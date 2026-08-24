@@ -8,6 +8,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -16,12 +17,26 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/protocol"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
+
+// publishACLValidator resolves an operator session ID to the operator
+// document. AuthService implements this; the interface makes the pubsub
+// handler's dependency on auth explicit and testable. It mirrors
+// operatorSessionValidator in dispatch_service.go but is declared here so
+// the pubsub package does not import the dispatch service's private
+// interface.
+type publishACLValidator interface {
+	ValidateOperatorSession(operatorSessionID string) (*models.OperatorDocumentGo, error)
+}
 
 // GatewayWebSocketHandler manages WebSocket-based publish/subscribe channels.
 type GatewayWebSocketHandler struct {
@@ -44,6 +59,15 @@ type GatewayWebSocketHandler struct {
 	// onHeartbeat is called for every publish to a heartbeat: channel.
 	onHeartbeatMu sync.RWMutex
 	onHeartbeat   func(channel string, data []byte)
+
+	// stateRootProvider supplies the gateway's current state Merkle root for
+	// command intent relay. Nil disables the cmd: relay path (publishes to
+	// cmd: are rejected fail-closed when the relay is not configured).
+	stateRootProvider governance.StateRootProvider
+
+	// sessionValidator resolves operator session IDs for command intent
+	// relay. Nil disables the cmd: relay path.
+	sessionValidator publishACLValidator
 }
 
 // dropOldestBuf is a bounded buffer that enforces drop-oldest back-pressure
@@ -168,6 +192,21 @@ func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
 		patternSubscribers: make(map[string]map[*wsSubscriber]struct{}),
 		handlers:           make(map[string]map[int64]func(string, []byte)),
 	}
+}
+
+// SetCommandRelayDeps wires the StateRootProvider and session validator
+// required for the cmd: command intent relay. When set, publishes to cmd:
+// channels from authorized app workloads are intercepted, transformed into
+// governed GovernanceEnvelopes with the gateway's state root, and fanned
+// out to subscribers. When nil (the default), the cmd: relay path is
+// disabled and publishes to cmd: are rejected fail-closed. Called once
+// during gateway startup after the auth service and state root service
+// are constructed.
+func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator publishACLValidator) {
+	b.mu.Lock()
+	b.stateRootProvider = stateRootProvider
+	b.sessionValidator = sessionValidator
+	b.mu.Unlock()
 }
 
 // SetHeartbeatHandler registers a callback invoked for every publish to a
@@ -412,8 +451,165 @@ func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 		h.broker.unsubscribe(msg.Channel, h.sub)
 		h.broker.punsubscribe(msg.Channel, h.sub)
 	case constants.PubSubActionPublish:
-		h.broker.Publish(msg.Channel, msg.Data)
+		h.handlePublish(msg)
 	}
+}
+
+// handlePublish enforces publish ACLs and, for cmd: channels from
+// authorized app workloads, intercepts the command intent payload,
+// constructs a governed GovernanceEnvelope with the gateway's state root,
+// and fans out the transformed envelope to subscribers. All other
+// authorized publishes (heartbeat:, results:) are fanned out verbatim.
+// Any ACL violation, decoding failure, or session validation failure is
+// fail-closed: the frame is dropped and the error is logged.
+func (h *pubSubSessionHandler) handlePublish(msg *pubsubv1.PubSubMessage) {
+	if err := verifyPublishACL(msg.Channel, h.sub.operatorID, h.sub.identitySPIFFEID); err != nil {
+		h.broker.logger.Warn("PubSub publish rejected: ACL violation",
+			"channel", msg.Channel,
+			"spiffe_id", h.sub.identitySPIFFEID,
+			"operator_id", h.sub.operatorID,
+			"error", err.Error())
+		return
+	}
+
+	// cmd: channels from app workloads are intercepted and transformed
+	// into governed GovernanceEnvelopes. The gateway owns envelope
+	// construction, state root, and governance proofs; the publisher
+	// supplies only the command intent.
+	if strings.HasPrefix(msg.Channel, constants.ChannelPrefixCmd+":") {
+		h.relayCommandIntent(msg.Channel, msg.Data)
+		return
+	}
+
+	// All other authorized publishes (heartbeat:, results:) are fanned
+	// out verbatim. The broker does not transform operator-originated
+	// frames.
+	h.broker.Publish(msg.Channel, msg.Data)
+}
+
+// relayCommandIntent decodes a command intent payload published by an
+// authorized app workload to a cmd: channel, constructs a governed
+// GovernanceEnvelope with the gateway's current state root, and fans
+// out the protojson envelope to subscribers. Fail-closed on any error.
+func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
+	b := h.broker
+	b.mu.RLock()
+	stateRootProvider := b.stateRootProvider
+	sessionValidator := b.sessionValidator
+	b.mu.RUnlock()
+
+	if stateRootProvider == nil || sessionValidator == nil {
+		b.logger.Warn("PubSub cmd: relay disabled: state root provider or session validator not configured",
+			"channel", channel)
+		return
+	}
+
+	// 1. Decode the command intent payload.
+	var intent commandIntent
+	if err := json.Unmarshal(data, &intent); err != nil {
+		b.logger.Warn("PubSub cmd: relay: failed to decode command intent",
+			"channel", channel, "error", err.Error())
+		return
+	}
+	if intent.OperatorID == "" || intent.OperatorSessionID == "" {
+		b.logger.Warn("PubSub cmd: relay: command intent missing operator identifiers",
+			"channel", channel)
+		return
+	}
+	if intent.ActionType == "" {
+		b.logger.Warn("PubSub cmd: relay: command intent missing action_type",
+			"channel", channel)
+		return
+	}
+	if len(intent.Payload) == 0 {
+		b.logger.Warn("PubSub cmd: relay: command intent missing payload",
+			"channel", channel)
+		return
+	}
+
+	// 2. Validate the channel matches the intent's operator identifiers.
+	// The channel is cmd:<operator_id>:<operator_session_id>; the intent
+	// must target the same operator and session. This prevents an
+	// authorized app from publishing to one operator's channel while
+	// claiming to target another.
+	expectedChannel := pubsub.CmdChannel(intent.OperatorID, intent.OperatorSessionID)
+	if channel != expectedChannel {
+		b.logger.Warn("PubSub cmd: relay: channel does not match command intent operator identifiers",
+			"channel", channel,
+			"expected", expectedChannel,
+			"intent_operator_id", intent.OperatorID,
+			"intent_session_id", intent.OperatorSessionID)
+		return
+	}
+
+	// 3. Validate the target operator session.
+	op, err := sessionValidator.ValidateOperatorSession(intent.OperatorSessionID)
+	if err != nil {
+		b.logger.Warn("PubSub cmd: relay: operator session validation failed",
+			"channel", channel,
+			"operator_session_id", intent.OperatorSessionID,
+			"error", err.Error())
+		return
+	}
+
+	// 4. Fetch the gateway's current state root.
+	stateRoot, err := stateRootProvider.GetCurrentStateRoot()
+	if err != nil {
+		b.logger.Warn("PubSub cmd: relay: failed to fetch state root",
+			"channel", channel, "error", err.Error())
+		return
+	}
+
+	// 5. Build the governed GovernanceEnvelope. The acting app identity
+	// is extracted from the mTLS certificate's SPIFFE ID; the requestor
+	// user identity is supplied by the command intent.
+	actingAppID := h.sub.identitySPIFFEID
+	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
+		OperatorID:        op.ID,
+		OperatorSessionID: op.OperatorSessionID,
+		ActionType:        intent.ActionType,
+		Payload:           intent.Payload,
+		TargetResource:    intent.TargetResource,
+		RequestorUserID:   intent.RequestorUserID,
+		ActingAppID:       actingAppID,
+		StateMerkleRoot:   stateRoot,
+	})
+	if err != nil {
+		b.logger.Warn("PubSub cmd: relay: failed to build governance envelope",
+			"channel", channel, "error", err.Error())
+		return
+	}
+
+	// 6. Marshal as protojson (the canonical wire format).
+	wire, err := protojson.Marshal(env)
+	if err != nil {
+		b.logger.Warn("PubSub cmd: relay: failed to marshal governance envelope",
+			"channel", channel, "error", err.Error())
+		return
+	}
+
+	// 7. Fan out the governed envelope to subscribers on the cmd: channel.
+	delivered := b.Publish(channel, wire)
+	b.logger.Info("PubSub cmd: relay: transformed and fanned out command intent",
+		"channel", channel,
+		"transaction_id", env.Id,
+		"action_type", env.ActionType,
+		"delivered", delivered)
+}
+
+// commandIntent is the typed wire format for app-published command intent
+// on cmd: channels. The ensemble publishes this JSON object directly; the
+// gateway decodes it, validates the target operator session, fetches the
+// state root, and constructs the governed GovernanceEnvelope. The
+// ensemble does not build partial GovernanceEnvelope structures for
+// command channels.
+type commandIntent struct {
+	OperatorID        string `json:"operator_id"`
+	OperatorSessionID string `json:"operator_session_id"`
+	ActionType        string `json:"action_type"`
+	Payload           []byte `json:"payload"`
+	TargetResource    string `json:"target_resource,omitempty"`
+	RequestorUserID   string `json:"requestor_user_id"`
 }
 
 func (h *pubSubSessionHandler) cleanup() {
@@ -654,4 +850,66 @@ func verifyPatternACL(pattern, operatorID, identitySPIFFEID string) error {
 		return fmt.Errorf("pattern operator_id mismatch: pattern=%s, cert=%s", parts[1], operatorID)
 	}
 	return nil
+}
+
+// verifyPublishACL enforces publish-time authorization for all PUBLISH
+// actions. The gateway is the relay and enforcement point for operator
+// command dispatch: operators may publish only to their own heartbeat:
+// and results: channels, and app workloads (spiffe://g8e.local/app/...)
+// may publish command intent to cmd:<operator_id>:<session_id> channels.
+// The ensemble (g8ee) is the centralized event broker and is authorized
+// to publish to any operator's cmd: channel. All unauthorized publish
+// attempts fail closed with ErrPubSubPublishUnauthorized.
+//
+// Channel formats:
+//
+//	cmd:<operator_id>:<operator_session_id>       App -> Operator (intercepted)
+//	results:<operator_id>:<operator_session_id>   Operator -> App (verbatim)
+//	heartbeat:<operator_id>:<operator_session_id> Operator -> App (verbatim)
+func verifyPublishACL(channel, publisherOperatorID, publisherSPIFFEID string) error {
+	parts := strings.Split(channel, ":")
+	if len(parts) < 2 {
+		return constants.ErrPubSubInvalidChannelFormat
+	}
+
+	prefix := parts[0]
+	wid := protocol.NewWorkloadIdentity()
+
+	switch prefix {
+	case constants.ChannelPrefixCmd:
+		// Only app workloads may publish command intent to cmd: channels.
+		// Operators are explicitly prohibited from publishing to cmd:
+		// (they receive commands, they do not issue them to themselves).
+		// The ensemble (g8ee) is authorized as the centralized event
+		// broker for any operator.
+		if wid.IsAppSAN(publisherSPIFFEID) {
+			return nil
+		}
+		return fmt.Errorf("%w: operators cannot publish to cmd: channels", constants.ErrPubSubPublishUnauthorized)
+
+	case constants.ChannelPrefixResults, constants.ChannelPrefixHeartbeat:
+		// Operators may publish only to their own heartbeat: and results:
+		// channels. The ensemble (g8ee) is authorized to publish to any
+		// operator's results: and heartbeat: channels as the centralized
+		// event broker.
+		if wid.IsEnsembleApp(publisherSPIFFEID) {
+			return nil
+		}
+		if publisherOperatorID == "" {
+			return constants.ErrPubSubCertificateMissingOperatorID
+		}
+		if len(parts) < 3 {
+			return constants.ErrPubSubInvalidChannelFormat
+		}
+		if parts[1] != publisherOperatorID {
+			return fmt.Errorf("%w: channel operator_id mismatch: channel=%s, cert=%s",
+				constants.ErrPubSubPublishUnauthorized, channel, publisherOperatorID)
+		}
+		return nil
+
+	default:
+		// Unknown channel prefixes are rejected fail-closed. The broker
+		// does not relay publishes to channels it does not recognize.
+		return fmt.Errorf("%w: unknown channel prefix %q", constants.ErrPubSubPublishUnauthorized, prefix)
+	}
 }

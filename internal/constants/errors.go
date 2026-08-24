@@ -383,6 +383,14 @@ var (
 	ErrPubSubBuildResultEnvelope          = errors.New("failed to build Governance Envelope")
 	ErrPubSubCertificateMissingOperatorID = errors.New("certificate missing Operator identity")
 	ErrPubSubInvalidChannelFormat         = errors.New("invalid channel format")
+	ErrPubSubPublishUnauthorized          = errors.New("publish unauthorized: channel not permitted for publisher identity")
+	ErrPubSubCommandIntentInvalid         = errors.New("invalid command intent: failed to decode command intent payload")
+	ErrPubSubCommandIntentMissingOperator = errors.New("command intent missing operator_id or operator_session_id")
+	ErrPubSubCommandIntentMissingAction   = errors.New("command intent missing action_type")
+	ErrPubSubCommandIntentMissingPayload  = errors.New("command intent missing payload")
+	ErrPubSubEnvelopeBuild                = errors.New("failed to build governance envelope from command intent")
+	ErrPubSubEnvelopeMarshal              = errors.New("failed to marshal governance envelope for fan-out")
+	ErrPubSubStateRootUnavailable         = errors.New("state root provider unavailable for command intent relay")
 
 	// Scrubbing service errors
 	ErrScrubbingInvalidPattern        = errors.New("invalid custom scrub pattern")

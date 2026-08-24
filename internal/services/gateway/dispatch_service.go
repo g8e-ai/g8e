@@ -36,6 +36,68 @@ import (
 // handler delivery.
 const DispatchTimeout = 30 * time.Second
 
+// EnvelopeExpiry is the lifetime of a dispatched GovernanceEnvelope from
+// construction to operator expiry rejection.
+const EnvelopeExpiry = 5 * time.Minute
+
+// BuildEnvelopeParams is the input to BuildGovernanceEnvelope. The gateway
+// owns the state Merkle root and governance posture; callers supply the
+// command intent fields and the resolved operator/session identifiers.
+type BuildEnvelopeParams struct {
+	OperatorID        string
+	OperatorSessionID string
+	ActionType        string
+	Payload           []byte
+	TargetResource    string
+	RequestorUserID   string
+	ActingAppID       string
+	StateMerkleRoot   string
+}
+
+// BuildGovernanceEnvelope constructs a canonical GovernanceEnvelope with
+// timestamp, expiry, nonce, L1 doctrine validation marker, and the supplied
+// identity and state-root fields. It computes the transaction hash via
+// govpkg.GenerateMessageID and sets both Id and TransactionHash to that
+// value. The returned envelope is ready for protojson marshaling and
+// fan-out to an operator's cmd channel. This is the single envelope
+// construction authority for both the HTTP DispatchService and the
+// WebSocket PubSub relay.
+func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEnvelope, error) {
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("gateway: build envelope: generate nonce: %w", err)
+	}
+
+	env := &commonv1.GovernanceEnvelope{
+		ProtocolVersion:   "1.0",
+		Timestamp:         timestamppb.Now(),
+		ExpiresAt:         timestamppb.New(time.Now().Add(EnvelopeExpiry)),
+		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
+		OperatorId:        params.OperatorID,
+		OperatorSessionId: params.OperatorSessionID,
+		ActionType:        params.ActionType,
+		TargetResource:    params.TargetResource,
+		EventType:         string(constants.MapActionTypeToEventType(constants.ActionType(params.ActionType))),
+		Payload:           params.Payload,
+		StateMerkleRoot:   params.StateMerkleRoot,
+		Nonce:             hex.EncodeToString(nonce),
+		RequestorUserId:   params.RequestorUserID,
+		ActingAppId:       params.ActingAppID,
+		Governance: &commonv1.GovernanceMetadata{
+			L1: &commonv1.L1Metadata{Validated: true},
+		},
+	}
+
+	txHash, err := govpkg.GenerateMessageID(env)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: build envelope: generate message ID: %w", err)
+	}
+	env.Id = txHash
+	env.TransactionHash = txHash
+
+	return env, nil
+}
+
 // DispatchRequest is the input to the command dispatch service.
 type DispatchRequest struct {
 	TargetOperatorSessionID string
@@ -106,47 +168,29 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		return nil, fmt.Errorf("dispatch: get state root: %w", err)
 	}
 
-	// 3. Build the GovernanceEnvelope.
-	nonce := make([]byte, 16)
-	if _, err := rand.Read(nonce); err != nil {
-		return nil, fmt.Errorf("dispatch: generate nonce: %w", err)
-	}
-
-	env := &commonv1.GovernanceEnvelope{
-		ProtocolVersion:   "1.0",
-		Timestamp:         timestamppb.Now(),
-		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
-		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
-		OperatorId:        operatorID,
-		OperatorSessionId: operatorSessionID,
+	// 3. Build the GovernanceEnvelope via the shared construction helper.
+	env, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
+		OperatorID:        operatorID,
+		OperatorSessionID: operatorSessionID,
 		ActionType:        req.ActionType,
-		TargetResource:    req.TargetResource,
-		EventType:         string(constants.MapActionTypeToEventType(constants.ActionType(req.ActionType))),
 		Payload:           req.Payload,
+		TargetResource:    req.TargetResource,
+		RequestorUserID:   req.RequestorUserID,
+		ActingAppID:       req.ActingAppID,
 		StateMerkleRoot:   stateRoot,
-		Nonce:             hex.EncodeToString(nonce),
-		RequestorUserId:   req.RequestorUserID,
-		ActingAppId:       req.ActingAppID,
-		Governance: &commonv1.GovernanceMetadata{
-			L1: &commonv1.L1Metadata{Validated: true},
-		},
-	}
-
-	// 4. Compute the transaction hash and set Id == TransactionHash.
-	txHash, err := govpkg.GenerateMessageID(env)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("dispatch: generate message ID: %w", err)
+		return nil, fmt.Errorf("dispatch: %w", err)
 	}
-	env.Id = txHash
-	env.TransactionHash = txHash
+	txHash := env.Id
 
-	// 5. Marshal as protojson (the canonical wire format).
+	// 4. Marshal as protojson (the canonical wire format).
 	wire, err := protojson.Marshal(env)
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: marshal envelope: %w", err)
 	}
 
-	// 6. Register an in-process handler on the operator's results channel to
+	// 5. Register an in-process handler on the operator's results channel to
 	//    correlate the result by transaction ID.
 	resultsChannel := pubsub.ResultsChannel(operatorID, operatorSessionID)
 	resultCh := make(chan *commonv1.GovernanceEnvelope, 1)
@@ -167,7 +211,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 	unregister := d.pubsub.RegisterHandler(resultsChannel, handler)
 	defer unregister()
 
-	// 7. Publish the envelope to the operator's cmd channel.
+	// 6. Publish the envelope to the operator's cmd channel.
 	cmdChannel := pubsub.CmdChannel(operatorID, operatorSessionID)
 	delivered := d.pubsub.Publish(cmdChannel, wire)
 	d.logger.Info("dispatch: published command",
@@ -176,7 +220,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		"results_channel", resultsChannel,
 		"delivered", delivered)
 
-	// 8. Wait for the result with a timeout.
+	// 7. Wait for the result with a timeout.
 	timeoutCtx, cancel := context.WithTimeout(ctx, DispatchTimeout)
 	defer cancel()
 

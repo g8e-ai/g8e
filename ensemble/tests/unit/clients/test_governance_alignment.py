@@ -11,8 +11,14 @@ Verifies:
 - ``GovernanceClient`` uses ``GatewayAPIPaths.GOVERNANCE_ENVELOPES`` (no hardcoded URL)
 - ``GovernanceClient`` passes mTLS cert paths to the HTTP session
 - ``canonical_json`` produces sorted, no-whitespace output
-- ``PubSubGovernanceClient.submit_envelope`` serializes dict correctly (not re-wrapping)
 - All business-critical data services route writes through governance envelopes
+
+The dead ``PubSubGovernanceClient`` and its sibling ``*_pubsub.py`` client
+variants were removed: they targeted a ``storage_type:operator_id:session_id``
+routing scheme that does not exist on the operator side, were never imported
+in production code, and bypassed the gateway's governance pipeline. The
+ensemble now publishes raw command intent to ``cmd:`` and lets the gateway
+construct the governed envelope.
 """
 
 import hashlib
@@ -88,27 +94,74 @@ class TestCanonicalJson:
         assert "café".encode("utf-8") in result
 
 
-class TestPubSubGovernanceClientSerialization:
-    """Verify PubSubGovernanceClient.submit_envelope serializes dict correctly."""
+class TestDeadPubSubClientsRemoved:
+    """Regression: the dead ``*_pubsub.py`` client variants must stay deleted.
 
-    def test_submit_envelope_does_not_call_build_uap_envelope_json(self):
+    These modules targeted a ``storage_type:operator_id:session_id`` routing
+    scheme that does not exist on the operator side, were never imported in
+    production code, and bypassed the gateway's governance pipeline. They
+    must not be reintroduced.
+    """
+
+    @pytest.mark.parametrize(
+        "module_name",
+        [
+            "app.clients.governance_client_pubsub",
+            "app.clients.db_client_pubsub",
+            "app.clients.blob_client_pubsub",
+            "app.clients.kv_cache_client_pubsub",
+        ],
+    )
+    def test_dead_pubsub_client_module_is_not_importable(self, module_name):
+        import importlib
+
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(module_name)
+
+    def test_clients_init_does_not_export_dead_pubsub_clients(self):
+        import app.clients as clients_pkg
+
+        exports = set(clients_pkg.__all__)
+        assert "PubSubGovernanceClient" not in exports
+        assert "PubSubDBClient" not in exports
+        assert "PubSubBlobClient" not in exports
+        assert "PubSubKvCacheClient" not in exports
+        assert not hasattr(clients_pkg, "PubSubGovernanceClient")
+        assert not hasattr(clients_pkg, "PubSubDBClient")
+        assert not hasattr(clients_pkg, "PubSubBlobClient")
+        assert not hasattr(clients_pkg, "PubSubKvCacheClient")
+
+
+class TestPubSubClientDoesNotConstructEnvelopes:
+    """Regression: PubSubClient must not construct governance envelopes.
+
+    The gateway is the relay and enforcement point for operator command
+    dispatch. The ensemble publishes raw command intent to ``cmd:`` and the
+    gateway intercepts, validates authorization, constructs the governed
+    GovernanceEnvelope with the current state Merkle root, and forwards it
+    to the operator. The ensemble must not import or call
+    ``build_uap_envelope_json`` and must not expose
+    ``check_operator_online`` or ``publish_storage_request``.
+    """
+
+    def test_pubsub_client_does_not_import_build_uap_envelope_json(self):
         import inspect
 
-        from app.clients.governance_client_pubsub import PubSubGovernanceClient
+        import app.clients.pubsub_client as mod
 
-        source = inspect.getsource(PubSubGovernanceClient.submit_envelope)
+        source = inspect.getsource(mod)
         assert "build_uap_envelope_json" not in source
-        assert "json.dumps" in source
+        assert "build_uap_envelope" not in source
 
-    def test_submit_envelope_accepts_dict(self):
-        import inspect
+    def test_pubsub_client_has_no_check_operator_online(self):
+        from app.clients.pubsub_client import PubSubClient
 
-        from app.clients.governance_client_pubsub import PubSubGovernanceClient
+        assert not hasattr(PubSubClient, "check_operator_online")
 
-        sig = inspect.signature(PubSubGovernanceClient.submit_envelope)
-        envelope_param = sig.parameters.get("envelope")
-        assert envelope_param is not None
-        assert envelope_param.annotation is dict or "dict" in str(envelope_param.annotation)
+    def test_pubsub_client_has_no_publish_storage_request(self):
+        from app.clients.pubsub_client import PubSubClient
+
+        assert not hasattr(PubSubClient, "publish_storage_request")
 
 
 class TestDataServicesUseGovernanceEnvelopes:

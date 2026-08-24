@@ -10,7 +10,16 @@ PubSubClient - WebSocket-based Pub/Sub client for the Gateway.
 
 Talks to the Gateway via WebSocket (constants.APIPaths.PubSubStream = "/api/v1/pubsub/stream").
 Supports: subscribe, psubscribe, publish,
-publish_command, subscribe_execution_results, subscribe_heartbeats, check_operator_online.
+publish_command, subscribe_execution_results, subscribe_heartbeats.
+
+The ensemble publishes raw command intent (a serialized G8eMessage) to the
+operator's ``cmd:`` channel. The Gateway intercepts the publish, validates
+authorization, constructs the governed GovernanceEnvelope with the current
+state Merkle root, and forwards it to the operator. The ensemble never
+constructs governance envelopes for operator command dispatch and never
+fetches state roots. Operator online status is not the ensemble's
+responsibility; operators announce health on ``heartbeat:<operator_id>``
+and the ensemble subscribes to that channel.
 """
 
 import asyncio
@@ -25,16 +34,14 @@ import aiohttp
 
 from app.models.settings import GatewaySettings, TLSConfig
 from app.utils.aiohttp_session import create_pubsub_ws_session, resolve_pubsub_ssl_context
-from app.utils.envelope_builder import build_uap_envelope_json
 from app.constants import (
-    EventType,
     G8EE_COMPONENT,
     GatewayAPIPaths,
     OperatorChannel,
     PubSubAction,
     PubSubWireEventType,
 )
-from app.models.pubsub_messages import G8eMessage, HeartbeatRequestPayload
+from app.models.pubsub_messages import G8eMessage
 
 logger = logging.getLogger(__name__)
 
@@ -550,10 +557,19 @@ class PubSubClient:
     async def publish_command(
         self, operator_id: str, operator_session_id: str, command_data: G8eMessage
     ) -> int:
+        """Publish raw command intent to the operator's ``cmd:`` channel.
+
+        The ensemble serializes the G8eMessage as canonical JSON and publishes
+        it verbatim. The Gateway intercepts the publish, validates
+        authorization, constructs the governed GovernanceEnvelope with the
+        current state Merkle root, and forwards it to the operator. The
+        ensemble does not build governance envelopes for operator command
+        dispatch.
+        """
         channel = OperatorChannel.cmd(operator_id, operator_session_id)
 
         logger.info(
-            "[PUBSUB-CLIENT] Publishing command for operator %s session %s (event_type: %s)",
+            "[PUBSUB-CLIENT] Publishing command intent for operator %s session %s (event_type: %s)",
             operator_id,
             operator_session_id,
             command_data.event_type,
@@ -567,19 +583,19 @@ class PubSubClient:
         )
 
         try:
-            payload_bytes = build_uap_envelope_json(
-                command_data,
+            payload_bytes = command_data.model_dump_json(
+                exclude_none=True
             ).encode("utf-8")
-            logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope")
+            logger.debug("[PUBSUB-CLIENT] Publishing raw command intent JSON")
         except Exception as e:
-            logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope: %s", e)
+            logger.error("[PUBSUB-CLIENT] Failed to serialize command intent: %s", e)
             return 0
 
         result = await self.publish(channel, payload_bytes)
 
         if result > 0:
             logger.info(
-                "[PUBSUB-CLIENT] Command published successfully for operator %s session %s",
+                "[PUBSUB-CLIENT] Command intent published successfully for operator %s session %s",
                 operator_id,
                 operator_session_id,
                 extra={
@@ -590,7 +606,7 @@ class PubSubClient:
             )
         else:
             logger.warning(
-                "[PUBSUB-CLIENT] Failed to publish command for operator %s session %s",
+                "[PUBSUB-CLIENT] Failed to publish command intent for operator %s session %s",
                 operator_id,
                 operator_session_id,
                 extra={
@@ -697,146 +713,3 @@ class PubSubClient:
 
         await self.unsubscribe(channel)
         self.off_channel_message(channel, callback)
-
-    async def check_operator_online(self, operator_id: str, operator_session_id: str) -> bool:
-        channel = OperatorChannel.cmd(operator_id, operator_session_id)
-
-        logger.info(
-            "[PUBSUB-CLIENT] Checking if operator %s session %s is online",
-            operator_id,
-            operator_session_id,
-            extra={
-                "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
-                "channel": channel,
-            },
-        )
-
-        try:
-            ping = G8eMessage(
-                id=str(uuid.uuid4()),
-                source_component=self.component_name,
-                event_type=EventType.OPERATOR_HEARTBEAT_REQUESTED,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                case_id=None,
-                task_id=None,
-                investigation_id=None,
-                web_session_id=None,
-                payload=HeartbeatRequestPayload(),
-            )
-
-            try:
-                payload_bytes = build_uap_envelope_json(
-                    ping,
-                ).encode("utf-8")
-                logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope for ping")
-            except Exception as e:
-                logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope for ping: %s", e)
-                return False
-
-            receivers = await self.publish(channel, payload_bytes)
-
-            is_online = receivers > 0
-            logger.info(
-                "[PUBSUB-CLIENT] Operator %s session %s online check result: %s (receivers: %d)",
-                operator_id,
-                operator_session_id,
-                "online" if is_online else "offline",
-                receivers,
-                extra={
-                    "operator_id": operator_id,
-                    "operator_session_id": operator_session_id,
-                    "is_online": is_online,
-                    "receivers": receivers,
-                },
-            )
-
-            return is_online
-        except Exception as e:
-            logger.warning(
-                "[PUBSUB-CLIENT] Failed to check if operator %s session %s is online: %s",
-                operator_id,
-                operator_session_id,
-                e,
-                extra={
-                    "operator_id": operator_id,
-                    "operator_session_id": operator_session_id,
-                },
-                exc_info=True,
-            )
-            return False
-
-    async def publish_storage_request(
-        self,
-        operator_id: str,
-        operator_session_id: str,
-        storage_type: str,
-        operation: str,
-        payload: dict[str, Any],
-        timeout: float = 30.0,
-    ) -> dict[str, Any]:
-        """Publish a storage operation request and wait for response.
-
-        Args:
-            operator_id: Target operator ID
-            operator_session_id: Target operator session ID
-            storage_type: Type of storage (document, kv, blob)
-            operation: Operation type (get, put, delete, query, etc.)
-            payload: Operation-specific payload
-            timeout: Timeout in seconds
-
-        Returns:
-            Response payload from g8eo
-
-        Raises:
-            NetworkError: If request fails or times out
-        """
-        channel = f"{storage_type}:{operator_id}:{operator_session_id}"
-        request_id = str(uuid.uuid4())
-
-        # Create a future to wait for the response
-        response_future: asyncio.Future[dict[str, Any]] = asyncio.Future()
-
-        # Register temporary callback for this specific request
-        def _handle_response(ch: str, data: bytes) -> None:
-            try:
-                msg = PubSubMessage.from_bytes(data)
-                if msg.action == PubSubAction.PUBLISH:
-                    response_data = json.loads(msg.data.decode("utf-8"))
-                    if response_data.get("request_id") == request_id:
-                        if not response_future.done():
-                            response_future.set_result(response_data)
-            except Exception as e:
-                logger.error("[PUBSUB-CLIENT] Failed to handle storage response: %s", e)
-                if not response_future.done():
-                    response_future.set_exception(e)
-
-        self.on_channel_message(channel, _handle_response)
-
-        # Subscribe to the channel to receive responses
-        await self.subscribe(channel)
-
-        # Publish the request
-        request_payload = {
-            "request_id": request_id,
-            "operation": operation,
-            "payload": payload,
-        }
-
-        try:
-            payload_bytes = json.dumps(request_payload).encode("utf-8")
-            await self.publish(channel, payload_bytes)
-
-            # Wait for response with timeout
-            try:
-                return await asyncio.wait_for(response_future, timeout=timeout)
-            except TimeoutError:
-                raise NetworkError(
-                    f"Storage request timed out after {timeout}s",
-                    component="g8ee",
-                )
-        finally:
-            # Clean up subscription
-            await self.unsubscribe(channel)
-            self.off_channel_message(channel, _handle_response)

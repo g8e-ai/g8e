@@ -156,6 +156,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
+	// Wire the pubsub command relay dependencies: the gateway intercepts
+	// app-published command intent on cmd: channels, validates the target
+	// operator session, fetches the current state root, and constructs the
+	// governed GovernanceEnvelope before fan-out.
+	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth)
+
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 	webSessionSvc := NewWebSessionService(stores.DocStore, logger)

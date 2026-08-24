@@ -729,14 +729,119 @@ class TestPubSubClientCoverage:
         assert channel in connected_client._subscribed_channels
         assert callback in connected_client._channel_handlers[channel]
 
-        # check_operator_online
-        connected_client._ws.send_bytes.reset_mock()
-
-        with patch.object(connected_client, "publish", return_value=1):
-            is_online = await connected_client.check_operator_online(op_id, sess_id)
-            assert is_online is True
-
         # unsubscribe_heartbeats
         await connected_client.unsubscribe_heartbeats(op_id, sess_id, callback)
         assert channel not in connected_client._subscribed_channels
         assert channel not in connected_client._channel_handlers
+
+
+@pytest.mark.asyncio
+class TestPublishCommandRawIntent:
+    """publish_command serializes the G8eMessage as raw command intent JSON.
+
+    The ensemble must not construct governance envelopes for operator command
+    dispatch. The Gateway intercepts the publish on the ``cmd:`` channel,
+    validates authorization, constructs the governed GovernanceEnvelope with
+    the current state Merkle root, and forwards it to the operator. These
+    tests pin the contract: the wire payload is the canonical JSON of the
+    G8eMessage itself, with no UAP/GovernanceEnvelope wrapping, no state
+    Merkle root, and no transaction hash.
+    """
+
+    async def test_publish_command_serializes_raw_g8e_message_json(self, connected_client):
+        """The published payload is the G8eMessage model_dump_json, not a UAP envelope."""
+        import json
+
+        from app.models.pubsub_messages import G8eMessage
+        from app.models.command_request_payloads import CommandRequestPayload
+        from app.constants import EventType
+
+        op_id = "op-1"
+        sess_id = "sess-1"
+        msg = G8eMessage(
+            id="msg-1",
+            source_component=G8EE_COMPONENT,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+            operator_id=op_id,
+            operator_session_id=sess_id,
+            case_id="case-1",
+            task_id="task-1",
+            investigation_id="inv-1",
+            web_session_id="web-1",
+            payload=CommandRequestPayload(command="echo hi", execution_id="exec-1"),
+        )
+
+        captured: list[bytes] = []
+
+        async def _capture_publish(channel: str, data: bytes) -> int:
+            captured.append(data)
+            return 1
+
+        with patch.object(connected_client, "publish", side_effect=_capture_publish):
+            res = await connected_client.publish_command(op_id, sess_id, msg)
+
+        assert res == 1
+        assert len(captured) == 1
+
+        decoded = json.loads(captured[0].decode("utf-8"))
+        # Raw command intent fields are present verbatim...
+        assert decoded["id"] == "msg-1"
+        assert decoded["event_type"] == EventType.OPERATOR_COMMAND_REQUESTED.value
+        assert decoded["operator_id"] == op_id
+        assert decoded["operator_session_id"] == sess_id
+        assert decoded["source_component"] == G8EE_COMPONENT
+        assert decoded["payload"]["command"] == "echo hi"
+        assert decoded["payload"]["execution_id"] == "exec-1"
+        # ...and no governance envelope fields are injected by the ensemble.
+        assert "state_merkle_root" not in decoded
+        assert "transaction_hash" not in decoded
+        assert "nonce" not in decoded
+        assert "governance" not in decoded
+        assert "acting_app_id" not in decoded
+
+    async def test_publish_command_does_not_import_build_uap_envelope_json(
+        self, connected_client
+    ):
+        """Regression: pubsub_client must not depend on build_uap_envelope_json."""
+        import app.clients.pubsub_client as mod
+
+        # The module must not import the envelope builder used for UAP wrapping.
+        assert not hasattr(mod, "build_uap_envelope_json")
+        # And the source must not reference it.
+        import inspect
+
+        source = inspect.getsource(mod)
+        assert "build_uap_envelope_json" not in source
+
+    async def test_publish_command_returns_zero_on_serialization_failure(
+        self, connected_client
+    ):
+        """If G8eMessage serialization raises, publish_command returns 0 and does not publish."""
+        from app.models.pubsub_messages import G8eMessage
+        from app.constants import EventType
+
+        op_id = "op-1"
+        sess_id = "sess-1"
+        msg = G8eMessage(
+            id="msg-1",
+            source_component=G8EE_COMPONENT,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+            operator_id=op_id,
+            operator_session_id=sess_id,
+            payload=None,
+        )
+
+        with (
+            patch.object(
+                G8eMessage, "model_dump_json", side_effect=RuntimeError("boom")
+            ),
+            patch.object(connected_client, "publish") as mock_publish,
+            patch("app.clients.pubsub_client.logger") as mock_logger,
+        ):
+            res = await connected_client.publish_command(op_id, sess_id, msg)
+
+        assert res == 0
+        mock_publish.assert_not_called()
+        mock_logger.error.assert_any_call(
+            "[PUBSUB-CLIENT] Failed to serialize command intent: %s", ANY
+        )

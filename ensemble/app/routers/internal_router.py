@@ -48,6 +48,7 @@ from app.models.cases import (
     CaseDeleteRequest,
 )
 from app.models.cache import FieldFilter
+from app.models.pubsub_messages import G8eMessage
 from app.models.internal_api import (
     APIKeyGenerationRequest,
     APIKeyGenerationResponse,
@@ -129,7 +130,7 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.infra.settings_service import SettingsService
-from app.utils.timestamp import now, now_iso
+from app.utils.timestamp import now
 from app.constants.message_sender import MessageSender
 
 if TYPE_CHECKING:
@@ -1694,12 +1695,16 @@ async def stop_operator(
     if operator_command_service.pubsub_client is None:
         raise ServiceUnavailableError("pub/sub client not initialized", component="g8ee")
 
-    command_data = {
-        "event_type": EventType.OPERATOR_SHUTDOWN_REQUESTED,
-        "operator_id": operator_id,
-        "user_id": user_id,
-        "timestamp": now_iso(),
-    }
+    command_data = G8eMessage(
+        id=str(uuid.uuid4()),
+        source_component=G8EE_COMPONENT,
+        event_type=EventType.OPERATOR_SHUTDOWN_REQUESTED,
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
+        user_id=user_id,
+        web_session_id=g8e_context.web_session_id,
+        payload=None,
+    )
 
     subscribers = await operator_command_service.pubsub_client.publish_command(
         operator_id=operator_id, operator_session_id=operator_session_id, command_data=command_data
