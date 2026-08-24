@@ -191,10 +191,14 @@ type ReceiptCorrelation struct {
 	OperatorSessionID string
 	ActionType        string
 	CaseID            string
+	Persona           clientpkg.Persona
 }
 
-// pollForReceiptWithCorrelation polls the audit vault for a receipt matching
-// the correlation criteria with a COMPLETED status. Returns the matching
+// pollForReceiptWithCorrelation polls the operator audit vault for a receipt
+// matching the correlation criteria with a COMPLETED status, using the
+// governed audit_receipt_list native MCP tool. Every poll traverses the
+// L1–L5 governance gauntlet and produces its own audit record, replacing the
+// previous unauthenticated HTTP audit endpoint polling. Returns the matching
 // receipt, or an error if the timeout expires. If a matching receipt is found
 // but its status is FAILED, returns ErrHarnessEnsembleReceiptFailed with the
 // result summary. Stale, unrelated, or unsigned receipts are skipped (with a
@@ -206,12 +210,12 @@ func pollForReceiptWithCorrelation(ctx context.Context, c *clientpkg.Client, r *
 	ticker := time.NewTicker(ensemblePollInterval)
 	defer ticker.Stop()
 
-	r.note("polling audit vault for %s receipt (not_before=%s, timeout %s)", corr.ActionType, corr.NotBefore.Format(time.RFC3339Nano), ensemblePollTimeout)
+	r.note("polling operator audit vault via audit_receipt_list for %s receipt (not_before=%s, timeout %s)", corr.ActionType, corr.NotBefore.Format(time.RFC3339Nano), ensemblePollTimeout)
 
 	for {
-		receipts, _, err := c.AuditReceipts(ctx, corr.OperatorSessionID)
+		receipts, err := queryAuditReceiptsViaGovernedTool(ctx, c, corr)
 		if err != nil {
-			r.note("audit receipts query error (will retry): %v", err)
+			r.note("audit_receipt_list query error (will retry): %v", err)
 		} else {
 			for i := range receipts {
 				rec := &receipts[i]
@@ -258,6 +262,77 @@ func pollForReceiptWithCorrelation(ctx context.Context, c *clientpkg.Client, r *
 		case <-ticker.C:
 		}
 	}
+}
+
+// queryAuditReceiptsViaGovernedTool invokes the audit_receipt_list native MCP
+// tool through the gateway's governed tools/call dispatch path and decodes
+// the returned ActionReceipt records into harness Receipt values. The tool
+// scopes the query by operator_session_id and optionally by action_type and
+// not_before; the caller applies additional client-side correlation checks
+// for defense in depth.
+func queryAuditReceiptsViaGovernedTool(ctx context.Context, c *clientpkg.Client, corr ReceiptCorrelation) ([]clientpkg.Receipt, error) {
+	args := clientpkg.AuditReceiptListArgs{
+		OperatorSessionID: corr.OperatorSessionID,
+		ActionType:        corr.ActionType,
+	}
+	if !corr.NotBefore.IsZero() {
+		args.NotBefore = corr.NotBefore.Format(time.RFC3339Nano)
+	}
+
+	resp, err := c.MCPToolsCall(ctx, corr.Persona, "audit_receipt_list", args)
+	if err != nil {
+		return nil, fmt.Errorf("audit_receipt_list: %w", err)
+	}
+	if resp != nil && resp.Error != nil {
+		return nil, fmt.Errorf("audit_receipt_list rejected: %s", resp.Error.Message)
+	}
+	if resp == nil || len(resp.Result) == 0 {
+		return nil, fmt.Errorf("audit_receipt_list returned empty result")
+	}
+
+	// The MCP tools/call result is a CallToolResult JSON:
+	// {"content":[{"type":"text","text":"..."}]}
+	var cr struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if err := json.Unmarshal(resp.Result, &cr); err != nil {
+		return nil, fmt.Errorf("audit_receipt_list: decode CallToolResult: %w", err)
+	}
+	if cr.IsError {
+		var sb strings.Builder
+		for _, c := range cr.Content {
+			sb.WriteString(c.Text)
+		}
+		return nil, fmt.Errorf("audit_receipt_list returned error: %s", sb.String())
+	}
+	if len(cr.Content) == 0 {
+		return nil, nil
+	}
+
+	// The text content is the JSON-encoded AuditReceiptListResult:
+	// {"receipts":[...],"count":N}
+	var listResult struct {
+		Receipts []json.RawMessage `json:"receipts"`
+		Count    int               `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(cr.Content[0].Text), &listResult); err != nil {
+		return nil, fmt.Errorf("audit_receipt_list: decode receipts payload: %w", err)
+	}
+
+	out := make([]clientpkg.Receipt, 0, len(listResult.Receipts))
+	for _, raw := range listResult.Receipts {
+		var rec clientpkg.Receipt
+		if err := json.Unmarshal(raw, &rec); err != nil {
+			continue
+		}
+		rec.Raw = raw
+		out = append(out, rec)
+	}
+	return out, nil
 }
 
 // receiptStatusSummary extracts the numeric execution status and result
@@ -421,6 +496,7 @@ func submitDocumentUpdateAndCorrelate(ctx context.Context, c *clientpkg.Client, 
 		NotBefore:         notBefore,
 		OperatorSessionID: req.OperatorSessionID,
 		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		Persona:           persona,
 	})
 	if err != nil {
 		return nil, notBefore, err
@@ -454,6 +530,7 @@ func submitDocumentDeleteAndCorrelate(ctx context.Context, c *clientpkg.Client, 
 		NotBefore:         notBefore,
 		OperatorSessionID: req.OperatorSessionID,
 		ActionType:        string(constants.ActionTypeDocumentDelete),
+		Persona:           persona,
 	})
 	if err != nil {
 		return nil, notBefore, err
@@ -513,6 +590,7 @@ func ensembleScenarios() []Scenario {
 					OperatorSessionID: kit.OperatorSessionID,
 					ActionType:        string(constants.ActionTypeFileEdit),
 					CaseID:            chatResp.CaseID,
+					Persona:           persona,
 				})
 				if err != nil {
 					return err
@@ -579,6 +657,7 @@ func ensembleScenarios() []Scenario {
 					OperatorSessionID: kit.OperatorSessionID,
 					ActionType:        string(constants.ActionTypeFileEdit),
 					CaseID:            chatResp.CaseID,
+					Persona:           persona,
 				})
 				if err != nil {
 					return err

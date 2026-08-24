@@ -244,6 +244,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		A2ADownstreamURL:  cfg.Gateway.A2ADownstreamURL,
 		PublicBaseURL:     publicBaseURL,
 		AuditStore:        stores.AuditStore,
+		AuditReceiptQuery: stores.AuditStore,
 		EnvProc:           envProcAdapter,
 		StateRootProvider: stores.StateRootSvc,
 		SigningKey:        actuatorPriv,

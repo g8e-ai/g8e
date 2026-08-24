@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -646,4 +648,106 @@ func TestNativeToolSingleAudit(t *testing.T) {
 
 	// If the double-audit block still existed in DispatchToDownstream,
 	// this would produce a duplicate audit event via the no-op recorder
+}
+
+// TestAuditReceiptListTool_DispatchToDownstream verifies the governed native
+// tool dispatch path for audit_receipt_list: when the GatewayService has an
+// AuditReceiptQuery wired into its NativeToolHandler, DispatchToDownstream
+// executes the tool locally and returns the receipts as a textual summary
+// without forwarding to a downstream MCP server.
+func TestAuditReceiptListTool_DispatchToDownstream(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	stub := &stubAuditReceiptQuery{
+		listBySession: []*models.ActionReceiptRecord{
+			sampleReceiptRecord("tx-1", "sess-1", "FILE_EDIT", now, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED),
+		},
+	}
+
+	nativeHandler, err := NewNativeToolHandler(slog.Default())
+	require.NoError(t, err)
+	nativeHandler.SetAuditReceiptQuery(stub)
+
+	registry, _ := NewFieldPathRegistry(slog.Default())
+	g := &GatewayService{
+		logger:            slog.Default(),
+		fieldPathRegistry: registry,
+		nativeToolHandler: nativeHandler,
+		auditStore:        noopAuditEventRecorder{},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
+		envProc:           &fakeEnvelopeProcessor{},
+	}
+
+	args, err := json.Marshal(AuditReceiptListRequest{OperatorSessionID: "sess-1"})
+	require.NoError(t, err)
+
+	summary, err := g.DispatchToDownstream(context.Background(), "audit_receipt_list", args, "sess-1")
+	require.NoError(t, err)
+	require.Contains(t, summary, "tx-1")
+	require.Contains(t, summary, "FILE_EDIT")
+	require.Equal(t, "sess-1", stub.lastListSession)
+}
+
+// TestAuditReceiptGetTool_DispatchToDownstream verifies the governed native
+// tool dispatch path for audit_receipt_get.
+func TestAuditReceiptGetTool_DispatchToDownstream(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	rec := sampleReceiptRecord("tx-get-1", "sess-1", "DOCUMENT_UPDATE", now, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED)
+	stub := &stubAuditReceiptQuery{getByID: map[string]*models.ActionReceiptRecord{"tx-get-1": rec}}
+
+	nativeHandler, err := NewNativeToolHandler(slog.Default())
+	require.NoError(t, err)
+	nativeHandler.SetAuditReceiptQuery(stub)
+
+	registry, _ := NewFieldPathRegistry(slog.Default())
+	g := &GatewayService{
+		logger:            slog.Default(),
+		fieldPathRegistry: registry,
+		nativeToolHandler: nativeHandler,
+		auditStore:        noopAuditEventRecorder{},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
+		envProc:           &fakeEnvelopeProcessor{},
+	}
+
+	args, err := json.Marshal(AuditReceiptGetRequest{TransactionID: "tx-get-1"})
+	require.NoError(t, err)
+
+	summary, err := g.DispatchToDownstream(context.Background(), "audit_receipt_get", args, "sess-1")
+	require.NoError(t, err)
+	require.Contains(t, summary, "tx-get-1")
+	require.Contains(t, summary, "DOCUMENT_UPDATE")
+	require.Equal(t, "tx-get-1", stub.lastGetID)
+}
+
+// TestAuditReceiptListTool_DispatchNotConfigured verifies the gateway fails
+// closed when no AuditReceiptQuery is wired, proving the audit receipt tools
+// cannot bypass governance to return ungoverned data.
+func TestAuditReceiptListTool_DispatchNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	nativeHandler, err := NewNativeToolHandler(slog.Default())
+	require.NoError(t, err)
+
+	registry, _ := NewFieldPathRegistry(slog.Default())
+	g := &GatewayService{
+		logger:            slog.Default(),
+		fieldPathRegistry: registry,
+		nativeToolHandler: nativeHandler,
+		auditStore:        noopAuditEventRecorder{},
+		maxPayloadBytes:   10 * 1024 * 1024,
+		posture:           "doctrine",
+		envProc:           &fakeEnvelopeProcessor{},
+	}
+
+	args, err := json.Marshal(AuditReceiptListRequest{OperatorSessionID: "sess-1"})
+	require.NoError(t, err)
+
+	_, err = g.DispatchToDownstream(context.Background(), "audit_receipt_list", args, "sess-1")
+	require.Error(t, err)
+	require.True(t, errors.Is(err, constants.ErrMCPAuditReceiptQueryNotConfigured))
 }

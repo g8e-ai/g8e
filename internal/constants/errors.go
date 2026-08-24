@@ -443,6 +443,13 @@ var (
 	ErrMCPParseSocketPort        = errors.New("parse socket port")
 	ErrMCPParseSocketIPOctet     = errors.New("parse socket IP octet")
 
+	// MCP audit receipt tool errors
+	ErrMCPAuditReceiptQueryNotConfigured      = errors.New("audit receipt query not configured")
+	ErrMCPAuditReceiptListOperatorSessionReq  = errors.New("operator_session_id is required")
+	ErrMCPAuditReceiptGetTransactionIDReq     = errors.New("transaction_id is required")
+	ErrMCPAuditReceiptParseNotBefore          = errors.New("not_before must be a valid RFC3339 timestamp")
+	ErrMCPAuditReceiptMarshalResult           = errors.New("marshal audit receipt result")
+
 	// SQLite validation errors
 	ErrSQLiteValidateEmptyIdentifier = errors.New("empty identifier")
 	ErrSQLiteValidateInvalidPattern  = errors.New("invalid identifier pattern")

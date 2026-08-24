@@ -191,6 +191,14 @@ type Dependencies struct {
 	// when nil — a missing audit store is a wiring bug, not a no-op condition.
 	AuditStore AuditEventRecorder
 
+	// AuditReceiptQuery provides read access to the operator audit vault for
+	// the governed audit_receipt_list and audit_receipt_get native tools.
+	// Optional: when nil, those tools fail closed with
+	// constants.ErrMCPAuditReceiptQueryNotConfigured. Production wires
+	// *storage.SQLAuditStore, which implements both AuditEventRecorder and
+	// AuditReceiptQuery.
+	AuditReceiptQuery AuditReceiptQuery
+
 	// FieldPathRegistryFactory overrides the default NewFieldPathRegistry constructor.
 	// When nil, NewFieldPathRegistry is used. This allows tests to inject a failing
 	// factory to verify error handling in NewGatewayService.
@@ -234,6 +242,9 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	nativeToolHandler, err := NewNativeToolHandler(deps.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
+	}
+	if deps.AuditReceiptQuery != nil {
+		nativeToolHandler.SetAuditReceiptQuery(deps.AuditReceiptQuery)
 	}
 
 	g := &GatewayService{
