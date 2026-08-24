@@ -57,6 +57,11 @@ type GatewayWebSocketHandler struct {
 	// sessionValidator resolves operator session IDs for command intent
 	// relay. Nil disables the cmd: relay path.
 	sessionValidator operatorSessionValidator
+
+	// posture is the gateway's governance posture, injected into every
+	// envelope built by the cmd: relay so the operator reads it
+	// per-transaction at L4 verification time.
+	posture string
 }
 
 // dropOldestBuf is a bounded buffer that enforces drop-oldest back-pressure
@@ -183,18 +188,21 @@ func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
 	}
 }
 
-// SetCommandRelayDeps wires the StateRootProvider and session validator
-// required for the cmd: command intent relay. When set, publishes to cmd:
-// channels from authorized app workloads are intercepted, transformed into
-// governed GovernanceEnvelopes with the gateway's state root, and fanned
-// out to subscribers. When nil (the default), the cmd: relay path is
-// disabled and publishes to cmd: are rejected fail-closed. Called once
-// during gateway startup after the auth service and state root service
-// are constructed.
-func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator operatorSessionValidator) {
+// SetCommandRelayDeps wires the StateRootProvider, session validator, and
+// gateway posture required for the cmd: command intent relay. When set,
+// publishes to cmd: channels from authorized app workloads are intercepted,
+// transformed into governed GovernanceEnvelopes with the gateway's state
+// root and posture, and fanned out to subscribers. When nil (the default),
+// the cmd: relay path is disabled and publishes to cmd: are rejected
+// fail-closed. Called once during gateway startup after the auth service
+// and state root service are constructed. The posture is injected into
+// every relayed envelope so the operator reads it per-transaction at L4
+// verification time instead of from out-of-band config.
+func (b *GatewayWebSocketHandler) SetCommandRelayDeps(stateRootProvider governance.StateRootProvider, sessionValidator operatorSessionValidator, posture string) {
 	b.mu.Lock()
 	b.stateRootProvider = stateRootProvider
 	b.sessionValidator = sessionValidator
+	b.posture = posture
 	b.mu.Unlock()
 }
 
@@ -571,6 +579,7 @@ func (h *pubSubSessionHandler) relayCommandIntent(channel string, data []byte) {
 		TaskID:            intent.TaskId,
 		WebSessionID:      intent.WebSessionId,
 		CliSessionID:      intent.CliSessionId,
+		Posture:           b.posture,
 	})
 	if err != nil {
 		b.logger.Warn("PubSub cmd: relay: failed to build governance envelope",

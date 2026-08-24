@@ -591,8 +591,13 @@ type GovernanceEnvelope struct {
 	SystemFingerprint string `protobuf:"bytes,18,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
 	TenantId          string `protobuf:"bytes,23,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	BindingPersona    string `protobuf:"bytes,24,opt,name=binding_persona,json=bindingPersona,proto3" json:"binding_persona,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Gateway governance posture at envelope construction time (doctrine,
+	// consensus, notary). Set by the gateway; the operator reads it here at
+	// L4 verification time instead of from out-of-band config. Not included
+	// in the transaction hash — it is policy metadata, not intent.
+	Posture       string `protobuf:"bytes,27,opt,name=posture,proto3" json:"posture,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GovernanceEnvelope) Reset() {
@@ -803,6 +808,13 @@ func (x *GovernanceEnvelope) GetTenantId() string {
 func (x *GovernanceEnvelope) GetBindingPersona() string {
 	if x != nil {
 		return x.BindingPersona
+	}
+	return ""
+}
+
+func (x *GovernanceEnvelope) GetPosture() string {
+	if x != nil {
+		return x.Posture
 	}
 	return ""
 }
@@ -1321,7 +1333,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x12GovernanceMetadata\x12)\n" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +
-	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\"\xb5\b\n" +
+	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\"\xcf\b\n" +
 	"\x12GovernanceEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x129\n" +
@@ -1356,7 +1368,8 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\atask_id\x18\x11 \x01(\tR\x06taskId\x12-\n" +
 	"\x12system_fingerprint\x18\x12 \x01(\tR\x11systemFingerprint\x12\x1b\n" +
 	"\ttenant_id\x18\x17 \x01(\tR\btenantId\x12'\n" +
-	"\x0fbinding_persona\x18\x18 \x01(\tR\x0ebindingPersona\"`\n" +
+	"\x0fbinding_persona\x18\x18 \x01(\tR\x0ebindingPersona\x12\x18\n" +
+	"\aposture\x18\x1b \x01(\tR\aposture\"`\n" +
 	"\x1ePlatformEnrollmentFingerprints\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x10\n" +

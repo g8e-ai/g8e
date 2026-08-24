@@ -348,18 +348,11 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		KeyID:             c.ActuatorKeyID,
 	}
 
-	// Initialize TransactionVerifier for strict pre-dispatch verification
+	// Initialize TransactionVerifier for strict pre-dispatch verification.
+	// The warden has no posture of its own; it reads posture per-envelope
+	// from GovernanceEnvelope.Posture at verification time. The gateway
+	// sets that field at envelope construction from cfg.Gateway.Posture.
 	knownActionTypes := constants.AllActionTypes
-	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode.
-	// The operator has no posture of its own; Config.Posture is the gateway's
-	// posture received at enrollment. Fail closed when neither is set.
-	posture := string(c.Config.Gateway.Posture)
-	if posture == "" {
-		posture = string(c.Config.Posture)
-	}
-	if posture == "" {
-		return fmt.Errorf("pubsub_commands: %w", constants.ErrPostureRequired)
-	}
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		govDeps.ReplayStore,
@@ -369,7 +362,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.L3Notary,
 		govDeps.Doctrine,
 		knownActionTypes,
-		posture,
 		nil, // Clock defaults to RealClock
 	)
 

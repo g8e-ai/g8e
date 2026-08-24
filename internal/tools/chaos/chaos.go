@@ -184,6 +184,10 @@ func signedEnvelope(
 		Payload:           payload,
 		StateMerkleRoot:   stateRoot,
 		Nonce:             fmt.Sprintf("chaos-%s-%s", nonceSuffix, hex.EncodeToString(payload[:clampMin(4, len(payload))])),
+		// Posture is gateway policy metadata, not part of the transaction
+		// hash. The chaos tester uses NoopConsensusPolicyStore, so doctrine
+		// posture (L1 enforced, L2/L3 audited) is the appropriate value.
+		Posture:           constants.PostureDoctrine,
 	}
 
 	hash, err := govpkg.GenerateMessageID(env)
@@ -515,7 +519,6 @@ func Run(cfg Config) error {
 		l3Notary,
 		doctrine,
 		knownActionTypes,
-		"doctrine",
 		nil, // Clock defaults to RealClock
 	)
 

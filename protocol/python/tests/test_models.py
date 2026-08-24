@@ -545,6 +545,47 @@ class TestGovernanceEnvelope:
         assert envelope.governance.l3.proof.signature == "sig"
         assert envelope.governance.l3.proof.credential_id == "cred-1"
 
+    def test_governance_envelope_posture_round_trip(self):
+        """The posture field round-trips through protojson serialization.
+
+        Posture is gateway policy metadata carried in-band on the envelope;
+        the operator reads it at L4 verification time. It is not part of the
+        transaction hash.
+        """
+        envelope = GovernanceEnvelope(
+            id="hash-1",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+            posture="doctrine",
+        )
+        data = envelope.model_dump(mode="json")
+        assert data["posture"] == "doctrine"
+        restored = GovernanceEnvelope.model_validate(data)
+        assert restored.posture == "doctrine"
+
+    def test_governance_envelope_posture_defaults_none(self):
+        """Posture defaults to None when not supplied by the gateway."""
+        envelope = GovernanceEnvelope(
+            id="hash-1",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+        )
+        assert envelope.posture is None
+
 
 class TestCommandIntent:
     """Verify CommandIntent model fields, base64 payload serialization, and protojson round-trip."""

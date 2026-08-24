@@ -160,7 +160,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// app-published command intent on cmd: channels, validates the target
 	// operator session, fetches the current state root, and constructs the
 	// governed GovernanceEnvelope before fan-out.
-	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth)
+	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth, string(cfg.Gateway.Posture))
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
@@ -300,7 +300,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
 		platformEnrollmentSvc:   NewPlatformEnrollmentService(stores.DocStore, userSvc, envProcAdapter, stores.StateRootSvc, logger),
-		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth),
+		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth, string(cfg.Gateway.Posture)),
 		responder:               res,
 	}
 

@@ -124,6 +124,12 @@ message GovernanceEnvelope {
   string system_fingerprint = 18;
   string tenant_id = 23;
   string binding_persona = 24;
+
+  // Gateway governance posture at envelope construction time (doctrine,
+  // consensus, notary). Set by the gateway; the operator reads it here at
+  // L4 verification time instead of from out-of-band config. Not included
+  // in the transaction hash — it is policy metadata, not intent.
+  string posture = 27;
 }
 
 enum PlatformComponentKind {

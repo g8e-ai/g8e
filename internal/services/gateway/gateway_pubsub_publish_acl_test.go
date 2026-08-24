@@ -164,6 +164,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 		RequestorUserID:   "user-001",
 		ActingAppID:       "spiffe://g8e.local/app/g8ee",
 		StateMerkleRoot:   "root-abc",
+		Posture:           "doctrine",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, env)
@@ -180,6 +181,7 @@ func TestBuildGovernanceEnvelope_Success(t *testing.T) {
 	assert.Equal(t, env.Id, env.TransactionHash, "Id must equal TransactionHash")
 	assert.Equal(t, "user-001", env.RequestorUserId)
 	assert.Equal(t, "spiffe://g8e.local/app/g8ee", env.ActingAppId)
+	assert.Equal(t, "doctrine", env.Posture, "envelope must carry the gateway posture")
 	require.NotNil(t, env.Governance)
 	require.NotNil(t, env.Governance.L1)
 	assert.True(t, env.Governance.L1.Validated, "L1 doctrine validation marker must be set")
@@ -199,6 +201,7 @@ func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 		RequestorUserID:   "user-001",
 		ActingAppID:       "spiffe://g8e.local/app/g8ee",
 		StateMerkleRoot:   "root-abc",
+		Posture:           "doctrine",
 	}
 
 	env1, err := BuildGovernanceEnvelope(params)
@@ -211,6 +214,29 @@ func TestBuildGovernanceEnvelope_DeterministicTxHash(t *testing.T) {
 	assert.NotEqual(t, env1.Id, env2.Id, "transaction hashes must differ due to random nonce")
 	// But nonces must be different.
 	assert.NotEqual(t, env1.Nonce, env2.Nonce, "nonces must differ")
+	// Posture is identical and not part of the hash.
+	assert.Equal(t, env1.Posture, env2.Posture)
+	assert.Equal(t, "doctrine", env1.Posture)
+}
+
+// TestBuildGovernanceEnvelope_MissingPostureFailsClosed verifies that the
+// gateway never emits an envelope without posture. An empty posture
+// indicates a gateway bug (the constructor was called without wiring
+// cfg.Gateway.Posture), and the operator would reject it per-transaction
+// anyway — fail closed at construction time.
+func TestBuildGovernanceEnvelope_MissingPostureFailsClosed(t *testing.T) {
+	_, err := BuildGovernanceEnvelope(BuildEnvelopeParams{
+		OperatorID:        "op-001",
+		OperatorSessionID: "sess-001",
+		ActionType:        string(constants.ActionTypeFileEdit),
+		Payload:           []byte("file-edit-payload"),
+		TargetResource:    "/etc/hostname",
+		StateMerkleRoot:   "root-abc",
+		// Posture intentionally omitted.
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrEnvelopePostureMissing),
+		"missing posture must fail closed with ErrEnvelopePostureMissing, got: %v", err)
 }
 
 // --- Command intent relay unit tests ---
@@ -243,7 +269,7 @@ func newRelayTestBroker(t *testing.T, stateRoot string, op *models.OperatorDocum
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 	validator := &stubOperatorSessionValidator{op: op}
-	broker.SetCommandRelayDeps(&stubStateRootProvider{root: stateRoot}, validator)
+	broker.SetCommandRelayDeps(&stubStateRootProvider{root: stateRoot}, validator, "doctrine")
 	return broker, validator
 }
 
@@ -547,6 +573,7 @@ func TestHandlePublish_StateRootErrorDroppedFailClosed(t *testing.T) {
 	broker.SetCommandRelayDeps(
 		&stubStateRootProvider{err: errors.New("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
+		"doctrine",
 	)
 	handler := newAppSessionHandler(broker, "g8ee")
 
@@ -692,14 +719,16 @@ func TestSetCommandRelayDeps(t *testing.T) {
 
 	assert.Nil(t, broker.stateRootProvider, "state root provider must be nil before SetCommandRelayDeps")
 	assert.Nil(t, broker.sessionValidator, "session validator must be nil before SetCommandRelayDeps")
+	assert.Empty(t, broker.posture, "posture must be empty before SetCommandRelayDeps")
 
 	provider := &stubStateRootProvider{root: "root-1"}
 	validator := &stubOperatorSessionValidator{op: &models.OperatorDocumentGo{ID: "op-1"}}
-	broker.SetCommandRelayDeps(provider, validator)
+	broker.SetCommandRelayDeps(provider, validator, "doctrine")
 
 	broker.mu.RLock()
 	assert.NotNil(t, broker.stateRootProvider)
 	assert.NotNil(t, broker.sessionValidator)
+	assert.Equal(t, "doctrine", broker.posture)
 	broker.mu.RUnlock()
 }
 

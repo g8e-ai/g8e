@@ -61,6 +61,7 @@ type BuildEnvelopeParams struct {
 	TaskID            string
 	WebSessionID      string
 	CliSessionID      string
+	Posture           string
 }
 
 // BuildGovernanceEnvelope constructs a canonical GovernanceEnvelope with
@@ -72,6 +73,9 @@ type BuildEnvelopeParams struct {
 // construction authority for both the HTTP DispatchService and the
 // WebSocket PubSub relay.
 func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEnvelope, error) {
+	if params.Posture == "" {
+		return nil, fmt.Errorf("gateway: build envelope: %w", constants.ErrEnvelopePostureMissing)
+	}
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, fmt.Errorf("gateway: build envelope: generate nonce: %w", err)
@@ -97,6 +101,7 @@ func BuildGovernanceEnvelope(params BuildEnvelopeParams) (*commonv1.GovernanceEn
 		TaskId:            params.TaskID,
 		WebSessionId:      params.WebSessionID,
 		CliSessionId:      params.CliSessionID,
+		Posture:           params.Posture,
 		Governance: &commonv1.GovernanceMetadata{
 			L1: &commonv1.L1Metadata{Validated: true},
 		},
@@ -153,16 +158,20 @@ type DispatchService struct {
 	pubsub            *GatewayWebSocketHandler
 	stateRootProvider governance.StateRootProvider
 	auth              operatorSessionValidator
+	posture           string
 }
 
 // NewDispatchService creates a DispatchService wired to the gateway's in-process
-// pub/sub broker, state root provider, and auth service.
-func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator) *DispatchService {
+// pub/sub broker, state root provider, and auth service. The posture is the
+// gateway's governance posture, injected into every envelope built by this
+// service so the operator reads it per-transaction at L4 verification time.
+func NewDispatchService(logger *slog.Logger, pubsubHandler *GatewayWebSocketHandler, stateRootProvider governance.StateRootProvider, auth operatorSessionValidator, posture string) *DispatchService {
 	return &DispatchService{
 		logger:            logger,
 		pubsub:            pubsubHandler,
 		stateRootProvider: stateRootProvider,
 		auth:              auth,
+		posture:           posture,
 	}
 }
 
@@ -202,6 +211,7 @@ func (d *DispatchService) Dispatch(ctx context.Context, req DispatchRequest) (*D
 		TaskID:            req.TaskID,
 		WebSessionID:      req.WebSessionID,
 		CliSessionID:      req.CliSessionID,
+		Posture:           d.posture,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: %w", err)

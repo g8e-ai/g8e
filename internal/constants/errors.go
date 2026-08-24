@@ -133,6 +133,7 @@ var (
 	ErrPortUnavailable         = errors.New("port unavailable")
 	ErrInvalidPosture          = errors.New("invalid posture")
 	ErrPostureRequired         = errors.New("posture required: operator has no posture of its own and received none from the gateway")
+	ErrEnvelopePostureMissing  = errors.New("governance envelope missing posture: gateway must set posture at envelope construction time")
 	ErrPIDReadFailed           = errors.New("failed to read PID file")
 	ErrPIDWriteFailed          = errors.New("failed to write PID file")
 	ErrPostureReadFailed       = errors.New("failed to read posture file")
