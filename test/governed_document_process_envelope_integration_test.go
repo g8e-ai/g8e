@@ -59,6 +59,7 @@ func buildTestEnvelope(
 		SourceComponent: commonv1.Component_COMPONENT_AGENT,
 		RequestorUserId: userID,
 		ActingAppId:     appID,
+		Posture:         constants.PostureDoctrine,
 	}
 
 	hash, err := governance.GenerateMessageID(env)

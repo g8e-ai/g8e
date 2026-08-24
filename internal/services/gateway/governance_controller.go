@@ -171,6 +171,29 @@ func isAppComponent(c commonv1.Component) bool {
 	return c == commonv1.Component_COMPONENT_AGENT || c == commonv1.Component_COMPONENT_CLIENT
 }
 
+// injectEnvelopePosture sets the gateway's governance posture on an incoming
+// envelope that was built by a client (ensemble, CLI, BYO app). Clients do not
+// know the gateway's posture — the gateway is the posture authority. Posture
+// is not part of the transaction hash, so injecting it here does not
+// invalidate the client's signature or hash. If the envelope already carries a
+// non-empty posture, it is left unchanged (gateway-internal construction paths
+// set posture at build time).
+func injectEnvelopePosture(body []byte, posture string) ([]byte, error) {
+	var envelope commonv1.GovernanceEnvelope
+	if err := protojson.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("decode envelope: %w", err)
+	}
+	if envelope.Posture != "" {
+		return body, nil
+	}
+	envelope.Posture = posture
+	reMarshaled, err := protojson.Marshal(&envelope)
+	if err != nil {
+		return nil, fmt.Errorf("re-marshal envelope: %w", err)
+	}
+	return reMarshaled, nil
+}
+
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point
 // for BYO Gateway clients. It accepts a GovernanceEnvelope, verifies it
 // through the Gateway's fail-closed gate (id, hash, expiry, nonce, state
@@ -233,6 +256,18 @@ func (c *GovernanceController) handleGovernanceEnvelope(w http.ResponseWriter, r
 			c.responder.Error(w, http.StatusForbidden, fmt.Errorf("handleGovernanceEnvelope: identity binding: %w", err).Error())
 			return
 		}
+	}
+
+	// Inject the gateway's governance posture into the envelope. The gateway
+	// is the posture authority; clients (ensemble, CLI, BYO apps) do not know
+	// the gateway's posture and must not set it. Posture is not part of the
+	// transaction hash, so injecting it here does not invalidate the client's
+	// signature. If the envelope already carries a posture (e.g. from a
+	// gateway-internal construction path), leave it unchanged.
+	body, err = injectEnvelopePosture(body, string(c.cfg.Gateway.Posture))
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("handleGovernanceEnvelope: inject posture: %w", err).Error())
+		return
 	}
 
 	receipt, procErr := proc.ProcessEnvelope(r.Context(), body)

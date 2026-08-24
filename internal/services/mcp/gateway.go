@@ -777,6 +777,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.NewString(),
 		StateMerkleRoot: stateRoot,
+		Posture:         g.posture,
 		Governance:      &commonv1.GovernanceMetadata{},
 	}
 
