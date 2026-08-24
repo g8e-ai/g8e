@@ -106,6 +106,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 		Payload:           payload,
 		StateMerkleRoot:   "test-state-root",
 		Nonce:             "nonce-missing-signer",
+		Posture:           constants.PostureConsensus,
 	}
 	hash, err := govpkg.GenerateMessageID(env)
 	require.NoError(t, err)
@@ -157,6 +158,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Payload:         nil,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		f.Svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
@@ -190,6 +192,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
@@ -277,6 +280,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					Payload:         tc.payload,
 					StateMerkleRoot: "test-state-root",
 					Nonce:           "nonce-" + tc.name,
+					Posture:         constants.PostureDoctrine,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
 							ConsensusSetId: "test-consensus",
@@ -339,6 +343,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-cancel",
+			Posture:         constants.PostureDoctrine,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
 					ConsensusSetId: "test-consensus",
@@ -876,6 +881,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-sync",
+			Posture:         constants.PostureDoctrine,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
 					ConsensusSetId: "test-consensus",
@@ -957,6 +963,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		envelopeBytes, _ := protojson.Marshal(env)
 
@@ -1041,6 +1048,7 @@ func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *te
 					Payload:         payload,
 					StateMerkleRoot: "test-state-root",
 					Nonce:           fmt.Sprintf("nonce-det-%s-%d", tc.actionType, i),
+					Posture:         constants.PostureDoctrine,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
 							ConsensusSetId: "test-consensus",

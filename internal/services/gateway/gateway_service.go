@@ -299,7 +299,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		mcpGateway:              mcpGateway,
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
-		platformEnrollmentSvc:   NewPlatformEnrollmentService(stores.DocStore, userSvc, envProcAdapter, stores.StateRootSvc, logger),
+		platformEnrollmentSvc:   NewPlatformEnrollmentService(stores.DocStore, userSvc, envProcAdapter, stores.StateRootSvc, string(cfg.Gateway.Posture), logger),
 		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth, string(cfg.Gateway.Posture)),
 		responder:               res,
 	}
