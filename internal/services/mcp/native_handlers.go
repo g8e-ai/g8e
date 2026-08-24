@@ -41,9 +41,9 @@ func isValidIdentifier(name string) bool {
 
 // NativeToolHandler executes native tools compiled into the Node binary.
 type NativeToolHandler struct {
-	registry           *ToolRegistry
-	logger             *slog.Logger
-	auditReceiptQuery  AuditReceiptQuery
+	registry          *ToolRegistry
+	logger            *slog.Logger
+	auditReceiptQuery AuditReceiptQuery
 }
 
 // NewNativeToolHandler creates a new native tool handler with all native tools

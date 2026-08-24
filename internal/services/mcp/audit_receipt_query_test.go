@@ -25,12 +25,12 @@ import (
 // for unit testing the audit receipt native tools. It returns canned records
 // and records the arguments it was called with so tests can assert dispatch.
 type stubAuditReceiptQuery struct {
-	listBySession  []*models.ActionReceiptRecord
-	listSince      []*models.ActionReceiptRecord
-	getByID        map[string]*models.ActionReceiptRecord
-	listErr        error
-	listSinceErr   error
-	getErr         error
+	listBySession []*models.ActionReceiptRecord
+	listSince     []*models.ActionReceiptRecord
+	getByID       map[string]*models.ActionReceiptRecord
+	listErr       error
+	listSinceErr  error
+	getErr        error
 
 	lastListSession string
 	lastListLimit   int
