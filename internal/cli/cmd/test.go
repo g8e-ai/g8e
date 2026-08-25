@@ -12,22 +12,25 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+	_ "modernc.org/sqlite"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/spf13/cobra"
-	_ "modernc.org/sqlite"
 )
 
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, lint, chaos)",
+		Short: "Run test suites (unit, integration, e2e, e2e-full, lint, chaos)",
 		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Chaos generates governance events for testing.`,
 	}
 
@@ -35,6 +38,7 @@ func testCmd() *cobra.Command {
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testE2ECmd(),
+		testE2EFullCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
 		chaosCmd(),
@@ -180,6 +184,107 @@ is not reachable. Supports an optional --run regexp to select specific tests.`,
 	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
 
 	return cmd
+}
+
+func testE2EFullCmd() *cobra.Command {
+	return testE2EFullCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+// testE2EFullCmdWithRunner constructs the full lifecycle Tier 3 executor.
+// It starts the unified Docker Compose stack, waits for health, runs the E2E tests,
+// and tears down on completion or failure.
+func testE2EFullCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+	var runRegexp string
+
+	cmd := &cobra.Command{
+		Use:   "e2e-full",
+		Short: "Run full lifecycle Tier 3 E2E tests (start compose, test, tear down)",
+		Long: `Start the unified Docker Compose stack (--profile bootstrapped), wait for
+services to become healthy, run the Tier 3 E2E test suite, and tear down
+(docker compose down -v) on completion or failure.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Starting unified Docker Compose stack (--profile bootstrapped)...")
+			if err := runDockerCompose([]string{"up", "-d"}, "bootstrapped"); err != nil {
+				return fmt.Errorf("%w: docker compose up failed: %w", constants.ErrE2ETestsFailed, err)
+			}
+			defer func() {
+				fmt.Println("Tearing down Docker Compose stack...")
+				_ = runDockerCompose([]string{"down", "-v"}, "")
+			}()
+
+			fmt.Println("Waiting for platform services to become healthy...")
+			waitCtx, waitCancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+			defer waitCancel()
+			if err := waitForStackHealthy(waitCtx); err != nil {
+				return fmt.Errorf("%w: platform health check failed: %w", constants.ErrE2ETestsFailed, err)
+			}
+
+			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			if runtime.GOOS != "windows" {
+				testArgs = append(testArgs, "-race")
+			}
+			if runRegexp != "" {
+				testArgs = append(testArgs, "-run", runRegexp)
+			}
+			testArgs = append(testArgs, "./test/e2e/...")
+
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrE2ETestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrE2ETestsFailed, code)
+			}
+
+			fmt.Println("E2E tests completed successfully.")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+	return cmd
+}
+
+func waitForStackHealthy(ctx context.Context) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	gatewayURL := "http://localhost:8080/api/v1/health"
+	ensembleURL := "http://localhost:8000/health"
+
+	for {
+		gwOK := false
+		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, gatewayURL, nil); err == nil {
+			if resp, err := client.Do(req); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					gwOK = true
+				}
+			}
+		}
+
+		ensOK := false
+		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, ensembleURL, nil); err == nil {
+			if resp, err := client.Do(req); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					ensOK = true
+				}
+			}
+		}
+
+		if gwOK && ensOK {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func testCoverageCmd() *cobra.Command {

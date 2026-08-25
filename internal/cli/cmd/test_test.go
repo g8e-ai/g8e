@@ -26,7 +26,7 @@ func TestTestCmd(t *testing.T) {
 		cmd := testCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"unit", "integration", "e2e", "coverage", "lint", "chaos", "summary"}
+		expectedSubcommands := []string{"unit", "integration", "e2e", "e2e-full", "coverage", "lint", "chaos", "summary"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {
@@ -75,6 +75,23 @@ func TestTestE2ECmd_RunFlagDefaultsEmpty(t *testing.T) {
 	flag := cmd.Flags().Lookup("run")
 	require.NotNil(t, flag)
 	assert.Equal(t, "", flag.DefValue)
+}
+
+func TestTestE2EFullCmd(t *testing.T) {
+	t.Run("e2e-full command has correct use and description", func(t *testing.T) {
+		cmd := testE2EFullCmd()
+		assert.Equal(t, "e2e-full", cmd.Use)
+		assert.Contains(t, cmd.Short, "Tier 3")
+		assert.Contains(t, cmd.Long, "unified Docker Compose stack")
+		assert.NotNil(t, cmd.RunE)
+	})
+
+	t.Run("e2e-full command has run flag", func(t *testing.T) {
+		cmd := testE2EFullCmd()
+		flag := cmd.Flags().Lookup("run")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+	})
 }
 
 func TestTestCoverageCmd(t *testing.T) {

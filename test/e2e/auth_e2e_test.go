@@ -25,10 +25,10 @@ import (
 // ServerName derived from the validated HTTPS URL — no InsecureSkipVerify.
 // A successful authenticated request is direct proof that:
 //
-   //   1. The owner CLI certificate chains to a CA in the trust bundle.
-//   2. The gateway's certificate SANs match the ServerName from config.
-//   3. The CLI session ID header is accepted by an authenticated route.
-//   4. TLS 1.3 with FIPS curve preferences negotiated successfully.
+//  1. The owner CLI certificate chains to a CA in the trust bundle.
+//  2. The gateway's certificate SANs match the ServerName from config.
+//  3. The CLI session ID header is accepted by an authenticated route.
+//  4. TLS 1.3 with FIPS curve preferences negotiated successfully.
 //
 // This replaces the prior log-based "Authentication successful" marker check
 // and the operator-cert mTLS dial. The owner identity is the canonical
