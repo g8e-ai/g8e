@@ -206,6 +206,11 @@ const (
 	ContextKeyWebSessionID ContextKey = "web_session_id"
 	// ContextKeyCLISessionID stores the CLI session ID for mTLS-authenticated CLI requests.
 	ContextKeyCLISessionID ContextKey = "cli_session_id"
+	// ContextKeyStateMerkleRoot stores a pre-fetched state merkle root so the
+	// in-process gateway build-verify window sees the same root for the same
+	// transaction. Operator-side verification (without this key in context)
+	// still re-fetches the current root from the provider.
+	ContextKeyStateMerkleRoot ContextKey = "state_merkle_root"
 )
 
 // Session constants

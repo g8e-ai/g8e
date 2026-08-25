@@ -506,13 +506,17 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 		actionType:     constants.ActionTypeMcpCall,
 		targetResource: callParams.Name,
 		payloadBytes:   payloadBytes,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if stateRoot != "" {
+		ctx = context.WithValue(ctx, constants.ContextKeyStateMerkleRoot, stateRoot)
 	}
 
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
@@ -669,13 +673,17 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 		actionType:     constants.ActionTypeMcpResourceRead,
 		targetResource: readParams.URI,
 		payloadBytes:   payloadBytes,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if stateRoot != "" {
+		ctx = context.WithValue(ctx, constants.ContextKeyStateMerkleRoot, stateRoot)
 	}
 
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
@@ -718,13 +726,17 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+	_, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 		actionType:     constants.ActionTypeMcpPromptGet,
 		targetResource: getParams.Name,
 		payloadBytes:   payloadBytes,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if stateRoot != "" {
+		ctx = context.WithValue(ctx, constants.ContextKeyStateMerkleRoot, stateRoot)
 	}
 
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
@@ -756,8 +768,8 @@ type processGatewayOptions struct {
 	payloadBytes   []byte
 }
 
-func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, err error) {
-	stateRoot := ""
+func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, stateRoot string, err error) {
+	stateRoot = ""
 	if g.stateRootProvider != nil {
 		var err error
 		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot()
@@ -809,14 +821,14 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 
 	hash, err = govpkg.GenerateMessageID(env)
 	if err != nil {
-		return "", nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
+		return "", nil, "", fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 	env.Id = hash
 	env.TransactionHash = hash
 
 	envelopeBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
-		return "", nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
+		return "", nil, "", fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
 	// Under any posture that requires L2 signatures (consensus and notary),
@@ -828,12 +840,12 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		deliberatedBytes, err := g.l2ConsensusDeliberator.Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("L2 consensus deliberation failed", "tx_hash", hash, "error", err)
-			return "", nil, fmt.Errorf("gateway: l2 consensus deliberation: %w", err)
+			return "", nil, "", fmt.Errorf("gateway: l2 consensus deliberation: %w", err)
 		}
 		envelopeBytes = deliberatedBytes
 	}
 
-	return hash, envelopeBytes, nil
+	return hash, envelopeBytes, stateRoot, nil
 }
 
 // @Summary		A2A call
@@ -880,13 +892,17 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
+	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
 		actionType:     constants.ActionTypeA2aCall,
 		targetResource: req.SkillName,
 		payloadBytes:   payloadBytes,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if stateRoot != "" {
+		ctx = context.WithValue(ctx, constants.ContextKeyStateMerkleRoot, stateRoot)
 	}
 
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)

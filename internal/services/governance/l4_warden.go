@@ -175,7 +175,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 	}
 
 	// 3. Stateful Validation (excluding nonce, which is already reserved)
-	err = tv.verifyStateful(envelope)
+	err = tv.verifyStateful(ctx, envelope)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: STATEFUL_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
@@ -325,8 +325,12 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 	return decodedPayload, computedHash, nil
 }
 
-// verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error {
+// verifyStateful checks the state root. Nonce and expiry are checked earlier in VerifyEnvelope.
+// If the caller has placed a pre-fetched state merkle root in the context (the
+// in-process gateway build path), that root is used so concurrent mutations do
+// not invalidate the envelope between construction and verification. External
+// operator-side verification always re-fetches from the provider.
+func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.GovernanceEnvelope) error {
 	if envelope.StateMerkleRoot == "" {
 		return constants.ErrTxStateRootRequired
 	}
@@ -336,10 +340,16 @@ func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error 
 		return constants.ErrTxStateRootMissing
 	}
 
-	currentRoot, err := tv.stateRootProvider.GetCurrentStateRoot()
-	if err != nil {
-		tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
-		return fmt.Errorf("l4 warden: get current state root: %w", err)
+	var currentRoot string
+	if root, ok := ctx.Value(constants.ContextKeyStateMerkleRoot).(string); ok && root != "" {
+		currentRoot = root
+	} else {
+		var err error
+		currentRoot, err = tv.stateRootProvider.GetCurrentStateRoot()
+		if err != nil {
+			tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
+			return fmt.Errorf("l4 warden: get current state root: %w", err)
+		}
 	}
 
 	if currentRoot == "" {

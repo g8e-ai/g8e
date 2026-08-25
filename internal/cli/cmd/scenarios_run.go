@@ -265,6 +265,12 @@ func printAgentHarnessSummary(w io.Writer, results []scenarios.Result) {
 			ok++
 		}
 		fmt.Fprintf(w, "  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
+		if r.Err != "" {
+			fmt.Fprintf(w, "    error: %s\n", r.Err)
+		}
+		for _, n := range r.Notes {
+			fmt.Fprintf(w, "    note: %s\n", n)
+		}
 	}
 	fmt.Fprintf(w, "\n%d/%d scenarios ok\n", ok, len(results))
 }

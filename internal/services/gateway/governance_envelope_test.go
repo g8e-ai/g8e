@@ -222,7 +222,16 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, 1, proc.calls)
-	require.Equal(t, body, proc.gotPayload, "handler must forward the body unchanged to the processor")
+
+	// The handler injects the gateway's posture into the envelope before
+	// forwarding to the processor. The test config uses PostureNotary, so the
+	// processor receives the posture field alongside the client's original
+	// fields. Posture is not part of the transaction hash, so this injection
+	// does not invalidate the client's signature.
+	var forwarded commonv1.GovernanceEnvelope
+	require.NoError(t, protojson.Unmarshal(proc.gotPayload, &forwarded))
+	require.Equal(t, "tx-abc", forwarded.GetId())
+	require.Equal(t, constants.PostureNotary, forwarded.GetPosture(), "handler must inject gateway posture into the envelope")
 
 	// Receipt should be returned as JSON. Field names follow protojson.
 	var got actionReceiptJSON
