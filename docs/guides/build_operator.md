@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Operator
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 ---
 
@@ -143,10 +143,10 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 
 ### Go Module
 
-The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v2.0.0
+go get github.com/g8e-ai/g8e/v2@v2.0.1
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.

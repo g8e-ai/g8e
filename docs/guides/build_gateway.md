@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Gateway
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 ---
 
@@ -150,10 +150,10 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 
 ### Go Module
 
-The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e/v2@v2.0.1
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).

@@ -6,7 +6,7 @@ parent: Guides
 # Connect g8e Operator to g8e Gateway
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 ---
 
@@ -267,7 +267,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e/v2@v2.0.1
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
