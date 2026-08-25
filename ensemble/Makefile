@@ -109,6 +109,7 @@ proto:
 	@sed -i 's|import "g8e/common/v1/common.proto"|import "common.proto"|' /tmp/proto_flat/operator.proto
 	@$(PYTHON) -m grpc_tools.protoc --proto_path=/tmp/proto_flat --python_out=app/proto common.proto operator.proto pubsub.proto
 	@sed -i 's/^import common_pb2 as common__pb2/from app.proto import common_pb2 as common__pb2/' app/proto/operator_pb2.py
+	@touch app/proto/__init__.py
 	@echo "Protobuf stubs generated in app/proto/"
 
 # =============================================================================
