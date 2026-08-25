@@ -39,6 +39,12 @@ class APIKeyService:
 
     def make_doc_id(self, raw_material: str) -> str:
         """Generate a deterministic document ID from a raw API key."""
+        # codeql[py/weak-sensitive-data-hashing]: API keys are 256-bit random
+        # values (secrets.token_hex(32) in generate_raw_key), not low-entropy
+        # passwords. SHA256 is the correct choice for deterministic lookup-index
+        # derivation: a slow KDF (bcrypt/argon2) would break O(1) key validation
+        # on every request and add no security benefit against a 2^256 input
+        # space. This mirrors the standard pattern for token-at-rest indexing.
         return hashlib.sha256(raw_material.encode()).hexdigest()[:API_KEY_HASH_LENGTH]
 
     def generate_raw_key(self, prefix: str = "g8e_") -> str:
