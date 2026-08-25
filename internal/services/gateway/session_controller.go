@@ -52,7 +52,7 @@ func (c *SessionController) handlePublicAuthLogout(w http.ResponseWriter, r *htt
 	cookie, err := r.Cookie(constants.WebSessionCookieName)
 	if err == nil {
 		// Best effort delete web session from DB
-		if _, err := c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
+		if err := c.docStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
 			c.logger.Warn("Failed to delete web session during logout", "error", err, "sessionID", cookie.Value)
 		}
 	}

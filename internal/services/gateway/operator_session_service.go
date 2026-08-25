@@ -66,3 +66,44 @@ func (s *OperatorSessionService) PersistOperatorSession(operatorSessionID, userI
 
 	return nil
 }
+
+// GetActiveSessionForUser returns the first active operator session for the
+// given user ID, or nil if none exists. Used by the CLI refresh controller
+// to inherit an operator binding when the old CLI session is missing (e.g.,
+// after a gateway volume reset that wiped CLI sessions but left operator
+// sessions intact).
+func (s *OperatorSessionService) GetActiveSessionForUser(userID string) (*models.OperatorSession, error) {
+	userIDVal, err := json.Marshal(userID)
+	if err != nil {
+		return nil, fmt.Errorf("marshal user_id filter: %w", err)
+	}
+	activeVal, err := json.Marshal(true)
+	if err != nil {
+		return nil, fmt.Errorf("marshal is_active filter: %w", err)
+	}
+	docs, err := s.db.DocQuery(
+		marshaler.CollectionName(constants.CollectionOperatorSessions),
+		[]models.DocFilter{
+			{Field: "user_id", Op: "==", Value: userIDVal},
+			{Field: "is_active", Op: "==", Value: activeVal},
+		},
+		"created_at DESC",
+		1,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query active operator sessions for user %s: %w", userID, err)
+	}
+	if len(docs) == 0 {
+		return nil, nil
+	}
+	dataBytes, err := json.Marshal(docs[0].Data)
+	if err != nil {
+		return nil, fmt.Errorf("marshal operator session document: %w", err)
+	}
+	var session models.OperatorSession
+	if err := json.Unmarshal(dataBytes, &session); err != nil {
+		return nil, fmt.Errorf("unmarshal operator session: %w", err)
+	}
+	session.ID = docs[0].ID
+	return &session, nil
+}

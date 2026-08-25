@@ -88,11 +88,11 @@ Running './g8e' with no arguments launches the Tactical Governance Console (TUI)
 		vaultCmd(),
 		testCmd(),
 		demosCmd(),
+		dockerCmd(),
 		auditCmd(),
 		reportCmd(),
 		swaggerCmd(),
 		tuiCmd(),
-		guiCmd(),
 		versionCmd(),
 		complianceCmd(),
 	)

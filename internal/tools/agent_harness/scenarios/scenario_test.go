@@ -610,7 +610,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dhsScenarios()) + len(financeScenarios()) + len(fedrampScenarios())
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(ensembleScenarios()) + len(dhsScenarios()) + len(financeScenarios()) + len(fedrampScenarios())
 
 	assert.Equal(t, expectedCount, len(scenarios), "Registry should have correct scenario count")
 }
@@ -699,6 +699,12 @@ func TestRegistryPostureDeclarations(t *testing.T) {
 		"agent-delegation": Doctrine,  // MCPToolsCall/MCPToolsList, no governance extras
 		"consensus-quorum": Consensus, // Ensemble, expects admission
 		"notary-oob":       Notary,    // Ensemble + Authenticator suspend flow
+
+		// Ensemble scenarios — EnsembleChat via g8ee, GovKit identity binding, polls audit vault
+		"ensemble-chat-file-create": Doctrine, // Chat -> file_create tool -> FILE_EDIT receipt
+		"ensemble-chat-file-write":  Doctrine, // Chat -> file_write tool -> FILE_EDIT receipt
+		"ensemble-document-update":  Doctrine, // Direct DOCUMENT_UPDATE create + merge=true patch + read-back (Bug 10 regression)
+		"ensemble-document-delete":  Doctrine, // Direct DOCUMENT_UPDATE create + DOCUMENT_DELETE + verify absence
 
 		// DHS scenarios
 		"dhs-ingest":         Consensus, // Ensemble + Authenticator inline, expects admission

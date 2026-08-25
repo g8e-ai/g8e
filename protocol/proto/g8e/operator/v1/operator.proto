@@ -12,6 +12,7 @@ package g8e.operator.v1;
 option go_package = "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1;operatorv1";
 
 import "g8e/common/v1/common.proto";
+import "google/protobuf/struct.proto";
 
 // Execution status enum for command and operation results
 enum ExecutionStatus {
@@ -186,6 +187,37 @@ message DirectCommandResultAuditRequested {
 
 message AuditMsgRequested {
   string content = 1;
+}
+
+// DocumentUpdateRequested is the typed payload for governed document
+// create/update operations (cases, investigations, memories, tasks).
+// The ensemble submits these through the governance envelope pipeline
+// for L1-L5 verification before the gateway persists them via DocSet.
+message DocumentUpdateRequested {
+  // Target collection name (e.g., "cases", "investigations", "memories").
+  string collection = 1;
+
+  // Document ID to create or update.
+  string document_id = 2;
+
+  // Field updates as a structured payload. The gateway converts this to
+  // JSON for document store persistence.
+  google.protobuf.Struct updates = 3;
+
+  // If true, use PATCH (merge); if false, use PUT (replace).
+  bool merge = 4;
+}
+
+// DocumentDeleteRequested is the typed payload for governed document
+// deletion operations (cases, investigations). The ensemble submits
+// these through the governance envelope pipeline for L1-L5 verification
+// before the gateway removes them via DocDelete.
+message DocumentDeleteRequested {
+  // Target collection name.
+  string collection = 1;
+
+  // Document ID to delete.
+  string document_id = 2;
 }
 
 message SignCertificateRequested {

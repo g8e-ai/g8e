@@ -9,18 +9,24 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/consensus"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // newTestGovernanceController creates a GovernanceController with minimal
@@ -149,4 +155,92 @@ func TestGovernanceController_SetConsensusService_RaceWithDeliberateRequest(t *t
 	}()
 
 	wg.Wait()
+}
+
+// identityBindingRequest builds an httptest.Request carrying an mTLS peer
+// certificate with the supplied SPIFFE URI SANs. The request body is unused
+// by verifyEnvelopeIdentityBinding (it reads envelopeBody separately).
+func identityBindingRequest(t *testing.T, spiffeIDs ...string) *http.Request {
+	t.Helper()
+	uris := make([]*url.URL, 0, len(spiffeIDs))
+	for _, s := range spiffeIDs {
+		u, err := url.Parse(s)
+		require.NoError(t, err)
+		uris = append(uris, u)
+	}
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{URIs: uris}},
+	}
+	return req
+}
+
+// mutationEnvelopeBytes builds a wire GovernanceEnvelope with the given action
+// type and identity claims, encoded in canonical protojson (the wire form
+// verifyEnvelopeIdentityBinding decodes).
+func mutationEnvelopeBytes(t *testing.T, actionType constants.ActionType, operatorID, operatorSessionID string, source commonv1.Component) []byte {
+	t.Helper()
+	b, err := protojson.Marshal(&commonv1.GovernanceEnvelope{
+		ActionType:        string(actionType),
+		OperatorId:        operatorID,
+		OperatorSessionId: operatorSessionID,
+		SourceComponent:   source,
+	})
+	require.NoError(t, err)
+	return b
+}
+
+// TestVerifyEnvelopeIdentityBinding_DocumentUpdateEmptyIdentity_FailsClosed
+// asserts that a DOCUMENT_UPDATE mutation envelope with empty operator_id and
+// operator_session_id is rejected at the transport boundary with
+// ErrIdentityBindingFailed rather than passing through to the downstream
+// processor (the previous fail-open behavior).
+func TestVerifyEnvelopeIdentityBinding_DocumentUpdateEmptyIdentity_FailsClosed(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	env := mutationEnvelopeBytes(t, constants.ActionTypeDocumentUpdate, "", "", commonv1.Component_COMPONENT_G8EO)
+	err := verifyEnvelopeIdentityBinding(req, env)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, constants.ErrIdentityBindingFailed), "expected ErrIdentityBindingFailed, got %v", err)
+}
+
+// TestVerifyEnvelopeIdentityBinding_DocumentDeleteEmptyIdentity_FailsClosed
+// asserts the same fail-closed guarantee for DOCUMENT_DELETE.
+func TestVerifyEnvelopeIdentityBinding_DocumentDeleteEmptyIdentity_FailsClosed(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	env := mutationEnvelopeBytes(t, constants.ActionTypeDocumentDelete, "", "", commonv1.Component_COMPONENT_G8EO)
+	err := verifyEnvelopeIdentityBinding(req, env)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, constants.ErrIdentityBindingFailed), "expected ErrIdentityBindingFailed, got %v", err)
+}
+
+// TestVerifyEnvelopeIdentityBinding_FileEditEmptyIdentity_FailsClosed asserts
+// the same fail-closed guarantee for FILE_EDIT.
+func TestVerifyEnvelopeIdentityBinding_FileEditEmptyIdentity_FailsClosed(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	env := mutationEnvelopeBytes(t, constants.ActionTypeFileEdit, "", "", commonv1.Component_COMPONENT_G8EO)
+	err := verifyEnvelopeIdentityBinding(req, env)
+	require.Error(t, err)
+	require.True(t, errors.Is(err, constants.ErrIdentityBindingFailed), "expected ErrIdentityBindingFailed, got %v", err)
+}
+
+// TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted
+// is the positive counterpart: a DOCUMENT_UPDATE envelope carrying both
+// operator_id and operator_session_id, presented via a matching operator
+// SPIFFE cert, is admitted (returns nil).
+func TestVerifyEnvelopeIdentityBinding_MutationWithMatchingOperatorCert_Admitted(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	env := mutationEnvelopeBytes(t, constants.ActionTypeDocumentUpdate, "op-1", "sess-1", commonv1.Component_COMPONENT_G8EO)
+	err := verifyEnvelopeIdentityBinding(req, env)
+	require.NoError(t, err)
+}
+
+// TestVerifyEnvelopeIdentityBinding_NonMutationReadEmptyIdentity_PassesThrough
+// asserts the fail-closed path applies only to mutations. A non-mutation read
+// (FS_READ) with empty identity fields still returns nil so the downstream
+// processor validates it — preserving the prior behavior for reads.
+func TestVerifyEnvelopeIdentityBinding_NonMutationReadEmptyIdentity_PassesThrough(t *testing.T) {
+	req := identityBindingRequest(t, "spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	env := mutationEnvelopeBytes(t, constants.ActionTypeFsRead, "", "", commonv1.Component_COMPONENT_G8EO)
+	err := verifyEnvelopeIdentityBinding(req, env)
+	require.NoError(t, err, "non-mutation read with empty identity should pass through to processor")
 }

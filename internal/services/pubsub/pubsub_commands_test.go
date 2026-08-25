@@ -12,10 +12,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -103,6 +106,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 		Payload:           payload,
 		StateMerkleRoot:   "test-state-root",
 		Nonce:             "nonce-missing-signer",
+		Posture:           constants.PostureConsensus,
 	}
 	hash, err := govpkg.GenerateMessageID(env)
 	require.NoError(t, err)
@@ -154,6 +158,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Payload:         nil,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		f.Svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
@@ -187,6 +192,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		svc.handleGovernanceEnvelope(env)
 		// Should log error and return without panic
@@ -274,6 +280,7 @@ func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 					Payload:         tc.payload,
 					StateMerkleRoot: "test-state-root",
 					Nonce:           "nonce-" + tc.name,
+					Posture:         constants.PostureDoctrine,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
 							ConsensusSetId: "test-consensus",
@@ -336,6 +343,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-cancel",
+			Posture:         constants.PostureDoctrine,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
 					ConsensusSetId: "test-consensus",
@@ -451,48 +459,239 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	})
 }
 
-func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
-	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+func TestOperatorPubSubService_handleDocumentUpdateSync(t *testing.T) {
+	t.Run("rejects when GovernedDocStore not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.SetActuator(nil)
+		f.Svc.governedDocStore = nil
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
+			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
 		}
-		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
+		assert.ErrorIs(t, err, constants.ErrGovernedDocStoreNotConfigured)
 	})
 
-	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
+	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.SetActuator(&governance.L5Actuator{})
-		f.Svc.Actuator().ConsoleAuditStore = nil
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
+			EventType: constants.EventAppCaseCreated,
 			ID:        "msg-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"test": "data"}),
+			Payload:   []byte("not-a-protobuf"),
 		}
-		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
+		assert.Contains(t, err.Error(), "pubsub: document update: unmarshal")
 	})
 
-	t.Run("creates investigation document successfully", func(t *testing.T) {
+	t.Run("rejects empty collection or document_id", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.Actuator().ConsoleAuditStore = &testutil.MockTransactionAudit{}
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
 		msg := &PubSubCommandMessage{
-			EventType: constants.EventAppInvestigationCreated,
-			ID:        "investigation-1",
-			Payload:   mustMarshalJSON(t, map[string]string{"title": "test investigation"}),
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "", DocumentId: ""}),
 		}
-		summary, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxPayloadMissing)
+	})
+
+	t.Run("rejects when DocReplace fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
+			DocReplaceFunc: func(collection, id string, data json.RawMessage) error {
+				return fmt.Errorf("disk full")
+			},
+		}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document update: doc replace")
+	})
+
+	t.Run("rejects when DocMerge fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
+			DocMergeFunc: func(collection, id string, fields json.RawMessage) error {
+				return fmt.Errorf("document not found")
+			},
+		}
+		updates, err := structpb.NewStruct(map[string]interface{}{"title": "updated"})
 		require.NoError(t, err)
-		assert.Equal(t, "investigation created", summary)
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: true}),
+		}
+		_, err = f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document update: doc merge")
+	})
+
+	t.Run("persists document replace via DocReplace with canonical protojson when merge is false", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		updates, err := structpb.NewStruct(map[string]interface{}{
+			"title":  "test case",
+			"status": "open",
+		})
+		require.NoError(t, err)
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: false}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocReplaceCalls, 1)
+		require.Len(t, mock.DocMergeCalls, 0)
+		call := mock.DocReplaceCalls[0]
+		assert.Equal(t, "cases", call.Collection)
+		assert.Equal(t, "case-1", call.ID)
+		// Canonical protojson preserves field names from the Struct.
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(call.Data, &parsed))
+		assert.Equal(t, "test case", parsed["title"])
+		assert.Equal(t, "open", parsed["status"])
+	})
+
+	t.Run("persists document merge via DocMerge when merge is true", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		updates, err := structpb.NewStruct(map[string]interface{}{
+			"title": "updated title",
+		})
+		require.NoError(t, err)
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseUpdated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: updates, Merge: true}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocMergeCalls, 1)
+		require.Len(t, mock.DocReplaceCalls, 0)
+		call := mock.DocMergeCalls[0]
+		assert.Equal(t, "cases", call.Collection)
+		assert.Equal(t, "case-1", call.ID)
+		var parsed map[string]interface{}
+		require.NoError(t, json.Unmarshal(call.Fields, &parsed))
+		assert.Equal(t, "updated title", parsed["title"])
+	})
+
+	t.Run("persists document update with empty updates as empty object", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseCreated,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-1", Updates: nil}),
+		}
+		summary, err := f.Svc.handleDocumentUpdateSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document updated: cases/case-1", summary)
+		require.Len(t, mock.DocReplaceCalls, 1)
+		assert.Equal(t, json.RawMessage("{}"), mock.DocReplaceCalls[0].Data)
+	})
+}
+
+func TestOperatorPubSubService_handleDocumentDeleteSync(t *testing.T) {
+	t.Run("rejects when GovernedDocStore not configured", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = nil
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrGovernedDocStoreNotConfigured)
+	})
+
+	t.Run("rejects malformed protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   []byte("not-a-protobuf"),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document delete: unmarshal")
+	})
+
+	t.Run("rejects empty collection or document_id", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "", DocumentId: ""}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrTxPayloadMissing)
+	})
+
+	t.Run("rejects when DocDelete fails", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.governedDocStore = &testutil.ConfigurableMockGovernedDocStore{
+			DocDeleteFunc: func(collection, id string) error {
+				return fmt.Errorf("disk full")
+			},
+		}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		_, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pubsub: document delete: doc delete")
+	})
+
+	t.Run("deletes document via DocDelete with correct collection and id", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		mock := &testutil.ConfigurableMockGovernedDocStore{}
+		f.Svc.governedDocStore = mock
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppCaseDeleted,
+			ID:        "msg-1",
+			Payload:   mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-1"}),
+		}
+		summary, err := f.Svc.handleDocumentDeleteSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "document deleted: cases/case-1", summary)
+		require.Len(t, mock.DocDeleteCalls, 1)
+		assert.Equal(t, "cases", mock.DocDeleteCalls[0].Collection)
+		assert.Equal(t, "case-1", mock.DocDeleteCalls[0].ID)
 	})
 }
 
@@ -682,6 +881,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-sync",
+			Posture:         constants.PostureDoctrine,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
 					ConsensusSetId: "test-consensus",
@@ -763,6 +963,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Payload:         payload,
 			StateMerkleRoot: "test-state-root",
 			Nonce:           "nonce-1",
+			Posture:         constants.PostureDoctrine,
 		}
 		envelopeBytes, _ := protojson.Marshal(env)
 
@@ -770,6 +971,114 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction verifier not configured")
 	})
+}
+
+// TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism
+// asserts the EventType stamped on the emitted PubSubCommandMessage and the
+// EventType derived by the L5 actuator for the signed receipt are stable
+// across repeated ProcessEnvelope calls for both DOCUMENT_UPDATE and
+// DOCUMENT_DELETE. The constants-level test (mappings_test.go) covers the
+// MapActionTypeToEventType choke point in isolation; this test covers the
+// wire-stamped value end to end through the pubsub execution path.
+func TestOperatorPubSubService_ProcessEnvelope_DocumentDispatchDeterminism(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		actionType constants.ActionType
+		wantEvent  constants.EventType
+		payload    func() []byte
+	}{
+		{
+			name:       "DOCUMENT_UPDATE resolves to canonical document update requested event",
+			actionType: constants.ActionTypeDocumentUpdate,
+			wantEvent:  constants.EventAppDocumentUpdateRequested,
+			payload: func() []byte {
+				return mustMarshalProto(t, &operatorv1.DocumentUpdateRequested{Collection: "cases", DocumentId: "case-det-1"})
+			},
+		},
+		{
+			name:       "DOCUMENT_DELETE resolves to canonical document delete requested event",
+			actionType: constants.ActionTypeDocumentDelete,
+			wantEvent:  constants.EventAppDocumentDeleteRequested,
+			payload: func() []byte {
+				return mustMarshalProto(t, &operatorv1.DocumentDeleteRequested{Collection: "cases", DocumentId: "case-det-1"})
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newPubsubFixture(t)
+
+			// Captured per-call: the actuator-derived eventType and the
+			// PubSubCommandMessage's stamped EventType. Both must be stable
+			// across iterations and equal the canonical event.
+			var capturedActuatorEvent constants.EventType
+			var capturedMsgEvent constants.EventType
+			var capturedMu sync.Mutex
+
+			mockHandler := &mockExecutionHandler{
+				ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+					pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
+					if !ok {
+						t.Fatalf("expected *PubSubCommandMessage, got %T", cmdMsg)
+					}
+					capturedMu.Lock()
+					capturedActuatorEvent = eventType
+					capturedMsgEvent = pubsubMsg.EventType
+					capturedMu.Unlock()
+					return "determinism-test-summary", nil
+				},
+			}
+			f.Svc.actuator.ExecutionHandler = mockHandler
+
+			const iterations = 25
+			for i := 0; i < iterations; i++ {
+				payload := tc.payload()
+				env := &commonv1.GovernanceEnvelope{
+					Id:              fmt.Sprintf("tx-det-%s-%d", tc.actionType, i),
+					TransactionHash: fmt.Sprintf("hash-det-%s-%d", tc.actionType, i),
+					ProtocolVersion: "1.0",
+					Timestamp:       timestamppb.Now(),
+					ExpiresAt:       timestamppb.New(time.Now().Add(time.Hour)),
+					ActionType:      string(tc.actionType),
+					TargetResource:  "localhost",
+					Payload:         payload,
+					StateMerkleRoot: "test-state-root",
+					Nonce:           fmt.Sprintf("nonce-det-%s-%d", tc.actionType, i),
+					Posture:         constants.PostureDoctrine,
+					Governance: &commonv1.GovernanceMetadata{
+						L2: &commonv1.L2Metadata{
+							ConsensusSetId: "test-consensus",
+							Votes: []*commonv1.L2Vote{
+								{SignerKeyId: "test-key", Decision: true},
+							},
+						},
+						L3: &commonv1.L3Metadata{
+							Proof: &commonv1.L3Proof{Signature: "human-proof"},
+						},
+					},
+				}
+				env.TransactionHash, _ = govpkg.GenerateMessageID(env)
+				env.Id = env.TransactionHash
+				l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
+				sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
+				env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
+				envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
+
+				receipt, err := f.Svc.ProcessEnvelope(context.Background(), envelopeBytes)
+				require.NoError(t, err, "iteration %d", i)
+				require.NotNil(t, receipt, "iteration %d", i)
+
+				capturedMu.Lock()
+				assert.Equal(t, tc.wantEvent, capturedActuatorEvent, "iteration %d: actuator-derived EventType must be the canonical event", i)
+				assert.Equal(t, tc.wantEvent, capturedMsgEvent, "iteration %d: PubSubCommandMessage EventType must be the canonical event", i)
+				capturedMu.Unlock()
+			}
+		})
+	}
 }
 
 // failingAuditStore is a mock audit store that always fails
@@ -1219,10 +1528,16 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 	t.Run("sends automatic heartbeat via heartbeat service", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		mockPublisher := &mockResultsPublisher{}
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:       cfg,
-			Logger:       testutil.NewTestLogger(),
-			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+			Config:             cfg,
+			Logger:             logger,
+			PubSubClient:       pubsubtest.NewMockOperatorPubSubClient(),
+			ResultsService:     mockPublisher,
+			ActuatorSigningKey: privKey,
+			ActuatorKeyID:      "test-key",
 		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
@@ -1231,9 +1546,9 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Should not panic
 		err = svc.SendAutomaticHeartbeat()
 		assert.NoError(t, err)
+		assert.True(t, mockPublisher.publishHeartbeatCalled, "automatic heartbeat must be published through the results publisher")
 	})
 }
 

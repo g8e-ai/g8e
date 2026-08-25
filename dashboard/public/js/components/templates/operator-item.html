@@ -1,0 +1,38 @@
+<div class="operator-item-info">
+    <div class="operator-item-header">
+        <div class="operator-item-left">
+            <span class="operator-type-icon {{operatorTypeClass}}" title="{{operatorTypeTitle}}">
+                <span class="material-symbols-outlined">{{operatorTypeIcon}}</span>
+            </span>
+            <span class="operator-item-hostname {{hostnameClass}}">{{hostnameFull}}</span>
+        </div>
+        <div class="operator-item-right">
+            {{{actionsHtml}}}
+            <button class="operator-toggle-btn" title="Expand/Collapse">
+                <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+        </div>
+    </div>
+    <div class="operator-item-expandable">
+        <div class="operator-item-details-row">
+            <div class="operator-detail-item">
+                <span class="detail-label">Status</span>
+                <span class="status-text {{statusClass}}">{{statusDisplay}}</span>
+            </div>
+            <div class="operator-detail-item">
+                <span class="detail-label">First Deployed</span>
+                <span class="detail-value">{{firstDeployedText}}</span>
+            </div>
+            <div class="operator-detail-item">
+                <span class="detail-label">Last Heartbeat</span>
+                <span class="detail-value">{{lastHeartbeatText}}</span>
+            </div>
+            <div class="operator-detail-item">
+                <span class="detail-label">Operator Name</span>
+                <span class="operator-item-fingerprint {{nameClass}}">{{operatorName}}</span>
+            </div>
+        </div>
+    </div>
+</div>

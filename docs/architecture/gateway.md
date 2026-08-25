@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-18
-Version: v1.7.7
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -68,7 +68,7 @@ By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, t
 
 The Governance Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. Legacy trust scripts and the old CLI enrollment handler are removed; OS trust installation is handled by `auth enroll` directly. No MCP routes are available on this port.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves CA bundle and fingerprint discovery, CLI recovery request/status/complete (token-scoped, no mTLS required), deploy scripts, and node binary distribution. Legacy trust scripts and the old CLI enrollment handler are removed; OS trust installation is handled by `auth enroll user` directly. No MCP routes are available on this port.
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The HTTPS router also serves the Swagger UI and OpenAPI specification; these documentation endpoints require the same mTLS client authentication as the rest of the API surface.
 
@@ -203,6 +203,10 @@ The gateway provides a set of native tools covering database operations, filesys
 
 **Execution Tools**:
 - `run_shell_command`: Safe shell command execution
+
+**Audit Tools**:
+- `audit_receipt_list`: Lists signed ActionReceipt records from the operator audit vault, scoped to an operator session, with optional action_type and not_before filtering and limit/offset pagination
+- `audit_receipt_get`: Retrieves a single signed ActionReceipt by transaction_id from the operator audit vault
 
 ---
 

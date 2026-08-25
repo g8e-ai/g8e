@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -134,6 +135,56 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
 		assert.NotNil(t, resp.Operators)
+	})
+
+	t.Run("Returns platform-enrolled operators alongside slots", func(t *testing.T) {
+		// Create a user-created slot.
+		slot, err := infra.Reg.createSlot("user-platform", "org-platform")
+		require.NoError(t, err)
+
+		// Persist a platform-enrolled operator (is_slot=false) stamped
+		// with the same user_id, mimicking what signOperatorComponent
+		// writes for a platform-enrolled operator.
+		platformOp := models.OperatorDocumentGo{
+			ID:        "platform-op-controller",
+			UserID:    "user-platform",
+			Component: constants.ComponentNameG8EO,
+			Name:      "platform-operator",
+			Status:    constants.OperatorStatusActive,
+			IsSlot:    false,
+			Claimed:   true,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		opBytes, err := json.Marshal(platformOp)
+		require.NoError(t, err)
+		require.NoError(t, infra.Reg.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.ID, opBytes))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators?user_id=user-platform", nil)
+		w := httptest.NewRecorder()
+
+		controller.handleListOperators(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp models.OperatorSlotResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.True(t, resp.Success)
+		assert.Len(t, resp.Operators, 2, "both the slot and the platform-enrolled operator should be returned")
+
+		slotFound := false
+		platformFound := false
+		for _, op := range resp.Operators {
+			if op.ID == slot.ID {
+				slotFound = true
+				assert.True(t, op.IsSlot)
+			}
+			if op.ID == platformOp.ID {
+				platformFound = true
+				assert.False(t, op.IsSlot)
+			}
+		}
+		assert.True(t, slotFound, "user-created slot should be in the response")
+		assert.True(t, platformFound, "platform-enrolled operator should be in the response")
 	})
 }
 

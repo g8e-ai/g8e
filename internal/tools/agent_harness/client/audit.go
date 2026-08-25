@@ -18,31 +18,65 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
+	harnessconfig "github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
 // /api/audit/receipts. The Operator is the source of truth; these are the real,
 // signed records of what actually executed on the host.
 type Receipt struct {
-	TransactionID   string          `json:"transaction_id"`
-	TransactionHash string          `json:"transaction_hash"`
-	ActionType      string          `json:"action_type"`
-	TargetResource  string          `json:"target_resource"`
-	Status          string          `json:"status"`
-	StateRootBefore string          `json:"state_root_before"`
-	StateRootAfter  string          `json:"state_root_after"`
-	Signature       string          `json:"signature"`
-	Raw             json.RawMessage `json:"-"`
+	TransactionID     string          `json:"transaction_id"`
+	TransactionHash   string          `json:"transaction_hash"`
+	OperatorID        string          `json:"operator_id"`
+	OperatorSessionID string          `json:"operator_session_id"`
+	RequestorUserID   string          `json:"requestor_user_id"`
+	ActingAppID       string          `json:"acting_app_id"`
+	ActionType        string          `json:"action_type"`
+	TargetResource    string          `json:"target_resource"`
+	Status            string          `json:"status"`
+	StateRootBefore   string          `json:"state_root_before"`
+	StateRootAfter    string          `json:"state_root_after"`
+	ExecutedAt        time.Time       `json:"executed_at"`
+	SignerKeyID       string          `json:"signer_key_id"`
+	Signature         string          `json:"signature"`
+	Raw               json.RawMessage `json:"-"`
+}
+
+type receiptAlias Receipt
+
+// UnmarshalJSON unmarshals a Receipt, tolerating both string and numeric status.
+func (r *Receipt) UnmarshalJSON(data []byte) error {
+	type rawReceipt struct {
+		receiptAlias
+		RawStatus json.RawMessage `json:"status"`
+	}
+	var aux rawReceipt
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*r = Receipt(aux.receiptAlias)
+	r.Raw = data
+
+	if len(aux.RawStatus) > 0 {
+		var str string
+		if err := json.Unmarshal(aux.RawStatus, &str); err == nil {
+			r.Status = str
+		} else {
+			var num int
+			if err := json.Unmarshal(aux.RawStatus, &num); err == nil {
+				r.Status = fmt.Sprintf("%d", num)
+			}
+		}
+	}
+	return nil
 }
 
 // GetReceipt retrieves a single receipt by transaction ID.
 func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona ...Persona) (*Receipt, []byte, error) {
-	p := Persona{ID: "agent-harness-auditor"}
+	p := c.auditorPersona()
 	if len(persona) > 0 {
 		p = persona[0]
 	}
@@ -65,6 +99,18 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 	return &rec, body, nil
 }
 
+// auditorPersona builds a persona carrying the config's CLI session and user
+// identity so authenticated audit endpoints accept the request. The harness
+// dials these endpoints with the owner CLI cert, so the gateway requires the
+// X-CLI-Session-ID header to bind the mTLS cert to an active session.
+func (c *Client) auditorPersona() Persona {
+	return Persona{
+		ID:           "agent-harness-auditor",
+		CLISessionID: c.cfg.CLISessionID,
+		UserID:       c.cfg.UserID,
+	}
+}
+
 // AuditReceipts pulls signed receipts from the Operator's local audit vault via
 // the Gateway, optionally scoped to an Operator session.
 func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([]Receipt, []byte, error) {
@@ -72,7 +118,7 @@ func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
 	}
@@ -86,7 +132,7 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness-auditor"}, http.MethodGet, u, nil)
+	_, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
 	return body, err
 }
 
@@ -123,19 +169,17 @@ func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSess
 		}
 	}
 
-	// Try to load user_id and operator_session_id from CLI credentials
+	// Try to load user_id and operator_session_id from CLI credentials via
+	// the shared helper so this path and config.Default() cannot drift on
+	// the identity source (E.5).
 	userID := ""
 	if c.cfg.UseCLIConfig {
-		cliCfg, err := config.Load("")
-		if err == nil && cliCfg != nil {
-			fileSvc, err := fs.NewRuntimeFileService("", slog.Default())
-			if err == nil {
-				creds, err := auth.LoadCredentials(fileSvc, cliCfg)
-				if err == nil && creds != nil {
-					userID = creds.UserID
-					operatorSessionID = creds.OperatorSessionID
-				}
-			}
+		identity, err := harnessconfig.LoadCLIIdentity("")
+		if err != nil {
+			slog.Warn("agent_harness: CLI identity load failed during operator discovery", "error", err)
+		} else {
+			userID = identity.UserID
+			operatorSessionID = identity.OperatorSessionID
 		}
 	}
 
@@ -145,11 +189,22 @@ func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSess
 	}
 
 	url := c.cfg.MTLSBaseURL + constants.APIPaths.Operators
-	if userID != "" {
-		url += "?user_id=" + userID
+	// Prefer the user_id from explicit config flags (--user-id) over the
+	// CLI credentials lookup, since the harness may be pointed at a
+	// gateway whose CLI credentials differ from the local .g8e/ tree.
+	effectiveUserID := c.cfg.UserID
+	if effectiveUserID == "" {
+		effectiveUserID = userID
+	}
+	if effectiveUserID != "" {
+		url += "?user_id=" + effectiveUserID
 	}
 
-	_, body, err := c.do(ctx, Persona{ID: "agent-harness"}, http.MethodGet, url, nil)
+	_, body, err := c.do(ctx, Persona{
+		ID:           "agent-harness",
+		CLISessionID: c.cfg.CLISessionID,
+		UserID:       effectiveUserID,
+	}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
 		return "", ""
 	}

@@ -185,8 +185,6 @@ func TestRouteAuthRegistry_ExactPaths(t *testing.T) {
 	// Test exact public paths
 	publicPaths := []string{
 		constants.APIPaths.Health,
-		constants.APIPaths.PKICSRSign,
-		constants.APIPaths.PKIDevicesEnroll,
 		constants.APIPaths.AuthBootstrap,
 		constants.APIPaths.AuthBootstrapStatus,
 		constants.APIPaths.AuthLogout,
@@ -195,6 +193,13 @@ func TestRouteAuthRegistry_ExactPaths(t *testing.T) {
 	for _, path := range publicPaths {
 		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "Path %s should be RouteAuthNone", path)
 	}
+
+	// PKICSRSign is explicitly classified as RouteAuthMTLS: it signs
+	// privileged platform leaf types and requires a validated mTLS identity.
+	// PKIDevicesEnroll is RouteAuthNone (the device bootstrap path that
+	// creates operator/CLI identities; the handler enforces mTLS directly).
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.PKICSRSign), "PKICSRSign should be RouteAuthMTLS (privileged leaf signing)")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.PKIDevicesEnroll), "PKIDevicesEnroll should be RouteAuthNone (handler enforces mTLS internally)")
 
 	// Test that slight variations are not public (fail-closed to RouteAuthMTLS)
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/healthz"), "/healthz should default to RouteAuthMTLS")
@@ -291,8 +296,8 @@ func TestRouteAuthRegistry_CanonicalCoverage(t *testing.T) {
 	// This test prevents regression when the registry is modified
 	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.Health), "Health check must be RouteAuthNone")
 	assert.Equal(t, RouteAuthNone, registry.AuthMode("/.well-known/g8e/pki/"), "PKI prefix must be RouteAuthNone")
-	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/pki/csr/sign"), "CSR signing must be RouteAuthNone")
-	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/pki/devices/enroll"), "Device enrollment must be RouteAuthNone")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/pki/csr/sign"), "CSR signing must be RouteAuthMTLS (privileged leaf-type signing)")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/pki/devices/enroll"), "Device enrollment must be RouteAuthNone (handler enforces mTLS internally)")
 	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/bootstrap"), "Bootstrap must be RouteAuthNone")
 	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/bootstrap/status"), "Bootstrap status must be RouteAuthNone")
 	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/logout"), "Logout must be RouteAuthNone")

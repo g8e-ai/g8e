@@ -41,6 +41,15 @@ const (
 	// The Operator must self-terminate to prevent noisy retry loops against the server.
 	// Resolution: download a new Node binary with updated certificates.
 	ExitCertTrustFailure = 7
+
+	// ExitEnrollmentPending indicates the Operator has credentials but the
+	// gateway has not approved its platform enrollment posture. The Operator
+	// cannot start until the owner approves the pending enrollment request.
+	// Resolution: run 'g8e auth pending-platform-enrollments' and
+	// 'g8e auth approve-platform-enrollment <request-id> --yes' on the host,
+	// then restart the Operator. Container orchestrators should treat this
+	// as a non-restartable exit code (or back off) to avoid crash-loops.
+	ExitEnrollmentPending = 8
 )
 
 // Unix shell exit codes for command execution

@@ -15,6 +15,34 @@
       }
     },
 
+    "ownership": {
+      "owner_user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User identity bound to the platform app certificate."
+      },
+      "approved_by_user_id": {
+        "type": "string",
+        "required": false,
+        "description": "Active first user who approved the enrollment request."
+      },
+      "enrollment_request_id": {
+        "type": "string",
+        "required": false,
+        "description": "Owner-approved platform enrollment request that created this policy."
+      },
+      "certificate_serial": {
+        "type": "string",
+        "required": false,
+        "description": "Serial number of the certificate associated with this policy."
+      },
+      "certificate_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA-256 fingerprint of the certificate associated with this policy."
+      }
+    },
+
     "permissions": {
       "allowed_collections": {
         "type": "array",

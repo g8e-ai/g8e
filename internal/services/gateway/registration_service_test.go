@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -208,6 +209,80 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 			}
 		}
 		assert.True(t, found, "created slot should be in results")
+	})
+}
+
+func TestRegistrationService_ListUserOperators(t *testing.T) {
+
+	infra := setupTestInfrastructure(t, false)
+	regSvc := infra.Reg
+
+	t.Run("Empty user_id returns error", func(t *testing.T) {
+		operators, err := regSvc.ListUserOperators("")
+		assert.Error(t, err)
+		assert.Nil(t, operators)
+		assert.Contains(t, err.Error(), "user_id is required")
+	})
+
+	t.Run("Returns empty list for user with no operators", func(t *testing.T) {
+		operators, err := regSvc.ListUserOperators("nonexistent-user")
+		require.NoError(t, err)
+		assert.NotNil(t, operators)
+		assert.Empty(t, operators)
+	})
+
+	t.Run("Returns slots and platform-enrolled operators for the user", func(t *testing.T) {
+		// Create a user-created slot.
+		slot, err := regSvc.createSlot("user-123", "org-123")
+		require.NoError(t, err)
+		require.NotNil(t, slot)
+
+		// Persist a platform-enrolled operator (is_slot=false) stamped
+		// with the same user_id, mimicking what signOperatorComponent
+		// writes for a platform-enrolled operator.
+		platformOp := models.OperatorDocumentGo{
+			ID:        "platform-op-1",
+			UserID:    "user-123",
+			Component: constants.ComponentNameG8EO,
+			Name:      "platform-operator",
+			Status:    constants.OperatorStatusActive,
+			IsSlot:    false,
+			Claimed:   true,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		opBytes, err := json.Marshal(platformOp)
+		require.NoError(t, err)
+		require.NoError(t, regSvc.docStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), platformOp.ID, opBytes))
+
+		operators, err := regSvc.ListUserOperators("user-123")
+		require.NoError(t, err)
+		assert.Len(t, operators, 2, "both the slot and the platform-enrolled operator should be returned")
+
+		slotFound := false
+		platformFound := false
+		for _, op := range operators {
+			if op.ID == slot.ID {
+				slotFound = true
+				assert.True(t, op.IsSlot, "user-created slot must keep is_slot=true")
+			}
+			if op.ID == platformOp.ID {
+				platformFound = true
+				assert.False(t, op.IsSlot, "platform-enrolled operator must keep is_slot=false")
+				assert.Equal(t, "user-123", op.UserID)
+			}
+		}
+		assert.True(t, slotFound, "user-created slot should be in results")
+		assert.True(t, platformFound, "platform-enrolled operator should be in results")
+	})
+
+	t.Run("Does not return operators owned by another user", func(t *testing.T) {
+		_, err := regSvc.createSlot("user-other", "org-other")
+		require.NoError(t, err)
+
+		operators, err := regSvc.ListUserOperators("user-isolated")
+		require.NoError(t, err)
+		assert.Empty(t, operators, "no operators should be returned for a user with no operators")
 	})
 }
 

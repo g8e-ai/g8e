@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -27,7 +28,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary, posture string) (*L4Warden, ed25519.PrivateKey) {
+func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary) (*L4Warden, ed25519.PrivateKey) {
 	t.Helper()
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -50,8 +51,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		l3Notary,
 		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
-		posture,
-		nil, // Clock defaults to RealClock
+		nil,                      // Clock defaults to RealClock
 	), privKey
 }
 
@@ -99,11 +99,36 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		msg = &operatorv1.McpPromptListRequested{ExecutionId: "exec-1"}
 	case constants.ActionTypeMcpPromptGet:
 		msg = &operatorv1.McpPromptGetRequested{Name: "test", ExecutionId: "exec-1"}
-	case constants.ActionTypeInvestigationCreate:
-		// INVESTIGATION_CREATE has no typed payload, uses raw bytes
-		return []byte(`{"test": "data"}`)
+	case constants.ActionTypeDocumentUpdate:
+		updates, err := structpb.NewStruct(map[string]interface{}{
+			"title":  "test-case",
+			"status": "open",
+		})
+		if err != nil {
+			t.Fatalf("failed to build updates struct: %v", err)
+		}
+		msg = &operatorv1.DocumentUpdateRequested{
+			Collection: "cases",
+			DocumentId: "case-1",
+			Updates:    updates,
+			Merge:      false,
+		}
+	case constants.ActionTypeDocumentDelete:
+		msg = &operatorv1.DocumentDeleteRequested{
+			Collection: "cases",
+			DocumentId: "case-1",
+		}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
+	case constants.ActionTypePlatformEnrollmentCreate,
+		constants.ActionTypePlatformEnrollmentDecide,
+		constants.ActionTypePlatformEnrollmentIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession:
+		msg = &commonv1.PlatformEnrollmentGovernancePayload{
+			Action:    string(actionType),
+			RequestId: "test-request",
+		}
 	default:
 		t.Fatalf("unsupported action type: %v", actionType)
 	}
@@ -126,7 +151,7 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 	}
 }
 
-func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *govtypes.GovernanceEnvelope {
+func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, posture string) *govtypes.GovernanceEnvelope {
 	t.Helper()
 	// Generate a safe nonce from action type and payload (handle empty payloads)
 	nonceSuffix := hex.EncodeToString(payload)
@@ -149,6 +174,10 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		Payload:           payload,
 		StateMerkleRoot:   "root-1",
 		Nonce:             "nonce-" + string(actionType) + "-" + nonceSuffix,
+		// Posture is gateway policy metadata, not intent — it is not part of
+		// the transaction hash. Set it before hashing so the envelope reaches
+		// the warden with posture populated (the warden reads it per-envelope).
+		Posture: posture,
 	}
 	// Compute transaction hash before any governance metadata.
 	// Protocol ordering: L1 → L2 → L3 → L4. L2 signs the hash, then L3 is added.
@@ -238,15 +267,14 @@ func createVerifierWithAppPolicyStore(t *testing.T, replayStore ReplayStore, sta
 		l3Notary,
 		NewL1Doctrine(),
 		constants.AllActionTypes,
-		constants.PostureNotary,
 		nil, // Clock defaults to RealClock
 	), privKey
 }
 
 // signedEnvelopeWithAppID creates a signed envelope with a specific L2 KeyId.
-func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *govtypes.GovernanceEnvelope {
+func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string, posture string) *govtypes.GovernanceEnvelope {
 	t.Helper()
-	env := signedEnvelope(t, actionType, payload, privKey)
+	env := signedEnvelope(t, actionType, payload, privKey, posture)
 	if env.Governance != nil && env.Governance.L2 != nil && len(env.Governance.L2.Votes) > 0 {
 		env.Governance.L2.Votes[0].SignerKeyId = appID
 	}

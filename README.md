@@ -2,17 +2,17 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-150%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](docs/core/about.md) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR%20FIPS140--3-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg)](ensemble/) [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](dashboard/) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-173%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](docs/core/about.md) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR%20FIPS140--3-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
-g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked with zero external library dependencies. OS-level services (filesystem, optional OS keyring) are used at runtime.
+g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform ships as a polyglot monorepo: the g8e wire protocol, the gateway/operator Go binary, the first g8e-compatible agentic ensemble (g8ee, Python/FastAPI), and the operator dashboard (g8ed, Node.js/Express) all live in-tree as first-party components. The gateway and operator are a single static Go binary — all dependencies resolved at build time, statically linked with zero external library dependencies, with OS-level services (filesystem, optional OS keyring) used at runtime. The ensemble and dashboard are containerized services that connect to the gateway over mTLS. `docker compose up` from the repo root brings up the whole stack end to end.
 
 <p align="center">
   <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />
 </p>
 
-**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [Build Gateway](docs/guides/build_gateway.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
+**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Unified Docker Stack](docs/guides/unified_stack.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [Build Gateway](docs/guides/build_gateway.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
 ## The Sovereignty Inversion
 
@@ -159,7 +159,7 @@ The admission pipeline consists of five layers with independent failure domains:
 2. **L2 Consensus** - Gateway (PDP): Multi-agent deliberation. An enrolled Consensus service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Consensus service and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
 3. **L3 Notary** - Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden** - Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, nonces, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden-pre-dispatch-verification).
-5. **L5 Actuator** - Operator (PEP): Single dispatch path. Handles isolated tool invocation (MCP/A2A), mints JIT capabilities, rehydrates scrubbed tokens on-host, and produces signed receipts at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator-executing-side-effects).
+5. **L5 Actuator** - Operator (PEP): Single dispatch path. Handles isolated tool invocation (MCP/A2A), mints JIT capabilities, rehydrates scrubbed tokens on-host, and produces signed receipts at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator-execution-boundary).
 
 ## Data Sovereignty
 
@@ -189,7 +189,12 @@ In each domain, the operator runs at the site of the data owner. The gateway can
 
 ## Quick Start
 
-The binary is available for linux, darwin, and windows on amd64 and arm64 architectures. It can also be built from source. See [Getting Started](docs/guides/getting_started.md) for detailed setup instructions.
+The binary is available for linux, darwin, and windows on amd64 and arm64 architectures. It can also be built from source. See [Getting Started](docs/guides/getting_started.md) for detailed setup instructions. To bring up the whole platform (gateway, operator, ensemble, and dashboard) as a Docker stack, see the [Unified Docker Stack guide](docs/guides/unified_stack.md).
+
+```bash
+# Bring up the full platform: gateway + operator + ensemble (g8ee) + dashboard (g8ed)
+docker compose up -d
+```
 
 ```bash
 # Start the Gateway
@@ -199,7 +204,7 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 ./g8e gw start --interactive
 
 # Authenticate the CLI
-./g8e auth enroll
+./g8e auth enroll user
 
 # Deploy an Operator to remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
@@ -220,7 +225,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.6
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 **Python package** (requires Python 3.10+):
@@ -259,6 +264,7 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 
 #### Guides
 - [Getting Started](docs/guides/getting_started.md)
+- [Unified Docker Stack](docs/guides/unified_stack.md)
 - [Build Gateway](docs/guides/build_gateway.md)
 - [Build Operator](docs/guides/build_operator.md)
 - [Build Applications](docs/guides/build_apps.md)
@@ -272,8 +278,11 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 - [Build a g8e-Compatible Frontend](docs/guides/build_frontend.md)
 
 #### Architecture
+- [Platform Overview](docs/architecture/overview.md)
 - [Gateway Architecture](docs/architecture/gateway.md)
 - [Operator Architecture](docs/architecture/operator.md)
+- [Ensemble (g8ee)](docs/architecture/ensemble.md)
+- [Dashboard (g8ed)](docs/architecture/dashboard.md)
 - [Security Model](docs/architecture/auth.md)
 - [Encryption](docs/architecture/encryption.md)
 - [Storage Architecture](docs/architecture/storage.md)
@@ -288,10 +297,14 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 
 #### Developer Guides
 - [Developer Guide](docs/devs/devs.md)
+- [Documentation Guidelines](docs/devs/docs.md)
 - [Codebase Map](docs/devs/codemap.md)
 - [Testing Guide](docs/devs/tests.md)
 - [Troubleshooting](docs/devs/troubleshooting.md)
 - [Release Process](docs/devs/release_process.md)
+
+#### Ensemble (g8ee)
+- [Ensemble Documentation](docs/ensemble/index.md)
 
 #### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)

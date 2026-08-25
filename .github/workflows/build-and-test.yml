@@ -263,3 +263,67 @@ jobs:
 
       - name: Run conformance tests
         run: python -m pytest protocol/conformance/ -v
+
+  ensemble-tests:
+    name: Ensemble (g8ee) Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install in-tree protocol package
+        working-directory: protocol/python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install ensemble with test dependencies
+        working-directory: ensemble
+        run: |
+          pip install -e ".[test]"
+
+      - name: Generate protobuf stubs
+        working-directory: ensemble
+        run: make proto
+
+      - name: Run ruff
+        working-directory: ensemble
+        run: ruff check app
+
+      - name: Run pyright
+        working-directory: ensemble
+        run: pyright app
+
+      - name: Run ensemble unit + in-process integration tests
+        working-directory: ensemble
+        run: python -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+
+  dashboard-tests:
+    name: Dashboard (g8ed) Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Run vitest suite
+        working-directory: dashboard
+        run: npm test

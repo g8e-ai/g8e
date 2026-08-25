@@ -16,7 +16,7 @@ pip install g8e
 
 The `g8e.constants` module loads JSON protocol constants from `protocol/constants/` at import time. It exports dicts for events, status, collections, headers, channels, pubsub, intents, prompts, timestamps, document IDs, platform configuration, agents, network, API paths, key-value keys, and sender identifiers. The module also exports the `ComponentName` `StrEnum` and individual HTTP header string constants for session, context, and g8e-specific headers.
 
-Set the `G8E_PROTOCOL_DIR` environment variable to override the default protocol directory resolution. The loader checks this variable first, then the bundled `g8e/_data/` directory included in PyPI installs, then the relative path from the package for dev mode, then `/app/protocol/constants` for containerized environments, and finally `./protocol/constants` as a last resort.
+Set the `G8E_PROTOCOL_DIR` environment variable to override the default protocol directory resolution. An empty value is treated as unset so a stray `G8E_PROTOCOL_DIR=` line in `.env` cannot shadow the bundled constants. The loader checks this variable first, then the bundled `g8e/_data/` directory included in PyPI installs (the production/container path). There are no dev-mode fallbacks — developers running from a source checkout must set `G8E_PROTOCOL_DIR` explicitly or install the package so the bundled `_data/` is present. If no constants file is found at the resolved path, `_load_protocol_json` raises `ProtocolConstantsError` at import time rather than returning an empty dict and letting downstream code fail with an opaque `KeyError`.
 
 #### Accessor Functions
 

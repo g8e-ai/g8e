@@ -1,0 +1,45 @@
+Execute shell commands on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and executes the command there.
+
+IMPORTANT: You DO NOT propose shell commands directly. The Tribunal - a five-member AI panel - is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
+
+<parameters>
+- request: REQUIRED - natural-language description of what the Operator must accomplish: what to learn, verify, or change. Investigative intent, not shell syntax.
+- guidelines: OPTIONAL - constraints on the command itself: tools or flags to prefer or avoid, portability requirements, edge cases the command must handle (e.g. spaces in paths), whitelist/blacklist restrictions surfaced by get_command_constraints. Plain language, never shell syntax. Guidelines describe the command, not its output. Leave empty when none apply.
+- target_operator: hostname, operator_id, or index ("0","1") - REQUIRED when multiple operators bound
+- target_operators: run the Tribunal-generated command on multiple operators simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
+- timeout_seconds: default 300 | expected_output_lines: for UI sizing
+</parameters>
+
+<examples>
+<example>User: "Show disk usage under /home broken down per-user, sorted largest first, top 10." → run_commands_with_operator(request="Show disk usage under /home broken down per-user, sorted largest first, top 10.")</example>
+<example>User: "Find all files modified in the last 24 hours under /var/log" → run_commands_with_operator(request="Find all files modified in the last 24 hours under /var/log", guidelines="Prefer a portable find invocation over locate; exclude compressed archives.")</example>
+<example>User: "Check nginx status" → run_commands_with_operator(request="Locate the nginx binary and list running nginx processes and listening ports.")</example>
+<example>User: "Show uptime on g8eo" → run_commands_with_operator(request="Show system uptime", target_operator="g8eo")</example>
+<example>User: "Check disk space on all operators" → run_commands_with_operator(request="Show disk usage", target_operators=["all"])</example>
+</examples>
+
+<batch_execution>
+target_operators=["all"] runs on all bound operators in parallel. Use for fleet-wide operations.
+</batch_execution>
+
+<data_sovereignty>
+LFAA: Output is available in result fields after execution - already Sentinel-scrubbed. That scrubbed result is the authoritative view of the command output for analysis.
+Call `fetch_execution_output` only when raw, unredacted output is required for analysis or the user explicitly requests it. Raw output is retained on the Operator's local storage for data sovereignty.
+</data_sovereignty>
+
+<never>
+- Never call `fetch_execution_output` as a routine follow-up; the scrubbed result is the authorized default for analysis.
+- Never treat Sentinel placeholders as missing data; they indicate presence of a value the user can confirm locally.
+</never>
+
+<sentinel_scrubbing>
+All output is processed by g8e Sentinel before transmission. Sensitive data replaced with placeholders:
+- Network: [IP_ADDR], [HOST], [URL], [MAC_ADDR]
+- Credentials: [JWT], [AWS_KEY], [GITHUB_TOKEN], [SLACK_TOKEN], [OKTA_TOKEN], [CREDENTIAL], [BEARER_TOKEN]
+- Cloud: [AWS_RESOURCE], [ACCOUNT_ID], [GCP_API_KEY], [AZURE_SECRET]
+- PII: [EMAIL], [PHONE], [PII]
+- Identifiers: [UUID], [PATH], [CONN_STRING]
+- Data: [DATA_ROW], [JSON_DATA], [VALUE], [ENCODED_DATA]
+
+Treat placeholders as indicators of data presence. Ask the user to provide specific values when needed. Structure hints, error types, and exit codes are preserved.
+</sentinel_scrubbing>

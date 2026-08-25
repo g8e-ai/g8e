@@ -28,6 +28,8 @@
     - [DirectCommandAuditRequested](#g8e-operator-v1-DirectCommandAuditRequested)
     - [DirectCommandResultAuditRequested](#g8e-operator-v1-DirectCommandResultAuditRequested)
     - [DiskDetails](#g8e-operator-v1-DiskDetails)
+    - [DocumentDeleteRequested](#g8e-operator-v1-DocumentDeleteRequested)
+    - [DocumentUpdateRequested](#g8e-operator-v1-DocumentUpdateRequested)
     - [EnvironmentDetails](#g8e-operator-v1-EnvironmentDetails)
     - [EvalAnswerRequested](#g8e-operator-v1-EvalAnswerRequested)
     - [ExecutionStatusUpdate](#g8e-operator-v1-ExecutionStatusUpdate)
@@ -597,6 +599,46 @@ authorized to be executed.
 | used_gb | [double](#double) |  |  |
 | free_gb | [double](#double) |  |  |
 | percent | [double](#double) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-DocumentDeleteRequested"></a>
+
+### DocumentDeleteRequested
+DocumentDeleteRequested is the typed payload for governed document
+deletion operations (cases, investigations). The ensemble submits
+these through the governance envelope pipeline for L1-L5 verification
+before the gateway removes them via DocDelete.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| collection | [string](#string) |  | Target collection name. |
+| document_id | [string](#string) |  | Document ID to delete. |
+
+
+
+
+
+
+<a name="g8e-operator-v1-DocumentUpdateRequested"></a>
+
+### DocumentUpdateRequested
+DocumentUpdateRequested is the typed payload for governed document
+create/update operations (cases, investigations, memories, tasks).
+The ensemble submits these through the governance envelope pipeline
+for L1-L5 verification before the gateway persists them via DocSet.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| collection | [string](#string) |  | Target collection name (e.g., &#34;cases&#34;, &#34;investigations&#34;, &#34;memories&#34;). |
+| document_id | [string](#string) |  | Document ID to create or update. |
+| updates | [google.protobuf.Struct](#google-protobuf-Struct) |  | Field updates as a structured payload. The gateway converts this to JSON for document store persistence. |
+| merge | [bool](#bool) |  | If true, use PATCH (merge); if false, use PUT (replace). |
 
 
 

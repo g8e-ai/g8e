@@ -68,21 +68,27 @@ func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error)
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			if err != nil || creds == nil {
+				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
+			}
+
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return err
 			}
 
-			resp, err := client.Get("/api/operators")
+			resp, err := client.Get(constants.APIPaths.Operators + "?user_id=" + creds.UserID)
 			if err != nil {
 				return err
 			}
 
-			var operators []models.OperatorDocumentGo
-			if err := json.Unmarshal(resp, &operators); err != nil {
+			var slotResp models.OperatorSlotResponse
+			if err := json.Unmarshal(resp, &slotResp); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
+			operators := slotResp.Operators
 			if len(operators) == 0 {
 				cmd.Println("No operators found")
 				return nil
@@ -393,7 +399,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy the operator binary to remote hosts and start it",
-		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll' first.`,
+		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll user' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -407,7 +413,7 @@ func operatorDeployCmdWithConfig(configLoader func(string) (*config.Config, erro
 
 			creds, err := auth.LoadCredentials(fileSvc, cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("%w: Please run './g8e auth enroll' first", constants.ErrNotAuthenticated)
+				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
 			}
 
 			if hosts == "" {

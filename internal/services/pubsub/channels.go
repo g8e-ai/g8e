@@ -27,3 +27,10 @@ func ResultsChannel(operatorID, operatorSessionID string) string {
 func HeartbeatChannel(operatorID, operatorSessionID string) string {
 	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixHeartbeat, operatorID, operatorSessionID)
 }
+
+// ReceiptsChannel returns the receipts channel for an operator session.
+// The operator publishes signed ActionReceipt envelopes to this channel
+// after execution; the gateway intercepts, verifies, records, and fans out.
+func ReceiptsChannel(operatorID, operatorSessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixReceipts, operatorID, operatorSessionID)
+}

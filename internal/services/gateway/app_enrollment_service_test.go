@@ -22,186 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestAppEnrollmentService_EnrollApp(t *testing.T) {
-	// Not running in parallel because setupTestGatewayService resets global keystore state
-
-	// Setup test infrastructure (PKI is now initialized by setupTestGatewayService)
-	gateway, _ := setupTestGatewayService(t)
-	docStore := gateway.GetDocStore()
-	logger := gateway.logger
-	pki := gateway.pki
-
-	// Create AppEnrollmentService
-	appEnrollment := NewAppEnrollmentService(docStore, pki, logger)
-
-	// Test cases
-	tests := []struct {
-		name        string
-		req         AppEnrollRequest
-		setup       func() // Setup function to prepare test state
-		wantSuccess bool
-		wantError   string
-		teardown    func() // Teardown function to clean up test state
-	}{
-		{
-			name: "successful enrollment with valid CSR",
-			req: AppEnrollRequest{
-				AppName:        "test-mcp-client",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			setup: func() {
-				// CSR will be generated in the test runner
-			},
-			wantSuccess: true,
-			teardown: func() {
-				// Clean up the enrolled app (identity-only, no signer to delete)
-				appID := "spiffe://g8e.local/app/test-mcp-client"
-				if _, err := docStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
-					t.Logf("Failed to delete signer document: %v", err)
-				}
-			},
-		},
-		{
-			name: "reject enrollment with missing CSR",
-			req: AppEnrollRequest{
-				AppName:        "test-app",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollCSRRequired.Error(),
-		},
-		{
-			name: "reject enrollment with missing app name",
-			req: AppEnrollRequest{
-				CSR:            testutil.GenerateTestCSR(t, "test-app"),
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollAppNameRequired.Error(),
-		},
-		{
-			name: "reject enrollment with missing app type",
-			req: AppEnrollRequest{
-				CSR:            testutil.GenerateTestCSR(t, "test-app"),
-				AppName:        "test-app",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollAppTypeRequired.Error(),
-		},
-		{
-			name: "reject enrollment with invalid app type",
-			req: AppEnrollRequest{
-				CSR:            testutil.GenerateTestCSR(t, "test-app"),
-				AppName:        "test-app",
-				AppType:        "invalid-type",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollInvalidAppType.Error(),
-		},
-		{
-			name: "reject enrollment with invalid app name (special chars)",
-			req: AppEnrollRequest{
-				CSR:            testutil.GenerateTestCSR(t, "test@app"),
-				AppName:        "test@app",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollInvalidAppName.Error(),
-		},
-		{
-			name: "reject enrollment with invalid app name (spaces)",
-			req: AppEnrollRequest{
-				CSR:            testutil.GenerateTestCSR(t, "test app"),
-				AppName:        "test app",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollInvalidAppName.Error(),
-		},
-		{
-			name: "reject enrollment with invalid CSR PEM format",
-			req: AppEnrollRequest{
-				CSR:            "invalid-pem-data",
-				AppName:        "test-app",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollInvalidCSRPEM.Error(),
-		},
-		{
-			name: "reject enrollment with malformed CSR",
-			req: AppEnrollRequest{
-				CSR:            "-----BEGIN CERTIFICATE REQUEST-----\nMIICZzCCAT8CAQAwFjEUMBIGA1UEAwwLdGVzdC1hcHAwggEiMA0GCSqGSIb3DQEB\n-----END CERTIFICATE REQUEST-----",
-				AppName:        "test-app",
-				AppType:        "mcp-client",
-				OrganizationID: "test-org",
-			},
-			wantSuccess: false,
-			wantError:   constants.ErrAppEnrollParseCSR.Error(),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Not running in parallel since test cases share gateway DB state
-
-			// Run setup if provided
-			if tt.setup != nil {
-				tt.setup()
-			}
-
-			// If the test requires a CSR, generate it
-			if tt.req.CSR == "" && tt.wantSuccess {
-				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
-			} else if tt.req.CSR == "" && !tt.wantSuccess && tt.wantError != constants.ErrAppEnrollCSRRequired.Error() {
-				// For negative tests that need a CSR to validate other fields
-				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
-			}
-
-			// Execute enrollment
-			resp, err := appEnrollment.EnrollApp(tt.req)
-
-			// Verify response
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantSuccess, resp.Success)
-
-			if !tt.wantSuccess {
-				assert.Contains(t, resp.Error, tt.wantError)
-			} else {
-				// Log the error if enrollment failed unexpectedly
-				if !resp.Success && resp.Error != "" {
-					t.Logf("Enrollment failed with error: %s", resp.Error)
-				}
-				assert.NotEmpty(t, resp.AppCert)
-				assert.NotEmpty(t, resp.CertChain)
-				assert.NotEmpty(t, resp.AppID)
-
-				// Verify the L2 signer was NOT registered automatically (identity-only enrollment)
-				signerDoc, err := docStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), resp.AppID)
-				require.NoError(t, err)
-				require.Nil(t, signerDoc)
-
-				// Verify no L2 private key was stored
-				_, err = pki.secretManager.GetServicePrivateKey(resp.AppID)
-				require.Error(t, err)
-			}
-
-			// Run teardown if provided
-			if tt.teardown != nil {
-				tt.teardown()
-			}
-		})
-	}
-}
-
 func TestAppEnrollmentService_EnrollDelegatedApp(t *testing.T) {
 	gateway, _ := setupTestGatewayService(t)
 	docStore := gateway.GetDocStore()
@@ -235,6 +55,31 @@ func TestAppEnrollmentService_EnrollDelegatedApp(t *testing.T) {
 	assert.False(t, policy.RequireL3Approval, "delegated enrollment must not require L3 approval")
 	assert.Equal(t, 0, policy.RateLimitRPS, "delegated enrollment should have unlimited rate")
 	assert.Equal(t, int64(0), policy.MaxPayloadBytes, "delegated enrollment should have no payload cap")
+}
+
+// TestAppEnrollmentService_EnrollDelegatedApp_RejectsReservedPlatformNames
+// proves that the retained delegated app enrollment path rejects the
+// canonical platform component names (g8ed, g8ee, g8eo). Those identities
+// are issued only through the owner-approved platform enrollment protocol.
+func TestAppEnrollmentService_EnrollDelegatedApp_RejectsReservedPlatformNames(t *testing.T) {
+	gateway, _ := setupTestGatewayService(t)
+	appEnrollment := NewAppEnrollmentService(gateway.GetDocStore(), gateway.pki, gateway.logger)
+
+	reservedNames := []string{"g8ed", "g8ee", "g8eo"}
+	for _, name := range reservedNames {
+		t.Run(name, func(t *testing.T) {
+			resp, err := appEnrollment.EnrollDelegatedApp(AppEnrollRequest{
+				CSR:     testutil.GenerateTestCSRP256(t, name),
+				AppName: name,
+				AppType: "mcp-client",
+			}, "test-user-001")
+			require.NoError(t, err)
+			assert.False(t, resp.Success, "reserved name %q must be rejected", name)
+			assert.Contains(t, resp.Error, constants.ErrPlatformEnrollmentReservedIdentity.Error(),
+				"reserved name %q must be rejected with ErrPlatformEnrollmentReservedIdentity", name)
+			assert.Empty(t, resp.AppCert, "no certificate must be issued for reserved name %q", name)
+		})
+	}
 }
 
 func TestIsValidAppName(t *testing.T) {

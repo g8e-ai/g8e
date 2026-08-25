@@ -113,14 +113,47 @@ func resolveCertPath(clientCert string, fileSvc fs.RuntimeFileService, logger *s
 	return ""
 }
 
+// classifyConfigLoadError inspects a config.Load error and returns the
+// appropriate exit code and an actionable user-facing message. All
+// config.Load errors return ExitConfigError with no actionable message.
+// The operator no longer requires config posture to start (it reads
+// posture per-envelope from GovernanceEnvelope.Posture at L4 verification
+// time), so the former posture-required enrollment-pending path is gone.
+func classifyConfigLoadError(err error) (exitCode int, actionable string) {
+	return constants.ExitConfigError, ""
+}
+
 // loadClientCertPair reads the cert and key PEM files and returns the TLS certificate
-// along with the raw cert PEM bytes for logging.
+// along with the raw cert PEM bytes for logging. It uses os.ReadFile directly,
+// so certPath and keyPath must be absolute or resolvable against the process
+// working directory (CLI flag paths, project-directory discovery paths).
 func loadClientCertPair(certPath, keyPath string) (tls.Certificate, []byte, error) {
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
 	}
 	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
+	}
+	return cert, certPEM, nil
+}
+
+// loadClientCertPairViaFileSvc reads the cert and key PEM files from the .g8e/
+// runtime tree via RuntimeFileService and returns the TLS certificate along
+// with the raw cert PEM bytes for logging. certPath and keyPath must be
+// relative to the runtime tree root (as returned by the platform enrollment
+// client). Use loadClientCertPair for arbitrary user-supplied paths instead.
+func loadClientCertPairViaFileSvc(ctx context.Context, fileSvc fs.RuntimeFileService, certPath, keyPath string) (tls.Certificate, []byte, error) {
+	certPEM, err := fileSvc.ReadFile(ctx, certPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
+	}
+	keyPEM, err := fileSvc.ReadFile(ctx, keyPath)
 	if err != nil {
 		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
 	}
@@ -234,22 +267,50 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	privateKey := resolveKeyPath(opts.PrivateKey, fileSvc, logger)
 	clientCert := resolveCertPath(opts.ClientCert, fileSvc, logger)
+	enrolled := false
 
-	if opts.Endpoint != "" {
-		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		sessionID, posture, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, fileSvc, logger)
+	// If no installed operator credentials exist and an endpoint is
+	// provided, drive the owner-approved platform enrollment protocol
+	// to obtain them. This replaces the removed bypass
+	// PerformAutomaticEnrollment. The operator submits both an operator
+	// CSR and a CLI CSR, waits for owner approval, signs the canonical
+	// completion transcript with both private keys, and writes the
+	// issued credentials atomically. Pending state is persisted to
+	// pki/pending-enrollment/g8eo.json so a kill-and-restart resumes
+	// the same request and key material.
+	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
+		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
+		gatewayHTTPURL := fmt.Sprintf("http://%s:%d", opts.Endpoint, constants.Ports.OperatorHttp)
+		hostname, err := os.Hostname()
 		if err != nil {
-			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
-			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
-			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
+			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
 			os.Exit(constants.ExitConfigError)
 		}
-		os.Setenv(string(constants.EnvVar.OperatorSessionID), sessionID)
-		opts.Posture = posture
+		instanceID := fmt.Sprintf("operator-%s", hostname)
+		enrollClient, err := NewOperatorPlatformEnrollmentClient(gatewayHTTPURL, instanceID, hostname, fileSvc, logger)
+		if err != nil {
+			logger.Error("Failed to create enrollment client", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			os.Exit(constants.ExitConfigError)
+		}
+		result, err := enrollClient.Enroll(context.Background())
+		if err != nil {
+			logger.Error("Platform enrollment failed", string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "Enrollment failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
+			fmt.Fprintf(os.Stderr, "  Pending state is persisted; restart to resume the same request.\n")
+			os.Exit(constants.ExitConfigError)
+		}
+		os.Setenv(string(constants.EnvVar.OperatorSessionID), result.OperatorSessionID)
+		if result.Posture != "" {
+			opts.Posture = result.Posture
+		}
+		privateKey = result.OperatorKeyPath
+		clientCert = result.OperatorCertPath
+		enrolled = true
 
-		privateKey = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey))
-		clientCert = fileSvc.Resolve(filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert))
-
+		// Reload the trust bundle from the newly written file.
 		caBundleRel := filepath.Join(constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		pemData, err := fileSvc.ReadFile(context.Background(), caBundleRel)
 		if err != nil {
@@ -259,15 +320,14 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		}
 		trustStore.SetCA(pemData)
 		logger.Info("Trust bundle reloaded after enrollment", "path", fileSvc.Resolve(caBundleRel))
-
-		logger.Info("Automatic enrollment completed, using enrolled certificates")
+		logger.Info("Platform enrollment completed, using enrolled certificates")
 	}
 
 	if privateKey == "" {
 		fmt.Fprintf(os.Stderr, "%s (-k or --key). Expected locations:\n", constants.ErrPrivateKeyRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorKeyDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientKeyDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -275,13 +335,19 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		fmt.Fprintf(os.Stderr, "%s (--cert or --client-cert). Expected locations:\n", constants.ErrClientCertRequired)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultOperatorCertDesc)
 		fmt.Fprintf(os.Stderr, "  - %s (project directory)\n", constants.DefaultClientCertDesc)
-		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform automatic enrollment\n")
+		fmt.Fprintf(os.Stderr, "Or provide --endpoint to perform platform enrollment\n")
 		os.Exit(constants.ExitConfigError)
 	}
 
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
-	cert, certPEM, err := loadClientCertPair(clientCert, privateKey)
+	var cert tls.Certificate
+	var certPEM []byte
+	if enrolled {
+		cert, certPEM, err = loadClientCertPairViaFileSvc(context.Background(), fileSvc, clientCert, privateKey)
+	} else {
+		cert, certPEM, err = loadClientCertPair(clientCert, privateKey)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(constants.ExitConfigError)
@@ -298,8 +364,12 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	cfg, err := config.Load(buildOperatorLoadOptions(opts, operatorEndpoint, effectiveWorkDir))
 	if err != nil {
+		exitCode, actionable := classifyConfigLoadError(err)
 		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitConfigError)
+		if actionable != "" {
+			fmt.Fprintln(os.Stderr, actionable)
+		}
+		os.Exit(exitCode)
 	}
 
 	cfg.Version = vi.Version

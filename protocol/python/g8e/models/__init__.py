@@ -45,6 +45,7 @@ from .governance import (
     GovernanceL2Vote,
     GovernanceL3,
     GovernanceL3Proof,
+    CommandIntent,
     compute_transaction_hash,
 )
 
@@ -86,5 +87,6 @@ __all__ = [
     "GovernanceL2Vote",
     "GovernanceL3",
     "GovernanceL3Proof",
+    "CommandIntent",
     "compute_transaction_hash",
 ]

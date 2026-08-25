@@ -206,6 +206,11 @@ const (
 	ContextKeyWebSessionID ContextKey = "web_session_id"
 	// ContextKeyCLISessionID stores the CLI session ID for mTLS-authenticated CLI requests.
 	ContextKeyCLISessionID ContextKey = "cli_session_id"
+	// ContextKeyStateMerkleRoot stores a pre-fetched state merkle root so the
+	// in-process gateway build-verify window sees the same root for the same
+	// transaction. Operator-side verification (without this key in context)
+	// still re-fetches the current root from the provider.
+	ContextKeyStateMerkleRoot ContextKey = "state_merkle_root"
 )
 
 // Session constants
@@ -214,6 +219,16 @@ const (
 	WebSessionTTL = 24 * time.Hour
 	// WebSessionCookieName is the name of the browser session cookie used by the unified auth middleware.
 	WebSessionCookieName = "g8e_web_session_cookie"
+	// CLISessionTTL defines the lifetime of a CLI session. It is aligned with
+	// the CLI certificate TTL (7 days, per leafCertValidityDays in
+	// gateway_certs.go) so the session does not expire while the cert is
+	// still valid. The previous 1-hour TTL created a window where the cert
+	// was valid but the session was expired, leaving no recovery path short
+	// of nuking the gateway volume. When the session does expire (gateway
+	// restart, manual deactivation, or cert expiry), the auth/cli/refresh
+	// endpoint reissues a session using the still-valid cert as proof of
+	// identity.
+	CLISessionTTL = 7 * 24 * time.Hour
 )
 
 // App enrollment type constants define the valid app_type values for external app enrollment.

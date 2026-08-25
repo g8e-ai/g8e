@@ -294,7 +294,7 @@ func (r *passkeyRegistrar) generateEnrollmentToken(ctx context.Context, mtlsClie
 // the X-G8E-CLI-Session-ID header for routing.
 //
 // This is a read-only identity check used by `mcp agent run` to decide
-// whether to prompt for the first passkey ceremony. `auth enroll` always
+// whether to prompt for the first passkey ceremony. `auth enroll user` always
 // performs the explicit add-passkey ceremony via the PasskeyRegistrar.
 func VerifyPasskeyRegistration(ctx context.Context, fileSvc fs.RuntimeFileService, cfg *config.Config, cliSessionID string) (bool, error) {
 	statusURL := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)

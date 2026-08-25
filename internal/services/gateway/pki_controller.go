@@ -30,12 +30,13 @@ import (
 
 // PKIController handles PKI and certificate management endpoints.
 type PKIController struct {
-	cfg           *config.Config
-	logger        *slog.Logger
-	pki           *PKIAuthority
-	appEnrollment *AppEnrollmentService
-	registration  *RegistrationService
-	responder     *response.Writer
+	cfg             *config.Config
+	logger          *slog.Logger
+	pki             *PKIAuthority
+	appEnrollment   *AppEnrollmentService
+	registration    *RegistrationService
+	responder       *response.Writer
+	nodeBinariesDir string
 }
 
 // PKIControllerDeps groups all dependencies for PKIController.
@@ -50,12 +51,13 @@ type PKIControllerDeps struct {
 
 func newPKIController(d PKIControllerDeps) *PKIController {
 	return &PKIController{
-		cfg:           d.Cfg,
-		logger:        d.Logger,
-		pki:           d.PKI,
-		appEnrollment: d.AppEnrollment,
-		registration:  d.Registration,
-		responder:     d.Responder,
+		cfg:             d.Cfg,
+		logger:          d.Logger,
+		pki:             d.PKI,
+		appEnrollment:   d.AppEnrollment,
+		registration:    d.Registration,
+		responder:       d.Responder,
+		nodeBinariesDir: constants.NodeBinariesDir,
 	}
 }
 
@@ -148,6 +150,17 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+
+	// Defense-in-depth: the route auth registry classifies this endpoint as
+	// RouteAuthMTLS, so the middleware rejects unauthenticated callers before
+	// the handler runs. The handler also enforces mTLS directly so a
+	// misconfigured router cannot mint privileged platform identities
+	// (operator, CLI, app, gateway-peer) without an authenticated client
+	// certificate.
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
 		return
 	}
 
@@ -306,50 +319,6 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 	c.responder.JSON(w, http.StatusCreated, resp)
 }
 
-// @Summary		PKI app enrollment
-// @Description	Enrolls an external app via PKI endpoint (identity-only enrollment)
-// @Tags			pki
-// @Accept			json
-// @Produce		json
-// @Success		200	{object}	AppEnrollResponse
-// @Router			/api/v1/pki/apps/enroll [post]
-func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	if c.appEnrollment == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	var req AppEnrollRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
-		return
-	}
-
-	resp, err := c.appEnrollment.EnrollApp(req)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
-		return
-	}
-
-	if !resp.Success {
-		c.responder.Error(w, http.StatusBadRequest, resp.Error)
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, resp)
-}
-
 // @Summary		Mint delegated app credential
 // @Description	Mints a short-lived delegated credential for an app, binding both app and requestor identities (mTLS-authenticated)
 // @Tags			pki
@@ -433,6 +402,11 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	possiblePaths := []string{}
+
+	// Check in the image-baked node binaries directory (Docker deployments).
+	// This directory is populated by the Dockerfile with all platform binaries
+	// and lives outside the .g8e/ volume mount, so it is always available.
+	possiblePaths = append(possiblePaths, filepath.Join(c.nodeBinariesDir, filename))
 
 	// Check relative to executable
 	if execPath, err := os.Executable(); err == nil {

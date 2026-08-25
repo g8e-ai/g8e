@@ -30,8 +30,8 @@ import (
 // non-mutation envelope with L2 passes under consensus posture.
 func TestL4Warden_Consensus_ValidNonMutationPasses(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 
 	verified, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
@@ -47,8 +47,8 @@ func TestL4Warden_Consensus_ValidNonMutationPasses(t *testing.T) {
 // consensus enforces L1+L2 but audits L3 only.
 func TestL4Warden_Consensus_ValidMutationPassesWithoutL3(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "consensus")
 
 	env.Governance.L3 = nil
 
@@ -73,9 +73,9 @@ func TestL4Warden_Consensus_AllActionTypesFromSSOT(t *testing.T) {
 	for _, actionType := range allActionTypes {
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
-			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			payload := typedPayload(t, actionType)
-			env := signedEnvelope(t, actionType, payload, privKey)
+			env := signedEnvelope(t, actionType, payload, privKey, "consensus")
 
 			verified, err := verifier.VerifyEnvelope(context.Background(), env)
 			if err != nil {
@@ -96,8 +96,8 @@ func TestL4Warden_Consensus_AllActionTypesFromSSOT(t *testing.T) {
 // reject an envelope under consensus (L2 is enforced).
 func TestL4Warden_Consensus_MissingL2Rejects(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 
 	env.Governance.L2 = nil
 
@@ -111,8 +111,8 @@ func TestL4Warden_Consensus_MissingL2Rejects(t *testing.T) {
 // proof does not reject a mutation under consensus (L3 is audited, not enforced).
 func TestL4Warden_Consensus_MissingL3DoesNotReject(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "consensus")
 
 	env.Governance.L3 = nil
 
@@ -129,8 +129,8 @@ func TestL4Warden_Consensus_ReplayAndStateRootReject(t *testing.T) {
 	t.Run("replayed nonce", func(t *testing.T) {
 		t.Parallel()
 		replayStore := testutil.NewStatefulMockReplayStore()
-		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 		if _, err := verifier.VerifyEnvelope(context.Background(), env); err != nil {
 			t.Fatalf("first verification failed: %v", err)
 		}
@@ -142,8 +142,8 @@ func TestL4Warden_Consensus_ReplayAndStateRootReject(t *testing.T) {
 
 	t.Run("state root mismatch", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMismatch) {
 			t.Fatalf("expected state root mismatch, got %v", err)
@@ -157,8 +157,8 @@ func TestL4Warden_Consensus_MissingVerifierDependenciesReject(t *testing.T) {
 	t.Parallel()
 	t.Run("missing replay store", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "consensus")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
 			t.Fatalf("expected replay store rejection, got %v", err)
@@ -167,8 +167,8 @@ func TestL4Warden_Consensus_MissingVerifierDependenciesReject(t *testing.T) {
 
 	t.Run("missing state root provider", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true), "consensus")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "consensus")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMissing) {
 			t.Fatalf("expected state root provider rejection, got %v", err)
@@ -239,6 +239,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			Payload:           payload,
 			StateMerkleRoot:   "root-1",
 			Nonce:             "nonce-quorum-" + nonceTag + "-" + nonceSuffix,
+			Posture:           "consensus",
 		}
 		hash, err := govtypes.GenerateMessageID(env)
 		if err != nil {
@@ -265,7 +266,6 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
-			"consensus",
 			nil,
 		)
 	}

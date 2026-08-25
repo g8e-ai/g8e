@@ -1,0 +1,201 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field as dataclass_field
+
+from app.constants import CommandGenerationOutcome, AuditorReason
+from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
+
+from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime, Field
+
+
+@dataclass
+class TribunalGenerationRequest:
+    """Context object for Tribunal command generation requests.
+
+    Groups all 14 parameters previously passed individually to generate_command
+    into a single typed context object for improved maintainability.
+    """
+
+    request: str
+    guidelines: str = ""
+    operator_context: OperatorContext | None = None
+    event_service: EventServiceProtocol | None = None
+    g8e_context: G8eHttpContext | None = None
+    settings: G8eeUserSettings | None = None
+    reputation_data_service: ReputationDataService | None = None
+    auditor_hmac_key: str | None = None
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None
+    investigation_state: str = ""
+    investigation_context: str = ""
+    whitelisting_enabled: bool = False
+    blacklisting_enabled: bool = False
+    whitelisted_commands: list[WhitelistedCommand] = dataclass_field(default_factory=list)
+    blacklisted_commands: list[str] = dataclass_field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.request:
+            raise ValueError("request must be non-empty")
+        if self.whitelisting_enabled and not self.whitelisted_commands:
+            raise ValueError("whitelisting_enabled=True requires non-empty whitelisted_commands")
+        if self.blacklisting_enabled and not self.blacklisted_commands:
+            raise ValueError("blacklisting_enabled=True requires non-empty blacklisted_commands")
+
+
+class TribunalCommandRequestContext(G8eBaseModel):
+    request: str = Field(
+        ..., description="Caller's natural-language request that seeded the Tribunal"
+    )
+    guidelines: str = Field(
+        default="",
+        description="Caller's optional guidelines on command shape passed to the Tribunal",
+    )
+    model: str | None = Field(default=None, description="LLM model used for Tribunal generation")
+    num_passes: int | None = Field(
+        default=None,
+        description="Number of generation passes performed (default 5, one per Tribunal member)",
+    )
+    rounds_executed: int = Field(
+        default=1,
+        description="Number of Tribunal voting rounds executed (1=single-round, 2=two-round with peer review)",
+    )
+
+
+class TribunalCommandGenerationResult(G8eBaseModel):
+    final_command: str | None = Field(
+        default=None,
+        description="Command string produced by the Tribunal pipeline; null when outcome=consensus_failed",
+    )
+    outcome: CommandGenerationOutcome = Field(..., description="Tribunal pipeline outcome")
+    vote_winner: str | None = Field(
+        default=None,
+        description="Command string that won the uniform majority vote; null when outcome=consensus_failed",
+    )
+    vote_score: float | None = Field(
+        default=None,
+        description="Fraction of members who voted for the winner (winner_count / total_members); null when outcome=consensus_failed",
+    )
+
+
+class TribunalCommandAuditor(G8eBaseModel):
+    auditor_passed: bool | None = Field(
+        default=None,
+        description="True if the auditor approved the vote winner (or an equivalent dissenter cluster)",
+    )
+    auditor_revision: str | None = Field(
+        default=None,
+        description="Revised command produced by the auditor when auditor_passed=false",
+    )
+    auditor_reason: AuditorReason | None = Field(
+        default=None, description="The auditor's stated reason"
+    )
+    swap_to_cluster: str | None = Field(
+        default=None,
+        description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)",
+    )
+    swap_to_member: str | None = Field(
+        default=None, description="ConsensusMember id resolved from swap_to_cluster"
+    )
+    reputation_commitment_id: str | None = Field(
+        default=None,
+        description="FK to the reputation_commitment row written inside this verdict (Phase 2; null when REPUTATION_COMMITMENT_ENABLED=false or commit step skipped/failed)",
+    )
+
+
+class TribunalCommandPipelineMetadata(G8eBaseModel):
+    consensus_confidence: str | None = Field(
+        default=None,
+        description="Qualitative consensus confidence level derived from quantitative metrics",
+    )
+    execution_duration_ms: int | None = Field(
+        default=None, description="Total Tribunal pipeline execution duration in milliseconds"
+    )
+    stage_1_duration_ms: int | None = Field(
+        default=None, description="Stage 1 (generation) duration in milliseconds"
+    )
+    stage_2_duration_ms: int | None = Field(
+        default=None, description="Stage 2 (voting) duration in milliseconds"
+    )
+    stage_3_duration_ms: int | None = Field(
+        default=None, description="Stage 3 (verification) duration in milliseconds"
+    )
+
+
+class TribunalCommandErrorContext(G8eBaseModel):
+    error_type: str | None = Field(default=None, description="Type of Tribunal error that occurred")
+    error_message: str | None = Field(default=None, description="Human-readable error message")
+    pass_errors: list[str] = Field(
+        default_factory=list, description="Per-pass error messages when multiple passes fail"
+    )
+
+
+class TribunalCommand(G8eIdentifiableModel):
+    """Full Tribunal command generation record with investigation reference.
+
+    Captures all Tribunal pipeline metadata including candidate commands,
+    voting breakdown, auditor decisions, and final outcome. Links to an
+    investigation via investigation_id for audit and analytics.
+    """
+
+    investigation_id: str = Field(
+        ...,
+        description="Associated investigation ID. Links this Tribunal command to the investigation that triggered it",
+    )
+    case_id: str = Field(
+        ...,
+        description="Associated case ID. Denormalized for query efficiency without investigation lookup",
+    )
+    created_at: UTCDatetime = Field(
+        ..., description="When the Tribunal command generation was initiated"
+    )
+    updated_at: UTCDatetime | None = Field(
+        default=None, description="When the record was last updated"
+    )
+    request_context: TribunalCommandRequestContext = Field(
+        ..., description="Request context that seeded the Tribunal"
+    )
+    generation_result: TribunalCommandGenerationResult = Field(
+        ..., description="Generation result from the Tribunal pipeline"
+    )
+    candidates: list[CandidateCommand] = Field(
+        default_factory=list,
+        description="All candidate commands generated by Tribunal members (Round 1)",
+    )
+    round_2_candidates: list[CandidateCommand] | None = Field(
+        default=None,
+        description="Round 2 candidates from anonymized peer review (null if single-round)",
+    )
+    vote_breakdown: VoteBreakdown | None = Field(
+        default=None,
+        description="Full per-member vote attribution, dissent clusters, and tie-break record (Round 1)",
+    )
+    round_2_vote_breakdown: VoteBreakdown | None = Field(
+        default=None,
+        description="Round 2 vote breakdown from anonymized peer review (null if single-round)",
+    )
+    auditor: TribunalCommandAuditor | None = Field(
+        default=None, description="Auditor pass results when enabled"
+    )
+    pipeline_metadata: TribunalCommandPipelineMetadata | None = Field(
+        default=None, description="Additional pipeline execution metadata"
+    )
+    error_context: TribunalCommandErrorContext | None = Field(
+        default=None, description="Error information when Tribunal pipeline fails"
+    )
+
+
+__all__ = [
+    "TribunalCommand",
+    "TribunalCommandAuditor",
+    "TribunalCommandErrorContext",
+    "TribunalCommandGenerationResult",
+    "TribunalCommandPipelineMetadata",
+    "TribunalCommandRequestContext",
+    "TribunalGenerationRequest",
+]

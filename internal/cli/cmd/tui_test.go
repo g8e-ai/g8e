@@ -83,7 +83,7 @@ func TestTUICmdStructure(t *testing.T) {
 	t.Run("command long description contains controls and enrollment hint", func(t *testing.T) {
 		cmd := tuiCmd()
 		assert.Contains(t, cmd.Long, "SSE")
-		assert.Contains(t, cmd.Long, "g8e auth enroll")
+		assert.Contains(t, cmd.Long, "g8e auth enroll user")
 		assert.Contains(t, cmd.Long, "Quit")
 		assert.Contains(t, cmd.Long, "Scroll ledger down")
 		assert.Contains(t, cmd.Long, "Scroll ledger up")
@@ -163,7 +163,7 @@ func TestTUI_NotEnrolled(t *testing.T) {
 		err := cmd.Execute()
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotEnrolled)
-		assert.Contains(t, err.Error(), "g8e auth enroll")
+		assert.Contains(t, err.Error(), "g8e auth enroll user")
 	})
 }
 

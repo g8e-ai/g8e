@@ -530,16 +530,17 @@ func Load(opts LoadOptions) (*Config, error) {
 		Term:  opts.Term,
 		TZ:    opts.TZ,
 
-		// Governance posture - the operator has no posture of its own; it uses
-		// the gateway's posture, received at enrollment and passed via LoadOptions.
-		// Fail closed when no posture was supplied: the operator must not invent one.
+		// Governance posture - the operator has no posture of its own; it
+		// reads posture per-envelope from GovernanceEnvelope.Posture at L4
+		// verification time. The gateway sets that field at envelope
+		// construction from cfg.Gateway.Posture. This config value is
+		// informational only (used for logging and non-envelope code paths);
+		// an empty posture is acceptable because the operator no longer
+		// needs config posture to start.
 		Posture: opts.Posture,
 
 		// Lattice adapter (nil when disabled)
 		Lattice: opts.Lattice,
-	}
-	if cfg.Posture == "" {
-		return nil, fmt.Errorf("config: %w", constants.ErrPostureRequired)
 	}
 
 	// Default PKIDir to .g8e/pki if not explicitly set

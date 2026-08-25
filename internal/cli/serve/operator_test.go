@@ -8,6 +8,7 @@
 package serve
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -612,4 +613,17 @@ func TestResolveLatticeOpt(t *testing.T) {
 		result := resolveLatticeOpt("", constants.EnvVar.LatticeEndpoint)
 		assert.Equal(t, "", result)
 	})
+}
+
+func TestClassifyConfigLoadError_NonPostureError_ReturnsConfigError(t *testing.T) {
+	exitCode, actionable := classifyConfigLoadError(errors.New("some other config error"))
+	assert.Equal(t, constants.ExitConfigError, exitCode,
+		"all config.Load errors should return ExitConfigError")
+	assert.Empty(t, actionable, "config errors should not produce an actionable message")
+}
+
+func TestClassifyConfigLoadError_NilError_ReturnsConfigError(t *testing.T) {
+	exitCode, actionable := classifyConfigLoadError(nil)
+	assert.Equal(t, constants.ExitConfigError, exitCode)
+	assert.Empty(t, actionable)
 }

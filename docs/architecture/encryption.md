@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ## Overview
 
@@ -269,7 +269,7 @@ If services fail with an uninitialized vault error, run `g8e vault init`, unlock
 If mTLS connections fail with certificate errors:
 
 - Gateway serving certificates auto-renew within 30 days of expiry.
-- Operator and CLI leaf certificates expire after 7 days and require re-enrollment via `g8e auth enroll`.
+- Operator and CLI leaf certificates expire after 7 days and require re-enrollment via `g8e auth enroll user`.
 - Check certificate validity using standard certificate tools.
 
 ## Receipt Signature Verification

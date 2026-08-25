@@ -376,7 +376,7 @@ func TestDocDelete_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Delete document
-	deleted, err := svc.DocDelete("users", "u17")
+	deleted, err := svc.DocDeleteWithResult("users", "u17")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
@@ -389,7 +389,7 @@ func TestDocDelete_Success(t *testing.T) {
 func TestDocDelete_NotFound(t *testing.T) {
 	svc := newDocumentStoreService(t)
 
-	deleted, err := svc.DocDelete("users", "nonexistent")
+	deleted, err := svc.DocDeleteWithResult("users", "nonexistent")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }

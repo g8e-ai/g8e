@@ -833,6 +833,76 @@ func (pki *PKIAuthority) SignDelegatedCSR(csrPEM string, appName, userID string)
 	return certPEM, chainPEM, nil
 }
 
+func (pki *PKIAuthority) SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error) {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	if pki.operatorCert == nil {
+		return "", "", constants.ErrPKIOperatorCANotLoaded
+	}
+
+	var caKey *ecdsa.PrivateKey
+	if err := pki.loadCAPrivateKey(string(constants.CATypeOperator), &caKey); err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKILoadCAPrivateKey, err)
+	}
+
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return "", "", constants.ErrPKIInvalidCSR
+	}
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIParseCSR, err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKICSRSignatureCheck, err)
+	}
+	if !isCurveP256(csr.PublicKey) {
+		return "", "", constants.ErrPKIInvalidCurve
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIGenerateSerial, err)
+	}
+	wid := protocol.NewWorkloadIdentity()
+	appURI, err := wid.AppSPIFFEURL(appName)
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIGenerateSPIFFEURL, err)
+	}
+	userURI, err := wid.UserSPIFFEURL(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIGenerateSPIFFEURL, err)
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		NotBefore:    now.Add(-1 * time.Minute),
+		NotAfter:     now.Add(time.Duration(leafCertValidityDays) * 24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		URIs:         []*url.URL{appURI, userURI},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, caKey)
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKISignCSR, err)
+	}
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
+	rootPEM, err := pki.fileSvc.ReadFile(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirRoot, constants.PkiFileRootCA))
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIReadRootCA, err)
+	}
+	caPEM, err := pki.fileSvc.ReadFile(context.Background(), filepath.Join(constants.PkiDirname, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA))
+	if err != nil {
+		return "", "", fmt.Errorf("%s: %w", constants.ErrPKIReadOperatorCA, err)
+	}
+	chainPEM = certPEM + string(caPEM) + string(rootPEM)
+	return certPEM, chainPEM, nil
+}
+
 // ─── private helpers ──────────────────────────────────────────────────────────
 
 func (pki *PKIAuthority) loadCACertificate(certRelPath string, cert **x509.Certificate) error {

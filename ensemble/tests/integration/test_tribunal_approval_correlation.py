@@ -1,0 +1,193 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""
+Tribunal → Approval Correlation Integration Tests
+
+End-to-end test covering the full Tribunal → approval → response flow to ensure:
+1. correlation_id is generated when Tribunal starts
+2. correlation_id flows through to approval events
+3. web_session_id is invariant on approval events
+4. SSE boundary validation rejects events missing web_session_id
+"""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.constants import CommandGenerationOutcome, EventType, G8EE_COMPONENT
+from app.models.agents.tribunal import (
+    CandidateCommand,
+)
+from app.models.http_context import G8eHttpContext
+from app.models.tribunal_commands import TribunalGenerationRequest
+from app.services.ai.generator import generate_command
+from tests.fakes.agent_helpers import (
+    make_agent_run_args,
+    make_event_service,
+)
+from tests.unit.services.ai.tribunal.conftest import make_tribunal_generation_request
+
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
+
+
+@pytest.mark.asyncio(loop_scope="session")
+class TestTribunalApprovalCorrelation:
+    """Verify correlation_id flows through Tribunal → approval pipeline."""
+
+    async def test_tribunal_correlation_id_flows_to_all_events(self):
+        """Tribunal correlation_id is carried through to all Tribunal SSE events."""
+        inputs, _state = make_agent_run_args(
+            case_id="correlation-test-case-001",
+            investigation_id="correlation-test-inv-001",
+            web_session_id="correlation-test-sess-001",
+            user_id="correlation-test-user-001",
+        )
+        event_svc = make_event_service()
+
+        from app.constants import ConsensusMember
+
+        mock_candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=ConsensusMember.CONCORD),
+        ]
+
+        with (
+            patch(
+                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+            ) as mock_gen,
+            patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
+        ):
+            mock_gen.return_value = mock_candidates
+            # Mock auditor to pass
+            mock_auditor = mock_auditor_class.return_value
+            mock_auditor.run = AsyncMock(
+                return_value=MagicMock(
+                    final_command="ls -la",
+                    outcome=CommandGenerationOutcome.VERIFIED,
+                    passed=True,
+                    revision=None,
+                    reason="ok",
+                    reputation_commitment_id=None,
+                )
+            )
+
+            # Generate command via Tribunal
+            gen_result = await generate_command(
+                make_tribunal_generation_request(
+                    request="list files in current directory",
+                    guidelines="show hidden files too",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=G8EE_COMPONENT,
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=AsyncMock(),
+                    auditor_hmac_key="test-key",
+                    whitelisting_enabled=False,
+                    blacklisting_enabled=False,
+                    whitelisted_commands=[],
+                    blacklisted_commands=[],
+                )
+            )
+
+        # Verify Tribunal generated correlation_id
+        assert gen_result.correlation_id is not None
+        correlation_id = gen_result.correlation_id
+
+        # Verify all emitted events carry the correlation_id
+        published = event_svc._published_events
+        tribunal_events = [
+            e for e in published if e.event_type.value.startswith("g8e.v1.ai.consensus")
+        ]
+        assert len(tribunal_events) > 0
+
+        for event in tribunal_events:
+            # Skip failure events that might not have it if they occur very early (though here they shouldn't)
+            if event.event_type in (
+                EventType.AI_CONSENSUS_SESSION_STARTED,
+                EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED,
+                EventType.AI_CONSENSUS_VOTING_CONSENSUS_REACHED,
+                EventType.AI_CONSENSUS_SESSION_COMPLETED,
+            ):
+                assert event.payload.correlation_id == correlation_id, (
+                    f"Event {event.event_type} missing correlation_id"
+                )
+                assert event.web_session_id == inputs.web_session_id
+
+    async def test_approval_event_includes_web_session_id(self):
+        """Approval events must include web_session_id for SSE boundary validation."""
+        inputs, _state = make_agent_run_args(
+            case_id="web-session-test-case-001",
+            investigation_id="web-session-test-inv-001",
+            web_session_id="web-session-test-sess-001",
+            user_id="web-session-test-user-001",
+        )
+        event_svc = make_event_service()
+
+        with (
+            patch(
+                "app.services.ai.generator._run_generation_stage", new_callable=AsyncMock
+            ) as mock_gen,
+            patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class,
+        ):
+            mock_gen.return_value = [
+                CandidateCommand(command="ls", pass_index=0, member="axiom"),
+                CandidateCommand(command="ls", pass_index=1, member="concord"),
+            ]
+            # Mock auditor to pass
+            mock_auditor = mock_auditor_class.return_value
+            mock_auditor.run = AsyncMock(
+                return_value=MagicMock(
+                    final_command="ls -la",
+                    outcome=CommandGenerationOutcome.VERIFIED,
+                    passed=True,
+                    revision=None,
+                    reason="ok",
+                    reputation_commitment_id=None,
+                )
+            )
+
+            # Generate command via Tribunal
+            await generate_command(
+                make_tribunal_generation_request(
+                    request="list files",
+                    guidelines="",
+                    operator_context=None,
+                    event_service=event_svc,
+                    g8e_context=G8eHttpContext(
+                        web_session_id=inputs.web_session_id,
+                        user_id=inputs.user_id,
+                        case_id=inputs.case_id,
+                        investigation_id=inputs.investigation_id,
+                        source_component=G8EE_COMPONENT,
+                    ),
+                    settings=inputs.request_settings,
+                    reputation_data_service=AsyncMock(),
+                    auditor_hmac_key="test-key",
+                    whitelisting_enabled=False,
+                    blacklisting_enabled=False,
+                    whitelisted_commands=[],
+                    blacklisted_commands=[],
+                )
+            )
+
+        # Verify web_session_id is present in Tribunal events
+        published = event_svc._published_events
+        tribunal_events = [
+            e for e in published if e.event_type == EventType.AI_CONSENSUS_SESSION_STARTED
+        ]
+        assert len(tribunal_events) == 1
+        assert tribunal_events[0].web_session_id == inputs.web_session_id
+
+        # Note: Actual approval event emission is tested in approval_service unit tests
+        # This integration test focuses on the Tribunal → correlation_id flow

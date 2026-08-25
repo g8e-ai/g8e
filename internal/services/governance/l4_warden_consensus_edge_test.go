@@ -53,12 +53,11 @@ func TestL4Warden_ConsensusPolicyStoreError_FailClosed(t *testing.T) {
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
 		constants.AllActionTypes,
-		"consensus",
 		nil,
 	)
 
 	payload := typedPayload(t, constants.ActionTypeFsList)
-	env := signedEnvelope(t, constants.ActionTypeFsList, payload, priv)
+	env := signedEnvelope(t, constants.ActionTypeFsList, payload, priv, "consensus")
 	// Override the L2 vote to use our member key
 	hash := env.TransactionHash
 	env.Governance.L2.Votes[0] = signL2Vote(priv, "member-1", hash, true)
@@ -113,7 +112,6 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		testutil.NewConfigurableMockL3Notary(true),
 		NewL1Doctrine(),
 		constants.AllActionTypes,
-		"consensus",
 		nil,
 	)
 
@@ -135,6 +133,7 @@ func TestL4Warden_L2SplitVote_QuorumNotMet(t *testing.T) {
 		Payload:           payload,
 		StateMerkleRoot:   "root-1",
 		Nonce:             "nonce-splitvote-" + nonceSuffix,
+		Posture:           "consensus",
 	}
 	hash, err := govtypes.GenerateMessageID(env)
 	if err != nil {
@@ -195,7 +194,6 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
-			"consensus",
 			nil,
 		)
 	}
@@ -218,6 +216,7 @@ func TestL4Warden_L2VoteOrderingIndependence(t *testing.T) {
 			Payload:           payload,
 			StateMerkleRoot:   "root-1",
 			Nonce:             fmt.Sprintf("nonce-order-%s-%s", nonceTag, nonceSuffix),
+			Posture:           "consensus",
 		}
 		hash, err := govtypes.GenerateMessageID(env)
 		if err != nil {
@@ -323,7 +322,6 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
-			"consensus",
 			nil,
 		)
 	}
@@ -346,6 +344,7 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 			Payload:           payload,
 			StateMerkleRoot:   "root-1",
 			Nonce:             fmt.Sprintf("nonce-singlekey-%s-%s", nonceTag, nonceSuffix),
+			Posture:           "consensus",
 		}
 		hash, err := govtypes.GenerateMessageID(env)
 		if err != nil {
@@ -413,7 +412,6 @@ func TestL4Warden_SingleKeyCannotSatisfyQuorum(t *testing.T) {
 			testutil.NewConfigurableMockL3Notary(true),
 			NewL1Doctrine(),
 			constants.AllActionTypes,
-			"consensus",
 			nil,
 		)
 	}

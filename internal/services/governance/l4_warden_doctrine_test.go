@@ -20,8 +20,8 @@ import (
 // non-mutation envelope passes under doctrine posture.
 func TestL4Warden_Doctrine_ValidNonMutationPasses(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 
 	verified, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
@@ -37,8 +37,8 @@ func TestL4Warden_Doctrine_ValidNonMutationPasses(t *testing.T) {
 // since doctrine only enforces L1 (L2/L3 are audited but do not gate).
 func TestL4Warden_Doctrine_ValidMutationPassesWithoutL2L3(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "doctrine")
 
 	env.Governance.L3 = nil
 	env.Governance.L2 = nil
@@ -68,9 +68,9 @@ func TestL4Warden_Doctrine_AllActionTypesFromSSOT(t *testing.T) {
 	for _, actionType := range allActionTypes {
 		t.Run(string(actionType), func(t *testing.T) {
 			t.Parallel()
-			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
 			payload := typedPayload(t, actionType)
-			env := signedEnvelope(t, actionType, payload, privKey)
+			env := signedEnvelope(t, actionType, payload, privKey, "doctrine")
 
 			verified, err := verifier.VerifyEnvelope(context.Background(), env)
 			if err != nil {
@@ -91,8 +91,8 @@ func TestL4Warden_Doctrine_AllActionTypesFromSSOT(t *testing.T) {
 // votes do not reject an envelope under doctrine (L2 is audited, not enforced).
 func TestL4Warden_Doctrine_MissingL2DoesNotReject(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 
 	env.Governance.L2 = nil
 
@@ -109,8 +109,8 @@ func TestL4Warden_Doctrine_MissingL2DoesNotReject(t *testing.T) {
 // proof does not reject a mutation under doctrine (L3 is audited, not enforced).
 func TestL4Warden_Doctrine_MissingL3DoesNotReject(t *testing.T) {
 	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "doctrine")
 
 	env.Governance.L3 = nil
 
@@ -130,8 +130,8 @@ func TestL4Warden_Doctrine_ReplayAndStateRootReject(t *testing.T) {
 	t.Run("replayed nonce", func(t *testing.T) {
 		t.Parallel()
 		replayStore := testutil.NewStatefulMockReplayStore()
-		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 		if _, err := verifier.VerifyEnvelope(context.Background(), env); err != nil {
 			t.Fatalf("first verification failed: %v", err)
 		}
@@ -143,8 +143,8 @@ func TestL4Warden_Doctrine_ReplayAndStateRootReject(t *testing.T) {
 
 	t.Run("state root mismatch", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMismatch) {
 			t.Fatalf("expected state root mismatch, got %v", err)
@@ -158,8 +158,8 @@ func TestL4Warden_Doctrine_MissingVerifierDependenciesReject(t *testing.T) {
 	t.Parallel()
 	t.Run("missing replay store", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrReplayStoreMissing) {
 			t.Fatalf("expected replay store rejection, got %v", err)
@@ -168,8 +168,8 @@ func TestL4Warden_Doctrine_MissingVerifierDependenciesReject(t *testing.T) {
 
 	t.Run("missing state root provider", func(t *testing.T) {
 		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true))
+		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
 		_, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMissing) {
 			t.Fatalf("expected state root provider rejection, got %v", err)

@@ -277,7 +277,7 @@ The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There i
 The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
 
 - `Makefile`: Reads `VERSION` via `$(shell cat VERSION)`; `make release` syncs Python files, tags, and pushes (GitHub Actions workflows create the release)
-- `Dockerfile`: Receives version as build arg
+- `Dockerfile`: Builds via `make build-all`, which reads `VERSION` from the file at build time (no version build arg)
 - `docker-compose.yml`: References build context, not version
 - `.github/workflows/*.yml`: Triggered by git tags, no hardcoded version. CI includes a version sync check that fails if Python files don't match `VERSION`.
 
@@ -303,56 +303,60 @@ Any file in the output that carries a version/date header should have that heade
 > | Bold | `**Version:** vX.Y.Z` / `**Last Updated:** YYYY-MM-DD` | (none currently) |
 > | Document Version (no `v`) | `**Document Version:** X.Y.Z` | `docs/reference/compliance-alignment.md` |
 
-#### Architecture Docs (`docs/architecture/`): 12 files
+#### Architecture Docs (`docs/architecture/`): 15 files
 
 | # | File |
 |---|------|
 | 1 | `docs/architecture/agents.md` |
 | 2 | `docs/architecture/auth.md` |
 | 3 | `docs/architecture/consensus.md` |
-| 4 | `docs/architecture/encryption.md` |
-| 5 | `docs/architecture/gateway.md` |
-| 6 | `docs/architecture/governance.md` |
-| 7 | `docs/architecture/network.md` |
-| 8 | `docs/architecture/operator.md` |
-| 9 | `docs/architecture/protocol.md` |
-| 10 | `docs/architecture/scripts.md` |
-| 11 | `docs/architecture/sse.md` |
-| 12 | `docs/architecture/storage.md` |
+| 4 | `docs/architecture/dashboard.md` |
+| 5 | `docs/architecture/encryption.md` |
+| 6 | `docs/architecture/ensemble.md` |
+| 7 | `docs/architecture/gateway.md` |
+| 8 | `docs/architecture/governance.md` |
+| 9 | `docs/architecture/network.md` |
+| 10 | `docs/architecture/operator.md` |
+| 11 | `docs/architecture/overview.md` |
+| 12 | `docs/architecture/protocol.md` |
+| 13 | `docs/architecture/scripts.md` |
+| 14 | `docs/architecture/sse.md` |
+| 15 | `docs/architecture/storage.md` |
 
-#### Guide Docs (`docs/guides/`): 12 files
+#### Guide Docs (`docs/guides/`): 13 files
 
 | # | File | Note |
 |---|------|------|
-| 14 | `docs/guides/air_gap.md` | |
-| 15 | `docs/guides/build_apps.md` | |
-| 16 | `docs/guides/build_frontend.md` | |
-| 17 | `docs/guides/build_gateway.md` | |
-| 18 | `docs/guides/build_operator.md` | |
-| 19 | `docs/guides/cloudflare_tunnel.md` | |
-| 20 | `docs/guides/connect_apps_to_gateway.md` | |
-| 21 | `docs/guides/connect_frontend_to_gateway.md` | |
-| 22 | `docs/guides/connect_operator_to_gateway.md` | |
-| 23 | `docs/guides/docker_gateway.md` | |
-| 24 | `docs/guides/getting_started.md` | |
-| 25 | `docs/guides/lovable.md` | |
+| 16 | `docs/guides/air_gap.md` | |
+| 17 | `docs/guides/build_apps.md` | |
+| 18 | `docs/guides/build_frontend.md` | |
+| 19 | `docs/guides/build_gateway.md` | |
+| 20 | `docs/guides/build_operator.md` | |
+| 21 | `docs/guides/cloudflare_tunnel.md` | |
+| 22 | `docs/guides/connect_apps_to_gateway.md` | |
+| 23 | `docs/guides/connect_frontend_to_gateway.md` | |
+| 24 | `docs/guides/connect_operator_to_gateway.md` | |
+| 25 | `docs/guides/docker_gateway.md` | |
+| 26 | `docs/guides/getting_started.md` | |
+| 27 | `docs/guides/lovable.md` | |
+| 28 | `docs/guides/unified_stack.md` | |
 
 
 #### Reference Docs (`docs/reference/`): 3 files
 
 | # | File | Note |
 |---|------|------|
-| 26 | `docs/reference/glossary.md` | plain `Version:` header |
-| 27 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
-| 28 | `docs/reference/fips140-3.md` | plain `Version:` header |
+| 29 | `docs/reference/glossary.md` | plain `Version:` header |
+| 30 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
+| 31 | `docs/reference/fips140-3.md` | plain `Version:` header |
 
 #### Protocol Docs (`protocol/docs/`): 3 files
 
 | # | File | Note |
 |---|------|------|
-| 29 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
-| 30 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
-| 31 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
+| 32 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
+| 33 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
+| 34 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
 
 #### Update Pattern for Each Modified Doc
 

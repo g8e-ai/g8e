@@ -70,15 +70,15 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 		cmd.Println("     gateway (passkey enrollment is optional for this posture):")
 	}
 	cmd.Println()
-	cmd.Printf("       %s auth enroll -e %s\n", bin, externalIP)
+	cmd.Printf("       %s auth enroll user -e %s\n", bin, externalIP)
 	cmd.Println()
-	cmd.Println("     `auth enroll` performs the human passkey ceremony and prepares the")
+	cmd.Println("     `auth enroll user` performs the human passkey ceremony and prepares the")
 	cmd.Println("     CLI credentials needed to access the console and MCP endpoints. It also")
 	cmd.Println("     installs the gateway root CA into the OS trust store before opening the")
 	cmd.Println("     browser; pass `--no-system-trust` to skip that step (an administrator")
 	cmd.Println("     must pre-install trust in that case).")
 	cmd.Println()
-	cmd.Println("     `auth enroll` verifies the local identity against the live gateway")
+	cmd.Println("     `auth enroll user` verifies the local identity against the live gateway")
 	cmd.Println("     before reuse: if the gateway's PKI has been regenerated (e.g., after")
 	cmd.Println("     `gw clean`), the local identity is stale and enrollment automatically")
 	cmd.Println("     routes through the human-approved recovery flow to obtain a fresh")
@@ -95,7 +95,7 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	} else {
 		cmd.Println("  2. Enroll a passkey (optional, in this terminal):")
 	}
-	cmd.Printf("       %s auth enroll\n", bin)
+	cmd.Printf("       %s auth enroll user\n", bin)
 	cmd.Println()
 
 	// Operators

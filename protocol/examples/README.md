@@ -43,8 +43,8 @@ The canonical schemas are defined in `internal/services/mcp/config.go` (gateway 
 
 Demonstrates SPIFFE workload identity operations:
 
-- Generates SPIFFE IDs for operator, CLI, app, hub, user, and gateway peer workloads
-- Validates identities with `Matches*` methods
+- Generates SPIFFE IDs for operator, CLI, app, ensemble, hub, user, and gateway peer workloads
+- Validates identities with `Matches*` and `Is*` methods
 - Extracts CLI session IDs, user IDs (from both CLI and User SAN SPIFFE IDs), operator session IDs, and gateway IDs from SPIFFE IDs
 - Parses SPIFFE URLs
 

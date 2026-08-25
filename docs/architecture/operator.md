@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -116,6 +116,10 @@ The Governed Operator compiles native tool playbooks directly into the `g8e` bin
 #### Shell Execution Playbook
 - **run_shell_command**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
 
+#### Audit Receipt Query Playbook
+- **audit_receipt_list**: Lists signed ActionReceipt records from the operator's audit vault with optional filters by operator session ID, action type, and not-before timestamp. Returns paginated, scrubbed results to the AI agent without exposing raw forensic data.
+- **audit_receipt_get**: Retrieves a single signed ActionReceipt by transaction ID from the operator's audit vault, returning the full receipt envelope with L2/L3 verification status and state root before/after.
+
 ### Identity, PKI, and mTLS
 The Governed Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
 
@@ -158,13 +162,13 @@ The reference implementation currently supports:
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
 - **Zero-Dependency Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
-- **Expanded Native Tool Catalog**: 30 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, and shell execution.
+- **Expanded Native Tool Catalog**: 32 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, shell execution, and governed audit receipt queries.
 
 ---
 
 ## 6. Post-Bootstrap Workflow
 
-After completing platform bootstrap via `g8e auth enroll`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
+After completing platform bootstrap via `g8e auth enroll user`, follow this workflow to begin using the Operator. Enrollment automatically registers a passkey via browser after successful CLI session enrollment.
 
 ### 1. Verify Gateway Health
 
@@ -172,7 +176,7 @@ Confirm the Governance Gateway is running and accessible with `g8e gw status`.
 
 ### 2. Enroll Remote Operators (Multi-Host Setups)
 
-For distributed enforcement across multiple hosts, enroll each remote operator with `g8e gw security pki enroll -e <gateway-ip>`. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
+For distributed enforcement across multiple hosts, deploy the binary and start each remote operator with `g8e operator start -e <gateway-ip>`. When no installed operator credentials are found and `--endpoint` is provided, the operator automatically drives the owner-approved platform enrollment protocol: it submits an operator CSR, waits for owner approval in the gateway console, and saves the signed certificates to the PKI directory. Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate. To deploy the binary to remote hosts, use `g8e operator deploy` or `g8e operator stream`.
 
 ### 3. Configure AI Client Integration
 
@@ -187,13 +191,13 @@ Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint
 
 Execute a benign diagnostic command via your MCP client to verify the verification sequence, such as a `db_discover_topology` or `sys_oom_detect` tool call.
 
-The Operator:
-1. Translates the request into a GovernanceEnvelope
-2. Enforces L1 (Technical Bedrock) checks
-3. Verifies L2 (Consensus) signatures if in consensus/notary mode
-4. Requires L3 (Notary) approval if in notary mode
-5. Executes through the Actuator boundary
-6. Emits a signed ActionReceipt
+The Gateway translates the request into a `GovernanceEnvelope` and runs L1-L3 (Doctrine, Consensus, Notary), attaching the resulting proofs to the envelope. The Operator then:
+1. Re-runs L1 (Technical Bedrock) validation on the decoded payload
+2. Re-verifies L2 (Consensus) signatures against its locally trusted signer store
+3. Re-verifies the L3 (Notary) proof if the posture requires it
+4. Enforces L4 (Warden) integrity, freshness, state-binding, and quorum checks
+5. Executes through the L5 (Actuator) boundary
+6. Emits a signed ActionReceipt anchored to the local audit vault
 
 ### 5. Review Audit Trail
 
@@ -234,6 +238,7 @@ The Operator compiles native tool playbooks for common operational tasks:
 - **File Operations**: File checksumming, disk usage analysis, file reading
 - **Cloud & Orchestration**: Cloud metadata, Kubernetes inspection, Git operations, operator deployment
 - **Shell Execution**: Safe shell command execution
+- **Audit Receipt Queries**: Signed receipt listing and single-receipt lookup from the local audit vault
 
 See [Native Tool Execution](#native-tool-execution) for the complete tool catalog.
 
@@ -254,4 +259,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 - [Storage Architecture](./storage.md) for audit vault and ledger internals
 - [Consensus](./consensus.md) for consensus configuration and consensus setup
 - [Encryption](./encryption.md) for encryption at rest details
-- Lattice Adapter for Anduril Lattice COP integration
+- [Lattice Adapter](../../internal/adapters/lattice/README.md) for Anduril Lattice COP integration

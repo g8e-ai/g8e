@@ -256,8 +256,33 @@ g8e demos reset healthcare
 
 ```bash
 cd demos/healthcare
-docker compose up -d
+docker compose up -d --build
 ```
+
+All services start, but the operator and any service that depends on it (`agent-runtime`) remain not-ready until their owner-approved platform enrollment requests are approved. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending.
+
+#### Owner-approved platform bootstrap
+
+After `docker compose up -d --build`, the gateway is healthy but the operator and its dependents are not. Bootstrap them by enrolling the first owner and approving the operator's pending enrollment request:
+
+```bash
+# 1. Wait for the gateway to be healthy (the healthcare demo gateway listens on port 8081).
+until curl -fsS http://localhost:8081/api/v1/health >/dev/null 2>&1; do sleep 2; done
+
+# 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
+./g8e auth enroll user -e https://localhost:8444
+
+# 3. List pending platform enrollment requests.
+./g8e auth pending-platform-enrollments
+
+# 4. Approve the operator's request by exact request ID.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+
+# 5. Wait for the operator and its dependents to become healthy.
+docker compose ps
+```
+
+The `g8e demos start healthcare` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
 
 Watch startup progress:
 
@@ -265,11 +290,11 @@ Watch startup progress:
 docker compose ps
 ```
 
-Expected healthy sequence (takes ~60s on first pull):
+Expected healthy sequence (after the operator's platform enrollment is approved):
 
 1. `reporting-db` → healthy
 2. `gateway` → healthy
-3. `operator` → healthy (operator cert written)
+3. `operator` → healthy (operator cert written after platform enrollment completes)
 4. `compliance-dashboard` → running
 5. `metabase-setup` → runs once, configures Metabase, exits 0
 

@@ -100,3 +100,11 @@ paths = [
   '''internal/services/gateway/pki/.*''',
   '''demos/.*/config/.*''',
 ]
+
+[[allowlists]]
+description = "Skip env var name constants and empty .env.example templates (names, not secret values)"
+paths = [
+  '''ensemble/app/constants/env_vars\.py''',
+  '''ensemble/\.env\.example''',
+  '''dashboard/models/settings_model\.js''',
+]

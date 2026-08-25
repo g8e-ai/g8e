@@ -35,7 +35,7 @@ func TestExecute(t *testing.T) {
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
 		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
-		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger", "report", "version", "compliance"}
+		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "version", "compliance"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -101,7 +101,7 @@ func TestRootCommandValidation(t *testing.T) {
 			expectedUse:    "g8e",
 			expectedShort:  "g8e Platform Manager",
 			expectedLong:   "zero-trust execution platform",
-			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger", "report", "tui", "gui", "version", "compliance"},
+			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "docker", "audit", "swagger", "report", "tui", "version", "compliance"},
 			expectedCmdLen: 14,
 		},
 	}
@@ -172,7 +172,6 @@ func TestSubcommandRegistration(t *testing.T) {
 		assert.NotNil(t, demosCmd(), "demosCmd should not be nil")
 		assert.NotNil(t, auditCmd(), "auditCmd should not be nil")
 		assert.NotNil(t, swaggerCmd(), "swaggerCmd should not be nil")
-		assert.NotNil(t, guiCmd(), "guiCmd should not be nil")
 	})
 
 	t.Run("all subcommands have valid cobra.Command structure", func(t *testing.T) {
@@ -186,7 +185,6 @@ func TestSubcommandRegistration(t *testing.T) {
 			demosCmd(),
 			auditCmd(),
 			swaggerCmd(),
-			guiCmd(),
 		}
 
 		for _, cmd := range commands {
@@ -249,7 +247,6 @@ func TestRootCommandConsistency(t *testing.T) {
 			demosCmd(),
 			auditCmd(),
 			swaggerCmd(),
-			guiCmd(),
 		}
 
 		for _, cmd := range commands {

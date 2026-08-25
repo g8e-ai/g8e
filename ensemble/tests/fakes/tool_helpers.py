@@ -1,0 +1,99 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""Consolidated tool executor helpers for g8ee tests."""
+
+from unittest.mock import AsyncMock, MagicMock
+
+from app.services.ai.tool_service import AIToolService
+from app.services.protocols import MemoryDataServiceProtocol
+
+from .fake_web_search_provider import FakeWebSearchProvider
+
+
+def create_tool_service_fake(
+    investigation_service=None,
+    web_search_provider=None,
+    with_run_commands_result=None,
+    auto_approve=True,
+    event_service=None,
+    whitelist_validator=None,
+    blacklist_validator=None,
+    auto_approved_validator=None,
+):
+    """Return an AIToolService with all external dependencies wired.
+
+    Uses build_command_service to ensure we have a real OperatorCommandService
+    with awaitable methods on its sub-services.
+    """
+    from app.models.operators import PendingApproval
+    from app.services.investigation.investigation_service import InvestigationService
+    from app.utils.timestamp import now
+
+    from .builder import build_command_service
+
+    # Build a real wired OperatorCommandService using our fakes
+    operator_command_service = build_command_service(
+        investigation_service=investigation_service, event_service=event_service
+    )
+
+    if auto_approve:
+
+        def _auto_approve_callback(approval_id: str, pending: PendingApproval):
+            import asyncio
+
+            # Schedule the resolution to happen almost immediately but in the next loop tick
+            # to simulate an external response while we are waiting.
+            loop = asyncio.get_event_loop()
+            loop.call_later(
+                0.01,
+                lambda: pending.resolve(
+                    approved=True, reason="Auto-approved by test runner", responded_at=now()
+                ),
+            )
+
+        operator_command_service._approval_service.set_on_approval_requested(_auto_approve_callback)
+
+    memory_data_service = MagicMock(spec=MemoryDataServiceProtocol)
+
+    # We use a real InvestigationService wired to the same fakes if possible
+    # This acts as our domain-layer service
+    investigation_service_domain = InvestigationService(
+        investigation_data_service=operator_command_service.investigation_service,
+        operator_data_service=operator_command_service.operator_data_service,
+        memory_data_service=memory_data_service,
+    )
+
+    # Default investigation_service to a fake if not provided
+    if investigation_service is None:
+        investigation_service = operator_command_service.investigation_service
+
+    return AIToolService(
+        operator_command_service=operator_command_service,
+        investigation_service=investigation_service_domain,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
+        ssh_inventory_service=MagicMock(),
+        stream_executor=MagicMock(),
+        web_search_provider=web_search_provider,
+        whitelist_validator=whitelist_validator,
+        blacklist_validator=blacklist_validator,
+        auto_approved_validator=auto_approved_validator,
+    )
+
+
+def create_tool_service_with_search_fake(investigation_service=None):
+    """Return an AIToolService with a fake WebSearchProvider configured."""
+    from app.models.tool_results import SearchWebResult
+
+    provider = FakeWebSearchProvider(
+        search_result=SearchWebResult(success=True, query="test query", results=[])
+    )
+    return create_tool_service_fake(
+        investigation_service=investigation_service, web_search_provider=provider
+    )

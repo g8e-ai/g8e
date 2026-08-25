@@ -312,7 +312,10 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 
 // TestApplyBootstrapConfig_AppliesGatewayPosture verifies that the posture
 // received from the gateway (via enrollment/reauth) is applied to the operator's
-// config. The operator has no posture of its own; it must use the gateway's.
+// config. The operator no longer requires this posture to start — it reads
+// posture per-envelope from GovernanceEnvelope.Posture at L4 verification time.
+// This config value is informational only (used for logging and non-envelope
+// code paths), but ApplyBootstrapConfig still applies it for continuity.
 func TestApplyBootstrapConfig_AppliesGatewayPosture(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
@@ -340,7 +343,9 @@ func TestApplyBootstrapConfig_AppliesGatewayPosture(t *testing.T) {
 // TestApplyBootstrapConfig_EmptyPostureNotOverridden verifies that an empty
 // posture in the bootstrap config does not override the existing config posture.
 // This prevents a reauth with no posture field from wiping out a previously
-// received posture.
+// received posture. The operator no longer requires config posture to start
+// (it reads posture per-envelope), but preserving a previously received value
+// avoids confusing log output.
 func TestApplyBootstrapConfig_EmptyPostureNotOverridden(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

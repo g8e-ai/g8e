@@ -79,6 +79,26 @@
       "_go_const": "PubSubActionUnsubscribe",
       "value": "unsubscribe",
       "_python_const": "UNSUBSCRIBE"
+    },
+    "PrefixCmd": {
+      "_go_const": "ChannelPrefixCmd",
+      "value": "cmd",
+      "_python_const": "PREFIX_CMD"
+    },
+    "PrefixHeartbeat": {
+      "_go_const": "ChannelPrefixHeartbeat",
+      "value": "heartbeat",
+      "_python_const": "PREFIX_HEARTBEAT"
+    },
+    "PrefixReceipts": {
+      "_go_const": "ChannelPrefixReceipts",
+      "value": "receipts",
+      "_python_const": "PREFIX_RECEIPTS"
+    },
+    "PrefixResults": {
+      "_go_const": "ChannelPrefixResults",
+      "value": "results",
+      "_python_const": "PREFIX_RESULTS"
     }
   }
 }

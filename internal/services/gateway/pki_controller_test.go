@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -283,61 +284,60 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 		"workload_session_id": testWorkloadSessionID,
 	}
 
-	tests := []httpTestCase{
-		{
-			name:           "Success - POST signs CSR and returns cert",
-			method:         http.MethodPost,
-			body:           mustMarshalJSON(t, validCSRPayload),
-			expectedStatus: http.StatusOK,
-			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]string
-				err := json.Unmarshal(rr.Body.Bytes(), &resp)
-				require.NoError(t, err, "failed to unmarshal response")
-				assert.NotEmpty(t, resp["certificate_pem"], "certificate_pem should not be empty")
-				assert.NotEmpty(t, resp["certificate_chain_pem"], "certificate_chain_pem should not be empty")
-				assert.Contains(t, resp["certificate_pem"], "BEGIN CERTIFICATE", "certificate should contain PEM header")
-			},
-		},
-		{
-			name:           "Failure - GET method not allowed",
-			method:         http.MethodGet,
-			expectedStatus: http.StatusMethodNotAllowed,
-			expectedBody:   `{"error":"method not allowed"}`,
-		},
-		{
-			name:           "Failure - Invalid JSON",
-			method:         http.MethodPost,
-			body:           []byte("invalid json"),
-			expectedStatus: http.StatusBadRequest,
-			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
-				var resp map[string]string
-				err := json.Unmarshal(rr.Body.Bytes(), &resp)
-				require.NoError(t, err)
-			},
-		},
-		{
-			name:   "Failure - PKI signing error",
-			method: http.MethodPost,
-			body: mustMarshalJSON(t, map[string]string{
-				"csr_pem":   "invalid csr",
-				"leaf_type": "operator",
-			}),
-			expectedStatus: http.StatusInternalServerError,
-		},
-	}
+	t.Run("Failure - no mTLS returns 401", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, validCSRPayload)))
+		req.TLS = nil
+		rr := httptest.NewRecorder()
+		c.handlePKICSRSign(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"missing certificate"}`, rr.Body.String())
+	})
 
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
-				c, _, _ := setupTestPKIController(t)
-				if tc.setup != nil {
-					tc.setup(t, c, nil)
-				}
-				c.handlePKICSRSign(rr, req)
-			})
-		})
-	}
+	t.Run("Success - POST with mTLS signs CSR and returns cert", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, validCSRPayload)))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
+		rr := httptest.NewRecorder()
+		c.handlePKICSRSign(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]string
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.NotEmpty(t, resp["certificate_pem"], "certificate_pem should not be empty")
+		assert.NotEmpty(t, resp["certificate_chain_pem"], "certificate_chain_pem should not be empty")
+		assert.Contains(t, resp["certificate_pem"], "BEGIN CERTIFICATE", "certificate should contain PEM header")
+	})
+
+	t.Run("Failure - GET method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.PKICSRSign, nil)
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
+		rr := httptest.NewRecorder()
+		c.handlePKICSRSign(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - Invalid JSON", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader([]byte("invalid json")))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
+		rr := httptest.NewRecorder()
+		c.handlePKICSRSign(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("Failure - PKI signing error", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.PKICSRSign, bytes.NewReader(mustMarshalJSON(t, map[string]string{
+			"csr_pem":   "invalid csr",
+			"leaf_type": "operator",
+		})))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, testUserID)}}
+		rr := httptest.NewRecorder()
+		c.handlePKICSRSign(rr, req)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
 }
 
 func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
@@ -546,6 +546,31 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
+func TestPKIController_HandleNodeBinaryDownload_ImageBakedBinDir(t *testing.T) {
+	c, _, _ := setupTestPKIController(t)
+
+	// Use a temp directory to simulate the image-baked /opt/g8e/bin directory
+	// where the Dockerfile copies all platform binaries. The controller's
+	// nodeBinariesDir field is overridden so the test does not require root
+	// to write to /opt/g8e.
+	binDir := t.TempDir()
+	c.nodeBinariesDir = binDir
+
+	testContent := []byte("image-baked binary content")
+	binaryPath := filepath.Join(binDir, "g8e-darwin-arm64")
+	require.NoError(t, os.WriteFile(binaryPath, testContent, constants.PermFilePublic))
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-darwin-arm64", nil)
+	rr := httptest.NewRecorder()
+
+	c.handleNodeBinaryDownload(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "application/octet-stream", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "attachment; filename=g8e-darwin-arm64", rr.Header().Get("Content-Disposition"))
+	assert.Equal(t, testContent, rr.Body.Bytes())
+}
+
 func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
@@ -631,71 +656,6 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
 		script := rr.Body.String()
 		assert.Contains(t, script, "10.0.0.1")
-	})
-}
-
-func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
-
-	t.Run("Failure - GET method not allowed", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/apps/enroll", nil)
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsEnroll(rr, req)
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - app enrollment service not available", func(t *testing.T) {
-		cfg := testutil.NewTestConfig(t)
-		logger := testutil.NewTestLogger()
-		pki := &PKIAuthority{}
-		resp := response.NewWriter(logger)
-
-		// Initialize script templates
-		if err := scripts.Init(logger); err != nil {
-			t.Fatalf("Failed to initialize script templates: %v", err)
-		}
-
-		controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, Responder: resp})
-
-		validPayload := map[string]string{
-			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
-			"app_name": "test-app",
-			"app_type": "mcp-client",
-		}
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
-		rr := httptest.NewRecorder()
-		controller.handlePKIAppsEnroll(rr, req)
-		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
-		assert.JSONEq(t, `{"error":"service unavailable"}`, rr.Body.String())
-	})
-
-	t.Run("Failure - malformed JSON", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader([]byte("invalid json")))
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsEnroll(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("Success - valid CSR request", func(t *testing.T) {
-		c, _, _ := setupTestPKIController(t)
-		validPayload := map[string]string{
-			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
-			"app_name": "test-app",
-			"app_type": "mcp-client",
-		}
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
-		rr := httptest.NewRecorder()
-		c.handlePKIAppsEnroll(rr, req)
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp AppEnrollResponse
-		err := json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp.Success)
-		assert.NotEmpty(t, resp.AppCert)
-		assert.NotEmpty(t, resp.CertChain)
-		assert.NotEmpty(t, resp.AppID)
 	})
 }
 

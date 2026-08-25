@@ -46,6 +46,11 @@ func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, 
 		return nil, fmt.Errorf("%w: %s", constants.ErrDocumentStoreUnmarshalData, keyID)
 	}
 	if doc == nil {
+		if len(keyID) == hex.EncodedLen(ed25519.PublicKeySize) {
+			if pubBytes, err := hex.DecodeString(keyID); err == nil && len(pubBytes) == ed25519.PublicKeySize {
+				return ed25519.PublicKey(pubBytes), nil
+			}
+		}
 		return nil, nil
 	}
 
@@ -124,7 +129,7 @@ func (s *SignerStoreService) ListTrustedSigners() ([]models.TrustedSigner, error
 
 // DeleteTrustedSigner removes a trusted L2 signer from the database.
 func (s *SignerStoreService) DeleteTrustedSigner(keyID string) (bool, error) {
-	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
+	return s.docSvc.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 }
 
 // HasTrustedSigners returns true if at least one trusted L2 signer is provisioned in the database.

@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -80,7 +81,14 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.DeployScriptWindows, RouteAuthNone)
 
 	// Protocol entry points (CSR enrollment, bootstrap)
-	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthNone)
+	// PKICSRSign signs privileged platform leaf types (operator, CLI, app,
+	// gateway-peer); it requires a validated mTLS identity (operator/CLI
+	// session) so only authenticated callers can mint those identities.
+	// PKIDevicesEnroll is the device bootstrap path that creates operator
+	// and CLI identities; the caller does not yet have a validated session,
+	// so the route is RouteAuthNone and the handler enforces mTLS directly
+	// (requires a client certificate and extracts the user ID from it).
+	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrapStatus, RouteAuthNone)
@@ -94,6 +102,14 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthCLIRecoveryRequest, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthCLIRecoveryStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthCLIRecoveryComplete, RouteAuthNone)
+
+	// Platform enrollment discovery surface — public, token-scoped.
+	// The opaque token and proof-of-possession signatures provide the
+	// authorization context; no mTLS or cookie required. The service
+	// checks bootstrap state (HasAnyUsers) before creating a request.
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentRequest, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentStatus, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentComplete, RouteAuthNone)
 
 	// Console SPA (public, no auth required)
 	r.addPrefix(constants.APIPaths.ConsolePrefix, RouteAuthNone)
@@ -123,6 +139,13 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// auth middleware. This is the headless counterpart to the browser path.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApproveCLI, RouteAuthMTLS)
 
+	// Platform enrollment owner surfaces — dual auth (web session cookie
+	// for browser console, mTLS for CLI). The controller enforces
+	// active-first-user authorization after the middleware stamps the
+	// user ID from the verified session or certificate.
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentPending, RouteAuthDual)
+	r.addExact(constants.APIPaths.AuthPlatformEnrollmentDecision, RouteAuthDual)
+
 	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
 	// These exact paths must be checked before the WebSession prefix matches.
 	r.addExact(constants.APIPaths.AuthPasskeysCLIStatus, RouteAuthMTLS)
@@ -135,6 +158,17 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	// The fail-closed default already covers this path, but the explicit
 	// classification documents the requirement and is asserted by tests.
 	r.addExact(constants.APIPaths.AuthCLIRotate, RouteAuthMTLS)
+
+	// CLI session refresh — mTLS only. The caller's identity (user ID) is
+	// derived from the verified CLI certificate URI SAN. The cert is the
+	// proof of identity; the session is NOT required to be active (the
+	// whole point is to recover from an expired session). The auth
+	// middleware's handleCLIAuth path rejects expired sessions before
+	// reaching the controller, so the controller only runs for certs with
+	// a valid (non-expired) session OR a cert whose URI SAN session ID has
+	// no persisted session (handled by the controller's oldSession=nil
+	// path). The explicit classification documents the requirement.
+	r.addExact(constants.APIPaths.AuthCLIRefresh, RouteAuthMTLS)
 
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
@@ -498,7 +532,7 @@ func (s *AuthService) handleMTLSAuth(w http.ResponseWriter, r *http.Request, nex
 	// Verify certificate revocation status
 	if s.pki != nil {
 		if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
-			s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w: %w", err, constants.ErrCertParseFailed))
+			s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w: %s", err, constants.ErrCertRevocationCheckFailed))
 			s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error())
 			return
 		}
@@ -615,6 +649,13 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			return true
 		}
 		if cliDoc == nil {
+			// Session not found. The only path that may proceed with a
+			// missing session is the refresh endpoint, where the cert is
+			// the proof of identity and the session may have been lost
+			// (e.g., gateway volume reset). All other paths fail closed.
+			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
+			}
 			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
 			s.responder.Error(w, http.StatusUnauthorized, constants.ErrCLISessionInvalid.Error())
 			return true
@@ -634,6 +675,14 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		}
 
 		if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
+			// Session expired. The only path that may proceed with an
+			// expired session is the refresh endpoint, where the cert is
+			// the proof of identity and the session expiry is the
+			// condition being recovered from. All other paths fail
+			// closed.
+			if r.URL.Path == constants.APIPaths.AuthCLIRefresh {
+				return s.handleCLIRefreshAuth(w, r, cert, cliSessionID, wid, next)
+			}
 			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
 			s.responder.Error(w, http.StatusUnauthorized, constants.ErrCLISessionExpired.Error())
 			return true
@@ -676,6 +725,71 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 	}
 
 	return false
+}
+
+// handleCLIRefreshAuth is the fail-closed auth path for the CLI session
+// refresh endpoint. It is called from handleCLIAuth when the session is
+// expired or missing — the exact condition the refresh endpoint recovers
+// from. The cert is the proof of identity: it was already verified by the
+// mTLS handshake (revocation check, chain validation, expiry check) in
+// handleMTLSAuth before handleCLIAuth was called.
+//
+// Security guarantees:
+//   - The cert is verified (revocation, chain, expiry) by handleMTLSAuth.
+//   - The user ID is extracted from the cert URI SAN, never from the
+//     request body or the expired/missing session record.
+//   - The user is validated as active.
+//   - The cert URI SAN session ID must match the header-provided session
+//     ID, proving the cert was issued for this session.
+//   - Only the refresh endpoint is reachable through this path; all other
+//     endpoints fail closed on expired/missing sessions.
+func (s *AuthService) handleCLIRefreshAuth(w http.ResponseWriter, r *http.Request, cert *x509.Certificate, oldCLISessionID string, wid *protocol.WorkloadIdentity, next http.Handler) bool {
+	// Extract the user ID from the cert URI SAN. The cert URI SAN format
+	// is spiffe://g8e.local/cli/<user_id>/<cli_session_id>. The session ID
+	// in the SAN must match the header-provided session ID.
+	var userID string
+	var certSessionID string
+	for _, uri := range cert.URIs {
+		uriStr := uri.String()
+		if uid, ok := wid.ExtractUserID(uriStr); ok {
+			if sid, sidOk := wid.ExtractCLISessionID(uriStr); sidOk && sid == oldCLISessionID {
+				userID = uid
+				certSessionID = sid
+				break
+			}
+		}
+	}
+	if userID == "" || certSessionID == "" {
+		s.logger.Warn("gateway: auth: CLI refresh: cert URI SAN does not match session ID",
+			"path", r.URL.Path,
+			"cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+		)
+		s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
+		return true
+	}
+
+	// Validate the user is still active. An expired session does not
+	// bypass user-disabled checks.
+	if _, err := s.getAndValidateUser(userID); err != nil {
+		if ae, ok := err.(*AuthError); ok {
+			s.logger.Warn("gateway: auth: CLI refresh: identity disabled", "user_id", userID)
+			s.responder.Error(w, ae.Status, ae.Message)
+		} else {
+			s.logger.Error("gateway: auth: CLI refresh: load user", "user_id", userID, string(constants.ConnectionStateError), err)
+			s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
+		}
+		return true
+	}
+
+	s.logger.Info("gateway: auth: CLI refresh: admitting expired/missing session for refresh",
+		"user_id", userID,
+		"cli_session_id_prefix", safeTruncateID(oldCLISessionID, 8),
+	)
+
+	ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, oldCLISessionID)
+	next.ServeHTTP(w, r.WithContext(ctx))
+	return true
 }
 
 // handleAppAuth handles authentication for system and external apps via URI SAN.

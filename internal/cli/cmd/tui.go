@@ -57,7 +57,7 @@ func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 connects to a running g8e Gateway via SSE and visualizes the execution
 pipeline (L1-L5), Sovereign Audit Ledger, and L2 Consensus.
 
-The Gateway must be running and the CLI must be enrolled (g8e auth enroll)
+The Gateway must be running and the CLI must be enrolled (g8e auth enroll user)
 before launching the TUI.
 
 Controls:
@@ -96,7 +96,7 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 	if creds == nil {
-		return fmt.Errorf("%w — run 'g8e auth enroll' first", constants.ErrNotEnrolled)
+		return fmt.Errorf("%w — run 'g8e auth enroll user' first", constants.ErrNotEnrolled)
 	}
 
 	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).

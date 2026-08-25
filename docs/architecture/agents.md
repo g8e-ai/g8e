@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ## Overview
 
@@ -40,7 +40,7 @@ The gateway also publishes signed execution results and out-of-band approval eve
 
 ## Native Tool Playbook
 
-The governed operator ships with native, memory-safe tools that agents invoke through the MCP surface. These tools execute inside the operator's L5 boundary and return structured JSON. Examples include filesystem reads, shell command execution, database triage, log filtering, process inspection, network probes, cloud metadata lookup, Git state, and Kubernetes inspection.
+The governed operator ships with native, memory-safe tools that agents invoke through the MCP surface. These tools execute inside the operator's L5 boundary and return structured JSON. Examples span database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata lookup, Git operations, Kubernetes inspection, and shell execution.
 
 Each native tool accepts a typed request, performs read-only or governed-mutation operations, and returns a scrubbed result. The operator runs L1 doctrine analysis on the tool call, verifies the envelope, and only then executes. See [Operator Architecture](./operator.md) for the complete native tool playbook.
 
@@ -82,8 +82,8 @@ The practical flow for an AI client is:
 2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
 3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
 4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
-5. After L1-L3 pass, the L4 Warden admits the envelope and publishes it to the unique pub/sub channel for the bound operator.
-6. The bound operator pulls the envelope, re-verifies L1-L4, and the L5 Actuator executes the action.
+5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
+6. The bound operator pulls the envelope, the L4 Warden re-verifies L1-L4, and the L5 Actuator executes the action.
 7. The operator writes the signed receipt to the local audit vault and publishes it back to the gateway.
 8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
 

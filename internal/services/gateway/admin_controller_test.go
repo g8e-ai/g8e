@@ -36,13 +36,13 @@ func setupTestAdminController(t *testing.T) *AdminController {
 func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
-	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
+	// The first user created is the gateway admin (IsFirstUser).
+	adminUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
-	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
+	require.NotNil(t, adminUser)
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
 
-	// Create a non-bootstrap user for testing
+	// A second user is a non-admin regular user.
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
@@ -103,7 +103,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
-	t.Run("Forbidden - non-bootstrap user", func(t *testing.T) {
+	t.Run("Forbidden - non-admin (non-first) user", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
@@ -113,7 +113,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("Forbidden - app policy not found", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/nonexistent-app/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -122,7 +122,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("BadRequest - invalid JSON", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{invalid json}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("BadRequest - missing public_key_hex", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("BadRequest - empty public_key_hex", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"public_key_hex": ""}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("BadRequest - invalid hex public key", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"public_key_hex": "not-hex"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("BadRequest - invalid public key size", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		shortKey := hex.EncodeToString([]byte{0x01, 0x02})
 		body := []byte(`{"public_key_hex": "` + shortKey + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
@@ -168,7 +168,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	})
 
 	t.Run("Success - valid signer registration", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -194,13 +194,13 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 func TestAdminControllerHandleConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
-	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
+	// The first user created is the gateway admin (IsFirstUser).
+	adminUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
-	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
+	require.NotNil(t, adminUser)
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
 
-	// Create a non-bootstrap user for testing
+	// A second user is a non-admin regular user.
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
@@ -242,7 +242,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
-	t.Run("POST - forbidden (non-bootstrap user)", func(t *testing.T) {
+	t.Run("POST - forbidden (non-admin user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
 		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1"],"quorum":1,"require_distinct":true,"enabled":true}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
@@ -252,7 +252,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("POST - invalid JSON", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{invalid json}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("POST - validation failure (quorum > member count)", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1"],"quorum":2,"require_distinct":true,"enabled":true}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("POST - success", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		body := []byte(`{"id":"test-consensus","member_app_ids":["consensus-member-1","consensus-member-2"],"quorum":2,"require_distinct":true,"enabled":true}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -294,7 +294,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
-	t.Run("GET - forbidden (non-bootstrap user)", func(t *testing.T) {
+	t.Run("GET - forbidden (non-admin user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -303,7 +303,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("GET - success", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleConsensus(rr, req)
@@ -311,7 +311,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("MethodNotAllowed - PUT", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleConsensus(rr, req)
@@ -319,7 +319,7 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 	})
 
 	t.Run("MethodNotAllowed - DELETE", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleConsensus(rr, req)
@@ -330,13 +330,13 @@ func TestAdminControllerHandleConsensus(t *testing.T) {
 func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
-	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
+	// The first user created is the gateway admin (IsFirstUser).
+	adminUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
-	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.docStore.DocDelete("users", bootstrapUser.ID) })
+	require.NotNil(t, adminUser)
+	t.Cleanup(func() { adminController.docStore.DocDelete("users", adminUser.ID) })
 
-	// Create a non-bootstrap user for testing
+	// A second user is a non-admin regular user.
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
@@ -374,7 +374,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
-	t.Run("DELETE - forbidden (non-bootstrap user)", func(t *testing.T) {
+	t.Run("DELETE - forbidden (non-admin user)", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -391,7 +391,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	})
 
 	t.Run("DELETE - missing consensus ID", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteConsensus(rr, req)
@@ -399,7 +399,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	})
 
 	t.Run("DELETE - success", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteConsensus(rr, req)
@@ -412,7 +412,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	})
 
 	t.Run("DELETE - non-existent consensus", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/consensus/non-existent", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteConsensus(rr, req)
@@ -420,7 +420,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	})
 
 	t.Run("MethodNotAllowed - GET", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteConsensus(rr, req)
@@ -428,7 +428,7 @@ func TestAdminControllerHandleDeleteConsensus(t *testing.T) {
 	})
 
 	t.Run("MethodNotAllowed - POST", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, adminUser.ID)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/consensus/delete-test-consensus", nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteConsensus(rr, req)

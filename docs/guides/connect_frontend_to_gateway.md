@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -16,6 +16,12 @@ This guide walks through connecting an **existing** frontend UI to the g8e Gatew
 
 ### Architecture
 
+```
+[Frontend App] → https://gateway-host:8443 → [g8e Gateway]
+      ↑                                          ↓
+ credentials: 'include'              WebAuthn + Session Cookie + SSE
+```
+
 The frontend communicates with the g8e Gateway over HTTPS. Authentication is via WebAuthn passkeys (no passwords, no API keys). The gateway issues an `HttpOnly` session cookie after successful passkey verification. All authenticated API calls must include `credentials: 'include'` so the cookie is sent cross-origin. Real-time telemetry is delivered via Server-Sent Events (SSE), not WebSockets (the WebSocket endpoint requires mTLS and is not available to browsers).
 
 ---
@@ -24,6 +30,7 @@ The frontend communicates with the g8e Gateway over HTTPS. Authentication is via
 
 - g8e Gateway running and healthy (`./g8e gw start`)
 - Existing frontend application served from a known origin (e.g., `https://your-app.example.com`, `http://localhost:3003`)
+- Gateway started with `--cors-origin` and `--passkey-rp-origin` flags matching the frontend origin
 - Browser supports WebAuthn (all modern Chrome, Firefox, Safari, Edge)
 
 ---
@@ -34,26 +41,40 @@ The gateway must be started with CORS and passkey RP settings that match your fr
 
 Start the gateway with CORS and passkey RP flags matching your frontend origin:
 
-`g8e gw start --passkey-rp-id example.com --passkey-rp-name "g8e Console" --passkey-rp-origin https://your-app.example.com --cors-origin https://your-app.example.com`
+```bash
+./g8e gw start \
+  --passkey-rp-id example.com \
+  --passkey-rp-name "g8e Console" \
+  --passkey-rp-origin https://your-app.example.com \
+  --cors-origin https://your-app.example.com
+```
 
-Or via environment variables: `G8E_PASSKEY_RP_ID`, `G8E_PASSKEY_RP_NAME`, `G8E_PASSKEY_RP_ORIGINS` (comma-separated), `G8E_ALLOWED_ORIGINS` (comma-separated), and `G8E_PUBLIC_BASE_URL`.
+Or via environment variables:
+
+```bash
+export G8E_PASSKEY_RP_ID=example.com
+export G8E_PASSKEY_RP_NAME="g8e Console"
+export G8E_PASSKEY_RP_ORIGINS=https://your-app.example.com
+export G8E_ALLOWED_ORIGINS=https://your-app.example.com
+export G8E_PUBLIC_BASE_URL=https://console.g8e.ai
+```
 
 Key flags:
 
-- **`--passkey-rp-id`**: The WebAuthn Relying Party ID. Use your frontend app's registrable domain so passkeys work across subdomains.
-- **`--passkey-rp-origin`**: The origin where WebAuthn ceremonies are performed (your frontend app URL). Repeat for each origin.
-- **`--cors-origin`**: Your frontend app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
-- **`--public-base-url`**: The public URL of the gateway (e.g., a tunnel hostname). Used for approval redirect links and host validation.
+- `--passkey-rp-id`: The WebAuthn Relying Party ID. Use your frontend app's registrable domain so passkeys work across subdomains.
+- `--passkey-rp-origin`: The origin where WebAuthn ceremonies are performed (your frontend app URL). Repeat for each origin.
+- `--cors-origin`: Your frontend app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
+- `--public-base-url`: The public URL of the gateway (e.g., a tunnel hostname). Used for approval redirect links and host validation.
 
 Add every origin your frontend may use (preview URLs, production URLs, custom domains). The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies when `--cors-origin` is provided.
 
 ### How CORS Works
 
-When `--cors-origin` is provided, the gateway CORS middleware:
+When `--cors-origin` (or `AllowedOrigins`) is configured, the gateway CORS middleware:
 
 1. Checks the request `Origin` header against the allowed set (case-insensitive, trailing slashes trimmed).
 2. If matched, sets `Access-Control-Allow-Origin` to the exact origin and `Access-Control-Allow-Credentials: true`.
-3. Handles `OPTIONS` preflight requests with `204 No Content` and the appropriate headers.
+3. Handles `OPTIONS` preflight requests with `204 No Content` and the appropriate `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age` headers.
 4. Adds `Vary: Origin` to all responses so caches respect per-origin differences.
 5. When no `--cors-origin` is set (same-origin only), the middleware is a pass-through and no CORS headers are set.
 
@@ -66,7 +87,7 @@ The gateway sets a `g8e_web_session_cookie` cookie after successful passkey regi
 - **`SameSite=Lax`**: Default when no cross-origin origins are configured.
 - **`SameSite=None`**: Automatically set when `--cors-origin` is provided (required for cross-origin cookie delivery).
 
-The cookie has a 24-hour TTL. The gateway validates the cookie on every authenticated request.
+The cookie has a 24-hour TTL. The gateway validates the cookie on every authenticated request by looking up the session ID in its document store and checking expiry.
 
 ---
 
@@ -74,7 +95,9 @@ The cookie has a 24-hour TTL. The gateway validates the cookie on every authenti
 
 Enroll your frontend with the gateway to validate CORS and generate a configuration snippet:
 
-`g8e gui enroll --origin https://your-app.example.com`
+```bash
+g8e auth enroll gui enroll --origin https://your-app.example.com
+```
 
 Optional flags:
 
@@ -90,19 +113,19 @@ This command:
 4. Persists the origin to `.g8e/gui_enrollments.json`
 5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `PASSKEY_RP_NAME`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths
 
-**Copy the outputted snippet** into your frontend project as the starting point for API integration.
+Copy the outputted snippet into your frontend project as the starting point for API integration.
 
-### Verify Enrollment
+### Other Enrollment Commands
 
-`g8e gui verify --origin https://your-app.example.com`
-
-This prints a verification checklist covering CORS headers, passkey registration, passkey authentication, session cookie attributes, SSE stream connectivity, and authenticated API calls.
+- `g8e auth enroll gui show` (alias: `g8e auth enroll gui list`): Display all enrolled frontend origins and regenerated configuration snippets. Supports `--json` for scripting.
+- `g8e auth enroll gui verify --origin https://your-app.example.com`: Verify gateway connectivity and print an integration checklist covering CORS headers, passkey registration, session cookie attributes, SSE stream connectivity, and authenticated API calls.
+- `g8e auth enroll gui remove --origin https://your-app.example.com`: Remove an origin from the enrollment file.
 
 ---
 
 ## Step 3: Add the API Configuration
 
-Take the TypeScript snippet from `g8e gui enroll` and add it to your frontend project. The key elements are:
+Take the TypeScript snippet from `g8e auth enroll gui enroll` and add it to your frontend project. The key elements are:
 
 ### API Base URL and Fetch Wrapper
 
@@ -114,24 +137,26 @@ Public endpoints (no auth required):
 
 - `GET /api/v1/health` - Health check
 - `GET /api/v1/auth/bootstrap/status` - Check if any passkey is registered
-- `POST /api/v1/auth/passkeys/console/register/challenge` - Begin passkey registration
-- `POST /api/v1/auth/passkeys/console/register/verify` - Complete passkey registration
-- `POST /api/v1/auth/passkeys/console/authenticate/challenge` - Begin passkey authentication
-- `POST /api/v1/auth/passkeys/console/authenticate/verify` - Complete passkey authentication
+- `POST /api/v1/auth/passkeys/console/register/challenge` - Begin console passkey registration
+- `POST /api/v1/auth/passkeys/console/register/verify` - Complete console passkey registration
+- `POST /api/v1/auth/passkeys/console/authenticate/challenge` - Begin console passkey authentication
+- `POST /api/v1/auth/passkeys/console/authenticate/verify` - Complete console passkey authentication
+- `POST /api/v1/auth/passkeys/enrollment/register/challenge` - Begin token-gated passkey registration
+- `POST /api/v1/auth/passkeys/enrollment/register/verify` - Complete token-gated passkey registration
 - `POST /api/v1/auth/logout` - Clear session cookie
 - `POST /api/v1/auth/enrollment-token/validate` - Validate a CLI-generated enrollment token
 
 Authenticated endpoints (session cookie required):
 
-- `GET /api/v1/users/me` - Get current user
-- `GET /api/v1/auth/sessions/me` - Get web session ID (needed for SSE)
+- `GET /api/v1/users/me` - Get current authenticated user
+- `GET /api/v1/auth/sessions/me` - Get current user ID and web session ID
 - `GET /api/v1/auth/passkeys` - List registered passkeys
 - `DELETE /api/v1/auth/passkeys/{credentialId}` - Revoke a passkey
 - `GET /api/v1/approvals` - List pending suspended transactions
 - `GET /api/v1/approvals/{txHash}/challenge` - Get WebAuthn challenge for approval
 - `POST /api/v1/approvals/{txHash}/verify` - Verify WebAuthn assertion to approve transaction
-- `GET /api/v1/sse/stream` - SSE live event stream (web_session_id derived from cookie)
-- `GET /api/v1/sse/events?since_id={n}` - Poll SSE events (web_session_id derived from cookie)
+- `GET /api/v1/sse/stream` - SSE live event stream (web session derived from cookie)
+- `GET /api/v1/sse/events?since_id={n}` - Poll SSE events (web session derived from cookie)
 
 The gateway also serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to auto-discover the full API surface and schemas.
 
@@ -164,13 +189,13 @@ Your frontend must implement WebAuthn passkey flows using the browser's `navigat
 
 On app mount, check auth state:
 
-1. Call `GET /api/v1/auth/bootstrap/status` to check if any passkey is registered
-2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in
-3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session ID (needed for SSE)
+1. Call `GET /api/v1/auth/bootstrap/status` to check if any passkey is registered.
+2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in.
+3. If logged in, optionally call `GET /api/v1/auth/sessions/me` to inspect the web session ID and user ID.
 
 ### Enrollment Token Flow (CLI-Initiated Registration)
 
-When the CLI initiates a passkey enrollment from the terminal, it opens the browser with `#enroll=1&token=<token>`. Your frontend must:
+When the CLI initiates a passkey enrollment from the terminal (`g8e auth enroll user`), it opens the browser with `#enroll=1&token=<token>`. Your frontend must:
 
 1. Read the token from the URL hash (`window.location.hash`).
 2. Immediately clear the token from the URL via `history.replaceState`.
@@ -190,7 +215,7 @@ Handle error responses (both challenge and verify endpoints):
 ### Connection
 
 - Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
-- The `web_session_id` is derived from the authenticated session cookie by the gateway; do NOT pass it in the URL.
+- The `web_session_id` and `user_id` are derived from the authenticated session cookie by the gateway; do NOT pass them in the URL.
 - On open, update connection status to connected. On error, update status to disconnected and auto-reconnect after 3 seconds.
 - Parse incoming messages via the `onmessage` handler.
 
@@ -277,12 +302,14 @@ Trigger the same registration flow as Step 4 from an authenticated state.
 
 Run the verification command:
 
-`g8e gui verify --origin https://your-app.example.com`
+```bash
+g8e auth enroll gui verify --origin https://your-app.example.com
+```
 
 Then manually verify in the browser:
 
 - [ ] **CORS headers**: Open browser DevTools, Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your frontend origin and `Access-Control-Allow-Credentials: true` is present.
-- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
+- [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with `204 No Content` before actual POST requests.
 - [ ] **Passkey registration**: Trigger registration and confirm the browser's WebAuthn dialog appears with the correct RP ID.
 - [ ] **Passkey authentication**: Trigger authentication and confirm the WebAuthn dialog appears and login succeeds.
 - [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session_cookie` with `SameSite=None` and `Secure` attributes.
@@ -303,9 +330,9 @@ Then manually verify in the browser:
 
 **Cause**: The gateway was not started with `--cors-origin` matching your frontend origin.
 
-**Fix**: Restart the gateway with the correct flags: `g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
+**Fix**: Restart the gateway with the correct flags: `./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
 
-Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
+Then run `g8e auth enroll gui enroll --origin https://your-app.example.com` to verify.
 
 ### Passkey RP Mismatch
 
@@ -321,7 +348,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Cause**: No authenticated session, or `withCredentials: true` not set on `EventSource`.
 
-**Fix**: Authenticate first via the passkey flow. Ensure `new EventSource(url, { withCredentials: true })`. Verify the `web_session_id` is valid via `GET /api/v1/auth/sessions/me`.
+**Fix**: Authenticate first via the passkey flow. Ensure `new EventSource(url, { withCredentials: true })`. Verify the session is valid via `GET /api/v1/users/me` or `GET /api/v1/auth/sessions/me`.
 
 ### Session Cookie Not Sent Cross-Origin
 
@@ -337,7 +364,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Cause**: Token expired (5-minute TTL), already used (one-time-use), or invalid.
 
-**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
+**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll user`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
 ---
 
@@ -347,5 +374,6 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 - [Lovable Frontend Integration](./lovable.md) - Lovable-specific integration guide with AI agent prompt
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
-- [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
-- [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+- [Authentication & Authorization](../architecture/auth.md) - WebAuthn passkey authentication architecture
+- [Gateway Architecture](../architecture/gateway.md) - Gateway service architecture
+- [SSE Streaming](../architecture/sse.md) - SSE push, poll, and stream endpoints for agentic ensembles

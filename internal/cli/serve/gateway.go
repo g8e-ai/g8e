@@ -270,6 +270,13 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		L2ConsensusDeliberator:  l2Deliberator,
 		EnvProcAdapter:          svc.GetEnvProcAdapter(),
 		SessionValidatorAdapter: svc.GetSessionValidatorAdapter(),
+		PlatformEnrollmentDeps: &pubsub.PlatformEnrollmentDeps{
+			DocStore:         svc.GetDocStore(),
+			PKI:              svc.GetPKI(),
+			CLISessions:      svc.GetCLISessionService(),
+			OperatorSessions: svc.GetOperatorSessionService(),
+			Posture:          string(gatewayCfg.Gateway.Posture),
+		},
 	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)

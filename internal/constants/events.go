@@ -273,6 +273,18 @@ const EventPlatformTelemetryErrorLogged EventType = "g8e.v1.platform.telemetry.e
 const EventPlatformTelemetryAuditLogged EventType = "g8e.v1.platform.telemetry.audit.logged"
 const EventPlatformConsoleLogEntryReceived EventType = "g8e.v1.platform.console.log.entry.received"
 const EventPlatformConsoleLogConnectedConfirmed EventType = "g8e.v1.platform.console.log.connected.confirmed"
+
+// Platform enrollment governance events. Each event maps 1:1 to a
+// PlatformEnrollmentGovernanceAction via eventToAction in mappings.go.
+// The five actions cover the full control-plane lifecycle: create
+// (write pending request), decide (approve/deny), issue (sign
+// certificates), persist_policy (write app policy with ownership),
+// and create_session (write operator/CLI sessions).
+const EventPlatformEnrollmentCreateRequested EventType = "g8e.v1.platform.enrollment.create.requested"
+const EventPlatformEnrollmentDecideRequested EventType = "g8e.v1.platform.enrollment.decide.requested"
+const EventPlatformEnrollmentIssueRequested EventType = "g8e.v1.platform.enrollment.issue.requested"
+const EventPlatformEnrollmentPersistPolicyRequested EventType = "g8e.v1.platform.enrollment.persist_policy.requested"
+const EventPlatformEnrollmentCreateSessionRequested EventType = "g8e.v1.platform.enrollment.create_session.requested"
 const EventSourceUserChat EventType = "g8e.v1.source.user.chat"
 const EventSourceUserTerminal EventType = "g8e.v1.source.user.terminal"
 const EventSourceAiPrimary EventType = "g8e.v1.source.ai.primary"
@@ -313,6 +325,19 @@ const EventAppInvestigationDeleted EventType = "g8e.v1.app.investigation.deleted
 const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
+const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
+
+// Canonical governed-document request events. These are the deterministic
+// EventType values that MapActionTypeToEventType returns for the
+// DOCUMENT_UPDATE and DOCUMENT_DELETE action types. The app-level
+// case/investigation/memory create/update/delete events all collapse to those
+// two action types (see eventToAction in mappings.go), which makes the derived
+// reverse map many-to-one and its result nondeterministic per process start.
+// Dispatching document mutations through these canonical events keeps the
+// EventType stamped on the command message and used for handler dispatch stable
+// across repeated calls.
+const EventAppDocumentUpdateRequested EventType = "g8e.v1.app.document.update.requested"
+const EventAppDocumentDeleteRequested EventType = "g8e.v1.app.document.delete.requested"
 
 // Event.Operator provides hierarchical access to Operator event constants
 type _EventOperatorA2a struct {
@@ -448,6 +473,9 @@ type _EventOperatorPortCheck struct {
 	Requested EventType
 	Started   EventType
 }
+type _EventOperatorReceipt struct {
+	Recorded EventType
+}
 type _EventOperatorRestoreFile struct {
 	Completed EventType
 	Failed    EventType
@@ -498,6 +526,7 @@ type _EventOperator struct {
 	Notary                   _EventOperatorNotary
 	PanelListUpdated         EventType
 	PortCheck                _EventOperatorPortCheck
+	Receipt                  _EventOperatorReceipt
 	RestoreFile              _EventOperatorRestoreFile
 	ShutdownAcknowledged     EventType
 	ShutdownRequested        EventType
@@ -655,6 +684,9 @@ var Event = struct {
 			Received:  EventOperatorNetworkPortCheckReceived,
 			Requested: EventOperatorNetworkPortCheckRequested,
 			Started:   EventOperatorNetworkPortCheckStarted,
+		},
+		Receipt: _EventOperatorReceipt{
+			Recorded: EventOperatorReceiptRecorded,
 		},
 		RestoreFile: _EventOperatorRestoreFile{
 			Completed: EventOperatorFileRestoreCompleted,

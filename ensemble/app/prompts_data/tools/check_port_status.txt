@@ -1,0 +1,38 @@
+Check if a network port is open and reachable on a host.
+
+<purpose>
+Use this for network diagnostics like verifying service availability, checking if a database port
+is listening, or testing connectivity to remote services. This is a lightweight, non-invasive
+operation that simply tests TCP/UDP connectivity.
+</purpose>
+
+<parameters>
+- host: Host to check (IP address or hostname). Defaults to 'localhost' if not specified.
+- port: Port number to check (1-65535). Required.
+- protocol: Protocol to use: 'tcp' or 'udp'. Defaults to 'tcp'.
+</parameters>
+
+<returns>
+- is_open: Whether the port is accepting connections
+- latency_ms: Connection latency in milliseconds (if successful)
+- error: Error message if connection failed
+- host: The host that was checked
+- port: The port that was checked
+- protocol: The protocol used
+</returns>
+
+<behavior>
+- This is a read-only diagnostic operation
+- Does not require user approval
+- Times out after a few seconds if no response
+- TCP checks attempt a full connection handshake
+- UDP checks are less reliable due to protocol nature
+</behavior>
+
+<examples>
+<example>User: "Check if MySQL is running" → check_port_status(port=3306, host="localhost")</example>
+<example>User: "Verify Redis connectivity" → check_port_status(port=6379, host="redis-server")</example>
+<example>User: "Test web server" → check_port_status(port=80, host="example.com")</example>
+<example>User: "Check SSH access" → check_port_status(port=22, host="remote-server")</example>
+<example>User: "Check if PostgreSQL is listening on default port" → check_port_status(port=5432, host="localhost")</example>
+</examples>

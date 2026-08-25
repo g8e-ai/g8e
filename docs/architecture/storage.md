@@ -1,6 +1,6 @@
 # Storage Architecture
 
-Last Updated: 2026-08-16
+Last Updated: 2026-08-25
 
 ## Overview
 
@@ -8,7 +8,7 @@ The g8e storage layer is the persistence foundation for the five-layer governanc
 
 The layer is split into specialized services. Sensitive services encrypt content at rest through the vault and fail closed when the vault is locked. Services that store public or non-sensitive data, such as replay nonces and suspended governance envelopes, do not require encryption.
 
-In gateway mode the canonical SQLite database `g8e.db` hosts the audit log, action receipts, key-value store, document store, blob store, replay nonces, and SSE event buffer. The ledger, execution vault, and suspended transaction store use their own files. In outbound/operator mode the replay store, execution vault, and suspended transaction store run as standalone SQLite databases; the audit store and ledger remain local to the operator.
+In gateway mode the canonical SQLite database `g8e.db` hosts the audit log, action receipts, commitment ledger, key-value store, document store, blob store, replay nonces, and SSE event buffer. The ledger, execution vault, and suspended transaction store use their own files. The operator-side replay store also uses a standalone SQLite database even in gateway mode; the g8e.db replay store services gateway-host transactions through the gateway's own governance pipeline. In outbound/operator mode the operator-side replay store, execution vault, and suspended transaction store run as standalone SQLite databases; the audit store and ledger remain local to the operator.
 
 See [Encryption Architecture](./encryption.md) for vault and key management, and [Gateway Architecture](./gateway.md) for service initialization in gateway mode.
 
@@ -40,7 +40,7 @@ The suspended transaction store persists governance transactions awaiting [L3 ap
 
 ### Commitment Ledger
 
-The commitment ledger stores attestation records with chain-integrity protection. Each new attestation must chain to the latest prior record within a single atomic operation, preventing concurrent forks. It stores the raw attestation alongside structured fields extracted from it. Commitments are treated as permanent audit records and are not pruned.
+The commitment ledger stores attestation records with chain-integrity protection. Each new attestation must chain to the latest prior record within a single atomic operation, preventing concurrent forks. It stores the raw attestation alongside structured fields extracted from it. The `commitment_ledger` table lives in `g8e.db` alongside the audit store tables. The `CommitmentLedger` service provides atomic append via `AppendCommitmentJSON` and read access via `ListCommitments`. The append path is exercised by the test suite but is not currently wired into the production transaction flow; the service is used by reporting and compliance tooling for chain verification. Commitments are treated as permanent audit records and are not pruned.
 
 ### History Handler
 
@@ -68,7 +68,7 @@ Most storage services run a background maintenance task that deletes records old
 1. **Encryption at rest**: The audit store, execution vault, token store, and ledger encrypt sensitive content through the vault.
 2. **Fail-closed encryption**: Sensitive services return errors when the vault is locked; there is no plaintext fallback.
 3. **Fail-closed replay protection**: Nonce reservation returns an error on any failure, so replay protection is never silently bypassed.
-4. **Commitment chain integrity**: The commitment ledger verifies each new record chains to the latest prior record atomically.
+4. **Commitment chain integrity**: The commitment ledger verifies each new record chains to the latest prior record atomically. The append path is implemented and tested but not currently exercised by the production transaction flow.
 5. **Session validation**: Audit events must reference an existing session.
 6. **Path confinement**: Ledger and audit file operations are confined to the `.g8e/` runtime directory.
 7. **Size limits for encrypted copies**: The ledger caps encrypted file copies to prevent memory exhaustion during encryption.
@@ -93,8 +93,8 @@ Each governance transaction passes through the [five-layer interlock](./auth.md)
 1. The L4 Warden reserves a nonce through the replay store as the first stage of L4 processing.
 2. The execution vault stores the execution result.
 3. The audit store records the signed action receipt.
-4. The replay store finalizes the nonce.
-5. The commitment ledger appends the attestation.
+
+Reserved nonces are released on validation failure via `ReleaseNonce`; on successful execution the reservation persists until the nonce expires. The commitment ledger table exists in `g8e.db` but the production transaction flow does not currently append attestations to it; the `AppendCommitmentJSON` path is exercised by the test suite and available for future wiring.
 
 ### Approval Flow (L3)
 

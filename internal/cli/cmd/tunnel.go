@@ -202,7 +202,7 @@ Prerequisites:
 			cmd.Printf("     g8e gw tunnel status --hostname %s\n", hostname)
 			cmd.Println()
 			cmd.Printf("  4. Enroll a frontend:\n")
-			cmd.Printf("     g8e gui enroll --origin https://your-app.lovable.app --public-base-url https://%s\n", hostname)
+			cmd.Printf("     g8e auth enroll gui enroll --origin https://your-app.lovable.app --public-base-url https://%s\n", hostname)
 
 			return nil
 		},

@@ -607,3 +607,100 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 		assert.Equal(t, customOpID, env.OperatorId)
 	})
 }
+
+func TestPubSubResultsService_PublishActionReceipt(t *testing.T) {
+	t.Run("publishes signed receipt envelope to receipts channel with identity propagation", func(t *testing.T) {
+		t.Parallel()
+		db := pubsubtest.NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		// Build the original command envelope (the one the operator received).
+		cmdEnv := &commonv1.GovernanceEnvelope{
+			ProtocolVersion:   "1.0",
+			OperatorId:        "op-001",
+			OperatorSessionId: "sess-001",
+			ActionType:        string(constants.ActionTypeFileEdit),
+			TargetResource:    "/tmp/test.txt",
+			RequestorUserId:   "user-001",
+			ActingAppId:       "spiffe://g8e.local/app/g8ee",
+			CaseId:            "case-1",
+			InvestigationId:   "inv-1",
+			TaskId:            "task-1",
+			WebSessionId:      "web-1",
+			CliSessionId:      "cli-1",
+			Posture:           "doctrine",
+		}
+
+		receipt := &pb.ActionReceipt{
+			TransactionId:    "tx-001",
+			TransactionHash:  "hash-001",
+			Status:           pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			ResultSummary:    "completed",
+			StateRootBefore:  "root-before",
+			StateRootAfter:   "root-after",
+			ExecutedAtUnixMs: 1700000000000,
+			SignerKeyId:      "actuator-key-1",
+			Signature:        "deadbeef",
+		}
+
+		err = svc.PublishActionReceipt(context.Background(), cmdEnv, receipt)
+		require.NoError(t, err)
+
+		published := db.LastPublished()
+		require.NotNil(t, published, "expected a message to be published")
+		assert.Equal(t, ReceiptsChannel("op-001", "sess-001"), published.Channel, "must publish to the receipts channel")
+
+		env := mustUnmarshalGovernanceEnvelope(t, published.Data)
+		assert.Equal(t, string(constants.Event.Operator.Receipt.Recorded), env.EventType, "event_type must be the receipt recorded event")
+		assert.Equal(t, commonv1.Component_COMPONENT_G8EO, env.SourceComponent, "source_component must be G8EO")
+		assert.Equal(t, "op-001", env.OperatorId, "operator_id must propagate from the command envelope")
+		assert.Equal(t, "sess-001", env.OperatorSessionId, "operator_session_id must propagate")
+		assert.Equal(t, string(constants.ActionTypeFileEdit), env.ActionType, "action_type must propagate")
+		assert.Equal(t, "/tmp/test.txt", env.TargetResource, "target_resource must propagate")
+		assert.Equal(t, "user-001", env.RequestorUserId, "requestor_user_id must propagate")
+		assert.Equal(t, "spiffe://g8e.local/app/g8ee", env.ActingAppId, "acting_app_id must propagate")
+		assert.Equal(t, "case-1", env.CaseId, "case_id must propagate")
+		assert.Equal(t, "inv-1", env.InvestigationId, "investigation_id must propagate")
+		assert.Equal(t, "task-1", env.TaskId, "task_id must propagate")
+		assert.Equal(t, "web-1", env.WebSessionId, "web_session_id must propagate")
+		assert.Equal(t, "cli-1", env.CliSessionId, "cli_session_id must propagate")
+		assert.Equal(t, "doctrine", env.Posture, "posture must propagate")
+
+		// The payload must be the marshaled ActionReceipt.
+		var decoded pb.ActionReceipt
+		err = proto.Unmarshal(env.Payload, &decoded)
+		require.NoError(t, err, "payload must be a valid ActionReceipt")
+		assert.Equal(t, "tx-001", decoded.TransactionId)
+		assert.Equal(t, "hash-001", decoded.TransactionHash)
+		assert.Equal(t, pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED, decoded.Status)
+		assert.Equal(t, "actuator-key-1", decoded.SignerKeyId)
+		assert.Equal(t, "deadbeef", decoded.Signature)
+	})
+
+	t.Run("nil envelope returns error", func(t *testing.T) {
+		t.Parallel()
+		db := pubsubtest.NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		err = svc.PublishActionReceipt(context.Background(), nil, &pb.ActionReceipt{})
+		require.Error(t, err)
+	})
+
+	t.Run("nil receipt returns error", func(t *testing.T) {
+		t.Parallel()
+		db := pubsubtest.NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		err = svc.PublishActionReceipt(context.Background(), &commonv1.GovernanceEnvelope{}, nil)
+		require.Error(t, err)
+	})
+}

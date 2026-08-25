@@ -247,8 +247,6 @@ definitions:
     properties:
       id:
         type: string
-      is_bootstrap:
-        type: boolean
       local_os_user:
         $ref: '#/definitions/models.LocalOSUser'
       organization_id:
@@ -1036,21 +1034,6 @@ paths:
           schema:
             $ref: '#/definitions/gateway.AppEnrollResponse'
       summary: Mint delegated app credential
-      tags:
-      - pki
-  /api/v1/pki/apps/enroll:
-    post:
-      consumes:
-      - application/json
-      description: Enrolls an external app via PKI endpoint (identity-only enrollment)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/gateway.AppEnrollResponse'
-      summary: PKI app enrollment
       tags:
       - pki
   /api/v1/pki/certificates/revoke:

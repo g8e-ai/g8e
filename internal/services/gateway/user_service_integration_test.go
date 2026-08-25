@@ -37,7 +37,6 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 		newUser, err := userSvc.CreateUser()
 		require.NoError(t, err)
 		require.NotNil(t, newUser)
-		require.False(t, newUser.IsBootstrap)
 		require.Equal(t, constants.UserStatusActive, newUser.Status)
 
 		// Verify local OS user info is stored
@@ -60,8 +59,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 
 		userSvc := NewUserService(stores.DocStore, logger)
 
-		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		// Create a user to disable
+		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
@@ -101,7 +100,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(stores.DocStore, logger)
 
 		// Create and disable a user
-		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.NoError(t, err)
@@ -132,8 +131,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		mockAuthSvc := &AuthService{}
 		userSvc.SetAuthService(mockAuthSvc)
 
-		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		// Create a user to disable
+		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
@@ -155,8 +154,8 @@ func TestUserService_Disable_Integration(t *testing.T) {
 
 		userSvc := NewUserService(stores.DocStore, logger)
 
-		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
+		// Create a user to disable
+		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
 		// Close DB to force GetByID error

@@ -80,6 +80,11 @@
       "value": "passkey_challenges",
       "_python_const": "PASSKEY_CHALLENGES"
     },
+    "platform_enrollments": {
+      "_go_const": "CollectionPlatformEnrollments",
+      "value": "platform_enrollments",
+      "_python_const": "PLATFORM_ENROLLMENTS"
+    },
     "personas": {
       "_go_const": "CollectionPersonas",
       "value": "personas",

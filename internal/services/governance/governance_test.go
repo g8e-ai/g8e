@@ -9,8 +9,11 @@ package governance
 
 import (
 	"context"
+	"sync"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // mockExecutionHandler is a test-only implementation of ExecutionHandler.
@@ -26,4 +29,31 @@ func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, e
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
 	}
 	return "", m.err
+}
+
+// mockReceiptPublisher is a test-only implementation of ReceiptPublisher.
+// It records the envelope and receipt passed to PublishActionReceipt so
+// tests can assert that Execute calls the publisher after successful
+// execution and does not call it when signAndLogFinalReceipt fails.
+type mockReceiptPublisher struct {
+	mu           sync.Mutex
+	calls        int
+	envelope     *govtypes.GovernanceEnvelope
+	receipt      *operatorv1.ActionReceipt
+	publishError error
+}
+
+func (m *mockReceiptPublisher) PublishActionReceipt(_ context.Context, env *govtypes.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls++
+	m.envelope = env
+	m.receipt = receipt
+	return m.publishError
+}
+
+func (m *mockReceiptPublisher) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.calls
 }

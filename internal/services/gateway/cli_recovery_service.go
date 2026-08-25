@@ -380,7 +380,7 @@ func (s *CLIRecoveryService) CleanupExpired() error {
 
 	var deleted int
 	for _, doc := range docs {
-		_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), doc.ID)
+		err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionCLIRecoveryRequests), doc.ID)
 		if err != nil {
 			s.logger.Warn("Failed to delete expired CLI recovery request", "doc_id", doc.ID, "error", err)
 			continue

@@ -36,6 +36,10 @@ func main() {
 	appSPIFFE := wid.AppSPIFFEID(operatorID)
 	fmt.Printf("App SPIFFE ID: %s\n", appSPIFFE)
 
+	// Ensemble app workload identity (centralized event broker)
+	ensembleSPIFFE := protocol.EnsembleAppID
+	fmt.Printf("Ensemble App SPIFFE ID: %s\n", ensembleSPIFFE)
+
 	// Hub workload identity
 	hubSPIFFE := wid.HubSPIFFEID()
 	fmt.Printf("Hub SPIFFE ID: %s\n", hubSPIFFE)
@@ -67,6 +71,10 @@ func main() {
 
 	if wid.IsAppSAN(appSPIFFE) {
 		fmt.Println("OK: App SAN workload identity recognized")
+	}
+
+	if wid.IsEnsembleApp(ensembleSPIFFE) {
+		fmt.Println("OK: Ensemble app identity recognized")
 	}
 
 	if wid.MatchesHub(hubSPIFFE) {

@@ -209,6 +209,7 @@ func newTestDispatchService(t *testing.T, stateRoot string, op *models.OperatorD
 		broker,
 		&stubStateRootProvider{root: stateRoot},
 		&stubOperatorSessionValidator{op: op},
+		"doctrine",
 	)
 	return svc, broker
 }
@@ -291,6 +292,7 @@ func TestDispatchService_Dispatch_StateRootError(t *testing.T) {
 		broker,
 		&stubStateRootProvider{err: errors.New("state root unavailable")},
 		&stubOperatorSessionValidator{op: op},
+		"doctrine",
 	)
 
 	_, err := svc.Dispatch(context.Background(), DispatchRequest{

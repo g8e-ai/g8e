@@ -1,7 +1,7 @@
 # Consensus
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ## Overview
 
@@ -75,7 +75,7 @@ Before a transaction is dispatched, the L4 Warden validates the L2 votes inside 
 2. **Store checks:** The signer store and consensus policy store must be configured under enforced postures.
 3. **Policy lookup:** The consensus policy is loaded by consensus set ID. A missing or disabled policy is rejected under enforced postures.
 4. **Member validation:** Votes whose signer key IDs are not in the policy's member list are silently excluded from the count.
-5. **Duplicate signer detection:** If `require_distinct` is true, duplicate signer key IDs in the vote set are rejected.
+5. **Duplicate signer detection:** If `require_distinct` is true, duplicate signer key IDs in the vote set are rejected. This check is enforced regardless of posture: a duplicate signer indicates a malformed vote set, not a policy decision, and is rejected fail-closed under all postures including `doctrine`.
 6. **Signature verification:** Each vote's Ed25519 signature is verified against the trusted public key in the signer store. Invalid signatures are excluded from the quorum count.
 7. **Quorum check:** The count of affirmative votes from valid, distinct members must meet or exceed the policy's quorum.
 
@@ -92,11 +92,13 @@ The L2 signature covers the string `transaction_hash|decision`, where `decision`
 | Consensus store configured | Audited | Enforced | Enforced |
 | Consensus policy exists and enabled | Audited | Enforced | Enforced |
 | Member validation | Audited | Enforced | Enforced |
-| Duplicate signer detection | Audited | Enforced | Enforced |
+| Duplicate signer detection | Enforced | Enforced | Enforced |
 | Signature verification | Audited | Enforced | Enforced |
 | Quorum met | Audited | Enforced | Enforced |
 
-Under `doctrine`, all L2 checks are audited but do not gate execution; the result is recorded in the receipt.
+Under `doctrine`, L2 checks run only when the signer store and consensus policy store are both configured and L2 votes are present in the envelope. If the stores are not configured or no votes are present, L2 verification is skipped entirely. When checks do run, the `L2Valid` result is computed and stored in the `VerificationResult`, but it does not gate execution. The L5 Actuator records `L2_STATUS_NOT_REQUIRED` in the action receipt under doctrine, because `RequiresL2Signature()` returns false; the per-vote verification result is not surfaced as a valid/failed status in the receipt.
+
+Duplicate signer detection is the one exception: it is enforced under all postures, including `doctrine`. A duplicate signer in a vote set is a malformed input, not a policy decision, and is rejected fail-closed regardless of posture.
 
 ---
 

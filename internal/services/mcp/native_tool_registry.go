@@ -51,6 +51,8 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 		&NetSSHKnownHostsTool{},
 		&OperatorDeployTool{},
 		&FileReadTool{},
+		&AuditReceiptListTool{},
+		&AuditReceiptGetTool{},
 	}
 
 	for _, tool := range tools {

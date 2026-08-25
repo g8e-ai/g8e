@@ -46,7 +46,6 @@ func TestEvalAnswerVerification(t *testing.T) {
 		nil,                         // L3 verifier not needed for EVAL_ANSWER (non-mutation)
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeEvalAnswer},
-		"doctrine",
 		nil, // Clock defaults to RealClock
 	)
 
@@ -74,6 +73,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-state-root-v1",
 		Nonce:             "test-nonce-001",
+		Posture:           "doctrine",
 	}
 
 	// Compute transaction hash

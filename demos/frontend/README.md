@@ -66,8 +66,33 @@ Or using Docker Compose directly:
 
 ```bash
 cd demos/frontend
-docker compose up -d
+docker compose up -d --build
 ```
+
+All services start, but the operator remains not-ready until its owner-approved platform enrollment request is approved. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending.
+
+#### Owner-approved platform bootstrap
+
+After `docker compose up -d --build`, the gateway is healthy but the operator is not. Bootstrap it by enrolling the first owner and approving the operator's pending enrollment request:
+
+```bash
+# 1. Wait for the gateway to be healthy (the frontend demo gateway listens on port 8083).
+until curl -fsS http://localhost:8083/api/v1/health >/dev/null 2>&1; do sleep 2; done
+
+# 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
+./g8e auth enroll user -e https://localhost:8446
+
+# 3. List pending platform enrollment requests.
+./g8e auth pending-platform-enrollments
+
+# 4. Approve the operator's request by exact request ID.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+
+# 5. Wait for the operator to become healthy.
+docker compose ps
+```
+
+The `g8e demos start frontend` CLI path prints these bootstrap instructions automatically, including the demo gateway port and the exact `g8e auth approve-platform-enrollment <request-id>` command to run.
 
 > **Note**: The frontend demo uses ports 8083 and 8446, which overlap with the `secure-data` (source) demo. Do not run both simultaneously.
 

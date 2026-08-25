@@ -542,6 +542,10 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	// Print endpoint information
 	printDemoEndpoints(cmd, org)
 
+	// Print platform enrollment instructions. The operator and its dependents
+	// stay not-ready until the owner approves their platform enrollment.
+	printPlatformEnrollmentInstructions(cmd, org)
+
 	return nil
 }
 
@@ -576,6 +580,83 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	default:
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
+}
+
+// demoGatewayHTTPPort maps each demo org to its gateway HTTP discovery port,
+// used for the platform enrollment instructions.
+var demoGatewayHTTPPort = map[string]string{
+	constants.DemosOrgHealthcare: "8081",
+	constants.DemosOrgFinance:    "8082",
+	constants.DemosOrgDHS:        "8087",
+	constants.DemosOrgFedRAMP:    "8088",
+	constants.DemosOrgFrontend:   "8083",
+}
+
+// demoOperatorContainer maps each demo org to its operator container name,
+// used to check operator enrollment readiness before running scenarios.
+var demoOperatorContainer = map[string]string{
+	constants.DemosOrgHealthcare: "healthcare-operator",
+	constants.DemosOrgFinance:    "finance-operator",
+	constants.DemosOrgDHS:        "dhs-operator",
+	constants.DemosOrgFedRAMP:    "g8e-fedramp-operator",
+	constants.DemosOrgFrontend:   "frontend-operator",
+}
+
+// printPlatformEnrollmentInstructions prints the owner-approved platform
+// enrollment flow for a demo org. The gateway starts with zero
+// users, so platform workloads (operator and its dependents) stay not-ready
+// until the owner enrolls and approves their platform enrollment requests.
+func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
+	port, ok := demoGatewayHTTPPort[org]
+	if !ok {
+		return
+	}
+	cmd.Println()
+	cmd.Println("Platform enrollment required:")
+	cmd.Println("  The gateway starts with zero users. The operator and its dependents stay")
+	cmd.Println("  not-ready until the owner approves their platform enrollment requests.")
+	cmd.Println("  Complete the enrollment flow:")
+	cmd.Println()
+	cmd.Println("  1. Enroll the first owner (creates CLI mTLS credentials):")
+	cmd.Printf("     ./g8e auth enroll user -e localhost:%s\n", port)
+	cmd.Println()
+	cmd.Println("  2. List pending platform enrollment requests:")
+	cmd.Println("     ./g8e auth pending-platform-enrollments")
+	cmd.Println()
+	cmd.Println("  3. Approve each request by ID (operator first, then dependents):")
+	cmd.Println("     ./g8e auth approve-platform-enrollment <request-id> --yes")
+	cmd.Println()
+	cmd.Println("  4. Wait for workload health:")
+	cmd.Printf("     g8e demos status %s\n", org)
+	cmd.Println()
+	cmd.Println("  The console at the HTTPS endpoint above also supports approval.")
+}
+
+// operatorEnrolled reports whether the demo operator container's healthcheck
+// reports healthy, indicating its platform enrollment has been approved and
+// credentials written. Returns false if the container or healthcheck is
+// unavailable.
+func operatorEnrolled(org string) bool {
+	container, ok := demoOperatorContainer[org]
+	if !ok {
+		return false
+	}
+	state, err := containerHealthStateFor(container)
+	if err != nil {
+		return false
+	}
+	return state == "healthy"
+}
+
+// containerHealthStateFor returns the Docker healthcheck state for a container
+// ("healthy", "starting", "unhealthy", or "none").
+func containerHealthStateFor(container string) (string, error) {
+	c := exec.Command("docker", "inspect", "-f", "{{.State.Health.Status}}", container)
+	output, err := c.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func demosStopCmd() *cobra.Command {
@@ -960,6 +1041,7 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 
 	cmd.Printf("\nDemo environment '%s' rebuilt and started successfully.\n", org)
 	printDemoEndpoints(cmd, org)
+	printPlatformEnrollmentInstructions(cmd, org)
 
 	return nil
 }
@@ -1073,6 +1155,17 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		if err := runDemosStart(cmd, args); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
+	}
+
+	// Warn if the operator is not yet enrolled. Scenarios require the operator
+	// to be healthy (operator.crt exists), which only happens after the owner
+	// approves the operator's platform enrollment request.
+	if !operatorEnrolled(org) {
+		cmd.Println()
+		cmd.Printf("Warning: the '%s' operator is not healthy. Scenarios require the operator\n", org)
+		cmd.Println("to be enrolled and approved before they can run. If the demo was just")
+		cmd.Println("started, complete the platform enrollment flow printed above, then re-run")
+		cmd.Printf("this command. Run 'g8e demos status %s' to check readiness.\n", org)
 	}
 
 	if useTUI {

@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -18,6 +18,79 @@ g8e is a zero-trust execution platform for agentic infrastructure. It consists o
 - **g8e Operator**, the host-side Policy Execution Point (PEP): outbound-only mTLS tunnel to the gateway, local audit vault, MCP server.
 
 Both roles are served by the same `g8e` binary. The mode is set via the command-line subcommand.
+
+---
+
+## Quick Start (Docker Compose)
+
+The recommended path to launch g8e is using the unified Docker Compose stack from the repository root. This requires only Docker 24.0+ and no local Go compiler.
+
+Building the gateway container image compiles all platform binaries inside the image (linux/amd64 with FIPS 140-3 approved mode, arm64, 386, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64) via `make build-all` in the builder stage. The gateway hosts and serves these binaries via `/.well-known/g8e/bin/{filename}` for node and remote operator deployment.
+
+### 1. Clone and start the Gateway
+
+```bash
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+docker compose up -d --build
+```
+
+`docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 (HTTP discovery, MCP) and port 8443 (HTTPS/mTLS, Web Console). Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and wait for owner enrollment before starting.
+
+### 2. Extract the CLI binary
+
+Copy the compiled CLI binary from the running gateway container to your host:
+
+```bash
+docker cp g8e-gateway:/g8e ./g8e
+```
+
+### 3. Enroll the first owner
+
+Authenticate the CLI to bootstrap the gateway PKI hierarchy, install the root CA into the OS trust store, and complete the browser-based WebAuthn passkey ceremony:
+
+```bash
+./g8e auth enroll user -e localhost
+```
+
+Follow the browser prompt to create your passkey. Once enrolled, the CLI holds mTLS credentials bound to the root owner identity.
+
+### 4. Start the platform workloads
+
+With the owner identity established, bring up the Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed):
+
+```bash
+docker compose --profile bootstrapped up -d
+```
+
+### 5. Approve platform workload enrollments
+
+List pending platform enrollment requests and approve each workload using your authenticated CLI session:
+
+```bash
+# List pending enrollment requests
+./g8e auth pending-platform-enrollments
+
+# Approve the operator, dashboard, and ensemble
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+```
+
+You can also view and approve pending enrollments in your browser via the Gateway Web Console at `https://localhost:8443/console/`.
+
+### 6. Verify stack health
+
+```bash
+docker compose ps
+./g8e gw status
+```
+
+Service endpoints:
+- **Gateway HTTP & MCP:** http://localhost:8080
+- **Gateway HTTPS & Web Console:** https://localhost:8443 (Web Console: `https://localhost:8443/console/`)
+- **Operator Dashboard:** http://localhost:3000
+- **Ensemble API:** http://localhost:8000
 
 ---
 
@@ -70,7 +143,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 Import the protocol packages in your Go code:
@@ -95,7 +168,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==1.7.5
+pip install g8e==2.0.0
 ```
 
 The package provides:
@@ -148,25 +221,27 @@ GOOS=windows GOARCH=amd64 make build
 
 Requires only Docker 24.0+. No local Go installation needed.
 
-Build the binary for Linux (amd64):
+Build and start the full stack (the Dockerfile builder stage compiles all platform binaries inside the image):
 
 ```bash
-make build-docker
+make up
 ```
 
-This builds a `g8e-builder` Docker image and runs the Go compiler inside it. The output binary lands in `bin/g8e-linux-amd64`.
+To obtain a host-side CLI binary without a local Go toolchain, copy it out of the running gateway container:
 
-Additional Docker build targets:
+```bash
+docker cp g8e-gateway:/g8e ./g8e
+```
+
+The Dockerfile builder stage produces all platform binaries (linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64); the gateway serves them via `/.well-known/g8e/bin/{filename}` for node deployment. Linux binaries are built with FIPS 140-3 approved mode enabled via `GOFIPS140=v1.0.0`.
+
+Related Docker Compose lifecycle targets:
 
 | Target | Description |
 |---|---|
-| `make build-docker` | Linux amd64 only |
-| `make build-linux-docker` | Linux: amd64, arm64, 386 |
-| `make build-darwin-docker` | macOS: amd64, arm64 |
-| `make build-windows-docker` | Windows: amd64, arm64 |
-| `make build-all-docker` | All platforms |
-
-Binaries are placed in `bin/` with `.sha256` checksums alongside each one.
+| `make up` | Build and start the full stack (`docker compose up -d --build`) |
+| `make down` | Stop the stack, preserving volumes (`docker compose down`) |
+| `make clean-docker` | Stop the stack and remove volumes (`docker compose down -v`) |
 
 ---
 
@@ -231,7 +306,7 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start --posture doctrine
+  gw start -f --posture doctrine
 ```
 
 The named volume `g8e-data` persists all runtime state (PKI, database, vault) across container restarts.
@@ -270,38 +345,47 @@ docker stop g8e-gateway && docker rm g8e-gateway
 After the gateway is running (locally or in Docker), authenticate the CLI to bootstrap the PKI hierarchy and issue mTLS credentials:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
-The `auth enroll` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. If trust installation fails, the browser does not open; resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
+The `auth enroll user` command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. If trust installation fails, the browser does not open; resolve the trust issue and re-run. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link so the browser opens a fresh session that recognizes the new trust anchor.
 
 For Docker demos where HTTP and HTTPS are mapped to different host ports, use the split endpoint flags:
 
 ```bash
-./g8e auth enroll -e localhost:<httpPort> --port <httpsPort>
+./g8e auth enroll user -e localhost:<httpPort> --port <httpsPort>
 ```
 
 See [Demo port mappings](#demo-port-mappings) below for each demo's ports.
 
-### Enroll a remote operator
+### Start a remote operator
 
 To connect an operator on a remote host to the gateway:
 
 ```bash
-./g8e gw security pki enroll -e <gateway-ip>
+./g8e operator start -e <gateway-ip>
 ```
 
-See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment steps.
+When `--endpoint` (or `-e`) is provided, the operator automatically initiates platform enrollment with the gateway if credentials are not yet installed. The gateway holds the enrollment request in pending state until the enrolled owner approves it via `./g8e auth pending-platform-enrollments` and `./g8e auth approve-platform-enrollment <request-id> --yes` (or via the gateway web console at `https://<gateway-ip>:8443/console/`). Once approved, the operator receives signed mTLS credentials, connects to the gateway pub/sub broker on port 8443, and begins executing governed actions. See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment and remote deployment options.
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` defines both a `g8e-gateway` service and a `g8e-operator` service on a shared bridge network (`g8e-net`). The gateway registers a network alias `g8e.local` on `g8e-net`, so the operator can enroll by connecting to `g8e.local` without DNS or `/etc/hosts` configuration. The gateway health check must pass before the operator starts, enforced by `depends_on` with `condition: service_healthy`.
+The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `ensemble` (g8ee), and `dashboard` (g8ed). The stack uses a two-phase startup model where `docker compose up -d` starts only the unprofiled gateway service. After enrolling the first owner, start the remaining platform workloads under the `bootstrapped` profile and approve their enrollment requests:
 
 ```bash
+# Phase 1: Start the gateway
 docker compose up -d
+
+# Phase 2: Enroll the first owner
+./g8e auth enroll user -e localhost
+
+# Phase 3: Start workloads and approve enrollment requests
+docker compose --profile bootstrapped up -d
+./g8e auth pending-platform-enrollments
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ```
 
-Both services use the root `Dockerfile` for image builds. The gateway exposes ports 8080 (HTTP) and 8443 (HTTPS/mTLS) on the host. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
+The gateway exposes ports 8080 (HTTP) and 8443 (HTTPS/mTLS) on the host. The operator resolves the gateway via the internal Docker network alias `g8e.local`. See [Unified Docker Stack Guide](unified_stack.md) and [Docker Gateway Guide](docker_gateway.md) for full configuration options.
 
 ---
 
@@ -453,10 +537,10 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 When enrolling the CLI against a demo gateway, use the HTTP and HTTPS ports from the table above:
 
 ```bash
-./g8e auth enroll -e localhost:<httpPort> --port <httpsPort>
+./g8e auth enroll user -e localhost:<httpPort> --port <httpsPort>
 ```
 
-For example, to enroll against the healthcare demo: `./g8e auth enroll -e localhost:8081 --port 8444`.
+For example, to enroll against the healthcare demo: `./g8e auth enroll user -e localhost:8081 --port 8444`.
 
 ### Verify all demos
 

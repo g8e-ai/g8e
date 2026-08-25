@@ -10,7 +10,7 @@
 package e2e
 
 import (
-	"strings"
+	"context"
 	"testing"
 	"time"
 
@@ -18,44 +18,65 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
-// TestDockerGateway_PubSubWebSocketConnectedAndHeartbeat verifies that:
-// 1. The operator logs contain the explicit "operator pub/sub WebSocket connected" marker.
-// 2. The gateway registry records recent heartbeat updates for the operator slot over pub/sub.
-func TestDockerGateway_PubSubWebSocketConnectedAndHeartbeat(t *testing.T) {
-	if sharedFixture == nil {
-		t.Skip("Docker E2E fixture not available")
+// TestPubSub_HeartbeatAdvances proves heartbeat delivery over the pub/sub
+// path by observing the active operator's UpdatedAt timestamp advance between
+// two typed observations. The prior test checked that UpdatedAt was nonzero
+// and matched a log line; this test requires a strictly later timestamp on
+// the second observation, which can only be satisfied by a live heartbeat
+// delivery — not a stale bootstrap value.
+//
+// The operator is discovered through the owner-authenticated operator list
+// endpoint. No container logs, no Docker exec, no session ID from
+// environment variables.
+func TestPubSub_HeartbeatAdvances(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	first := activeOperator(t, ctx)
+	firstUpdatedAt := first.UpdatedAt
+	require.False(t, firstUpdatedAt.IsZero(),
+		"first observation: active operator UpdatedAt must be set by at least one heartbeat")
+	t.Logf("first heartbeat observation: updated_at=%s", firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+
+	// Poll until UpdatedAt advances past the first observation. The
+	// heartbeat interval is typically 10-15 seconds; a 60-second window
+	// accommodates jitter and pub/sub delivery latency without being so
+	// generous that a dead heartbeat path could pass.
+	var second *models.OperatorDocumentGo
+	require.Eventually(t, func() bool {
+		second = activeOperator(t, ctx)
+		return second.UpdatedAt.After(firstUpdatedAt)
+	}, 60*time.Second, 3*time.Second,
+		"heartbeat UpdatedAt did not advance past %s within 60s — pub/sub heartbeat path may be dead",
+		firstUpdatedAt.UTC().Format(time.RFC3339Nano))
+
+	assert.True(t, second.UpdatedAt.After(firstUpdatedAt),
+		"second heartbeat observation must be strictly later than the first")
+	assert.Equal(t, constants.OperatorStatusActive, second.Status,
+		"operator must remain active across heartbeat observations")
+	t.Logf("second heartbeat observation: updated_at=%s (advanced by %s)",
+		second.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		second.UpdatedAt.Sub(firstUpdatedAt).Round(time.Second))
+}
+
+// activeOperator fetches the operator list and returns a pointer to the first
+// active operator. It fails the test if no active operator is found. The
+// caller owns the context; this helper does not call require.Eventually or
+// introduce its own polling — it is a single typed observation.
+func activeOperator(t *testing.T, ctx context.Context) *models.OperatorDocumentGo {
+	t.Helper()
+	operators, err := e2eClient.ListOperators(ctx)
+	require.NoError(t, err, "operator list must succeed for heartbeat observation")
+	require.True(t, operators.Success, "operator list response must report success")
+	require.NotEmpty(t, operators.Operators, "at least one operator must be registered")
+	for i := range operators.Operators {
+		if operators.Operators[i].Status == constants.OperatorStatusActive {
+			return &operators.Operators[i]
+		}
 	}
-	f := sharedFixture
-
-	// Ensure operator container is running and has authenticated
-	f.CheckOperatorContainer(t)
-
-	// Verify the operator container logs contain the WebSocket connected marker
-	startedAt := f.OperatorStartedAt(t)
-	require.Eventually(t, func() bool {
-		logs := f.OperatorLogsSince(t, startedAt)
-		return strings.Contains(logs, "operator pub/sub WebSocket connected")
-	}, 60*time.Second, 2*time.Second, "Operator logs do not contain 'operator pub/sub WebSocket connected' marker")
-
-	// Verify heartbeat delivery by checking operator slot liveness in gateway registry
-	sessionID := f.GetOperatorSessionID(t)
-	require.NotEmpty(t, sessionID, "Operator session ID should not be empty")
-
-	// Wait up to ~35s for at least one heartbeat delivery cycle to update UpdatedAt
-	require.Eventually(t, func() bool {
-		op := f.GetOperatorBySession(t, sessionID)
-		if op == nil {
-			return false
-		}
-		if op.Status != constants.OperatorStatusActive {
-			return false
-		}
-		return !op.UpdatedAt.IsZero()
-	}, 45*time.Second, 3*time.Second, "Operator slot in gateway registry did not record recent heartbeat update")
-
-	op := f.GetOperatorBySession(t, sessionID)
-	assert.Equal(t, constants.OperatorStatusActive, op.Status)
-	assert.False(t, op.UpdatedAt.IsZero(), "Operator UpdatedAt timestamp should be set by heartbeat")
+	t.Fatal("no active operator found in registry — heartbeat test requires an approved stack with a live operator")
+	return nil
 }

@@ -53,8 +53,8 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	assert.Contains(t, out, "GUI")
 	assert.Contains(t, out, "1. Enroll your CLI identity from a workstation that can reach this")
 	assert.Contains(t, out, "(passkey enrollment is optional for this posture)")
-	assert.Contains(t, out, bin+" auth enroll -e 192.168.1.100")
-	assert.Contains(t, out, "`auth enroll` performs the human passkey ceremony")
+	assert.Contains(t, out, bin+" auth enroll user -e 192.168.1.100")
+	assert.Contains(t, out, "`auth enroll user` performs the human passkey ceremony")
 	// Built-in OS trust installation is mentioned, including the
 	// --no-system-trust opt-out (administrator-managed trust).
 	assert.Contains(t, out, "installs the gateway root CA into the OS trust store")
@@ -63,7 +63,7 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	// CLI section
 	assert.Contains(t, out, "CLI")
 	assert.Contains(t, out, "2. Enroll a passkey (optional, in this terminal)")
-	assert.Contains(t, out, bin+" auth enroll")
+	assert.Contains(t, out, bin+" auth enroll user")
 
 	// Operators (step 3)
 	assert.Contains(t, out, "3. Operators:")
@@ -103,7 +103,7 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "auth enroll -e 10.0.0.50")
+	assert.Contains(t, out, "auth enroll user -e 10.0.0.50")
 
 	// No posture-specific text from the old posture-specific output
 	assert.NotContains(t, out, "Configure L2 Consensus")
@@ -128,7 +128,7 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	assert.Contains(t, out, "3. Operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "auth enroll -e 172.16.0.1")
+	assert.Contains(t, out, "auth enroll user -e 172.16.0.1")
 
 	// No posture-specific text from the old posture-specific output
 	assert.NotContains(t, out, "Configure L2 Consensus")
@@ -178,8 +178,8 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 			printNextSteps(cmd, &governance.DoctrinePosture{}, ip, "")
 			out := buf.String()
 
-			// The IP should appear in auth enroll -e and operator start -e
-			assert.Contains(t, out, "auth enroll -e "+ip)
+			// The IP should appear in auth enroll user -e and operator start -e
+			assert.Contains(t, out, "auth enroll user -e "+ip)
 			assert.Contains(t, out, "operator start -e "+ip)
 		})
 	}
@@ -212,7 +212,7 @@ func TestPrintNextSteps_BinaryNameInterpolation(t *testing.T) {
 	bin := getBinaryName()
 
 	// Binary name should appear in multiple commands
-	assert.Contains(t, out, bin+" auth enroll")
+	assert.Contains(t, out, bin+" auth enroll user")
 	assert.Contains(t, out, bin+" operator deploy")
 	assert.Contains(t, out, bin+" operator stream")
 	assert.Contains(t, out, bin+" operator start -e")

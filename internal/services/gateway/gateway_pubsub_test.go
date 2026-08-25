@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/protocol"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
@@ -713,4 +714,70 @@ func TestVerifyPatternACL(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+// TestVerifyChannelACLEnsembleAppBypass verifies that the ensemble (g8ee)
+// app identity is authorized to subscribe to result channels for any
+// operator, mirroring the SSE push authorization in sse_controller.go. The
+// ensemble is the centralized event broker that relays command results back
+// to callers, so the per-operator ownership check is skipped for it.
+func TestVerifyChannelACLEnsembleAppBypass(t *testing.T) {
+	ensembleSPIFFE := protocol.EnsembleAppID
+	otherOperatorID := "a7a272ba-5022-4a89-81f4-28bf30dc1692"
+
+	// Ensemble can subscribe to any operator's result channel.
+	err := verifyChannelACL(
+		"results:"+otherOperatorID+":session-123",
+		"g8ee",
+		ensembleSPIFFE,
+	)
+	assert.NoError(t, err, "ensemble app must be authorized to subscribe to any operator's result channel")
+
+	// Ensemble can subscribe to any operator's heartbeat channel.
+	err = verifyChannelACL(
+		"heartbeat:"+otherOperatorID,
+		"g8ee",
+		ensembleSPIFFE,
+	)
+	assert.NoError(t, err, "ensemble app must be authorized to subscribe to any operator's heartbeat channel")
+
+	// Non-ensemble app still rejected for cross-operator channels.
+	err = verifyChannelACL(
+		"results:"+otherOperatorID+":session-123",
+		"op-1",
+		"spiffe://g8e.local/app/op-1",
+	)
+	assert.Error(t, err, "non-ensemble app must still be rejected for cross-operator channels")
+}
+
+// TestVerifyPatternACLEnsembleAppBypass verifies that the ensemble (g8ee)
+// app identity is authorized to subscribe to patterns for any operator,
+// mirroring the channel ACL bypass.
+func TestVerifyPatternACLEnsembleAppBypass(t *testing.T) {
+	ensembleSPIFFE := protocol.EnsembleAppID
+	otherOperatorID := "a7a272ba-5022-4a89-81f4-28bf30dc1692"
+
+	// Ensemble can psubscribe to any operator's pattern.
+	err := verifyPatternACL(
+		"results:"+otherOperatorID+":*",
+		"g8ee",
+		ensembleSPIFFE,
+	)
+	assert.NoError(t, err, "ensemble app must be authorized to psubscribe to any operator's result pattern")
+
+	// Ensemble can psubscribe to heartbeat patterns for any operator.
+	err = verifyPatternACL(
+		"heartbeat:"+otherOperatorID+":*",
+		"g8ee",
+		ensembleSPIFFE,
+	)
+	assert.NoError(t, err, "ensemble app must be authorized to psubscribe to any operator's heartbeat pattern")
+
+	// Non-ensemble app still rejected for cross-operator patterns.
+	err = verifyPatternACL(
+		"results:"+otherOperatorID+":*",
+		"op-1",
+		"spiffe://g8e.local/app/op-1",
+	)
+	assert.Error(t, err, "non-ensemble app must still be rejected for cross-operator patterns")
 }

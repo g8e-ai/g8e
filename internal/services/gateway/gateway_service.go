@@ -77,6 +77,7 @@ type GatewayModeService struct {
 	mcpGateway              *mcp.GatewayService
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
+	platformEnrollmentSvc   *PlatformEnrollmentService
 	consensusSvc            atomic.Pointer[consensus.ConsensusService]
 	dispatchSvc             *DispatchService
 	responder               *response.Writer
@@ -154,6 +155,19 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	jwtAudience := cfg.Gateway.JWTAudience
 	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
+
+	// Wire the pubsub command relay dependencies: the gateway intercepts
+	// app-published command intent on cmd: channels, validates the target
+	// operator session, fetches the current state root, and constructs the
+	// governed GovernanceEnvelope before fan-out.
+	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth, string(cfg.Gateway.Posture))
+
+	// Wire the pubsub receipt relay dependencies: the gateway intercepts
+	// operator-published signed ActionReceipts on receipts: channels,
+	// verifies the receipt signature against the operator's actuator public
+	// key (via the SignerStore), records the receipt in the gateway's
+	// SQLAuditStore, and fans out the envelope to subscribers.
+	wsHandler.SetReceiptRelayDeps(stores.SignerStore, stores.AuditStore)
 
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
@@ -237,6 +251,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		A2ADownstreamURL:  cfg.Gateway.A2ADownstreamURL,
 		PublicBaseURL:     publicBaseURL,
 		AuditStore:        stores.AuditStore,
+		AuditReceiptQuery: stores.AuditStore,
 		EnvProc:           envProcAdapter,
 		StateRootProvider: stores.StateRootSvc,
 		SigningKey:        actuatorPriv,
@@ -259,6 +274,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		WebSessionSvc:      webSessionSvc,
 		EnrollmentTokenSvc: enrollmentTokenSvc,
 		Responder:          res,
+		MaxPayload:         cfg.Gateway.MaxPayloadBytes,
 		Orchestrator:       passkeyOrchestrator,
 	})
 
@@ -290,7 +306,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		mcpGateway:              mcpGateway,
 		envProcAdapter:          envProcAdapter,
 		sessionValidatorAdapter: sessionValidatorAdapter,
-		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth),
+		platformEnrollmentSvc:   NewPlatformEnrollmentService(stores.DocStore, userSvc, envProcAdapter, stores.StateRootSvc, string(cfg.Gateway.Posture), logger),
+		dispatchSvc:             NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth, string(cfg.Gateway.Posture)),
 		responder:               res,
 	}
 
@@ -516,6 +533,14 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			UserSvc:       userSvc,
 			Responder:     ls.responder,
 		},
+		CLIRefreshControllerDeps: CLIRefreshControllerDeps{
+			Cfg:                cfg,
+			Logger:             logger,
+			CLISessionSvc:      cliSessionSvc,
+			OperatorSessionSvc: operatorSessionSvc,
+			UserSvc:            userSvc,
+			Responder:          ls.responder,
+		},
 		EnrollmentTokenControllerDeps: EnrollmentTokenControllerDeps{
 			Cfg:                cfg,
 			Logger:             logger,
@@ -590,6 +615,13 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		PasskeyControllerDeps: PasskeyControllerDeps{
 			Handler: passkey,
 		},
+		PlatformEnrollmentControllerDeps: PlatformEnrollmentControllerDeps{
+			Cfg:       cfg,
+			Logger:    logger,
+			EnrollSvc: ls.platformEnrollmentSvc,
+			UserSvc:   userSvc,
+			Responder: ls.responder,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)
@@ -656,6 +688,31 @@ func (ls *GatewayModeService) GetDocStore() *DocumentStoreService {
 	return ls.docStore
 }
 
+// GetPKI returns the PKI authority service.
+func (ls *GatewayModeService) GetPKI() *PKIAuthority {
+	return ls.pki
+}
+
+// GetCLISessionService returns the CLI session service.
+func (ls *GatewayModeService) GetCLISessionService() *CLISessionService {
+	return ls.cliSessionSvc
+}
+
+// GetOperatorSessionService returns the operator session service.
+func (ls *GatewayModeService) GetOperatorSessionService() *OperatorSessionService {
+	return ls.operatorSessionSvc
+}
+
+// GetUserService returns the user service.
+func (ls *GatewayModeService) GetUserService() *UserService {
+	return ls.userSvc
+}
+
+// GetRegistrationService returns the registration service.
+func (ls *GatewayModeService) GetRegistrationService() *RegistrationService {
+	return ls.reg
+}
+
 // GetConsensusStore returns the consensus store service.
 func (ls *GatewayModeService) GetConsensusStore() *ConsensusStoreService {
 	return ls.consensusStore
@@ -694,6 +751,12 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 // GetEnvProcAdapter returns the lazy adapter for governance.EnvelopeProcessor.
 func (ls *GatewayModeService) GetEnvProcAdapter() *pubsub.GatewayEnvProcAdapter {
 	return ls.envProcAdapter
+}
+
+// GetPlatformEnrollmentService returns the platform enrollment service
+// that owns the owner-approved workload enrollment lifecycle.
+func (ls *GatewayModeService) GetPlatformEnrollmentService() *PlatformEnrollmentService {
+	return ls.platformEnrollmentSvc
 }
 
 // GetSessionValidatorAdapter returns the lazy adapter for mcp.SessionValidator.
@@ -778,6 +841,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 		ReplayStore:          ls.replayStore,
 		StateRootProvider:    ls.stateRootSvc,
 		TransactionAudit:     ls.docStore,
+		GovernedDocStore:     ls.docStore,
 		L3Notary:             l3Notary,
 		SignerStore:          ls.signerStore,
 		ConsensusPolicyStore: ls.consensusStore,
@@ -813,6 +877,10 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 
 	// Start background enrollment token cleanup
 	go ls.runEnrollmentTokenCleanup(ctx)
+
+	// Start managed cleanup for platform enrollment (expired lease
+	// reconciliation and terminal request retention cleanup).
+	ls.platformEnrollmentSvc.StartCleanup(ctx)
 
 	errChan := make(chan error, 5)
 	readyChan := make(chan struct{}, 5)
@@ -958,6 +1026,9 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 // All close methods are idempotent, so this is safe to call even if some
 // resources have already been closed.
 func (ls *GatewayModeService) closeResources() {
+	if ls.platformEnrollmentSvc != nil {
+		ls.platformEnrollmentSvc.StopCleanup()
+	}
 	if ls.pubsub != nil {
 		ls.pubsub.Close()
 	}

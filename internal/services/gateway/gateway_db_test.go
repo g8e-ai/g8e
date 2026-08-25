@@ -150,7 +150,7 @@ func TestDocDelete(t *testing.T) {
 	err := stores.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
 	require.NoError(t, err)
 
-	deleted, err := stores.DocStore.DocDelete("users", "u1")
+	deleted, err := stores.DocStore.DocDeleteWithResult("users", "u1")
 	require.NoError(t, err)
 	assert.True(t, deleted)
 
@@ -162,7 +162,7 @@ func TestDocDelete(t *testing.T) {
 func TestDocDeleteNotFound(t *testing.T) {
 	_, stores := newTestDB(t)
 
-	deleted, err := stores.DocStore.DocDelete("users", "non-existent-id")
+	deleted, err := stores.DocStore.DocDeleteWithResult("users", "non-existent-id")
 	require.NoError(t, err)
 	assert.False(t, deleted)
 }
@@ -490,7 +490,7 @@ func TestHasTrustedSigners(t *testing.T) {
 	assert.True(t, has)
 
 	// Delete the enabled signer
-	_, err = stores.DocStore.DocDelete("trusted_signers", "test-signer-1")
+	err = stores.DocStore.DocDelete("trusted_signers", "test-signer-1")
 	require.NoError(t, err)
 
 	// Now only disabled signer exists - should return false
