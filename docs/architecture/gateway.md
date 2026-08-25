@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-18
-Version: v1.7.7
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 

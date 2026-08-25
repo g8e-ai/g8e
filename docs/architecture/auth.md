@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-18
-Version: v1.7.7
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -119,7 +119,7 @@ By default, `auth enroll user` installs the gateway Root CA into the OS trust st
 When local credentials are partial or corrupt, the CLI initiates a recovery flow that requires one-time human approval through the Console SPA:
 
 1. CLI sends a recovery request to `POST /api/v1/auth/cli/recovery/request` (public, token-scoped).
-2. Gateway creates a recovery record with an opaque token and bounded TTL.
+2. Gateway creates a recovery record with an opaque token and a 10-minute TTL.
 3. CLI opens the browser to the Console SPA with the token in the URL fragment (`#recovery=1&token=<token>`) - the token never appears in server logs, referrer headers, or browser history. Under `--headless`, this step is replaced: the CLI prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser (see [Headless CLI Enrollment (mTLS-Only)](#headless-cli-enrollment-mtls-only)).
 4. An authenticated user (existing browser session) approves the recovery at `POST /api/v1/auth/cli/recovery/approve` (web-session protected). Under `--headless`, an already-enrolled CLI approves via `POST /api/v1/auth/cli/recovery/approve-cli` (mTLS protected) using `g8e auth approve-recovery <token>`; the approver user ID is derived from the verified CLI certificate URI SAN by the unified auth middleware.
 5. CLI polls `GET /api/v1/auth/cli/recovery/status` until the recovery is approved or expires.
@@ -137,6 +137,17 @@ When the `--rotate-cli` flag is used or the certificate is near expiry, the CLI 
 3. Gateway issues a replacement CLI certificate and revokes the old one.
 4. Only **one replacement certificate** is issued per rotation run.
 5. Rotation is mTLS-only and is never available on plain HTTP.
+
+**CLI Session Refresh Flow (mTLS-Protected):**
+
+CLI sessions have a TTL of 7 days, aligned with the CLI certificate TTL (7 days) so the session does not expire while the cert is still valid. When the session does expire (gateway restart, manual deactivation, or session record loss after a gateway volume reset) but the certificate is still valid, the CLI session refresh endpoint reissues a session using the still-valid cert as proof of identity. The cert is NOT rotated — the cert is the proof of identity, and the cert's URI SAN binds the new session to the same user.
+
+1. CLI calls `POST /api/v1/auth/cli/refresh` (mTLS-protected, `RouteAuthMTLS`) using its existing certificate. The request body is empty — the cert is the proof of identity.
+2. The unified auth middleware (`handleMTLSAuth` → `handleCLIAuth`) detects the expired or missing session and routes to `handleCLIRefreshAuth`, which extracts the user ID from the cert URI SAN (never from the request body or the expired session record), validates the cert URI SAN session ID matches the header-provided session ID, and verifies the user is still active.
+3. The gateway deactivates the old session (if it still exists and is active) and issues a new CLI session bound to the same user and cert, inheriting the operator binding and cert fingerprint from the old session. When the old session is missing (for example after a gateway volume reset that wiped CLI sessions but left operator sessions intact), the gateway looks up the user's active operator session to inherit its binding. If no active operator session exists, the refresh returns 409 and the caller must re-enroll with `auth enroll user` to establish a fresh operator binding.
+4. The CLI persists the new session ID atomically and prints the new session ID.
+
+This is the recovery path for an expired CLI session with a still-valid cert. When the certificate itself has expired, an expired cert cannot authenticate via mTLS, so it can never reach this endpoint — the caller must use the recovery flow (`auth enroll user --headless`) instead, which issues a new certificate. The `g8e auth refresh` CLI subcommand wraps this endpoint.
 
 **Logout Ownership Policy:**
 
