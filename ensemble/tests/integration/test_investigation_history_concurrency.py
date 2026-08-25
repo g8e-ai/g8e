@@ -25,12 +25,19 @@ def mock_cache_aside_service():
 
 
 @pytest.fixture
-def service(mock_cache_aside_service):
-    return InvestigationDataService(mock_cache_aside_service, AsyncMock())
+def mock_governance_client():
+    return AsyncMock()
+
+
+@pytest.fixture
+def service(mock_cache_aside_service, mock_governance_client):
+    return InvestigationDataService(mock_cache_aside_service, mock_governance_client)
 
 
 @pytest.mark.asyncio
-async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_cache_aside_service):
+async def test_concurrent_chat_appends_preserve_chain_under_load(
+    service, mock_cache_aside_service, mock_governance_client
+):
     """
     REPRODUCER: Spin 20 coroutines via asyncio.gather calling add_chat_message
     against the same investigation.
@@ -51,29 +58,20 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
         # Return a copy to simulate a fresh read from the "database"
         return protocol_db_state[0].copy()
 
-    async def mock_update_document(collection, document_id, data, merge=True):
+    async def mock_update_governed_doc(**kwargs):
+        # add_chat_message routes writes through the governance envelope as a
+        # DOCUMENT_UPDATE with merge=true; mirror the persisted state here so
+        # the next read observes the appended message.
         await asyncio.sleep(0.01)
-        if "conversation_history" in data:
+        updates = kwargs.get("updates", {})
+        if "conversation_history" in updates:
             new_state = protocol_db_state[0].copy()
-            new_state["conversation_history"] = data["conversation_history"]
-            protocol_db_state[0] = new_state
-        return AsyncMock(success=True)
-
-    async def mock_append_to_array(
-        collection, document_id, array_field, items_to_add, additional_updates=None
-    ):
-        await asyncio.sleep(0.01)
-        if array_field == "conversation_history":
-            # This mimics what happens if we don't have a lock
-            new_state = protocol_db_state[0].copy()
-            current_history = new_state.get(array_field, [])
-            new_state[array_field] = current_history + items_to_add
+            new_state["conversation_history"] = updates["conversation_history"]
             protocol_db_state[0] = new_state
         return AsyncMock(success=True)
 
     mock_cache_aside_service.get_document_with_cache.side_effect = mock_get_document
-    mock_cache_aside_service.update_document.side_effect = mock_update_document
-    mock_cache_aside_service.append_to_array.side_effect = mock_append_to_array
+    mock_governance_client.update_governed_doc.side_effect = mock_update_governed_doc
 
     # Launch 20 concurrent appends
     num_concurrent = 20
