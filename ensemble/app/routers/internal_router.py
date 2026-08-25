@@ -1703,6 +1703,7 @@ async def stop_operator(
         operator_session_id=operator_session_id,
         user_id=user_id,
         web_session_id=g8e_context.web_session_id,
+        cli_session_id=g8e_context.cli_session_id,
         payload=None,
     )
 

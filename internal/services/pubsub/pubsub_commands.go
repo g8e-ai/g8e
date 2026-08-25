@@ -900,8 +900,9 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}
-	// Bound the receipt summary to avoid unbounded growth on chatty tools.
-	if len(summary) > constants.ReceiptSummaryMaxBytes {
+	// Bound the receipt summary on external tools to avoid unbounded growth on chatty tools.
+	// Native tools return structured JSON payloads (e.g. audit queries) and must not be truncated.
+	if mcpReq.ToolName != "read_field" && !rs.mcpGateway.IsNativeTool(mcpReq.ToolName) && len(summary) > constants.ReceiptSummaryMaxBytes {
 		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 

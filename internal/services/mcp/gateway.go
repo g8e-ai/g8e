@@ -353,6 +353,11 @@ func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
 	g.l2ConsensusDeliberator = d
 }
 
+// IsNativeTool checks if a tool name is a native tool compiled into the Operator.
+func (g *GatewayService) IsNativeTool(name string) bool {
+	return g.isNativeTool(name)
+}
+
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
 func (g *GatewayService) isNativeTool(name string) bool {
 	if g.nativeToolHandler == nil {
@@ -1162,11 +1167,6 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		summary := strings.TrimRight(sb.String(), "\n")
 		if summary == "" {
 			summary = "completed"
-		}
-
-		// Scrub native tool output to prevent sensitive data leakage
-		if g.scrubbingService != nil {
-			summary = g.scrubbingService.ScrubText(summary)
 		}
 
 		return summary, nil

@@ -262,6 +262,8 @@ class OperatorIntentService:
                 task_id=AITaskId.COMMAND,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
+                user_id=g8e_context.user_id,
+                cli_session_id=g8e_context.cli_session_id,
                 operator_session_id=final_session_id,
                 operator_id=final_op_id,
                 payload=CommandRequestPayload(
@@ -294,6 +296,8 @@ class OperatorIntentService:
                         task_id=AITaskId.COMMAND,
                         investigation_id=g8e_context.investigation_id,
                         web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        cli_session_id=g8e_context.cli_session_id,
                         operator_session_id=final_session_id,
                         operator_id=final_op_id,
                         payload=CommandRequestPayload(
@@ -388,6 +392,8 @@ class OperatorIntentService:
                 task_id=AITaskId.COMMAND,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
+                user_id=g8e_context.user_id,
+                cli_session_id=g8e_context.cli_session_id,
                 operator_session_id=op_doc.operator_session_id,
                 operator_id=op_doc.id,
                 payload=CommandRequestPayload(

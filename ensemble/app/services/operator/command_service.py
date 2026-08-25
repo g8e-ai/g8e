@@ -512,6 +512,8 @@ class OperatorCommandService:
                     task_id=AITaskId.COMMAND,
                     investigation_id=g8e_context.investigation_id,
                     web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    cli_session_id=g8e_context.cli_session_id,
                     operator_session_id=op_session_id,
                     operator_id=op_id,
                     payload=CommandRequestPayload(

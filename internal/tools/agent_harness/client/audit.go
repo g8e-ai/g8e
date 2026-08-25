@@ -45,6 +45,35 @@ type Receipt struct {
 	Raw               json.RawMessage `json:"-"`
 }
 
+type receiptAlias Receipt
+
+// UnmarshalJSON unmarshals a Receipt, tolerating both string and numeric status.
+func (r *Receipt) UnmarshalJSON(data []byte) error {
+	type rawReceipt struct {
+		receiptAlias
+		RawStatus json.RawMessage `json:"status"`
+	}
+	var aux rawReceipt
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*r = Receipt(aux.receiptAlias)
+	r.Raw = data
+
+	if len(aux.RawStatus) > 0 {
+		var str string
+		if err := json.Unmarshal(aux.RawStatus, &str); err == nil {
+			r.Status = str
+		} else {
+			var num int
+			if err := json.Unmarshal(aux.RawStatus, &num); err == nil {
+				r.Status = fmt.Sprintf("%d", num)
+			}
+		}
+	}
+	return nil
+}
+
 // GetReceipt retrieves a single receipt by transaction ID.
 func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona ...Persona) (*Receipt, []byte, error) {
 	p := c.auditorPersona()
