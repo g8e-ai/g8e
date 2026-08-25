@@ -49,7 +49,7 @@ class BootstrapServiceProtocol(Protocol):
         """Check if bootstrap data is available."""
         ...
 
-    def verify_against_manifest(self, secret_name: str, value: str | None) -> None:
+    def verify_against_manifest(self, resource_name: str, value: str | None = None) -> None:
         """Verify a loaded secret's SHA-256 matches the digest g8eo recorded.
 
         Raises BootstrapSecretTamperError on divergence. No-op when the
@@ -153,7 +153,7 @@ class BootstrapService:
         self._cached_auditor_hmac_key = None
         self._cached_ca_path = None
 
-    def verify_against_manifest(self, secret_name: str, value: str | None) -> None:
+    def verify_against_manifest(self, resource_name: str, value: str | None = None) -> None:
         """Verify the encrypted secret file's SHA-256 matches the digest g8eo recorded.
 
         g8eo encrypts secrets with AES-256-GCM before writing to disk. The manifest
@@ -169,26 +169,22 @@ class BootstrapService:
             before a g8eo with manifest support has booted);
           * manifest present, entry present, digest mismatch -> raise
             :class:`BootstrapSecretTamperError`;
-          * manifest present, no entry for ``secret_name`` -> log warning,
+          * manifest present, no entry for ``resource_name`` -> log warning,
             return.
 
         Args:
-            secret_name: logical secret name.
+            resource_name: logical identifier of the bootstrap artifact (e.g. "session_encryption_key").
             value: ignored - we read the encrypted file directly for verification.
 
         Raises:
             BootstrapSecretTamperError: when the manifest has an entry for
-                ``secret_name`` but the encrypted file digest does not match.
+                ``resource_name`` but the encrypted file digest does not match.
         """
         manifest_path = self._secrets_dir / BOOTSTRAP_DIGEST_MANIFEST_FILE
         if not manifest_path.exists():
-            # codeql[py/clear-text-logging-sensitive-data]: secret_name is a logical
-            # label (e.g. "session_encryption_key"), not the secret value;
-            # manifest_path is a filesystem path. Both are non-sensitive identifiers
-            # required for operational debugging of tamper-evidence failures.
             self._logger.warning(
                 "Bootstrap digest manifest missing; skipping verification for %s (path=%s)",
-                secret_name,
+                resource_name,
                 manifest_path,
             )
             return
@@ -198,55 +194,50 @@ class BootstrapService:
         except (OSError, ValueError) as err:
             raise BootstrapSecretTamperError(
                 f"Bootstrap digest manifest at {manifest_path} is unreadable or malformed: {err}. "
-                f"Refusing to start with an unverified {secret_name}."
+                f"Refusing to start with an unverified {resource_name}."
             ) from err
 
         manifest = cast(dict[str, Any], raw_manifest) if isinstance(raw_manifest, dict) else {}
-        secrets_dict_raw = manifest.get("secrets")
-        secrets_dict = (
-            cast(dict[str, Any], secrets_dict_raw) if isinstance(secrets_dict_raw, dict) else {}
+        entries_dict_raw = manifest.get("secrets")
+        entries_dict = (
+            cast(dict[str, Any], entries_dict_raw) if isinstance(entries_dict_raw, dict) else {}
         )
-        entry_raw = secrets_dict.get(secret_name)
+        entry_raw = entries_dict.get(resource_name)
         entry = cast(dict[str, Any], entry_raw) if isinstance(entry_raw, dict) else {}
         expected = entry.get("sha256") if isinstance(entry.get("sha256"), str) else None
         if not expected:
-            # codeql[py/clear-text-logging-sensitive-data]: secret_name is a logical
-            # label (e.g. "session_encryption_key"), not the secret value; the
-            # manifest version is a schema integer. Neither is sensitive.
             self._logger.warning(
                 "Bootstrap digest manifest has no entry for %s (manifest_version=%s)",
-                secret_name,
+                resource_name,
                 manifest.get("version"),
             )
             return
 
         # Read the encrypted file content and hash it (not the plaintext value)
         try:
-            key_path = validate_safe_path(secret_name, self._secrets_dir)
+            key_path = validate_safe_path(resource_name, self._secrets_dir)
             if not key_path.exists():
                 raise BootstrapSecretTamperError(
-                    f"Bootstrap secret file {secret_name} does not exist at {key_path}. "
+                    f"Bootstrap secret file {resource_name} does not exist at {key_path}. "
                     f"Refusing to start with missing secret."
                 )
             encrypted_content = key_path.read_bytes()
             actual = hashlib.sha256(encrypted_content).hexdigest()
         except Exception as err:
             raise BootstrapSecretTamperError(
-                f"Failed to read encrypted secret file {secret_name} for verification: {err}. "
+                f"Failed to read encrypted secret file {resource_name} for verification: {err}. "
                 f"Refusing to start with an unreadable secret."
             ) from err
 
         if actual != expected:
             raise BootstrapSecretTamperError(
-                f"Bootstrap secret {secret_name} failed tamper-evidence check: "
+                f"Bootstrap secret {resource_name} failed tamper-evidence check: "
                 f"encrypted file SHA-256 {actual} does not match manifest digest {expected}. "
                 f"The on-disk encrypted file has been tampered with or corrupted. "
                 f"Refusing to start to avoid using a compromised secret."
             )
 
-        # codeql[py/clear-text-logging-sensitive-data]: secret_name is a logical
-        # label (e.g. "session_encryption_key"), not the secret value. Logging
-        # which secret passed verification is required for audit trails.
         self._logger.info(
-            "Bootstrap secret %s verified against digest manifest (encrypted content)", secret_name
+            "Bootstrap secret %s verified against digest manifest (encrypted content)",
+            resource_name,
         )

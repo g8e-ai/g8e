@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import secrets
 from typing import TYPE_CHECKING, Any
@@ -15,6 +14,11 @@ from typing import TYPE_CHECKING, Any
 from app.constants import DB_COLLECTION_API_KEYS, APIKeyStatus
 from app.models.api_keys import APIKeyDocument
 from app.services.cache.cache_aside import CacheAsideService
+from app.utils.security import (
+    DEFAULT_KEY_DERIVATION_ITERATIONS,
+    DEFAULT_KEY_DERIVATION_SALT,
+    derive_key_identifier,
+)
 from app.utils.timestamp import now
 
 if TYPE_CHECKING:
@@ -22,8 +26,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Constants for hashing (aligned with client)
-KEY_DERIVATION_ALGORITHM = "sha256"
+# Constants for key derivation
+KEY_DERIVATION_ALGORITHM = "pbkdf2_sha256"
+KEY_DERIVATION_SALT = DEFAULT_KEY_DERIVATION_SALT
+KEY_DERIVATION_ITERATIONS = DEFAULT_KEY_DERIVATION_ITERATIONS
 API_KEY_HASH_LENGTH = 32
 
 
@@ -38,14 +44,13 @@ class APIKeyService:
         self.collection = DB_COLLECTION_API_KEYS
 
     def make_doc_id(self, raw_material: str) -> str:
-        """Generate a deterministic document ID from a raw API key."""
-        # codeql[py/weak-sensitive-data-hashing]: API keys are 256-bit random
-        # values (secrets.token_hex(32) in generate_raw_key), not low-entropy
-        # passwords. SHA256 is the correct choice for deterministic lookup-index
-        # derivation: a slow KDF (bcrypt/argon2) would break O(1) key validation
-        # on every request and add no security benefit against a 2^256 input
-        # space. This mirrors the standard pattern for token-at-rest indexing.
-        return hashlib.sha256(raw_material.encode()).hexdigest()[:API_KEY_HASH_LENGTH]
+        """Generate a deterministic document ID from a raw API key using PBKDF2 key derivation."""
+        return derive_key_identifier(
+            raw_material,
+            salt=KEY_DERIVATION_SALT,
+            iterations=KEY_DERIVATION_ITERATIONS,
+            length=API_KEY_HASH_LENGTH,
+        )
 
     def generate_raw_key(self, prefix: str = "g8e_") -> str:
         """Generate a new raw API key.
