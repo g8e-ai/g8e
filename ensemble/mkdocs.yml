@@ -24,6 +24,7 @@ nav:
   - PKI & Trust: pki.md
   - Storage: storage.md
   - LLM Providers: llm-providers.md
+  - Server-Sent Events: sse.md
   - Development: devs.md
   - Testing: tests.md
   - Evals: evals.md

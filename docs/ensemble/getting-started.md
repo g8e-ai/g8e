@@ -46,5 +46,5 @@ The application starts on port 8443 (HTTPS), connects to operator services on st
 ## Next Steps
 
 - [Architecture](architecture.md) — Understand the system design
-- [Governance](governance.md) — Learn about the 3-layer governance model
+- [Governance](governance.md) — Five-layer verification pipeline and governance postures
 - [Development](devs.md) — Set up your development environment

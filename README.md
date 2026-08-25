@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg)](ensemble/) [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](dashboard/) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-150%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](docs/core/about.md) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR%20FIPS140--3-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB.svg)](ensemble/) [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](dashboard/) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Python Tests](https://img.shields.io/badge/Python%20Tests-173%20passed-3776AB.svg)](protocol/python/tests/) [![Conformance](https://img.shields.io/badge/Conformance-420%20tests-3776AB.svg)](protocol/conformance/) [![Secrets](https://img.shields.io/badge/secrets-gitleaks-006600.svg)](https://github.com/gitleaks/gitleaks) [![Licenses](https://img.shields.io/badge/licenses-go--licenses-006600.svg)](https://github.com/google/go-licenses) [![Signed](https://img.shields.io/badge/binaries-cosign%20signed-676BFF.svg)](https://github.com/sigstore/cosign) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](docs/core/about.md) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR%20FIPS140--3-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
@@ -159,7 +159,7 @@ The admission pipeline consists of five layers with independent failure domains:
 2. **L2 Consensus** - Gateway (PDP): Multi-agent deliberation. An enrolled Consensus service evaluates the envelope and produces signed votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Consensus service and never self-signs. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
 3. **L3 Notary** - Gateway (PDP): Hardware-bound human authorization. Utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden** - Operator (PEP): Fail-closed verification authority. Re-verifies all proofs against local state, signatures, freshness, nonces, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden-pre-dispatch-verification).
-5. **L5 Actuator** - Operator (PEP): Single dispatch path. Handles isolated tool invocation (MCP/A2A), mints JIT capabilities, rehydrates scrubbed tokens on-host, and produces signed receipts at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator-executing-side-effects).
+5. **L5 Actuator** - Operator (PEP): Single dispatch path. Handles isolated tool invocation (MCP/A2A), mints JIT capabilities, rehydrates scrubbed tokens on-host, and produces signed receipts at the execution boundary. See [Actuator Layer](protocol/docs/spec.md#l5-actuator-execution-boundary).
 
 ## Data Sovereignty
 
@@ -264,6 +264,7 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 
 #### Guides
 - [Getting Started](docs/guides/getting_started.md)
+- [Unified Docker Stack](docs/guides/unified_stack.md)
 - [Build Gateway](docs/guides/build_gateway.md)
 - [Build Operator](docs/guides/build_operator.md)
 - [Build Applications](docs/guides/build_apps.md)
@@ -296,10 +297,14 @@ We welcome contributions of all kinds, including bug reports, feature ideas, doc
 
 #### Developer Guides
 - [Developer Guide](docs/devs/devs.md)
+- [Documentation Guidelines](docs/devs/docs.md)
 - [Codebase Map](docs/devs/codemap.md)
 - [Testing Guide](docs/devs/tests.md)
 - [Troubleshooting](docs/devs/troubleshooting.md)
 - [Release Process](docs/devs/release_process.md)
+
+#### Ensemble (g8ee)
+- [Ensemble Documentation](docs/ensemble/index.md)
 
 #### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-21
+Last Updated: 2026-08-25
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -42,7 +42,7 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Never hardcode filepath strings**: No dynamic path construction with `filepath.Join()` and string literals. No relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"` inline.
 - **Never use legacy trust bundle paths**: Tests fail closed if the canonical bundle is missing or malformed. Do not use `.g8e/g8e-gw-ca-bundle.pem` or `.g8e/pki/ca-bundle.pem`.
 - **Never mutate local PKI state in tests**: If trust bundle issues persist, restart the gateway and re-authenticate manually.
-- **Never use hand-trolled error strings**: Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
+- **Never use hand-rolled error strings**: Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
 - **Never use generic test names**: No `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, or any name that does not describe the specific behavior under test. The name must tell the reader what is being verified.
 - **Never use generic test filenames**: No `edge_test.go`, `misc_test.go`, `coverage_test.go`, or any filename that does not describe its scope. Do not use "coverage", "gap", or "edge" in test filenames.
 
@@ -118,13 +118,13 @@ Full state machine coverage:
 ### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
 
 Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperatorRunning` stub:
-- `TestEnrollUserCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
-- `TestEnrollUserCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
-- `TestEnrollUserCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
-- `TestEnrollUserCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
-- `TestEnrollUserCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
-- `TestEnrollUserCmd_SystemTrustInstalledOutput` — browser-close guidance printed
-- `TestEnrollUserCmd_StdinContinueInjected` — interactive `auth enroll user` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
+- `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
+- `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
+- `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
+- `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
+- `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
+- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
+- `TestEnrollCmd_StdinContinueInjected` — interactive `auth enroll user` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
 - `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
 - `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
 
@@ -156,12 +156,16 @@ Stateful scenarios require specific platform states that the user prepares manua
 - `pubsub_heartbeat_e2e_test.go` — heartbeat advancement proof via two typed `UpdatedAt` observations
 - `command_roundtrip_e2e_test.go` — full gateway-to-operator command dispatch roundtrip with typed `FsReadResult` protobuf decode
 - `ensemble_e2e_test.go` — ensemble health, detailed health with typed client map, dashboard index, gateway stability
+- `ensemble_chat_e2e_test.go` — ensemble chat file creation tool call roundtrip
+- `governance_document_e2e_test.go` — governed document update (partial merge) and deletion
 - `compliance_e2e_test.go` — typed audit receipts, summary, and events responses
+- `platform_bootstrap_e2e_test.go` — platform full bootstrap lifecycle
 - `platform_enrollment_pending_e2e_test.go` — pending discovery: all three component kinds appear, request IDs are unique, raw JSON excludes tokens and secret material
 - `platform_enrollment_denial_e2e_test.go` — denial: deny an exact request ID, verify terminal state, gateway remains healthy, no active operator
 - `platform_enrollment_restart_pending_e2e_test.go` — restart-during-pending: request-ID continuity after restart, no duplicate, approval succeeds, command roundtrip works
 - `platform_enrollment_headless_e2e_test.go` — headless: gateway-only deployment, health and CA bundle succeed, pending list and operator list are empty, ensemble and dashboard endpoints are absent
 - `approved_restart_e2e_test.go` — approved-restart: operator identity persists after restart, heartbeat advances, command roundtrip succeeds
+- `sse_observing_e2e_test.go` — live SSE stream observing during chat turns
 
 MCP config-output assertions (`mcp agent show` JSON structure, TLS fields, transport type) are covered by hermetic CLI command tests in `internal/cli/cmd/mcp_config_output_test.go` as Tier 1 unit tests, not Tier 3 E2E tests.
 
@@ -215,7 +219,7 @@ The `adapterFixture` struct in `test/protocol_test_helpers_test.go` bundles a `G
 
 | Tier | Name | Target Directory | Build Tag / Marker | External Deps | Execution Time |
 | --- | --- | --- | --- | --- | --- |
-| **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* | None (stub-only, no files/network/DB) | < 10ms per test |
+| **Tier 1** | **Unit Tests** | `internal/...` | *No tags* | None (stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI, local pubsub (gateway in-process) | < 2s per suite |
 | **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Running platform (user starts `docker compose up` or `./g8e gw start` first) | < 30s per suite |
 | **Tier 4** | **External** | `ensemble/tests/integration/` (and any future component tests with external deps) | `pytest.mark.ai_integration`, `pytest.mark.requires_web_search`, `pytest.mark.requires_api` | Real LLM providers, web search APIs, third-party services | seconds to minutes per test |
@@ -247,6 +251,10 @@ make test-integration  # Tier 2 only (integration build tag)
 make test-docker       # Tier 3 (e2e build tag, requires running platform)
 make test-coverage     # Coverage with -coverprofile and -covermode=atomic
 make test-airgap       # Verify vendored build works without network access
+make ensemble-test     # Ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)
+make test-external     # Ensemble external test suite (Tier 4: real LLM/API calls)
+make dashboard-test    # Dashboard vitest suite
+make verify-fips       # FIPS 140-3 build and self-check
 make ci                # Full CI pipeline (proto, swagger, lint, vulncheck, tests)
 make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck + validate-doctrines + validate-cosais + swagger-generate
 ```
@@ -279,7 +287,7 @@ make test-docker      # connects to the running platform
 
 The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity; the Gateway and Operator are real infrastructure.
 
-**26 scenarios total**: 7 MCP + 3 A2A + 5 governance + 5 DHS + 1 finance + 5 FedRAMP.
+**30 scenarios total**: 7 MCP + 3 A2A + 5 governance + 4 ensemble + 5 DHS + 1 finance + 5 FedRAMP.
 
 The interactive demo runner (`g8e demos run <org> [scenario]`) provides 14 numbered platform demos across 5 environments: healthcare (4), finance (1), dhs (4), fedramp (4), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll user` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
 
@@ -349,10 +357,11 @@ From `protocol/constants/ports.json`:
 
 ### Python Test Suite
 
-The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 122 test functions across 4 files:
+The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 144 test functions (173 collected test cases) across 5 files:
 
 - `test_constants.py`: Constant dict loading, value integrity, and namespace conventions
-- `test_enums.py`: Enum generation, name conversion helpers, and dynamic attribute access
+- `test_constants_loader.py`: Fail-closed protocol JSON loader integrity, empty/whitespace env var fallback, and source-tree fallback elimination
+- `test_enums.py`: Enum generation, name conversion helpers, dynamic attribute access, and extra enum generation
 - `test_models.py`: Model instantiation, validation rules, serialization round-trips, and `G8eBaseModel` behavior
 - `test_version.py`: Version string consistency with `pyproject.toml` and semver format
 
@@ -406,24 +415,33 @@ CI runs both scripts on every PR (`smoke-test` job).
 
 ### Continuous Integration
 
-GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
+GitHub Actions (`.github/workflows/build-and-test.yml` and `.github/workflows/build-and-test-fips.yml`) enforces:
 
 **Core CI** (`ci` job, runs on `ubuntu-latest`):
 - Version sync verification (`VERSION` file vs `protocol/python/pyproject.toml` vs `protocol/python/g8e/__init__.py`)
 - Proto verification and doctrine validation
+- COSAiS overlay coverage validation (`make validate-cosais`)
 - Swagger generation and validation
 - golangci-lint
 - govulncheck
 - Unit tests and integration tests
 - Windows cross-compile (Linux runner only)
+- Static linking verification
 
 **Additional CI jobs**:
-- `python-tests`: Pytest on Python 3.10-3.14 matrix with version sync verification
+- `python-tests`: Pytest on Python 3.10-3.14 matrix with version sync verification and examples smoke tests
 - `python-audit`: pip-audit `--skip-editable` for Python dependency vulnerability scanning
 - `conformance`: Protocol conformance suite (420 tests) on Python 3.14
 - `smoke-test`: Clean-environment install verification for both Python and Go packages
 - `secret-scan`: gitleaks full-history secret scanning
 - `license-check`: go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
+- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12
+- `dashboard-tests`: Dashboard (g8ed) vitest suite on Node 22
+
+**FIPS CI** (`.github/workflows/build-and-test-fips.yml`, `fips` job on `ubuntu-latest`):
+- FIPS 140-3 build and self-check (`make verify-fips`)
+- Unit tests and integration tests in FIPS approved mode (`GOFIPS140=v1.0.0`)
+- FIPS binary static linking verification
 
 **Local-only targets** (not run in CI):
 - `demo-verify`: Builds and runs all 5 demo environments via Docker Compose

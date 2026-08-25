@@ -22,7 +22,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.HistoryService
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
-│   │   ├── governance.StateRootProvider (gateway.StateRootService via Stores) [SHARED]
+│   │   ├── governance.StateRootProvider (governance.RemoteStateRootProvider when connected to gateway; gateway.StateRootService in standalone mode) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.L2ConsensusPolicyStore (via GovernanceDeps.ConsensusPolicyStore; nil in outbound mode with fail-closed nil-check, gateway.ConsensusStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (from GovernanceDeps.Doctrine; wired as governance.NewL1Doctrine() in the outbound-mode GovernanceDeps construction in g8eo.go and in gateway-mode wiring; nil Doctrine is a wiring bug and L4Warden fail-closes with ErrTxDoctrineMissing rather than defaulting at the call site)
@@ -126,7 +126,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │       └── gateway.GatewayWebSocketHandler
 ├── gateway.UserService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
-├── gateway.CLISessionService (CLI session persistence; used by recovery/rotation controllers for session replacement and by L3 notary for mTLS session verification)
+├── gateway.CLISessionService (CLI session persistence; used by recovery/rotation/refresh controllers for session replacement/refresh and by L3 notary for mTLS session verification)
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.CLIRecoveryService (human-approved CLI recovery request lifecycle; token hashing, atomic state transitions, proof-of-possession verification)
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
@@ -134,6 +134,15 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
 ├── gateway.WebSessionService
 │   └── gateway.DocumentStoreService (from Stores [SHARED])
+├── gateway.PlatformEnrollmentService (platform workload enrollment lifecycle: request, owner decision, lease, issuance)
+│   ├── gateway.DocumentStoreService (from Stores [SHARED])
+│   ├── gateway.UserService [SHARED]
+│   ├── governance.EnvelopeProcessor (pubsub.GatewayEnvProcAdapter)
+│   └── gateway.StateRootService (from Stores [SHARED])
+├── gateway.DispatchService (mTLS-protected command dispatch to operators over pub/sub)
+│   ├── gateway.GatewayWebSocketHandler [SHARED]
+│   ├── gateway.StateRootService (from Stores [SHARED])
+│   └── gateway.AuthService [SHARED]
 ├── gateway.HTTPHandler (router + middleware shell; deps injected via HTTPHandlerDependencies as per-controller Deps structs)
 │   ├── gateway.GatewayWebSocketHandler
 │   ├── gateway.AuthService
@@ -197,15 +206,20 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.UserService [SHARED]
 │   │   └── response.Writer
+│   ├── gateway.CLIRefreshController (mTLS-protected CLI session refresh)
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.OperatorSessionService [SHARED]
+│   │   ├── gateway.UserService [SHARED]
+│   │   └── response.Writer
 │   ├── gateway.EnrollmentTokenController (enrollment token generate, validate)
 │   │   ├── gateway.EnrollmentTokenService (created in HTTPHandler constructor, manages enrollment token lifecycle with TTL-based cleanup)
-│   │   ├── response.Writer
+│   │   └── response.Writer
 │   ├── gateway.UserController (user creation, user me)
 │   │   ├── gateway.UserService [SHARED]
-│   │   ├── response.Writer
+│   │   └── response.Writer
 │   ├── gateway.SessionController (logout, web session)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
-│   │   ├── response.Writer
+│   │   └── response.Writer
 │   ├── gateway.AdminController (app policies, consensus, app revocation)
 │   │   ├── gateway.DocumentStoreService (from Stores [SHARED])
 │   │   ├── gateway.SignerStoreService (from Stores [SHARED])
@@ -228,7 +242,17 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.AuthService [SHARED]
 │   │   └── response.Writer
 │   ├── gateway.DispatchController (mTLS-protected operator command dispatch)
-│   │   ├── gateway.GatewayService [SHARED]
+│   │   ├── gateway.DispatchService [SHARED]
+│   │   └── response.Writer
+│   ├── gateway.MCPController (MCP/A2A ingress wrapper)
+│   │   └── mcp.GatewayService [SHARED]
+│   ├── gateway.PubSubController (PubSub WebSocket stream wrapper)
+│   │   └── gateway.GatewayWebSocketHandler [SHARED]
+│   ├── gateway.PasskeyController (Passkey registration, authentication, approval wrapper)
+│   │   └── gateway.PasskeyHandler [SHARED]
+│   ├── gateway.PlatformEnrollmentController (owner-approved platform workload enrollment: request, status, complete, pending, decision)
+│   │   ├── gateway.PlatformEnrollmentService [SHARED]
+│   │   ├── gateway.UserService [SHARED]
 │   │   └── response.Writer
 │   └── response.Writer
 ├── http.Server (HTTPS port, mTLS-enforced public router)
@@ -350,7 +374,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (gateway mode only; shared between HTTP ingress and OperatorPubSubService egress).
-- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 19 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `CLIRecoveryController`, `CLIRotationController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `DispatchController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
+- `gateway.HTTPHandler` is a router and middleware shell for gateway mode. It holds router infrastructure (rate limiting, CORS, path traversal guard), cross-cutting infrastructure (`responder`, `authMiddleware`), and 21 controller fields: `PKIController`, `AuditController`, `DataController`, `SignerController`, `BootstrapController`, `CLIRecoveryController`, `CLIRotationController`, `CLIRefreshController`, `EnrollmentTokenController`, `UserController`, `SessionController`, `AdminController`, `OperatorController`, `DispatchController`, `SSEController`, `HealthController`, `GovernanceController`, `MCPController`, `PubSubController`, `PasskeyController`, `PlatformEnrollmentController`. All HTTP endpoint logic lives on controllers. Dependencies are injected via `HTTPHandlerDependencies`, composed of per-controller `Deps` structs.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
@@ -359,8 +383,8 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 
 ### Gateway HTTP Dual-Router Architecture
-- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, approval UI, CLI recovery (request/status/approve/complete), and CLI rotation (`/api/v1/auth/cli/rotate`, mTLS-only). WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
-- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts (Linux/Windows), node binary download, CLI recovery discovery (request/status/complete — approve is HTTPS-only), and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard. (The old `handleCLIEnrollment` route and per-platform trust-install script routes were removed in v1.7.2.)
+- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, approval UI, CLI recovery (request/status/approve/complete), CLI rotation (`/api/v1/auth/cli/rotate`, mTLS-only), CLI session refresh (`/api/v1/auth/cli/refresh`, mTLS-only), and platform workload enrollment (`/api/v1/auth/platform-enrollments/*`, request/status/complete/pending/decision). WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware. The landing page (`/`) redirects to `/console/`.
+- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, deploy scripts (Linux/Windows), node binary download, CLI recovery discovery (request/status/complete — approve is HTTPS-only), platform workload enrollment discovery (request/status/complete — pending and decision are HTTPS-only), and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard. (The old `handleCLIEnrollment` route and per-platform trust-install script routes were removed in v1.7.2.)
 - **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.
@@ -378,6 +402,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.BootstrapController`** (`bootstrap_controller.go`): Local bootstrap with URL, bootstrap status, device enrollment. CLI enrollment is no longer handled here — it is owned by the client-side `EnrollmentCoordinator` (CLI auth package) which drives the bootstrap, recovery, and rotation gateway endpoints. 9 dependencies (cfg, logger, docStore, userSvc, pki, cliSessionSvc, operatorSessionSvc, responder, actuatorKeyReader).
 - **`gateway.CLIRecoveryController`** (`cli_recovery_controller.go`): Human-approved CLI recovery flow — request creation (public, CSR is proof-of-possession anchor), status polling (public, opaque token is lookup key), browser approval/denial (web-session protected, existing user authorizes new CLI), mTLS approval/denial (`RouteAuthMTLS`, already-enrolled CLI authorizes new CLI via `approve-cli`; approver user ID derived from verified mTLS cert URI SAN by unified auth middleware, never from request body), and proof-of-possession-gated completion (public, requires token + CSR private-key signature over request ID). Issues a new CLI certificate bound to a new CLI session. Auth classification: request/status/complete = `RouteAuthNone`, approve = `RouteAuthWebSession`, approve-cli = `RouteAuthMTLS`. 9 dependencies (cfg, logger, recoverySvc, userSvc, pki, cliSessionSvc, operatorSessionSvc, docStore, responder).
 - **`gateway.CLIRotationController`** (`cli_rotation_controller.go`): mTLS-protected CLI certificate rotation. Identity (user ID + active CLI session ID) is derived strictly from the verified mTLS certificate URI SAN — request body fields are NOT trusted for identity. Single transactional replacement: new cert is signed BEFORE old session is deactivated, old cert is revoked AFTER session replacement commits. Auth classification: `RouteAuthMTLS` (registered on `buildPublicRouter` only, never on plain HTTP). 7 dependencies (cfg, logger, cliSessionSvc, pki, userSvc, responder, + cert revocation via PKI).
+- **`gateway.CLIRefreshController`** (`cli_refresh_controller.go`): mTLS-protected CLI session refresh (`POST /api/v1/auth/cli/refresh`). Validates the caller's active mTLS CLI certificate, extracts identity from the URI SAN, deactivates any existing session, and issues a fresh session bound to the same user without re-issuing or rotating certificate material. Auth classification: `RouteAuthMTLS`. 6 dependencies (cfg, logger, cliSessionSvc, operatorSessionSvc, userSvc, responder).
 - **`gateway.EnrollmentTokenController`** (`enrollment_token_controller.go`): Enrollment token generation (mTLS-protected) and validation (public). 4 dependencies (cfg, logger, enrollmentTokenSvc, responder).
 - **`gateway.UserController`** (`user_controller.go`): User creation (mTLS-protected), user me (web session). 4 dependencies (cfg, logger, userSvc, responder).
 - **`gateway.SessionController`** (`session_controller.go`): Logout (clear cookie + delete web session), web session info. 4 dependencies (logger, docStore, responder, crossOrigin).
@@ -390,6 +415,7 @@ Governance store interfaces are defined in dedicated files under `internal/servi
 - **`gateway.MCPController`** (`mcp_controller.go`): MCP/A2A ingress endpoints. Thin wrapper around `mcp.GatewayService` that exposes HTTP-facing methods through the controller pattern so `HTTPHandler` does not retain the `GatewayService` directly.
 - **`gateway.PubSubController`** (`pubsub_controller.go`): PubSub WebSocket stream endpoint. Thin wrapper around `GatewayWebSocketHandler` that exposes its HTTP-facing method through the controller pattern.
 - **`gateway.PasskeyController`** (`passkey_controller.go`): Passkey registration, authentication, approval, and credential management endpoints. Thin wrapper around `PasskeyHandler` that exposes its HTTP-facing methods through the controller pattern.
+- **`gateway.PlatformEnrollmentController`** (`platform_enrollment_controller.go`): Owner-approved platform workload enrollment flow (dashboard, ensemble, operator). Endpoints: public request creation, status polling, and proof-of-possession-gated completion registered on both HTTP and HTTPS discovery routers (`RouteAuthNone`), plus authenticated pending-list discovery and owner decisions (approve/deny) on HTTPS only (`RouteAuthDual`: web session cookie or mTLS CLI, active first user enforced). 5 dependencies (cfg, logger, enrollSvc, userSvc, responder).
 
   **Single-phase construction with narrow setter:** `GatewayModeService` constructs the HTTP handler in `NewGatewayModeService` (via `gatewayServiceBuilder.build()`). The `ConsensusService` is wired after construction via `SetConsensusService` (a narrow setter for a genuinely late-bound dependency — `ConsensusService` requires `GatewayModeService` to exist first for `ConsensusBootstrap`). The `consensusSvc` field on `GatewayModeService` is an `atomic.Pointer[consensus.ConsensusService]`; `initHTTPHandler` captures `&ls.consensusSvc` at construction time; `SetConsensusService` calls `Store`; the controller calls `Load` at request time. The `atomic.Pointer` provides the memory ordering guarantees a raw `**T` lacks (the cell is read on the request path and written during boot). Tests that bypass the constructor call `initHTTPHandler` directly (same package).
 
@@ -409,12 +435,13 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
   - **`data`**: Administer the local platform over mTLS. Subcommands: `users`, `operators`, `settings`, `store`, `audit`.
   - **`security`**: Security validation checks. Subcommands: `validate`.
   - **`tunnel`**: Manage Cloudflare Tunnel for public gateway access. Subcommands: `create`, `run`, `status`.
-- **`auth`**: Authentication and session management. Subcommands: `enroll` (parent; requires a subcommand), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey), `approve-recovery` (mTLS approval of a pending CLI recovery request). `enroll` subcommands: `user` (local human CLI/user enrollment with passkey registration), `operator` (remote operator/device enrollment via CSR), `gui` (enroll external frontend application origins; subcommands `enroll`, `show`, `verify`, `remove`).
-- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled). The `run` subcommand includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default. Supported agents: Claude Code, OpenAI Codex, Goose, Gemini CLI.
+- **`auth`**: Authentication and session management. Subcommands: `enroll` (parent; requires a subcommand: `user` [local human CLI/user enrollment with passkey registration], `gui` [enroll external frontend application origins; subcommands `enroll`, `show`, `verify`, `remove`]), `logout`, `approve` (interactive OOB approval of suspended transactions via passkey), `approve-recovery` (mTLS approval of a pending CLI recovery request), `approve-platform-enrollment` (mTLS approval or denial of a pending platform workload enrollment request), `pending-platform-enrollments` (list pending platform workload enrollment requests via mTLS), `refresh` (refresh an expired CLI session using an active mTLS certificate).
+- **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration and native tools disabled). The `run` subcommand includes `verifyToolInterception` pre-launch config verification via `--verify` flag, enabled by default. Supported agents: Claude Code / Claude Desktop, OpenAI Codex, Devin CLI, Google Gemini CLI, Goose.
 - **`operator`**: Manage Operator instances. Subcommands: `list`, `start`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
-- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `chaos`, `summary`.
+- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `e2e-full`, `coverage`, `lint`, `chaos`, `summary`.
 - **`demos`** (alias `demo`): Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`, `export`, `import`, `images`, `scenarios` (with `list` and `run` subcommands).
+- **`docker`**: Manage the Docker Compose unified stack (gateway, operator, ensemble, dashboard). Subcommands: `start` (interactive startup walkthrough with pre-flight checks, gateway health wait, enrollment, and container bringup), `stop`, `status`, `build`, `clean`, `reset`, `rebuild`, `logs`.
 - **`audit`**: Run audit reports for compliance. Subcommands: `receipts`, `export`, `report`, `events`, `summary`.
 - **`report`**: Generate CSV evidence reports. Subcommands: `all`, `verify`.
 - **`compliance`**: FedRAMP 20x (CR26) compliance operations. Subcommands: `export` (generate OSCAL `component-definition` and `assessment-results` JSON artifacts), `ksi` (evaluate KSIs and print result set as JSON), `ksi-history` (list KSI snapshot history or filter by KSI ID), `overlay` (load and validate COSAiS overlay catalogs).
@@ -433,6 +460,7 @@ All Model Context Protocol (MCP) native tools are registered explicitly in `inte
 - **TLS and Security Inspection**: `TLSCertInspectTool` for certificate chain and TLS configuration verification.
 - **File and Configuration Management**: `FSDiskProfileTool`, `ConfigDiffMaskTool`, `FSFileChecksumTool`, `FSDiskUsageTool`, `FileReadTool` for filesystem verification and config diff masking.
 - **Environment and Cloud Integration**: `SysEnvVarsTool`, `GitOpsTool`, `CloudMetadataTool`, `K8sInspectTool`, `OperatorDeployTool` for metadata discovery and deployment workflows.
+- **Audit Receipt Inspection**: `AuditReceiptListTool`, `AuditReceiptGetTool` for querying and inspecting signed governance action receipts.
 - **Shell Execution**: `RunShellCommandTool` for controlled shell command execution with scrubbing and audit logging.
 
 ## Critical Data Flows
@@ -488,6 +516,9 @@ The reporting system operates as a self-contained, offline verification utility 
 - **`internal/cli/cmd/tui.go`**: `tuiCmd` launches the Tactical Governance Console (TUI). Loads config, checks operator status, loads credentials, builds an mTLS client, and constructs an SSE stream URL using the CLI session ID for real-time updates.
 - **`internal/cli/cmd/gwstdout.go`**: `printNextSteps` outputs guidance after the gateway starts, including CA trust instructions, CLI enrollment, operator deployment, and Console UI access.
 - **`internal/cli/cmd/approve_recovery.go`**: `approveRecoveryCmd` implements `g8e auth approve-recovery <token>` and `approveRecoveryCmdWithConfig`. Uses the local enrolled CLI mTLS identity to approve or deny a pending CLI recovery request created by another CLI's `auth enroll user --headless` run. Posts to `POST /api/v1/auth/cli/recovery/approve-cli` (`RouteAuthMTLS`) with the token and `--deny` flag, prints the resulting approved/denied state, and wraps `ErrCLIRecoveryRequestFailed` for any other state. Follows the `approveCmdWithConfig` pattern with `configLoader`, `apiClientFactory`, and `fileSvcFactory` injection.
+- **`internal/cli/cmd/approve_platform_enrollment.go`**: `approvePlatformEnrollmentCmd` implements `g8e auth approve-platform-enrollment <request-id>`. Uses the local enrolled owner CLI mTLS identity to approve or deny a pending platform workload enrollment request (dashboard, ensemble, or operator) via `POST /api/v1/auth/platform-enrollments/decision`.
+- **`internal/cli/cmd/pending_platform_enrollment.go`**: `pendingPlatformEnrollmentCmd` implements `g8e auth pending-platform-enrollments`. Uses the local enrolled owner CLI mTLS identity to list pending platform workload enrollment requests from `GET /api/v1/auth/platform-enrollments/pending`.
+- **`internal/cli/cmd/refresh.go`**: `refreshCmd` implements `g8e auth refresh`. Uses an active CLI mTLS certificate to refresh an expired CLI session via `POST /api/v1/auth/cli/refresh`, updating local credentials without re-issuing or rotating certificate keys.
 - **`internal/services/gateway/cli_cert.go`**: `ExtractUserIDFromCert` extracts the user ID from a CLI mTLS certificate's SPIFFE URI SAN.
 - **Test Coverage**: `cert_test.go` covers `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `platform_enrollment_client_test.go` covers the operator enrollment client (12 tests: transcript parity, CSR fingerprint, token hash, transcript signing, pending state persistence, full enroll flow with mock gateway including resume and denial). `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
 
@@ -525,6 +556,7 @@ cmd.enrollUserCmdWithConfig / cmd.agentRunCmdWithConfig
 - **`credential_store.go`** — `CredentialStore` is the coordinator's typed API over local CLI identity files. `Inspect` classifies local state as absent/complete/partial/corrupt by examining ALL managed artifacts as a set. `Stage`/`Commit` write a new complete identity atomically (credentials written LAST so partial commits are detected as partial/corrupt by the next `Inspect`). `Rollback` releases staged state without writing canonical files. `Clear` removes local CLI credential material for logout/recovery but does NOT remove the shared OS root CA (§4.3 ownership policy). Safe for concurrent use via `sync.Mutex` (enrollment lock).
 - **`key_provider.go`** — `FileKeyProvider` implements `KeyProvider` with file-backed EC P-256 keys on all platforms (the `--tpm` flag was removed in v1.7.2). The `KeyProvider` interface is the extension point if non-exportable platform keys (TPM/CNG) are added later.
 - **`passkey_enrollment.go`** — `passkeyRegistrar` runs the browser-based passkey registration ceremony. Prepares the SSE listener before browser launch, uses a correct cursor strategy (`since_id=0` for live-only events), filters events by type/user/session, surfaces browser-open errors, and propagates context cancellation. `defaultPasskeyRegistrar` wraps it and satisfies the `PasskeyRegistrar` interface.
+- **`passkey_enroll_tui.go`** — `enrollModel` implements a Bubble Tea TUI for the passkey enrollment waiting UX. Displays a spinner and console URL until a `passkey.registered` event is received, an error occurs, or the user cancels.
 - **`trust_bundle.go`** — `ReadTrustBundle` loads the gateway root CA bundle from the local trust store (used by mTLS client construction and system trust installation).
 - **`tls.go`** — `BuildMTLSClient` constructs an `*http.Client` with TLS 1.3 + mTLS from the local CLI certificate and trust bundle. Uses `tls.LoadX509KeyPair` directly (correct for file-backed keys on all platforms post-Section-7).
 - **`client.go`** — `LoadCredentials` loads the local CLI credentials JSON. Used by operator/MCP/audit/approve/serve callers (credential consumers, not enrollment).
@@ -650,10 +682,21 @@ The following packages are test-only and are not part of the production dependen
 - `mcp_gateway_config_test.go` - MCP gateway configuration validation tests
 - `a2a_gateway_test.go` - A2A protocol gateway tests
 - `native_tool_registry_integration_test.go` - Native tool registry integration tests
+- `cli_refresh_integration_test.go` - CLI session refresh flow integration tests
+- `governed_document_process_envelope_integration_test.go` - Governed document process envelope integration tests
+- `protocol_errors_test.go` / `protocol_payload_test.go` / `protocol_test_helpers_test.go` - Protocol error and payload integration tests
+- `test/e2e/approved_restart_e2e_test.go` - E2E approved restart flow tests (build tag: `e2e`)
 - `test/e2e/auth_e2e_test.go` - E2E authentication flow tests (build tag: `e2e`)
-- `test/e2e/gateway_e2e_test.go` - E2E gateway lifecycle and health tests (build tag: `e2e`)
-- `test/e2e/mcp_stdio_e2e_test.go` - E2E MCP stdio config output, JSON-RPC parsing, config template validation (build tag: `e2e`)
+- `test/e2e/command_roundtrip_e2e_test.go` - E2E operator command roundtrip tests (build tag: `e2e`)
 - `test/e2e/compliance_e2e_test.go` - E2E compliance KSI pipeline test (build tag: `e2e`): runs `g8e compliance ksi/export/ksi-history` inside the operator container, verifies typed result sets, history snapshots, OSCAL artifacts, and evidence anchor resolution against real ledger commits (4 subtests)
+- `test/e2e/ensemble_chat_e2e_test.go` / `test/e2e/ensemble_e2e_test.go` - E2E ensemble chat and lifecycle tests (build tag: `e2e`)
+- `test/e2e/gateway_e2e_test.go` - E2E gateway lifecycle and health tests (build tag: `e2e`)
+- `test/e2e/governance_document_e2e_test.go` - E2E governance document mutation tests (build tag: `e2e`)
+- `test/e2e/operator_registry_e2e_test.go` - E2E operator registry tests (build tag: `e2e`)
+- `test/e2e/platform_bootstrap_e2e_test.go` - E2E platform bootstrap tests (build tag: `e2e`)
+- `test/e2e/platform_enrollment_denial_e2e_test.go` / `test/e2e/platform_enrollment_headless_e2e_test.go` / `test/e2e/platform_enrollment_pending_e2e_test.go` / `test/e2e/platform_enrollment_restart_pending_e2e_test.go` - E2E platform workload enrollment tests (build tag: `e2e`)
+- `test/e2e/pubsub_heartbeat_e2e_test.go` - E2E pub/sub heartbeat tests (build tag: `e2e`)
+- `test/e2e/sse_observing_e2e_test.go` - E2E SSE event observing tests (build tag: `e2e`)
 - `test/e2e/main_test.go` - E2E test main entry point and fixture setup (build tag: `e2e`)
 
 ## Python Protocol Package

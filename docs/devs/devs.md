@@ -7,7 +7,7 @@ AI agents updating documentation must follow **[docs.md](docs.md)** for stylisti
 g8e is a zero-trust execution platform for agentic infrastructure. Mutations are typed, signed, state-bound, and verified through a 5-layer gauntlet before any host state changes.
 
 - **GovernanceEnvelope**: Canonical wire format for all mutations (protojson)
-- **5-layer verification**: L1 (Technical Bedrock) → L2 (Consensus) → L3 (Notary) → L4 (Warden) → L5 (Actuator)
+- **5-layer verification**: L1 (Doctrine) → L2 (Consensus) → L3 (Notary) → L4 (Warden) → L5 (Actuator)
 - **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
 - **BYO clients**: The CLI (`./g8e`) is the default interface; MCP stdio for AI IDE integration; Console SPA and TUI for governance management
 
@@ -31,7 +31,6 @@ make build          # Build the g8e Operator binary
 | `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
 | `./g8e gw status` | Gateway health and status |
 | `./g8e auth enroll user` | Enroll the first owner / local CLI session with the running Gateway and register a passkey |
-| `./g8e auth enroll operator` | Enroll a remote operator/device with the Gateway via CSR |
 | `./g8e auth enroll gui` | Enroll an external frontend application origin with the Gateway |
 | `./g8e auth pending-platform-enrollments` | List pending platform workload enrollment requests (operator, dashboard, ensemble) via authenticated mTLS |
 | `./g8e auth approve-platform-enrollment <request-id>` | Approve or deny (`--deny`) a pending platform workload enrollment request by exact request ID via authenticated mTLS |
@@ -50,7 +49,11 @@ Startup sequence: binary check/build → root of trust generation (first boot) �
 - `internal/cli/sse/` - Reusable SSE client (frame parsing, reconnection, mTLS headers)
 - `internal/cli/tui/` - Tactical Governance Console (Bubble Tea TUI)
 - `internal/` - Internal Go packages
-- `internal/pkg/` - Shared internal packages (e.g., SSH utilities)
+- `internal/pkg/` - Shared internal packages (e.g., SSH utilities, certificate helpers)
+- `dashboard/` - Governance Dashboard web application and server
+- `ensemble/` - Multi-agent orchestration ensemble (Python)
+- `demos/` - Deterministic scenario demonstrations
+- `scripts/` - Setup and smoke test scripts
 - `test/` - E2E and integration tests (gateway, MCP, consensus, native tool registry)
 - `docs/` - Documentation
 
@@ -147,6 +150,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 - `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL). `TestSQLAuditStore` satisfies `compliance.AuditEvidenceReader` via `ListEvents` and `ListFileMutations` methods.
 - `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
 - `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
+- `internal/services/keystore/keystoretest/` - Test-only keyring and test filesystem fixtures (`TestKeyring`)
 - `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
 - `internal/tools/agent_harness/` - Agent test harness with scenario runner (`client/`, `config/`, `scenarios/`) for MCP/A2A gateway integration tests
 - `test/` - Root-level E2E and integration tests (gateway, MCP, consensus, native tool registry, A2A)
@@ -157,21 +161,21 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 `mcp.GatewayService` uses a **single-phase construction model**: all dependencies are passed to `NewGatewayService` via the `Dependencies` struct and are immutable after construction. There is no `SetRuntimeDeps`, no `atomic.Pointer`, and no `runtimeReady()` gate.
 
-**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
+**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `AuditReceiptQuery`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
 
-**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress). Each adapter's target field is an `atomic.Pointer[OperatorPubSubService]`; `SetTarget` calls `Store` (during boot) and the request-path method calls `Load`. The `atomic.Pointer` provides the memory ordering guarantees a raw pointer lacks — the target is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means the real target is not yet wired; the adapter returns `constants.ErrGatewayNotReady` (fail-closed) in that case.
+**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress). Each adapter's target field is an `atomic.Pointer[OperatorPubSubService]`; `SetTarget` calls `Store` (during boot) and the request-path method calls `Load`. The `atomic.Pointer` provides the memory ordering guarantees a raw pointer lacks - the target is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means the real target is not yet wired; the adapter returns `constants.ErrGatewayNotReady` (fail-closed) in that case.
 
-- `pubsub.GatewayEnvProcAdapter` — implements `governance.EnvelopeProcessor`, delegates to `OperatorPubSubService` once it is constructed. The adapter is pre-allocated in `GatewayModeService.build()` and passed to `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called, `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
-- `pubsub.GatewaySessionValidatorAdapter` — same pattern for `mcp.SessionValidator`.
+- `pubsub.GatewayEnvProcAdapter` - implements `governance.EnvelopeProcessor`, delegates to `OperatorPubSubService` once it is constructed. The adapter is pre-allocated in `GatewayModeService.build()` and passed to `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called, `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
+- `pubsub.GatewaySessionValidatorAdapter` - same pattern for `mcp.SessionValidator`.
 
-**Narrow setters for genuinely late-bound deps** (no circular dependency, no `atomic.Pointer`, no `runtimeReady()` guard — the fields are nil-checked at their call sites):
+**Narrow setters for genuinely late-bound deps** (no circular dependency, no `atomic.Pointer`, no `runtimeReady()` guard - the fields are nil-checked at their call sites):
 
-- `SetAuditLogger` — `AuditStore` comes from `CommandServiceConfig.AuditStore`, configured in `serve/gateway.go` after `GatewayModeService` exists.
-- `SetL2ConsensusDeliberator` — the deliberator requires `GatewayModeService` to exist for `ConsensusBootstrap`.
+- `SetAuditLogger` - `AuditStore` comes from `CommandServiceConfig.AuditStore`, configured in `serve/gateway.go` after `GatewayModeService` exists.
+- `SetL2ConsensusDeliberator` - the deliberator requires `GatewayModeService` to exist for `ConsensusBootstrap`.
 
 These two setters are the only post-construction mutators on `mcp.GatewayService`. All other dependencies are construction-phase only.
 
-**`GatewayModeService.SetConsensusService`** is a narrow setter on `GatewayModeService` (not `mcp.GatewayService`) for a genuinely late-bound dependency: `ConsensusService` is built between `NewGatewayModeService` and `Start` because it reads from the DB the constructor opens (via `ConsensusBootstrap`). The `consensusSvc` field is an `atomic.Pointer[consensus.ConsensusService]`; `SetConsensusService` calls `Store`, and the `GovernanceController` (which captures `&ls.consensusSvc` at construction time) calls `Load` on the request path. The `atomic.Pointer` provides the memory ordering guarantees that a raw `**T` lacks — the cell is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means consensus is not configured for the current posture (e.g. doctrine mode); `handleConsensusDeliberate` returns 503 in that case.
+**`GatewayModeService.SetConsensusService`** is a narrow setter on `GatewayModeService` (not `mcp.GatewayService`) for a genuinely late-bound dependency: `ConsensusService` is built between `NewGatewayModeService` and `Start` because it reads from the DB the constructor opens (via `ConsensusBootstrap`). The `consensusSvc` field is an `atomic.Pointer[consensus.ConsensusService]`; `SetConsensusService` calls `Store`, and the `GovernanceController` (which captures `&ls.consensusSvc` at construction time) calls `Load` on the request path. The `atomic.Pointer` provides the memory ordering guarantees that a raw `**T` lacks - the cell is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means consensus is not configured for the current posture (e.g. doctrine mode); `handleConsensusDeliberate` returns 503 in that case.
 
 ## Constants & Doctrines
 
@@ -196,7 +200,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 4. Add unit tests in `internal/services/mcp/your_tool_name_test.go`
 5. No `init()` function; registration is explicit
 
-**Existing tools:** Database (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy.
+**Existing tools:** Database (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy, audit receipts (list, get).
 
 ## Quick Reference
 
@@ -220,3 +224,4 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 - Commit prefixes: `g8e: fix the thing`
 
 **Contact:** danny@g8e.ai · **License:** BSL 1.1 (converts to Apache 2.0 on 2030-08-18)
+

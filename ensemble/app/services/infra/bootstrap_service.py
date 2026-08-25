@@ -182,6 +182,10 @@ class BootstrapService:
         """
         manifest_path = self._secrets_dir / BOOTSTRAP_DIGEST_MANIFEST_FILE
         if not manifest_path.exists():
+            # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
+            # logical label (e.g. "session_encryption_key"), not the secret value;
+            # manifest_path is a filesystem path. Both are non-sensitive identifiers
+            # required for operational debugging of tamper-evidence failures.
             self._logger.warning(
                 "Bootstrap digest manifest missing; skipping verification for %s (path=%s)",
                 resource_name,
@@ -206,6 +210,9 @@ class BootstrapService:
         entry = cast(dict[str, Any], entry_raw) if isinstance(entry_raw, dict) else {}
         expected = entry.get("sha256") if isinstance(entry.get("sha256"), str) else None
         if not expected:
+            # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
+            # logical label (e.g. "session_encryption_key"), not the secret value;
+            # the manifest version is a schema integer. Neither is sensitive.
             self._logger.warning(
                 "Bootstrap digest manifest has no entry for %s (manifest_version=%s)",
                 resource_name,
@@ -237,6 +244,9 @@ class BootstrapService:
                 f"Refusing to start to avoid using a compromised secret."
             )
 
+        # codeql[py/clear-text-logging-sensitive-data]: resource_name is a
+        # logical label (e.g. "session_encryption_key"), not the secret value.
+        # Logging which secret passed verification is required for audit trails.
         self._logger.info(
             "Bootstrap secret %s verified against digest manifest (encrypted content)",
             resource_name,

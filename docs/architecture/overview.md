@@ -66,8 +66,8 @@ The practical flow for an AI client is:
 2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
 3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
 4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
-5. After L1-L3 pass, the L4 Warden admits the envelope and publishes it to the unique pub/sub channel for the bound operator.
-6. The bound operator pulls the envelope, re-verifies L1-L4, and the L5 Actuator executes the action.
+5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
+6. The bound operator pulls the envelope, the L4 Warden re-verifies L1-L4, and the L5 Actuator executes the action.
 7. The operator writes the signed receipt to the local audit vault and publishes it back to the gateway.
 8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
 
@@ -92,7 +92,7 @@ The platform uses a zero-trust networking model where all communication is authe
 
 The gateway operates a four-tier PKI hierarchy: a self-signed Root CA signs a Hub Intermediate CA (which signs the gateway serving certificate), an Operator Intermediate CA (which signs operator, CLI, and app leaf certificates), and a Gateway Peer Intermediate CA (which signs gateway peer certificates for multi-host deployments). All certificates use ECDSA P-256 and carry SPIFFE URI SANs under the `g8e.local` trust domain. Certificate revocation is enforced per-request during mTLS verification, with a standard X.509 CRL served at `/.well-known/g8e/pki/crl`.
 
-The gateway exposes two ports: a plain HTTP port for bootstrap enrollment and PKI discovery only, and an HTTPS port enforcing TLS 1.3 with required and verified client certificates for all API, enrollment, and MCP routes. Route-level mTLS enforcement is handled by authentication middleware, which classifies routes by auth mode. Operators initiate outbound-only mTLS tunnels to the gateway and pull work from unique pub/sub channels; the gateway never reaches into operators. See [Network Architecture](./network.md) for the full PKI hierarchy, port topology, SPIFFE identity formats, and enrollment procedures.
+The gateway exposes two ports: a plain HTTP port for unauthenticated discovery and bootstrap (health and state checks, CA bundle and fingerprint discovery, bootstrap, CLI recovery and platform enrollment request/status/complete, deploy scripts, and node binary distribution), and an HTTPS port enforcing TLS 1.3 that serves the Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, and all governed execution routes. The HTTPS port accepts optional client certificates at the transport layer; authentication middleware classifies routes by auth mode and enforces application-layer mTLS verification for governed operator API, CSR signing, and MCP/A2A routes. Operators initiate outbound-only mTLS tunnels to the gateway and pull work from unique pub/sub channels; the gateway never reaches into operators. See [Network Architecture](./network.md) for the full PKI hierarchy, port topology, SPIFFE identity formats, and enrollment procedures.
 
 ---
 

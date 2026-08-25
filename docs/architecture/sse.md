@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 The Governance Gateway provides a Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. g8e-compatible agentic ensembles publish typed events, including AI chat and lifecycle events, for downstream consumption. The gateway also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval.
 
@@ -44,6 +44,7 @@ flowchart TD
 
     producer -- "mTLS POST" --> push
     internal --> stream
+    internal --> events
     push --> stream
     push --> events
     browser -- "mTLS or cookie" --> stream
@@ -62,7 +63,7 @@ flowchart TD
 
 **Response**: Returns a success status and a delivered count.
 
-**Authorization**: The app identity must be associated with the target session. Ownership is verified against bound Operator sessions before the event is persisted. If ownership verification fails, the handler returns a 403 Forbidden status and no event is stored.
+**Authorization**: The app identity must be associated with the target session. Ownership is verified against bound Operator sessions before the event is persisted. If ownership verification fails, the handler returns a 403 Forbidden status and no event is stored. The ensemble app identity (`g8ee`, `spiffe://g8e.local/app/g8ee`) is the centralized event broker and is always authorized to push events to any session, so the per-operator ownership check is skipped for it.
 
 ### Internal SSE Producers
 
@@ -112,7 +113,7 @@ The SSE system is generic and supports any producer-defined event type. The gate
 
 Only app workloads with valid mTLS certificates can push events. The certificate must have a SPIFFE URI SAN with an `/app/` prefix. Gateway and Operator identities are blocked from pushing. Producer identity is recorded for attribution.
 
-The app identity must be associated with the target session. Ownership is verified against bound Operator sessions before the event is persisted. If ownership verification fails, the handler returns 403 and no event is stored.
+The app identity must be associated with the target session. Ownership is verified against bound Operator sessions before the event is persisted. If ownership verification fails, the handler returns 403 and no event is stored. The ensemble app identity (`g8ee`) is the centralized event broker and is always authorized to push events to any session, bypassing the per-operator ownership check.
 
 ### Consumer Authorization
 

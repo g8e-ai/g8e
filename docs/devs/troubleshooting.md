@@ -18,7 +18,7 @@ Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The `Makefile
 
 At minimum, install the tools for the component you are touching:
 
-- Go 1.26.5 or later for the g8e Operator and protocol work.
+- Go 1.26.6 or later for the g8e Operator and protocol work.
 - Python 3.10 or later for protocol generation and demo scripts.
 
 ## `make` targets fail with missing `curl`
@@ -71,7 +71,7 @@ The `gw start` command launches the g8e Gateway as a background process via `gat
 Common causes:
 
 - One of the local ports from `protocol/constants/ports.json` (HTTP 8080, HTTPS 8443) is already in use. The process manager in `internal/cli/platform/process.go` performs a preflight port check and reports conflicting PIDs.
-- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.5).
+- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.6).
 - Runtime PKI or secrets were created by an older incompatible checkout.
 - Port collision prevention: the gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary. The HTTP surface (8080) serves plain HTTP for bootstrap and PKI discovery only; the HTTPS surface (8443) handles all API, MCP, console, and management routes. See [Network Architecture](../architecture/network.md) for port topology details.
 - Governance posture validation: when starting in `consensus` or `notary` posture, the gateway validates consensus prerequisites at startup before any services start. If the consensus ID is empty, the consensus policy does not exist in the database, or quorum is less than 1, the gateway exits with an error. See [Governance](../architecture/governance.md) for posture startup validation details.
@@ -111,7 +111,7 @@ Common causes:
 - The platform is not running. Start it first: `docker compose up` or `./g8e gw start`.
 - The gateway is running but the health endpoint is not responding. Check `./g8e gw status` and `./g8e gw logs`.
 - Owner credentials are missing or expired. Run `./g8e auth enroll user` to obtain a fresh CLI session. The test binary reads the owner CLI certificate, key, and session ID from the local `.g8e/` runtime tree.
-- The CLI session has expired (1-hour TTL). Authenticated tests fail with `CLI session expired` (401). Re-enroll to obtain a fresh session.
+- The CLI session has expired (7-day TTL). Authenticated tests fail with `CLI session expired` (401). Re-enroll to obtain a fresh session.
 
 ### Tier 3 scenario selection
 
@@ -231,7 +231,7 @@ If the CLI certificate has already expired and rotation is not possible, re-enro
 ./g8e auth logout && ./g8e auth enroll user
 ```
 
-The gateway serving certificate has a 90-day validity period and is auto-rotated by the PKI authority. Operator certificates require manual re-enrollment after expiry.
+The gateway serving certificate has a 90-day validity period and is auto-rotated by the PKI authority. Operator certificates are auto-renewed by `RunClientCertRenewalLoop` in `internal/cli/serve/cert.go`, which periodically re-enrolls via the device-enroll handler before expiry.
 
 ### g8e.local DNS resolution
 
@@ -239,7 +239,7 @@ The platform uses `g8e.local` as the default hostname for gateway connections. I
 
 ### Session TTL
 
-Operator sessions have a 24-hour TTL by default. CLI sessions have a 1-hour TTL. If CLI commands fail with session-related errors after extended idle periods, re-enroll to obtain a fresh session. Operator sessions require a gateway restart to refresh.
+Operator sessions have a 1-hour TTL by default. CLI sessions have a 7-day TTL, aligned with the CLI certificate validity period. If CLI commands fail with session-related errors after extended idle periods, re-enroll to obtain a fresh session. Operator sessions require a gateway restart to refresh.
 
 ## L3 approval timeouts and transaction rejection
 
@@ -285,9 +285,9 @@ The governance envelope submission endpoint (`POST /api/v1/governance/envelopes`
 
 ### Outbound mode mutations fail closed
 
-Notary is the default posture for outbound (operator) mode. Since the L3 notary is nil in outbound mode, mutations fail closed unless an L3 notary is explicitly configured. If operators reject all mutations with L3-related errors, either configure an L3 notary for the operator or switch the operator to `doctrine` or `consensus` posture.
+The default posture for outbound (operator) mode is `doctrine`. When the operator is started in `notary` posture, mutations require L3 human authorization. The outbound L3 notary (`governance.NewOutboundL3Notary` in `internal/services/governance/l3_notary.go`) is not nil in outbound mode: it suspends mutation transactions and requires CLI-based approval via the suspended transaction store. If operators reject all mutations with L3-related errors under `notary` posture, either complete the CLI approval flow or switch the operator to `doctrine` or `consensus` posture.
 
-The following action types are classified as mutations and require L3 proof under notary posture: `A2A_CALL`, `CANCEL`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof even under notary posture.
+The following action types are classified as mutations and require L3 proof under notary posture: `A2A_CALL`, `CANCEL`, `DOCUMENT_DELETE`, `DOCUMENT_UPDATE`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `PLATFORM_ENROLLMENT_CREATE_SESSION`, `PLATFORM_ENROLLMENT_DECIDE`, `PLATFORM_ENROLLMENT_ISSUE`, `PLATFORM_ENROLLMENT_PERSIST_POLICY`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof even under notary posture.
 
 ## State Merkle root mismatch
 
@@ -353,7 +353,7 @@ If SSE events are not reaching clients:
 
 ### Event drops under high load
 
-The SSE stream uses a buffered channel of 100 entries per subscriber. If the buffer is full when an event arrives, the event is dropped with a back-pressure warning log. This can occur under high-frequency event streaming. Consider batching events before pushing to reduce database load and buffer pressure.
+The SSE stream uses a bounded drop-oldest buffer of 100 entries per subscriber. If the buffer is full when an event arrives, the oldest queued event is dropped (not the incoming event) with a back-pressure warning log. Consumers can recover evicted events via DB replay on reconnect. Consider batching events before pushing to reduce database load and buffer pressure.
 
 ### Event retention
 
@@ -469,10 +469,6 @@ Metabase requires the `reporting-db` PostgreSQL container to be healthy before i
 docker compose ps reporting-db
 docker compose restart compliance-dashboard
 ```
-
-### RabbitMQ management UI unreachable (healthcare demo)
-
-The RabbitMQ management plugin is mapped to port 15673 on the host (from 15672 inside the container). Use `localhost:15673` to access the management UI.
 
 ## Known platform limitations
 
