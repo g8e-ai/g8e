@@ -177,6 +177,62 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
+// PublishActionReceipt publishes a signed ActionReceipt to the gateway's
+// receipts:<operator_id>:<operator_session_id> channel. The receipt is wrapped
+// as the payload of a GovernanceEnvelope that copies the identity fields
+// (operator_id, operator_session_id, requestor_user_id, acting_app_id,
+// action_type, target_resource, case_id, investigation_id, task_id) from the
+// original command envelope env, so the gateway can build a complete
+// ActionReceiptRecord without the ActionReceipt proto carrying those fields.
+// The gateway intercepts the publish, verifies the receipt signature against
+// the operator's actuator public key, records the receipt in its
+// SQLAuditStore, and fans out the envelope to subscribers.
+func (rr *PubSubResultsService) PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error {
+	if env == nil || receipt == nil {
+		return fmt.Errorf("pubsub: publish action receipt: %w", constants.ErrMissingRequiredField)
+	}
+
+	receiptBytes, err := proto.Marshal(receipt)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish action receipt: marshal receipt: %w", err)
+	}
+
+	receiptEnv := &commonv1.GovernanceEnvelope{
+		ProtocolVersion:   "1.0",
+		Timestamp:         env.Timestamp,
+		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
+		OperatorId:        env.OperatorId,
+		OperatorSessionId: env.OperatorSessionId,
+		ActionType:        env.ActionType,
+		TargetResource:    env.TargetResource,
+		EventType:         string(constants.Event.Operator.Receipt.Recorded),
+		Payload:           receiptBytes,
+		RequestorUserId:   env.RequestorUserId,
+		ActingAppId:       env.ActingAppId,
+		CaseId:            env.CaseId,
+		InvestigationId:   env.InvestigationId,
+		TaskId:            env.TaskId,
+		WebSessionId:      env.WebSessionId,
+		CliSessionId:      env.CliSessionId,
+		Posture:           env.Posture,
+	}
+
+	wire, err := protojson.Marshal(receiptEnv)
+	if err != nil {
+		return fmt.Errorf("pubsub: publish action receipt: marshal envelope: %w", err)
+	}
+
+	channel := ReceiptsChannel(env.OperatorId, env.OperatorSessionId)
+	rr.logger.Info("Publishing action receipt to gateway receipts channel",
+		"channel", channel,
+		"transaction_id", receipt.TransactionId,
+		"event_type", receiptEnv.EventType)
+	if err := rr.client.Publish(ctx, channel, wire); err != nil {
+		return fmt.Errorf("pubsub: publish action receipt: %w", err)
+	}
+	return nil
+}
+
 // publishUniversal marshals a GovernanceEnvelope as protojson and publishes it to the results channel.
 // operatorID overrides rr.config.OperatorID for channel routing (e.g. gateway mode where config has no operator ID).
 func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorID, operatorSessionID string) error {

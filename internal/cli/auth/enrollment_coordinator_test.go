@@ -37,8 +37,8 @@ import (
 // mockGateway records every call and returns configurable responses.
 type mockGateway struct {
 	mu                       sync.Mutex
-	bootstrapStatus          bool
-	bootstrapStatusErr       error
+	bootstrapped             bool
+	bootstrappedErr          error
 	bootstrapArtifacts       EnrollmentArtifacts
 	bootstrapErr             error
 	bootstrapCalls           int
@@ -62,10 +62,14 @@ type mockGateway struct {
 	discoveryFingerprint string
 	discoveryErr         error
 	discoveryCalls       int
+
+	// ProbeCLISession mock fields.
+	probeErr   error
+	probeCalls int
 }
 
 func (m *mockGateway) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
-	return m.bootstrapStatus, m.bootstrapStatusErr
+	return m.bootstrapped, m.bootstrappedErr
 }
 
 func (m *mockGateway) Bootstrap(ctx context.Context, cliCSR string, cliKey *ecdsa.PrivateKey, operatorCSR, caFingerprint, baseURL string) (EnrollmentArtifacts, error) {
@@ -125,6 +129,18 @@ func (m *mockGateway) DiscoverGatewayCA(ctx context.Context) ([]byte, string, er
 		return nil, "", m.discoveryErr
 	}
 	return m.discoveryBundlePEM, m.discoveryFingerprint, nil
+}
+
+// ProbeCLISession returns the configured mock probe response. By default
+// (zero-value mockGateway), probeErr is nil, which the coordinator treats
+// as "session healthy" and proceeds with reuse. Tests that want to
+// simulate an expired or invalid session set probeErr to
+// constants.ErrCLISessionExpired or constants.ErrCLISessionInvalid.
+func (m *mockGateway) ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	m.mu.Lock()
+	m.probeCalls++
+	m.mu.Unlock()
+	return m.probeErr
 }
 
 // mockKeyProvider returns a pre-generated CSR + key.
@@ -460,12 +476,12 @@ func setupCoordinatorTest(t *testing.T) (*EnrollmentCoordinator, *mockGateway, *
 
 // --- State classification tests ---
 
-func TestEnroll_AbsentUnbootstrapped_PerformsBootstrap(t *testing.T) {
+func TestEnroll_AbsentNotBootstrapped_PerformsBootstrap(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 
@@ -503,7 +519,7 @@ func TestEnroll_AbsentBootstrapped_PerformsRecovery(t *testing.T) {
 	coord, gw, keys, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-123"
 	gw.recoveryToken = "token-abc"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-abc"
@@ -537,6 +553,76 @@ func TestEnroll_AbsentBootstrapped_PerformsRecovery(t *testing.T) {
 	assert.Equal(t, "cli-session-123", creds.CLISessionID)
 
 	assert.True(t, recorder.contains("recovery"))
+}
+
+// TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride verifies that
+// when the user supplies -e/--endpoint (setting the HTTPS endpoint override),
+// the coordinator rewrites the gateway-returned approval URL base to match the
+// user's endpoint instead of the gateway's own PublicBaseURL (which defaults to
+// localhost). Without this, a remote user who passed -e dev.g8e.local would
+// receive an approval URL pointing at localhost and be unable to open it.
+// TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride verifies that
+// when the user supplies -e/--endpoint (setting the HTTPS endpoint override),
+// the coordinator rewrites the gateway-returned approval URL base to match the
+// user's endpoint instead of the gateway's own PublicBaseURL (which defaults to
+// localhost). Without this, a remote user who passed -e dev.g8e.local would
+// receive an approval URL pointing at localhost and be unable to open it.
+//
+// Not parallel: mutates the global config.SetHTTPSEndpointOverride, which
+// leaks to other tests via the process-wide config singleton.
+func TestEnroll_Recovery_RewritesApprovalURLWithEndpointOverride(t *testing.T) {
+	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.bootstrapped = true
+	gw.recoveryRequestID = "req-ep"
+	gw.recoveryToken = "token-ep"
+	// Gateway returns a localhost-based URL (its own PublicBaseURL default).
+	gw.recoveryApprovalURL = "https://localhost:8443/console/#recovery=token-ep"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	// Simulate -e dev.g8e.local --port 8443 from the root PersistentPreRunE.
+	config.SetHTTPSEndpointOverride("dev.g8e.local:8443")
+	t.Cleanup(func() { config.SetHTTPSEndpointOverride("") })
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, browser.urls, 1, "browser should be opened once")
+	assert.Contains(t, browser.urls[0], "dev.g8e.local:8443")
+	assert.NotContains(t, browser.urls[0], "localhost")
+	assert.Contains(t, browser.urls[0], "/console/#recovery=token-ep")
+}
+
+// TestEnroll_Recovery_PreservesApprovalURLWithoutOverride verifies that when
+// no endpoint override is set, the coordinator passes the gateway-returned
+// approval URL through unchanged, respecting the gateway's PublicBaseURL config.
+// TestEnroll_Recovery_PreservesApprovalURLWithoutOverride verifies that when
+// no endpoint override is set, the coordinator passes the gateway-returned
+// approval URL through unchanged, respecting the gateway's PublicBaseURL config.
+//
+// Not parallel: the companion RewritesApprovalURLWithEndpointOverride test
+// mutates the global config.SetHTTPSEndpointOverride; running in parallel
+// would leak that override into this test.
+func TestEnroll_Recovery_PreservesApprovalURLWithoutOverride(t *testing.T) {
+	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
+
+	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
+	gw.bootstrapped = true
+	gw.recoveryRequestID = "req-noep"
+	gw.recoveryToken = "token-noep"
+	gw.recoveryApprovalURL = "https://gateway.example.com:8443/console/#recovery=token-noep"
+	gw.recoveryStates = []models.CLIRecoveryState{models.CLIRecoveryStateApproved}
+	gw.recoveryCompleteArtifact = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+
+	require.Len(t, browser.urls, 1, "browser should be opened once")
+	assert.Equal(t, "https://gateway.example.com:8443/console/#recovery=token-noep", browser.urls[0])
 }
 
 func TestEnroll_CompleteHealthy_ReusesIdentity(t *testing.T) {
@@ -639,6 +725,8 @@ func TestEnroll_CompleteExpired_UsesRecoveryNotRotation(t *testing.T) {
 	_, _, bundleFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(-time.Hour))
 	gw.discoveryFingerprint = bundleFP
 
+	// Gateway is bootstrapped — recovery is the correct path for an expired cert.
+	gw.bootstrapped = true
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-exp"
 	gw.recoveryToken = "token-exp"
@@ -666,7 +754,7 @@ func TestEnroll_PartialState_UsesRecovery(t *testing.T) {
 	creds := &Credentials{UserID: "user-partial", CLISessionID: "cli-partial"}
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-p"
 	gw.recoveryToken = "token-p"
@@ -683,12 +771,12 @@ func TestEnroll_PartialState_UsesRecovery(t *testing.T) {
 	assert.True(t, recorder.contains("partial"))
 }
 
-// TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap verifies that
-// a partial local identity on an unbootstrapped gateway bootstraps rather
+// TestEnroll_PartialState_NotBootstrapped_PerformsBootstrap verifies that
+// a partial local identity on a not-bootstrapped gateway bootstraps rather
 // than attempting recovery (which the gateway would reject with 403). This
 // is the defense-in-depth companion to the classifier fix: even if partial
 // state reaches the coordinator, it must not bypass the bootstrap check.
-func TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap(t *testing.T) {
+func TestEnroll_PartialState_NotBootstrapped_PerformsBootstrap(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
@@ -696,7 +784,7 @@ func TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap(t *testing.T) {
 	creds := &Credentials{UserID: "user-partial", CLISessionID: "cli-partial"}
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
@@ -704,8 +792,8 @@ func TestEnroll_PartialState_Unbootstrapped_PerformsBootstrap(t *testing.T) {
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, EnrollmentSourceBootstrap, result.Source)
-	assert.Equal(t, 1, gw.bootstrapCalls, "bootstrap should be called on unbootstrapped gateway")
-	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery must not be attempted on unbootstrapped gateway")
+	assert.Equal(t, 1, gw.bootstrapCalls, "bootstrap should be called on a not-bootstrapped gateway")
+	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery must not be attempted on a not-bootstrapped gateway")
 	assert.True(t, recorder.contains("bootstrap"))
 }
 
@@ -728,7 +816,7 @@ func TestEnroll_CorruptState_UsesRecovery(t *testing.T) {
 	require.NoError(t, WriteTrustBundleFS(fileSvc, cfg, []byte(bundlePEM), constants.PermFilePublic))
 	require.NoError(t, SaveCredentials(fileSvc, cfg, &Credentials{UserID: "u", CLISessionID: "s"}))
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-c"
 	gw.recoveryToken = "token-c"
@@ -749,7 +837,7 @@ func TestEnroll_RecoveryDenied_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-d"
 	gw.recoveryToken = "token-d"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-d"
@@ -766,7 +854,7 @@ func TestEnroll_RecoveryExpired_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-e"
 	gw.recoveryToken = "token-e"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-e"
@@ -782,7 +870,7 @@ func TestEnroll_RecoveryPollsUntilApproved(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-poll"
 	gw.recoveryToken = "token-poll"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-poll"
@@ -811,7 +899,7 @@ func TestEnroll_ContextCancelled_AbortsBeforeEnrollment(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
@@ -825,7 +913,7 @@ func TestEnroll_RecoveryContextCancelled_AbortsPolling(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, browser, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-cancel"
 	gw.recoveryToken = "token-cancel"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-cancel"
@@ -853,9 +941,10 @@ func TestEnroll_NoSystemTrust_SkipsInstaller(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{NoSystemTrust: true})
 	require.NoError(t, err)
@@ -892,7 +981,7 @@ func TestEnroll_SystemTrustFailure_AbortsBeforePasskey(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.installErr = constants.ErrSystemTrustInstallFailed
@@ -908,7 +997,7 @@ func TestEnroll_SystemTrustAlreadyTrusted_NoPrivilegePrompt(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.isTrusted = true
@@ -925,7 +1014,7 @@ func TestEnroll_SystemTrustInstalled_PrintsBrowserCloseNote(t *testing.T) {
 	coord, gw, keys, _, _, _, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
@@ -943,7 +1032,7 @@ func TestEnroll_SkipPasskey_SuppressesCeremony(t *testing.T) {
 	coord, gw, keys, _, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 
@@ -970,7 +1059,7 @@ func TestEnroll_Headless_RecoveryPrintsApproveRecoveryCommandAndDoesNotOpenBrows
 	creds := &Credentials{UserID: "user-headless", CLISessionID: "cli-headless"}
 	require.NoError(t, SaveCredentials(fileSvc, cfg, creds))
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-headless"
 	gw.recoveryToken = "token-headless"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-headless"
@@ -1000,7 +1089,7 @@ func TestEnroll_BootstrapStatusError_ReturnsError(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatusErr = constants.ErrServiceUnavailable
+	gw.bootstrappedErr = constants.ErrServiceUnavailable
 
 	_, err := coord.Enroll(context.Background(), EnrollmentOptions{})
 	require.Error(t, err)
@@ -1010,7 +1099,7 @@ func TestEnroll_BootstrapError_ReturnsError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapErr = constants.ErrEnrollmentFailed
 	keys.csr, keys.key = "test-csr", nil
 
@@ -1022,7 +1111,7 @@ func TestEnroll_RecoveryRequestError_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestErr = constants.ErrCLIRecoveryRequestFailed
 	keys.csr, keys.key = "test-csr", nil
 
@@ -1048,7 +1137,7 @@ func TestEnroll_BrowserOpenFailure_ContinuesRecovery(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, browser, _, recorder, _, _ := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = true
+	gw.bootstrapped = true
 	gw.recoveryRequestID = "req-bf"
 	gw.recoveryToken = "token-bf"
 	gw.recoveryApprovalURL = "https://example.com/console#recovery=token-bf"
@@ -1069,7 +1158,7 @@ func TestEnroll_PasskeyFailure_ReturnsTypedError(t *testing.T) {
 	coord, gw, keys, _, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	passkey.err = constants.ErrPasskeyRegistrationTimedOut
@@ -1089,7 +1178,7 @@ func TestEnroll_TransportMethods_NoHiddenFileWrites(t *testing.T) {
 	// The mock gateway performs no file I/O, so the only writes should
 	// come from CredentialStore.Commit (after Stage). We verify by
 	// checking that no files are written before the gateway is called.
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
@@ -1126,7 +1215,7 @@ func TestEnroll_StageValidationFailure_RollsBackAndReturnsError(t *testing.T) {
 	t.Parallel()
 	coord, gw, keys, _, _, _, _, fileSvc, cfg := setupCoordinatorTest(t)
 
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	// Artifacts with mismatched cert/key → Stage validation fails.
 	caKey, caCert := generateTestCAWithKey(t, "test-root-ca")
 	cliCertPEM, _ := testutil.GenerateTestSignedCert(t, "g8e-cli-test", caCert, caKey)
@@ -1167,9 +1256,10 @@ func TestEnroll_StaleAnchors_Confirmed_RemovesAndInstalls(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 		{Fingerprint: "stale-fp-2", CommonName: constants.RootCACommonName, Handle: "/path/stale2"},
@@ -1203,9 +1293,10 @@ func TestEnroll_StaleAnchors_Declined_AbortsBeforeInstall(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1227,9 +1318,10 @@ func TestEnroll_StaleAnchors_None_NoPrompt(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = nil
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1254,9 +1346,10 @@ func TestEnroll_StaleAnchors_RemovalError_Aborts(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1279,9 +1372,10 @@ func TestEnroll_StaleAnchors_ListError_ProceedsAsBestEffort(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleErr = fmt.Errorf("enumeration failed")
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1307,9 +1401,10 @@ func TestEnroll_StaleAnchors_Unsupported_SkipsDetection(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleErr = constants.ErrSystemTrustUnsupported
 	// IsTrusted returns false (default), InstallRoot succeeds (default) → installed.
 
@@ -1335,7 +1430,7 @@ func TestInstallSystemTrust_UnsupportedPlatformWarns(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.isTrustedErr = constants.ErrSystemTrustUnsupported
@@ -1359,7 +1454,7 @@ func TestInstallSystemTrust_InstallRootUnsupportedWarns(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.isTrusted = false
@@ -1395,6 +1490,8 @@ func TestEnroll_ReusedIdentity_StaleBundle_RoutesToRecovery(t *testing.T) {
 	gw.discoveryFingerprint = "different-live-fp"
 	gw.discoveryBundlePEM = []byte("live-bundle")
 
+	// Gateway is bootstrapped — recovery is the correct path for a stale bundle.
+	gw.bootstrapped = true
 	// Configure recovery flow.
 	artifacts := buildTestArtifacts(t, EnrollmentSourceRecovery)
 	gw.recoveryRequestID = "req-stale"
@@ -1483,25 +1580,19 @@ func TestEnroll_ReusedIdentity_DiscoveryUnreachable_WarnsAndProceeds(t *testing.
 }
 
 // TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails is the R5 regression
-// guard. On the pre-fix code, when discovery was unreachable on the reuse
-// path, ensureSystemTrust fell back to the local (possibly stale) trust
-// bundle fingerprint for ListStaleAnchors, so the old OS anchor matched
-// the "keep" fingerprint and was NOT reported as stale. EnsureSystemTrust
-// then reported "already trusted" with the stale fingerprint, and the
-// passkey ceremony proceeded against a root the browser did not trust.
-//
-// After R2, installSystemTrust surfaces a diagnosable R5 warning when
-// discovery is unreachable AND reuse is attempted, BEFORE bundle
-// resolution. This test asserts the warning IS printed — it would have
-// failed on the old ensureSystemTrust which did not print a warning in
-// the unreachable-reuse path.
+// guard. When discovery is unreachable on the reuse path, the coordinator
+// cannot obtain the live fingerprint, so cleanupStaleAnchors is skipped
+// (it cannot determine which anchors are stale without the live
+// fingerprint). installSystemTrust then surfaces a diagnosable R5 warning
+// so the user knows the local bundle may be stale. This test asserts the
+// warning IS printed and ListStaleAnchors is NOT called.
 func TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails(t *testing.T) {
 	t.Parallel()
 	coord, gw, _, trust, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
 
-	_, _, localFP, _ := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	_, _, _, _ = writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
 	// Discovery is unreachable — the coordinator cannot obtain the live
-	// fingerprint, so it falls back to the local bundle.
+	// fingerprint, so cleanupStaleAnchors is skipped.
 	gw.discoveryErr = constants.ErrServiceUnavailable
 
 	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
@@ -1512,13 +1603,11 @@ func TestEnroll_StaleAnchorNotDetectedWhenDiscoveryFails(t *testing.T) {
 	assert.True(t, recorder.contains("could not reach the gateway discovery endpoint"),
 		"R5 warning must be printed when discovery is unreachable on the reuse path")
 
-	// ListStaleAnchors is called with the LOCAL fingerprint (the only one
-	// available when discovery fails). This means a stale OS anchor
-	// matching the local fingerprint would NOT be detected — the R5
-	// warning is the user's only signal that something may be wrong.
-	assert.Equal(t, 1, trust.staleListCalls)
-	assert.Equal(t, localFP, trust.lastStaleFingerprint,
-		"ListStaleAnchors should receive the local fingerprint when discovery is unreachable")
+	// ListStaleAnchors is NOT called — without the live fingerprint,
+	// cleanupStaleAnchors cannot determine which anchors are stale. The
+	// R5 warning is the user's only signal that something may be wrong.
+	assert.Equal(t, 0, trust.staleListCalls,
+		"ListStaleAnchors should NOT be called when discovery is unreachable")
 
 	// Passkey should still run (best-effort, user may be intentionally offline).
 	assert.Equal(t, 1, passkey.calls)
@@ -1539,6 +1628,9 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	newFP := "new-live-fp"
 	gw.discoveryFingerprint = newFP
 	gw.discoveryBundlePEM = []byte("live-bundle-new-fp")
+
+	// Gateway is bootstrapped — recovery is the correct path for a stale bundle.
+	gw.bootstrapped = true
 
 	// The OS store has the OLD root anchor — it should be detected as stale.
 	trust.staleAnchors = []platform.StaleAnchor{
@@ -1582,6 +1674,63 @@ func TestEnroll_ReusedIdentity_StaleBundle_DetectsStaleOSAnchors(t *testing.T) {
 	assert.True(t, recorder.contains("does not match the live gateway"))
 }
 
+// TestEnroll_ReusedIdentity_StaleBundle_UnbootstrappedGateway_Bootstraps is
+// the regression test for the brand-new-gateway 403 bug. When the local CLI
+// has a complete identity with a stale trust bundle (left over from a
+// previous gateway CA) but the live gateway is NOT bootstrapped (no users yet
+// — a fresh `docker compose up`), the coordinator must NOT route through
+// recovery. The recovery endpoint returns 403 on an unbootstrapped gateway, so
+// recovery is impossible. Instead, the coordinator must bootstrap, creating
+// the first owner just like an absent identity on a fresh gateway.
+func TestEnroll_ReusedIdentity_StaleBundle_UnbootstrappedGateway_Bootstraps(t *testing.T) {
+	t.Parallel()
+	coord, gw, keys, trust, browser, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	// Write a complete identity with a known bundle root fingerprint.
+	writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+
+	// Inject a MISMATCHING live fingerprint — simulates a fresh gateway
+	// with a brand-new CA (e.g. `docker compose down -v && docker compose up`).
+	gw.discoveryFingerprint = "different-live-fp"
+	gw.discoveryBundlePEM = []byte("live-bundle")
+
+	// Gateway is NOT bootstrapped — no users exist yet. Recovery would 403.
+	gw.bootstrapped = false
+	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
+	gw.bootstrapArtifacts = artifacts
+	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+
+	// Use a bounded context so the test fails fast on the buggy code
+	// (which routes to recovery and polls forever since the mock returns
+	// pending). On the fixed code, bootstrap completes immediately.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := coord.Enroll(ctx, EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, EnrollmentSourceBootstrap, result.Source)
+	assert.False(t, result.Reused, "must NOT reuse when bundle is stale")
+
+	// Bootstrap should be called, not recovery.
+	assert.Equal(t, 1, gw.bootstrapCalls, "bootstrap should be called on an unbootstrapped gateway")
+	assert.Equal(t, 0, gw.recoveryRequestCalls, "recovery must NOT be called — gateway is not bootstrapped (would 403)")
+	assert.Equal(t, 0, gw.recoveryCompleteCalls)
+	assert.Equal(t, 0, gw.rotateCalls)
+
+	// Browser should NOT open — bootstrap does not require human approval.
+	assert.Equal(t, 0, browser.calls, "bootstrap does not open a browser for approval")
+
+	// System trust should be installed (new root CA from the fresh gateway).
+	assert.Equal(t, 1, trust.isTrustedCalls)
+	assert.Equal(t, 1, trust.installCalls)
+
+	// Passkey ceremony should run (first owner registration).
+	assert.Equal(t, 1, passkey.calls)
+
+	assert.True(t, recorder.contains("does not match the live gateway"))
+	assert.True(t, recorder.contains("bootstrap"))
+}
+
 // TestEnroll_NoSystemTrust_StillRunsStaleDetection verifies that
 // --no-system-trust still runs stale-anchor detection (ListStaleAnchors +
 // RemoveStaleAnchors) but skips IsTrusted + InstallRoot. This is the C4
@@ -1592,9 +1741,10 @@ func TestEnroll_NoSystemTrust_StillRunsStaleDetection(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1634,7 +1784,7 @@ func TestEnroll_Bootstrap_DiscoveryMatchesArtifacts(t *testing.T) {
 	coord, gw, keys, trust, _, _, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 
@@ -1667,7 +1817,7 @@ func TestEnroll_BrowserRestartGate_Continue_ProceedsToPasskey(t *testing.T) {
 	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	// IsTrusted returns false (default), InstallRoot succeeds (default) →
@@ -1697,7 +1847,7 @@ func TestEnroll_BrowserRestartGate_Decline_AbortsBeforePasskey(t *testing.T) {
 	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	// IsTrusted returns false (default), InstallRoot succeeds (default) →
@@ -1721,7 +1871,7 @@ func TestEnroll_NoBrowserRestartPrompt_WhenTrustUnchanged(t *testing.T) {
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	trust.isTrusted = true // root already trusted → browserRestartNeeded=false
@@ -1749,7 +1899,7 @@ func TestEnroll_NoBrowserRestartPrompt_WhenSkipPasskey(t *testing.T) {
 	coord, gw, keys, _, _, passkey, recorder, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
 	// IsTrusted returns false (default), InstallRoot succeeds (default) →
@@ -1779,9 +1929,10 @@ func TestEnroll_NoBrowserRestartPrompt_WhenNoSystemTrustAndNoStaleAnchors(t *tes
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = nil // no stale anchors → browserRestartNeeded=false
 
 	continueCalled := false
@@ -1807,9 +1958,10 @@ func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *
 	coord, gw, keys, trust, _, passkey, _, _, _ := setupCoordinatorTest(t)
 
 	artifacts := buildTestArtifacts(t, EnrollmentSourceBootstrap)
-	gw.bootstrapStatus = false
+	gw.bootstrapped = false
 	gw.bootstrapArtifacts = artifacts
 	keys.csr, keys.key = "test-csr", artifacts.CLIKey
+	gw.discoveryFingerprint = "test-live-fp"
 	trust.staleAnchors = []platform.StaleAnchor{
 		{Fingerprint: "stale-fp-1", CommonName: constants.RootCACommonName, Handle: "/path/stale1"},
 	}
@@ -1836,4 +1988,117 @@ func TestEnroll_BrowserRestartPrompt_WhenNoSystemTrustButStaleAnchorsRemoved(t *
 
 func pemEncode(blockType string, der []byte) string {
 	return string(pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}))
+}
+
+// --- E.3: CLI session probe on the reuse path ---
+
+// TestEnroll_ReusedIdentity_HealthyProbe_ProceedsWithReuse verifies that
+// when the session probe returns nil (session is healthy), the coordinator
+// proceeds with reuse as before — prints "Reusing existing CLI identity"
+// and runs the passkey ceremony. The probe is called exactly once.
+func TestEnroll_ReusedIdentity_HealthyProbe_ProceedsWithReuse(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	// probeErr is nil (zero value) — session is healthy.
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused)
+	assert.Equal(t, 1, gw.probeCalls, "probe should be called exactly once on the reuse path")
+	assert.True(t, recorder.contains("Reusing existing CLI identity"), "should print reuse message")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_ReusedIdentity_ExpiredSession_PrintsActionableMessageAndExits
+// verifies that when the session probe returns ErrCLISessionExpired, the
+// coordinator prints an actionable message pointing to 'auth refresh' and
+// returns ErrCLISessionRefreshRequired — it does NOT proceed with reuse or
+// run the passkey ceremony.
+func TestEnroll_ReusedIdentity_ExpiredSession_PrintsActionableMessageAndExits(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = constants.ErrCLISessionExpired
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	assert.ErrorIs(t, err, constants.ErrCLISessionExpired)
+	assert.Equal(t, 1, gw.probeCalls, "probe should be called exactly once")
+	assert.False(t, recorder.contains("Reusing existing CLI identity"), "should NOT print reuse message on expired session")
+	assert.True(t, recorder.contains("auth refresh"), "should print actionable 'auth refresh' message")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on expired session")
+}
+
+// TestEnroll_ReusedIdentity_InvalidSession_PrintsActionableMessageAndExits
+// verifies that when the session probe returns ErrCLISessionInvalid (e.g.,
+// gateway volume reset wiped CLI sessions), the coordinator prints an
+// actionable message pointing to 'auth refresh' and returns
+// ErrCLISessionRefreshRequired.
+func TestEnroll_ReusedIdentity_InvalidSession_PrintsActionableMessageAndExits(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = constants.ErrCLISessionInvalid
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.Error(t, err)
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, constants.ErrCLISessionRefreshRequired)
+	assert.ErrorIs(t, err, constants.ErrCLISessionInvalid)
+	assert.True(t, recorder.contains("auth refresh"), "should print actionable 'auth refresh' message")
+	assert.Equal(t, 0, passkey.calls, "passkey ceremony should NOT run on invalid session")
+}
+
+// TestEnroll_ReusedIdentity_ProbeNetworkError_WarnsAndProceeds verifies
+// that when the session probe fails with a network error (not an expired/
+// invalid session), the coordinator prints a warning and proceeds with
+// reuse — the user may be intentionally offline or the gateway may have
+// restarted between discovery and probe.
+func TestEnroll_ReusedIdentity_ProbeNetworkError_WarnsAndProceeds(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, recorder, fileSvc, cfg := setupCoordinatorTest(t)
+
+	_, _, bundleFP, liveBundlePEM := writeCompleteIdentityWithBundleFP(t, fileSvc, cfg, time.Now().Add(365*24*time.Hour))
+	gw.discoveryFingerprint = bundleFP
+	gw.discoveryBundlePEM = []byte(liveBundlePEM)
+	gw.probeErr = fmt.Errorf("%w: connection refused", constants.ErrHTTPRequestExecuteFailed)
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse on probe network error")
+	assert.True(t, recorder.contains("could not verify CLI session validity"), "should print probe-failure warning")
+	assert.True(t, recorder.contains("Reusing existing CLI identity"), "should still print reuse message")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
+}
+
+// TestEnroll_ReusedIdentity_DiscoveryUnreachable_ProbeNotCalled verifies
+// that when discovery is unreachable, the probe is NOT called — the
+// coordinator skips the probe and proceeds with reuse as before.
+func TestEnroll_ReusedIdentity_DiscoveryUnreachable_ProbeNotCalled(t *testing.T) {
+	t.Parallel()
+	coord, gw, _, _, _, passkey, _, fileSvc, cfg := setupCoordinatorTest(t)
+
+	writeCompleteIdentity(t, fileSvc, cfg)
+	gw.discoveryErr = constants.ErrServiceUnavailable
+	// probeErr is set to an expired error, but the probe should NOT be
+	// called, so this should not affect the outcome.
+	gw.probeErr = constants.ErrCLISessionExpired
+
+	result, err := coord.Enroll(context.Background(), EnrollmentOptions{})
+	require.NoError(t, err)
+	assert.True(t, result.Reused, "should proceed with reuse when discovery is unreachable")
+	assert.Equal(t, 0, gw.probeCalls, "probe should NOT be called when discovery is unreachable")
+	assert.Equal(t, 1, passkey.calls, "passkey ceremony should run")
 }

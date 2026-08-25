@@ -52,8 +52,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.sessionController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
-	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// CLI recovery flow — request/status/complete are public (token-scoped);
@@ -65,11 +63,28 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryApproveCLI, h.cliRecoveryController.handleRecoveryApproveCLI)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
 
+	// Platform enrollment flow — request/status/complete are public
+	// (token-scoped, like CLI recovery); pending and decision require
+	// owner authentication (web session or mTLS CLI via RouteAuthDual).
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, h.platformEnrollmentController.handlePlatformEnrollmentRequest)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentPending, h.platformEnrollmentController.handlePlatformEnrollmentPending)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentDecision, h.platformEnrollmentController.handlePlatformEnrollmentDecision)
+
 	// CLI rotation — mTLS-protected; the caller's identity is derived from
 	// the verified CLI certificate. NOT registered on buildHTTPRouter
 	// (plain HTTP) because rotation requires mTLS, which the plain router
 	// does not provide.
 	mux.HandleFunc(constants.APIPaths.AuthCLIRotate, h.cliRotationController.handleRotate)
+
+	// CLI session refresh — mTLS-protected; the caller's identity is
+	// derived from the verified CLI certificate. The cert is the proof of
+	// identity; the session may be expired or missing (the condition being
+	// recovered from). NOT registered on buildHTTPRouter (plain HTTP)
+	// because refresh requires mTLS, which the plain router does not
+	// provide.
+	mux.HandleFunc(constants.APIPaths.AuthCLIRefresh, h.cliRefreshController.handleRefresh)
 
 	// Enrollment token validation (public — the token itself is the credential)
 	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.enrollmentTokenController.handleEnrollmentTokenValidate)
@@ -84,7 +99,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// CLI-initiated enrollment: the enrollment token is the single
 	// authorization primitive. No enforceFirstCredentialOnly (the token
 	// already vouches for the user), no createUserOnBootstrap (the user
-	// exists — the CLI created it via `auth enroll`), no
+	// exists — the CLI created it via `auth enroll user`), no
 	// requireAuthenticatedUser (the token is the credential).
 	enrollmentRegisterCfg := passkeyHandlerConfig{source: sourceEnrollmentToken, requireEnrollmentToken: true, createWebSession: true, setCookie: true}
 
@@ -228,9 +243,6 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.bootstrapController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.bootstrapController.handleBootstrapStatus)
-	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.bootstrapController.handleDeviceEnrollment)
-	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
-	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 
@@ -241,6 +253,16 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryRequest, h.cliRecoveryController.handleRecoveryRequest)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryStatus, h.cliRecoveryController.handleRecoveryStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIRecoveryComplete, h.cliRecoveryController.handleRecoveryComplete)
+
+	// Platform enrollment discovery surface — request/status/complete are
+	// reachable over plain HTTP so an unenrolled workload (dashboard,
+	// ensemble, operator) without a client certificate can initiate
+	// enrollment. pending and decision are intentionally NOT registered
+	// here: they require owner authentication (web session or mTLS),
+	// which is only available over HTTPS.
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentRequest, h.platformEnrollmentController.handlePlatformEnrollmentRequest)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentStatus, h.platformEnrollmentController.handlePlatformEnrollmentStatus)
+	mux.HandleFunc(constants.APIPaths.AuthPlatformEnrollmentComplete, h.platformEnrollmentController.handlePlatformEnrollmentComplete)
 
 	mux.HandleFunc("/.well-known/g8e/bin/", h.pkiController.handleNodeBinaryDownload)
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)

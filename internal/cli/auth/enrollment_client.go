@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/certs"
@@ -56,7 +57,7 @@ type EnrollmentClient struct {
 }
 
 // NewEnrollmentClient returns an enrollment client using a plain HTTP
-// client (no mTLS) for bootstrap, recovery, and remote operator/device
+// client (no mTLS) for bootstrap, recovery, and remote operator
 // enrollment. The CLI rotation method builds its own mTLS client from the
 // local identity via BuildMTLSClient.
 //
@@ -300,100 +301,97 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 	return artifacts, nil
 }
 
-// EnrollRemoteOperator performs remote operator/device enrollment
-// (POST /api/v1/auth/device/enroll over plain HTTP). This is the
-// headless path used by `security pki enroll`; it is NOT a local human
-// enrollment and must not trigger OS trust installation or passkey
-// registration.
+// Refresh performs the mTLS CLI session refresh
+// (POST /api/v1/auth/cli/refresh over the public HTTPS surface). The
+// caller's existing CLI cert is used to build the mTLS client; the
+// gateway derives the user from the authenticated certificate context.
+// The request body is empty — the cert is the proof of identity. A new
+// CLI session is issued bound to the same user, with a fresh TTL. The
+// cert is NOT rotated.
 //
-// gatewayEndpoint is the host:port of the remote gateway. The caller
-// supplies the operator and CLI CSRs and their private keys for staging.
-func (c *EnrollmentClient) EnrollRemoteOperator(ctx context.Context, gatewayEndpoint, operatorCSR string, operatorKey *ecdsa.PrivateKey, cliCSR string, cliKey *ecdsa.PrivateKey, caFingerprint string) (EnrollmentArtifacts, error) {
-	systemFp, err := c.systemFingerprint()
+// This is the recovery path for an expired CLI session with a still-valid
+// cert. The caller must hold a valid (non-expired) cert; an expired cert
+// cannot authenticate via mTLS and must use the recovery flow instead.
+func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileService) (CLISessionRefresh, error) {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
 	if err != nil {
-		return EnrollmentArtifacts{}, err
+		return CLISessionRefresh{}, err
 	}
 
-	hostname, herr := osHostname()
-	if herr != nil {
-		return EnrollmentArtifacts{}, fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, herr)
-	}
-
-	req := models.DeviceEnrollRequest{
-		CSR:               operatorCSR,
-		CLICSR:            cliCSR,
-		SystemFingerprint: systemFp,
-		Hostname:          hostname,
-	}
-
-	url := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPaths.AuthDeviceEnroll)
-
-	var resp models.DeviceEnrollmentResponse
-	if err := postJSON(ctx, c.httpClient, url, req, &resp); err != nil {
-		return EnrollmentArtifacts{}, err
+	publicURL := c.cfg.OperatorPublicURL()
+	var resp models.CLIRefreshResponse
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRefresh, models.CLIRefreshRequest{}, &resp); err != nil {
+		return CLISessionRefresh{}, err
 	}
 	if !resp.Success {
-		return EnrollmentArtifacts{}, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, resp.Error)
+		return CLISessionRefresh{}, fmt.Errorf("%w: refresh unsuccessful", constants.ErrCLIRefreshFailed)
 	}
-
-	artifacts := EnrollmentArtifacts{
-		Source:               EnrollmentSourceRemoteOperator,
-		CLISessionID:         resp.CLISessionID,
-		UserID:               resp.UserID,
-		OperatorSessionID:    resp.OperatorSessionID,
-		OperatorID:           resp.OperatorID,
-		CLICertPEM:           resp.CLICert,
-		CLICertChainPEM:      resp.CLICertChain,
-		CLIKey:               cliKey,
-		TrustBundlePEM:       resp.HubTrustBundle,
-		OperatorCertPEM:      resp.OperatorCert,
-		OperatorCertChainPEM: resp.OperatorCertChain,
+	if resp.CLISessionID == "" || resp.UserID == "" {
+		return CLISessionRefresh{}, constants.ErrMissingRequiredField
 	}
-	if operatorKey != nil {
-		artifacts.OperatorKeyPEM = encodePrivateKeyPEM(operatorKey)
-	}
-	// When a CLI CSR was supplied, validate the full local-CLI artifact set
-	// (session/user/cert/trust bundle/fingerprint/cert-key match). When the
-	// caller passed an empty CLI CSR (headless operator-only enrollment, e.g.
-	// `security pki enroll`), the gateway does not issue CLI credentials, so
-	// only the operator cert is required and the trust bundle/fingerprint pin
-	// are validated opportunistically when present.
-	if cliCSR != "" {
-		if err := validateLocalCLI(artifacts, caFingerprint); err != nil {
-			return EnrollmentArtifacts{}, err
-		}
-	} else {
-		if err := validateRemoteOperator(artifacts, caFingerprint); err != nil {
-			return EnrollmentArtifacts{}, err
-		}
-	}
-	return artifacts, nil
+	return CLISessionRefresh{
+		CLISessionID: resp.CLISessionID,
+		UserID:       resp.UserID,
+	}, nil
 }
 
-// validateRemoteOperator validates the operator-only enrollment artifact set
-// returned when EnrollRemoteOperator is called with an empty CLI CSR. The
-// operator certificate is required; the trust bundle and CA fingerprint pin
-// are validated only when both are present (the trust bundle is optional for
-// headless operator enrollment).
-func validateRemoteOperator(a EnrollmentArtifacts, caFingerprint string) error {
-	if a.OperatorCertPEM == "" {
-		return constants.ErrMissingCertificate
+// CLISessionRefresh is the result of a successful CLI session refresh.
+type CLISessionRefresh struct {
+	CLISessionID string
+	UserID       string
+}
+
+// ProbeCLISession issues a lightweight authenticated mTLS GET to
+// ApprovalsCLIList (/api/v1/approvals/pending) to determine whether the
+// local CLI session is still valid server-side. The coordinator calls
+// this on the complete-reuse path to detect an expired or invalidated
+// session before printing "Reusing existing CLI identity".
+//
+// Returns nil when the session is healthy (HTTP 200). Returns
+// constants.ErrCLISessionExpired or constants.ErrCLISessionInvalid when
+// the gateway rejects the session with 401. Returns a wrapped
+// constants.ErrHTTPRequestExecuteFailed on network failure.
+func (c *EnrollmentClient) ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error {
+	mtlsClient, err := BuildMTLSClient(fileSvc, c.cfg, httpTimeout)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
-	if a.TrustBundlePEM != "" && caFingerprint != "" {
-		bundle, err := ParseTrustBundle([]byte(a.TrustBundlePEM), time.Now())
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
-		}
-		if err := bundle.VerifyFingerprintPin(caFingerprint); err != nil {
-			return err
-		}
+
+	publicURL := c.cfg.OperatorPublicURL()
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL+constants.APIPaths.ApprovalsCLIList, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
-	return nil
+
+	resp, err := mtlsClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		respBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, readErr)
+		}
+		body := string(respBytes)
+		if strings.Contains(body, constants.ErrCLISessionExpired.Error()) {
+			return constants.ErrCLISessionExpired
+		}
+		if strings.Contains(body, constants.ErrCLISessionInvalid.Error()) {
+			return constants.ErrCLISessionInvalid
+		}
+		return constants.ErrCLISessionInvalid
+	}
+	return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 }
 
 // CheckBootstrapStatus reports whether the gateway has been bootstrapped
-// (has any users). Used by the coordinator to choose between bootstrap
-// and recovery for an absent local identity.
+// (started and at least one owner user exists). Used by the coordinator to
+// choose between bootstrap and recovery for an absent local identity.
 //
 // baseURL, when non-empty, overrides the discovery URL.
 func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL string) (bool, error) {
@@ -556,19 +554,6 @@ func parseCertPEMBytes(data []byte) (*x509.Certificate, error) {
 // osHostname wraps os.Hostname for testability.
 func osHostname() (string, error) {
 	return os.Hostname()
-}
-
-// encodePrivateKeyPEM marshals an EC private key to PEM (EC PRIVATE KEY).
-// Used by EnrollRemoteOperator to stage the operator key.
-func encodePrivateKeyPEM(key *ecdsa.PrivateKey) string {
-	if key == nil {
-		return ""
-	}
-	der, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return ""
-	}
-	return string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
 }
 
 // randReader returns the default crypto/rand reader for signature

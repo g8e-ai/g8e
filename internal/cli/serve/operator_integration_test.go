@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -298,6 +300,129 @@ func TestLoadClientCertPair_CertPEMMatchesFileContent(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// loadClientCertPairViaFileSvc — reads cert/key from the .g8e/ runtime tree
+// via RuntimeFileService with relative paths (as returned by the platform
+// enrollment client).
+// ---------------------------------------------------------------------------
+
+// generateTestKeyCertPairViaFileSvc creates a self-signed cert and matching
+// ECDSA private key in PEM format, writes them to the .g8e/ runtime tree via
+// fileSvc, and returns the relative paths (certRel, keyRel).
+func generateTestKeyCertPairViaFileSvc(t *testing.T, fileSvc fs.RuntimeFileService) (string, string) {
+	t.Helper()
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-client"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	keyDER, err := x509.MarshalECPrivateKey(privKey)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	certRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorCert)
+	keyRel := filepath.Join(constants.PkiDirname, constants.PkiFileOperatorKey)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), certRel, certPEM, constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel, keyPEM, constants.PermFilePrivate))
+	return certRel, keyRel
+}
+
+func TestLoadClientCertPairViaFileSvc_Success(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	certRel, keyRel := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	cert, certPEM, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, certRel, keyRel)
+	require.NoError(t, err)
+	assert.NotNil(t, cert.Certificate)
+	assert.NotEmpty(t, certPEM)
+	assert.Contains(t, string(certPEM), "BEGIN CERTIFICATE")
+}
+
+func TestLoadClientCertPairViaFileSvc_NonExistentCertFile(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	_, keyRel := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	_, _, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, filepath.Join(constants.PkiDirname, constants.TestNonExistentCrtFilename), keyRel)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrReadClientCert))
+}
+
+func TestLoadClientCertPairViaFileSvc_NonExistentKeyFile(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	certRel, _ := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	_, _, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, certRel, filepath.Join(constants.PkiDirname, constants.TestNonExistentKeyFilename))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrReadPrivateKey))
+}
+
+func TestLoadClientCertPairViaFileSvc_InvalidCertPEM(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	invalidCertRel := filepath.Join(constants.PkiDirname, constants.TestInvalidCrtFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), invalidCertRel, []byte("not a PEM file"), constants.PermFilePrivate))
+
+	_, keyRel := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	_, _, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, invalidCertRel, keyRel)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
+}
+
+func TestLoadClientCertPairViaFileSvc_InvalidKeyPEM(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	certRel, _ := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	invalidKeyRel := filepath.Join(constants.PkiDirname, constants.TestInvalidKeyFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), invalidKeyRel, []byte("not a PEM file"), constants.PermFilePrivate))
+
+	_, _, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, certRel, invalidKeyRel)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
+}
+
+func TestLoadClientCertPairViaFileSvc_MismatchedKeyCertPair(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	certRel1, _ := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	// Generate a second key/cert pair in a different fileSvc (different temp dir)
+	// and write the key to the first fileSvc under a different relative path.
+	fileSvc2 := newTestFileSvc(t)
+	_, keyRel2Abs := generateTestKeyCertPair(t)
+	keyContent, err := os.ReadFile(keyRel2Abs)
+	require.NoError(t, err)
+	keyRel2 := filepath.Join(constants.PkiDirname, constants.CliKeyFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), keyRel2, keyContent, constants.PermFilePrivate))
+	_ = fileSvc2 // keep linter happy
+
+	_, _, err = loadClientCertPairViaFileSvc(context.Background(), fileSvc, certRel1, keyRel2)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
+}
+
+func TestLoadClientCertPairViaFileSvc_CertPEMMatchesFileContent(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+	certRel, keyRel := generateTestKeyCertPairViaFileSvc(t, fileSvc)
+
+	expectedPEM, err := fileSvc.ReadFile(context.Background(), certRel)
+	require.NoError(t, err)
+
+	_, certPEM, err := loadClientCertPairViaFileSvc(context.Background(), fileSvc, certRel, keyRel)
+	require.NoError(t, err)
+	assert.Equal(t, expectedPEM, certPEM,
+		"returned certPEM bytes should exactly match the file content in the runtime tree")
+}
+
+// ---------------------------------------------------------------------------
 // resolveKeyPath / resolveCertPath — additional edge cases
 // ---------------------------------------------------------------------------
 
@@ -333,4 +458,45 @@ func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
 
 	result := resolveCertPath("", fileSvc, testLogger())
 	assert.Equal(t, fileSvc.Resolve(cliCertRel), result)
+}
+
+// ---------------------------------------------------------------------------
+// classifyConfigLoadError — integration with real config.Load
+// ---------------------------------------------------------------------------
+
+// TestClassifyConfigLoadError_RealConfigLoadNoPosture_Succeeds verifies that
+// the operator no longer requires config posture to start. config.Load with
+// an empty posture succeeds (the operator reads posture per-envelope from
+// GovernanceEnvelope.Posture at L4 verification time). classifyConfigLoadError
+// is never reached on this path.
+func TestClassifyConfigLoadError_RealConfigLoadNoPosture_Succeeds(t *testing.T) {
+	opts := ServeOperatorOptions{
+		Endpoint:   "127.0.0.1",
+		WorkingDir: t.TempDir(),
+	}
+	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
+	assert.Empty(t, loadOpts.Posture, "precondition: no posture supplied (operator reads posture per-envelope)")
+
+	cfg, err := config.Load(loadOpts)
+	require.NoError(t, err, "config.Load with empty posture should succeed (operator reads posture per-envelope)")
+	require.NotNil(t, cfg)
+	assert.Empty(t, cfg.Posture, "cfg.Posture should be empty when no posture was supplied")
+}
+
+// TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds verifies
+// the positive half: when a posture IS supplied (informational, e.g. from
+// reauth), config.Load succeeds and the posture is preserved on the config.
+func TestClassifyConfigLoadError_RealConfigLoadWithPosture_Succeeds(t *testing.T) {
+	opts := ServeOperatorOptions{
+		Endpoint:   "127.0.0.1",
+		WorkingDir: t.TempDir(),
+		Posture:    "doctrine",
+	}
+	loadOpts := buildOperatorLoadOptions(opts, resolveOperatorEndpoint(opts.Endpoint), opts.WorkingDir)
+	assert.NotEmpty(t, loadOpts.Posture, "precondition: posture supplied (informational)")
+
+	cfg, err := config.Load(loadOpts)
+	require.NoError(t, err, "config.Load with a posture should succeed")
+	require.NotNil(t, cfg)
+	assert.Equal(t, config.GatewayPosture("doctrine"), cfg.Posture)
 }

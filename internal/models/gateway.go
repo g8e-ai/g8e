@@ -145,6 +145,8 @@ type ActionReceiptRecord struct {
 	TransactionHash   string                     `json:"transaction_hash"`
 	OperatorID        string                     `json:"operator_id"`
 	OperatorSessionID string                     `json:"operator_session_id"`
+	RequestorUserID   string                     `json:"requestor_user_id"`
+	ActingAppID       string                     `json:"acting_app_id"`
 	ActionType        constants.ActionType       `json:"action_type"`
 	TargetResource    string                     `json:"target_resource"`
 	Status            operatorv1.ExecutionStatus `json:"status"`
@@ -224,24 +226,24 @@ type SSETruncationEvent struct {
 	Limit   int    `json:"limit"`
 }
 
-// SSEPushResponse is the typed response for POST /api/internal/sse/push.
+// SSEPushResponse is the typed response for POST /api/v1/sse/push.
 type SSEPushResponse struct {
 	Success   bool `json:"success"`
 	Delivered int  `json:"delivered"`
 }
 
-// SSEEventsResponse is the typed response for GET /api/internal/sse/events.
+// SSEEventsResponse is the typed response for GET /api/v1/sse/events.
 type SSEEventsResponse struct {
 	Events []SSEEventRow `json:"events"`
 	Count  int           `json:"count"`
 }
 
-// SSEEventsCountResponse is the typed response for GET /api/internal/sse/events/count.
+// SSEEventsCountResponse is the typed response for GET /api/v1/sse/events/count.
 type SSEEventsCountResponse struct {
 	Count int64 `json:"count"`
 }
 
-// SSEEventsWipeResponse is the typed response for DELETE /api/internal/sse/events.
+// SSEEventsWipeResponse is the typed response for DELETE /api/v1/sse/events.
 type SSEEventsWipeResponse struct {
 	Deleted int64 `json:"deleted"`
 }
@@ -295,7 +297,12 @@ type AuthLoginChallengeResponse struct {
 	Options *protocol.CredentialAssertion `json:"options,omitempty"`
 }
 
-// BootstrapStatusResponse is the typed response for GET /api/auth/bootstrap/status.
+// BootstrapStatusResponse is the typed response for GET /api/v1/auth/bootstrap/status.
+//
+// The gateway is bootstrapped when it has been started and at least one owner
+// user exists (HasAnyUsers). This is the decision signal the CLI coordinator
+// uses to choose between bootstrap (first `auth enroll user` creates the first
+// real user) and recovery (human-approved flow).
 type BootstrapStatusResponse struct {
 	Bootstrapped bool `json:"bootstrapped"`
 }
@@ -390,25 +397,6 @@ type CLIEnrollmentResponse struct {
 	UserID            string `json:"user_id"`
 	OperatorSessionID string `json:"operator_session_id,omitempty"`
 	OperatorID        string `json:"operator_id,omitempty"`
-}
-
-// DeviceEnrollmentResponse is the typed response for POST /api/auth/device/enroll.
-type DeviceEnrollmentResponse struct {
-	Success           bool   `json:"success"`
-	User              *User  `json:"user,omitempty"`
-	OperatorCert      string `json:"operator_cert"`
-	OperatorCertChain string `json:"operator_cert_chain"`
-	HubTrustBundle    string `json:"hub_trust_bundle"`
-	OperatorSessionID string `json:"operator_session_id"`
-	OperatorID        string `json:"operator_id"`
-	CLISessionID      string `json:"cli_session_id"`
-	CLICert           string `json:"cli_cert"`
-	CLICertChain      string `json:"cli_cert_chain"`
-	UserID            string `json:"user_id"`
-	Posture           string `json:"posture,omitempty"`
-	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
-	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
-	Error             string `json:"error,omitempty"`
 }
 
 // ActuatorPublicKeyExport is the typed JSON structure for exporting the Actuator's public key.

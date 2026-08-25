@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [g8e/common/v1/common.proto](#g8e_common_v1_common-proto)
+    - [CommandIntent](#g8e-common-v1-CommandIntent)
     - [GovernanceEnvelope](#g8e-common-v1-GovernanceEnvelope)
     - [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata)
     - [L1Metadata](#g8e-common-v1-L1Metadata)
@@ -11,8 +12,13 @@
     - [L2Vote](#g8e-common-v1-L2Vote)
     - [L3Metadata](#g8e-common-v1-L3Metadata)
     - [L3Proof](#g8e-common-v1-L3Proof)
+    - [PlatformEnrollmentCompletionTranscript](#g8e-common-v1-PlatformEnrollmentCompletionTranscript)
+    - [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints)
+    - [PlatformEnrollmentGovernancePayload](#g8e-common-v1-PlatformEnrollmentGovernancePayload)
   
     - [Component](#g8e-common-v1-Component)
+    - [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind)
+    - [PlatformEnrollmentDecision](#g8e-common-v1-PlatformEnrollmentDecision)
   
     - [File-level Extensions](#g8e_common_v1_common-proto-extensions)
   
@@ -24,6 +30,37 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## g8e/common/v1/common.proto
+
+
+
+<a name="g8e-common-v1-CommandIntent"></a>
+
+### CommandIntent
+CommandIntent is the pre-governance command intent published by an app
+workload (e.g. the ensemble) to a cmd:&lt;operator_id&gt;:&lt;operator_session_id&gt;
+channel. The gateway decodes it via protojson, validates the target
+operator session, fetches the current state Merkle root, and constructs
+the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
+commonv1 so all core transaction lifecycle models share one package.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| operator_id | [string](#string) |  | Identity &amp; routing |
+| operator_session_id | [string](#string) |  |  |
+| requestor_user_id | [string](#string) |  |  |
+| event_type | [string](#string) |  | Intent classification |
+| action_type | [string](#string) |  |  |
+| target_resource | [string](#string) |  |  |
+| payload | [bytes](#bytes) |  | Payload: serialized operator protobuf bytes (e.g., CommandRequested, FileEditRequested) |
+| case_id | [string](#string) |  | Application context |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| web_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+
+
+
 
 
 
@@ -62,6 +99,7 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | system_fingerprint | [string](#string) |  |  |
 | tenant_id | [string](#string) |  |  |
 | binding_persona | [string](#string) |  |  |
+| posture | [string](#string) |  | Gateway governance posture at envelope construction time (doctrine, consensus, notary). Set by the gateway; the operator reads it here at L4 verification time instead of from out-of-band config. Not included in the transaction hash — it is policy metadata, not intent. |
 
 
 
@@ -171,6 +209,74 @@ should be populated per instance.
 
 
 
+
+<a name="g8e-common-v1-PlatformEnrollmentCompletionTranscript"></a>
+
+### PlatformEnrollmentCompletionTranscript
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| protocol_version | [string](#string) |  |  |
+| request_id | [string](#string) |  |  |
+| token_hash | [string](#string) |  |  |
+| component_kind | [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind) |  |  |
+| instance_id | [string](#string) |  |  |
+| fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
+
+
+
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentFingerprints"></a>
+
+### PlatformEnrollmentFingerprints
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| app | [string](#string) |  |  |
+| operator | [string](#string) |  |  |
+| cli | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentGovernancePayload"></a>
+
+### PlatformEnrollmentGovernancePayload
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| action | [string](#string) |  |  |
+| intent | [string](#string) |  |  |
+| request_id | [string](#string) |  |  |
+| component_kind | [PlatformComponentKind](#g8e-common-v1-PlatformComponentKind) |  |  |
+| instance_id | [string](#string) |  |  |
+| actor_user_id | [string](#string) |  |  |
+| decision | [PlatformEnrollmentDecision](#g8e-common-v1-PlatformEnrollmentDecision) |  |  |
+| fingerprints | [PlatformEnrollmentFingerprints](#g8e-common-v1-PlatformEnrollmentFingerprints) |  |  |
+| target_collection | [string](#string) |  |  |
+| target_document_id | [string](#string) |  |  |
+| operator_id | [string](#string) |  | Public identifiers and attribution metadata carried forward between handlers. These are all public values (no credentials, token hashes, CSR PEM, or private keys); placing them in the audited payload keeps the handlers stateless with respect to each other. |
+| operator_session_id | [string](#string) |  |  |
+| cli_session_id | [string](#string) |  |  |
+| policy_id | [string](#string) |  |  |
+| certificate_serial | [string](#string) |  |  |
+| certificate_fingerprint | [string](#string) |  |  |
+| owner_user_id | [string](#string) |  |  |
+
+
+
+
+
  
 
 
@@ -185,6 +291,33 @@ Source component identifier
 | COMPONENT_AGENT | 1 |  |
 | COMPONENT_G8EO | 2 |  |
 | COMPONENT_CLIENT | 3 |  |
+
+
+
+<a name="g8e-common-v1-PlatformComponentKind"></a>
+
+### PlatformComponentKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PLATFORM_COMPONENT_KIND_UNSPECIFIED | 0 |  |
+| PLATFORM_COMPONENT_KIND_DASHBOARD | 1 |  |
+| PLATFORM_COMPONENT_KIND_ENSEMBLE | 2 |  |
+| PLATFORM_COMPONENT_KIND_OPERATOR | 3 |  |
+
+
+
+<a name="g8e-common-v1-PlatformEnrollmentDecision"></a>
+
+### PlatformEnrollmentDecision
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED | 0 |  |
+| PLATFORM_ENROLLMENT_DECISION_APPROVE | 1 |  |
+| PLATFORM_ENROLLMENT_DECISION_DENY | 2 |  |
 
 
  

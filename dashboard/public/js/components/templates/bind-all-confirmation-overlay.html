@@ -1,0 +1,47 @@
+<div class="bind-all-overlay" id="bind-all-overlay">
+    <div class="bind-all-modal">
+        <div class="bind-all-header">
+            <div class="bind-all-header-content">
+                <span class="material-symbols-outlined bind-all-icon">link</span>
+                <div class="bind-all-title-section">
+                    <h3 class="bind-all-title">Bind All Active Operators</h3>
+                    <span class="bind-all-count" data-operator-count></span>
+                </div>
+            </div>
+            <button class="bind-all-close-btn" data-action="close">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <div class="bind-all-description">
+            The following active operators will be bound to your current web session. 
+            You will be able to interact with all of them through the chat interface.
+        </div>
+        
+        <div class="bind-all-operators-container">
+            <div class="bind-all-operators-header">
+                <span class="material-symbols-outlined">dns</span>
+                <span>Active Operators</span>
+            </div>
+            <div class="bind-all-operators-list" data-operators-list>
+                <!-- Operators will be dynamically inserted here -->
+            </div>
+        </div>
+        
+        <div class="bind-all-actions">
+            <button class="bind-all-action-btn cancel-btn" data-action="cancel">
+                <span class="material-symbols-outlined">cancel</span>
+                <span>Cancel</span>
+            </button>
+            <button class="bind-all-action-btn confirm-btn" data-action="confirm">
+                <span class="material-symbols-outlined">check_circle</span>
+                <span>Bind All</span>
+            </button>
+        </div>
+        
+        <div class="bind-all-processing initially-hidden" data-processing-indicator>
+            <div class="spinner"></div>
+            <span>Binding operators...</span>
+        </div>
+    </div>
+</div>

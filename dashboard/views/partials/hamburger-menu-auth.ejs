@@ -1,0 +1,27 @@
+<%# 
+  Authenticated user hamburger menu partial for chat/session pages
+  
+  Usage: include('partials/hamburger-menu-auth', { currentPage: 'chat' })
+  
+  Expects:
+    - currentPage: string (e.g., 'chat', 'audit', etc.)
+%>
+<%
+  const page = typeof currentPage !== 'undefined' ? currentPage : '';
+  const isActive = (pageName) => page === pageName ? 'active' : '';
+%>
+<!-- Authenticated User Hamburger Menu -->
+<div class="hamburger-menu nav-hamburger">
+    <button id="hamburger-btn" class="hamburger-btn" aria-label="Menu">
+        <span class="material-symbols-outlined">description</span>
+    </button>
+    <div id="hamburger-dropdown" class="hamburger-dropdown">
+        <a href="/" class="hamburger-menu-item <%= isActive('home') %>">Home</a>
+        <a href="/docs" class="hamburger-menu-item <%= isActive('docs') %>">Local Docs</a>
+        <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="hamburger-menu-item">GitHub</a>
+        <div class="hamburger-menu-divider"></div>
+        <button id="hamburger-theme-toggle" class="hamburger-menu-item hamburger-theme-toggle">
+            <span><%= theme === 'light' ? 'Go Dark' : 'Go Light' %></span>
+        </button>
+    </div>
+</div>

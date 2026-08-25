@@ -592,7 +592,7 @@ func TestPasskeyHandler_RegisterChallenge_CLIEnrollmentFlow(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler(rr, req)
 
-	// The user already exists (the CLI created it via `auth enroll`), so
+	// The user already exists (the CLI created it via `auth enroll user`), so
 	// HasAnyUsers() is true and the handler returns 400 user_id required.
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	var resp map[string]any

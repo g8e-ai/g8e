@@ -48,9 +48,8 @@ func TestL4Warden_ReplayStoreError_FailClosed(t *testing.T) {
 		&errorReplayStore{},
 		testutil.NewMockStateRootProvider("root-1"),
 		testutil.NewConfigurableMockL3Notary(true),
-		"notary",
 	)
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "notary")
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err == nil {
@@ -71,9 +70,8 @@ func TestL4Warden_StateRootProviderError_FailClosed(t *testing.T) {
 		testutil.NewStatefulMockReplayStore(),
 		&errorStateRootProvider{},
 		testutil.NewConfigurableMockL3Notary(true),
-		"notary",
 	)
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "notary")
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err == nil {
@@ -100,9 +98,8 @@ func TestL4Warden_PartialValidation_NonceNotLeaked(t *testing.T) {
 		replayStore,
 		testutil.NewMockStateRootProvider("wrong-root"),
 		testutil.NewConfigurableMockL3Notary(true),
-		"notary",
 	)
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "notary")
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if !errors.Is(err, ErrStateRootMismatch) {

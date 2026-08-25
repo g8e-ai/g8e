@@ -571,29 +571,6 @@
                 }
             }
         },
-        "/api/v1/pki/apps/enroll": {
-            "post": {
-                "description": "Enrolls an external app via PKI endpoint (identity-only enrollment)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "pki"
-                ],
-                "summary": "PKI app enrollment",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/gateway.AppEnrollResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/pki/certificates/revoke": {
             "post": {
                 "description": "Revokes a certificate by serial number (internal mTLS endpoint)",
@@ -1416,9 +1393,6 @@
             "properties": {
                 "id": {
                     "type": "string"
-                },
-                "is_bootstrap": {
-                    "type": "boolean"
                 },
                 "local_os_user": {
                     "$ref": "#/definitions/models.LocalOSUser"

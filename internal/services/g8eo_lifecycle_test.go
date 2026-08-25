@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Use of this source code is governed by the Business Source License
 // included in the LICENSE file.
@@ -31,7 +33,6 @@ import (
 )
 
 func TestG8eoService_Start_SuccessFlow(t *testing.T) {
-	t.Parallel()
 	// 1. Setup mock client server for bootstrap
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/operators/reauth" {

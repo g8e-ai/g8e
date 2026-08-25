@@ -38,14 +38,18 @@ var (
 	delegateAgent    = clientpkg.Persona{ID: "delegate-agent", UserAgent: "g8e-agent/1.x (delegated)"}
 )
 
-// withCLIIdentity returns a copy of base with the host CLI user_id and
-// cli_session_id from GovKit so the submit headers bind the suspended
-// transaction to the same identity as the browser approver.
+// withCLIIdentity returns a copy of base with the host CLI user_id,
+// cli_session_id, operator_id, and operator_session_id from GovKit so the
+// submit headers bind the suspended transaction to the same identity as the
+// browser approver and the auto-approver can construct bound_operators for
+// the approval respond POST.
 func withCLIIdentity(base clientpkg.Persona) clientpkg.Persona {
 	out := base
 	if kit != nil {
 		out.UserID = kit.UserID
 		out.CLISessionID = kit.CLISessionID
+		out.OperatorID = kit.OperatorID
+		out.OperatorSessionID = kit.OperatorSessionID
 	}
 	return out
 }

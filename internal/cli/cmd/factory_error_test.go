@@ -9,8 +9,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
-	"crypto/ecdsa"
 	"errors"
 	"testing"
 
@@ -53,6 +51,34 @@ func TestApproveRecoveryCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{"abc123"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestApprovePlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := approvePlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"req-001"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestPendingPlatformEnrollmentCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	cmd := pendingPlatformEnrollmentCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
@@ -413,10 +439,10 @@ func TestVaultImportCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 // --- Auth/enroll command (session 17) ---
 
-func TestEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+func TestEnrollUserCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 	stubCheckOperatorRunning := func(*config.Config) error { return nil }
-	cmd := enrollCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), stubCheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -456,35 +482,6 @@ func TestOperatorDeployCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 
 func TestSecurityValidateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd := securityValidateCmdWithConfig(failingFileSvcFactory(errFactory))
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
-func TestSecurityPKIEnrollCmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	_, cfg := newCmdTestEnv(t)
-	cmd := securityPKIEnrollCmdWithConfig(configLoaderFor(cfg), panickingRemoteOperatorEnrollerFactory(), failingFileSvcFactory(errFactory))
-	cmd.Flags().StringP("endpoint", "e", "localhost:8080", "Gateway endpoint")
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
-}
-
-// --- Test command (session 18) ---
-
-func TestTestE2ECmdWithConfig_FileSvcFactoryError(t *testing.T) {
-	_, cfg := newCmdTestEnv(t)
-	config.SetEndpointOverride("127.0.0.1:1")
-	defer config.SetEndpointOverride("")
-	cmd := testE2ECmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -544,17 +541,27 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
-// panickingRemoteOperatorEnrollerFactory returns a remoteOperatorEnroller
-// factory whose enroller panics if called. Used to assert that enrollment is
-// not attempted when an earlier dependency (e.g. fileSvcFactory) fails.
-func panickingRemoteOperatorEnrollerFactory() func(*config.Config) remoteOperatorEnroller {
-	return func(*config.Config) remoteOperatorEnroller {
-		return &panickingRemoteOperatorEnroller{}
-	}
-}
+// --- Docker start command (interactive walkthrough) ---
 
-type panickingRemoteOperatorEnroller struct{}
+func TestDockerStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+	writeRootCompose(t)
 
-func (p *panickingRemoteOperatorEnroller) EnrollRemoteOperator(_ context.Context, _, _ string, _ *ecdsa.PrivateKey, _ string, _ *ecdsa.PrivateKey, _ string) (auth.EnrollmentArtifacts, error) {
-	panic("enroll should not be called when fileSvcFactory fails")
+	stubCheckOperatorRunning := func(*config.Config) error { return nil }
+	cmd := dockerStartCmdWithConfig(
+		configLoaderFor(cfg),
+		failingFileSvcFactory(errFactory),
+		panickingClientFactory(),
+		stubCheckOperatorRunning,
+		panickingEnrollerFactory(),
+	)
+	cmd.Flags().Set("full", "true")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
 }

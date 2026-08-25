@@ -259,7 +259,7 @@ func (s *CredentialStore) Commit(ctx context.Context, staged *stagedIdentity) er
 			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 	} else {
-		// Remote operator/device enrollment: only the cert is staged (the
+		// Remote operator enrollment: only the cert is staged (the
 		// key was generated elsewhere). Write the cert + chain.
 		certContent := []byte(a.CLICertPEM)
 		if a.CLICertChainPEM != "" {

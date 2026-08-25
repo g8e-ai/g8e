@@ -124,4 +124,90 @@ message GovernanceEnvelope {
   string system_fingerprint = 18;
   string tenant_id = 23;
   string binding_persona = 24;
+
+  // Gateway governance posture at envelope construction time (doctrine,
+  // consensus, notary). Set by the gateway; the operator reads it here at
+  // L4 verification time instead of from out-of-band config. Not included
+  // in the transaction hash — it is policy metadata, not intent.
+  string posture = 27;
+}
+
+enum PlatformComponentKind {
+  PLATFORM_COMPONENT_KIND_UNSPECIFIED = 0;
+  PLATFORM_COMPONENT_KIND_DASHBOARD = 1;
+  PLATFORM_COMPONENT_KIND_ENSEMBLE = 2;
+  PLATFORM_COMPONENT_KIND_OPERATOR = 3;
+}
+
+enum PlatformEnrollmentDecision {
+  PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED = 0;
+  PLATFORM_ENROLLMENT_DECISION_APPROVE = 1;
+  PLATFORM_ENROLLMENT_DECISION_DENY = 2;
+}
+
+message PlatformEnrollmentFingerprints {
+  string app = 1;
+  string operator = 2;
+  string cli = 3;
+}
+
+message PlatformEnrollmentGovernancePayload {
+  string action = 1;
+  string intent = 2;
+  string request_id = 3;
+  PlatformComponentKind component_kind = 4;
+  string instance_id = 5;
+  string actor_user_id = 6;
+  PlatformEnrollmentDecision decision = 7;
+  PlatformEnrollmentFingerprints fingerprints = 8;
+  string target_collection = 9;
+  string target_document_id = 10;
+  // Public identifiers and attribution metadata carried forward between
+  // handlers. These are all public values (no credentials, token hashes,
+  // CSR PEM, or private keys); placing them in the audited payload keeps
+  // the handlers stateless with respect to each other.
+  string operator_id = 11;
+  string operator_session_id = 12;
+  string cli_session_id = 13;
+  string policy_id = 14;
+  string certificate_serial = 15;
+  string certificate_fingerprint = 16;
+  string owner_user_id = 17;
+}
+
+message PlatformEnrollmentCompletionTranscript {
+  string protocol_version = 1;
+  string request_id = 2;
+  string token_hash = 3;
+  PlatformComponentKind component_kind = 4;
+  string instance_id = 5;
+  PlatformEnrollmentFingerprints fingerprints = 6;
+}
+
+// CommandIntent is the pre-governance command intent published by an app
+// workload (e.g. the ensemble) to a cmd:<operator_id>:<operator_session_id>
+// channel. The gateway decodes it via protojson, validates the target
+// operator session, fetches the current state Merkle root, and constructs
+// the governed GovernanceEnvelope. Co-located with GovernanceEnvelope in
+// commonv1 so all core transaction lifecycle models share one package.
+message CommandIntent {
+  // Identity & routing
+  string operator_id = 1;
+  string operator_session_id = 2;
+  string requestor_user_id = 3;
+
+  // Intent classification
+  string event_type = 4;
+  string action_type = 5;
+  string target_resource = 6;
+
+  // Payload: serialized operator protobuf bytes (e.g., CommandRequested, FileEditRequested)
+  bytes payload = 7;
+
+  // Application context
+  string case_id = 8;
+  string investigation_id = 9;
+  string task_id = 10;
+  string web_session_id = 11;
+  string cli_session_id = 12;
 }

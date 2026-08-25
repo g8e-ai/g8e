@@ -76,12 +76,18 @@ type OperatorPubSubService struct {
 	reconnectBaseDelay time.Duration
 
 	// governance services
-	actuator    *governance.L5Actuator
-	l4warden    *governance.L4Warden
-	signerStore governance.SignerStore
+	actuator         *governance.L5Actuator
+	l4warden         *governance.L4Warden
+	signerStore      governance.SignerStore
+	governedDocStore governance.GovernedDocumentStore
 
 	// MCP gateway for protocol translation egress
 	mcpGateway *mcp.GatewayService
+
+	// platformEnrollment dispatches the five platform enrollment
+	// governance actions. Nil in outbound (operator) mode; the handlers
+	// are not registered when this is nil.
+	platformEnrollment *PlatformEnrollmentHandler
 }
 
 // GovernanceDeps holds the governance dependencies required for transaction
@@ -94,6 +100,7 @@ type GovernanceDeps struct {
 	ReplayStore          governance.ReplayStore
 	StateRootProvider    governance.StateRootProvider
 	TransactionAudit     governance.TransactionAuditStore
+	GovernedDocStore     governance.GovernedDocumentStore
 	L3Notary             governance.L3Notary
 	SignerStore          governance.SignerStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
@@ -176,6 +183,11 @@ type GatewayCommandServiceConfig struct {
 	L2ConsensusDeliberator  mcp.L2ConsensusDeliberator
 	EnvProcAdapter          *GatewayEnvProcAdapter
 	SessionValidatorAdapter *GatewaySessionValidatorAdapter
+	// PlatformEnrollmentDeps provides the gateway-side services required
+	// by the five platform enrollment governance handlers. Required in
+	// gateway mode; nil in outbound (operator) mode, where the handlers
+	// are never registered.
+	PlatformEnrollmentDeps *PlatformEnrollmentDeps
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -201,7 +213,6 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	rs.heartbeat = NewHeartbeatService(c.Config, c.Logger, &rs.wg)
 	rs.heartbeat.ctx = serviceCtx
 	rs.heartbeat.results = c.ResultsService
-	rs.heartbeat.SetActuator(rs.actuator)
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
@@ -233,6 +244,8 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 
 	rs.buildHandlers()
 
+	rs.governedDocStore = govDeps.GovernedDocStore
+
 	rs.signerStore = govDeps.SignerStore
 	if rs.signerStore == nil {
 		// Provide a fallback empty signer store instead of loading from filesystem.
@@ -255,6 +268,10 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	if err := rs.initializeGovernance(c, govDeps); err != nil {
 		return nil, err
 	}
+	// Wire the heartbeat service's actuator after initializeGovernance has
+	// constructed it. Calling SetActuator earlier passes nil and silently
+	// drops every automatic heartbeat (no audit record, no pub/sub publish).
+	rs.heartbeat.SetActuator(rs.actuator)
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
@@ -279,6 +296,15 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	}
 
 	rs.mcpGateway = c.MCPGateway
+
+	// Wire the platform enrollment handler when gateway-side dependencies
+	// are provided. The handler is constructed after the base service so
+	// it can share the logger. When PlatformEnrollmentDeps is nil the
+	// handlers are not registered and dispatch fails closed with
+	// ErrTxUnknownActionType.
+	if c.PlatformEnrollmentDeps != nil {
+		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.PlatformEnrollmentDeps, c.Logger)
+	}
 
 	// Wire the MCP gateway's runtime governance dependencies. This is the single
 	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
@@ -322,18 +348,22 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		KeyID:             c.ActuatorKeyID,
 	}
 
-	// Initialize TransactionVerifier for strict pre-dispatch verification
+	// Wire the ReceiptPublisher so the actuator publishes signed
+	// ActionReceipts to the gateway's receipts: channel after execution.
+	// PubSubResultsService implements governance.ReceiptPublisher via
+	// PublishActionReceipt. Nil is valid (gateway in-process operator path
+	// records receipts directly in the gateway's SQLAuditStore).
+	if c.ResultsService != nil {
+		if publisher, ok := c.ResultsService.(governance.ReceiptPublisher); ok {
+			rs.actuator.ReceiptPublisher = publisher
+		}
+	}
+
+	// Initialize TransactionVerifier for strict pre-dispatch verification.
+	// The warden has no posture of its own; it reads posture per-envelope
+	// from GovernanceEnvelope.Posture at verification time. The gateway
+	// sets that field at envelope construction from cfg.Gateway.Posture.
 	knownActionTypes := constants.AllActionTypes
-	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode.
-	// The operator has no posture of its own; Config.Posture is the gateway's
-	// posture received at enrollment. Fail closed when neither is set.
-	posture := string(c.Config.Gateway.Posture)
-	if posture == "" {
-		posture = string(c.Config.Posture)
-	}
-	if posture == "" {
-		return fmt.Errorf("pubsub_commands: %w", constants.ErrPostureRequired)
-	}
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
 		govDeps.ReplayStore,
@@ -343,7 +373,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		govDeps.L3Notary,
 		govDeps.Doctrine,
 		knownActionTypes,
-		posture,
 		nil, // Clock defaults to RealClock
 	)
 
@@ -394,9 +423,20 @@ func (rs *OperatorPubSubService) buildHandlers() {
 				rs.logger.Error("A2A call request handler failed", "error", err)
 			}
 		},
-		constants.EventAppInvestigationCreated: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleAppInvestigationCreatedSync(ctx, msg); err != nil {
-				rs.logger.Error("App investigation creation handler failed", "error", err)
+		// Governed document mutations dispatch through the canonical
+		// document-request events. MapActionTypeToEventType resolves both
+		// DOCUMENT_UPDATE and DOCUMENT_DELETE deterministically to these two
+		// events regardless of which app-level event (case/investigation/memory)
+		// originated the envelope, so a single handler per action type is
+		// sufficient and dispatch is stable across repeated calls.
+		constants.EventAppDocumentUpdateRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentUpdateSync(ctx, msg); err != nil {
+				rs.logger.Error("Document update handler failed", "error", err)
+			}
+		},
+		constants.EventAppDocumentDeleteRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
+			if _, err := rs.handleDocumentDeleteSync(ctx, msg); err != nil {
+				rs.logger.Error("Document delete handler failed", "error", err)
 			}
 		},
 	}
@@ -759,18 +799,53 @@ func (rs *OperatorPubSubService) HeartbeatService() *HeartbeatService {
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
 // This is called by Actuator to execute verified transactions, making Actuator the execution boundary.
 func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
-	handler, ok := rs.handlers[eventType]
-	if !ok {
-		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
-		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
-	}
-
 	pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "*PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
 		return "", fmt.Errorf("invalid cmdMsg type %T: %w", cmdMsg, constants.ErrTxPayloadDecodeFailed)
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
+
+	// Platform enrollment actions are synchronous: each handler performs a
+	// typed mutation and returns a receipt summary string for the L5
+	// actuator to stamp into the signed final receipt. These event types
+	// are not registered in the handlers map (they use a different
+	// signature), so they must be dispatched before the handler lookup.
+	// When platformEnrollment is nil (outbound/operator mode), dispatch
+	// fails closed with ErrTxUnknownActionType.
+	switch eventType {
+	case constants.EventPlatformEnrollmentCreateRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentDecideRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentIssueRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentPersistPolicyRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
+	case constants.EventPlatformEnrollmentCreateSessionRequested:
+		if rs.platformEnrollment == nil {
+			break
+		}
+		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
+	}
+
+	handler, ok := rs.handlers[eventType]
+	if !ok {
+		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
+		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
+	}
 
 	// Special case for EVAL_ANSWER which is synchronous and returns the answer as summary
 	if eventType == constants.Event.Operator.Eval.AnswerRequested {
@@ -825,8 +900,9 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}
-	// Bound the receipt summary to avoid unbounded growth on chatty tools.
-	if len(summary) > constants.ReceiptSummaryMaxBytes {
+	// Bound the receipt summary on external tools to avoid unbounded growth on chatty tools.
+	// Native tools return structured JSON payloads (e.g. audit queries) and must not be truncated.
+	if mcpReq.ToolName != "read_field" && !rs.mcpGateway.IsNativeTool(mcpReq.ToolName) && len(summary) > constants.ReceiptSummaryMaxBytes {
 		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 
@@ -875,22 +951,95 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 	return summary, nil
 }
 
-func (rs *OperatorPubSubService) handleAppInvestigationCreatedSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
-
-	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
-		return "", constants.ErrPubSubActuatorOrAuditStore
+// handleDocumentUpdateSync unmarshals a DocumentUpdateRequested payload from
+// the pub/sub message, converts the updates Struct to JSON, and persists the
+// document via GovernedDocumentStore. When merge is false, the document is
+// replaced (DocReplace); when merge is true, the fields are merged into the
+// existing document (DocMerge), preserving untouched fields. Fail-closed:
+// returns an error if the governed document store is missing (outbound mode),
+// if the payload fails to unmarshal, if the Struct-to-JSON conversion fails,
+// or if the document mutation fails.
+func (rs *OperatorPubSubService) handleDocumentUpdateSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.governedDocStore == nil {
+		return "", constants.ErrGovernedDocStoreNotConfigured
 	}
 
-	// DocSet expects collection, id, and data.
-	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
-	if err := rs.actuator.ConsoleAuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
-		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
-		return "", fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
+	var req operatorv1.DocumentUpdateRequested
+	if err := proto.Unmarshal(msg.Payload, &req); err != nil {
+		rs.logger.Error("Failed to unmarshal DocumentUpdateRequested", string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("pubsub: document update: unmarshal: %w", err)
 	}
 
-	rs.logger.Info("Investigation document created successfully", "investigation_id", msg.ID)
-	return "investigation created", nil
+	if req.Collection == "" || req.DocumentId == "" {
+		rs.logger.Error("DocumentUpdateRequested missing collection or document_id",
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document update: %w", constants.ErrTxPayloadMissing)
+	}
+
+	var data json.RawMessage
+	if req.Updates != nil {
+		jsonBytes, err := protojson.Marshal(req.Updates)
+		if err != nil {
+			rs.logger.Error("Failed to convert updates Struct to JSON", string(constants.ConnectionStateError), err)
+			return "", fmt.Errorf("pubsub: document update: struct to json: %w", err)
+		}
+		data = json.RawMessage(jsonBytes)
+	} else {
+		data = json.RawMessage(`{}`)
+	}
+
+	if req.Merge {
+		if err := rs.governedDocStore.DocMerge(req.Collection, req.DocumentId, data); err != nil {
+			rs.logger.Error("Failed to merge document update",
+				string(constants.ConnectionStateError), err,
+				"collection", req.Collection, "document_id", req.DocumentId)
+			return "", fmt.Errorf("pubsub: document update: doc merge: %w", err)
+		}
+	} else {
+		if err := rs.governedDocStore.DocReplace(req.Collection, req.DocumentId, data); err != nil {
+			rs.logger.Error("Failed to persist document update",
+				string(constants.ConnectionStateError), err,
+				"collection", req.Collection, "document_id", req.DocumentId)
+			return "", fmt.Errorf("pubsub: document update: doc replace: %w", err)
+		}
+	}
+
+	rs.logger.Info("Document update persisted",
+		"collection", req.Collection, "document_id", req.DocumentId, "merge", req.Merge)
+	return fmt.Sprintf("document updated: %s/%s", req.Collection, req.DocumentId), nil
+}
+
+// handleDocumentDeleteSync unmarshals a DocumentDeleteRequested payload from
+// the pub/sub message and removes the document via GovernedDocumentStore.
+// Fail-closed: returns an error if the governed document store is missing
+// (outbound mode), if the payload fails to unmarshal, or if DocDelete fails.
+func (rs *OperatorPubSubService) handleDocumentDeleteSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
+	if rs.governedDocStore == nil {
+		return "", constants.ErrGovernedDocStoreNotConfigured
+	}
+
+	var req operatorv1.DocumentDeleteRequested
+	if err := proto.Unmarshal(msg.Payload, &req); err != nil {
+		rs.logger.Error("Failed to unmarshal DocumentDeleteRequested", string(constants.ConnectionStateError), err)
+		return "", fmt.Errorf("pubsub: document delete: unmarshal: %w", err)
+	}
+
+	if req.Collection == "" || req.DocumentId == "" {
+		rs.logger.Error("DocumentDeleteRequested missing collection or document_id",
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document delete: %w", constants.ErrTxPayloadMissing)
+	}
+
+	if err := rs.governedDocStore.DocDelete(req.Collection, req.DocumentId); err != nil {
+		rs.logger.Error("Failed to delete document",
+			string(constants.ConnectionStateError), err,
+			"collection", req.Collection, "document_id", req.DocumentId)
+		return "", fmt.Errorf("pubsub: document delete: doc delete: %w", err)
+	}
+
+	rs.logger.Info("Document deleted",
+		"collection", req.Collection, "document_id", req.DocumentId)
+	return fmt.Sprintf("document deleted: %s/%s", req.Collection, req.DocumentId), nil
 }
 
 func (rs *OperatorPubSubService) handleShutdownRequest(msg *PubSubCommandMessage) {

@@ -16,8 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/fs"
 )
 
@@ -124,13 +126,25 @@ func TestDataUsersCmdWithConfig_ValidResponse(t *testing.T) {
 	assert.Equal(t, []string{"/api/users"}, client.getCalls)
 }
 
+// saveDataTestCredentials writes a Credentials with the given userID so that
+// dataOperatorsCmdWithConfig can load it for the user_id query parameter.
+func saveDataTestCredentials(t *testing.T, fileSvc fs.RuntimeFileService, cfg *config.Config, userID string) {
+	t.Helper()
+	creds := &auth.Credentials{UserID: userID, CLISessionID: "cli-sess-test"}
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
+}
+
 func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
 	env := newDataTestEnv(t)
+	saveDataTestCredentials(t, env.fileSvc, env.cfg, "user-001")
 
-	operators := []map[string]interface{}{
-		{"id": "op1", "cloud_subtype": "aws", "status": "active"},
+	slotResp := models.OperatorSlotResponse{
+		Success: true,
+		Operators: []models.OperatorDocumentGo{
+			{ID: "op1", CloudSubtype: "aws", Status: "active"},
+		},
 	}
-	opsJSON, _ := json.Marshal(operators)
+	opsJSON, _ := json.Marshal(slotResp)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: opsJSON}
@@ -143,11 +157,12 @@ func TestDataOperatorsCmdWithConfig_ValidResponse(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "Operators (1 total)")
 	assert.Contains(t, buf.String(), "op1")
-	assert.Equal(t, []string{"/api/operators"}, client.getCalls)
+	assert.Equal(t, []string{constants.APIPaths.Operators + "?user_id=user-001"}, client.getCalls)
 }
 
 func TestDataOperatorsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 	env := newDataTestEnv(t)
+	saveDataTestCredentials(t, env.fileSvc, env.cfg, "user-001")
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
 	client := &mockAPIClient{getResp: []byte("not json")}
@@ -159,6 +174,43 @@ func TestDataOperatorsCmdWithConfig_InvalidJSONResponse(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidJSONResponse)
+}
+
+func TestDataOperatorsCmdWithConfig_NotAuthenticatedWithoutCredentials(t *testing.T) {
+	env := newDataTestEnv(t)
+
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
+	client := &mockAPIClient{}
+	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	assert.Empty(t, client.getCalls, "client must not be called when credentials are missing")
+}
+
+func TestDataOperatorsCmdWithConfig_SendsUserIDQueryParameter(t *testing.T) {
+	env := newDataTestEnv(t)
+	saveDataTestCredentials(t, env.fileSvc, env.cfg, "user-distinct-456")
+
+	slotResp := models.OperatorSlotResponse{Success: true, Operators: []models.OperatorDocumentGo{}}
+	opsJSON, _ := json.Marshal(slotResp)
+
+	loader := func(string) (*config.Config, error) { return env.cfg, nil }
+	client := &mockAPIClient{getResp: opsJSON}
+	cmd := dataOperatorsCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+	require.Len(t, client.getCalls, 1)
+	assert.Contains(t, client.getCalls[0], "user_id=user-distinct-456")
+	assert.Equal(t, constants.APIPaths.Operators+"?user_id=user-distinct-456", client.getCalls[0])
 }
 
 func TestDataSettingsCmdWithConfig_ValidResponse(t *testing.T) {

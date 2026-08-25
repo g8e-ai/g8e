@@ -198,7 +198,7 @@ func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error
 }
 
 func (s *dbSessionStore) DeleteSession(userID string) error {
-	_, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	return err
 }
 
@@ -320,6 +320,15 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 		orchestrator:       deps.Orchestrator,
 		crossOrigin:        deps.CrossOrigin,
 	}
+}
+
+// MaxPayloadBytes returns the configured maximum request payload size in
+// bytes. A zero value causes http.MaxBytesReader to reject every body on the
+// first read, breaking all body-reading passkey endpoints (register/auth
+// challenge and verify). Production wiring must set this to a non-zero value
+// (typically cfg.Gateway.MaxPayloadBytes).
+func (h *PasskeyHandler) MaxPayloadBytes() int64 {
+	return h.maxPayload
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.

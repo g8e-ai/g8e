@@ -199,6 +199,16 @@ func TestSignerStoreService_GetTrustedSigner(t *testing.T) {
 		assert.Nil(t, retrieved)
 	})
 
+	t.Run("GetTrustedSigner decodes hex public key when not in document store", func(t *testing.T) {
+		svc := setupSignerStore(t)
+		pubKey := generateTestPublicKey(t)
+		keyHex := hex.EncodeToString(pubKey)
+
+		retrieved, err := svc.GetTrustedSigner(keyHex)
+		assert.NoError(t, err)
+		assert.Equal(t, pubKey, retrieved)
+	})
+
 	t.Run("GetTrustedSigner handles invalid hex public key", func(t *testing.T) {
 		// This test would require direct DB manipulation to insert invalid hex data
 		// Since we can't insert invalid data through AddTrustedSigner,

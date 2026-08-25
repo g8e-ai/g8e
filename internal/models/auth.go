@@ -45,14 +45,6 @@ type CLIEnrollRequest struct {
 	LocalOSUser       *LocalOSUser `json:"local_os_user,omitempty"`
 }
 
-// DeviceEnrollRequest is the inbound body for /api/v1/auth/device/enroll.
-type DeviceEnrollRequest struct {
-	CSR               string `json:"csr_pem"`
-	CLICSR            string `json:"cli_csr_pem,omitempty"`
-	SystemFingerprint string `json:"system_fingerprint"`
-	Hostname          string `json:"hostname"`
-}
-
 // AppEnrollRequest is the request body for external app enrollment via /api/v1/pki/apps/delegated.
 type AppEnrollRequest struct {
 	CSR            string `json:"csr_pem"`
@@ -427,11 +419,10 @@ type LocalOSUser struct {
 // Email and name are NOT stored - users are identified solely by their
 // cryptographic credentials.
 //
-// IsBootstrap identifies the ephemeral local-owner identity created by
-// `./g8e gw start -a` over loopback. It is *not* a privilege tier - it
-// marks an identity that exists purely to make a fresh local install usable
-// without ceremony, and that is retired automatically the first time a real
-// mTLS login completes.
+// The first user created via `auth enroll user` (POST /api/v1/auth/bootstrap)
+// is the gateway owner and admin. Admin authorization is enforced via
+// UserService.IsFirstUser (the first human enrollee is the admin); there is
+// no ephemeral bootstrap-user concept.
 type User struct {
 	ID                 string              `json:"id"`
 	PasskeyCredentials []PasskeyCredential `json:"passkey_credentials,omitempty"`
@@ -440,8 +431,7 @@ type User struct {
 	OrganizationID string   `json:"organization_id,omitempty"`
 	Roles          []string `json:"roles,omitempty"`
 
-	Status      constants.UserStatus `json:"status,omitempty"`
-	IsBootstrap bool                 `json:"is_bootstrap,omitempty"`
+	Status constants.UserStatus `json:"status,omitempty"`
 
 	LocalOSUser    *LocalOSUser `json:"local_os_user,omitempty"`
 	WebAuthnUserID string       `json:"webauthn_user_id,omitempty"` // GUID for WebAuthn v4 compliance (Windows Hello)
@@ -492,15 +482,20 @@ type TrustedSigner struct {
 // AppPolicy defines the authorization rules for an external application identity.
 // Under the Phase 1 fail-closed model, any app lacking an active policy gets deny-all.
 type AppPolicy struct {
-	AppID              string    `json:"app_id"`
-	AllowedCollections []string  `json:"allowed_collections"`
-	AllowedEventTypes  []string  `json:"allowed_event_types"`
-	AllowedIntents     []string  `json:"allowed_intents"`
-	RateLimitRPS       int       `json:"rate_limit_rps"`
-	MaxPayloadBytes    int64     `json:"max_payload_bytes"`
-	RequireL3Approval  bool      `json:"require_l3_approval"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	AppID                  string    `json:"app_id"`
+	OwnerUserID            string    `json:"owner_user_id,omitempty"`
+	ApprovedByUserID       string    `json:"approved_by_user_id,omitempty"`
+	EnrollmentRequestID    string    `json:"enrollment_request_id,omitempty"`
+	CertificateSerial      string    `json:"certificate_serial,omitempty"`
+	CertificateFingerprint string    `json:"certificate_fingerprint,omitempty"`
+	AllowedCollections     []string  `json:"allowed_collections"`
+	AllowedEventTypes      []string  `json:"allowed_event_types"`
+	AllowedIntents         []string  `json:"allowed_intents"`
+	RateLimitRPS           int       `json:"rate_limit_rps"`
+	MaxPayloadBytes        int64     `json:"max_payload_bytes"`
+	RequireL3Approval      bool      `json:"require_l3_approval"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // Persona defines a declarative persona manifest for role-based access control.
@@ -644,4 +639,20 @@ type CLIRotationResponse struct {
 	CLICertChain   string `json:"cli_cert_chain"`
 	HubTrustBundle string `json:"hub_trust_bundle"`
 	UserID         string `json:"user_id"`
+}
+
+// CLIRefreshRequest is the wire request for POST /api/v1/auth/cli/refresh.
+// This is an mTLS-protected endpoint; the current user and CLI session are
+// derived from the authenticated certificate context. The request body is
+// empty — the cert is the proof of identity. A new CLI session is issued
+// bound to the same user, with a fresh TTL. The cert itself is NOT rotated;
+// the caller continues to use the same cert. This is the recovery path for
+// an expired CLI session with a still-valid cert.
+type CLIRefreshRequest struct{}
+
+// CLIRefreshResponse is the wire response for POST /api/v1/auth/cli/refresh.
+type CLIRefreshResponse struct {
+	Success      bool   `json:"success"`
+	CLISessionID string `json:"cli_session_id"`
+	UserID       string `json:"user_id"`
 }

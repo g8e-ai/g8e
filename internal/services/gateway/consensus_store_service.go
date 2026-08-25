@@ -190,7 +190,7 @@ func (s *ConsensusStoreService) ListConsensus() ([]models.ConsensusPolicy, error
 
 // DeleteConsensus removes a ConsensusPolicy from the database.
 func (s *ConsensusStoreService) DeleteConsensus(id string) (bool, error) {
-	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionConsensus), id)
+	return s.docSvc.DocDeleteWithResult(marshaler.CollectionName(constants.CollectionConsensus), id)
 }
 
 // isValidConsensusID validates that a consensus ID contains only allowed characters.

@@ -1,0 +1,96 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""
+Contract test enforcing that all command request payload types are present
+in the G8eOutboundPayload discriminated union.
+
+This prevents regressions like the one in April 2026 where CheckPortRequestPayload
+was missing from the outbound union, forcing port-check to go through MCP wrapping
+instead of using native event types.
+"""
+
+from typing import get_args
+
+from app.models.command_request_payloads import (
+    CheckPortRequestPayload,
+    CommandCancelRequestPayload,
+    CommandRequestPayload,
+    DirectCommandAuditRequestPayload,
+    DocumentDeleteRequestPayload,
+    DocumentUpdateRequestPayload,
+    FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchLogsRequestPayload,
+    FileEditRequestPayload,
+    FsGrepRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    HeartbeatRequestPayload,
+    RestoreFileRequestPayload,
+)
+from app.models.pubsub_messages import G8eOutboundPayload
+
+
+class TestOutboundPayloadUnionContract:
+    """Verify all command request payloads are present in G8eOutboundPayload union."""
+
+    def test_all_command_request_payloads_in_outbound_union(self):
+        """Every command request payload type must be present in G8eOutboundPayload.
+
+        This contract test prevents regressions where a new payload type is added
+        to command_request_payloads.py but forgotten in the G8eOutboundPayload union,
+        which would force that operation to go through MCP wrapping instead of using
+        native event types.
+
+        Regression history: April 2026 - CheckPortRequestPayload was missing from
+        G8eOutboundPayload, causing port-check to incorrectly route through MCP.
+        """
+        # All command request payload types that should be in the outbound union
+        command_payloads = {
+            CommandRequestPayload,
+            CommandCancelRequestPayload,
+            FileEditRequestPayload,
+            FsListRequestPayload,
+            FsReadRequestPayload,
+            FsGrepRequestPayload,
+            FetchLogsRequestPayload,
+            FetchHistoryRequestPayload,
+            FetchFileHistoryRequestPayload,
+            FetchFileDiffRequestPayload,
+            CheckPortRequestPayload,
+            RestoreFileRequestPayload,
+            DirectCommandAuditRequestPayload,
+            HeartbeatRequestPayload,
+            DocumentUpdateRequestPayload,
+            DocumentDeleteRequestPayload,
+        }
+
+        # Get all types in the G8eOutboundPayload Union
+        outbound_union_types = set(get_args(G8eOutboundPayload))
+
+        # Check that every command payload is present
+        missing_payloads = []
+        for payload_type in command_payloads:
+            if payload_type not in outbound_union_types:
+                missing_payloads.append(payload_type.__name__)
+
+        assert not missing_payloads, (
+            f"The following command request payload types are missing from G8eOutboundPayload: {missing_payloads}. "
+            "Add them to the Union in app/models/pubsub_messages.py to ensure they can be dispatched "
+            "using native g8e event types instead of being forced through MCP wrapping."
+        )
+
+        # Also verify there are no extra types in the union that shouldn't be there
+        extra_types = outbound_union_types - command_payloads
+        assert not extra_types, (
+            f"G8eOutboundPayload contains unexpected types: {[t.__name__ for t in extra_types]}. "
+            "If these are legitimate command payloads, add them to the command_payloads set above. "
+            "If they are MCP types (e.g., JSONRPCRequest), remove them from the union in pubsub_messages.py "
+            "since MCP is a gateway-only concern and must not appear in the operator command channel union."
+        )

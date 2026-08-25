@@ -33,7 +33,7 @@ const (
 	sessionBindSuffix         = ":bind"
 )
 
-// RegistrationService handles Gateway-native device enrollment via CSR-based authentication.
+// RegistrationService handles Gateway-native operator enrollment via CSR-based authentication.
 type RegistrationService struct {
 	docStore           *DocumentStoreService
 	kvStore            *KVStoreService
@@ -90,6 +90,34 @@ func (s *RegistrationService) ListOperatorSlots(userID string) ([]models.Operato
 		slots = append(slots, *slot)
 	}
 	return slots, nil
+}
+
+// ListUserOperators returns every operator document owned by userID,
+// including both user-created slots (is_slot=true) and platform-enrolled
+// operators (is_slot=false). Platform enrollment stamps the approving
+// owner's user_id on the operator document so the owner can discover and
+// manage it through this method. ListOperatorSlots remains limited to
+// slots for callers that only want user-created slots.
+func (s *RegistrationService) ListUserOperators(userID string) ([]models.OperatorDocumentGo, error) {
+	if userID == "" {
+		return nil, constants.ErrRegistrationUserIDRequired
+	}
+	filters := []models.DocFilter{
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
+	}
+	docs, err := s.docStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "created_at", 0)
+	if err != nil {
+		return nil, err
+	}
+	operators := make([]models.OperatorDocumentGo, 0, len(docs))
+	for _, doc := range docs {
+		op, err := s.toOperatorDoc(doc)
+		if err != nil {
+			continue
+		}
+		operators = append(operators, *op)
+	}
+	return operators, nil
 }
 
 func (s *RegistrationService) TerminateOperator(operatorID, userID, reason string) error {
@@ -216,23 +244,6 @@ func (s *RegistrationService) RegisterDeviceCSR(userID, organizationID string, r
 	resp, err := s.completeRegistration(operator, userID, organizationID, req, sanitizedFingerprint)
 	if err != nil {
 		return nil, err
-	}
-
-	// Retire bootstrap user if this is a real login
-	if s.userSvc != nil && userID != "" {
-		bootstrapUser, err := s.userSvc.FindBootstrapUser()
-		if err != nil {
-			s.logger.Error("[REGISTRATION] Failed to check for bootstrap user", "error", err)
-		} else if bootstrapUser != nil && bootstrapUser.ID != userID {
-			s.logger.Info("[REGISTRATION] Retiring bootstrap user on real login",
-				"bootstrap_user_id", bootstrapUser.ID,
-				"new_user_id", userID,
-				"operator_id", operator.ID)
-			if err := s.userSvc.Disable(bootstrapUser.ID, "retired_by_real_login", userID, operator.ID); err != nil {
-				s.logger.Error("[REGISTRATION] Failed to retire bootstrap user", "error", err)
-				return nil, fmt.Errorf("%w: %w", constants.ErrRegistrationBootstrapRetirementFailed, err)
-			}
-		}
 	}
 
 	s.logger.Info("[REGISTRATION] CSR-based enrollment complete",

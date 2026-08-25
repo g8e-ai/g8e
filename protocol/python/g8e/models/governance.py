@@ -24,6 +24,7 @@ before the human notary is asked.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from datetime import datetime, timezone
 from typing import Any
@@ -123,9 +124,93 @@ class GovernanceEnvelope(G8eBaseModel):
     tenant_id: str | None = None
     binding_persona: str | None = None
 
+    # Gateway governance posture at envelope construction time (doctrine,
+    # consensus, notary). Set by the gateway; the operator reads it here at
+    # L4 verification time instead of from out-of-band config. Not included
+    # in the transaction hash — it is policy metadata, not intent.
+    posture: str | None = None
+
     # Protocol
     transaction_hash: str | None = None
     protocol_version: str = "1.0"
+
+
+class CommandIntent(G8eBaseModel):
+    """Pre-governance command intent published by an app workload to a cmd: channel.
+
+    The ensemble constructs this from a ``G8eMessage`` at the publish boundary,
+    serializes the payload protobuf to bytes and base64-encodes it, and
+    publishes the protojson representation to ``cmd:<operator_id>:<operator_session_id>``.
+    The gateway decodes it via protojson, validates the target operator session,
+    fetches the state Merkle root, and constructs the governed
+    ``GovernanceEnvelope``. The ensemble does not build governance envelopes
+    for operator command dispatch.
+
+    The ``payload`` field carries base64-encoded serialized operator protobuf
+    bytes (e.g., ``CommandRequested``, ``FileEditRequested``), matching the
+    protojson encoding of the proto ``bytes`` field.
+    """
+
+    # Identity & routing
+    operator_id: str
+    operator_session_id: str
+    requestor_user_id: str | None = None
+
+    # Intent classification
+    event_type: str | None = None
+    action_type: str
+    target_resource: str | None = None
+
+    # Payload: base64-encoded serialized operator protobuf bytes
+    payload: str
+
+    # Application context
+    case_id: str | None = None
+    investigation_id: str | None = None
+    task_id: str | None = None
+    web_session_id: str | None = None
+    cli_session_id: str | None = None
+
+    @classmethod
+    def from_payload_bytes(
+        cls,
+        *,
+        operator_id: str,
+        operator_session_id: str,
+        action_type: str,
+        payload_bytes: bytes,
+        requestor_user_id: str | None = None,
+        event_type: str | None = None,
+        target_resource: str | None = None,
+        case_id: str | None = None,
+        investigation_id: str | None = None,
+        task_id: str | None = None,
+        web_session_id: str | None = None,
+        cli_session_id: str | None = None,
+    ) -> "CommandIntent":
+        """Build a CommandIntent from raw protobuf payload bytes.
+
+        Encodes ``payload_bytes`` as base64 ASCII for the protojson wire format.
+        """
+        return cls(
+            operator_id=operator_id,
+            operator_session_id=operator_session_id,
+            requestor_user_id=requestor_user_id,
+            event_type=event_type,
+            action_type=action_type,
+            target_resource=target_resource,
+            payload=base64.b64encode(payload_bytes).decode("ascii"),
+            case_id=case_id,
+            investigation_id=investigation_id,
+            task_id=task_id,
+            web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
+        )
+
+    @property
+    def payload_bytes(self) -> bytes:
+        """Decode the base64 payload back to raw protobuf bytes."""
+        return base64.b64decode(self.payload) if self.payload else b""
 
 
 def _normalize_timestamp(ts: str) -> str:

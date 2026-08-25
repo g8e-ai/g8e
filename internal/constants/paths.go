@@ -139,6 +139,7 @@ const (
 	PkiSubdirGatewayPeer    = "gateway-peer"
 	PkiSubdirApps           = "apps"
 	PkiSubdirTrustedSigners = "trusted_signers"
+	PkiSubdirPendingEnroll  = "pending-enrollment"
 
 	// File extensions
 	FileExtCert = ".crt"
@@ -180,6 +181,12 @@ const (
 	CliCertFilename     = "cli.crt"
 	CliKeyFilename      = "cli.key"
 	CredentialsFilename = "credentials"
+
+	// Pending platform enrollment state filenames (one per component,
+	// persisted under pki/pending-enrollment/ with 0600 permissions).
+	PendingEnrollmentFileOperator  = "g8eo.json"
+	PendingEnrollmentFileDashboard = "g8ed.json"
+	PendingEnrollmentFileEnsemble  = "g8ee.json"
 )
 
 // Storage constants for database filenames and paths.
@@ -220,6 +227,17 @@ const (
 	SecretsFileCLIPrivateKey            = "cli_private_key"
 	SecretsFileSessionToken             = "session_token"
 	SecretsFileConsensusMemberKeyPrefix = "consensus_member_"
+)
+
+// Docker constants for the root unified-stack compose deployment.
+const (
+	DockerComposeFile         = "docker-compose.yml"
+	DockerBootstrappedProfile = "bootstrapped"
+	DockerGatewayContainer    = "g8e-gateway"
+	DockerOperatorContainer   = "g8e-operator"
+	DockerEnsembleContainer   = "ensemble"
+	DockerDashboardContainer  = "dashboard"
+	DockerProjectPrefix       = "g8e"
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
@@ -274,6 +292,15 @@ const (
 const (
 	BinaryImageName        = "g8e"
 	BinaryImageNameWindows = "g8e.exe"
+)
+
+// NodeBinariesDir is the image-baked directory in the Docker runtime image
+// where all platform binaries (g8e-linux-amd64, g8e-darwin-arm64, etc.) are
+// placed by the Dockerfile. The gateway serves them via the
+// /.well-known/g8e/bin/{filename} endpoint. This path is outside the .g8e/
+// volume mount so it is always present regardless of volume state.
+const (
+	NodeBinariesDir = "/opt/g8e/bin"
 )
 
 // Deploy script filenames served by the gateway.
@@ -350,7 +377,6 @@ const (
 
 // API path constants for enrollment and well-known endpoints.
 const (
-	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
 	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
 	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
 )

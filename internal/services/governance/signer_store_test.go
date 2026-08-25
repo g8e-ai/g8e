@@ -168,7 +168,7 @@ func TestParseGovernancePosture_Invalid(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid governance posture")
 }
 
-func TestL4Warden_Posture_And_Doctrine(t *testing.T) {
+func TestL4Warden_Doctrine(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 	warden := NewL4Warden(
@@ -180,11 +180,9 @@ func TestL4Warden_Posture_And_Doctrine(t *testing.T) {
 		nil,
 		NewL1Doctrine(),
 		[]constants.ActionType{constants.ActionTypeFileEdit},
-		"consensus",
 		nil,
 	)
 
-	assert.Equal(t, "consensus", warden.Posture().Name())
 	assert.NotNil(t, warden.Doctrine())
 }
 

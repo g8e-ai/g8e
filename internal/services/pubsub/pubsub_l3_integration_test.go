@@ -102,6 +102,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-root",
 		Nonce:             "nonce-test-1",
+		Posture:           constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -228,6 +229,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-root",
 		Nonce:             "nonce-test-2",
+		Posture:           constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
@@ -355,6 +357,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		Payload:           payloadBytes,
 		StateMerkleRoot:   "test-root",
 		Nonce:             "nonce-test-3",
+		Posture:           constants.PostureNotary,
 	}
 
 	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3

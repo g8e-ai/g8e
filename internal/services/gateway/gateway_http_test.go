@@ -285,7 +285,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config, *TestInfr
 			Responder: infra.Responder,
 		},
 		DispatchControllerDeps: DispatchControllerDeps{
-			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.Stores.StateRootSvc, infra.Auth),
+			DispatchSvc: NewDispatchService(infra.Logger, infra.Pubsub, infra.Stores.StateRootSvc, infra.Auth, string(infra.Cfg.Gateway.Posture)),
 			Responder:   infra.Responder,
 			Logger:      infra.Logger,
 		},

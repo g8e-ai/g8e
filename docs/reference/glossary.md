@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v1.7.8
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -69,6 +69,7 @@ The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8
 - State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
 - Governance: `governance` (L1/L2/L3 metadata)
 - Context: `case_id`, `investigation_id`, `task_id`, `system_fingerprint`, `tenant_id`, `binding_persona`
+- Posture: `posture` (gateway governance posture at envelope construction time — doctrine, consensus, or notary; policy metadata, not included in the transaction hash)
 
 The wire format is canonical JSON (protojson) for client-facing surfaces; signing is based on the deterministic `transaction_hash` computed from normalized envelope fields.
 
@@ -92,7 +93,7 @@ A configuration that determines which governance layers are required for transac
 - **Doctrine**: Requires only L1 (Technical Bedrock) validation
 - **Consensus**: Requires L1 and L2 (Consensus) validation
 - **Notary**: Requires L1, L2, and L3 (Notary/Human) validation
-The posture is set at startup and affects whether L2 signatures and L3 proofs are required. Posture requirements are enforced by the L4 Warden via the GovernancePosture interface.
+The posture is configured at startup and stamped into each GovernanceEnvelope at construction time (the `posture` field). The L4 Warden reads posture per-envelope at verification time — the warden has no posture of its own; the envelope is authoritative. Posture requirements are enforced by the L4 Warden via the GovernancePosture interface.
 
 ---
 
@@ -242,7 +243,7 @@ The data sovereignty and scrubbing system running within the Governed Operator (
 
 ## SSE (Server-Sent Events)
 
-The streaming protocol used to push real-time events from the Governance Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE. Approval completions are delivered as `approval.completed` events on the SSE stream.
+The streaming protocol used to push real-time events from the Governance Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response, not pushed via SSE: A2A responses carry a structured `approval_url` field, while MCP responses embed the approval URL in the tool result text content. Approval completions are delivered as `approval.completed` events on the SSE stream.
 
 ---
 

@@ -121,6 +121,24 @@ type ExecuteBashArgs struct {
 
 func (ExecuteBashArgs) isToolArgs() {}
 
+// AuditReceiptListArgs are the arguments for the audit_receipt_list tool.
+type AuditReceiptListArgs struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	ActionType        string `json:"action_type,omitempty"`
+	NotBefore         string `json:"not_before,omitempty"`
+	Limit             int    `json:"limit,omitempty"`
+	Offset            int    `json:"offset,omitempty"`
+}
+
+func (AuditReceiptListArgs) isToolArgs() {}
+
+// AuditReceiptGetArgs are the arguments for the audit_receipt_get tool.
+type AuditReceiptGetArgs struct {
+	TransactionID string `json:"transaction_id"`
+}
+
+func (AuditReceiptGetArgs) isToolArgs() {}
+
 // ---- MCP params envelopes ---------------------------------------------------
 
 // toolsCallParams is the JSON-RPC params envelope for tools/call.

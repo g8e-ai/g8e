@@ -29,6 +29,7 @@ from g8e.models import (
     GovernanceL2Vote,
     GovernanceL3,
     GovernanceL3Proof,
+    CommandIntent,
     compute_transaction_hash,
 )
 from g8e.models.settings import LLMSettings, SearchSettings
@@ -543,3 +544,187 @@ class TestGovernanceEnvelope:
         assert envelope.governance.l2.votes[0].decision is True
         assert envelope.governance.l3.proof.signature == "sig"
         assert envelope.governance.l3.proof.credential_id == "cred-1"
+
+    def test_governance_envelope_posture_round_trip(self):
+        """The posture field round-trips through protojson serialization.
+
+        Posture is gateway policy metadata carried in-band on the envelope;
+        the operator reads it at L4 verification time. It is not part of the
+        transaction hash.
+        """
+        envelope = GovernanceEnvelope(
+            id="hash-1",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+            posture="doctrine",
+        )
+        data = envelope.model_dump(mode="json")
+        assert data["posture"] == "doctrine"
+        restored = GovernanceEnvelope.model_validate(data)
+        assert restored.posture == "doctrine"
+
+    def test_governance_envelope_posture_defaults_none(self):
+        """Posture defaults to None when not supplied by the gateway."""
+        envelope = GovernanceEnvelope(
+            id="hash-1",
+            timestamp="2026-01-01T00:00:00Z",
+            expires_at="2026-01-01T01:00:00Z",
+            source_component="COMPONENT_CLIENT",
+            event_type="g8e.v1.operator.command.requested",
+            payload="dGVzdA==",
+            action_type="EXECUTE_BASH",
+            target_resource="/tmp",
+            state_merkle_root="root",
+            nonce="n1",
+        )
+        assert envelope.posture is None
+
+
+class TestCommandIntent:
+    """Verify CommandIntent model fields, base64 payload serialization, and protojson round-trip."""
+
+    def test_minimal_instantiation(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            action_type="FILE_EDIT",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+        )
+        assert intent.operator_id == "op-001"
+        assert intent.operator_session_id == "sess-001"
+        assert intent.action_type == "FILE_EDIT"
+        assert intent.payload == "ZmlsZS1lZGl0LXBheWxvYWQ="
+        assert intent.requestor_user_id is None
+        assert intent.event_type is None
+        assert intent.case_id is None
+
+    def test_full_instantiation_with_context(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            requestor_user_id="user-001",
+            event_type="g8e.v1.operator.file_edit.requested",
+            action_type="FILE_EDIT",
+            target_resource="/etc/hostname",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+            case_id="case-1",
+            investigation_id="inv-1",
+            task_id="task-1",
+            web_session_id="web-1",
+            cli_session_id="cli-1",
+        )
+        assert intent.requestor_user_id == "user-001"
+        assert intent.event_type == "g8e.v1.operator.file_edit.requested"
+        assert intent.target_resource == "/etc/hostname"
+        assert intent.case_id == "case-1"
+        assert intent.investigation_id == "inv-1"
+        assert intent.task_id == "task-1"
+        assert intent.web_session_id == "web-1"
+        assert intent.cli_session_id == "cli-1"
+
+    def test_from_payload_bytes_base64_encodes(self):
+        raw = b"\x08\x01\x12\x05hello"
+        intent = CommandIntent.from_payload_bytes(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            action_type="FILE_EDIT",
+            payload_bytes=raw,
+        )
+        import base64
+
+        assert intent.payload == base64.b64encode(raw).decode("ascii")
+        assert intent.payload_bytes == raw
+
+    def test_payload_bytes_decodes_base64(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            action_type="FILE_EDIT",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+        )
+        assert intent.payload_bytes == b"file-edit-payload"
+
+    def test_payload_bytes_empty_when_payload_empty(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            action_type="FILE_EDIT",
+            payload="",
+        )
+        assert intent.payload_bytes == b""
+
+    def test_serialization_round_trip(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            requestor_user_id="user-001",
+            event_type="g8e.v1.operator.file_edit.requested",
+            action_type="FILE_EDIT",
+            target_resource="/etc/hostname",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+            case_id="case-1",
+        )
+        data = intent.model_dump(mode="json")
+        restored = CommandIntent.model_validate(data)
+        assert restored.operator_id == "op-001"
+        assert restored.operator_session_id == "sess-001"
+        assert restored.action_type == "FILE_EDIT"
+        assert restored.payload == "ZmlsZS1lZGl0LXBheWxvYWQ="
+        assert restored.case_id == "case-1"
+
+    def test_json_serialization_excludes_none(self):
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            action_type="FILE_EDIT",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+        )
+        import json
+
+        data = json.loads(intent.model_dump_json())
+        assert "operator_id" in data
+        assert "action_type" in data
+        assert "payload" in data
+        assert "requestor_user_id" not in data
+        assert "event_type" not in data
+        assert "case_id" not in data
+
+    def test_protojson_field_names_match_proto(self):
+        """Verify the JSON field names match the proto field names (snake_case).
+
+        Go's protojson.Unmarshal accepts both the lowerCamelCase name and the
+        original proto field name (snake_case), so the Pydantic model's
+        snake_case output is valid protojson on the wire."""
+        intent = CommandIntent(
+            operator_id="op-001",
+            operator_session_id="sess-001",
+            requestor_user_id="user-001",
+            action_type="FILE_EDIT",
+            target_resource="/etc/hostname",
+            payload="ZmlsZS1lZGl0LXBheWxvYWQ=",
+            case_id="case-1",
+            investigation_id="inv-1",
+            task_id="task-1",
+            web_session_id="web-1",
+            cli_session_id="cli-1",
+        )
+        import json
+
+        data = json.loads(intent.model_dump_json())
+        assert data["operator_id"] == "op-001"
+        assert data["operator_session_id"] == "sess-001"
+        assert data["requestor_user_id"] == "user-001"
+        assert data["action_type"] == "FILE_EDIT"
+        assert data["target_resource"] == "/etc/hostname"
+        assert data["case_id"] == "case-1"
+        assert data["investigation_id"] == "inv-1"
+        assert data["task_id"] == "task-1"
+        assert data["web_session_id"] == "web-1"
+        assert data["cli_session_id"] == "cli-1"

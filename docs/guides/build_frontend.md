@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.7.6
 
 This guide describes how to build a g8e-compatible web UI. It covers gateway configuration, frontend enrollment, WebAuthn authentication, SSE streaming, approval flows, API data types, UI/UX guidelines, and the recommended project structure. It applies to custom React apps, Vue dashboards, vanilla JS consoles, and hosted platforms like Lovable.
 
-The `g8e gui` command family enrolls external frontend applications with the g8e Gateway. Enrollment validates that the gateway is running with the correct CORS and passkey RP configuration for the frontend origin, persists the origin to a local enrollment file, and outputs a TypeScript configuration snippet for the frontend developer.
+The `g8e auth enroll gui` command family enrolls external frontend applications with the g8e Gateway. Enrollment validates that the gateway is running with the correct CORS and passkey RP configuration for the frontend origin, persists the origin to a local enrollment file, and outputs a TypeScript configuration snippet for the frontend developer.
 
 For Lovable-specific integration (AI agent prompt, Cloudflare Tunnel setup), see [Lovable Frontend Integration](./lovable.md).
 
@@ -101,7 +101,7 @@ The cookie has a 24-hour TTL. The gateway validates the cookie on every authenti
 ### Enroll a Frontend Origin
 
 ```bash
-g8e gui enroll --origin https://your-app.example.com
+g8e auth enroll gui enroll --origin https://your-app.example.com
 ```
 
 Optional flags:
@@ -123,19 +123,19 @@ Copy the outputted snippet into the frontend project as the starting point for A
 ### Show Enrolled Origins
 
 ```bash
-g8e gui show
+g8e auth enroll gui show
 ```
 
-Alias: `g8e gui list`. Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting:
+Alias: `g8e auth enroll gui list`. Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting:
 
 ```bash
-g8e gui show --json
+g8e auth enroll gui show --json
 ```
 
 ### Verify Enrollment
 
 ```bash
-g8e gui verify --origin https://your-app.example.com
+g8e auth enroll gui verify --origin https://your-app.example.com
 ```
 
 Checks enrollment status and prints a verification checklist covering CORS headers, passkey registration, session cookie attributes, SSE stream connectivity, and authenticated API calls.
@@ -143,7 +143,7 @@ Checks enrollment status and prints a verification checklist covering CORS heade
 ### Remove an Origin
 
 ```bash
-g8e gui remove --origin https://your-app.example.com
+g8e auth enroll gui remove --origin https://your-app.example.com
 ```
 
 Removes an origin from the enrollment file. Does not restart the gateway. The origin remains in the gateway's CORS and passkey RP configuration until the gateway is restarted without the corresponding flags.
@@ -423,7 +423,7 @@ Organize the frontend with separate concerns:
 - [ ] **Enrollment token**: Navigate to `#enroll=1&token={token}` and confirm the token is validated and registration auto-triggers.
 - [ ] **URL hash approval**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
 - [ ] **Logout**: Sign out and confirm redirect to login page and cookie cleared.
-- [ ] **`g8e gui verify`**: Run `g8e gui verify --origin <url>` and confirm all checklist items pass.
+- [ ] **`g8e auth enroll gui verify`**: Run `g8e auth enroll gui verify --origin <url>` and confirm all checklist items pass.
 
 ---
 
@@ -441,7 +441,7 @@ Organize the frontend with separate concerns:
 ./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com
 ```
 
-Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
+Then run `g8e auth enroll gui enroll --origin https://your-app.example.com` to verify.
 
 ### Passkey RP Mismatch
 
@@ -473,7 +473,7 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 
 **Cause**: Token expired (5-minute TTL), already used (one-time-use), or invalid.
 
-**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
+**Fix**: Generate a new enrollment token from the CLI (`g8e auth enroll user`). Handle 410 (expired), 409 (already used), and 401 (invalid) with specific user-facing error messages.
 
 ---
 
@@ -484,3 +484,41 @@ Then run `g8e gui enroll --origin https://your-app.example.com` to verify.
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture
 - [Architecture: Gateway](../architecture/gateway.md) - Gateway service architecture
+
+---
+
+## In-Tree Dashboard (g8ed) Server-to-Server mTLS Enrollment
+
+The previous sections cover browser-based frontends that authenticate via WebAuthn passkeys and session cookies. The in-tree dashboard (`g8ed`, `dashboard/`) is a special case: its **browser SPA** still authenticates via WebAuthn passkeys (unchanged), but its **container** also holds its own mTLS app identity for server-to-server gateway calls, mirroring the ensemble's enrollment model. The two identity surfaces are independent — the browser never presents the container's mTLS cert, and the container never holds the browser's session cookie.
+
+### Enrollment
+
+The dashboard container enrolls at startup via the owner-approved platform enrollment protocol, the same protocol the ensemble uses. The `AppEnrollmentService` (`dashboard/services/infra/app-enrollment-service.js`) implements the nine-step resumable sequence mirroring the ensemble's `ensemble/app/services/infra/app_enrollment_service.py`:
+
+- `loadIdentity()` — read path. Loads an existing cert/key from the dashboard's PKI tree, parses the cert to check expiry (rejects if within 7 days of expiry), extracts the SPIFFE `app_id` from the URI SAN. Throws on missing files, parse failure, near-expiry, or missing URI SAN. Does not touch the network.
+- `enroll()` — write path. Loads any persisted pending attempt; if none, generates an ECDSA P-256 key and CSR, fetches the CA bundle from the gateway's plain-HTTP discovery surface, submits a platform enrollment request with the CSR and system fingerprint, persists pending state (private key, requester token, request ID, CSR fingerprint, expiry) to `pki/pending-enrollment/g8ed.json` with 0600 permissions, polls status with bounded backoff, signs the canonical completion transcript, validates the response, and writes the returned app cert, cert chain, private key, and trust bundle to the dashboard's runtime tree. On restart with a pending attempt, resumes polling the same request without generating new keys.
+
+The enrollment is resumable and idempotent: on restart with a valid, non-near-expiry cert, the reuse path short-circuits. On restart while a platform enrollment request is pending, the service loads the persisted pending state and resumes polling the same request. On enrollment failure, the dashboard container exits non-zero (fail-closed) so Docker's healthcheck and restart policy surface the failure. The enrolled credentials persist across container restarts in the `g8e-dashboard-data` named volume. See [auth.md](../architecture/auth.md) §1.5 for the owner-approved platform enrollment protocol.
+
+### Environment Variables
+
+The dashboard's enrollment is configured via two env vars set by `docker-compose.yml`:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `G8E_GATEWAY_HTTP_URL` | none (required) | Gateway plain-HTTP bootstrap surface URL (e.g., `http://g8eg:8080`). Used for the CA bundle fetch and the enrollment POST. Fail-closed if unset — no derivation from `G8E_GATEWAY_URL` (which is browser-facing `localhost`). |
+| `G8E_RUNTIME_DIR` | none (compose sets `/data`) | Dashboard runtime directory root. Credentials are written under `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt`, `g8ed.key`, and `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem`. Fail-closed if unset. The dashboard container runs as the non-root `g8e` user (UID 1001), so compose mounts the `g8e-dashboard-data` volume at `/data` (created and chowned to `g8e:g8e` in the Dockerfile) rather than `/root/.g8e`. |
+
+### Credential Path Layout
+
+The dashboard's runtime tree mirrors the ensemble's layout so the gateway-side cert directory structure is consistent across enrolled apps:
+
+- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.crt` — enrolled app certificate (permissions `0600`)
+- `${G8E_RUNTIME_DIR}/pki/issued/apps/g8ed.key` — ECDSA P-256 private key (permissions `0600`)
+- `${G8E_RUNTIME_DIR}/pki/trust/hub-bundle.pem` — trust bundle (permissions `0644`)
+
+### Browser vs Container Identity
+
+The dashboard's browser SPA authenticates via WebAuthn passkeys exactly as described in the rest of this guide — the container's mTLS enrollment does not change the browser auth model. The container's mTLS identity is consumed by future backend service wiring (governance, SSE, document store) that makes server-to-server gateway calls; `server.js` is currently a static SPA host and does not yet construct g8eg clients with the enrolled credential. The mTLS constructor params on `g8eg_http_client.js` and `g8eg_pubsub_client.js` (`clientCertPath`, `clientKeyPath`, `caCertPath`) are forward-compatible preparation for that wiring.
+
+See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture and [Ensemble (g8ee)](../architecture/ensemble.md) for the parallel ensemble enrollment implementation.

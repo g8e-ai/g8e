@@ -60,7 +60,8 @@ func TestNeedsGovKit(t *testing.T) {
 		for _, s := range all {
 			if s.RequiresPosture == scenarios.Doctrine &&
 				!strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) &&
-				!strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) {
+				!strings.HasPrefix(s.Name, scenarios.FedRAMPScenarioPrefix) &&
+				!strings.HasPrefix(s.Name, scenarios.EnsembleScenarioPrefix) {
 				doctrineOnly = append(doctrineOnly, s)
 			}
 		}
@@ -160,6 +161,13 @@ func TestDemosScenariosRunCmd_IdentityFlags(t *testing.T) {
 		assert.Equal(t, "", flag.DefValue)
 		assert.Contains(t, flag.Usage, "session")
 	})
+
+	t.Run("has --ensemble-url flag", func(t *testing.T) {
+		flag := cmd.Flags().Lookup("ensemble-url")
+		require.NotNil(t, flag)
+		assert.Equal(t, "", flag.DefValue)
+		assert.Contains(t, flag.Usage, "ensemble")
+	})
 }
 
 func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
@@ -177,14 +185,27 @@ func TestApplyAgentHarnessFlags_IdentityFields(t *testing.T) {
 		assert.Equal(t, "test-session", cfg.CLISessionID)
 	})
 
-	t.Run("leaves identity empty when flags unset", func(t *testing.T) {
+	t.Run("preserves identity when flags unset", func(t *testing.T) {
 		harnessUserID = ""
 		harnessCLISessionID = ""
 
 		cfg := config.Default()
+		beforeUserID := cfg.UserID
+		beforeCLISessionID := cfg.CLISessionID
 		applyAgentHarnessFlags(&cfg)
-		assert.Empty(t, cfg.UserID)
-		assert.Empty(t, cfg.CLISessionID)
+		assert.Equal(t, beforeUserID, cfg.UserID,
+			"applyAgentHarnessFlags should not modify UserID when flag unset")
+		assert.Equal(t, beforeCLISessionID, cfg.CLISessionID,
+			"applyAgentHarnessFlags should not modify CLISessionID when flag unset")
+	})
+
+	t.Run("propagates ensemble-url to config", func(t *testing.T) {
+		harnessEnsembleURL = "http://localhost:8000"
+		defer func() { harnessEnsembleURL = "" }()
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+		assert.Equal(t, "http://localhost:8000", cfg.EnsembleBaseURL)
 	})
 }
 

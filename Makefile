@@ -162,19 +162,15 @@ help:
 	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
 	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
 	@echo "  build-compressed	Build g8e then compress with UPX (requires upx installed)"
-	@echo "  build-docker		Build g8e binary in Docker (linux/amd64)"
-	@echo "  build-linux-docker		Build g8e for Linux in Docker (amd64, arm64, 386)"
-	@echo "  build-windows-docker	Build g8e for Windows in Docker (amd64, arm64)"
-	@echo "  build-darwin-docker		Build g8e for Darwin in Docker (amd64, arm64)"
-	@echo "  build-all-docker		Build g8e for all platforms in Docker"
 	@echo "  build-fips		Build g8e with FIPS 140-3 approved mode (linux/amd64, GOFIPS140=v1.0.0)"
 	@echo "  verify-fips		Build the FIPS variant and run the g8e version --fips self-check"
+	@echo "  fmt			Format all Go source files (gofmt -w .)"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests (unit + integration)"
 	@echo "  test-coverage         Run tests with coverage (enforces $(COVERAGE_THRESHOLD)% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
-	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
+	@echo "  test-docker           Run Tier 3 (Docker E2E) steady-state tests against an approved platform"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -185,12 +181,27 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
+	@echo "  clean-docker  Stop all profile containers and remove volumes (--profile bootstrapped down -v --remove-orphans)"
+	@echo ""
+	@echo "Docker Compose:"
+	@echo "  up            Build and start the full stack (docker compose up -d --build)"
+	@echo "  down          Stop all profile containers, keep volumes (--profile bootstrapped down --remove-orphans)"
 	@echo ""
 	@echo "Demos:"
 	@echo "  demo-verify         Build and run all 5 demo environments (requires Docker)"
 	@echo ""
 	@echo "Python Protocol:"
 	@echo "  python-build  Copy constants and build the Python protocol package"
+	@echo ""
+	@echo "Ensemble (g8ee):"
+	@echo "  ensemble-test   Run the ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)"
+	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
+	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
+	@echo "  build-ensemble  Build the ensemble Docker image"
+	@echo ""
+	@echo "Dashboard (g8ed):"
+	@echo "  dashboard-test   Run the dashboard vitest suite (requires npm ci in dashboard/)"
+	@echo "  build-dashboard  Build the dashboard Docker image"
 
 .PHONY: python-build
 python-build:
@@ -304,7 +315,6 @@ protoc-install:
 .PHONY: build
 build:
 	@echo "Building g8e Operator for current platform..."
-	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
@@ -345,8 +355,7 @@ build-compressed: build
 
 .PHONY: build-all
 build-all:
-	@echo "Building g8e Operator for all platforms..."
-	@gofmt -w .
+	@echo "Building g8e Operator for all platforms (FIPS 140-3 for linux)..."
 	@mkdir -p $(BIN_DIR)
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
@@ -356,7 +365,12 @@ build-all:
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
+		if [ "$$GOOS" = "linux" ]; then \
+			FIPS_ENV="GOFIPS140=$(GOFIPS140_VERSION)"; \
+		else \
+			FIPS_ENV="-u GOFIPS140"; \
+		fi; \
+		env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
@@ -364,7 +378,6 @@ build-all:
 .PHONY: build-darwin
 build-darwin:
 	@echo "Building g8e for Darwin..."
-	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(DARWIN_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
@@ -377,7 +390,6 @@ build-darwin:
 .PHONY: build-linux
 build-linux:
 	@echo "Building g8e for Linux..."
-	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(LINUX_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
@@ -390,7 +402,6 @@ build-linux:
 .PHONY: build-windows
 build-windows:
 	@echo "Building g8e for Windows..."
-	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
@@ -399,74 +410,6 @@ build-windows:
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
-
-.PHONY: build-docker
-build-docker:
-	@echo "Building g8e binary in Docker (linux/amd64)..."
-	@gofmt -w .
-	@mkdir -p $(BIN_DIR)
-	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-linux-amd64"
-	@sha256sum $(BIN_DIR)/g8e-linux-amd64 > $(BIN_DIR)/g8e-linux-amd64.sha256
-	@echo "Docker build complete. Binary: $(BIN_DIR)/g8e-linux-amd64"
-
-.PHONY: build-linux-docker
-build-linux-docker:
-	@echo "Building g8e for Linux in Docker..."
-	@gofmt -w .
-	@mkdir -p $(BIN_DIR)
-	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@for arch in $(LINUX_ARCHS); do \
-		echo "Building linux/$$arch in Docker..."; \
-		docker run --rm -e GOOS=linux -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-linux-$$arch"; \
-		sha256sum $(BIN_DIR)/g8e-linux-$$arch > $(BIN_DIR)/g8e-linux-$$arch.sha256; \
-	done
-	@echo "Linux Docker build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
-
-.PHONY: build-windows-docker
-build-windows-docker:
-	@echo "Building g8e for Windows in Docker..."
-	@gofmt -w .
-	@mkdir -p $(BIN_DIR)
-	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@for arch in $(WINDOWS_ARCHS); do \
-		echo "Building windows/$$arch in Docker..."; \
-		docker run --rm -e GOOS=windows -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-windows-$$arch.exe"; \
-		sha256sum $(BIN_DIR)/g8e-windows-$$arch.exe > $(BIN_DIR)/g8e-windows-$$arch.exe.sha256; \
-	done
-	@echo "Windows Docker build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
-
-.PHONY: build-darwin-docker
-build-darwin-docker:
-	@echo "Building g8e for Darwin in Docker..."
-	@gofmt -w .
-	@mkdir -p $(BIN_DIR)
-	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@for arch in $(DARWIN_ARCHS); do \
-		echo "Building darwin/$$arch in Docker..."; \
-		docker run --rm -e GOOS=darwin -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-darwin-$$arch"; \
-		sha256sum $(BIN_DIR)/g8e-darwin-$$arch > $(BIN_DIR)/g8e-darwin-$$arch.sha256; \
-	done
-	@echo "Darwin Docker build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
-
-.PHONY: build-all-docker
-build-all-docker:
-	@echo "Building g8e for all platforms in Docker..."
-	@gofmt -w .
-	@mkdir -p $(BIN_DIR)
-	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@for platform in $(PLATFORMS); do \
-		GOOS=$${platform%/*}; \
-		GOARCH=$${platform#*/}; \
-		NODE_BINARY=g8e-$$GOOS-$$GOARCH; \
-		if [ "$$GOOS" = "windows" ]; then \
-			NODE_BINARY=$$NODE_BINARY.exe; \
-		fi; \
-		echo "Building $$platform in Docker..."; \
-		docker run --rm -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -trimpath -tags netgo,osusergo -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/$$NODE_BINARY"; \
-		sha256sum $(BIN_DIR)/$$NODE_BINARY > $(BIN_DIR)/$$NODE_BINARY.sha256; \
-	done
-	@echo "All-platform Docker build complete. Binaries: $(BIN_DIR)/g8e-*"
 
 # FIPS 140-3 build variant.
 # Produces a linux/amd64 binary linked against the Go Cryptographic Module
@@ -478,7 +421,6 @@ build-all-docker:
 .PHONY: build-fips
 build-fips:
 	@echo "Building g8e with FIPS 140-3 approved mode (GOFIPS140=$(GOFIPS140_VERSION), $(FIPS_GOOS)/$(FIPS_GOARCH))..."
-	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@NODE_BINARY=$(BIN_DIR)/g8e-fips-$(FIPS_GOOS)-$(FIPS_GOARCH); \
 	echo "Building $(FIPS_GOOS)/$(FIPS_GOARCH) -> $$NODE_BINARY..."; \
@@ -503,6 +445,13 @@ verify-fips: build-fips
 	@GODEBUG=fips140=only ./g8e-fips version --fips
 	@echo "FIPS 140-3 self-check passed."
 
+# Format all Go source files. Build targets no longer format the working tree;
+# run this explicitly or wire it into a pre-commit hook.
+.PHONY: fmt
+fmt:
+	@gofmt -w .
+	@echo "Formatting complete."
+
 # =============================================================================
 # TEST
 # =============================================================================
@@ -524,11 +473,25 @@ test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
 	@go test -p=1 -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
-# Tier 3: Docker E2E Tests - requires Docker
+# Tier 3: Docker E2E Tests - requires a running platform.
+# Start the platform first (docker compose up or ./g8e gw start), approve all
+# enrollment requests, then run this target. The test binary connects to the
+# running platform and fails fast if it is not reachable. Per docs/devs/devs.md,
+# platform tests run through ./g8e test, never go test directly.
+#
+# The default target runs the steady-state suite: tests that exercise an
+# approved stack (gateway, auth, operator registry, heartbeat, command
+# roundtrip, ensemble, dashboard, compliance, approved-restart). Stateful
+# scenario tests (pending-discovery, denial, restart-during-pending, headless)
+# require specific platform states and are run individually via:
+#   ./g8e test e2e --run TestPlatformEnrollment_PendingDiscovery
+#   ./g8e test e2e --run TestPlatformEnrollment_Denial
+#   ./g8e test e2e --run TestPlatformEnrollment_RestartDuringPending
+#   ./g8e test e2e --run TestPlatformEnrollment_Headless
 .PHONY: test-docker
 test-docker:
-	@echo "Running Tier 3 (Docker E2E) tests..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
+	@echo "Running Tier 3 (Docker E2E) steady-state tests..."
+	@./g8e test e2e --run 'TestGateway|TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestEnsemble|TestDashboard|TestCompliance|TestApprovedRestart'
 
 
 # Air-Gap Verification: verify vendored build works without network access
@@ -577,6 +540,59 @@ demo-verify: build
 	echo "========================================================"; \
 	echo "  All $(words $(DEMO_ORGS)) demos PASSED"; \
 	echo "========================================================"
+
+# =============================================================================
+# ENSEMBLE (g8ee) — Python first-party component
+# =============================================================================
+# The ensemble depends on the in-tree protocol/python package. Install it first:
+#   pip install -e protocol/python
+#   pip install -e 'ensemble[test]'
+# The targets prefer the repo-root .venv if present (development), falling back
+# to system python3 (CI installs protocol/python + ensemble into system python).
+
+ENSEMBLE_PY := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
+ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+
+.PHONY: ensemble-test
+ensemble-test:
+	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
+	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+
+.PHONY: test-external
+test-external:
+	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
+	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
+
+.PHONY: ensemble-lint
+ensemble-lint:
+	@echo "Running ruff on ensemble..."
+	@cd ensemble && $(ENSEMBLE_RUFF) check app
+	@echo "Running pyright on ensemble..."
+	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
+
+.PHONY: build-ensemble
+build-ensemble:
+	@echo "Building ensemble (g8ee) Docker image..."
+	@DOCKER_BUILDKIT=1 docker build -f ensemble/Dockerfile -t g8e-ensemble:$(VERSION) .
+	@echo "Ensemble image built: g8e-ensemble:$(VERSION)"
+
+# =============================================================================
+# DASHBOARD (g8ed) — Node.js first-party component
+# =============================================================================
+# The dashboard requires node_modules installed first:
+#   cd dashboard && npm ci
+
+.PHONY: dashboard-test
+dashboard-test:
+	@echo "Running dashboard (g8ed) vitest suite..."
+	@cd dashboard && npm test
+
+.PHONY: build-dashboard
+build-dashboard:
+	@echo "Building dashboard (g8ed) Docker image..."
+	@DOCKER_BUILDKIT=1 docker build -f dashboard/Dockerfile -t g8e-dashboard:$(VERSION) .
+	@echo "Dashboard image built: g8e-dashboard:$(VERSION)"
 
 # Coverage tests
 .PHONY: test-coverage
@@ -682,6 +698,31 @@ clean-harness:
 	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
+# =============================================================================
+# DOCKER COMPOSE LIFECYCLE
+# =============================================================================
+# Convenience wrappers around docker compose. Docker-first: `docker compose
+# up -d --build` works standalone; these targets are not prerequisites.
+.PHONY: up
+up:
+	@echo "Building and starting the full stack..."
+	@docker compose up -d --build
+	@echo "Stack started. The gateway is healthy; workloads remain not-ready until bootstrapped."
+	@echo "Bootstrap the platform with: ./g8e auth enroll user -e localhost"
+	@echo "Then: ./g8e auth pending-platform-enrollments && ./g8e auth approve-platform-enrollment <id> --yes"
+
+.PHONY: down
+down:
+	@echo "Stopping the full stack including bootstrapped workloads (volumes preserved)..."
+	@docker compose --profile bootstrapped down --remove-orphans
+	@echo "Stack stopped. Volumes preserved; rerun 'make up' to resume."
+
+.PHONY: clean-docker
+clean-docker:
+	@echo "Stopping the full stack (all profiles) and removing volumes..."
+	@docker compose --profile bootstrapped down -v --remove-orphans
+	@echo "Stack stopped and volumes removed. The next 'make up' re-bootstraps the CA and requires re-enrollment."
+
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -692,12 +733,20 @@ clean-harness:
 # CI/CD (LOCAL)
 # =============================================================================
 .PHONY: ci
-ci: ci-platform
+ci: ci-platform ci-ensemble ci-dashboard
 	@echo "CI complete."
 
 .PHONY: ci-platform
 ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 	@echo "Platform CI complete."
+
+.PHONY: ci-ensemble
+ci-ensemble: ensemble-lint ensemble-test
+	@echo "Ensemble CI complete."
+
+.PHONY: ci-dashboard
+ci-dashboard: dashboard-test
+	@echo "Dashboard CI complete."
 
 .PHONY: _ci-verify-proto
 _ci-verify-proto:

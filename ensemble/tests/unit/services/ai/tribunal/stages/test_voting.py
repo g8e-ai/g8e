@@ -1,0 +1,147 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+import pytest
+from app.constants import TieBreakReason, ConsensusMember
+from app.models.agents.tribunal import CandidateCommand
+from app.services.ai.tribunal.emitter import TribunalEmitter
+from app.services.ai.tribunal.stages.voting import _run_voting_stage
+
+
+@pytest.mark.asyncio
+class TestRunVotingStage:
+    async def test_returns_winner_and_score_with_breakdown(self, mock_g8e_context):
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=ConsensusMember.CONCORD),
+            CandidateCommand(command="ls -l", pass_index=2, member=ConsensusMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=ConsensusMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=ConsensusMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates,
+            request="list files",
+            emitter=emitter,
+            total_members=5,
+        )
+
+        assert winner == "ls -la"
+        assert score == 0.6
+        assert vote_breakdown is not None
+        assert vote_breakdown.winner == "ls -la"
+        assert vote_breakdown.consensus_strength == 0.6
+        assert len(vote_breakdown.winner_supporters) == 3
+        assert tied_candidates is None
+
+    async def test_single_cluster_unanimous_wins(self, mock_g8e_context):
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=ConsensusMember.CONCORD),
+            CandidateCommand(command="ls -la", pass_index=2, member=ConsensusMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=ConsensusMember.PRAGMA),
+            CandidateCommand(command="ls -la", pass_index=4, member=ConsensusMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates,
+            request="list files",
+            emitter=emitter,
+            total_members=5,
+        )
+
+        assert winner == "ls -la"
+        assert score == 1.0
+        assert vote_breakdown.consensus_strength == 1.0
+        assert tied_candidates is None
+
+    async def test_consensus_failed_returns_none_winner(self, mock_g8e_context):
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
+            CandidateCommand(command="ls -l", pass_index=1, member=ConsensusMember.CONCORD),
+            CandidateCommand(command="ls", pass_index=2, member=ConsensusMember.VARIANCE),
+            CandidateCommand(command="ll", pass_index=3, member=ConsensusMember.PRAGMA),
+            CandidateCommand(command="rm -rf", pass_index=4, member=ConsensusMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates,
+            request="list files",
+            emitter=emitter,
+            total_members=5,
+        )
+
+        assert winner is None
+        assert score == 0.0
+        assert vote_breakdown.consensus_strength == 0.2
+        assert vote_breakdown.winner is None
+        assert tied_candidates is None
+
+    async def test_two_two_one_tied_top_breaks_by_shortest_command(self, mock_g8e_context):
+        candidates = [
+            CandidateCommand(
+                command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df",
+                pass_index=0,
+                member=ConsensusMember.AXIOM,
+            ),
+            CandidateCommand(
+                command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df",
+                pass_index=1,
+                member=ConsensusMember.CONCORD,
+            ),
+            CandidateCommand(command="docker ps", pass_index=2, member=ConsensusMember.VARIANCE),
+            CandidateCommand(command="docker ps", pass_index=3, member=ConsensusMember.PRAGMA),
+            CandidateCommand(command="docker images", pass_index=4, member=ConsensusMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates,
+            request="check docker state",
+            emitter=emitter,
+            total_members=5,
+        )
+
+        assert winner == "docker ps"
+        assert score == 0.4
+        assert vote_breakdown.consensus_strength == 0.4
+        assert vote_breakdown.tie_broken is True
+        assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
+        assert len(vote_breakdown.winner_supporters) == 2
+        assert tied_candidates is not None
+        assert len(tied_candidates) == 2
+
+    async def test_tie_force_round_2_when_equal_length_and_no_nemesis(self, mock_g8e_context):
+        # Two clusters of 2, same length, no Nemesis in either cluster
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=ConsensusMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=ConsensusMember.CONCORD),
+            CandidateCommand(command="ls -al", pass_index=2, member=ConsensusMember.VARIANCE),
+            CandidateCommand(command="ls -al", pass_index=3, member=ConsensusMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=ConsensusMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, mock_g8e_context)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates,
+            request="list files",
+            emitter=emitter,
+            total_members=5,
+        )
+
+        # Should force Round 2 (winner is None)
+        assert winner is None
+        assert score == 0.4
+        assert vote_breakdown.consensus_strength == 0.4
+        assert vote_breakdown.tie_broken is False
+        assert vote_breakdown.tie_break_reason is None
+        assert tied_candidates is not None
+        assert len(tied_candidates) == 2
+        assert {c.command for c in tied_candidates} == {"ls -la", "ls -al"}

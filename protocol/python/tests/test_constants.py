@@ -28,6 +28,7 @@ from g8e.constants import (
     OPERATOR_ID_HEADER,
     collection,
     channel,
+    document_id,
     intent,
     prompt,
     kv_key,
@@ -179,6 +180,10 @@ class TestAccessorFunctions:
         assert channel("Governance") == "governance"
         assert channel("SseEvent") == "sse_event"
 
+    def test_document_id_accessor(self):
+        assert document_id("platform_settings") == "platform_settings"
+        assert document_id("user_settings_prefix") == "user_settings_"
+
     def test_intent_accessor(self):
         assert intent("ApigatewayDiscovery") == "apigateway_discovery"
         assert intent("Ec2Discovery") == "ec2_discovery"
@@ -223,6 +228,10 @@ class TestAccessorFunctions:
     def test_channel_invalid_key_raises(self):
         with pytest.raises(KeyError):
             channel("nonexistent")
+
+    def test_document_id_invalid_key_raises(self):
+        with pytest.raises(KeyError):
+            document_id("nonexistent")
 
     def test_kv_key_invalid_name_raises(self):
         with pytest.raises(KeyError):

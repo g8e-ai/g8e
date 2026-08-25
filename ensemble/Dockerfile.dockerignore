@@ -1,0 +1,31 @@
+# Per-Dockerfile build-context filter for the g8e Ensemble image.
+#
+# Takes precedence over the root .dockerignore under BuildKit. The ensemble
+# Dockerfile only needs the in-tree Python protocol package (protocol/python)
+# and the ensemble source tree (ensemble/). Everything else in the monorepo is
+# excluded via the leading wildcard, then the two required trees are
+# re-included.
+
+# Exclude everything by default, then re-include only what the build needs.
+*
+!ensemble/
+!protocol/
+
+# Within protocol/, the Python package and the constants JSON source are
+# required (constants/ is synced into _data/ at build time so JSON changes
+# invalidate the layer cache — see E.9).
+protocol/*
+!protocol/python/
+!protocol/constants/
+
+# Within ensemble/, drop venvs, caches, test sources, and evals — none are
+# needed for `pip install /build/ensemble` (which reads pyproject.toml + app).
+ensemble/.venv/
+ensemble/venv/
+ensemble/.pytest_cache/
+ensemble/.ruff_cache/
+ensemble/.mypy_cache/
+ensemble/__pycache__/
+ensemble/tests/
+ensemble/evals/
+ensemble/g8ee.egg-info/

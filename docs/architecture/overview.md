@@ -5,17 +5,24 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-08-19
-Version: v1.7.8
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ## What g8e Is
 
 g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. The agent formulates intent, and the platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five fail-closed governance layers before any action runs. Every AI client is treated as an untrusted principal; every host is sovereign over its own audit ledger and state root.
 
-The platform ships as a single static binary that runs in two modes:
+The platform ships as a polyglot monorepo. The gateway and operator are a single static Go binary that runs in two modes:
 
 - **Governance Gateway (Policy Decision Point / PDP)**: The central coordinator that admits transactions, manages PKI, enforces L1 through L3 governance, brokers pub/sub channels to operators, and acts as the platform's persistence layer, root CA, and audit authority. The gateway runs an in-process Operator substrate (L4 Warden and L5 Actuator) for operations targeting the gateway host itself.
 - **Governed Operator (Policy Execution Point / PEP)**: The same binary run in operator mode on target hosts. It requires no installation, opens no inbound ports, initiates an outbound-only mTLS tunnel to the gateway, pulls work from a unique pub/sub channel, re-verifies every proof locally, and is the only component authorized to mutate the host.
+
+Two first-party components ship alongside the Go binary and complete the platform:
+
+- **Ensemble (g8ee)**: The first g8e-compatible agentic ensemble. A Python 3.12 / FastAPI service that connects to the gateway over mTLS, submits governed intents through the MCP surface, and streams progress and results back through the SSE event bridge. See [Ensemble (g8ee)](./ensemble.md).
+- **Dashboard (g8ed)**: The operator dashboard. A Node.js 22 / Express web application that provides the operator-facing UI for driving ensembles, managing operators, inspecting audit trails, and configuring the platform. See [Dashboard (g8ed)](./dashboard.md).
+
+`docker compose up` from the repo root brings up the whole stack end to end: gateway, operator, ensemble, and dashboard. See the [Unified Docker Stack guide](../guides/unified_stack.md).
 
 For the full service stacks, see [Gateway Architecture](./gateway.md) and [Operator Architecture](./operator.md). For a visual map of the system, see the [50k system diagram](../diagrams/graph-system-50k.md) and the [system overview flowchart](../diagrams/flowchart-system-overview-lr.md).
 
@@ -59,8 +66,8 @@ The practical flow for an AI client is:
 2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
 3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
 4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
-5. After L1-L3 pass, the L4 Warden admits the envelope and publishes it to the unique pub/sub channel for the bound operator.
-6. The bound operator pulls the envelope, re-verifies L1-L4, and the L5 Actuator executes the action.
+5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
+6. The bound operator pulls the envelope, the L4 Warden re-verifies L1-L4, and the L5 Actuator executes the action.
 7. The operator writes the signed receipt to the local audit vault and publishes it back to the gateway.
 8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
 
@@ -85,7 +92,7 @@ The platform uses a zero-trust networking model where all communication is authe
 
 The gateway operates a four-tier PKI hierarchy: a self-signed Root CA signs a Hub Intermediate CA (which signs the gateway serving certificate), an Operator Intermediate CA (which signs operator, CLI, and app leaf certificates), and a Gateway Peer Intermediate CA (which signs gateway peer certificates for multi-host deployments). All certificates use ECDSA P-256 and carry SPIFFE URI SANs under the `g8e.local` trust domain. Certificate revocation is enforced per-request during mTLS verification, with a standard X.509 CRL served at `/.well-known/g8e/pki/crl`.
 
-The gateway exposes two ports: a plain HTTP port for bootstrap enrollment and PKI discovery only, and an HTTPS port enforcing TLS 1.3 with required and verified client certificates for all API, enrollment, and MCP routes. Route-level mTLS enforcement is handled by authentication middleware, which classifies routes by auth mode. Operators initiate outbound-only mTLS tunnels to the gateway and pull work from unique pub/sub channels; the gateway never reaches into operators. See [Network Architecture](./network.md) for the full PKI hierarchy, port topology, SPIFFE identity formats, and enrollment procedures.
+The gateway exposes two ports: a plain HTTP port for unauthenticated discovery and bootstrap (health and state checks, CA bundle and fingerprint discovery, bootstrap, CLI recovery and platform enrollment request/status/complete, deploy scripts, and node binary distribution), and an HTTPS port enforcing TLS 1.3 that serves the Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, and all governed execution routes. The HTTPS port accepts optional client certificates at the transport layer; authentication middleware classifies routes by auth mode and enforces application-layer mTLS verification for governed operator API, CSR signing, and MCP/A2A routes. Operators initiate outbound-only mTLS tunnels to the gateway and pull work from unique pub/sub channels; the gateway never reaches into operators. See [Network Architecture](./network.md) for the full PKI hierarchy, port topology, SPIFFE identity formats, and enrollment procedures.
 
 ---
 
@@ -158,6 +165,8 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [AI Agents and the g8e Governance Boundary](./agents.md) | AI client surface (MCP, A2A), native tool playbook, intent-to-execution flow, security boundaries summary. |
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
+| [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
+| [Dashboard (g8ed)](./dashboard.md) | Operator dashboard: role, connection model, relationship to demos/frontend/, build and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |
 | [Consensus](./consensus.md) | L2 consensus policy, declarative bootstrap, member key management, deliberation, L4 vote verification. |
 | [Authentication & Authorization](./auth.md) | CLI enrollment state machine, recovery and rotation, headless enrollment, WebAuthn notary, session binding. |

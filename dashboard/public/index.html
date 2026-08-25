@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="g8e - Zero-Trust AI for Real Production">
+    <meta name="robots" content="noindex, nofollow">
+    <title>g8e</title>
+    <base href="/">
+
+    <!-- Gateway origin for browser-direct WebAuthn + API calls. Served by the
+         SPA host from the G8E_GATEWAY_URL env var via /g8e-config.js. No
+         hardcoded fallback — fail-closed if unset. Must load before all other
+         scripts so window.G8E_GATEWAY_URL is available at init time. -->
+    <script src="/g8e-config.js"></script>
+
+    <link rel="stylesheet" href="/css/fonts.css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/modals.css">
+    <link rel="stylesheet" href="/css/system-notifications.css">
+    <link rel="stylesheet" href="/css/landing.css">
+    <link rel="stylesheet" href="/css/auth.css">
+
+    <link rel="icon" type="image/png" href="/media/g8e-logo-tiny.png">
+
+    <!-- Dev logs bootstrap — defaults to false for the static SPA host; the
+         gateway does not inject server-side user preferences. -->
+    <script>window.__DEV_LOGS_ENABLED = false;</script>
+
+    <!-- Theme Manager - must load before all other scripts -->
+    <script src="/js/utils/theme-manager.js"></script>
+    <!-- ServiceClient - must load before the nav inline module (auth.js init) -->
+    <script type="module" src="/js/utils/service-client.js"></script>
+</head>
+
+<body data-theme="dark">
+    <header class="landing-header">
+        <div class="header-left">
+            <div class="hamburger-menu nav-hamburger">
+                <button id="hamburger-btn" class="hamburger-btn" aria-label="Menu">
+                    <span class="material-symbols-outlined">description</span>
+                </button>
+                <div id="hamburger-dropdown" class="hamburger-dropdown">
+                    <a href="/" class="hamburger-menu-item active">Home</a>
+                    <a href="/docs" class="hamburger-menu-item">Docs</a>
+                    <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="hamburger-menu-item">GitHub</a>
+                    <div class="hamburger-menu-divider"></div>
+                    <button id="hamburger-theme-toggle" class="hamburger-menu-item hamburger-theme-toggle">
+                        <span>Go Light</span>
+                    </button>
+                </div>
+            </div>
+            <a href="/" class="nav-logo-link">
+                <img src="/media/g8e-logo-vector.png" alt="g8e Logo" width="44" height="44" class="logo-icon">
+            </a>
+        </div>
+        <div class="nav-categories-menu" id="nav-categories-menu">
+            <a href="/" class="nav-category-link">Home</a>
+            <a href="/docs" class="nav-category-link">Docs</a>
+            <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="nav-category-link">GitHub</a>
+        </div>
+        <nav class="header-nav">
+            <div id="auth-button-container" class="nav-auth-container">
+            </div>
+        </nav>
+    </header>
+
+    <main class="login-section">
+        <div class="login-body-content">
+            <div class="login-flow">
+                <img src="/media/g8e-logo-vector.png" alt="g8e Logo" class="login-logo-img">
+                <div class="login-flow-node login-flow-browser login-flow-row2">
+                    <span class="material-symbols-outlined">terminal</span>
+                    <span>Your Browser</span>
+                </div>
+                <div class="login-flow-arrow login-flow-row2">
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </div>
+                <div class="login-flow-node login-flow-platform login-flow-row2">
+                    <span class="material-symbols-outlined">hub</span>
+                    <span>g8e Gateway</span>
+                </div>
+                <div class="login-flow-arrow login-flow-row2">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                </div>
+                <div class="login-flow-node login-flow-operator login-flow-row2">
+                    <span class="material-symbols-outlined">dns</span>
+                    <span>Bound Operator</span>
+                </div>
+            </div>
+
+            <div class="getting-started" id="getting-started" hidden>
+                <div class="getting-started-header">
+                    <span class="material-symbols-outlined getting-started-header-icon">rocket_launch</span>
+                    <span class="getting-started-header-text">Getting Started</span>
+                </div>
+
+                <p class="getting-started-intro">
+                    Remote workstations must enroll with the gateway before the browser can authenticate. Download the g8e binary, run <code>auth enroll user</code> to install the gateway root CA, then sign in with your passkey.
+                </p>
+
+                <div class="getting-started-steps" id="getting-started-steps">
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">1</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Download the g8e binary</div>
+                            <div class="getting-started-step-desc">
+                                Detected platform: <span id="gs-platform-label">—</span>.
+                                Binary URL: <span class="getting-started-binary-url" id="gs-binary-url">—</span>
+                            </div>
+                            <div class="getting-started-code">
+                                <code id="gs-download-cmd">—</code>
+                                <button type="button" class="getting-started-copy-btn" data-copy-target="gs-download-cmd" aria-label="Copy download command">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">2</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Enroll your workstation</div>
+                            <div class="getting-started-step-desc">
+                                Installs the gateway root CA into the OS trust store and opens a browser for the passkey ceremony. Restart your browser after the trust install prompt before completing the passkey.
+                            </div>
+                            <div class="getting-started-code">
+                                <code id="gs-enroll-cmd">—</code>
+                                <button type="button" class="getting-started-copy-btn" data-copy-target="gs-enroll-cmd" aria-label="Copy enroll command">
+                                    <span class="material-symbols-outlined">content_copy</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="getting-started-step">
+                        <div class="getting-started-step-number">
+                            <span class="getting-started-step-badge">3</span>
+                        </div>
+                        <div class="getting-started-step-content">
+                            <div class="getting-started-step-title">Sign in</div>
+                            <div class="getting-started-step-desc">
+                                After enrollment completes, click <strong>Sign in</strong> at the top right to authenticate with your passkey.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="getting-started-degraded" id="getting-started-degraded" hidden>
+                    Configure <code>G8E_GATEWAY_URL</code> on the dashboard host to enable remote enrollment instructions.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="app-footer">
+        <div class="footer-content">
+            <div class="footer-copyright">
+                <a href="https://g8e.ai" class="footer-link">g8e © 2026 Lateralus Labs, LLC</a>
+            </div>
+            <div class="footer-links">
+                <a href="/docs" class="footer-link">Docs</a>
+                <a href="/security" class="footer-link">Security</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- app.js creates the single AuthManager instance (window.authState) on
+         DOMContentLoaded, validates the gateway session cookie, and renders
+         either the profile dropdown or the sign-in button into
+         #auth-button-container. error-handler and hamburger-menu are
+         independent utilities loaded as modules. -->
+    <script type="module" src="/js/utils/error-handler.js"></script>
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+    <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/components/getting-started.js"></script>
+</body>
+
+</html>

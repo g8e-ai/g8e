@@ -17,39 +17,79 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+class ProtocolConstantsError(RuntimeError):
+    """Raised when a required protocol constant file is missing, empty, or malformed.
+
+    Fail-closed sentinel for :func:`_load_protocol_json` and :func:`_get_protocol_dir`.
+    Downstream ``KeyError``\\s from empty constant dicts (e.g. ``STATUS["status"]``)
+    are prevented by raising this at import time with the offending path.
+    """
+
+
 def _get_protocol_dir() -> Path:
-    """Find the protocol directory."""
-    # 1. Check environment variable
-    if "G8E_PROTOCOL_DIR" in os.environ:
-        return Path(os.environ["G8E_PROTOCOL_DIR"]) / "constants"
+    """Resolve the protocol constants directory.
 
-    # 2. Check within the package (PyPI install — JSON files bundled in g8e/_data/)
+    Resolution order (first match wins):
+
+    1. ``G8E_PROTOCOL_DIR`` env var — explicit override. An empty value is
+       treated as unset so a stray ``G8E_PROTOCOL_DIR=`` line in ``.env``
+       (loaded by ``load_dotenv``) cannot shadow the bundled ``_data/`` bundle.
+    2. Bundled ``g8e/_data/`` inside site-packages — the production/container
+       path used by ``pip install`` of this package.
+
+    There are no dev-mode fallbacks. The previous source-tree and
+    ``/app/protocol/constants`` probes were removed because they could silently
+    win in a container with a stale or empty path, producing the E.1
+    ``KeyError: 'status'`` crash. Developers running from a source checkout
+    must set ``G8E_PROTOCOL_DIR`` explicitly or install the package so the
+    bundled ``_data/`` is present.
+    """
+    # 1. Explicit env var override (empty string treated as unset).
+    env_dir = os.environ.get("G8E_PROTOCOL_DIR", "").strip()
+    if env_dir:
+        return Path(env_dir) / "constants"
+
+    # 2. Bundled _data/ inside the installed package — the only other path.
     pkg_path = Path(__file__).parent / "_data"
-    if pkg_path.exists():
-        return pkg_path
+    return pkg_path
 
-    # 3. Check relative to this file (dev mode — protocol/python/g8e/constants.py -> protocol/constants)
-    rel_path = Path(__file__).parent.parent.parent / "constants"
-    if rel_path.exists():
-        return rel_path
-
-    # 4. Fallback for containerized environments
-    container_path = Path("/app/protocol/constants")
-    if container_path.exists():
-        return container_path
-
-    return Path("./protocol/constants")
 
 _PROTOCOL_CONSTANTS_DIR = _get_protocol_dir()
 
+
 def _load_protocol_json(filename: str) -> dict[str, Any]:
+    """Load a required protocol constant JSON file, fail closed on missing/empty.
+
+    Raises :class:`ProtocolConstantsError` if the file is missing, empty, or
+    contains empty JSON content (``{}`` or whitespace-only). A missing or empty
+    constants file is a broken bundle, not a recoverable state — returning
+    ``{}`` would let downstream code raise opaque ``KeyError``\\s far from the
+    root cause (the E.1 ``KeyError: 'status'`` crash).
+    """
     path = _PROTOCOL_CONSTANTS_DIR / filename
     if not path.exists():
-        logger.warning("Protocol JSON %s not found at %s", filename, path)
-        return {}
+        raise ProtocolConstantsError(
+            f"Protocol constant file {filename!r} not found at {path}. "
+            f"Set G8E_PROTOCOL_DIR to the protocol directory or reinstall the "
+            f"g8e package to restore the bundled _data/ constants."
+        )
 
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ProtocolConstantsError(
+            f"Protocol constant file {filename!r} at {path} is malformed JSON: {exc}"
+        ) from exc
+
+    if not data:
+        raise ProtocolConstantsError(
+            f"Protocol constant file {filename!r} at {path} is empty. "
+            f"The constants bundle is broken; reinstall the g8e package."
+        )
+
+    return data
 
 # Exported constants
 EVENTS = _load_protocol_json("events.json")
@@ -85,6 +125,11 @@ def collection(name: str) -> str:
 def channel(name: str) -> str:
     """Get the wire value for a channel by key."""
     return CHANNELS["channels"][name]["value"]
+
+
+def document_id(name: str) -> str:
+    """Get the wire value for a document ID by key. e.g. document_id("platform_settings") -> "platform_settings" """
+    return DOCUMENT_IDS["document_ids"][name]["value"]
 
 
 def intent(name: str) -> str:

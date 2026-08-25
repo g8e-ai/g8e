@@ -31,8 +31,9 @@ const (
 	Consensus Posture = "consensus"
 	Notary    Posture = "notary"
 
-	DhsScenarioPrefix     = "dhs-"
-	FedRAMPScenarioPrefix = "fedramp-"
+	DhsScenarioPrefix      = "dhs-"
+	FedRAMPScenarioPrefix  = "fedramp-"
+	EnsembleScenarioPrefix = "ensemble-"
 )
 
 // Result is the detailed, auditable record of one scenario run.
@@ -74,6 +75,7 @@ func Registry() []Scenario {
 	s = append(s, mcpScenarios()...)
 	s = append(s, a2aScenarios()...)
 	s = append(s, governanceScenarios()...)
+	s = append(s, ensembleScenarios()...)
 	s = append(s, dhsScenarios()...)
 	s = append(s, financeScenarios()...)
 	s = append(s, fedrampScenarios()...)

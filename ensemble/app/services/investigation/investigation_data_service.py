@@ -1,0 +1,495 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+import logging
+
+from app.models.base import TypeAdapter
+
+from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+
+from app.constants import (
+    ComponentStatus,
+    DB_COLLECTION_INVESTIGATIONS,
+    EscalationRisk,
+    EventType,
+    ExecutionStatus,
+    FileOperation,
+    G8EE_COMPONENT,
+    HistoryActor,
+)
+from app.constants.message_sender import MessageSender
+from app.errors import ResourceNotFoundError, DatabaseError, ErrorCode
+from app.models.cache import FieldFilter
+from app.models.investigations import (
+    ConversationHistoryMessage,
+    ConversationMessageMetadata,
+    InvestigationCreateRequest,
+    InvestigationCurrentState,
+    InvestigationHistoryEntry,
+    InvestigationModel,
+    InvestigationQueryRequest,
+)
+
+from app.models.http_context import RequestContext
+from app.models.operators import CommandInternalResult
+from app.models.tool_results import FileEditResult
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.protocols import InvestigationDataServiceProtocol
+from app.utils.keyed_lock import KeyedAsyncLock
+from app.utils.timestamp import now
+from app.clients.governance_client import GovernanceClient
+
+
+logger = logging.getLogger(__name__)
+
+_CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
+
+
+class InvestigationDataService(InvestigationDataServiceProtocol):
+    def __init__(self, cache: CacheAsideService, governance_client: GovernanceClient):
+        self.cache = cache
+        self.collection = DB_COLLECTION_INVESTIGATIONS
+        self._history_lock = KeyedAsyncLock()
+        self._governance_client = governance_client
+
+    async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
+        """Low-level persistence for a new investigation document via governance envelope."""
+        from app.models.command_request_payloads import DocumentUpdateRequestPayload
+        from app.models.pubsub_messages import G8eMessage
+        from app.constants import AITaskId
+
+        investigation = InvestigationModel(
+            case_id=request.case_id,
+            case_title=request.case_title,
+            case_description=request.case_description,
+            web_session_id=request.web_session_id,
+            priority=request.priority,
+            user_email=request.user_email,
+            user_id=request.user_id,
+            created_with_case=request.created_with_case,
+            case_source=request.case_source,
+            sentinel_mode=request.sentinel_mode,
+        )
+
+        investigation.current_state = InvestigationCurrentState(
+            active_attempt=1,
+            escalation_risk=EscalationRisk.LOW,
+            collaboration_status={G8EE_COMPONENT: ComponentStatus.ACTIVE},
+        )
+
+        # Initial creation record is data-layer appropriate
+        investigation.add_history_entry(
+            event_type=EventType.APP_INVESTIGATION_CREATED,
+            actor=HistoryActor.SYSTEM,
+            summary=f"Investigation created for case {request.case_id}",
+        )
+
+        # Use governance envelope for governed collection writes.
+        # All governed document mutations (case/investigation/memory create/update/delete)
+        # route through DocumentUpdateRequestPayload, matching the Go-side
+        # DOCUMENT_UPDATE/DOCUMENT_DELETE action types and handleDocumentUpdateSync.
+        message = G8eMessage(
+            id=investigation.id,
+            source_component=G8EE_COMPONENT,
+            event_type=EventType.APP_INVESTIGATION_CREATED,
+            case_id=request.case_id,
+            task_id=AITaskId.CHAT,
+            investigation_id=investigation.id,
+            web_session_id=request.web_session_id,
+            user_id=request.user_id,
+            payload=DocumentUpdateRequestPayload(
+                collection=self.collection,
+                document_id=investigation.id,
+                updates=investigation.model_dump(mode="json"),
+                merge=False,
+            ),
+        )
+        await self._governance_client.submit_envelope(message)
+        logger.info(
+            "Created investigation %s for case %s via governance envelope",
+            investigation.id,
+            request.case_id,
+        )
+
+        return investigation
+
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
+        """Fetch a single investigation document by ID."""
+        doc_data = await self.cache.get_document_with_cache(
+            collection=self.collection,
+            document_id=investigation_id,
+        )
+        if doc_data is None:
+            return None
+        doc_data["id"] = investigation_id
+        return InvestigationModel.model_validate(doc_data)
+
+    async def update_investigation_raw(
+        self,
+        investigation_id: str,
+        updates: dict[str, object],
+        context: RequestContext,
+        merge: bool = True,
+    ):
+        """Authoritative low-level update for the investigations collection via governance envelope."""
+        from app.constants import EventType
+
+        await self._governance_client.update_governed_doc(
+            collection=self.collection,
+            document_id=investigation_id,
+            updates=updates,
+            event_type=EventType.APP_INVESTIGATION_UPDATED,
+            case_id=context.case_id,
+            investigation_id=investigation_id,
+            web_session_id=context.web_session_id,
+            user_id=context.user_id,
+            operator_id=context.operator_id,
+            operator_session_id=context.operator_session_id,
+            merge=merge,
+        )
+        logger.info("Updated investigation %s via governance envelope", investigation_id)
+
+    async def query_investigations(
+        self, request: InvestigationQueryRequest
+    ) -> list[InvestigationModel]:
+        """Execute a filtered query against the investigations collection."""
+        filter_map = {
+            "user_id": request.user_id,
+            "case_id": request.case_id,
+            "task_id": request.task_id,
+            "web_session_id": request.web_session_id,
+            "status": request.status,
+            "priority": request.priority,
+        }
+        filters = [
+            FieldFilter(field=field, op="==", value=value).model_dump(mode="json")
+            for field, value in filter_map.items()
+            if value is not None
+        ]
+
+        raw_order_by = {request.order_by: request.order_direction}
+
+        results = await self.cache.query_documents(
+            collection=self.collection,
+            field_filters=filters,
+            order_by=raw_order_by,
+            limit=request.limit,
+        )
+
+        # Data is already validated at write time - no need to re-validate on read
+        return [InvestigationModel.model_validate(data) for data in results]
+
+    async def get_case_investigations(
+        self,
+        case_id: str,
+        user_id: str | None,
+        context: RequestContext,
+    ) -> list[InvestigationModel]:
+        """Convenience query for all investigations associated with a case."""
+        request = InvestigationQueryRequest(
+            case_id=case_id, user_id=user_id, context=context, limit=100
+        )
+        return await self.query_investigations(request)
+
+    async def delete_investigation(self, investigation_id: str, context: RequestContext) -> None:
+        """Hard-delete an investigation document via governance envelope."""
+        from app.constants import EventType
+
+        await self._governance_client.delete_governed_doc(
+            collection=self.collection,
+            document_id=investigation_id,
+            event_type=EventType.APP_INVESTIGATION_DELETED,
+            case_id=context.case_id,
+            investigation_id=investigation_id,
+            web_session_id=context.web_session_id,
+            user_id=context.user_id,
+            operator_id=context.operator_id,
+            operator_session_id=context.operator_session_id,
+        )
+        logger.info("Deleted investigation %s via governance envelope", investigation_id)
+
+    async def add_chat_message(
+        self,
+        investigation_id: str | None,
+        sender: str,
+        content: str,
+        metadata: ConversationMessageMetadata,
+        context: RequestContext | None = None,
+    ) -> bool:
+        """Persist a chat message to the investigation's conversation history.
+
+        Routes through the governance envelope pipeline (DOCUMENT_UPDATE with
+        merge=true) so the gateway enforces L1-L5 verification on every chat
+        message append. Direct DB PATCH is rejected by the gateway with 409.
+        """
+        if not investigation_id:
+            return True
+
+        async with self._history_lock.acquire(investigation_id):
+            # Get previous hash from last entry in conversation history.
+            # All entries must carry an entry_hash; missing hashes are a hard error.
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ValueError(f"Investigation {investigation_id} not found")
+
+            if not investigation.conversation_history:
+                # First entry - use genesis hash
+                prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+            else:
+                last_entry = investigation.conversation_history[-1]
+                if not last_entry.entry_hash:
+                    raise ValueError(
+                        f"Previous entry in conversation history lacks entry_hash - chain integrity violation for investigation {investigation_id}"
+                    )
+                prev_hash = last_entry.entry_hash
+
+            message = ConversationHistoryMessage(
+                sender=sender,
+                content=content,
+                metadata=metadata or ConversationMessageMetadata(),
+                prev_hash=prev_hash,
+            )
+
+            # Compute entry hash
+            entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
+            computed_hash = compute_entry_hash(entry_dict, prev_hash)
+            message = message.model_copy(update={"entry_hash": computed_hash})
+
+            # Build the updated conversation_history array (existing + new message)
+            updated_history = [
+                e.model_dump(mode="json") for e in investigation.conversation_history
+            ] + [message.model_dump(mode="json")]
+
+            updates = {
+                "conversation_history": updated_history,
+                "created_at": now().isoformat(),
+            }
+
+            if context is not None:
+                await self._governance_client.update_governed_doc(
+                    collection=self.collection,
+                    document_id=investigation_id,
+                    updates=updates,
+                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    case_id=context.case_id,
+                    investigation_id=investigation_id,
+                    web_session_id=context.web_session_id,
+                    user_id=context.user_id,
+                    operator_id=context.operator_id,
+                    operator_session_id=context.operator_session_id,
+                    merge=True,
+                )
+            else:
+                # Fallback: construct a minimal context from the investigation
+                await self._governance_client.update_governed_doc(
+                    collection=self.collection,
+                    document_id=investigation_id,
+                    updates=updates,
+                    event_type=EventType.APP_INVESTIGATION_UPDATED,
+                    case_id=investigation.case_id,
+                    investigation_id=investigation_id,
+                    web_session_id=investigation.web_session_id,
+                    user_id=investigation.user_id,
+                    merge=True,
+                )
+
+        return True
+
+    async def add_history_entry(
+        self,
+        investigation_id: str,
+        event_type: EventType,
+        actor: HistoryActor,
+        summary: str,
+        details: ConversationMessageMetadata,
+        context: RequestContext,
+    ) -> InvestigationModel:
+        """Record an event in the investigation history trail."""
+        async with self._history_lock.acquire(investigation_id):
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ResourceNotFoundError(
+                    f"Investigation {investigation_id} not found",
+                    resource_type="investigation",
+                    resource_id=investigation_id,
+                )
+
+            # Single chokepoint: delegate to model method which handles hash chaining.
+            investigation.add_history_entry(
+                event_type=event_type,
+                actor=actor,
+                summary=summary,
+                details=details or ConversationMessageMetadata(),
+            )
+
+            await self.update_investigation_raw(
+                investigation_id=investigation_id,
+                updates={
+                    "history_trail": [
+                        e.model_dump(mode="json") for e in investigation.history_trail
+                    ]
+                },
+                context=context,
+            )
+
+            return investigation
+
+    async def add_approval_record(
+        self,
+        investigation_id: str,
+        event_type: EventType,
+        metadata: ConversationMessageMetadata,
+        context: RequestContext,
+        actor: HistoryActor = HistoryActor.SYSTEM,
+    ) -> InvestigationModel:
+        """Record an approval lifecycle event in both conversation_history and history_trail."""
+        summary = f"{event_type.value} ({metadata.approval_id})"
+        metadata.event_type = event_type
+
+        await self.add_chat_message(
+            investigation_id=investigation_id,
+            sender=MessageSender.SYSTEM,
+            content=summary,
+            metadata=metadata,
+            context=context,
+        )
+
+        return await self.add_history_entry(
+            investigation_id=investigation_id,
+            event_type=event_type,
+            actor=actor,
+            summary=summary,
+            details=metadata,
+            context=context,
+        )
+
+    async def add_command_execution_result(
+        self,
+        investigation_id: str,
+        execution_id: str,
+        command: str,
+        result: CommandInternalResult,
+        operator_id: str,
+        operator_session_id: str,
+        context: RequestContext,
+    ) -> InvestigationModel:
+        """Helper to record a command execution result."""
+        details = ConversationMessageMetadata(
+            execution_id=execution_id,
+            command=command,
+            status=result.status,
+            exit_code=result.exit_code,
+            error=result.error,
+            execution_time_seconds=result.execution_time_seconds,
+            hostname=operator_id,  # Using operator_id as hostname for now as per previous pattern
+        )
+        summary = f"Executed: {command[:50]}... ({result.status})"
+        return await self.add_history_entry(
+            investigation_id=investigation_id,
+            event_type=EventType.OPERATOR_COMMAND_EXECUTION,
+            actor=HistoryActor.G8EO,
+            summary=summary,
+            details=details,
+            context=context,
+        )
+
+    async def add_file_operation_result(
+        self,
+        investigation_id: str,
+        execution_id: str,
+        operator_id: str,
+        event_type: EventType,
+        file_path: str,
+        result: FileEditResult,
+        operation: FileOperation,
+        context: RequestContext,
+    ) -> InvestigationModel:
+        """Helper to record a file operation result."""
+        details = ConversationMessageMetadata(
+            execution_id=execution_id,
+            file_path=file_path,
+            operation=operation,
+            status=ExecutionStatus.COMPLETED if result.success else ExecutionStatus.FAILED,
+            error=result.error,
+        )
+        summary = f"{event_type.value}: {file_path} ({'success' if result.success else 'failed'})"
+        return await self.add_history_entry(
+            investigation_id=investigation_id,
+            event_type=event_type,
+            actor=HistoryActor.G8EO,
+            summary=summary,
+            details=details,
+            context=context,
+        )
+
+    async def get_command_execution_history(
+        self, investigation_id: str
+    ) -> list[InvestigationHistoryEntry]:
+        """Retrieve all command execution entries from investigation history."""
+        investigation = await self.get_investigation(investigation_id)
+        if not investigation:
+            return []
+
+        return [
+            entry
+            for entry in investigation.history_trail
+            if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION
+        ]
+
+    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
+        """Format operator actions for inclusion in Ensemble system prompt."""
+        investigation = await self.get_investigation(investigation_id)
+        if not investigation or not investigation.history_trail:
+            return "No Operator actions recorded yet."
+
+        history = [
+            e
+            for e in investigation.history_trail
+            if e.event_type
+            in (
+                EventType.OPERATOR_COMMAND_EXECUTION,
+                EventType.OPERATOR_FILE_EDIT_COMPLETED,
+                EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
+                EventType.OPERATOR_FILESYSTEM_READ_COMPLETED,
+            )
+        ]
+
+        if not history:
+            return "No Operator actions recorded yet."
+
+        lines = [f"Recorded Operator Actions ({len(history)}):"]
+        for entry in history:
+            lines.append(f"- [{entry.timestamp}] {entry.summary}")
+            if entry.details:
+                if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
+                    status = entry.details.status
+                    if hasattr(status, "value"):
+                        status = status.value
+                    status = status if status else "unknown"
+                else:
+                    status = "success" if entry.details.approved else "failed"
+                lines.append(f"  Result: {status}")
+
+        return "\n".join(lines)
+
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
+        """Retrieve full conversation history for an investigation."""
+        data = await self.cache.get_document_with_cache(
+            collection=self.collection,
+            document_id=investigation_id,
+        )
+
+        if not data:
+            return []
+
+        raw_history = data.get("conversation_history", [])
+        if not isinstance(raw_history, list):
+            return []
+        messages = _CONVERSATION_HISTORY_ADAPTER.validate_python(raw_history)
+        messages.sort(key=lambda m: m.timestamp)
+
+        return messages

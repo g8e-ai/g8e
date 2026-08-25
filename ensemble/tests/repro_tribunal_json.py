@@ -1,0 +1,78 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.constants import (
+    ComponentName,
+    G8EE_COMPONENT,
+)
+from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
+from app.models.http_context import G8eHttpContext
+from app.services.ai.auditor_service import run_auditor
+from app.services.ai.generator import TribunalEmitter
+
+
+def _make_mock_g8e_context() -> G8eHttpContext:
+    return G8eHttpContext(
+        web_session_id="test-session-id",
+        user_id="test-user-id",
+        case_id="test-case-id",
+        investigation_id="test-investigation-id",
+        source_component=G8EE_COMPONENT,
+    )
+
+
+@pytest.mark.asyncio
+async def test_auditor_repro_json_failure():
+    # Mock a response that is truncated or has prose prefix that might confuse parsing
+    # as seen in the logs: raw_text='Here is the JSON requested:\n```json'
+    mock_response = MagicMock()
+    mock_response.text = "Here is the JSON requested:\n```json"
+
+    mock_provider = MagicMock()
+    mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
+
+    # Mock emitter to avoid network calls
+    emitter = MagicMock(spec=TribunalEmitter)
+    emitter.emit = AsyncMock()
+
+    vote_breakdown = VoteBreakdown(
+        candidates_by_member={"axiom": "ls -la"},
+        candidates_by_command={"ls -la": ["axiom"]},
+        winner="ls -la",
+        winner_supporters=["axiom"],
+        dissenters_by_command={},
+        consensus_strength=1.0,
+    )
+
+    with pytest.raises(TribunalAuditorFailedError) as exc_info:
+        await run_auditor(
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            mode="unanimous",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
+            operator_context=MagicMock(),
+            emitter=emitter,
+            command_constraints_message="No constraints",
+            auditor_persona=get_agent_persona("auditor"),
+        )
+
+    assert "no_valid_revision" in str(exc_info.value)
+    assert "Failed to parse auditor response" in str(exc_info.value)
+
+
+if __name__ == "__main__":
+    asyncio.run(test_auditor_repro_json_failure())

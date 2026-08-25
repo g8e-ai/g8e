@@ -709,9 +709,9 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 			if postureObj.RequiresL3Proof() {
-				cmd.Printf("\nNext step: Run '%s auth enroll' to register a passkey (required for notary posture)\n", getBinaryName())
+				cmd.Printf("\nNext step: Run '%s auth enroll user' to register a passkey (required for notary posture)\n", getBinaryName())
 			} else {
-				cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate (passkey optional for %s posture)\n", getBinaryName(), postureObj.Name())
+				cmd.Printf("\nNext step: Run '%s auth enroll user' to authenticate (passkey optional for %s posture)\n", getBinaryName(), postureObj.Name())
 			}
 			return nil
 		},
@@ -924,7 +924,7 @@ Use --force to skip the confirmation prompt.`,
 				cmd.Println("  5. Remove g8e root CA anchors from the OS trust store")
 				cmd.Println()
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e auth enroll' again after restarting the gateway.")
+				cmd.Println("You will need to run './g8e auth enroll user' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
 				reader := bufio.NewReader(cmd.InOrStdin())
 				response, _ := reader.ReadString('\n')

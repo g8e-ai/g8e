@@ -1,0 +1,684 @@
+/* Navigation Component Styles */
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Hamburger Menu */
+.hamburger-menu {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: 0;
+}
+
+.hamburger-btn:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.hamburger-btn .material-symbols-outlined {
+    font-size: 24px;
+}
+
+.hamburger-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    min-width: 140px;
+    max-height: calc(100vh - 80px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.hamburger-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.hamburger-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    text-decoration: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all var(--transition-fast);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.hamburger-menu-item:last-child {
+    border-bottom: none;
+}
+
+.hamburger-menu-item:hover {
+    background-color: var(--bg-hover);
+    color: var(--accent-blue);
+}
+
+.hamburger-menu-item.active {
+    background-color: rgba(var(--accent-blue-rgb), 0.1);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+.hamburger-menu-item .material-symbols-outlined {
+    font-size: 16px;
+    flex-shrink: 0;}
+
+/* Collapsible Sections */
+.hamburger-section {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.hamburger-section:last-of-type {
+    border-bottom: none;
+}
+
+/* Menu Category Labels (clickable buttons) */
+.hamburger-category-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: left;
+}
+
+.hamburger-category-label:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.hamburger-chevron {
+    font-size: 16px;
+    transition: transform var(--transition-fast);
+}
+
+.hamburger-section.collapsed .hamburger-chevron {
+    transform: rotate(-90deg);
+}
+
+/* Section Content (collapsible) */
+.hamburger-section-content {
+    overflow: hidden;
+    max-height: 500px;
+    transition: max-height var(--transition-fast);
+}
+
+.hamburger-section.collapsed .hamburger-section-content {
+    max-height: 0;
+}
+
+/* Indented Menu Items (under categories) */
+.hamburger-menu-item.hamburger-menu-indent {
+    padding-left: 1rem;
+}
+
+/* Hamburger Menu Divider */
+.hamburger-menu-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 0;
+}
+
+/* Hamburger Theme Toggle */
+.hamburger-theme-toggle {
+    width: 100%;
+    background: transparent;
+    border: none;
+    justify-content: flex-start;
+    font-family: var(--font-mono);
+    font-size: inherit;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+}
+
+.hamburger-theme-toggle:hover .material-symbols-outlined {
+    transform: rotate(15deg);
+}
+
+.hamburger-theme-toggle .material-symbols-outlined {
+    transition: transform var(--transition-fast);
+}
+
+/* Nav Hamburger Menu - opens downward in header */
+.nav-hamburger {
+    position: relative;
+}
+
+.nav-hamburger .hamburger-dropdown {
+    top: calc(100% + 0.5rem);
+    left: 0;
+}
+
+/* Responsive - Mobile Hamburger Menu */
+@media (max-width: 480px) {
+    .hamburger-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .hamburger-btn .material-symbols-outlined {
+        font-size: 20px;
+    }
+}
+
+/* Navigation Dropdown */
+.nav-dropdown {
+    position: relative;
+}
+
+.nav-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.nav-dropdown-trigger:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.nav-dropdown-trigger .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.nav-dropdown:hover .nav-dropdown-menu,
+.nav-dropdown:focus-within .nav-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.nav-dropdown-item {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.nav-dropdown-item:hover {
+    background-color: var(--bg-hover);
+    color: var(--accent-blue);
+}
+
+.nav-dropdown-item.active {
+    background-color: rgba(var(--accent-blue-rgb), 0.1);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+/* Nav Link (e.g., Docs) */
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.nav-link:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-color);
+}
+
+.nav-link .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.nav-link-text {
+    display: inline;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: 2px;
+}
+
+.theme-toggle-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.theme-toggle-btn:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+/* ============================================
+   Theme-Aware Hamburger Menu Overrides
+   ============================================ */
+
+/* Dark theme */
+[data-theme="dark"] .hamburger-btn {
+    border-color: var(--border-color);
+    color: var(--text-dim);
+}
+
+[data-theme="dark"] .hamburger-btn:hover {
+    background-color: rgba(var(--accent-blue-rgb), 0.15);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .hamburger-dropdown {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .hamburger-dropdown a,
+[data-theme="dark"] .hamburger-dropdown .hamburger-menu-item {
+    color: var(--text-dim);
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .hamburger-dropdown a:hover,
+[data-theme="dark"] .hamburger-dropdown .hamburger-menu-item:hover {
+    background: rgba(var(--accent-blue-rgb), 0.15);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .hamburger-dropdown a.active,
+[data-theme="dark"] .hamburger-dropdown .hamburger-menu-item.active {
+    background-color: rgba(var(--accent-blue-rgb), 0.2);
+    color: var(--accent-blue);
+}
+
+[data-theme="dark"] .hamburger-category-label {
+    color: var(--text-muted);
+}
+
+[data-theme="dark"] .hamburger-category-label:hover {
+    background-color: rgba(var(--accent-blue-rgb), 0.1);
+    color: var(--text-dim);
+}
+
+[data-theme="dark"] .hamburger-menu-divider {
+    background-color: var(--border-color);
+}
+
+/* Light theme */
+[data-theme="light"] .hamburger-btn {
+    border-color: var(--border-color);
+    color: var(--text-dim);
+}
+
+[data-theme="light"] .hamburger-btn:hover {
+    background-color: rgba(var(--accent-blue-rgb), 0.08);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .hamburger-dropdown {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .hamburger-dropdown a,
+[data-theme="light"] .hamburger-dropdown .hamburger-menu-item {
+    color: var(--text-dim);
+    border-bottom-color: var(--border-secondary);
+}
+
+[data-theme="light"] .hamburger-dropdown a:hover,
+[data-theme="light"] .hamburger-dropdown .hamburger-menu-item:hover {
+    background-color: rgba(var(--accent-blue-rgb), 0.08);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .hamburger-dropdown a.active,
+[data-theme="light"] .hamburger-dropdown .hamburger-menu-item.active {
+    background-color: rgba(var(--accent-blue-rgb), 0.1);
+    color: var(--accent-blue);
+}
+
+[data-theme="light"] .hamburger-category-label {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .hamburger-category-label:hover {
+    background-color: rgba(var(--accent-blue-rgb), 0.05);
+    color: var(--text-dim);
+}
+
+[data-theme="light"] .hamburger-menu-divider {
+    background-color: var(--border-color);
+}
+
+/* ==========================================================================
+   Categorized Navigation Menu (Public/Static Pages)
+   Theme-aware using CSS variables from main.css
+   ========================================================================== */
+
+.nav-categories-menu {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: auto;
+    margin-right: 1rem;
+}
+
+.nav-category {
+    position: relative;
+}
+
+.nav-category-link {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.nav-category-link:hover {
+    background: rgba(var(--accent-blue-rgb), 0.15);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+    color: var(--text-primary);
+}
+
+.nav-category-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.65rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-category-btn:hover,
+.nav-category-btn.active {
+    background: rgba(var(--accent-blue-rgb), 0.15);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+    color: var(--text-primary);
+}
+
+.nav-category-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.nav-category-btn .nav-category-arrow {
+    font-size: 16px;
+    transition: transform 0.2s ease;
+}
+
+.nav-category-btn.active .nav-category-arrow {
+    transform: rotate(180deg);
+}
+
+.nav-category-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 180px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    padding: 0.5rem 0;
+    margin-top: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.2s ease;
+    z-index: 200;
+    box-shadow: var(--shadow-lg);
+}
+
+.nav-category:hover .nav-category-dropdown,
+.nav-category-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.nav-category-dropdown a {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 400;
+    border-bottom: none;
+    transition: all 0.15s ease;
+}
+
+.nav-category-dropdown a:hover {
+    background: rgba(var(--accent-blue-rgb), 0.15);
+    color: var(--text-primary);
+}
+
+.nav-category-dropdown a .material-symbols-outlined {
+    font-size: 18px;
+    color: var(--text-secondary);
+}
+
+.nav-category-dropdown a:hover .material-symbols-outlined {
+    color: var(--accent-blue);
+}
+
+/* Hide categories menu on mobile, show hamburger instead */
+@media (max-width: 650px) {
+    .nav-categories-menu {
+        display: none;
+    }
+
+    /* Only hide logo on mobile when user is authenticated */
+    body.user-authenticated .nav-logo-link img {
+        display: none;
+    }
+}
+
+
+/* Nav Logo Link */
+.nav-logo-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.nav-logo-link img {
+    height: 44px;
+    width: auto;
+}
+
+
+
+/* Contact Headshot */
+.contact-headshot {
+    width: 120px;
+    height: 120px;
+    border-radius: 1rem;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Public Page Header
+   ========================================================================== */
+.landing-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1100;
+}
+
+.landing-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.landing-header .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.nav-auth-container {
+    display: flex;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .landing-header {
+        padding: 1rem;
+    }
+
+    .landing-header .header-nav {
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .landing-header {
+        padding: 0.75rem;
+    }
+
+    .landing-header .header-nav {
+        gap: 0.5rem;
+    }
+}
+
+[data-theme="light"] .landing-header {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="light"] .nav-category-btn {
+    color: var(--text-dim);
+}
+
+[data-theme="light"] .nav-category-btn:hover,
+[data-theme="light"] .nav-category-btn.active {
+    background: rgba(var(--accent-blue-rgb), 0.08);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .nav-category-dropdown {
+    background: var(--bg-elevated);
+    border-color: var(--border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .nav-category-dropdown a {
+    color: var(--text-dim);
+}
+
+[data-theme="light"] .nav-category-dropdown a:hover {
+    background: rgba(var(--accent-blue-rgb), 0.08);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .nav-category-dropdown a .material-symbols-outlined {
+    color: var(--text-dim);
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -47,13 +48,15 @@ type L4Warden struct {
 	l3Notary             L3Notary
 	doctrine             *L1Doctrine
 	knownActionTypes     map[constants.ActionType]struct{}
-	posture              GovernancePosture // Governance posture: doctrine, consensus, or notary
-	clock                system.Clock      // Injectable time source for deterministic testing
+	clock                system.Clock // Injectable time source for deterministic testing
 
 	inFlight sync.Map // Concurrent-safe tracking of in-flight nonces
 }
 
-// NewL4Warden creates a new L4 Warden.
+// NewL4Warden creates a new L4 Warden. The warden has no posture of its
+// own; it reads posture per-envelope from GovernanceEnvelope.Posture at
+// verification time. The gateway sets that field at envelope construction
+// from cfg.Gateway.Posture.
 func NewL4Warden(
 	logger *slog.Logger,
 	replayStore ReplayStore,
@@ -63,7 +66,6 @@ func NewL4Warden(
 	l3Notary L3Notary,
 	doctrine *L1Doctrine,
 	knownActionTypes []constants.ActionType,
-	posture string,
 	clock system.Clock,
 ) *L4Warden {
 	knownActions := make(map[constants.ActionType]struct{})
@@ -85,9 +87,21 @@ func NewL4Warden(
 		l3Notary:             l3Notary,
 		doctrine:             doctrine,
 		knownActionTypes:     knownActions,
-		posture:              NewGovernancePosture(posture),
 		clock:                clock,
 	}
+}
+
+// postureFromEnvelope reads the gateway's governance posture from the
+// envelope's Posture field. Fails closed with ErrEnvelopePostureMissing
+// when the field is empty — that indicates a gateway bug (the constructor
+// was called without wiring cfg.Gateway.Posture), not an operator config
+// gap. The envelope is the authoritative source of posture for
+// operator-side L2/L3 gating.
+func postureFromEnvelope(envelope *govtypes.GovernanceEnvelope) (GovernancePosture, error) {
+	if envelope.Posture == "" {
+		return nil, constants.ErrEnvelopePostureMissing
+	}
+	return ParseGovernancePosture(envelope.Posture)
 }
 
 // VerifyEnvelope performs all required verification checks on a decoded GovernanceEnvelope JSON GovernanceEnvelope.
@@ -161,7 +175,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 	}
 
 	// 3. Stateful Validation (excluding nonce, which is already reserved)
-	err = tv.verifyStateful(envelope)
+	err = tv.verifyStateful(ctx, envelope)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: STATEFUL_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
@@ -173,12 +187,24 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 	}
 
 	// 4. Posture Validation (L2/L3)
-	l2Valid, l3Valid, err := tv.verifyPosture(ctx, envelope, computedHash)
+	// Posture is read per-envelope from GovernanceEnvelope.Posture, which
+	// the gateway sets at construction time. The warden has no posture of
+	// its own; the envelope is authoritative.
+	posture, err := postureFromEnvelope(envelope)
+	if err != nil {
+		tv.logger.Error("Transaction rejected: ENVELOPE_POSTURE_MISSING",
+			"nonce", envelope.Nonce,
+			"tx_id", envelope.Id,
+			string(constants.ConnectionStateError), err)
+		tv.releaseNonceReservation(envelope.Nonce)
+		return nil, err
+	}
+	l2Valid, l3Valid, err := tv.verifyPosture(ctx, envelope, computedHash, posture)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: POSTURE_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
 			"tx_id", envelope.Id,
-			"posture", tv.posture.Name(),
+			"posture", posture.Name(),
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on posture validation failure
 		tv.releaseNonceReservation(envelope.Nonce)
@@ -196,7 +222,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 		ExpiresAt:      expiresAt,
 		L2Valid:        l2Valid,
 		L3Valid:        l3Valid,
-		Posture:        tv.posture,
+		Posture:        posture,
 	}, nil
 }
 
@@ -261,7 +287,11 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 		return nil, "", constants.ErrTxPayloadDecodeFailed
 	}
 
-	// INVESTIGATION_CREATE has no typed payload (returns nil), skip L1 validation
+	// All governed document mutations (DOCUMENT_UPDATE, DOCUMENT_DELETE) and
+	// every other known action type carry a typed protobuf payload that goes
+	// through L1 doctrine validation. Only adapter-specific action types that
+	// fall through to the default case in decodePayloadForAction return nil
+	// and skip L1 validation.
 	if decodedPayload != nil {
 		if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
 			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
@@ -295,8 +325,12 @@ func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (prot
 	return decodedPayload, computedHash, nil
 }
 
-// verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error {
+// verifyStateful checks the state root. Nonce and expiry are checked earlier in VerifyEnvelope.
+// If the caller has placed a pre-fetched state merkle root in the context (the
+// in-process gateway build path), that root is used so concurrent mutations do
+// not invalidate the envelope between construction and verification. External
+// operator-side verification always re-fetches from the provider.
+func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.GovernanceEnvelope) error {
 	if envelope.StateMerkleRoot == "" {
 		return constants.ErrTxStateRootRequired
 	}
@@ -306,10 +340,16 @@ func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error 
 		return constants.ErrTxStateRootMissing
 	}
 
-	currentRoot, err := tv.stateRootProvider.GetCurrentStateRoot()
-	if err != nil {
-		tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
-		return fmt.Errorf("l4 warden: get current state root: %w", err)
+	var currentRoot string
+	if root, ok := ctx.Value(constants.ContextKeyStateMerkleRoot).(string); ok && root != "" {
+		currentRoot = root
+	} else {
+		var err error
+		currentRoot, err = tv.stateRootProvider.GetCurrentStateRoot()
+		if err != nil {
+			tv.logger.Error("Failed to get current state root", string(constants.ConnectionStateError), err)
+			return fmt.Errorf("l4 warden: get current state root: %w", err)
+		}
 	}
 
 	if currentRoot == "" {
@@ -332,13 +372,13 @@ func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) error 
 // human's approval bond is spent only on transactions that have already
 // cleared L2 consensus. A human should never be asked to authorize
 // content the machines have not yet vetted.
-func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string) (bool, bool, error) {
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, bool, error) {
+	l2Valid, err := tv.verifyL2Posture(envelope, computedHash, posture)
 	if err != nil {
 		return false, false, err
 	}
 
-	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope, posture)
 	if err != nil {
 		return l2Valid, false, err
 	}
@@ -346,22 +386,22 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.Govern
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope) (bool, error) {
+func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, posture GovernancePosture) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
 	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
 
 	if !hasProof {
-		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
-			tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
+		if tv.isMutation(actionType) && posture.RequiresL3Proof() {
+			tv.logger.Error("L3 proof missing but required by posture", "posture", posture.Name())
 			return false, constants.ErrTxL3ProofMissing
 		}
 		return false, nil
 	}
 
 	if tv.l3Notary == nil {
-		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
-			tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
+		if tv.isMutation(actionType) && posture.RequiresL3Proof() {
+			tv.logger.Error("L3 notary not configured but required by posture", "posture", posture.Name())
 			return false, constants.ErrTxL3NotaryNotConfigured
 		}
 		return false, nil
@@ -375,7 +415,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.Gove
 		envelope.Governance.L3.Proof,
 	)
 
-	if (err != nil || !ok) && tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
+	if (err != nil || !ok) && tv.isMutation(actionType) && posture.RequiresL3Proof() {
 		tv.logger.Error("Notary (L3Notary) verification failed but required by posture", string(constants.ConnectionStateError), err)
 		return false, constants.ErrTxL3ProofInvalid
 	}
@@ -428,15 +468,28 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{}
-	case constants.ActionTypeInvestigationCreate:
-		// No typed payload for investigation create, it uses raw bytes
-		return nil, nil
+	case constants.ActionTypeDocumentUpdate:
+		msg = &operatorv1.DocumentUpdateRequested{}
+	case constants.ActionTypeDocumentDelete:
+		msg = &operatorv1.DocumentDeleteRequested{}
+	case constants.ActionTypePlatformEnrollmentCreate,
+		constants.ActionTypePlatformEnrollmentDecide,
+		constants.ActionTypePlatformEnrollmentIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession:
+		// All five platform enrollment actions share the same
+		// PlatformEnrollmentGovernancePayload proto. The action field
+		// inside the payload distinguishes them; L1 doctrine validates
+		// the payload shape and the handler layer enforces per-action
+		// semantics. CSR PEM, token hashes, and private keys are never
+		// placed in the audited envelope payload.
+		msg = &commonv1.PlatformEnrollmentGovernancePayload{}
 
 	default:
 		// Known action type without a typed proto decode case (e.g.
-		// adapter-specific action types). Treat payload as raw bytes,
-		// same as INVESTIGATION_CREATE. Unknown action types are
-		// rejected before reaching this function (knownActionTypes check).
+		// adapter-specific action types). Treat payload as raw bytes.
+		// Unknown action types are rejected before reaching this
+		// function (knownActionTypes check).
 		return nil, nil
 	}
 	if err := proto.Unmarshal(payload, msg); err != nil {
@@ -448,11 +501,6 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 // computeTransactionHash computes the canonical transaction hash.
 func (tv *L4Warden) computeTransactionHash(envelope *govtypes.GovernanceEnvelope) (string, error) {
 	return govtypes.GenerateMessageID(envelope)
-}
-
-// Posture returns the current governance posture.
-func (tv *L4Warden) Posture() GovernancePosture {
-	return tv.posture
 }
 
 // Doctrine returns the current L1 doctrine validator.

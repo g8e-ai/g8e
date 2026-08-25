@@ -8,9 +8,10 @@
 package cmd
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,19 +20,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/cli/platform"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/services/fs"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, lint, chaos)",
+		Short: "Run test suites (unit, integration, e2e, e2e-full, lint, chaos)",
 		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Chaos generates governance events for testing.`,
 	}
 
@@ -39,6 +38,7 @@ func testCmd() *cobra.Command {
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testE2ECmd(),
+		testE2EFullCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
 		chaosCmd(),
@@ -113,69 +113,67 @@ func testIntegrationCmd() *cobra.Command {
 	return cmd
 }
 
-func testE2ECmd() *cobra.Command {
-	return testE2ECmdWithConfig(loadConfig, newFileSvc)
+// e2eCommandRunner abstracts exec.CommandContext so unit tests can verify
+// argument propagation and failure wrapping without starting platform tests.
+type e2eCommandRunner func(ctx context.Context, name string, args ...string) (int, error)
+
+// realE2ERunner runs the Go test binary as a child process, streaming stdout
+// and stderr to the parent. It returns the child exit code and any start/run
+// error. Cancellation via ctx signals the child process.
+func realE2ERunner(stdout, stderr io.Writer) e2eCommandRunner {
+	return func(ctx context.Context, name string, args ...string) (int, error) {
+		c := exec.CommandContext(ctx, name, args...)
+		c.Stdout = stdout
+		c.Stderr = stderr
+		if err := c.Run(); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				return exitErr.ExitCode(), err
+			}
+			return -1, err
+		}
+		return 0, nil
+	}
 }
 
-func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
+func testE2ECmd() *cobra.Command {
+	return testE2ECmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+// testE2ECmdWithRunner constructs the canonical Tier 3 executor. It runs only
+// ./test/e2e/... with the e2e build tag, race detection on non-Windows
+// platforms, -count=1, -parallel=1 as a backstop against accidental
+// t.Parallel() use, and an optional --run regexp for scenario selection. The
+// external scenario runner owns Docker lifecycle; this command performs network
+// requests and assertions only.
+func testE2ECmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+	var runRegexp string
+
 	cmd := &cobra.Command{
 		Use:   "e2e",
 		Short: "Run Tier 3 (Live Platform E2E) tests",
-		Long:  `Run live-platform E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
+		Long: `Run Tier 3 (Live Platform E2E) tests against a running production platform.
+
+Start the platform first (docker compose up or ./g8e gw start), then run this
+command. The test binary connects to the running platform and fails fast if it
+is not reachable. Supports an optional --run regexp to select specific tests.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			cfg, err := configLoader("")
-			if err != nil {
-				return err
-			}
-
-			// Try HTTP check first (works for Docker/foreground/background modes)
-			// Use plain HTTP with short timeout to avoid hanging when gateway is not running
-			healthURL := cfg.OperatorDiscoveryURL() + constants.APIPaths.Health
-			httpClient := &http.Client{Timeout: 5 * time.Second}
-			isRunning := false
-			resp, err := httpClient.Get(healthURL)
-			if err == nil && resp.StatusCode == http.StatusOK {
-				isRunning = true
-				resp.Body.Close()
-			}
-
-			// Fallback to ProcessManager check (for background/host mode)
-			if !isRunning {
-				fileSvc, err := fileSvcFactory("", slog.Default())
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-				}
-				pm, err := platform.NewProcessManager(fileSvc)
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-				}
-
-				running, _, err := pm.OperatorStatus()
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-				}
-				isRunning = running
-			}
-
-			if !isRunning {
-				fmt.Println("Error: Gateway is not running.")
-				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
-				return constants.ErrGatewayNotRunning
-			}
-
-			testRace := ""
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
 			if runtime.GOOS != "windows" {
-				testRace = "-race"
+				testArgs = append(testArgs, "-race")
 			}
+			if runRegexp != "" {
+				testArgs = append(testArgs, "-run", runRegexp)
+			}
+			testArgs = append(testArgs, "./test/e2e/...")
 
-			testCmd := exec.Command("go", "test", "-tags=e2e", testRace, "-count=1", "-timeout", "180s", "./test/...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrE2ETestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrE2ETestsFailed, code)
 			}
 
 			fmt.Println("E2E tests completed successfully.")
@@ -183,7 +181,110 @@ func testE2ECmdWithConfig(configLoader func(string) (*config.Config, error), fil
 		},
 	}
 
+	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+
 	return cmd
+}
+
+func testE2EFullCmd() *cobra.Command {
+	return testE2EFullCmdWithRunner(realE2ERunner(os.Stdout, os.Stderr))
+}
+
+// testE2EFullCmdWithRunner constructs the full lifecycle Tier 3 executor.
+// It starts the unified Docker Compose stack, waits for health, runs the E2E tests,
+// and tears down on completion or failure.
+func testE2EFullCmdWithRunner(runner e2eCommandRunner) *cobra.Command {
+	var runRegexp string
+
+	cmd := &cobra.Command{
+		Use:   "e2e-full",
+		Short: "Run full lifecycle Tier 3 E2E tests (start compose, test, tear down)",
+		Long: `Start the unified Docker Compose stack (--profile bootstrapped), wait for
+services to become healthy, run the Tier 3 E2E test suite, and tear down
+(docker compose down -v) on completion or failure.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Starting unified Docker Compose stack (--profile bootstrapped)...")
+			if err := runDockerCompose([]string{"up", "-d"}, "bootstrapped"); err != nil {
+				return fmt.Errorf("%w: docker compose up failed: %w", constants.ErrE2ETestsFailed, err)
+			}
+			defer func() {
+				fmt.Println("Tearing down Docker Compose stack...")
+				_ = runDockerCompose([]string{"down", "-v"}, "")
+			}()
+
+			fmt.Println("Waiting for platform services to become healthy...")
+			waitCtx, waitCancel := context.WithTimeout(cmd.Context(), 60*time.Second)
+			defer waitCancel()
+			if err := waitForStackHealthy(waitCtx); err != nil {
+				return fmt.Errorf("%w: platform health check failed: %w", constants.ErrE2ETestsFailed, err)
+			}
+
+			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
+			testArgs := []string{"test", "-tags=e2e", "-count=1", "-parallel=1", "-timeout", "300s"}
+			if runtime.GOOS != "windows" {
+				testArgs = append(testArgs, "-race")
+			}
+			if runRegexp != "" {
+				testArgs = append(testArgs, "-run", runRegexp)
+			}
+			testArgs = append(testArgs, "./test/e2e/...")
+
+			code, err := runner(cmd.Context(), "go", testArgs...)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrE2ETestsFailed, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("%w: exit code %d", constants.ErrE2ETestsFailed, code)
+			}
+
+			fmt.Println("E2E tests completed successfully.")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&runRegexp, "run", "", "Regular expression selecting which E2E tests to run (passed to go test -run)")
+	return cmd
+}
+
+func waitForStackHealthy(ctx context.Context) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	gatewayURL := "http://localhost:8080/api/v1/health"
+	ensembleURL := "http://localhost:8000/health"
+
+	for {
+		gwOK := false
+		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, gatewayURL, nil); err == nil {
+			if resp, err := client.Do(req); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					gwOK = true
+				}
+			}
+		}
+
+		ensOK := false
+		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, ensembleURL, nil); err == nil {
+			if resp, err := client.Do(req); err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					ensOK = true
+				}
+			}
+		}
+
+		if gwOK && ensOK {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func testCoverageCmd() *cobra.Command {

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log - g8e</title>
+    <meta name="description" content="g8e Audit Log - Complete transparency into all operations, approvals, and data flows.">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <%- include('partials/head-public') %>
+    
+    <!-- Audit Page CSS -->
+    <link rel="stylesheet" href="/css/audit.css?v=<%= assetVersion %>">
+
+</head>
+<body class="audit-body" data-theme="<%= theme %>">
+        <%- include('partials/nav-public', { currentPage: 'audit' }) %>
+
+    <!-- Main Content -->
+    <main class="audit-page">
+        
+        <!-- Back to Chat -->
+        <a href="/chat" class="back-to-chat-link">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Back to Chat
+        </a>
+
+        <!-- Header -->
+        <header class="audit-header">
+            <h1 class="audit-title">Audit Log</h1>
+            <p class="audit-subtitle">Complete transparency into all operations, approvals, and data flows</p>
+        </header>
+
+        <!-- Main Audit Container -->
+        <div class="audit-container">
+            
+            <!-- Event Log Section -->
+            <div class="audit-panel-content">
+                    
+                    <!-- Filters Row -->
+                    <div class="audit-filters">
+                        <div class="audit-filter-group">
+                            <label for="from-date" class="audit-filter-label">From:</label>
+                            <input type="date" id="from-date" name="from-date" class="audit-date-input">
+                        </div>
+                        <div class="audit-filter-group">
+                            <label for="to-date" class="audit-filter-label">To:</label>
+                            <input type="date" id="to-date" name="to-date" class="audit-date-input">
+                        </div>
+                        <button class="audit-btn" id="apply-filters-btn">
+                            <span class="material-symbols-outlined audit-tab-icon">filter_alt</span>
+                            Apply
+                        </button>
+                        <div class="audit-filter-actions">
+                            <button class="audit-btn" id="download-csv-btn">
+                                <span class="material-symbols-outlined audit-tab-icon">download</span>
+                                CSV
+                            </button>
+                            <button class="audit-btn primary" id="download-json-btn">
+                                <span class="material-symbols-outlined audit-tab-icon">download</span>
+                                JSON
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stats Row -->
+                    <div class="audit-stats-grid">
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="total-events">--</span>
+                            <span class="audit-stat-label">Total</span>
+                        </div>
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="chat-count">--</span>
+                            <span class="audit-stat-label">Chat</span>
+                        </div>
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="approval-count">--</span>
+                            <span class="audit-stat-label">Approvals</span>
+                        </div>
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="command-count">--</span>
+                            <span class="audit-stat-label">Commands</span>
+                        </div>
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="file-edit-count">--</span>
+                            <span class="audit-stat-label">File Edits</span>
+                        </div>
+                        <div class="audit-stat-card">
+                            <span class="audit-stat-value audit-stat-value-small" id="date-range">--</span>
+                            <span class="audit-stat-label">Date Range</span>
+                        </div>
+                    </div>
+
+                    <!-- Table Container -->
+                    <div class="audit-table-container" id="audit-table-container">
+                        <div class="loading-indicator active" id="loading-indicator">
+                            <span class="material-symbols-outlined spin">sync</span>
+                            Loading audit log...
+                        </div>
+                    </div>
+            </div>
+        </div>
+
+        <!-- Data Transparency Section -->
+        <div class="audit-container audit-section-spacing">
+            <div class="audit-section-header">
+                <span class="material-symbols-outlined audit-section-icon">visibility</span>
+                <h2 class="audit-section-title">Data Transparency</h2>
+            </div>
+            <div class="audit-panel-content">
+                    <p class="audit-panel-desc">See exactly what data flows where. Complete transparency into how g8e handles your information.</p>
+                    
+                    <div class="audit-table-wrapper">
+                        <table class="transparency-table">
+                            <thead>
+                                <tr>
+                                    <th>Audit Field</th>
+                                    <th>Storage</th>
+                                    <th>Sent to AI?</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">category</span>
+                                            <div>
+                                                <div class="audit-category-name">Event Type</div>
+                                                <div class="audit-category-desc">command, file_edit, chat, approval</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge cloud">Yes</span></td>
+                                    <td class="audit-protection-text">Metadata sent so AI understands context</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">schedule</span>
+                                            <div>
+                                                <div class="audit-category-name">Timestamp</div>
+                                                <div class="audit-category-desc">When the event occurred</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge cloud">Yes</span></td>
+                                    <td class="audit-protection-text">Execution timestamps sent as metadata</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">terminal</span>
+                                            <div>
+                                                <div class="audit-category-name">Command</div>
+                                                <div class="audit-category-desc">The executed command string</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge scrubbed">Scrubbed</span></td>
+                                    <td class="audit-protection-text">Sentinel scrubs secrets; toggle controls scrubbing level</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">output</span>
+                                            <div>
+                                                <div class="audit-category-name">Output (stdout/stderr)</div>
+                                                <div class="audit-category-desc">Command execution results</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge scrubbed">Scrubbed</span></td>
+                                    <td class="audit-protection-text">Full output stored locally; Sentinel scrubs before AI sees it</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">check_circle</span>
+                                            <div>
+                                                <div class="audit-category-name">Exit Code</div>
+                                                <div class="audit-category-desc">Command return status</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge cloud">Yes</span></td>
+                                    <td class="audit-protection-text">Numeric status code (0 = success)</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">timer</span>
+                                            <div>
+                                                <div class="audit-category-name">Duration</div>
+                                                <div class="audit-category-desc">Execution time in milliseconds</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge cloud">Yes</span></td>
+                                    <td class="audit-protection-text">How long the command took to execute</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">link</span>
+                                            <div>
+                                                <div class="audit-category-name">WebSession ID</div>
+                                                <div class="audit-category-desc">Links events to conversation</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge never">No</span></td>
+                                    <td class="audit-protection-text">Groups related events in the same session</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                <!-- Sentinel Note -->
+                <div class="audit-sentinel-note">
+                    <span class="material-symbols-outlined">info</span>
+                    <span><strong>Scrubbed</strong> fields are processed by Sentinel, which redacts IPs, hostnames, credentials, and PII. You can toggle Sentinel mode in chat to control scrubbing level.</span>
+                </div>
+
+                <!-- Security Link -->
+                <div class="audit-info-banner">
+                    <span class="material-symbols-outlined audit-banner-icon">security</span>
+                    <div class="audit-banner-content">
+                        <div class="audit-banner-title">Enterprise-Grade Data Protection</div>
+                        <div class="audit-banner-desc">Learn how Sentinel scrubs sensitive data before any cloud transmission.</div>
+                    </div>
+                    <a href="/security#sentinel" class="audit-btn">
+                        <span class="material-symbols-outlined audit-tab-icon">arrow_forward</span>
+                        Security Details
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verify Section -->
+        <div class="audit-container audit-section-spacing">
+            <div class="audit-section-header">
+                <span class="material-symbols-outlined audit-section-icon">terminal</span>
+                <h2 class="audit-section-title">Access Your Local Audit Data</h2>
+            </div>
+            <div class="audit-panel-content">
+                    <p class="audit-panel-desc">All audit data is stored locally on your operator. Use these commands to query and verify your records.</p>
+                    
+                    <div class="audit-verify-grid">
+                        <div class="verify-card">
+                            <div class="verify-card-header">
+                                <span class="material-symbols-outlined verify-card-icon blue">database</span>
+                                <h3 class="verify-card-title">Audit Vault (SQLite)</h3>
+                            </div>
+                            <p class="verify-card-desc">Query the local SQLite database containing all execution records, outputs, and metadata.</p>
+                            
+                            <div class="command-list">
+                                <div class="command-item">
+                                    <span class="command-label">List recent executions</span>
+                                    <div class="command-row">
+                                        <code class="command-code">sqlite3 ~/.g8e/audit.db "SELECT execution_id, command, exit_code, created_at FROM executions ORDER BY created_at DESC LIMIT 20;"</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">Search commands by pattern</span>
+                                    <div class="command-row">
+                                        <code class="command-code">sqlite3 ~/.g8e/audit.db "SELECT * FROM executions WHERE command LIKE '%kubectl%';"</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">Export to CSV</span>
+                                    <div class="command-row">
+                                        <code class="command-code">sqlite3 -header -csv ~/.g8e/audit.db "SELECT * FROM executions;" > audit_export.csv</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">View database schema</span>
+                                    <div class="command-row">
+                                        <code class="command-code">sqlite3 ~/.g8e/audit.db ".schema"</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="verify-card">
+                            <div class="verify-card-header">
+                                <span class="material-symbols-outlined verify-card-icon purple">history</span>
+                                <h3 class="verify-card-title">Ledger (Git)</h3>
+                            </div>
+                            <p class="verify-card-desc">Tamper-evident Git repository with cryptographic commit hashes. Each execution is a signed commit.</p>
+                            
+                            <div class="command-list">
+                                <div class="command-item">
+                                    <span class="command-label">View commit history</span>
+                                    <div class="command-row">
+                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --oneline -20</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">View full commit details</span>
+                                    <div class="command-row">
+                                        <code class="command-code">cd ~/.g8e/audit-trail && git log -5 --stat</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">Search commits by message</span>
+                                    <div class="command-row">
+                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --grep="kubectl" --oneline</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">Verify commit signatures</span>
+                                    <div class="command-row">
+                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --show-signature -1</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="command-item">
+                                    <span class="command-label">Diff between two points in time</span>
+                                    <div class="command-row">
+                                        <code class="command-code">cd ~/.g8e/audit-trail && git diff HEAD~10 HEAD -- .</code>
+                                        <button class="copy-btn" title="Copy to clipboard">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                <!-- Security Features -->
+                <div class="audit-security-section">
+                    <h3 class="audit-security-header">
+                        <span class="material-symbols-outlined audit-banner-icon">security</span>
+                        Security Architecture
+                    </h3>
+                    <div class="audit-features-list">
+                        <span class="audit-feature">Zero Standing Privileges (AWS)</span>
+                        <span class="audit-feature">Zero Inbound Connectivity</span>
+                        <span class="audit-feature">Local-First Audit</span>
+                        <span class="audit-feature">Sentinel Scrubbing</span>
+                        <span class="audit-feature">mTLS Communication</span>
+                    </div>
+                    <p class="audit-security-link">
+                        <a href="/security">Read full security documentation</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <%- include('partials/footer-public') %>
+
+    <!-- JavaScript -->
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+    <script type="module" src="/js/components/audit-page.js"></script>
+</body>
+</html>

@@ -5,8 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+# Two-phase startup: only the gateway starts by default (no profile). The
+# operator, dashboard, and ensemble are in the `bootstrapped` profile and require
+# a human to enroll the first owner before they can start. After enrolling,
+# run `docker compose --profile bootstrapped up -d` to bring up the workloads.
+# See docs/guides/unified_stack.md for the full bootstrap flow and
+# docs/guides/docker_gateway.md for the per-service details.
+
 networks:
   g8e-net:
+    name: g8e-net
     driver: bridge
 
 volumes:
@@ -14,9 +22,17 @@ volumes:
     driver: local
   g8e-operator-data:
     driver: local
+  g8e-ensemble-data:
+    driver: local
+  g8e-dashboard-data:
+    driver: local
+  g8e-shared-tmp:
+    driver: local
 
 services:
   g8e-gateway:
+    # Policy Decision Point: admits transactions, manages PKI, enforces L1-L3 governance.
+    image: g8e-gateway
     build:
       context: .
       dockerfile: Dockerfile
@@ -26,8 +42,10 @@ services:
       g8e-net:
         aliases:
           - g8e.local
+          - g8eg
     volumes:
       - g8e-gateway-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
     ports:
       - "${G8E_HTTP_PORT:-8080}:8080"
       - "${G8E_HTTPS_PORT:-8443}:8443"
@@ -37,7 +55,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    command: ["gw", "start", "-f"]
+    environment:
+      - G8E_PUBLIC_BASE_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
+    command:
+      - "gw"
+      - "start"
+      - "-f"
+      - "--cors-origin"
+      - "http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}"
+      - "--passkey-rp-origin"
+      - "http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}"
+      - "--passkey-rp-id"
+      - "${G8E_HOSTNAME:-localhost}"
+      - "--passkey-rp-name"
+      - "g8e"
     restart: "no"
     deploy:
       resources:
@@ -49,21 +80,28 @@ services:
           memory: 256M
 
   g8e-operator:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Policy Execution Point: outbound-only mTLS to the gateway. Same image as the gateway.
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
+    image: g8e-gateway
     container_name: ${G8E_PREFIX:-g8e}-operator
     working_dir: /root
     networks:
       - g8e-net
     volumes:
       - g8e-operator-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
     depends_on:
       g8e-gateway:
         condition: service_healthy
-    # g8e.local resolves to the gateway container via the g8e-net network alias
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     command: ["operator", "start", "-e", "g8e.local"]
-    restart: "no"
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -72,3 +110,94 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
+
+  ensemble:
+    # First-party agentic ensemble (g8ee): Python/FastAPI. Submits governed intents via MCP.
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
+    build:
+      context: .
+      dockerfile: ensemble/Dockerfile
+    container_name: ${G8E_PREFIX:-g8e}-ensemble
+    networks:
+      - g8e-net
+    depends_on:
+      g8e-gateway:
+        condition: service_healthy
+      g8e-operator:
+        condition: service_started
+    ports:
+      - "${G8E_ENSEMBLE_PORT:-8000}:8000"
+    volumes:
+      - g8e-ensemble-data:/root/.g8e
+      # Read-only mount of the operator's enrolled mTLS credentials so the
+      # ensemble can submit governance envelopes using the operator's cert
+      # (whose SPIFFE URI carries the operator session ID, bypassing the
+      # gateway's PrivilegedRouteRegistry block on app certs). See
+      # docs/guides/unified_stack.md and the v1.2.2 "Operator Cert Sharing"
+      # release notes. Mounted at /operator-state to avoid colliding with the
+      # ensemble's own /root/.g8e runtime tree.
+      - g8e-operator-data:/operator-state:ro
+      - g8e-shared-tmp:/tmp
+    environment:
+      - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
+      - G8E_GATEWAY_URL=https://g8e.local:8443
+      - G8E_OPERATOR_URL=https://g8e.local:8443
+      - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
+      - G8E_RUNTIME_DIR=/root/.g8e
+      - G8E_GOVERNANCE_OPERATOR_CERT=/operator-state/pki/operator.crt
+      - G8E_GOVERNANCE_OPERATOR_KEY=/operator-state/pki/operator.key
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  dashboard:
+    # Operator dashboard (g8ed): Node.js/Express browser UI. Runs as non-root g8e user (UID 1001).
+    # Requires owner enrollment before starting — use `docker compose --profile bootstrapped up -d`.
+    profiles: [bootstrapped]
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: ${G8E_PREFIX:-g8e}-dashboard
+    networks:
+      - g8e-net
+    ports:
+      - "${G8E_DASHBOARD_PORT:-3000}:3000"
+    depends_on:
+      g8e-gateway:
+        condition: service_healthy
+    volumes:
+      - g8e-dashboard-data:/data
+    environment:
+      - GATEWAY_HEALTH_URL=http://g8eg:8080
+      - GATEWAY_HEALTH_PATH=/api/v1/health
+      - G8E_GATEWAY_URL=https://${G8E_HOSTNAME:-localhost}:${G8E_HTTPS_PORT:-8443}
+      - G8E_GATEWAY_HTTP_URL=http://g8eg:8080
+      - G8E_RUNTIME_DIR=/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M

@@ -42,13 +42,31 @@ demos/
 │   ├── cloudsvc.py             # Sovereign Cloud Service (L5 actuator, Python HTTP server)
 │   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
 │   └── README.md               # FedRAMP-specific documentation
-├── frontend/                   # Frontend enrollment demo
+├── frontend/                   # Frontend enrollment demo (minimal enrollment smoke test; distinct from dashboard/)
 │   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
 │   ├── config/
 │   ├── doctrine/               # Frontend security rules (API access, CORS spoofing, session hijacking)
 │   ├── app/                    # Single-file HTML frontend app served by nginx
 │   └── README.md               # Frontend-specific documentation
 ```
+
+## Two Deployment Modes
+
+g8e ships two Docker Compose deployment modes that serve different purposes and must not be confused:
+
+- **Unified platform compose** — the repo-root `docker-compose.yml`. Brings up the whole platform end to end on a single `g8e-net` bridge network: gateway, operator, ensemble (g8ee), and dashboard (g8ed). Run with `docker compose up` from the repo root. This is the default way to run the complete product and is what the v2.0.0 reunification targets. See the [Unified Docker Stack guide](../docs/guides/unified_stack.md).
+- **Per-demo composes** — `demos/<org>/compose.yml`. Each demo is an org-specific, hermetically sealed deployment on five isolated networks (untrusted, perimeter, internal, secure, mgmt) that exercises a particular compliance scenario. They build the gateway/operator image from the repo-root `Dockerfile` via `context: ../..` and are driven by the `g8e demos` CLI. The per-demo composes do not include the ensemble or dashboard; they are a separate deployment mode focused on org-specific isolated-network scenarios.
+
+The two modes share the repo-root `Dockerfile` (the Go gateway/operator image) but are otherwise independent: the unified compose adds the ensemble and dashboard services and uses a single flat network, while the per-demo composes use isolated multi-network topologies and are scoped to a single org.
+
+## `demos/frontend/` vs `dashboard/`
+
+`demos/frontend/` and `dashboard/` are two different things and both ship in-tree:
+
+- `demos/frontend/` is a minimal enrollment smoke test: a single-file nginx-served HTML app that exercises WebAuthn passkey enrollment and SSE event streaming against the gateway on an isolated demo network. It exists to prove the enrollment and CORS path end to end.
+- `dashboard/` is the real product UI (g8ed): a Node.js 22 / Express app with EJS views, vitest tests, and its own `dashboard/Dockerfile`. It is a first-party component of the platform, reunited in v2.0.0, and runs as the `dashboard` service in the unified platform compose.
+
+Keep both. The demo proves a narrow protocol path; the dashboard is the operator-facing product.
 
 
 ## Network Topology
@@ -159,6 +177,26 @@ g8e demos run <org> <scenario> --tui
 g8e demos pull
 ```
 
+### Owner-approved platform bootstrap
+
+Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
+
+```bash
+# 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
+./g8e auth enroll user -e https://localhost:<demo-https-port>
+
+# 2. List pending platform enrollment requests.
+./g8e auth pending-platform-enrollments
+
+# 3. Approve the operator's request by exact request ID.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+
+# 4. Wait for the operator and its dependents to become healthy.
+g8e demos status <org>
+```
+
+`g8e demos run <org>` warns if the operator is not yet enrolled and prints the bootstrap instructions before attempting to run scenarios. Do not use `docker compose up --wait` before approval; it is expected to time out while enrollment is pending. See the [Docker Gateway Guide](../docs/guides/docker_gateway.md) for the full bootstrap flow and the headless deployment mode.
+
 ### Audit Commands
 
 Audit commands are top-level, not nested under `demos`. They query the running Gateway's audit store:
@@ -207,6 +245,61 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 **Frontend Demo Scenarios:**
 - `g8e demos run frontend 1` - Third-Party Frontend Enrollment
+
+### Ensemble Demo Scenarios
+
+Ensemble scenarios exercise the core product path: a user sends a chat message to the ensemble (g8ee), the AI reasons about the request and submits governed tool calls through the operator to the gateway for admission. The gateway runs the 5-layer governance gauntlet (L1 doctrine, L2 consensus, L3 notary, L4 warden, L5 actuator), and the operator executes the admitted command. The scenarios verify the end-to-end flow by polling the audit vault for signed ActionReceipts.
+
+Ensemble scenarios require the **unified platform compose** (`docker-compose.yml` at the repo root), not the per-demo composes (which do not include the ensemble). Bring up the full stack with the two-phase bootstrap profile:
+
+```bash
+# 1. Start the gateway (default profile).
+docker compose up -d g8e-gateway
+
+# 2. Enroll the first owner.
+./g8e auth enroll user -e https://localhost:8443
+
+# 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
+docker compose --profile bootstrapped up -d
+
+# 4. Approve the operator and ensemble enrollment requests.
+./g8e auth pending-platform-enrollments
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+```
+
+Run ensemble scenarios via the agent harness:
+
+```bash
+g8e demos scenarios run ensemble-chat-file-create \
+  --mtls-url https://localhost:8443 \
+  --public-url http://localhost:8080 \
+  --ensemble-url http://localhost:8000 \
+  --user-id <user-id> \
+  --cli-session-id <cli-session-id>
+```
+
+The `--ensemble-url` flag points the harness at the ensemble (g8ee) HTTP surface. Ensemble scenarios use the `GovKit` pattern for identity binding (operator session, user ID, CLI session ID) and poll the audit vault for signed receipts.
+
+**Available ensemble scenarios:**
+
+- `ensemble-chat-file-create` - AI creates a governed file via the `file_create` tool. Verifies a `FILE_EDIT` receipt with `COMPLETED` status appears in the audit vault.
+- `ensemble-chat-file-write` - AI writes content to an existing file via the `file_write` tool. Verifies a `FILE_EDIT` receipt.
+- `ensemble-document-update` - AI triggers a case/investigation create via the ensemble. Verifies a `DOCUMENT_UPDATE` envelope was admitted by L1 and persisted via the document store handler.
+- `ensemble-document-delete` - AI triggers a document delete. Verifies a `DOCUMENT_DELETE` envelope was admitted and the document was removed.
+
+**LLM provider selection:**
+
+Ensemble scenarios default to the `fake` LLM provider for CI determinism (no external LLM dependency). The `FakeProvider` (`ensemble/app/llm/providers/fake.py`) returns deterministic tool-call responses by pattern-matching the user message — no network calls, no API keys required.
+
+For local dev with a real LLM (e.g., ollama), set env vars before running the harness:
+
+```bash
+export G8E_HARNESS_LLM_PROVIDER=ollama
+export G8E_HARNESS_LLM_MODEL=gemma4:12b
+export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
+g8e demos scenarios run ensemble-chat-file-create --ensemble-url http://localhost:8000 ...
+```
 
 ### Demo Output Format
 

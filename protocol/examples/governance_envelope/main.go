@@ -66,6 +66,7 @@ func main() {
 		SystemFingerprint: "fp-123",
 		TenantId:          "tenant-xyz",
 		BindingPersona:    "default",
+		Posture:           "notary",
 		IntentData: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
 				"goal":         structpb.NewStringValue("Inspect filesystem"),
@@ -167,4 +168,5 @@ func main() {
 	fmt.Printf("Transaction Hash: %s\n", parsedEnvelope.TransactionHash)
 	fmt.Printf("Requestor User ID: %s\n", parsedEnvelope.RequestorUserId)
 	fmt.Printf("Acting App ID: %s\n", parsedEnvelope.ActingAppId)
+	fmt.Printf("Posture: %s\n", parsedEnvelope.Posture)
 }

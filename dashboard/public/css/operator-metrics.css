@@ -1,0 +1,796 @@
+
+/* ============================================
+   OPERATOR METRICS - MAIN CONTAINER
+   ============================================ */
+
+.operator-metrics {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    position: relative;
+}
+
+/* Action icons matching Operator list button styles */
+
+
+.step-action-icon .material-symbols-outlined {
+    font-size: 16px;
+    color: var(--text-secondary);
+}
+
+/* Download icon - blue primary */
+
+.step-action-icon.download-icon .material-symbols-outlined {
+    color: var(--primary-color);
+}
+
+/* Copy icon - green accent with glow (matches Operator list) */
+.step-action-icon.copy-icon {
+    border-color: var(--accent-green);
+    background: rgba(var(--accent-green-rgb), 0.1);
+}
+.step-action-icon.copy-icon .material-symbols-outlined {
+    color: var(--accent-green);
+}
+
+/* Bind icon - green with glow animation (matches Operator list) */
+
+.step-action-icon.bind-icon .material-symbols-outlined {
+    color: var(--accent-green);
+}
+
+@keyframes guideBindGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(var(--accent-green-rgb), 0.4); }
+    50% { box-shadow: 0 0 12px rgba(var(--accent-green-rgb), 0.6); }
+}
+
+/* API key button in getting started - cyan glow (matches Operator list) */
+.getting-started-path .api-key-btn {
+    box-shadow: 0 0 8px 2px rgba(var(--info-color-rgb), 0.5);
+    border-color: var(--info-color);
+}
+
+/* AWS/external link icon - green */
+
+.step-action-icon.aws-icon .material-symbols-outlined {
+    color: var(--accent-green);
+}
+
+/* Download button inside g8e Operator Binary path */
+
+
+.path-download-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+@keyframes pulse-rocket {
+    0%, 100% { opacity: 0.8; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
+}
+
+@keyframes bounce-arrow {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(3px); }
+}
+
+/* Expandable details section - now inside drawer header */
+.operator-metrics-details {
+    display: block;
+    border: none;
+    border-radius: 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative; /* Required for overlay positioning */
+    /* Note: background inherited from .operator-drawer-header parent */
+}
+
+.operator-metrics-details.expanded {
+    display: block;
+    animation: slideDown 0.15s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Override status badge styles for metric card - text only, no box */
+.metric-card-status .metric-card-value {
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+.metric-card-value {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Status-specific colors - match Operator card status colors */
+.metric-card-value.status-online,
+.metric-card-value.status-connected,
+.metric-card-value.status-bound,
+.metric-card-value.status-active {
+    color: var(--accent-green);
+}
+
+.metric-card-value.status-offline,
+.metric-card-value.status-inactive {
+    color: var(--text-tertiary);
+}
+
+.metric-card-value.status-connecting {
+    color: var(--accent-amber);
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+.metric-card-value.status-stopped {
+    color: var(--text-tertiary);
+}
+
+.metric-card-value.status-stale {
+    color: var(--accent-amber);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ============================================
+   VISUAL PROGRESS BARS
+   ============================================ */
+
+
+.metric-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease-out, background-color 0.3s ease;
+    width: var(--progress-width, 0%);
+}
+
+/* Progress bar color thresholds */
+.metric-progress-fill.level-low {
+    background: linear-gradient(90deg, var(--level-low), var(--level-low-light));
+}
+
+.metric-progress-fill.level-medium {
+    background: linear-gradient(90deg, var(--level-medium), var(--level-medium-light));
+}
+
+.metric-progress-fill.level-high {
+    background: linear-gradient(90deg, var(--level-high), var(--level-high-light));
+}
+
+/* ============================================
+   EXPAND TOGGLE BUTTON (COMPACT)
+   ============================================ */
+
+.operator-metrics-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0.1rem;
+    background: rgba(var(--accent-blue-solid-rgb), 0.08);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    width: 100%;
+}
+
+.operator-metrics-toggle:hover {
+    background: rgba(var(--accent-blue-solid-rgb), 0.15);
+}
+
+.operator-metrics-toggle.expanded .operator-metrics-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* ============================================
+   DETAILS GRID - EXPANDED VIEW (COMPACT)
+   ============================================ */
+
+.operator-details-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem;
+}
+
+.operator-detail-section {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+    padding: 0.25rem 0.35rem;
+    border: 1px solid rgba(var(--accent-blue-solid-rgb), 0.08);
+}
+
+.operator-detail-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    margin-bottom: 0.15rem;
+    padding-bottom: 0.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.operator-detail-section-icon {
+    font-size: 16px;
+    color: var(--accent-blue);
+}
+
+.operator-detail-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.operator-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.08rem 0;
+}
+
+.operator-detail-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.operator-detail-value {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    text-align: right;
+    max-width: 75%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ip-value-container {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.ip-visibility-toggle {
+    font-size: 14px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: color 0.15s ease;
+    user-select: none;
+}
+
+.ip-visibility-toggle:hover {
+    color: var(--accent-blue);
+}
+
+/* ============================================
+   CIRCULAR GAUGE (for CPU/Memory/Disk)
+   ============================================ */
+
+
+.metric-gauge-fill.level-low {
+    stroke: var(--level-low);
+}
+
+.metric-gauge-fill.level-medium {
+    stroke: var(--level-medium);
+}
+
+.metric-gauge-fill.level-high {
+    stroke: var(--level-high);
+}
+
+/* ============================================
+   STORAGE/MEMORY VISUAL BARS (COMPACT)
+   ============================================ */
+
+.storage-visual {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+}
+
+.storage-bar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.storage-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.storage-bar-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.storage-bar-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.storage-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.storage-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease-out;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue-light));
+    width: var(--progress-width, 0%);
+}
+
+.storage-bar-fill.level-warning {
+    background: linear-gradient(90deg, var(--level-medium), var(--level-medium-light));
+}
+
+.storage-bar-fill.level-critical {
+    background: linear-gradient(90deg, var(--level-high), var(--level-high-light));
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 1080px) {
+    .operator-metrics-primary {
+        flex-wrap: nowrap;
+        overflow: hidden;
+        min-width: 0;
+    }
+    
+    .metric-card {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+    }
+    
+    .metric-card-label {
+        font-size: 9px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .metric-card-status .metric-card-label {
+        display: none;
+    }
+    
+    .metric-card-value {
+        font-size: 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .metric-progress-bar {
+        flex-shrink: 1;
+        min-width: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .metric-card-label {
+        display: none;
+    }
+    
+    .metric-card-value {
+        font-size: 9px;
+    }
+    
+    .metric-progress-bar {
+        min-width: 30px;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Mobile: 2-row grid layout with evenly spaced sections */
+    .operator-metrics-primary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: auto auto;
+        gap: 4px 8px;
+        padding: 0.35rem 0.5rem;
+    }
+    
+    .operator-details-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .metric-card {
+        flex: none;
+        min-width: 0;
+        justify-content: center;
+        padding: 0.2rem 0.25rem;
+    }
+    
+    .metric-card::after {
+        display: none;
+    }
+    
+    .metric-card-label {
+        display: none;
+    }
+    
+    .metric-card-value {
+        font-size: 10px;
+    }
+    
+    .metric-progress-bar {
+        width: 30px;
+    }
+    
+    /* Row 1: Status, Host, Latency */
+    .metric-card-status {
+        grid-column: 1;
+        grid-row: 1;
+        margin: 0;
+        padding: 0.2rem 0.4rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+    }
+    
+    .metric-card-host {
+        grid-column: 2;
+        grid-row: 1;
+    }
+    
+    .metric-card-latency {
+        grid-column: 3;
+        grid-row: 1;
+    }
+    
+    /* Row 2: CPU, Memory, Disk (nth-child based on DOM order) */
+    .metric-card:nth-child(3) { /* CPU */
+        grid-column: 1;
+        grid-row: 2;
+    }
+    
+    .metric-card:nth-child(4) { /* Memory */
+        grid-column: 2;
+        grid-row: 2;
+    }
+    
+    .metric-card:nth-child(5) { /* Disk */
+        grid-column: 3;
+        grid-row: 2;
+    }
+    
+    /* Getting Started paths - stack vertically on mobile */
+    .getting-started-paths {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        gap: 0.75rem;
+    }
+    
+    .getting-started-path {
+        grid-row: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    /* Cloud Operator card first on mobile */
+    .getting-started-path.cloud-path {
+        order: -1;
+    }
+    
+    .path-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .path-step {
+        flex-wrap: wrap;
+    }
+    
+    .cloud-launch-content,
+    .download-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .region-links {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.25rem;
+    }
+    
+    .region-link {
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Small mobile: tighter spacing, same 2-row grid */
+    .operator-metrics-primary {
+        gap: 3px 6px;
+        padding: 0.25rem 0.4rem;
+    }
+    
+    .metric-card {
+        padding: 0.15rem 0.2rem;
+    }
+    
+    .metric-card-value {
+        font-size: 9px;
+    }
+    
+    .metric-card-status {
+        padding: 0.15rem 0.3rem;
+    }
+    
+    .metric-gauge {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .metric-gauge-text {
+        font-size: 8px;
+    }
+    
+    /* Getting Started paths - smaller screens */
+    .getting-started-paths {
+        gap: 0.5rem;
+    }
+    
+    .getting-started-path {
+        padding: 0.5rem;
+    }
+    
+    .path-header {
+        padding-bottom: 0.4rem;
+    }
+    
+    .path-icon {
+        font-size: 16px;
+    }
+    
+    .path-title {
+        font-size: 12px;
+    }
+    
+    .path-badge {
+        font-size: 8px;
+        padding: 1px 4px;
+    }
+    
+    .path-step .step-number {
+        width: 18px;
+        height: 18px;
+        min-width: 18px;
+        font-size: 10px;
+    }
+    
+    .step-action-icon {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+    }
+    
+    .step-action-icon .material-symbols-outlined {
+        font-size: 14px;
+    }
+    
+    .step-label {
+        font-size: 11px;
+    }
+    
+    .region-links {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .region-link {
+        padding: 3px 6px;
+        font-size: 9px;
+    }
+    
+    .path-download-btn {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    
+    .path-download-btn .material-symbols-outlined {
+        font-size: 14px;
+    }
+}
+
+/* ============================================
+   NETWORK LATENCY INDICATOR
+   ============================================ */
+
+.latency-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.latency-indicator.excellent .latency-bar {
+    background: var(--level-low);
+}
+
+.latency-indicator.good .latency-bar:nth-child(-n+3) {
+    background: var(--level-low);
+}
+
+.latency-indicator.fair .latency-bar:nth-child(-n+2) {
+    background: var(--level-medium);
+}
+
+.latency-indicator.poor .latency-bar:nth-child(1) {
+    background: var(--level-high);
+}
+
+/* ============================================
+   GETTING STARTED TABBED INTERFACE
+   ============================================ */
+
+
+.getting-started-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.getting-started-tab[data-tab="cloud"].active {
+    color: var(--accent-green);
+    border-bottom-color: var(--accent-green);
+}
+
+.getting-started-tab .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.getting-started-content.active {
+    display: block;
+}
+
+/* Getting Started Steps - New Compact Design */
+
+
+@keyframes gsBindGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(var(--accent-green-rgb), 0.4); }
+    50% { box-shadow: 0 0 12px rgba(var(--accent-green-rgb), 0.6); }
+}
+
+.gs-download-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+/* ============================================
+   CLOUD OPERATOR AWS INPUT
+   ============================================ */
+
+
+.gs-aws-save-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.gs-aws-saved-check .material-symbols-outlined {
+    font-size: 24px;
+    color: var(--accent-green);
+}
+
+.gs-aws-error .material-symbols-outlined {
+    font-size: 16px;
+}
+
+/* ============================================
+   CLOUD OPERATOR LAUNCH
+   ============================================ */
+
+
+.gs-launch-btn:hover:not(.disabled) {
+    background: linear-gradient(135deg, var(--accent-green-solid), var(--accent-green-dark));
+    transform: translateY(-1px);
+    color: white;
+    text-decoration: none;
+}
+
+.gs-launch-btn.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.gs-launch-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.gs-launch-hint.enabled {
+    color: var(--accent-green);
+}
+
+/* Rotating animation for save button loading state */
+@keyframes gsRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.gs-aws-save-btn .rotating {
+    animation: gsRotate 1s linear infinite;
+}
+
+/* ============================================
+   GETTING STARTED RESPONSIVE
+   ============================================ */
+
+@media (max-width: 480px) {
+    .getting-started-tabs {
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .getting-started-tab {
+        justify-content: center;
+        padding: 0.6rem 1rem;
+        border-bottom: none;
+        border-left: 2px solid transparent;
+    }
+    
+    .getting-started-tab.active {
+        border-left-color: var(--primary-color);
+        border-bottom-color: transparent;
+    }
+    
+    .getting-started-tab[data-tab="cloud"].active {
+        border-left-color: var(--accent-green);
+    }
+    
+    .gs-step {
+        flex-wrap: wrap;
+    }
+    
+    .gs-aws-input-group {
+        flex-wrap: wrap;
+    }
+    
+    .gs-aws-input {
+        max-width: 100%;
+        flex: 1 1 100%;
+    }
+    
+    .gs-launch-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .gs-region-select {
+        min-width: 100%;
+    }
+    
+    .gs-launch-btn {
+        justify-content: center;
+    }
+}

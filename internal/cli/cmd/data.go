@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -110,21 +111,27 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
 
+			creds, err := auth.LoadCredentials(fileSvc, cfg)
+			if err != nil || creds == nil {
+				return fmt.Errorf("%w: Please run './g8e auth enroll user' first", constants.ErrNotAuthenticated)
+			}
+
 			client, err := clientFactory(fileSvc, cfg)
 			if err != nil {
 				return fmt.Errorf("data: create API client: %w", err)
 			}
 
-			resp, err := client.Get("/api/operators")
+			resp, err := client.Get(constants.APIPaths.Operators + "?user_id=" + creds.UserID)
 			if err != nil {
 				return fmt.Errorf("data: fetch operators: %w", err)
 			}
 
-			var operators []models.OperatorDocumentGo
-			if err := json.Unmarshal(resp, &operators); err != nil {
+			var slotResp models.OperatorSlotResponse
+			if err := json.Unmarshal(resp, &slotResp); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
+			operators := slotResp.Operators
 			cmd.Printf("Operators (%d total)\n", len(operators))
 			cmd.Println(strings.Repeat("=", 110))
 			for _, op := range operators {

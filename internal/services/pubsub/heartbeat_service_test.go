@@ -10,6 +10,8 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -18,7 +20,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,6 +77,30 @@ func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, statu
 func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	m.publishHeartbeatCalled = true
 	return m.publishHeartbeatError
+}
+
+func (m *mockResultsPublisher) PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error {
+	return nil
+}
+
+// capturingConsoleAuditStore records every receipt document passed to DocSet
+// so tests can assert on the ActionReceiptRecord fields derived from the
+// GovernanceEnvelope without requiring a real SQLite audit store. It is a
+// test-only implementation of governance.TransactionAuditStore.
+type capturingConsoleAuditStore struct {
+	mu      sync.Mutex
+	records [][]byte
+}
+
+func (c *capturingConsoleAuditStore) DocSet(_, _ string, data json.RawMessage) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.records = append(c.records, append([]byte(nil), data...))
+	return nil
+}
+
+func (c *capturingConsoleAuditStore) DocDelete(_, _ string) error {
+	return nil
 }
 
 func TestNewHeartbeatService(t *testing.T) {
@@ -529,6 +557,96 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		err := svc.SendAutomatic()
 		assert.NoError(t, err)
 		// Should not panic, should log warning
+	})
+
+	t.Run("propagates operator identity onto the governance envelope", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+		svc.SetContext(context.Background())
+
+		mockHandler := &mockExecutionHandler{
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg governance.CommandMessage) (string, error) {
+				return "heartbeat-receipt-id", nil
+			},
+		}
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		capture := &capturingConsoleAuditStore{}
+		mockActuator := &governance.L5Actuator{
+			Logger:            logger,
+			ConsoleAuditStore: capture,
+			ExecutionHandler:  mockHandler,
+			SigningKey:        privKey,
+			KeyID:             "test-key",
+		}
+		svc.SetActuator(mockActuator)
+
+		err := svc.SendAutomatic()
+		require.NoError(t, err)
+
+		capture.mu.Lock()
+		records := capture.records
+		capture.mu.Unlock()
+		require.NotEmpty(t, records, "actuator must log at least one receipt document")
+
+		var record models.ActionReceiptRecord
+		require.NoError(t, json.Unmarshal(records[0], &record))
+
+		// Regression: SendAutomatic previously built the GovernanceEnvelope with
+		// only Id/TransactionHash/ActionType/Payload, leaving OperatorId and
+		// OperatorSessionId empty. buildReceiptRecord reads those envelope
+		// fields directly, so an empty OperatorSessionId produced a receipt
+		// violating the receipts.operator_session_id FOREIGN KEY constraint.
+		assert.Equal(t, cfg.OperatorID, record.OperatorID, "envelope must carry OperatorId from config")
+		assert.Equal(t, cfg.OperatorSessionId, record.OperatorSessionID, "envelope must carry OperatorSessionId from config")
+		assert.Equal(t, constants.ActionTypeHeartbeat, record.ActionType, "envelope must carry the heartbeat action type")
+	})
+}
+
+// TestNewOperatorPubSubService_HeartbeatActuatorWired asserts that
+// NewOperatorPubSubService wires the heartbeat service's actuator during
+// construction, without the caller needing to invoke SetActuator manually.
+//
+// Regression: previously SetActuator was called before initializeGovernance
+// assigned rs.actuator, so the heartbeat service received a nil actuator and
+// every automatic heartbeat was silently dropped (logged "Actuator service not
+// set, skipping receipted heartbeat dispatch") with no audit record or
+// pub/sub publish.
+func TestNewOperatorPubSubService_HeartbeatActuatorWired(t *testing.T) {
+	t.Run("heartbeat actuator is non-nil after construction", func(t *testing.T) {
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		db := pubsubtest.NewMockOperatorPubSubClient()
+
+		pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+		signerStore := &governance.FailClosedSignerStore{
+			Signers: map[string]ed25519.PublicKey{"test-key": pub},
+		}
+
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:             cfg,
+			Logger:             logger,
+			PubSubClient:       db,
+			ActuatorSigningKey: priv,
+			ActuatorKeyID:      "Actuator-key",
+		}, GovernanceDeps{
+			ReplayStore:          &testutil.MockReplayStore{},
+			StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:     &testutil.MockTransactionAudit{},
+			L3Notary:             &testutil.MockL3Notary{},
+			SignerStore:          signerStore,
+			ConsensusPolicyStore: testConsensusStore(),
+			Doctrine:             governance.NewL1Doctrine(),
+		})
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+
+		// The heartbeat service must be wired with the same actuator instance
+		// the parent service constructed in initializeGovernance. No manual
+		// SetActuator call is performed here.
+		require.NotNil(t, svc.heartbeat.actuator, "heartbeat actuator must be wired by the constructor; automatic heartbeats are silently dropped when nil")
+		assert.Same(t, svc.actuator, svc.heartbeat.actuator, "heartbeat actuator must reference the parent service's actuator")
 	})
 }
 

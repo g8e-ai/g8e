@@ -1,0 +1,112 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package pubsub
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/models"
+)
+
+// PlatformEnrollmentDocStore is the document-store subset required by the
+// platform enrollment handlers. It is implemented natively by
+// gateway.DocumentStoreService; the interface lives in the pubsub package
+// so the handler layer does not import the gateway package (which would
+// invert the dependency direction: gateway already imports pubsub).
+type PlatformEnrollmentDocStore interface {
+	DocSet(collection, id string, data json.RawMessage) error
+	DocGet(collection, id string) (*models.Document, error)
+	DocConditionalUpdate(collection, id string, setFields map[string]interface{}, conditionField string, conditionValue interface{}) (bool, error)
+}
+
+// PlatformEnrollmentPKI is the PKI subset required by the platform
+// enrollment handlers. SignPlatformAppCSR issues the dual-SAN app
+// certificate for dashboard/ensemble; SignCSR issues operator and CLI
+// leaf certificates; GatewayTrustBundle returns the pinned trust bundle.
+// Implemented natively by gateway.PKIAuthority.
+type PlatformEnrollmentPKI interface {
+	SignPlatformAppCSR(csrPEM, appName, userID string) (certPEM, chainPEM string, err error)
+	SignCSR(csrPEM string, leafType string, organizationID, operatorID, userID, sessionID, gatewayID string) (certPEM, chainPEM string, err error)
+	GatewayTrustBundle() ([]byte, error)
+}
+
+// PlatformEnrollmentCLISessions is the CLI-session subset required by the
+// platform enrollment handlers. Implemented natively by
+// gateway.CLISessionService.
+type PlatformEnrollmentCLISessions interface {
+	PersistCLISession(cliSessionID, operatorSessionID, userID, systemFingerprint, certFingerprint, certSerial, loginMethod string) error
+}
+
+// PlatformEnrollmentOperatorSessions is the operator-session subset
+// required by the platform enrollment handlers. Implemented natively by
+// gateway.OperatorSessionService.
+type PlatformEnrollmentOperatorSessions interface {
+	PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod string) error
+}
+
+// PlatformEnrollmentDeps bundles the gateway-side dependencies required
+// by the five platform enrollment handlers registered in buildHandlers.
+// All fields are required in gateway mode; the pubsub service fails
+// closed at handler dispatch if any is nil. Outbound (operator) mode
+// never constructs platform enrollment handlers, so nil is acceptable
+// there. Owner authorization (IsFirstUser) is enforced by the
+// enrollment service before submitting the DECIDE envelope, not by the
+// handlers, so UserService is not part of this bundle.
+type PlatformEnrollmentDeps struct {
+	DocStore         PlatformEnrollmentDocStore
+	PKI              PlatformEnrollmentPKI
+	CLISessions      PlatformEnrollmentCLISessions
+	OperatorSessions PlatformEnrollmentOperatorSessions
+	Posture          string
+}
+
+// platformEnrollmentCollection is the canonical collection name for
+// persisted platform enrollment requests, resolved once through the
+// marshaler to avoid repeated string conversions at handler dispatch.
+func platformEnrollmentCollection() string {
+	return marshaler.CollectionName(constants.CollectionPlatformEnrollments)
+}
+
+// loadPlatformEnrollmentRequest reads a persisted enrollment request by
+// ID and decodes it into the typed model. Returns (nil, nil) when the
+// request does not exist so the caller can distinguish not-found from
+// decode errors.
+func loadPlatformEnrollmentRequest(ctx context.Context, deps PlatformEnrollmentDeps, requestID string) (*models.PlatformEnrollmentRequest, error) {
+	_ = ctx
+	if requestID == "" {
+		return nil, nil
+	}
+	doc, err := deps.DocStore.DocGet(platformEnrollmentCollection(), requestID)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: load request %s: %w", requestID, err)
+	}
+	if doc == nil {
+		return nil, nil
+	}
+	// Re-marshal the document's field map back to a JSON object so the
+	// typed model can be decoded with a single json.Unmarshal call.
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, fmt.Errorf("platform enrollment: marshal doc %s: %w", requestID, err)
+	}
+	var req models.PlatformEnrollmentRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		return nil, fmt.Errorf("platform enrollment: decode request %s: %w", requestID, err)
+	}
+	return &req, nil
+}
+
+// platformEnrollmentLogger is a typed alias for the slog.Logger used by
+// the handler, kept here so the handler struct in
+// platform_enrollment_handlers.go does not re-import slog.
+type platformEnrollmentLogger = *slog.Logger

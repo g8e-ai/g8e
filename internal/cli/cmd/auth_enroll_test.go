@@ -28,7 +28,7 @@ func TestEnrollCmdWithConfig_ConfigLoaderError(t *testing.T) {
 		return nil, errors.New("config load error")
 	}
 
-	cmd := enrollCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(failLoader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -48,7 +48,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 		return cfg, nil
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -58,7 +58,7 @@ func TestEnrollCmdWithConfig_OperatorNotRunningReturnsError(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	tpmFlag := cmd.Flags().Lookup("tpm")
 	if tpmFlag != nil {
 		assert.Equal(t, "false", tpmFlag.DefValue)
@@ -66,7 +66,7 @@ func TestEnrollCmdWithConfig_NoTPMFlagOnNonWindows(t *testing.T) {
 }
 
 func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
-	cmd := enrollCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(loadConfig, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	require.NotNil(t, cmd.RunE)
 }
 
@@ -76,7 +76,7 @@ func TestEnrollCmdWithConfig_HasRunE(t *testing.T) {
 // command adapter exposes the new options.
 func TestEnrollCmdWithConfig_FlagsRegistered(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
-	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(func(string) (*config.Config, error) { return cfg, nil }, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	noSystemTrustFlag := cmd.Flags().Lookup("no-system-trust")
 	require.NotNil(t, noSystemTrustFlag)
 	assert.Equal(t, "false", noSystemTrustFlag.DefValue)
@@ -92,7 +92,7 @@ func TestEnrollCmdWithConfig_UsesInjectedConfigLoader(t *testing.T) {
 		return nil, errors.New("injected error")
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	_ = cmd.RunE(cmd, nil)
 
 	assert.True(t, called, "config loader should have been called")
@@ -104,7 +104,7 @@ func TestEnrollCmdWithConfig_PropagatesConfigError(t *testing.T) {
 		return nil, expectedErr
 	}
 
-	cmd := enrollCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
+	cmd := enrollUserCmdWithConfig(loader, newFileSvc, auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 }
@@ -120,7 +120,7 @@ func TestEnrollCmdWithConfig_GatewayDownReturnsError(t *testing.T) {
 
 	fileSvc, cfg := newCmdTestEnv(t)
 
-	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
+	cmd := enrollUserCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
 	}, fileSvcFactoryFor(fileSvc), auth.CheckOperatorRunning, newDefaultEnrollmentCoordinator)
 	var buf bytes.Buffer
@@ -264,7 +264,7 @@ func TestEnrollCmd_OptionPropagation(t *testing.T) {
 				},
 			}
 
-			cmd := enrollCmdWithConfig(
+			cmd := enrollUserCmdWithConfig(
 				func(string) (*config.Config, error) { return cfg, nil },
 				fileSvcFactoryFor(fileSvc),
 				noopCheckOperatorRunning,
@@ -295,7 +295,7 @@ func TestEnrollCmd_CoordinatorErrorPropagates(t *testing.T) {
 	expectedErr := constants.ErrSystemTrustInstallFailed
 	mock := &mockEnroller{err: expectedErr}
 
-	cmd := enrollCmdWithConfig(
+	cmd := enrollUserCmdWithConfig(
 		func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactoryFor(fileSvc),
 		noopCheckOperatorRunning,
@@ -328,7 +328,7 @@ func TestEnrollCmd_HealthyReusedIdentityNoRotate(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := enrollCmdWithConfig(
+	cmd := enrollUserCmdWithConfig(
 		func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactoryFor(fileSvc),
 		noopCheckOperatorRunning,
@@ -361,7 +361,7 @@ func TestEnrollCmd_RotateCLIFlagForcesRotation(t *testing.T) {
 		},
 	}
 
-	cmd := enrollCmdWithConfig(
+	cmd := enrollUserCmdWithConfig(
 		func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactoryFor(fileSvc),
 		noopCheckOperatorRunning,
@@ -391,7 +391,7 @@ func TestEnrollCmd_NoSystemTrustFlagWired(t *testing.T) {
 		},
 	}
 
-	cmd := enrollCmdWithConfig(
+	cmd := enrollUserCmdWithConfig(
 		func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactoryFor(fileSvc),
 		noopCheckOperatorRunning,
@@ -425,7 +425,7 @@ func TestEnrollCmd_SystemTrustInstalledOutput(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := enrollCmdWithConfig(
+	cmd := enrollUserCmdWithConfig(
 		func(string) (*config.Config, error) { return cfg, nil },
 		fileSvcFactoryFor(fileSvc),
 		noopCheckOperatorRunning,

@@ -19,4 +19,5 @@ import "encoding/json"
 // tests. No adapter is required in either production mode.
 type TransactionAuditStore interface {
 	DocSet(collection, id string, data json.RawMessage) error
+	DocDelete(collection, id string) error
 }

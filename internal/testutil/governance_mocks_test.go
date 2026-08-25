@@ -196,10 +196,10 @@ func TestConfigurableMockAuditStore(t *testing.T) {
 	err := store.DocSet("collection-1", "id-1", data)
 	require.NoError(t, err)
 
-	require.Len(t, store.Calls, 1, "Should have recorded one call")
-	require.Equal(t, "collection-1", store.Calls[0].Collection)
-	require.Equal(t, "id-1", store.Calls[0].ID)
-	require.Equal(t, data, store.Calls[0].Data)
+	require.Len(t, store.DocSetCalls, 1, "Should have recorded one call")
+	require.Equal(t, "collection-1", store.DocSetCalls[0].Collection)
+	require.Equal(t, "id-1", store.DocSetCalls[0].ID)
+	require.Equal(t, data, store.DocSetCalls[0].Data)
 
 	// Test multiple calls
 	err = store.DocSet("collection-2", "id-2", json.RawMessage(`{"test": "value2"}`))
@@ -208,7 +208,7 @@ func TestConfigurableMockAuditStore(t *testing.T) {
 	err = store.DocSet("collection-3", "id-3", json.RawMessage(`{"test": "value3"}`))
 	require.NoError(t, err)
 
-	require.Len(t, store.Calls, 3, "Should have recorded three calls")
+	require.Len(t, store.DocSetCalls, 3, "Should have recorded three calls")
 }
 
 func TestConfigurableMockAuditStore_ErrorFunc(t *testing.T) {
@@ -230,5 +230,5 @@ func TestConfigurableMockAuditStore_NilFunc(t *testing.T) {
 	err := store.DocSet("collection-1", "id-1", json.RawMessage(`{}`))
 	require.NoError(t, err, "Nil DocSetFunc should not return error")
 
-	require.Len(t, store.Calls, 1, "Should still record calls even with nil func")
+	require.Len(t, store.DocSetCalls, 1, "Should still record calls even with nil func")
 }

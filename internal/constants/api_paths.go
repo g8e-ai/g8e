@@ -56,7 +56,6 @@ var APIPaths = struct {
 	// PKI routes
 	PKICSRSign            string `json:"pki_csr_sign"`
 	PKIDevicesEnroll      string `json:"pki_devices_enroll"`
-	PKIAppsEnroll         string `json:"pki_apps_enroll"`
 	PKIAppsDelegated      string `json:"pki_apps_delegated"`
 	PKICertificatesRevoke string `json:"pki_certificates_revoke"`
 	PKIRevocationBundle   string `json:"pki_revocation_bundle"`
@@ -77,13 +76,18 @@ var APIPaths = struct {
 	AuthLogout                               string `json:"auth_logout"`
 	AuthBootstrap                            string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
-	AuthDeviceEnroll                         string `json:"auth_device_enroll"`
+	AuthPlatformEnrollmentRequest            string `json:"auth_platform_enrollment_request"`
+	AuthPlatformEnrollmentStatus             string `json:"auth_platform_enrollment_status"`
+	AuthPlatformEnrollmentComplete           string `json:"auth_platform_enrollment_complete"`
+	AuthPlatformEnrollmentPending            string `json:"auth_platform_enrollment_pending"`
+	AuthPlatformEnrollmentDecision           string `json:"auth_platform_enrollment_decision"`
 	AuthCLIRecoveryRequest                   string `json:"auth_cli_recovery_request"`
 	AuthCLIRecoveryStatus                    string `json:"auth_cli_recovery_status"`
 	AuthCLIRecoveryApprove                   string `json:"auth_cli_recovery_approve"`
 	AuthCLIRecoveryApproveCLI                string `json:"auth_cli_recovery_approve_cli"`
 	AuthCLIRecoveryComplete                  string `json:"auth_cli_recovery_complete"`
 	AuthCLIRotate                            string `json:"auth_cli_rotate"`
+	AuthCLIRefresh                           string `json:"auth_cli_refresh"`
 	AuthPasskeys                             string `json:"auth_passkeys"`
 	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
 	AuthPasskeysJITRegisterChallenge         string `json:"auth_passkeys_jit_register_challenge"`
@@ -146,10 +150,8 @@ var APIPaths = struct {
 	InternalPrefix: "/api/v1",
 	OperatorPrefix: "/api",
 	Client: map[string]string{
-		"chat":       "/api/v1/chat",
-		"health":     "/api/v1/health",
-		"sse_events": "/api/v1/internal/sse/events",
-		"sse_stream": "/api/v1/internal/sse/stream",
+		"chat":   "/api/v1/chat",
+		"health": "/api/v1/health",
 	},
 	// MCP routes
 	MCPEndpoint: "/mcp",
@@ -195,7 +197,6 @@ var APIPaths = struct {
 	// PKI routes
 	PKICSRSign:            "/api/v1/pki/csr/sign",
 	PKIDevicesEnroll:      "/api/v1/pki/devices/enroll",
-	PKIAppsEnroll:         "/api/v1/pki/apps/enroll",
 	PKIAppsDelegated:      "/api/v1/pki/apps/delegated",
 	PKICertificatesRevoke: "/api/v1/pki/certificates/revoke",
 	PKIRevocationBundle:   "/api/v1/pki/revocation-bundle",
@@ -216,13 +217,18 @@ var APIPaths = struct {
 	AuthLogout:                               "/api/v1/auth/logout",
 	AuthBootstrap:                            "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
-	AuthDeviceEnroll:                         "/api/v1/auth/device/enroll",
+	AuthPlatformEnrollmentRequest:            "/api/v1/auth/platform-enrollments/request",
+	AuthPlatformEnrollmentStatus:             "/api/v1/auth/platform-enrollments/status",
+	AuthPlatformEnrollmentComplete:           "/api/v1/auth/platform-enrollments/complete",
+	AuthPlatformEnrollmentPending:            "/api/v1/auth/platform-enrollments/pending",
+	AuthPlatformEnrollmentDecision:           "/api/v1/auth/platform-enrollments/decision",
 	AuthCLIRecoveryRequest:                   "/api/v1/auth/cli/recovery/request",
 	AuthCLIRecoveryStatus:                    "/api/v1/auth/cli/recovery/status",
 	AuthCLIRecoveryApprove:                   "/api/v1/auth/cli/recovery/approve",
 	AuthCLIRecoveryApproveCLI:                "/api/v1/auth/cli/recovery/approve-cli",
 	AuthCLIRecoveryComplete:                  "/api/v1/auth/cli/recovery/complete",
 	AuthCLIRotate:                            "/api/v1/auth/cli/rotate",
+	AuthCLIRefresh:                           "/api/v1/auth/cli/refresh",
 	AuthPasskeys:                             "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",
 	AuthPasskeysJITRegisterChallenge:         "/api/v1/auth/passkeys/jit-register/challenge",

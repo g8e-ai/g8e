@@ -41,8 +41,9 @@ func isValidIdentifier(name string) bool {
 
 // NativeToolHandler executes native tools compiled into the Node binary.
 type NativeToolHandler struct {
-	registry *ToolRegistry
-	logger   *slog.Logger
+	registry          *ToolRegistry
+	logger            *slog.Logger
+	auditReceiptQuery AuditReceiptQuery
 }
 
 // NewNativeToolHandler creates a new native tool handler with all native tools
@@ -57,6 +58,14 @@ func NewNativeToolHandler(logger *slog.Logger) (*NativeToolHandler, error) {
 		registry: registry,
 		logger:   logger,
 	}, nil
+}
+
+// SetAuditReceiptQuery wires the operator audit vault read interface into the
+// handler so the audit_receipt_list and audit_receipt_get native tools can
+// query signed ActionReceipt records under governed dispatch. Called after
+// construction once the audit store is available.
+func (h *NativeToolHandler) SetAuditReceiptQuery(q AuditReceiptQuery) {
+	h.auditReceiptQuery = q
 }
 
 // HandleTool executes a native tool by name and returns the result.
@@ -75,6 +84,9 @@ func (h *NativeToolHandler) HandleTool(ctx context.Context, toolName string, arg
 			toolNames = append(toolNames, t.Name())
 		}
 		return CallToolResult{}, fmt.Errorf("%w: %s (available tools: %s)", constants.ErrMCPNativeToolUnknown, toolName, strings.Join(toolNames, ", "))
+	}
+	if h.auditReceiptQuery != nil {
+		ctx = withAuditReceiptQuery(ctx, h.auditReceiptQuery)
 	}
 	result, err := tool.Execute(ctx, arguments)
 	if h.logger != nil {

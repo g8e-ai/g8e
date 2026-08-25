@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -90,13 +90,12 @@ The Makefile provides several build targets:
 - `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
 - `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
 - `make build-compressed`, Builds the g8e binary for the current platform and compresses it with UPX (requires UPX installed).
-- `make build-docker`, Builds the g8e binary for linux/amd64 inside a Docker container.
-- `make build-linux-docker`, Builds the g8e binary for Linux (amd64, arm64, 386) inside a Docker container.
-- `make build-windows-docker`, Builds the g8e binary for Windows (amd64, arm64) inside a Docker container.
-- `make build-darwin-docker`, Builds the g8e binary for Darwin (amd64, arm64) inside a Docker container.
-- `make build-all-docker`, Builds all platform binaries using Docker.
 - `make build-fips`, Builds the g8e binary with FIPS 140-3 approved mode (linux/amd64, GOFIPS140 v1.0.0).
 - `make verify-fips`, Builds the FIPS variant and runs the `g8e version --fips` self-check.
+- `make fmt`, Formats all Go source files (`gofmt -w .`).
+- `make up`, Builds and starts the full Docker Compose stack (`docker compose up -d --build`).
+- `make down`, Stops the stack, preserving volumes (`docker compose --profile bootstrapped down --remove-orphans`).
+- `make clean-docker`, Stops the stack and removes volumes (`docker compose --profile bootstrapped down -v --remove-orphans`).
 - `make clean`, Removes compiled binaries, test artifacts, and `.g8e/` runtime state.
 
 ### Cross-Compilation
@@ -131,7 +130,7 @@ This builds for both amd64 and arm64 architectures. On Windows hosts, use the sa
 The `operator` subcommand provides tools for managing remote Operator instances:
 
 - `./g8e operator list`, Lists all Operators currently connected to the Gateway.
-- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
+- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll user` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
 - `./g8e operator stream [host...] [flags]`, Streams the binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming and advanced SSH configuration. Flags: `--arch` (target architecture: amd64, arm64, 386), `--hosts` (file of hosts, one per line, or `-` for stdin), `--concurrency` (max parallel SSH sessions, default: 50), `--timeout` (per-host dial and inject timeout in seconds, default: 60), `--endpoint` (platform endpoint; if set, starts Operator on each remote host), `--no-git` (disable ledger), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--binary-dir` (directory containing arch-specific Operator builds), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--preflight` (enable pre-flight SSH connectivity check).
 - `./g8e operator cp <target>`, Copies the binary to a local path.
 - `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve`, `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
@@ -147,7 +146,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -159,7 +158,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.7.5
+pip install g8e==2.0.0
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -275,12 +274,14 @@ Refer to the [Protocol Library documentation](../architecture/protocol.md) for t
 
 ## Testing
 
-A custom Operator implementation must pass the platform test suite to claim g8e compatibility:
+A custom Operator implementation must pass the platform test suite to claim g8e compatibility. Run tests via `./g8e test` or make targets:
 
-- `make test-unit`, Runs Tier 1 unit tests.
-- `make test-integration`, Runs Tier 2 in-process integration tests.
-- `make test-docker`, Runs Tier 3 E2E tests requiring Docker.
-- `make ci`, Runs the full CI pipeline.
+- `make test-unit` or `./g8e test unit`, Runs Tier 1 unit tests with stubs and mocks (no external dependencies).
+- `make test-integration` or `./g8e test integration`, Runs Tier 2 in-process integration tests with local SQLite, PKI, and pub/sub.
+- `make test-docker` or `./g8e test e2e`, Runs Tier 3 E2E tests against a running platform. Start the platform first (`docker compose up -d --build` or `./g8e gw start`), then run `make test-docker` or `./g8e test e2e`. Use `./g8e test e2e --run <pattern>` to select specific scenario tests.
+- `make test-coverage` or `./g8e test coverage`, Runs the test suite and enforces the 75% coverage threshold.
+- `make lint` or `./g8e test lint`, Runs linters and static analysis.
+- `make ci`, Runs the full CI pipeline (proto generation, documentation validation, linting, vulnerability checks, and test suites).
 
 ---
 

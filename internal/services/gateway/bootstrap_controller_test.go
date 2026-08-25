@@ -12,12 +12,10 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,17 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
-
-// mockActuatorKeyReader is a test implementation of actuatorKeyReader.
-type mockActuatorKeyReader struct {
-	keyID     string
-	publicKey string
-	err       error
-}
-
-func (m *mockActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string, err error) {
-	return m.keyID, m.publicKey, m.err
-}
 
 func TestFileActuatorKeyReader(t *testing.T) {
 	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
@@ -88,7 +75,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 }
 
 func TestHandleBootstrapWithURL(t *testing.T) {
-	t.Run("Success - Bootstrap with CSR", func(t *testing.T) {
+	t.Run("Success - Bootstrap with CSR creates the first real user", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
@@ -117,61 +104,11 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		assert.NotEmpty(t, resp["cli_session_id"])
 		assert.NotEqual(t, resp["operator_session_id"], resp["cli_session_id"],
 			"cli_session_id MUST be a distinct identifier from operator_session_id")
-	})
-
-	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		user, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
+		// Bootstrap creates exactly one real user (the first human enrollee
+		// and gateway admin). There is no ephemeral bootstrap-user concept.
+		hasUsers, err := c.userSvc.HasAnyUsers()
 		require.NoError(t, err)
-		require.NotNil(t, user)
-
-		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"name":               "Owner",
-			"csr_pem":            csr,
-			"cli_csr_pem":        cliCsr,
-			"system_fingerprint": "rotated-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleLocalBootstrapWithURL(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp map[string]interface{}
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp["success"].(bool))
-		assert.NotEmpty(t, resp["operator_cert"])
-	})
-
-	t.Run("Failure - Rotation fails for disabled bootstrap user", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		user, _ := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		c.userSvc.Disable(user.ID, "retired", "actor", "op")
-
-		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"name":               "Owner",
-			"csr_pem":            csr,
-			"cli_csr_pem":        cliCsr,
-			"system_fingerprint": "fail-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleLocalBootstrapWithURL(rr, req)
-
-		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.JSONEq(t, `{"error":"`+constants.ErrBootstrapUserDisabled.Error()+`"}`, rr.Body.String())
+		assert.True(t, hasUsers, "bootstrap must create the first real user")
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
@@ -194,20 +131,21 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 }
 
 func TestHandleBootstrapStatus(t *testing.T) {
-	t.Run("Initially not bootstrapped", func(t *testing.T) {
+	t.Run("Fresh gateway is not bootstrapped", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
 		c.handleBootstrapStatus(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.BootstrapStatusResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.False(t, resp["bootstrapped"].(bool))
+		// bootstrapped is false until a human enrolls as the first owner.
+		assert.False(t, resp.Bootstrapped, "bootstrapped is false on a fresh gateway with no users")
 	})
 
-	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
+	t.Run("Bootstrapped after creating the first user", func(t *testing.T) {
 		c, _ := setupTestBootstrapController(t)
 		_, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
@@ -217,240 +155,9 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		c.handleBootstrapStatus(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.BootstrapStatusResponse
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.True(t, resp["bootstrapped"].(bool))
-	})
-}
-
-func TestHandleDeviceEnrollment(t *testing.T) {
-	t.Run("Failure - method not allowed", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/device/enroll", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-	})
-
-	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", strings.NewReader("{invalid}"))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrInvalidJSONBody.Error())
-	})
-
-	t.Run("Failure - missing csr_pem", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		body := map[string]string{
-			"system_fingerprint": "fp-123",
-			"hostname":           "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrCSRRequired.Error())
-	})
-
-	t.Run("Failure - missing system_fingerprint", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		body := map[string]string{
-			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-device"),
-			"hostname": "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrSystemFingerprintRequired.Error())
-	})
-
-	t.Run("Failure - missing hostname", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"system_fingerprint": "fp-123",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrHostnameRequired.Error())
-	})
-
-	t.Run("Failure - bootstrap user disabled", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		c.userSvc.Disable(bootstrapUser.ID, "test", "actor", "op")
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"system_fingerprint": "fp-123",
-			"hostname":           "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
-	})
-
-	t.Run("Failure - device enrollment on non-empty system", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		c.userSvc.CreateUser()
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"system_fingerprint": "fp-123",
-			"hostname":           "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrDeviceEnrollmentInitialOnly.Error())
-	})
-
-	t.Run("Failure - missing cli_csr_pem", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"system_fingerprint": "fp-123",
-			"hostname":           "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrCLICSRMandatory.Error())
-	})
-
-	t.Run("Success - initial bootstrap", func(t *testing.T) {
-		c, cfg := setupTestBootstrapController(t)
-
-		c.actuatorKeyReader = &mockActuatorKeyReader{
-			keyID:     "act-123",
-			publicKey: "pub-123",
-		}
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
-			"system_fingerprint": "fp-123",
-			"hostname":           "test-host",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp models.DeviceEnrollmentResponse
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp.Success)
-		assert.NotEmpty(t, resp.OperatorCert)
-		assert.NotEmpty(t, resp.CLICert)
-		assert.Equal(t, "act-123", resp.ActuatorKeyID)
-		assert.Equal(t, "pub-123", resp.ActuatorPubKey)
-		// The gateway owns the posture and must send it to the operator at
-		// enrollment so the operator can run L4 posture-gated checks against
-		// the gateway's posture rather than inventing its own.
-		assert.Equal(t, string(cfg.Gateway.Posture), resp.Posture)
-
-		user, err := c.userSvc.GetByID(resp.UserID)
-		require.NoError(t, err)
-		assert.NotNil(t, user)
-		assert.True(t, user.IsBootstrap)
-	})
-
-	t.Run("Success - existing bootstrap user", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
-			"system_fingerprint": "fp-124",
-			"hostname":           "test-host-2",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp models.DeviceEnrollmentResponse
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp.Success)
-		assert.Equal(t, bootstrapUser.ID, resp.UserID)
-	})
-
-	t.Run("Success - actuator key reader error (graceful degradation)", func(t *testing.T) {
-		c, _ := setupTestBootstrapController(t)
-
-		c.actuatorKeyReader = &mockActuatorKeyReader{
-			err: fmt.Errorf("failed to read actuator key: %w", constants.ErrPathNotFound),
-		}
-
-		body := map[string]string{
-			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
-			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
-			"system_fingerprint": "fp-125",
-			"hostname":           "test-host-3",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handleDeviceEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp models.DeviceEnrollmentResponse
-		err = json.Unmarshal(rr.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		assert.True(t, resp.Success)
-		assert.Empty(t, resp.ActuatorKeyID)
-		assert.Empty(t, resp.ActuatorPubKey)
+		assert.True(t, resp.Bootstrapped, "bootstrapped flips to true once the first user exists")
 	})
 }

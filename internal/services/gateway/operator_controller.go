@@ -63,12 +63,12 @@ func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.
 		c.responder.Error(w, http.StatusBadRequest, "user_id required")
 		return
 	}
-	slots, err := c.reg.ListOperatorSlots(userID)
+	operators, err := c.reg.ListUserOperators(userID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
+	c.responder.JSON(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: operators})
 }
 
 // POST /api/v1/operators/{id}/terminate

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -82,7 +82,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -94,7 +94,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==1.7.5
+pip install g8e==2.0.0
 ```
 
 The package provides runtime loaders for JSON protocol constants, dynamic enum generation from those constants, and Pydantic v2 models for protocol data structures including request contexts, platform settings, SSE event wire models, and `GovernanceEnvelope` with deterministic transaction hash generation.
@@ -110,7 +110,7 @@ Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol c
 Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 
 ```bash
-./g8e auth enroll
+./g8e auth enroll user
 ```
 
 This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).
@@ -140,7 +140,7 @@ Format the mutation intent according to the protocol schema. For example, a shel
   "command": "ls -la",
   "execution_id": "unique-execution-id",
   "justification": "List directory contents",
-  "vault_mode": "scrub",
+  "vault_mode": "scrubbed",
   "timeout_seconds": 30,
   "intent": "Inspect filesystem",
   "environment": {},
@@ -354,7 +354,7 @@ Applications must validate the state root returned by the g8e Gateway before usi
 
 ## Reference Implementation
 
-The reference implementation of a maximal g8e-compatible agentic ensemble is **g8ee** (the "g8e Agentic Ensemble"), a native g8e application maintained in its own repository. g8ee is a first-class g8e client: it holds no privileged Gateway role, authenticates over mTLS, and produces signed governance envelopes like any other L2 consensus producer. It includes an internal consensus mechanism for L2 signature generation, envelope construction and submission using the canonical hash algorithm, receipt verification, and MCP/A2A integration.
+The reference implementation of a maximal g8e-compatible agentic ensemble is **g8ee** (the "g8e Agentic Ensemble"), a first-party Python / FastAPI agentic ensemble located in-tree at `ensemble/` in the repository root. g8ee is a first-class g8e client: it holds no privileged Gateway role, authenticates over mTLS, and produces signed governance envelopes like any other L2 consensus producer. It includes an internal consensus mechanism for L2 signature generation, envelope construction and submission using the canonical hash algorithm, receipt verification, and MCP/A2A integration.
 
 The design patterns documented in the [Building an Agentic System](#building-an-agentic-system) section below are derived from g8ee as the canonical worked example.
 

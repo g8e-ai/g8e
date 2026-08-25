@@ -107,9 +107,20 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	operatorSessionID := envelope.GetOperatorSessionId()
 	operatorID := envelope.GetOperatorId()
 	sourceComponent := envelope.GetSourceComponent()
+	actionType := constants.ActionType(envelope.GetActionType())
 
-	// If envelope has no identity fields, let the processor handle validation
+	// Fail closed for governed mutations: an envelope that performs a
+	// mutation MUST bind to a transport identity. An empty operator_id AND
+	// operator_session_id on a mutation means the envelope is unbound and
+	// must be rejected at the transport boundary rather than deferred to
+	// the downstream processor, which would otherwise admit it as a
+	// fail-open path. Non-mutation reads keep the pass-through behavior so
+	// the downstream processor validates them.
 	if operatorSessionID == "" && operatorID == "" {
+		if actionType.IsMutation() {
+			return fmt.Errorf("%w: mutation action %q requires operator_id or operator_session_id binding",
+				constants.ErrIdentityBindingFailed, actionType)
+		}
 		return nil
 	}
 
@@ -158,6 +169,29 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 // (spiffe://<trust-domain>/app/<operator_id>).
 func isAppComponent(c commonv1.Component) bool {
 	return c == commonv1.Component_COMPONENT_AGENT || c == commonv1.Component_COMPONENT_CLIENT
+}
+
+// injectEnvelopePosture sets the gateway's governance posture on an incoming
+// envelope that was built by a client (ensemble, CLI, BYO app). Clients do not
+// know the gateway's posture — the gateway is the posture authority. Posture
+// is not part of the transaction hash, so injecting it here does not
+// invalidate the client's signature or hash. If the envelope already carries a
+// non-empty posture, it is left unchanged (gateway-internal construction paths
+// set posture at build time).
+func injectEnvelopePosture(body []byte, posture string) ([]byte, error) {
+	var envelope commonv1.GovernanceEnvelope
+	if err := protojson.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("decode envelope: %w", err)
+	}
+	if envelope.Posture != "" {
+		return body, nil
+	}
+	envelope.Posture = posture
+	reMarshaled, err := protojson.Marshal(&envelope)
+	if err != nil {
+		return nil, fmt.Errorf("re-marshal envelope: %w", err)
+	}
+	return reMarshaled, nil
 }
 
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point
@@ -222,6 +256,18 @@ func (c *GovernanceController) handleGovernanceEnvelope(w http.ResponseWriter, r
 			c.responder.Error(w, http.StatusForbidden, fmt.Errorf("handleGovernanceEnvelope: identity binding: %w", err).Error())
 			return
 		}
+	}
+
+	// Inject the gateway's governance posture into the envelope. The gateway
+	// is the posture authority; clients (ensemble, CLI, BYO apps) do not know
+	// the gateway's posture and must not set it. Posture is not part of the
+	// transaction hash, so injecting it here does not invalidate the client's
+	// signature. If the envelope already carries a posture (e.g. from a
+	// gateway-internal construction path), leave it unchanged.
+	body, err = injectEnvelopePosture(body, string(c.cfg.Gateway.Posture))
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("handleGovernanceEnvelope: inject posture: %w", err).Error())
+		return
 	}
 
 	receipt, procErr := proc.ProcessEnvelope(r.Context(), body)

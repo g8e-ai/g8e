@@ -204,7 +204,7 @@ func (c *DataController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		deleted, err := c.docStore.DocDelete(collection, id)
+		deleted, err := c.docStore.DocDeleteWithResult(collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("data_controller: handleDataDB: %w", err).Error())
 			return

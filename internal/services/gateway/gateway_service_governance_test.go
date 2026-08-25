@@ -64,6 +64,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	assert.NotNil(t, deps.ReplayStore)
 	assert.NotNil(t, deps.StateRootProvider)
 	assert.NotNil(t, deps.TransactionAudit)
+	assert.NotNil(t, deps.GovernedDocStore, "GovernanceDeps.GovernedDocStore should be populated by GetGovernanceDeps")
 	assert.NotNil(t, deps.L3Notary)
 	assert.NotNil(t, deps.SignerStore)
 	assert.NotNil(t, deps.FieldReader)

@@ -33,7 +33,7 @@ func approveRecoveryCmdWithConfig(
 	cmd := &cobra.Command{
 		Use:   "approve-recovery <token>",
 		Short: "Approve or deny a pending CLI recovery request via mTLS",
-		Long: `Approve or deny a pending CLI recovery request from another CLI's 'auth enroll --headless' run.
+		Long: `Approve or deny a pending CLI recovery request from another CLI's 'auth enroll user --headless' run.
 
 This command uses the local enrolled CLI identity (mTLS) to approve or deny the
 request. It is the CLI-side counterpart to the browser Console SPA approve

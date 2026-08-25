@@ -3,9 +3,7 @@
   "operator_prefix": "/api",
   "client": {
     "chat": "/api/v1/chat",
-    "health": "/api/v1/health",
-    "sse_events": "/api/v1/internal/sse/events",
-    "sse_stream": "/api/v1/internal/sse/stream"
+    "health": "/api/v1/health"
   },
   "mcp_endpoint": "/mcp",
   "a2a_call": "/api/v1/a2a/call",
@@ -57,7 +55,12 @@
   "auth_cli_recovery_approve_cli": "/api/v1/auth/cli/recovery/approve-cli",
   "auth_cli_recovery_complete": "/api/v1/auth/cli/recovery/complete",
   "auth_cli_rotate": "/api/v1/auth/cli/rotate",
-  "auth_device_enroll": "/api/v1/auth/device/enroll",
+  "auth_cli_refresh": "/api/v1/auth/cli/refresh",
+  "auth_platform_enrollment_request": "/api/v1/auth/platform-enrollments/request",
+  "auth_platform_enrollment_status": "/api/v1/auth/platform-enrollments/status",
+  "auth_platform_enrollment_complete": "/api/v1/auth/platform-enrollments/complete",
+  "auth_platform_enrollment_pending": "/api/v1/auth/platform-enrollments/pending",
+  "auth_platform_enrollment_decision": "/api/v1/auth/platform-enrollments/decision",
   "auth_passkeys": "/api/v1/auth/passkeys",
   "auth_passkeys_by_id": "/api/v1/auth/passkeys/",
   "auth_passkeys_jit_register_challenge": "/api/v1/auth/passkeys/jit-register/challenge",

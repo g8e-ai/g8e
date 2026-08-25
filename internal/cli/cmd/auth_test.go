@@ -30,12 +30,32 @@ func TestAuthCmd(t *testing.T) {
 	})
 }
 
-func TestEnrollCmd(t *testing.T) {
-	t.Run("enroll command has correct use", func(t *testing.T) {
-		cmd := enrollCmd()
-		assert.Equal(t, "enroll", cmd.Use)
+func TestEnrollUserCmd(t *testing.T) {
+	t.Run("user command has correct use", func(t *testing.T) {
+		cmd := enrollUserCmd()
+		assert.Equal(t, "user", cmd.Use)
 		assert.Contains(t, cmd.Short, "Enroll")
 	})
+}
+
+// TestEnrollCmd_Parent verifies the enroll parent command has no RunE
+// (cobra prints help and exits non-zero when invoked without a subcommand)
+// and registers the user and gui subcommands. The operator subcommand was
+// removed when the unauthenticated operator enrollment bypass was closed
+// (Phase 4); operators now enroll through the owner-approved platform
+// enrollment protocol.
+func TestEnrollCmd_Parent(t *testing.T) {
+	cmd := enrollCmd()
+	assert.Equal(t, "enroll", cmd.Use)
+	assert.Nil(t, cmd.RunE, "parent enroll command must have no RunE so cobra prints help on bare invocation")
+
+	names := map[string]bool{}
+	for _, sub := range cmd.Commands() {
+		names[sub.Name()] = true
+	}
+	assert.True(t, names["user"], "enroll parent must register the user subcommand")
+	assert.True(t, names["gui"], "enroll parent must register the gui subcommand")
+	assert.False(t, names["operator"], "enroll parent must NOT register the removed operator subcommand")
 }
 
 func TestLogoutCmd(t *testing.T) {
@@ -110,13 +130,13 @@ func TestLogoutCmd(t *testing.T) {
 
 func TestAuthCommandFlags(t *testing.T) {
 	t.Run("enroll has no count flag", func(t *testing.T) {
-		cmd := enrollCmd()
+		cmd := enrollUserCmd()
 		countFlag := cmd.Flags().Lookup("count")
 		assert.Nil(t, countFlag)
 	})
 
 	t.Run("enroll has no ttl flag", func(t *testing.T) {
-		cmd := enrollCmd()
+		cmd := enrollUserCmd()
 		ttlFlag := cmd.Flags().Lookup("ttl")
 		assert.Nil(t, ttlFlag)
 	})

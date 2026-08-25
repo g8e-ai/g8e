@@ -18,7 +18,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,8 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -59,16 +56,16 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NoError(t, err)
 	cliCsrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: cliCsrBytes})
 
-	// 1. Initial status - not bootstrapped
+	// 1. Initial status - not bootstrapped (no users yet)
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr := httptest.NewRecorder()
 	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var statusResp models.BootstrapStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.False(t, statusResp.Bootstrapped)
+	assert.False(t, statusResp.Bootstrapped, "bootstrapped is false on a fresh gateway with no users")
 
-	// 2. Perform bootstrap
+	// 2. Perform bootstrap (creates the first real user, the gateway admin)
 	bootstrapBody := map[string]string{
 		"csr_pem":            string(csrPEM),
 		"cli_csr_pem":        string(cliCsrPEM),
@@ -99,61 +96,33 @@ func TestBootstrapFlow(t *testing.T) {
 	require.NotEqual(t, bootstrapSessionID, cliSessionID,
 		"cli_session_id MUST be a distinct identifier from operator_session_id - session types are strictly disjoint")
 
-	// 3. Status - now bootstrapped
+	// 3. Status - now bootstrapped (the first user exists)
 	req = httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 	rr = httptest.NewRecorder()
 	h.bootstrapController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.True(t, statusResp.Bootstrapped)
+	assert.True(t, statusResp.Bootstrapped, "bootstrapped flips to true once the first user exists")
 
-	// 4. Verify bootstrap user is active
+	// 4. Verify the first user is active and is the admin (first user). There
+	// is no ephemeral bootstrap-user concept and no retirement flow: the user
+	// created by bootstrap IS the first human enrollee and stays active.
 	user, err := h.adminController.userSvc.GetByID(bootstrapUserID)
 	require.NoError(t, err)
 	assert.True(t, user.IsActive())
-	assert.True(t, user.IsBootstrap)
+	isFirst, err := h.adminController.userSvc.IsFirstUser(bootstrapUserID)
+	require.NoError(t, err)
+	assert.True(t, isFirst, "the bootstrap-created user is the first user (admin)")
 
-	// 5. Verify bootstrap user can authenticate
+	// 5. Verify the user can authenticate via the operator session
 	op, err := h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
 	require.NoError(t, err)
 	assert.Equal(t, bootstrapUserID, op.UserID)
 
-	// 6. Simulate real user registration (retirement)
-	// We'll call the retirement logic directly as if RegistrationService did it
-	realUserID := "user-real-123"
-	realOperatorID := "op-real-456"
-	err = h.adminController.userSvc.Disable(bootstrapUserID, "retired_by_real_login", realUserID, realOperatorID)
-	require.NoError(t, err)
-
-	// 7. Verify bootstrap user is now inactive
+	// 6. Verify the user remains active (no retirement). The old
+	// create-then-retire dance is gone; the first user is a real user that
+	// is never disabled by a later login.
 	user, err = h.adminController.userSvc.GetByID(bootstrapUserID)
 	require.NoError(t, err)
-	assert.False(t, user.IsActive())
-	assert.Equal(t, constants.UserStatusDisabled, user.Status)
-
-	// 8. Verify audit entry was created for bootstrap retirement
-	filters := []models.DocFilter{
-		{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", bootstrapUserID))},
-		{Field: "action", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", models.AdminAuditActionRetireLocalOwner))},
-	}
-	results, err := h.dataController.docStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
-	require.NoError(t, err)
-	require.Len(t, results, 1, "Expected exactly one audit entry for bootstrap retirement")
-
-	var auditEntry models.AdminAuditEntry
-	auditBytes, err := json.Marshal(results[0].ForWire())
-	require.NoError(t, err)
-	err = json.Unmarshal(auditBytes, &auditEntry)
-	require.NoError(t, err)
-	assert.Equal(t, models.AdminAuditActionRetireLocalOwner, auditEntry.Action)
-	assert.Equal(t, realUserID, auditEntry.Actor)
-	assert.Equal(t, realOperatorID, auditEntry.OperatorID)
-	require.NotNil(t, auditEntry.Details)
-	assert.Equal(t, "retired_by_real_login", auditEntry.Details.Reason)
-
-	// 8. Verify bootstrap user is REJECTED during authentication
-	op, err = h.authMiddleware.ValidateOperatorSession(bootstrapSessionID)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "identity disabled")
-	assert.Nil(t, op)
+	assert.True(t, user.IsActive(), "the first user is never retired by a later enrollment")
 }

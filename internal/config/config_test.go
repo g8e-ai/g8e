@@ -8,7 +8,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -52,16 +51,17 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, wantWorkDir, cfg.WorkDir)
 }
 
-// TestLoad_NoPosture_FailsClosed verifies that the operator does not invent a
-// posture when the gateway did not send one. The operator has no posture of its
-// own and must fail closed rather than defaulting to a local posture.
-func TestLoad_NoPosture_FailsClosed(t *testing.T) {
+// TestLoad_NoPosture_Succeeds verifies that the operator no longer requires
+// config posture to start. The operator reads posture per-envelope from
+// GovernanceEnvelope.Posture at L4 verification time, so an empty config
+// posture is acceptable. cfg.Posture is empty when none was supplied.
+func TestLoad_NoPosture_Succeeds(t *testing.T) {
 	cfg, err := Load(LoadOptions{
 		OperatorEndpoint: constants.DefaultEndpoint,
 	})
-	require.Error(t, err)
-	assert.Nil(t, cfg)
-	assert.True(t, errors.Is(err, constants.ErrPostureRequired), "expected ErrPostureRequired, got: %v", err)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Empty(t, cfg.Posture, "cfg.Posture should be empty when no posture was supplied")
 }
 
 func TestLoad_WorkDir_Flag(t *testing.T) {
