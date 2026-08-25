@@ -291,8 +291,7 @@ class AppEnrollmentService:
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-        digest = hashlib.sha256(spki_der).hexdigest()
-        return digest
+        return hashlib.sha256(spki_der).hexdigest()
 
     @staticmethod
     def _token_hash(token: str) -> str:
