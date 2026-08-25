@@ -77,10 +77,18 @@ func uniqueDocumentID(kind string) string {
 //	G8E_HARNESS_LLM_MODEL=gemma4:12b
 //	G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 
-// ensemblePollTimeout is the maximum time to wait for an audit receipt to
-// appear after sending a chat request. The LLM + governance round-trip can
-// take 30-60s with ollama; the fake provider is near-instant.
-const ensemblePollTimeout = 90 * time.Second
+// ensemblePollTimeout returns the maximum time to wait for an audit receipt
+// to appear after sending a chat request. The LLM + governance round-trip can
+// take 60-120s with real local LLMs (triage + agent turn + risk analysis); the
+// fake provider is near-instant. Defaults to 3 minutes.
+func getEnsemblePollTimeout() time.Duration {
+	if s := os.Getenv("G8E_HARNESS_POLL_TIMEOUT"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 3 * time.Minute
+}
 
 // ensemblePollInterval is the delay between audit vault polls.
 const ensemblePollInterval = 3 * time.Second
@@ -156,13 +164,19 @@ func ensembleChatRequest(persona clientpkg.Persona, message, caseTitle string) c
 		}
 	}
 	return clientpkg.EnsembleChatRequest{
-		Context:            ctx,
-		Message:            message,
-		SentinelMode:       true,
-		ResourceCreation:   &clientpkg.EnsembleResourceCreation{CreateCase: true, CaseTitle: caseTitle},
-		LLMPrimaryProvider: provider,
-		LLMPrimaryModel:    model,
-		LLMPrimaryEndpoint: endpoint,
+		Context:              ctx,
+		Message:              message,
+		SentinelMode:         true,
+		ResourceCreation:     &clientpkg.EnsembleResourceCreation{CreateCase: true, CaseTitle: caseTitle},
+		LLMPrimaryProvider:   provider,
+		LLMPrimaryModel:      model,
+		LLMPrimaryEndpoint:   endpoint,
+		LLMAssistantProvider: provider,
+		LLMAssistantModel:    model,
+		LLMAssistantEndpoint: endpoint,
+		LLMLiteProvider:      provider,
+		LLMLiteModel:         model,
+		LLMLiteEndpoint:      endpoint,
 	}
 }
 
@@ -190,6 +204,7 @@ type ReceiptCorrelation struct {
 	NotBefore         time.Time
 	OperatorSessionID string
 	ActionType        string
+	TargetResource    string
 	CaseID            string
 	Persona           clientpkg.Persona
 }
@@ -206,11 +221,12 @@ type ReceiptCorrelation struct {
 // pass. The caller captures NotBefore before sending the chat request and
 // passes it here so stale receipts from prior runs are rejected.
 func pollForReceiptWithCorrelation(ctx context.Context, c *clientpkg.Client, r *Result, corr ReceiptCorrelation) (*clientpkg.Receipt, error) {
-	deadline := time.Now().Add(ensemblePollTimeout)
+	timeout := getEnsemblePollTimeout()
+	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(ensemblePollInterval)
 	defer ticker.Stop()
 
-	r.note("polling operator audit vault via audit_receipt_list for %s receipt (not_before=%s, timeout %s)", corr.ActionType, corr.NotBefore.Format(time.RFC3339Nano), ensemblePollTimeout)
+	r.note("polling operator audit vault via audit_receipt_list for %s receipt (not_before=%s, timeout %s)", corr.ActionType, corr.NotBefore.Format(time.RFC3339Nano), timeout)
 
 	for {
 		receipts, err := queryAuditReceiptsViaGovernedTool(ctx, c, corr)
@@ -232,6 +248,12 @@ func pollForReceiptWithCorrelation(ctx context.Context, c *clientpkg.Client, r *
 				// defend against a mis-scoped query.
 				if corr.OperatorSessionID != "" && rec.OperatorSessionID != "" && rec.OperatorSessionID != corr.OperatorSessionID {
 					r.note("skipping %s receipt: tx=%s operator_session_id=%s != expected=%s", corr.ActionType, short(rec.TransactionID), rec.OperatorSessionID, corr.OperatorSessionID)
+					continue
+				}
+				// Target resource binding: defend against stale or concurrent
+				// operations on other resources within the same session.
+				if corr.TargetResource != "" && rec.TargetResource != "" && rec.TargetResource != corr.TargetResource {
+					r.note("skipping %s receipt: tx=%s target_resource=%s != expected=%s", corr.ActionType, short(rec.TransactionID), rec.TargetResource, corr.TargetResource)
 					continue
 				}
 				// Signature presence: a receipt without a signature is not
@@ -410,23 +432,22 @@ func verifyReceiptIdentity(r *Result, receipt *clientpkg.Receipt) error {
 	return nil
 }
 
-// governedReadBack submits a governed fs_read tool call through the gateway's
+// governedReadBack submits a governed read_file tool call through the gateway's
 // MCP endpoint and returns the text content from the response. This is the
 // read-back path (C.2): the harness verifies the actual operator filesystem
-// via a governed FS_READ envelope, not a host path. The gateway wraps the
-// fs_read into a governed MCP_CALL envelope, runs the L1-L5 gauntlet, and the
+// via a governed MCP_CALL envelope, runs the L1-L5 gauntlet, and the
 // operator executes the read and returns the file content.
 func governedReadBack(ctx context.Context, c *clientpkg.Client, r *Result, persona clientpkg.Persona, path string) (string, error) {
-	r.note("governed read-back: fs_read %s via MCP tools/call", path)
-	resp, err := c.MCPToolsCall(ctx, persona, "fs_read", clientpkg.FSPathArgs{Path: path})
+	r.note("governed read-back: read_file %s via MCP tools/call", path)
+	resp, err := c.MCPToolsCall(ctx, persona, "read_file", clientpkg.FSPathArgs{Path: path})
 	if err != nil {
 		return "", fmt.Errorf("governed read-back: %w", err)
 	}
 	if resp != nil && resp.Error != nil {
-		return "", fmt.Errorf("governed read-back: fs_read rejected: %s", resp.Error.Message)
+		return "", fmt.Errorf("governed read-back: read_file rejected: %s", resp.Error.Message)
 	}
 	if resp == nil || len(resp.Result) == 0 {
-		return "", fmt.Errorf("governed read-back: fs_read returned empty result")
+		return "", fmt.Errorf("governed read-back: read_file returned empty result")
 	}
 	// The MCP tools/call result is a CallToolResult JSON: {"content":[{"type":"text","text":"..."}]}
 	var cr struct {
@@ -444,10 +465,20 @@ func governedReadBack(ctx context.Context, c *clientpkg.Client, r *Result, perso
 		for _, c := range cr.Content {
 			sb.WriteString(c.Text)
 		}
-		return "", fmt.Errorf("governed read-back: fs_read returned error: %s", sb.String())
+		return "", fmt.Errorf("governed read-back: read_file returned error: %s", sb.String())
 	}
 	if len(cr.Content) == 0 {
-		return "", fmt.Errorf("governed read-back: fs_read returned no content")
+		return "", fmt.Errorf("governed read-back: read_file returned no content")
+	}
+	var fileResult struct {
+		Content string `json:"content"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(cr.Content[0].Text), &fileResult); err == nil {
+		if fileResult.Error != "" {
+			return "", fmt.Errorf("governed read-back: read_file error: %s", fileResult.Error)
+		}
+		return fileResult.Content, nil
 	}
 	return cr.Content[0].Text, nil
 }
@@ -589,6 +620,7 @@ func ensembleScenarios() []Scenario {
 					NotBefore:         notBefore,
 					OperatorSessionID: kit.OperatorSessionID,
 					ActionType:        string(constants.ActionTypeFileEdit),
+					TargetResource:    filePath,
 					CaseID:            chatResp.CaseID,
 					Persona:           persona,
 				})
@@ -656,6 +688,7 @@ func ensembleScenarios() []Scenario {
 					NotBefore:         notBefore,
 					OperatorSessionID: kit.OperatorSessionID,
 					ActionType:        string(constants.ActionTypeFileEdit),
+					TargetResource:    filePath,
 					CaseID:            chatResp.CaseID,
 					Persona:           persona,
 				})

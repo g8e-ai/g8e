@@ -645,6 +645,8 @@ class AppEnrollmentService:
             request_id = pending["request_id"]
             fingerprint = pending["fingerprint"]
             key_pem = pending["key_pem"]
+            if pending.get("instance_id"):
+                self._instance_id = pending["instance_id"]
             # Re-load the private key for proof signing.
             private_key = serialization.load_pem_private_key(
                 key_pem.encode("utf-8"), password=None

@@ -880,7 +880,7 @@ class ChatPipelineService:
             )
 
         assistant_provider, assistant_api_key, assistant_endpoint, assistant_model = (
-            user_settings.llm.resolve(
+            resolved_settings.llm.resolve(
                 "assistant",
                 provider_override=llm_assistant_provider,
                 api_key_override=llm_assistant_api_key,

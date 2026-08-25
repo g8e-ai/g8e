@@ -178,7 +178,19 @@ def resolve_model(
     if tier == "primary":
         return primary_override or settings_primary_model
     if tier == "assistant":
-        return assistant_override or settings_assistant_model
+        return (
+            assistant_override
+            or settings_assistant_model
+            or primary_override
+            or settings_primary_model
+        )
     if tier == "lite":
-        return lite_override or settings_lite_model
+        return (
+            lite_override
+            or settings_lite_model
+            or assistant_override
+            or settings_assistant_model
+            or primary_override
+            or settings_primary_model
+        )
     raise ValueError(f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'.")

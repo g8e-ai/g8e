@@ -595,6 +595,13 @@ class PubSubClient:
 
             action_type = map_event_type_to_action_type(command_data.event_type)
             payload_bytes = command_data.payload.to_protobuf().SerializeToString()
+            target_resource = (
+                getattr(command_data.payload, "file_path", None)
+                or getattr(command_data.payload, "path", None)
+                or getattr(command_data.payload, "doc_id", None)
+                or getattr(command_data.payload, "host", None)
+                or "localhost"
+            )
             intent = CommandIntent.from_payload_bytes(
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
@@ -602,7 +609,7 @@ class PubSubClient:
                 payload_bytes=payload_bytes,
                 requestor_user_id=command_data.user_id,
                 event_type=command_data.event_type,
-                target_resource="localhost",
+                target_resource=target_resource,
                 case_id=command_data.case_id,
                 investigation_id=command_data.investigation_id,
                 task_id=command_data.task_id,

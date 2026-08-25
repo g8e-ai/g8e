@@ -26,6 +26,8 @@ volumes:
     driver: local
   g8e-dashboard-data:
     driver: local
+  g8e-shared-tmp:
+    driver: local
 
 services:
   g8e-gateway:
@@ -43,6 +45,7 @@ services:
           - g8eg
     volumes:
       - g8e-gateway-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
     ports:
       - "${G8E_HTTP_PORT:-8080}:8080"
       - "${G8E_HTTPS_PORT:-8443}:8443"
@@ -87,6 +90,7 @@ services:
       - g8e-net
     volumes:
       - g8e-operator-data:/root/.g8e
+      - g8e-shared-tmp:/tmp
     depends_on:
       g8e-gateway:
         condition: service_healthy
@@ -134,6 +138,7 @@ services:
       # release notes. Mounted at /operator-state to avoid colliding with the
       # ensemble's own /root/.g8e runtime tree.
       - g8e-operator-data:/operator-state:ro
+      - g8e-shared-tmp:/tmp
     environment:
       - G8E_GATEWAY_HTTP_URL=http://g8e.local:8080
       - G8E_GATEWAY_URL=https://g8e.local:8443

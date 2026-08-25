@@ -485,13 +485,14 @@ class LLMSettings(_ProtocolLLMSettings):
             if not model:
                 model = p_model
 
-        # Lite role falls back to assistant then primary when lite is not
-        # configured (no provider and no override). This aligns with
+        # Assistant and lite roles fall back when not configured (no provider
+        # and no override). This aligns with resolved_assistant_model /
         # resolved_lite_model's fallback chain and means "use the best available
-        # model for lite tasks." The caller's model_override is honored when
-        # present; otherwise the fallback role's model is used.
-        if role == "lite" and not effective_provider:
-            for fallback_role in ("assistant", "primary"):
+        # model." The caller's model_override is honored when present;
+        # otherwise the fallback role's model is used.
+        if role in ("assistant", "lite") and not effective_provider:
+            fallbacks = ("assistant", "primary") if role == "lite" else ("primary",)
+            for fallback_role in fallbacks:
                 fb_provider, fb_api_key, fb_endpoint, fb_model = self.resolve(fallback_role)
                 if fb_provider:
                     return fb_provider, fb_api_key, fb_endpoint, model or fb_model
