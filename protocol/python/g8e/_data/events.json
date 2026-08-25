@@ -1187,6 +1187,10 @@
     "OperatorPortCheckRequested": {
       "_go_const": "EventOperatorPortCheckRequested",
       "value": "g8e.v1.operator.port.check.requested"
+    },
+    "OperatorReceiptRecorded": {
+      "_go_const": "EventOperatorReceiptRecorded",
+      "value": "g8e.v1.operator.receipt.recorded"
     }
   }
 }

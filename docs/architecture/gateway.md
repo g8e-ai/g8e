@@ -204,6 +204,10 @@ The gateway provides a set of native tools covering database operations, filesys
 **Execution Tools**:
 - `run_shell_command`: Safe shell command execution
 
+**Audit Tools**:
+- `audit_receipt_list`: Lists signed ActionReceipt records from the operator audit vault, scoped to an operator session, with optional action_type and not_before filtering and limit/offset pagination
+- `audit_receipt_get`: Retrieves a single signed ActionReceipt by transaction_id from the operator audit vault
+
 ---
 
 ## Incremental State Tracking

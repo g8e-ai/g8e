@@ -432,12 +432,24 @@ To manually rotate your CLI certificate (for example before expiry):
 3. A replacement certificate is issued and the old one is revoked.
 4. Only one replacement is issued per run.
 
+### 6.1.3 Refreshing an Expired CLI Session
+
+If your CLI session has expired but your CLI certificate is still valid (for example after a gateway restart or a gateway volume reset that wiped CLI sessions):
+
+1. Run `g8e auth refresh`.
+2. The CLI uses your existing mTLS certificate to request a new session from `POST /api/v1/auth/cli/refresh`.
+3. The gateway derives your user identity from the verified certificate, deactivates the old session (if it still exists), and issues a new session bound to the same user and cert.
+4. The CLI persists the new session ID atomically.
+
+If your certificate itself has expired, `g8e auth refresh` cannot help (an expired cert cannot authenticate via mTLS). Use `g8e auth enroll user --headless` to initiate the human-approved CLI recovery flow, which issues a new certificate.
+
 ### 6.2 Daily Usage
 
 **CLI:**
 - Your enrolled certificate handles authentication automatically.
 - Run `g8e auth enroll user` again - if your identity is complete and valid, and the local trust bundle matches the live gateway root CA, it is reused without rotation.
 - Run `g8e auth enroll user --rotate-cli` to force certificate rotation.
+- Run `g8e auth refresh` to obtain a new CLI session when the session has expired but the certificate is still valid.
 - If credentials are partial or corrupt, or the local trust bundle is stale against the live gateway (for example after `gw clean`), the CLI automatically initiates the recovery flow.
 
 **Browser:**
