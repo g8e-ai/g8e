@@ -1437,7 +1437,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"(PLATFORM_ENROLLMENT_DECISION_UNSPECIFIED\x10\x00\x12(\n" +
 	"$PLATFORM_ENROLLMENT_DECISION_APPROVE\x10\x01\x12%\n" +
 	"!PLATFORM_ENROLLMENT_DECISION_DENY\x10\x02:N\n" +
-	"\x12forbidden_patterns\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\tR\x11forbiddenPatternsB=Z;github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1;commonv1b\x06proto3"
+	"\x12forbidden_patterns\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\tR\x11forbiddenPatternsB@Z>github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1;commonv1b\x06proto3"
 
 var (
 	file_g8e_common_v1_common_proto_rawDescOnce sync.Once

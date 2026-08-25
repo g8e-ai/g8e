@@ -775,8 +775,8 @@ const file_anduril_entitymanager_v1_sensors_pub_proto_rawDesc = "" +
 	"\x0fSENSOR_TYPE_GPS\x10\x05\x12\x17\n" +
 	"\x13SENSOR_TYPE_PTU_POS\x10\x06\x12\x19\n" +
 	"\x15SENSOR_TYPE_PERIMETER\x10\b\x12\x15\n" +
-	"\x11SENSOR_TYPE_SONAR\x10\t\"\x04\b\a\x10\aB\xab\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\fSensorsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x11SENSOR_TYPE_SONAR\x10\t\"\x04\b\a\x10\aB\xae\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\fSensorsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_sensors_pub_proto_rawDescOnce sync.Once

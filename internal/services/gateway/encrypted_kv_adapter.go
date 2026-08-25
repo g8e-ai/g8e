@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
 // EncryptedKVAdapter bridges KVStoreService (in the canonical gateway DB) to the

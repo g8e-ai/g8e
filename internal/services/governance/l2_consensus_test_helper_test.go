@@ -1,6 +1,6 @@
 package governance
 
-import "github.com/g8e-ai/g8e/internal/services/governance/governancetest"
+import "github.com/g8e-ai/g8e/v2/internal/services/governance/governancetest"
 
 // consensusStoreTestAdapter wraps a governancetest.SimpleConsensusStore and adapts
 // it to satisfy L2ConsensusPolicyStore for test code within the governance package.

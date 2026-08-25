@@ -15,8 +15,8 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/security"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 )
 
 // LogStreamFilterTool reads log files and applies regex filtering with scrubbing.

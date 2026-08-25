@@ -28,12 +28,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/pkg/certutil"
-	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/certutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // ParseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.

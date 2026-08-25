@@ -14,7 +14,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/security"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 )
 
 // ConfigDiffMaskTool compares configuration files with secret masking.

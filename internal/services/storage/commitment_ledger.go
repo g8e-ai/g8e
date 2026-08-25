@@ -14,7 +14,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 )
 
 // CommitmentRow represents a single row from the commitment_ledger table.

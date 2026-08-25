@@ -262,8 +262,8 @@ const file_anduril_entitymanager_v1_schedule_pub_proto_rawDesc = "" +
 	"\fScheduleType\x12\x19\n" +
 	"\x15SCHEDULE_TYPE_INVALID\x10\x00\x12\x1e\n" +
 	"\x1aSCHEDULE_TYPE_ZONE_ENABLED\x10\x01\x12#\n" +
-	"\x1fSCHEDULE_TYPE_ZONE_TEMP_ENABLED\x10\x02B\xac\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\rScheduleProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x1fSCHEDULE_TYPE_ZONE_TEMP_ENABLED\x10\x02B\xaf\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\rScheduleProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_schedule_pub_proto_rawDescOnce sync.Once

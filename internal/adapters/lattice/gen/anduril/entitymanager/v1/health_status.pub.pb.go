@@ -614,8 +614,8 @@ const file_anduril_entitymanager_v1_health_status_pub_proto_rawDesc = "" +
 	"\x13ALERT_LEVEL_INVALID\x10\x00\x12\x18\n" +
 	"\x14ALERT_LEVEL_ADVISORY\x10\x01\x12\x17\n" +
 	"\x13ALERT_LEVEL_CAUTION\x10\x02\x12\x17\n" +
-	"\x13ALERT_LEVEL_WARNING\x10\x03B\xb6\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x17EntityHealthStatusProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x13ALERT_LEVEL_WARNING\x10\x03B\xb9\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x17EntityHealthStatusProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_health_status_pub_proto_rawDescOnce sync.Once

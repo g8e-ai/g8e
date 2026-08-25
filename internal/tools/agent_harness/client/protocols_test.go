@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
 func TestMCPToolsList(t *testing.T) {

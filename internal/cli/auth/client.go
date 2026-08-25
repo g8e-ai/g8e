@@ -29,11 +29,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/pkg/certutil"
-	"github.com/g8e-ai/g8e/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/certutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 // httpTimeout is the default timeout for all HTTP clients in the auth package.

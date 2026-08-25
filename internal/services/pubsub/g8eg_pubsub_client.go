@@ -19,10 +19,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/httpclient"
-	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
+	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
 
 //go:generate mockery --name PubSubClient --output ./mocks --dir .

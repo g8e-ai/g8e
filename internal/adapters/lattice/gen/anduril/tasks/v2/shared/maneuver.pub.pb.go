@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	v2 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2"
+	v2 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -478,8 +478,8 @@ const file_anduril_tasks_v2_shared_maneuver_pub_proto_rawDesc = "" +
 	"\x12LaunchTrackingMode\x12 \n" +
 	"\x1cLAUNCH_TRACKING_MODE_INVALID\x10\x00\x12'\n" +
 	"#LAUNCH_TRACKING_MODE_GO_TO_WAYPOINT\x10\x01\x12*\n" +
-	"&LAUNCH_TRACKING_MODE_TRACK_TO_WAYPOINT\x10\x02Bk\n" +
-	"\x14com.anduril.tasks.v2P\x01ZQgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
+	"&LAUNCH_TRACKING_MODE_TRACK_TO_WAYPOINT\x10\x02Bn\n" +
+	"\x14com.anduril.tasks.v2P\x01ZTgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_shared_maneuver_pub_proto_rawDescOnce sync.Once

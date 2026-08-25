@@ -73,8 +73,8 @@ const file_anduril_entitymanager_v1_dimensions_pub_proto_rawDesc = "" +
 	"-anduril/entitymanager/v1/dimensions.pub.proto\x12\x18anduril.entitymanager.v1\"'\n" +
 	"\n" +
 	"Dimensions\x12\x19\n" +
-	"\blength_m\x18\x01 \x01(\x02R\alengthMB\xae\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x0fDimensionsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\blength_m\x18\x01 \x01(\x02R\alengthMB\xb1\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x0fDimensionsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_dimensions_pub_proto_rawDescOnce sync.Once

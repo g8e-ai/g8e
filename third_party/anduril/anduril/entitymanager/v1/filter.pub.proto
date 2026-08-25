@@ -8,7 +8,7 @@ import "anduril/entitymanager/v1/location.pub.proto";
 import "google/protobuf/timestamp.proto";
 
 option csharp_namespace = "Anduril.Entitymanager.V1";
-option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager";
+option go_package = "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager";
 option java_multiple_files = true;
 option java_outer_classname = "FilterProto";
 option java_package = "com.anduril.entitymanager.v1";

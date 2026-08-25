@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/protocol"
-	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/protocol"
+	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
 
 // TestPubSubBackPressureDropsOldestAndLogs verifies the drop-oldest

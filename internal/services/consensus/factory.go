@@ -16,10 +16,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/response"
-	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/response"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
 // KeyProvider resolves Ed25519 private keys for consensus members by AppID.

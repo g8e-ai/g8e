@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package anduril.type;
 
-option go_package = "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type;atypes";
+option go_package = "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type;atypes";
 option java_multiple_files = true;
 option java_package = "com.anduril.type";
 

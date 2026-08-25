@@ -30,19 +30,19 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/consensus"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/network"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
+	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // GatewayModeService is the top-level orchestrator for gateway mode (operator).

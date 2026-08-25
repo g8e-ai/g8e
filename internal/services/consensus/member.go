@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/internal/governance"
-	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/governance"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
 // ConsensusMember represents a single member identity in the Consensus.

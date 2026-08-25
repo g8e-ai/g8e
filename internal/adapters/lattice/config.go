@@ -10,7 +10,7 @@ package lattice
 import (
 	"time"
 
-	latticeconfig "github.com/g8e-ai/g8e/internal/adapters/lattice/config"
+	latticeconfig "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/config"
 )
 
 // LatticeConfig is an alias for latticeconfig.LatticeConfig, re-exported so

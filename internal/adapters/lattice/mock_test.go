@@ -12,9 +12,9 @@ import (
 	"log/slog"
 	"os"
 
-	entitymanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1"
-	taskmanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
-	"github.com/g8e-ai/g8e/internal/constants"
+	entitymanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1"
+	taskmanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

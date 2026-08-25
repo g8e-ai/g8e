@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // BenchmarkCacheGet benchmarks cache retrieval (hit scenario).

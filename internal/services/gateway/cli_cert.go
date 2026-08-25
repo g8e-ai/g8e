@@ -10,8 +10,8 @@ package gateway
 import (
 	"crypto/x509"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/protocol"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/protocol"
 )
 
 // ExtractUserIDFromCert extracts the user ID from a certificate's SPIFFE URI SAN.

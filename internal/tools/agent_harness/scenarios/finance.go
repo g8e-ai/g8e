@@ -11,7 +11,7 @@ import (
 	"context"
 	"fmt"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 var financeAgent = clientpkg.Persona{ID: "finance-agent", UserAgent: "g8e-finance/1.x (trading)"}

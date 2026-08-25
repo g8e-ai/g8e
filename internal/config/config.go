@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"time"
 
-	latticeconfig "github.com/g8e-ai/g8e/internal/adapters/lattice/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
+	latticeconfig "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/paths"
 )
 
 // GatewayPosture defines the governance enforcement posture for the Gateway.

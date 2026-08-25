@@ -13,8 +13,8 @@ import (
 	"crypto/tls"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // NewTestPubSubClient returns a real OperatorPubSubClient connected to the test Operator instance.

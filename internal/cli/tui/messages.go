@@ -10,7 +10,7 @@ package tui
 import (
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // PipelineStage identifies a layer in the 5-layer verification gauntlet.

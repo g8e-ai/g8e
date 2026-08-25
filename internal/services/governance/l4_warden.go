@@ -17,11 +17,11 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/services/system"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/system"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.

@@ -6,7 +6,7 @@ parent: Guides
 # Air-Gap Architecture
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies in the root `vendor/` directory. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -75,7 +75,7 @@ Verified operations are logged to a host-local ledger, and the Operator exposes 
 To ensure a self-contained installation, the build process packages all required components offline:
 
 - **Go Dependencies**: The core platform compiles into a single statically-linked g8e binary. All Go dependencies are vendored into the root `vendor/` directory. The build uses `-mod=vendor` and sets `GOFLAGS=-mod=vendor` in the Dockerfile, ensuring no network access is needed during compilation. Run `go mod vendor` on a connected host to populate or refresh this directory.
-- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e@v2.0.0` works offline once the vendor directory is populated. No additional downloads are required.
+- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e/v2@v2.0.1` works offline once the vendor directory is populated. No additional downloads are required.
 - **Protocol Library (Python)**: The `g8e` Python package is published to PyPI. For air-gapped environments, download the wheel on a connected host and transfer it:
 
   ```bash

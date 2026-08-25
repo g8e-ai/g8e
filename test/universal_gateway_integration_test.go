@@ -34,12 +34,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/network"
-	"github.com/g8e-ai/g8e/test/fixtures"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
+	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/test/fixtures"
 )
 
 // TestUniversalGateway_MultiProtocolAutoDetection verifies that the universal

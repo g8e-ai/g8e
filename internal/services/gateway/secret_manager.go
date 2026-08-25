@@ -21,12 +21,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/keystore"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/internal/timesvc"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
 var requiredBootstrapSecrets = []string{

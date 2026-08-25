@@ -13,8 +13,8 @@ import (
 	"log/slog"
 	"time"
 
-	taskmanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
-	"github.com/g8e-ai/g8e/internal/constants"
+	taskmanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // subscribeToTasks opens a streaming RPC to TaskManagerAPI and receives

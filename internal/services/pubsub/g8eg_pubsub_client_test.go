@@ -30,9 +30,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/constants"
-	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
 
 func generateTestCAPEM(t *testing.T) []byte {

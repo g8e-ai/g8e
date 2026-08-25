@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 )
 
 func TestCommandErrorHandling(t *testing.T) {

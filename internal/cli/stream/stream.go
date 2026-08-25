@@ -21,9 +21,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
-	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 )
 
 const (

@@ -10,8 +10,8 @@
 package governancetest
 
 import (
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // SimpleConsensusStore provides in-memory ConsensusPolicy lookup for tests.

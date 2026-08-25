@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 func TestSignPlatformAppCSRCreatesNormalValidityDualSANIdentity(t *testing.T) {

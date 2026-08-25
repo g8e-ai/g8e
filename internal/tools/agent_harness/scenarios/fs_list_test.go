@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 func TestFsListArgs_BuildsValidJSON(t *testing.T) {

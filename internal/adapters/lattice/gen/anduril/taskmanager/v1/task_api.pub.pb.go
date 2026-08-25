@@ -7,7 +7,7 @@
 package taskmanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -194,8 +194,8 @@ const file_anduril_taskmanager_v1_task_api_pub_proto_rawDesc = "" +
 	"\bassignee\x18\x02 \x01(\v2!.anduril.taskmanager.v1.PrincipalR\bassignee\x129\n" +
 	"\x06author\x18\x03 \x01(\v2!.anduril.taskmanager.v1.PrincipalR\x06author:\x06\xfa\xb4\x18\x02\x10\x01\"2\n" +
 	"\x0fCompleteRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId:\x06\xfa\xb4\x18\x02\x10\x01B\xa3\x01\n" +
-	"\x1acom.anduril.taskmanager.v1B\fTaskApiProtoP\x01ZVgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
+	"\atask_id\x18\x01 \x01(\tR\x06taskId:\x06\xfa\xb4\x18\x02\x10\x01B\xa6\x01\n" +
+	"\x1acom.anduril.taskmanager.v1B\fTaskApiProtoP\x01ZYgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
 
 var (
 	file_anduril_taskmanager_v1_task_api_pub_proto_rawDescOnce sync.Once

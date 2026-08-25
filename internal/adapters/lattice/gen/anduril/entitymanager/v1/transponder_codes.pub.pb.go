@@ -321,8 +321,8 @@ const file_anduril_entitymanager_v1_transponder_codes_pub_proto_rawDesc = "" +
 	"\x1eINTERROGATION_RESPONSE_INVALID\x10\x00\x12\"\n" +
 	"\x1eINTERROGATION_RESPONSE_CORRECT\x10\x01\x12$\n" +
 	" INTERROGATION_RESPONSE_INCORRECT\x10\x02\x12&\n" +
-	"\"INTERROGATION_RESPONSE_NO_RESPONSE\x10\x03B\xb4\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x15TransponderCodesProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\"INTERROGATION_RESPONSE_NO_RESPONSE\x10\x03B\xb7\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x15TransponderCodesProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_transponder_codes_pub_proto_rawDescOnce sync.Once

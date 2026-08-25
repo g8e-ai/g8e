@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // AuditReceiptQuery is the read interface into the operator audit vault for

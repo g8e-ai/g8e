@@ -1781,8 +1781,8 @@ const file_anduril_taskmanager_v1_task_manager_api_pub_proto_rawDesc = "" +
 	"CancelTask\x12).anduril.taskmanager.v1.CancelTaskRequest\x1a*.anduril.taskmanager.v1.CancelTaskResponse\x12n\n" +
 	"\rListenAsAgent\x12,.anduril.taskmanager.v1.ListenAsAgentRequest\x1a-.anduril.taskmanager.v1.ListenAsAgentResponse0\x01\x12\x9b\x01\n" +
 	"\x1cListenForManualControlFrames\x12;.anduril.taskmanager.v1.ListenForManualControlFramesRequest\x1a<.anduril.taskmanager.v1.ListenForManualControlFramesResponse0\x01\x12h\n" +
-	"\vStreamTasks\x12*.anduril.taskmanager.v1.StreamTasksRequest\x1a+.anduril.taskmanager.v1.StreamTasksResponse0\x01B\xaa\x01\n" +
-	"\x1acom.anduril.taskmanager.v1B\x13TaskManagerApiProtoP\x01ZVgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
+	"\vStreamTasks\x12*.anduril.taskmanager.v1.StreamTasksRequest\x1a+.anduril.taskmanager.v1.StreamTasksResponse0\x01B\xad\x01\n" +
+	"\x1acom.anduril.taskmanager.v1B\x13TaskManagerApiProtoP\x01ZYgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
 
 var (
 	file_anduril_taskmanager_v1_task_manager_api_pub_proto_rawDescOnce sync.Once

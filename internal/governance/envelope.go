@@ -17,9 +17,9 @@ import (
 
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/timesvc"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // GovernanceEnvelope is an alias for the canonical GovernanceEnvelope proto message.

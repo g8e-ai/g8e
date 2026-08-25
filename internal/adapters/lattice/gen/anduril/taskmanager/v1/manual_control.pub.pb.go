@@ -7,7 +7,7 @@
 package taskmanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	anypb "google.golang.org/protobuf/types/known/anypb"
@@ -130,8 +130,8 @@ const file_anduril_taskmanager_v1_manual_control_pub_proto_rawDesc = "" +
 	"\fepoch_micros\x18\x02 \x01(\x04R\vepochMicros\x12\x1a\n" +
 	"\bsequence\x18\x03 \x01(\x04R\bsequence\x12?\n" +
 	"\rcreation_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\fcreationTime\x12:\n" +
-	"\rspecification\x18\x05 \x01(\v2\x14.google.protobuf.AnyR\rspecification:\x06\xfa\xb4\x18\x02\x10\x01B\xa9\x01\n" +
-	"\x1acom.anduril.taskmanager.v1B\x12ManualControlProtoP\x01ZVgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
+	"\rspecification\x18\x05 \x01(\v2\x14.google.protobuf.AnyR\rspecification:\x06\xfa\xb4\x18\x02\x10\x01B\xac\x01\n" +
+	"\x1acom.anduril.taskmanager.v1B\x12ManualControlProtoP\x01ZYgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
 
 var (
 	file_anduril_taskmanager_v1_manual_control_pub_proto_rawDescOnce sync.Once

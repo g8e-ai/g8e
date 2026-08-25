@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // kubectlRunner is an interface for running kubectl commands, allowing dependency injection for testing.

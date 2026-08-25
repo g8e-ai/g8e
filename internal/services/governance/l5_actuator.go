@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 //go:generate mockery --name ExecutionHandler --output ./mocks --dir .

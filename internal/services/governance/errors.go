@@ -7,7 +7,7 @@
 
 package governance
 
-import "github.com/g8e-ai/g8e/internal/constants"
+import "github.com/g8e-ai/g8e/v2/internal/constants"
 
 // Exported aliases for governance transaction errors, allowing callers outside
 // this package to use errors.Is against the canonical sentinel values.

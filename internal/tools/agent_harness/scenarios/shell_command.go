@@ -10,7 +10,7 @@ package scenarios
 import (
 	"encoding/json"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 // shellCommandArgs builds the run_shell_command arguments_json string using

@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Config represents the top-level MCP client configuration structure.

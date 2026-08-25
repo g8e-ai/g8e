@@ -274,8 +274,8 @@ const file_anduril_entitymanager_v1_classification_pub_proto_rawDesc = "" +
 	"-CLASSIFICATION_LEVELS_CONTROLLED_UNCLASSIFIED\x10\x02\x12&\n" +
 	"\"CLASSIFICATION_LEVELS_CONFIDENTIAL\x10\x03\x12 \n" +
 	"\x1cCLASSIFICATION_LEVELS_SECRET\x10\x04\x12$\n" +
-	" CLASSIFICATION_LEVELS_TOP_SECRET\x10\x05B\xb8\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x19ClassificationLevelsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	" CLASSIFICATION_LEVELS_TOP_SECRET\x10\x05B\xbb\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x19ClassificationLevelsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_classification_pub_proto_rawDescOnce sync.Once

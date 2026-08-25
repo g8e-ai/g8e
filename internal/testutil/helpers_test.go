@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

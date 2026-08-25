@@ -113,8 +113,8 @@ const file_anduril_type_color_pub_proto_rawDesc = "" +
 	"\x03red\x18\x01 \x01(\x02R\x03red\x12\x14\n" +
 	"\x05green\x18\x02 \x01(\x02R\x05green\x12\x12\n" +
 	"\x04blue\x18\x03 \x01(\x02R\x04blue\x121\n" +
-	"\x05alpha\x18\x04 \x01(\v2\x1b.google.protobuf.FloatValueR\x05alphaB]\n" +
-	"\x10com.anduril.typeP\x01ZGgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
+	"\x05alpha\x18\x04 \x01(\v2\x1b.google.protobuf.FloatValueR\x05alphaB`\n" +
+	"\x10com.anduril.typeP\x01ZJgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
 
 var (
 	file_anduril_type_color_pub_proto_rawDescOnce sync.Once

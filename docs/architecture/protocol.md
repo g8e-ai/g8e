@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Protocol Library
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,20 +59,20 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e@v2.0.0
+go get github.com/g8e-ai/g8e/v2@v2.0.1
 ```
 
 To fetch the latest release:
 
 ```bash
-go get github.com/g8e-ai/g8e@latest
+go get github.com/g8e-ai/g8e/v2@latest
 ```
 
 ### Go Module Path & Versioning
 
-The Go protocol implementation belongs to the root module `github.com/g8e-ai/g8e`. There is no separate module file for the protocol directory. Module versions derive from git tags of the form `vX.Y.Z`, created during the release workflow. The Go module proxy resolves release versions directly from these tags.
+The Go protocol implementation belongs to the root module `github.com/g8e-ai/g8e/v2`. There is no separate module file for the protocol directory. Module versions derive from git tags of the form `vX.Y.Z`, created during the release workflow. The Go module proxy resolves release versions directly from these tags.
 
-Import paths use `github.com/g8e-ai/g8e/protocol/...`. Consumers configure their module requirements by referencing the root module `github.com/g8e-ai/g8e vX.Y.Z`. See [Release & Distribution](#release--distribution) for version sync details.
+Import paths use `github.com/g8e-ai/g8e/v2/protocol/...`. Consumers configure their module requirements by referencing the root module `github.com/g8e-ai/g8e/v2 vX.Y.Z`. See [Release & Distribution](#release--distribution) for version sync details.
 
 ### Go Package Overview
 

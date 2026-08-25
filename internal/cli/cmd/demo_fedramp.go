@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/tui"
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.

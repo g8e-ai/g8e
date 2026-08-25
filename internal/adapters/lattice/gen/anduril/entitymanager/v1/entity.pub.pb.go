@@ -7,9 +7,9 @@
 package entitymanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
-	v2 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2"
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
+	v2 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -2013,8 +2013,8 @@ const file_anduril_entitymanager_v1_entity_pub_proto_rawDesc = "" +
 	"\x1aCorrelationReplicationMode\x12(\n" +
 	"$CORRELATION_REPLICATION_MODE_INVALID\x10\x00\x12&\n" +
 	"\"CORRELATION_REPLICATION_MODE_LOCAL\x10\x01\x12'\n" +
-	"#CORRELATION_REPLICATION_MODE_GLOBAL\x10\x02B\xaa\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\vEntityProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"#CORRELATION_REPLICATION_MODE_GLOBAL\x10\x02B\xad\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\vEntityProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_entity_pub_proto_rawDescOnce sync.Once

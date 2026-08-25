@@ -16,7 +16,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FileResult is returned by writeCSV with the file stats needed for the manifest.

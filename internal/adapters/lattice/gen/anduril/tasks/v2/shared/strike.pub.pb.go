@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	v2 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2"
+	v2 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
@@ -463,8 +463,8 @@ const file_anduril_tasks_v2_shared_strike_pub_proto_rawDesc = "" +
 	"\bpayloads\x18\x01 \x03(\v2&.anduril.tasks.v2.PayloadConfigurationR\bpayloads\x129\n" +
 	"\tobjective\x18\x02 \x01(\v2\x1b.anduril.tasks.v2.ObjectiveR\tobjective\x12E\n" +
 	"\x11precision_release\x18\x03 \x01(\v2\x16.google.protobuf.EmptyH\x00R\x10precisionReleaseB\x10\n" +
-	"\x0erelease_methodBk\n" +
-	"\x14com.anduril.tasks.v2P\x01ZQgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
+	"\x0erelease_methodBn\n" +
+	"\x14com.anduril.tasks.v2P\x01ZTgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_shared_strike_pub_proto_rawDescOnce sync.Once

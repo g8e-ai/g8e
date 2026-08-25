@@ -21,8 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/cli/sse"
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // TestSSE_LiveChatObserving verifies the end-to-end SSE bridge against the live

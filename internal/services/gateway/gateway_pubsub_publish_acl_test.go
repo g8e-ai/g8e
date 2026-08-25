@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	pubsubv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1"
 )
 
 // --- verifyPublishACL table-driven tests ---

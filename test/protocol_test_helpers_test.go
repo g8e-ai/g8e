@@ -19,10 +19,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/network"
-	"github.com/g8e-ai/g8e/test/fixtures"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
+	"github.com/g8e-ai/g8e/v2/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/test/fixtures"
 )
 
 // protocolAdapter abstracts the wire-level differences between the MCP and A2A

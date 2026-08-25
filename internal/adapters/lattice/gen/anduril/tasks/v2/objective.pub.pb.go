@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -185,8 +185,8 @@ const file_anduril_tasks_v2_objective_pub_proto_rawDesc = "" +
 	"\x05Point\x12%\n" +
 	"\x0ereference_name\x18\x01 \x01(\tR\rreferenceName\x12#\n" +
 	"\x03lla\x18\x02 \x01(\v2\x11.anduril.type.LLAR\x03lla\x12*\n" +
-	"\x11backing_entity_id\x18\x03 \x01(\tR\x0fbackingEntityIdBd\n" +
-	"\x14com.anduril.tasks.v2P\x01ZJgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
+	"\x11backing_entity_id\x18\x03 \x01(\tR\x0fbackingEntityIdBg\n" +
+	"\x14com.anduril.tasks.v2P\x01ZMgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_objective_pub_proto_rawDescOnce sync.Once

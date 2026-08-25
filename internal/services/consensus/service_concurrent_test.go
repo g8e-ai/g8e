@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

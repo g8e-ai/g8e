@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // EventHandler receives parsed SSE events. The eventType is the value from the

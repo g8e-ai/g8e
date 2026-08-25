@@ -6,7 +6,7 @@ Protocol library for the g8e zero-trust execution platform. Provides protobuf sc
 
 ### Go
 
-The Go module is part of the root module `github.com/g8e-ai/g8e` and requires Go 1.26.6. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install the module with `go get github.com/g8e-ai/g8e` and import the protocol package as `github.com/g8e-ai/g8e/protocol` or the generated protobuf packages under `github.com/g8e-ai/g8e/protocol/proto/...`.
+The Go module is part of the root module `github.com/g8e-ai/g8e/v2` and requires Go 1.26.6. It depends on `google.golang.org/grpc` and `google.golang.org/protobuf`. Install the module with `go get github.com/g8e-ai/g8e/v2` and import the protocol package as `github.com/g8e-ai/g8e/v2/protocol` or the generated protobuf packages under `github.com/g8e-ai/g8e/v2/protocol/proto/...`.
 
 ### Python
 

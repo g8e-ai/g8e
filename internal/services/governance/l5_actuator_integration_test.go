@@ -17,16 +17,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/vault"
-	"github.com/g8e-ai/g8e/internal/uuid"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {

@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // resolveRepoRoot finds the repository root using go list -m, matching the

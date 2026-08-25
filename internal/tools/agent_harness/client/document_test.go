@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

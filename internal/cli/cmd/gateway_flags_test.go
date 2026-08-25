@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	g8econfig "github.com/g8e-ai/g8e/internal/config"
+	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
 )
 
 func TestGatewayFlagsToServeConfig_AllFieldsTransferred(t *testing.T) {

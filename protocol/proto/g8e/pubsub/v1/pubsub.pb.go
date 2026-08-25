@@ -173,7 +173,7 @@ const file_g8e_pubsub_v1_pubsub_proto_rawDesc = "" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x18\n" +
 	"\achannel\x18\x02 \x01(\tR\achannel\x12\x18\n" +
 	"\apattern\x18\x03 \x01(\tR\apattern\x12\x12\n" +
-	"\x04data\x18\x04 \x01(\fR\x04dataB=Z;github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1;pubsubv1b\x06proto3"
+	"\x04data\x18\x04 \x01(\fR\x04dataB@Z>github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1;pubsubv1b\x06proto3"
 
 var (
 	file_g8e_pubsub_v1_pubsub_proto_rawDescOnce sync.Once

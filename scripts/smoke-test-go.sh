@@ -31,7 +31,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/g8e-ai/g8e/protocol"
+	"github.com/g8e-ai/g8e/v2/protocol"
 )
 
 func main() {
@@ -41,7 +41,7 @@ func main() {
 EOF
 
 # Use the local module (replace directive for testing without publishing)
-go mod edit -replace github.com/g8e-ai/g8e="$REPO_ROOT"
+go mod edit -replace github.com/g8e-ai/g8e/v2="$REPO_ROOT"
 go mod tidy
 
 # Build the binary

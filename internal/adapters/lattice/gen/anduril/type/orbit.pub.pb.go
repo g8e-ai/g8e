@@ -650,8 +650,8 @@ const file_anduril_type_orbit_pub_proto_rawDesc = "" +
 	"\x18MEAN_ELEMENT_THEORY_SGP4\x10\x01*R\n" +
 	"\x11EciReferenceFrame\x12\x1f\n" +
 	"\x1bECI_REFERENCE_FRAME_INVALID\x10\x00\x12\x1c\n" +
-	"\x18ECI_REFERENCE_FRAME_TEME\x10\x01B]\n" +
-	"\x10com.anduril.typeP\x01ZGgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
+	"\x18ECI_REFERENCE_FRAME_TEME\x10\x01B`\n" +
+	"\x10com.anduril.typeP\x01ZJgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
 
 var (
 	file_anduril_type_orbit_pub_proto_rawDescOnce sync.Once

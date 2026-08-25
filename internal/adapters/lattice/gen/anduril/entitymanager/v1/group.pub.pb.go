@@ -311,9 +311,9 @@ const file_anduril_entitymanager_v1_group_pub_proto_rawDesc = "" +
 	"\x15ARMY_ECHELON_DIVISION\x10\b\x12\x16\n" +
 	"\x12ARMY_ECHELON_CORPS\x10\t\x12\x15\n" +
 	"\x11ARMY_ECHELON_ARMY\x10\n" +
-	"B\xa9\x01\n" +
+	"B\xac\x01\n" +
 	"\x1ccom.anduril.entitymanager.v1B\n" +
-	"GroupProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"GroupProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_group_pub_proto_rawDescOnce sync.Once

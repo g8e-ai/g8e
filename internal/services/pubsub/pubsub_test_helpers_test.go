@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )

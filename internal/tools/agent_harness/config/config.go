@@ -17,11 +17,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
 
 // Auth selects how Agent Harness authenticates to the Gateway's mTLS surface.

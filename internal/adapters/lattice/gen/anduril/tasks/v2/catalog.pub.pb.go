@@ -120,8 +120,8 @@ const file_anduril_tasks_v2_catalog_pub_proto_rawDesc = "" +
 	"\vTaskCatalog\x12K\n" +
 	"\x10task_definitions\x18\x01 \x03(\v2 .anduril.tasks.v2.TaskDefinitionR\x0ftaskDefinitionsJ\x04\b\x02\x10\x03\"F\n" +
 	"\x0eTaskDefinition\x124\n" +
-	"\x16task_specification_url\x18\x01 \x01(\tR\x14taskSpecificationUrlBv\n" +
-	"\x14com.anduril.tasks.v2B\x10TaskCatalogProtoP\x01ZJgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
+	"\x16task_specification_url\x18\x01 \x01(\tR\x14taskSpecificationUrlBy\n" +
+	"\x14com.anduril.tasks.v2B\x10TaskCatalogProtoP\x01ZMgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_catalog_pub_proto_rawDescOnce sync.Once

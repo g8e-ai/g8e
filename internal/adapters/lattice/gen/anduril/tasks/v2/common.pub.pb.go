@@ -408,8 +408,8 @@ const file_anduril_tasks_v2_common_pub_proto_rawDesc = "" +
 	"\x19CONTROL_AREA_TYPE_INVALID\x10\x00\x12\"\n" +
 	"\x1eCONTROL_AREA_TYPE_KEEP_IN_ZONE\x10\x01\x12#\n" +
 	"\x1fCONTROL_AREA_TYPE_KEEP_OUT_ZONE\x10\x02\x12 \n" +
-	"\x1cCONTROL_AREA_TYPE_DITCH_ZONE\x10\x03Bd\n" +
-	"\x14com.anduril.tasks.v2P\x01ZJgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
+	"\x1cCONTROL_AREA_TYPE_DITCH_ZONE\x10\x03Bg\n" +
+	"\x14com.anduril.tasks.v2P\x01ZMgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_common_pub_proto_rawDescOnce sync.Once

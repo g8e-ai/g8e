@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"time"
 
-	entitymanagerv1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1"
-	"github.com/g8e-ai/g8e/internal/constants"
+	entitymanagerv1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FSDiskUsageTool provides df-style free space reporting.

@@ -126,7 +126,7 @@ jobs:
 
       - name: Fresh go install
         run: |
-          go install github.com/g8e-ai/g8e/cmd/g8e@v${{ needs.release.outputs.version }}
+          go install github.com/g8e-ai/g8e/v2/cmd/g8e@v${{ needs.release.outputs.version }}
           g8e --version
           g8e --help
           echo "Fresh go install verified successfully"

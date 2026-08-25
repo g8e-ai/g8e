@@ -13,7 +13,7 @@ package execution
 import (
 	"os"
 
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // collectFileOwnership is a no-op on Windows (ownership handled differently)

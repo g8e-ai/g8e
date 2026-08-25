@@ -6,7 +6,7 @@ parent: Guides
 # Connect Apps to g8e Gateway
 
 Last Updated: 2026-08-25
-Version: v2.0.0
+Version: v2.0.1
 
 ---
 
@@ -373,7 +373,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v2.0.0
+go get github.com/g8e-ai/g8e/v2@v2.0.1
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.

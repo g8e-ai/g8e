@@ -17,9 +17,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/g8e-ai/g8e/internal/cli/sse"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/cli/sse"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // messageSender abstracts the Send method of tea.Program so tests can

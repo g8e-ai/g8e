@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // corsMiddleware returns an http.Handler that applies CORS headers based on the

@@ -17,14 +17,14 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/governance/governancetest"
-	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
-	"github.com/g8e-ai/g8e/internal/testutil"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance/governancetest"
+	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // signL2Vote creates an L2Vote with a signature derived from the Decision field,

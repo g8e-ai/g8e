@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	v1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
+	v1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
@@ -675,8 +675,8 @@ const file_anduril_tasks_v2_shared_transitions_pub_proto_rawDesc = "" +
 	"\x0einterval_start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\rintervalStart\x12=\n" +
 	"\finterval_end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vintervalEnd\"]\n" +
 	"\x15PhaseTimeoutPredicate\x12D\n" +
-	"\x10timeout_duration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x0ftimeoutDurationBk\n" +
-	"\x14com.anduril.tasks.v2P\x01ZQgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
+	"\x10timeout_duration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x0ftimeoutDurationBn\n" +
+	"\x14com.anduril.tasks.v2P\x01ZTgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_shared_transitions_pub_proto_rawDescOnce sync.Once

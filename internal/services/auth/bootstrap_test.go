@@ -22,13 +22,13 @@ import (
 
 	"crypto/tls"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/exitcode"
-	"github.com/g8e-ai/g8e/internal/httpclient"
-	system "github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/exitcode"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
+	system "github.com/g8e-ai/g8e/v2/internal/services/system"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -270,7 +270,7 @@ Throughout this document, **`vX.Y.Z`** refers to the new release version (e.g., 
 
 ### Go Protocol Module
 
-The Go protocol code is part of the root module `github.com/g8e-ai/g8e`. There is no separate `protocol/go.mod` to update. The Go module version is derived from git tags (`vX.Y.Z`), created by `make release`. External consumers use `go get github.com/g8e-ai/g8e@vX.Y.Z`.
+The Go protocol code is part of the root module `github.com/g8e-ai/g8e/v2`. There is no separate `protocol/go.mod` to update. The Go module version is derived from git tags (`vX.Y.Z`), created by `make release`. External consumers use `go get github.com/g8e-ai/g8e/v2@vX.Y.Z`.
 
 ### Build & CI Files (No Version Update Required)
 

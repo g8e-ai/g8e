@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	v1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/ontology/v1"
+	v1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/ontology/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -278,8 +278,8 @@ const file_anduril_entitymanager_v1_payloads_pub_proto_rawDesc = "" +
 	"\"PAYLOAD_OPERATIONAL_STATE_DEGRADED\x10\x03\x12)\n" +
 	"%PAYLOAD_OPERATIONAL_STATE_OPERATIONAL\x10\x04\x12,\n" +
 	"(PAYLOAD_OPERATIONAL_STATE_OUT_OF_SERVICE\x10\x05\x12%\n" +
-	"!PAYLOAD_OPERATIONAL_STATE_UNKNOWN\x10\x06B\xac\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\rPayloadsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"!PAYLOAD_OPERATIONAL_STATE_UNKNOWN\x10\x06B\xaf\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\rPayloadsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_payloads_pub_proto_rawDescOnce sync.Once

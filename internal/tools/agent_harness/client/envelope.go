@@ -26,10 +26,10 @@ import (
 	// hash and wire format match the verifier. GovernanceEnvelope is the alias for
 	// g8e.common.v1.GovernanceEnvelope; GenerateMessageID is the canonical hasher.
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/governance"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/governance"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // Canonical GovernanceEnvelope action types. SCREAMING_SNAKE per protocol/constants. Pinned

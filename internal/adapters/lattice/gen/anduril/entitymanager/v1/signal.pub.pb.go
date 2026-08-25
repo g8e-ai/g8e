@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -867,8 +867,8 @@ const file_anduril_entitymanager_v1_signal_pub_proto_rawDesc = "" +
 	"(SCAN_TYPE_UNIDIRECTIONAL_VERTICAL_SECTOR\x10\r\x12.\n" +
 	"*SCAN_TYPE_UNIDIRECTIONAL_HORIZONTAL_SECTOR\x10\x0e\x12#\n" +
 	"\x1fSCAN_TYPE_UNIDIRECTIONAL_SECTOR\x10\x0f\x12\"\n" +
-	"\x1eSCAN_TYPE_BIDIRECTIONAL_SECTOR\x10\x10B\xaa\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\vSignalProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x1eSCAN_TYPE_BIDIRECTIONAL_SECTOR\x10\x10B\xad\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\vSignalProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_signal_pub_proto_rawDescOnce sync.Once

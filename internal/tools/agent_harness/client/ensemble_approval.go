@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	ssepkg "github.com/g8e-ai/g8e/internal/cli/sse"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	ssepkg "github.com/g8e-ai/g8e/v2/internal/cli/sse"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 // EnsembleApprovalRespondPath is the canonical ensemble approval respond

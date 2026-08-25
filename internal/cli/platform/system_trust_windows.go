@@ -18,7 +18,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // envCertPath passes the certificate file path to PowerShell via an

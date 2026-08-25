@@ -19,7 +19,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/v2/internal/paths"
 )
 
 // ConfigBlock holds parsed values for a single Host block from SSH config.

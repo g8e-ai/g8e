@@ -518,9 +518,9 @@ const file_anduril_entitymanager_v1_types_pub_proto_rawDesc = "" +
 	"\fOverrideType\x12\x19\n" +
 	"\x15OVERRIDE_TYPE_INVALID\x10\x00\x12\x16\n" +
 	"\x12OVERRIDE_TYPE_LIVE\x10\x01\x12\x1d\n" +
-	"\x19OVERRIDE_TYPE_POST_EXPIRY\x10\x02B\xa9\x01\n" +
+	"\x19OVERRIDE_TYPE_POST_EXPIRY\x10\x02B\xac\x01\n" +
 	"\x1ccom.anduril.entitymanager.v1B\n" +
-	"TypesProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"TypesProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_types_pub_proto_rawDescOnce sync.Once

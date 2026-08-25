@@ -192,9 +192,9 @@ const file_anduril_entitymanager_v1_media_pub_proto_rawDesc = "" +
 	"\tMediaType\x12\x16\n" +
 	"\x12MEDIA_TYPE_INVALID\x10\x00\x12\x14\n" +
 	"\x10MEDIA_TYPE_IMAGE\x10\x02\x12\x14\n" +
-	"\x10MEDIA_TYPE_VIDEO\x10\x03\"\x04\b\x01\x10\x01\"\x04\b\x04\x10\x04B\xa9\x01\n" +
+	"\x10MEDIA_TYPE_VIDEO\x10\x03\"\x04\b\x01\x10\x01\"\x04\b\x04\x10\x04B\xac\x01\n" +
 	"\x1ccom.anduril.entitymanager.v1B\n" +
-	"MediaProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"MediaProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_media_pub_proto_rawDescOnce sync.Once

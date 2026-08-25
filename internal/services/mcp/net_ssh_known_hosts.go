@@ -17,8 +17,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/pkg/ssh"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 )
 
 // NetSSHKnownHostsTool lists known hosts from SSH config and known_hosts files.

@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
-	"github.com/g8e-ai/g8e/internal/uuid"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
 
 // Personas — the real-world tools Agent Harness pretends to be. This is the ONLY

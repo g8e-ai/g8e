@@ -19,10 +19,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // fakeMCPCallServer returns an httptest server that handles audit_receipt_list MCP calls
