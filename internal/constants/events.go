@@ -325,6 +325,7 @@ const EventAppInvestigationDeleted EventType = "g8e.v1.app.investigation.deleted
 const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
 const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
+const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
 
 // Canonical governed-document request events. These are the deterministic
 // EventType values that MapActionTypeToEventType returns for the
@@ -472,6 +473,9 @@ type _EventOperatorPortCheck struct {
 	Requested EventType
 	Started   EventType
 }
+type _EventOperatorReceipt struct {
+	Recorded EventType
+}
 type _EventOperatorRestoreFile struct {
 	Completed EventType
 	Failed    EventType
@@ -522,6 +526,7 @@ type _EventOperator struct {
 	Notary                   _EventOperatorNotary
 	PanelListUpdated         EventType
 	PortCheck                _EventOperatorPortCheck
+	Receipt                  _EventOperatorReceipt
 	RestoreFile              _EventOperatorRestoreFile
 	ShutdownAcknowledged     EventType
 	ShutdownRequested        EventType
@@ -679,6 +684,9 @@ var Event = struct {
 			Received:  EventOperatorNetworkPortCheckReceived,
 			Requested: EventOperatorNetworkPortCheckRequested,
 			Started:   EventOperatorNetworkPortCheckStarted,
+		},
+		Receipt: _EventOperatorReceipt{
+			Recorded: EventOperatorReceiptRecorded,
 		},
 		RestoreFile: _EventOperatorRestoreFile{
 			Completed: EventOperatorFileRestoreCompleted,

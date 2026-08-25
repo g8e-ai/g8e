@@ -162,6 +162,13 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// governed GovernanceEnvelope before fan-out.
 	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth, string(cfg.Gateway.Posture))
 
+	// Wire the pubsub receipt relay dependencies: the gateway intercepts
+	// operator-published signed ActionReceipts on receipts: channels,
+	// verifies the receipt signature against the operator's actuator public
+	// key (via the SignerStore), records the receipt in the gateway's
+	// SQLAuditStore, and fans out the envelope to subscribers.
+	wsHandler.SetReceiptRelayDeps(stores.SignerStore, stores.AuditStore)
+
 	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
 	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
 	webSessionSvc := NewWebSessionService(stores.DocStore, logger)

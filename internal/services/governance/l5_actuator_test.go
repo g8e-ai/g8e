@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -333,4 +334,137 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	require.Equal(t, "root-after", parsed["state_root_after"])
 	require.InEpsilon(t, float64(1234567890), parsed["executed_at_unix_ms"], 0.0)
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
+}
+
+// TestL5ActuatorExecuteCallsReceiptPublisherOnSuccess verifies that Execute
+// calls ReceiptPublisher.PublishActionReceipt with the original command
+// envelope and the final signed receipt after successful execution.
+func TestL5ActuatorExecuteCallsReceiptPublisherOnSuccess(t *testing.T) {
+	t.Parallel()
+	actuator, _ := newTestActuator(t)
+	publisher := &mockReceiptPublisher{}
+	actuator.ReceiptPublisher = publisher
+
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                uuid.NewString(),
+		TransactionHash:   "test-hash-receipt-pub",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+		RequestorUserId:   "user-001",
+		ActingAppId:       "spiffe://g8e.local/app/g8ee",
+	}
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	require.Equal(t, 1, publisher.callCount(), "PublishActionReceipt must be called exactly once after successful execution")
+	require.Equal(t, envelope, publisher.envelope, "publisher must receive the original command envelope")
+	require.Equal(t, receipt.TransactionId, publisher.receipt.TransactionId, "publisher must receive the final receipt")
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, publisher.receipt.Status)
+	require.NotEmpty(t, publisher.receipt.Signature, "publisher must receive a signed receipt")
+}
+
+// TestL5ActuatorExecuteDoesNotCallReceiptPublisherWhenFinalReceiptFails
+// verifies that Execute does not call ReceiptPublisher.PublishActionReceipt
+// when signAndLogFinalReceipt fails (the receipt is not finalized).
+func TestL5ActuatorExecuteDoesNotCallReceiptPublisherWhenFinalReceiptFails(t *testing.T) {
+	t.Parallel()
+	actuator, _ := newTestActuator(t)
+
+	// Configure the console audit store to fail on the second DocSet call
+	// (the final receipt log), causing signAndLogFinalReceipt to return an
+	// error before the ReceiptPublisher is reached.
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	callCount := 0
+	consoleAuditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
+		callCount++
+		if callCount == 2 {
+			return errors.New("final audit write failed")
+		}
+		return nil
+	}
+
+	publisher := &mockReceiptPublisher{}
+	actuator.ReceiptPublisher = publisher
+
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                uuid.NewString(),
+		TransactionHash:   "test-hash-receipt-pub-fail",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+	}
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	_, err := actuator.Execute(context.Background(), vt, nil)
+	require.Error(t, err, "Execute must return an error when signAndLogFinalReceipt fails")
+	require.Equal(t, 0, publisher.callCount(), "PublishActionReceipt must not be called when signAndLogFinalReceipt fails")
+}
+
+// TestL5ActuatorExecuteNilReceiptPublisherDoesNotPanic verifies that a nil
+// ReceiptPublisher (the gateway in-process operator path) does not cause a
+// panic and execution proceeds normally.
+func TestL5ActuatorExecuteNilReceiptPublisherDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	actuator, _ := newTestActuator(t)
+	// ReceiptPublisher is nil by default (not set in newTestActuator).
+	require.Nil(t, actuator.ReceiptPublisher)
+
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                uuid.NewString(),
+		TransactionHash:   "test-hash-nil-pub",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+	}
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	assert.NotPanics(t, func() {
+		receipt, err := actuator.Execute(context.Background(), vt, nil)
+		require.NoError(t, err)
+		require.NotNil(t, receipt)
+	})
+}
+
+// TestL5ActuatorExecuteReceiptPublisherErrorDoesNotFailExecution verifies
+// that a ReceiptPublisher publish error is best-effort: the execution
+// succeeds and the receipt is returned, with the publish error only logged.
+func TestL5ActuatorExecuteReceiptPublisherErrorDoesNotFailExecution(t *testing.T) {
+	t.Parallel()
+	actuator, _ := newTestActuator(t)
+	publisher := &mockReceiptPublisher{publishError: errors.New("publish failed")}
+	actuator.ReceiptPublisher = publisher
+
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                uuid.NewString(),
+		TransactionHash:   "test-hash-pub-err",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+		TargetResource:    "localhost",
+	}
+	vt := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
+	require.NoError(t, err, "publish error must not fail the execution")
+	require.NotNil(t, receipt)
+	require.Equal(t, 1, publisher.callCount(), "PublishActionReceipt must still be attempted")
 }

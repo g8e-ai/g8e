@@ -348,6 +348,17 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 		KeyID:             c.ActuatorKeyID,
 	}
 
+	// Wire the ReceiptPublisher so the actuator publishes signed
+	// ActionReceipts to the gateway's receipts: channel after execution.
+	// PubSubResultsService implements governance.ReceiptPublisher via
+	// PublishActionReceipt. Nil is valid (gateway in-process operator path
+	// records receipts directly in the gateway's SQLAuditStore).
+	if c.ResultsService != nil {
+		if publisher, ok := c.ResultsService.(governance.ReceiptPublisher); ok {
+			rs.actuator.ReceiptPublisher = publisher
+		}
+	}
+
 	// Initialize TransactionVerifier for strict pre-dispatch verification.
 	// The warden has no posture of its own; it reads posture per-envelope
 	// from GovernanceEnvelope.Posture at verification time. The gateway

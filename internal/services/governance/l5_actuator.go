@@ -34,6 +34,20 @@ type ExecutionHandler interface {
 	ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg CommandMessage) (string, error)
 }
 
+// ReceiptPublisher publishes a signed ActionReceipt (wrapped in a
+// GovernanceEnvelope carrying the original command's identity fields) to the
+// gateway's receipts: channel after execution. The gateway intercepts the
+// publish, verifies the receipt signature against the operator's actuator
+// public key, records the receipt in its SQLAuditStore, and fans it out to
+// subscribers. Implemented by pubsub.PubSubResultsService on the operator
+// side; nil on the gateway in-process operator path (in-process receipts are
+// already recorded in the gateway's SQLAuditStore directly by L5Actuator).
+// Publish errors are best-effort: the receipt is already recorded locally
+// and the result already published, so the gateway-side mirror is not a gate.
+type ReceiptPublisher interface {
+	PublishActionReceipt(ctx context.Context, env *govtypes.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error
+}
+
 // CommandMessage is the typed command message passed through the L5 execution
 // boundary. It supports sovereignty-preserving payload rehydration via
 // GetPayload/SetPayload. Implemented by pubsub.PubSubCommandMessage.
@@ -58,6 +72,13 @@ type L5Actuator struct {
 	StateRootProvider StateRootProvider
 	ExecutionHandler  ExecutionHandler
 	Scrubbing         *scrubbing.ScrubbingService
+
+	// ReceiptPublisher publishes the signed ActionReceipt to the gateway's
+	// receipts: channel after execution so the gateway can record it in its
+	// SQLAuditStore. Nil on the gateway in-process operator path (receipts
+	// are already recorded locally). Best-effort: publish errors are logged
+	// and do not fail the execution.
+	ReceiptPublisher ReceiptPublisher
 
 	// L5Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
@@ -121,6 +142,19 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
 		return receipt, err
+	}
+
+	// Publish the signed ActionReceipt to the gateway's receipts: channel
+	// so the gateway can record it in its SQLAuditStore. Best-effort: the
+	// receipt is already recorded locally and the result already published;
+	// the gateway-side mirror is not a gate. Only attempted when a
+	// ReceiptPublisher is wired (outbound operator path).
+	if w.ReceiptPublisher != nil {
+		if pubErr := w.ReceiptPublisher.PublishActionReceipt(ctx, vt.Envelope, receipt); pubErr != nil {
+			w.Logger.Warn("Failed to publish ActionReceipt to gateway receipts channel",
+				string(constants.ConnectionStateError), pubErr,
+				"message_id", vt.Envelope.Id)
+		}
 	}
 
 	return receipt, execErr
@@ -307,7 +341,7 @@ func (w *L5Actuator) LogReceipt(env *govtypes.GovernanceEnvelope, r *operatorv1.
 		return docErr
 	}
 
-	record := buildReceiptRecord(env, r)
+	record := BuildReceiptRecord(env, r)
 
 	if err := w.SQLAuditStore.RecordActionReceipt(record); err != nil {
 		if w.Logger != nil {
@@ -327,7 +361,7 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 		return nil
 	}
 
-	record := buildReceiptRecord(env, r)
+	record := BuildReceiptRecord(env, r)
 
 	body, err := json.Marshal(record)
 	if err != nil {
@@ -348,7 +382,7 @@ func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *ope
 
 // buildReceiptRecord constructs an ActionReceiptRecord from a GovernanceEnvelope and ActionReceipt.
 // This is the single source of truth for record construction, used by both LogReceipt and logReceiptDocument.
-func buildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) *models.ActionReceiptRecord {
+func BuildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) *models.ActionReceiptRecord {
 	return &models.ActionReceiptRecord{
 		TransactionID:     r.TransactionId,
 		TransactionHash:   r.TransactionHash,

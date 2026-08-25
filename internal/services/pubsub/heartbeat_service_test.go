@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,6 +77,10 @@ func (m *mockResultsPublisher) PublishExecutionStatus(ctx context.Context, statu
 func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	m.publishHeartbeatCalled = true
 	return m.publishHeartbeatError
+}
+
+func (m *mockResultsPublisher) PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error {
+	return nil
 }
 
 // capturingConsoleAuditStore records every receipt document passed to DocSet

@@ -11,6 +11,9 @@ import (
 	"context"
 
 	"google.golang.org/protobuf/proto"
+
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 //go:generate mockery --name ResultsPublisher --output ./mocks --dir .
@@ -26,4 +29,5 @@ type ResultsPublisher interface {
 	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg *PubSubCommandMessage) error
 	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
+	PublishActionReceipt(ctx context.Context, env *commonv1.GovernanceEnvelope, receipt *operatorv1.ActionReceipt) error
 }
