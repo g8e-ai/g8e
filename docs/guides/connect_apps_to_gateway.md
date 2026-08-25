@@ -180,6 +180,10 @@ The Gateway includes a registry of native tools that execute locally with full g
 **Operator Tools**
 - `operator_deploy` - Deploys the g8e operator to remote hosts via SSH.
 
+**Audit Tools**
+- `audit_receipt_list` - Lists signed ActionReceipt records from the operator audit vault scoped to an operator session.
+- `audit_receipt_get` - Retrieves a single signed ActionReceipt by transaction ID from the operator audit vault.
+
 All native tools enforce fail-closed input validation.
 
 #### MCP Endpoints
@@ -194,8 +198,8 @@ The `/mcp` endpoint is the sole MCP surface for AI IDEs. It implements the JSON-
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -247,8 +251,8 @@ A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway applies the
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -273,8 +277,8 @@ Applications can submit canonical JSON `GovernanceEnvelope` transactions directl
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
@@ -291,8 +295,8 @@ The Gateway provides real-time pub/sub via WebSocket for streaming events and co
 
 ```bash
 wscat -c wss://localhost:8443/api/v1/pubsub/stream \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 ```
 
 #### Pub/Sub Channels
@@ -314,36 +318,42 @@ The Gateway provides a JSON document store with CRUD operations and query suppor
 
 ```bash
 # Get document
-curl https://localhost:8443/api/v1/data/cases/case-123 \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key
+curl https://localhost:8443/api/v1/data/settings/platform_settings \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 
-# Set document
-curl -X PUT https://localhost:8443/api/v1/data/cases/case-123 \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+# Set document (allowed on infrastructure collections)
+curl -X PUT https://localhost:8443/api/v1/data/settings/platform_settings \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"status": "open", "priority": "high"}'
+  -d '{"posture": "doctrine"}'
 
 # Update document (merge)
-curl -X PATCH https://localhost:8443/api/v1/data/cases/case-123 \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+curl -X PATCH https://localhost:8443/api/v1/data/settings/platform_settings \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"priority": "critical"}'
+  -d '{"posture": "consensus"}'
 
 # Delete document
-curl -X DELETE https://localhost:8443/api/v1/data/cases/case-123 \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key
+curl -X DELETE https://localhost:8443/api/v1/data/settings/platform_settings \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 
 # Query documents
 curl -X POST https://localhost:8443/api/v1/data/cases/_query \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
-    "filter": {"status": "open"},
+    "filters": [
+      {
+        "field": "status",
+        "op": "==",
+        "value": "open"
+      }
+    ],
     "limit": 10
   }'
 ```
@@ -352,7 +362,7 @@ The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD op
 
 #### Governed Collections
 
-Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata) must use `POST /api/v1/governance/envelopes` for mutations.
+Direct `/api/v1/data/` mutations (PUT, PATCH, DELETE) are restricted to platform infrastructure collections (`settings`, `users`, `operators`, `operator_sessions`, `bound_sessions`, `passkey_challenges`, `revoked_certificates`, `trusted_signers`, `console_audit`). Governed collections (`cases`, `investigations`, `tasks`, `memories`, `reputation_state`, `reputation_commitments`, `stake_resolutions`, `agent_activity_metadata`) permit reads and queries via `GET` and `POST .../_query`, but require `POST /api/v1/governance/envelopes` for mutations.
 
 ---
 
@@ -363,7 +373,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -371,7 +381,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==1.7.5
+pip install g8e==2.0.0
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -403,7 +413,7 @@ Generate a client certificate for CLI operations:
 This:
 1. Generates a CSR (Certificate Signing Request)
 2. Receives a signed client certificate with SPIFFE URI SAN
-3. Stores it in `.g8e/pki/client.crt`
+3. Stores the client certificate in `.g8e/cli.crt` and private key in `.g8e/cli.key`
 4. Opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication
 
 CLI sessions use the mTLS certificate fingerprint as L3 proof. The passkey enables browser-based authentication for console and approval flows.
@@ -428,7 +438,7 @@ All authentication to the Gateway uses CSR-based enrollment. The first human to 
 
 1. **Client generates key pair and CSR**: The entity (device, app, or user) creates a private key and a Certificate Signing Request (CSR) that states the desired identity (e.g., `spiffe://g8e.local/app/etl-service`)
 2. **Gateway validates and signs**: The Gateway (acting as CA) issues a signed mTLS certificate with a SPIFFE URI SAN
-3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA) and uses it with its private key for all subsequent authentication
+3. **Client receives certificate**: The client gets its signed certificate (such as `.g8e/cli.crt` or `.g8e/pki/issued/apps/<name>.crt`) and uses it with its private key for all subsequent authentication
 4. **Short-lived by design**: Leaf certificates expire after 7 days, limiting the lifetime of a compromised key
 5. **Certificate renewal**: Clients must re-enroll before certificate expiry. The enrollment coordinator reuses valid credentials without rotation; use `--rotate-cli` to force rotation. Partial or corrupt credentials trigger the one-time human-approved recovery flow.
 
@@ -606,8 +616,8 @@ Enroll a device using CSR-based enrollment with mTLS authentication. The user_id
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
@@ -627,8 +637,8 @@ Submit a CSR for low-level certificate issuance (for advanced use cases):
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/csr/sign \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
@@ -647,7 +657,7 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 
 1. Client submits MCP/A2A request without L3 proof.
 2. Gateway stores the transaction in a suspended state.
-3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}`.
+3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}` (which redirects to `/console/#approve={tx_hash}`).
 4. User opens URL in browser and authenticates with passkey.
 5. User approves transaction via WebAuthn.
 6. Gateway attaches the L3 proof and resubmits the envelope through the verification pipeline.
@@ -693,20 +703,28 @@ The Gateway attaches the L3 proof and resubmits the envelope through the verific
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts?operator_session_id=op-session-abc \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 ```
 
 ### Export Audit Receipts
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z&limit=100 \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -o audit-export.json
 ```
 
 ### CLI Audit Query
+
+Query signed receipts directly using the CLI:
+
+```bash
+./g8e audit receipts --session <session-id>
+```
+
+Or query raw audit events from the Gateway audit store:
 
 ```bash
 ./g8e gw data audit list --operator-session-id <session-id> --limit 100
@@ -751,10 +769,10 @@ ls -la .g8e/pki/
 
 ### Authentication Failures
 
-Verify client certificate exists:
+Verify client certificate and key exist:
 
 ```bash
-ls -la .g8e/pki/client.crt
+ls -la .g8e/cli.crt .g8e/cli.key
 ```
 
 Re-run login if certificate is missing or expired:

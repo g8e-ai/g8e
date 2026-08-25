@@ -94,8 +94,8 @@ The Makefile provides several build targets:
 - `make verify-fips`, Builds the FIPS variant and runs the `g8e version --fips` self-check.
 - `make fmt`, Formats all Go source files (`gofmt -w .`).
 - `make up`, Builds and starts the full Docker Compose stack (`docker compose up -d --build`).
-- `make down`, Stops the stack, preserving volumes (`docker compose down`).
-- `make clean-docker`, Stops the stack and removes volumes (`docker compose down -v`).
+- `make down`, Stops the stack, preserving volumes (`docker compose --profile bootstrapped down --remove-orphans`).
+- `make clean-docker`, Stops the stack and removes volumes (`docker compose --profile bootstrapped down -v --remove-orphans`).
 - `make clean`, Removes compiled binaries, test artifacts, and `.g8e/` runtime state.
 
 ### Cross-Compilation
@@ -146,7 +146,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e@v1.7.5
+go get github.com/g8e-ai/g8e@v2.0.0
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -158,7 +158,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==1.7.5
+pip install g8e==2.0.0
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -274,12 +274,14 @@ Refer to the [Protocol Library documentation](../architecture/protocol.md) for t
 
 ## Testing
 
-A custom Operator implementation must pass the platform test suite to claim g8e compatibility:
+A custom Operator implementation must pass the platform test suite to claim g8e compatibility. Run tests via `./g8e test` or make targets:
 
-- `make test-unit`, Runs Tier 1 unit tests.
-- `make test-integration`, Runs Tier 2 in-process integration tests.
-- `make test-docker`, Runs Tier 3 E2E tests against a running platform. Start the platform first (`docker compose up` or `./g8e gw start`), then run `make test-docker`. The low-level executor is `./g8e test e2e`, which connects to the running platform and fails fast if it is not reachable. Use `./g8e test e2e --run <pattern>` to select specific scenario tests.
-- `make ci`, Runs the full CI pipeline.
+- `make test-unit` or `./g8e test unit`, Runs Tier 1 unit tests with stubs and mocks (no external dependencies).
+- `make test-integration` or `./g8e test integration`, Runs Tier 2 in-process integration tests with local SQLite, PKI, and pub/sub.
+- `make test-docker` or `./g8e test e2e`, Runs Tier 3 E2E tests against a running platform. Start the platform first (`docker compose up -d --build` or `./g8e gw start`), then run `make test-docker` or `./g8e test e2e`. Use `./g8e test e2e --run <pattern>` to select specific scenario tests.
+- `make test-coverage` or `./g8e test coverage`, Runs the test suite and enforces the 75% coverage threshold.
+- `make lint` or `./g8e test lint`, Runs linters and static analysis.
+- `make ci`, Runs the full CI pipeline (proto generation, documentation validation, linting, vulnerability checks, and test suites).
 
 ---
 

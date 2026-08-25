@@ -18,7 +18,7 @@ In an air-gapped configuration, the platform restricts all outbound communicatio
 
 - **No Telemetry**: The platform disables all outbound telemetry, usage statistics, and error reporting.
 - **Local Assets**: All user interface assets, fonts, icons, and libraries are served locally by platform services.
-- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway within the `.g8e` directory.
+- **Local Persistence**: All platform state, including session records, configuration settings, and cryptographic keys, resides in local SQLite databases managed by the g8e Gateway within the `.g8e/` directory.
 
 ---
 
@@ -37,7 +37,7 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 
 ### Core Functional Capabilities
 
-- **State Persistence**: All system state is stored locally within SQLite databases inside the `.g8e` directory.
+- **State Persistence**: All system state is stored locally within SQLite databases inside the `.g8e/` directory.
 - **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-256 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local WebSocket pub/sub broker manages real-time communication between the gateway and connected clients. Server-Sent Events (SSE) streaming provides event delivery to browser and CLI subscribers.
@@ -75,15 +75,15 @@ Verified operations are logged to a host-local ledger, and the Operator exposes 
 To ensure a self-contained installation, the build process packages all required components offline:
 
 - **Go Dependencies**: The core platform compiles into a single statically-linked g8e binary. All Go dependencies are vendored into the root `vendor/` directory. The build uses `-mod=vendor` and sets `GOFLAGS=-mod=vendor` in the Dockerfile, ensuring no network access is needed during compilation. Run `go mod vendor` on a connected host to populate or refresh this directory.
-- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e@v1.7.5` works offline once the vendor directory is populated. No additional downloads are required.
+- **Protocol Library (Go)**: The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Since all dependencies are vendored, `go get github.com/g8e-ai/g8e@v2.0.0` works offline once the vendor directory is populated. No additional downloads are required.
 - **Protocol Library (Python)**: The `g8e` Python package is published to PyPI. For air-gapped environments, download the wheel on a connected host and transfer it:
 
   ```bash
   # On connected host:
-  pip download g8e==1.7.5 -d /tmp/g8e-python-pkg
+  pip download g8e==2.0.0 -d /tmp/g8e-python-pkg
 
   # Transfer /tmp/g8e-python-pkg/ to the air-gapped host, then:
-  pip install --no-index --find-links /tmp/g8e-python-pkg g8e==1.7.5
+  pip install --no-index --find-links /tmp/g8e-python-pkg g8e==2.0.0
   ```
 
   The package includes bundled JSON protocol constants. Set `G8E_PROTOCOL_DIR` if the constants directory is in a non-default location. See the [Protocol Library documentation](../architecture/protocol.md) for details.
@@ -106,13 +106,13 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `g8e` binary (produced at `bin/g8e-<os>-<arch>` with a root copy at `./g8e`).
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, or `demos/frontend` as reference. Demos build from the repo-root `Dockerfile` via `context: ../..` (the same production image, always-FIPS, compiles from source using vendored modules in-container). The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same root `Dockerfile` with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the unified platform compose (`docker-compose.yml` deploying `g8e-gateway`, `g8e-operator`, `ensemble`, and `dashboard`) or the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, and `demos/frontend` as reference. Compose files build the gateway and operator images from the repo-root `Dockerfile` via `context: ../..` (the production image, always-FIPS, compiles from source using vendored modules in-container).
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
-   g8e demos pull
-   g8e demos export /tmp/g8e-images
+   ./g8e demos pull
+   ./g8e demos export /tmp/g8e-images
    ```
-   This pulls all images pinned by sha256 digest in `demos/images.json` and saves them as `.tar` files. Transfer the export directory to the air-gapped machine and load them with `g8e demos import /tmp/g8e-images`.
+   This pulls all images pinned by sha256 digest in `demos/images.json` and saves them as `.tar` files. Transfer the export directory to the air-gapped machine and load them with `./g8e demos import /tmp/g8e-images`.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
@@ -138,7 +138,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 1. **Isolated Boundaries**: In gateway mode, the g8e Gateway does not initiate outbound connections to any external network addresses.
 2. **Mutual Cryptographic Trust**: All traffic between the g8e Gateway, connected clients, and the g8e Operator is encrypted and authenticated using mutual TLS (mTLS) issued by the local Certificate Authority.
-3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e` directory.
+3. **Local Sovereignty**: All audit logs, transactions, and state records remain strictly on the host filesystem inside the local `.g8e/` directory.
 4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
 5. **Mandatory Encryption at Rest**: All sensitive data stored in SQLite databases is encrypted using platform-managed encryption keys.
 
@@ -148,6 +148,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Remote management commands (cp, scp, stream, deploy) for operators inside the air-gapped environment.
 - **[Docker Gateway](docker_gateway.md)**: Containerized deployment details for gateway and operator services.
+- **[Unified Docker Stack](unified_stack.md)**: Full platform stack (Gateway, Operator, Ensemble, Dashboard) deployment guide.
 - **[Demos README](../../demos/README.md)**: Step-by-step air-gapped Docker image export/import workflow using `g8e demos export/import` and `demos/images.json`.
 - **[Scripts README](../architecture/scripts.md)**: Central reference for all g8e deployment and bootstrap scripts.
 

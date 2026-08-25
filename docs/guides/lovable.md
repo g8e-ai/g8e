@@ -5,8 +5,8 @@ parent: Guides
 
 # Lovable Frontend Integration
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-25
+Version: v2.0.0
 
 ---
 
@@ -18,17 +18,17 @@ For the guide on building a g8e-compatible frontend (enrollment commands, API re
 
 ### Steps at a Glance
 
-1. **[Configure the Cloudflare Tunnel](./cloudflare_tunnel.md)** - Expose the local g8e Gateway to the internet via `console.g8e.ai`
-2. **[Configure the Gateway](./build_frontend.md#gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-3. **[Enroll the Frontend](./build_frontend.md#frontend-enrollment-commands)** - Run `g8e auth enroll gui enroll` to validate CORS and generate a TypeScript config snippet
-4. **[Review the API Reference](./build_frontend.md#api-reference)** - Understand the public and authenticated endpoints (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-5. **[Review API Data Types](./build_frontend.md#api-data-types)** - Use the Swagger spec for request and response schemas (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-6. **[Build Pages and Components](#6-pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
-7. **[Define WebAuthn Flow Requirements](./build_frontend.md#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-8. **[Define SSE Requirements](./build_frontend.md#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback (see [Build a g8e-Compatible Frontend](./build_frontend.md))
-9. **[Apply UI/UX Guidelines](#9-uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
-10. **[Handle Errors](#10-error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
-11. **[Verify the Integration](#11-verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
+1. **[Configure the Cloudflare Tunnel](#1-cloudflare-tunnel)** - Expose the local g8e Gateway to the internet via `console.g8e.ai` (see [Cloudflare Tunnel Integration](./cloudflare_tunnel.md))
+2. **[Configure the Gateway](#2-gateway-side-configuration)** - Set CORS origins, passkey RP ID/name/origins (see [Build a g8e-Compatible Frontend](./build_frontend.md#gateway-side-configuration))
+3. **[Enroll the Frontend](#3-frontend-enrollment)** - Run `g8e auth enroll gui enroll` to validate CORS and generate a TypeScript config snippet (see [Build a g8e-Compatible Frontend](./build_frontend.md#frontend-enrollment-commands))
+4. **[Review the API Reference](#api-reference)** - Understand public and authenticated endpoints
+5. **[Review API Data Types](#api-data-types)** - Use the Swagger spec for request and response schemas
+6. **[Build Pages and Components](#pages-and-components)** - AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
+7. **[Define WebAuthn Flow Requirements](#webauthn-flow-requirements)** - Registration, authentication, and approval ceremonies
+8. **[Define SSE Requirements](#sse-live-audit-stream)** - Live event streaming with auto-reconnect and polling fallback
+9. **[Apply UI/UX Guidelines](#uiux-guidelines)** - Dark theme, monospace hashes, toast notifications, responsive layout
+10. **[Handle Errors](#error-handling)** - 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
+11. **[Verify the Integration](#verification-checklist)** - CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
 
 ### Architecture
 
@@ -42,7 +42,7 @@ For the guide on building a g8e-compatible frontend (enrollment commands, API re
 
 A Cloudflare Tunnel securely exposes the local g8e Gateway to the internet so the Lovable frontend can reach it from the browser. The tunnel routes `console.g8e.ai` through Cloudflare's edge to the gateway's HTTPS listener on `localhost:8443`, with HTTP/2 enabled for SSE streaming performance.
 
-**Full setup instructions** (tunnel creation, `config.yml`, systemd service, Cloudflare Access policies, and troubleshooting) are in the [Cloudflare Tunnel Integration guide](./cloudflare_tunnel.md).
+Full setup instructions (tunnel creation, `config.yml`, systemd service, Cloudflare Access policies, and troubleshooting) are in the [Cloudflare Tunnel Integration guide](./cloudflare_tunnel.md).
 
 ### Prerequisites
 
@@ -87,7 +87,7 @@ Copy the outputted TypeScript config snippet into the Lovable project as the sta
 
 ---
 
-## 11. Verification Checklist
+## Verification Checklist
 
 After the Lovable AI agent generates the app, verify:
 
@@ -148,29 +148,31 @@ Use a dark theme with CSS custom properties as design tokens: `--bg`, `--surface
 
 ---
 
-## 4. API Reference
+### API Reference
 
 All paths are relative to `API_BASE_URL`. All authenticated routes require `credentials: 'include'`.
 
 > **Tip:** The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Lovable's AI can ingest this spec to auto-discover the API surface and generate correct integration code. Point the Lovable agent to `https://console.g8e.ai/swagger/doc.json` for the complete endpoint catalog.
 
-### Public Routes (no auth required)
+#### Public Routes (no auth required)
 
 | Method | Path | Description |
-|--------|------|-------------|
+|---|---|---|
 | `GET` | `/api/v1/health` | Gateway health check |
 | `GET` | `/api/v1/auth/bootstrap/status` | Check if any passkey is registered |
 | `POST` | `/api/v1/auth/passkeys/console/register/challenge` | Get WebAuthn registration challenge |
 | `POST` | `/api/v1/auth/passkeys/console/register/verify` | Verify registration attestation |
 | `POST` | `/api/v1/auth/passkeys/console/authenticate/challenge` | Get WebAuthn authentication challenge |
 | `POST` | `/api/v1/auth/passkeys/console/authenticate/verify` | Verify authentication assertion |
+| `POST` | `/api/v1/auth/passkeys/enrollment/register/challenge` | Get WebAuthn registration challenge for CLI enrollment token |
+| `POST` | `/api/v1/auth/passkeys/enrollment/register/verify` | Verify registration and consume CLI enrollment token |
 | `POST` | `/api/v1/auth/logout` | Sign out (clears session cookie) |
 | `POST` | `/api/v1/auth/enrollment-token/validate` | Validate enrollment token (for registration links) |
 
-### Authenticated Routes (require session cookie)
+#### Authenticated Routes (require session cookie)
 
 | Method | Path | Description |
-|--------|------|-------------|
+|---|---|---|
 | `GET` | `/api/v1/users/me` | Get current authenticated user |
 | `GET` | `/api/v1/auth/sessions/me` | Get current web session info |
 | `GET` | `/api/v1/auth/passkeys` | List user's passkey credentials (user derived from session) |
@@ -181,21 +183,21 @@ All paths are relative to `API_BASE_URL`. All authenticated routes require `cred
 | `GET` | `/api/v1/sse/stream` | SSE stream for live audit events (web_session_id from cookie) |
 | `GET` | `/api/v1/sse/events?since_id={n}` | Poll SSE events (web_session_id from cookie) |
 
-### Route Authentication
+#### Route Authentication
 
 Browser clients use public routes (no auth) and authenticated routes (session cookie). The SSE endpoints accept either mTLS or a session cookie. All other gateway routes require mTLS and are not accessible from browsers.
 
 ---
 
-## 5. API Data Types
+### API Data Types
 
 The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Use this to discover request and response schemas for all endpoints, including user, passkey, session, health, bootstrap, approval, and SSE event types. The `@simplewebauthn/browser` library provides TypeScript types for WebAuthn ceremony inputs and outputs.
 
 ---
 
-## 6. Pages and Components
+### Pages and Components
 
-### 6.1 Auth Context
+#### Auth Context
 
 Manage global auth state:
 
@@ -211,7 +213,7 @@ On mount:
 2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in
 3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session info (the web session ID is derived from the cookie by the gateway; do not pass it in SSE requests)
 
-### 6.2 Login Page
+#### Login Page
 
 Two modes based on `bootstrapped` state:
 
@@ -226,7 +228,7 @@ Two modes based on `bootstrapped` state:
 - Button: "Sign In with Passkey" → calls `authenticatePasskey()`
 - Secondary button: "Register New Passkey" → reveals registration form
 
-### 6.3 Dashboard
+#### Dashboard
 
 After authentication, show:
 
@@ -265,7 +267,7 @@ After authentication, show:
 - Display user ID (monospace)
 - "Sign Out" button
 
-### 6.4 Approval Flow
+#### Approval Flow
 
 When user clicks "Approve" on a transaction:
 
@@ -277,7 +279,7 @@ When user clicks "Approve" on a transaction:
 6. Show success or error message
 7. Refresh the approvals list
 
-### 6.5 URL Hash Handling
+#### URL Hash Handling
 
 On app load, check `window.location.hash` for:
 
@@ -292,17 +294,16 @@ When a destructive mutation is suspended by the gateway's governance gauntlet, t
 
 For the Lovable app, you have two options:
 
-1. **Handle approvals inline** (recommended): The Lovable app implements the approval flow directly (see [Approval Flow](#64-approval-flow)). When a mutation is suspended, the API response includes the transaction hash. The Lovable app can auto-trigger the approval flow using the `#approve={txHash}` URL hash pattern.
-
+1. **Handle approvals inline** (recommended): The Lovable app implements the approval flow directly (see [Approval Flow](#approval-flow)). When a mutation is suspended, the API response includes the transaction hash. The Lovable app can auto-trigger the approval flow using the `#approve={txHash}` URL hash pattern.
 2. **Redirect to the gateway console**: If the Lovable app does not implement the approval flow, redirect the user's browser to `{API_BASE_URL}/approve/{txHash}`. The gateway console at `/console/` handles the WebAuthn approval ceremony. Note: this requires the passkey RP ID to match the gateway's domain. If the RP ID is set to the Lovable app's domain (recommended), the console redirect will not be able to perform WebAuthn. Use option 1 instead.
 
 ---
 
-## 7. WebAuthn Flow Requirements
+### WebAuthn Flow Requirements
 
 The app must implement three WebAuthn ceremonies using the browser's `navigator.credentials` API. The `@simplewebauthn/browser` library is recommended as it handles base64url conversions automatically.
 
-### 7.1 Base64url Encoding
+#### Base64url Encoding
 
 The gateway sends and receives WebAuthn challenge data as base64url strings. The browser's WebAuthn API requires ArrayBuffers. The app must convert between base64url strings and ArrayBuffers for:
 
@@ -313,7 +314,7 @@ The gateway sends and receives WebAuthn challenge data as base64url strings. The
 
 If using `@simplewebauthn/browser`, these conversions are handled automatically.
 
-### 7.2 Registration Flow (First-Time Setup)
+#### Registration Flow (First-Time Setup)
 
 1. POST to `/api/v1/auth/passkeys/console/register/challenge` with JSON body `{ user_id, user_name, cli_session_id: "browser" }`. If no passkeys exist on the gateway, omit `user_id` to auto-create a user.
 2. Decode the returned `options.publicKey` challenge and user ID from base64url to ArrayBuffers.
@@ -322,7 +323,7 @@ If using `@simplewebauthn/browser`, these conversions are handled automatically.
 5. POST to `/api/v1/auth/passkeys/console/register/verify` with JSON body `{ user_id, cli_session_id: "browser", attestation_response: { ...encodedFields } }`.
 6. On success, the gateway sets a `g8e_web_session_cookie` session cookie. The app transitions to the dashboard.
 
-### 7.3 Authentication Flow (Returning User)
+#### Authentication Flow (Returning User)
 
 1. POST to `/api/v1/auth/passkeys/console/authenticate/challenge` with JSON body `{ user_id }`.
 2. If the response has `success: false` and `needs_setup: true`, no passkey is registered. Show the registration form instead.
@@ -332,7 +333,7 @@ If using `@simplewebauthn/browser`, these conversions are handled automatically.
 6. POST to `/api/v1/auth/passkeys/console/authenticate/verify` with JSON body `{ user_id, assertion_response: { ...encodedFields } }`.
 7. On success, the gateway sets a `g8e_web_session_cookie` session cookie. The app transitions to the dashboard.
 
-### 7.4 Approval Flow (Suspended Transaction)
+#### Approval Flow (Suspended Transaction)
 
 1. GET `/api/v1/approvals/{txHash}/challenge` (with `credentials: 'include'`). Returns WebAuthn `PublicKeyCredentialRequestOptions`.
 2. Decode the challenge and `allowCredentials` from base64url to ArrayBuffers.
@@ -344,18 +345,18 @@ If using `@simplewebauthn/browser`, these conversions are handled automatically.
 
 ---
 
-## 8. SSE Live Audit Stream
+### SSE Live Audit Stream
 
 The app must provide a live audit event stream with the following requirements:
 
-### Connection
+#### Connection
 
 - Connect to `GET /api/v1/sse/stream` using `EventSource` with `withCredentials: true`.
 - The `web_session_id` is derived from the authenticated session cookie by the gateway; do NOT pass it in the URL.
 - Show connection status: green (connected), yellow (connecting), red (disconnected).
 - Provide manual connect and disconnect buttons.
 
-### Event Handling
+#### Event Handling
 
 - Parse incoming SSE messages as JSON. Each message may contain a nested `event` field that itself is JSON.
 - Extract: event type, timestamp, event ID, and raw payload.
@@ -365,21 +366,21 @@ The app must provide a live audit event stream with the following requirements:
 - Provide a filter input (case-insensitive filter by event type).
 - Provide auto-scroll checkbox, clear button, and event count display.
 
-### Reconnection
+#### Reconnection
 
 - Auto-reconnect 3 seconds after disconnection.
 
-### Polling Fallback
+#### Polling Fallback
 
 If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?since_id={lastId}` every 2 seconds (the `web_session_id` is derived from the session cookie).
 
-### WebSocket Note
+#### WebSocket Note
 
 The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
 
 ---
 
-## 9. UI/UX Guidelines
+### UI/UX Guidelines
 
 - **Dark theme** using the CSS variables above
 - **Monospace font** for all hashes, credential IDs, and technical identifiers
@@ -394,7 +395,7 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it re
 
 ---
 
-## 10. Error Handling
+### Error Handling
 
 - **401 responses**: Clear user state and redirect to login
 - **`needs_setup: true`** on authenticate challenge: Show registration form automatically
@@ -404,7 +405,7 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/ws/pubsub`, but it re
 
 ---
 
-## Recommended File Structure
+### Recommended File Structure
 
 ```
 src/

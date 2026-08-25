@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.7.7  
-**Last Updated:** 2026-08-18  
-**Platform:** g8e v1.7.5  
+**Document Version:** 2.0.0  
+**Last Updated:** 2026-08-25  
+**Platform:** g8e v2.0.0  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -549,6 +549,8 @@ The OSCAL exporter (`internal/services/compliance/oscal.go`) generates machine-r
 CLI commands:
 - `g8e compliance export --format oscal --class C` generates OSCAL JSON artifacts.
 - `g8e compliance ksi --class C` evaluates KSIs and prints the result set as JSON.
+- `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
+- `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
 
 ### Historical Metrics Retention
 
@@ -615,7 +617,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Gitleaks secret scanning** in CI/CD preventing credential leakage in source code
 - **Go-licenses license compliance** auditing transitive dependencies for license compatibility
 - **Cross-OS CI matrix** (Ubuntu, macOS, Windows) ensuring platform parity
-- **Python protocol test suite** (151 tests) validating constant accessors, enum generation, and model serialization
+- **Python protocol test suite** (173 tests) validating constant accessors, enum generation, and model serialization
 - **Python protocol conformance suite** (420 tests) enforcing parity between Go constants, Python runtime values, and canonical JSON SSOT files
 - **Interactive gateway onboarding wizard** (`g8e gw start --interactive`) guiding users through network, security, agent, and review configuration steps
 - **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
@@ -657,6 +659,12 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Atomic pointer adoption** for the late-bound consensus service, replacing unsafe `**T` pointers with `atomic.Pointer` for thread-safe dependency wiring
 - **Typed audit response models** narrowing HTTP audit payload shapes to typed structs instead of raw maps
 - **RootCACommonName constant centralization** extracting the root-CA subject common name into a single typed constant across gateway certificate generation, OS trust-store installation, and stale-anchor enumeration
+- **Headless CLI enrollment** via `--headless` flag on `g8e auth enroll` enabling CLI-only identities (mTLS without browser or WebAuthn passkey ceremony) for automated CI and remote server environments
+- **mTLS-based CLI recovery approval** via `g8e auth approve-recovery <token>` subcommand and `POST /api/v1/auth/cli/recovery/approve-cli` (`RouteAuthMTLS`) endpoint, allowing enrolled CLIs to approve or deny pending recovery requests over mTLS
+- **Platform logging consolidation** under `internal/services/logging` with unified `g8e.log` file lifecycle, structured slog logging, and `RuntimeFileService` streaming append and read support (`OpenForAppend`/`OpenForRead`)
+- **Pub/sub `PSUBSCRIBE` glob-pattern subscriptions** on the gateway broker with Redis-compatible channel matching and fail-closed topic ACLs confining wildcards to subscriber-owned operator segments
+- **Typed MCP request and result structs** replacing ad-hoc JSON unmarshaling and generic maps across native tools
+- **Re-unified complete platform monorepo (v2.0.0)** shipping the Go gateway and operator platform, in-tree Python/FastAPI ensemble (`ensemble/` — g8ee), and Node.js/Express dashboard (`dashboard/` — g8ed) with unified end-to-end Docker Compose orchestration
 
 ### Planned Enhancements
 
@@ -717,6 +725,9 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **KSI History Store** | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
 | **COSAiS Overlay Loader** | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
 | **Compliance CLI** | `internal/cli/cmd/compliance.go` | `compliance export`, `ksi`, `ksi-history`, and `overlay` subcommands |
+| **Log Service** | `internal/services/logging/log_service.go` | Platform logging lifecycle, streaming file append and read |
+| **Enrollment Coordinator** | `internal/cli/auth/enrollment.go` | CLI enrollment state machine for browser and headless flows |
+| **CLI Recovery Controller** | `internal/services/gateway/cli_recovery_controller.go` | CLI recovery approval via browser and mTLS endpoints |
 | **Workload Identity** | `protocol/workload_identity.go` | SPIFFE identity specification |
 
 ### Test Evidence
@@ -729,8 +740,9 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **Governance Tests** | `internal/services/governance/*_test.go` | L1-L5 verification |
 | **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
+| **Logging Tests** | `internal/services/logging/*_test.go` | LogService, handler, formatting, and stream file tests |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
-| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (89.7% coverage) |
+| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (92.7% coverage) |
 
 ---
 
@@ -777,6 +789,10 @@ For specific compliance questions or audit support, contact:
 | 1.7.3 | 2026-08-14 | Lateralus Labs | Updated platform version to v1.7.3; noted RootCACommonName constant centralization (internal refactor, no on-wire or trust-store behavior change); verified all evidence paths against live codebase |
 | 1.7.4 | 2026-08-15 | Lateralus Labs | Updated platform version to v1.7.4; noted passkey enrollment is required only for notary posture (optional for doctrine and consensus); noted single always-FIPS Dockerfile consolidation and demo orchestration simplification; verified all evidence paths against live codebase |
 | 1.7.5 | 2026-08-16 | Lateralus Labs | Updated platform version to v1.7.5; added audit store hard dependency for MCP gateway, passkey proof verification decoupling from L3 notary interface, and atomic.Pointer adoption for late-bound consensus service to Current Strengths; added typed audit response models to Current Strengths; corrected agent support count from 4 to 5 to reflect Devin CLI addition in v1.6.7; verified all evidence paths against live codebase |
+| 1.7.6 | 2026-08-16 | Lateralus Labs | Reconciled architecture, guide, and reference documentation; aligned Python protocol package constants with Go SSOT; fixed PyPI publish verification workflow |
+| 1.7.7 | 2026-08-18 | Lateralus Labs | Added headless CLI enrollment (`--headless`), mTLS recovery approval (`g8e auth approve-recovery` and `POST /api/v1/auth/cli/recovery/approve-cli`), and updated project license to Business Source License 1.1 (BSL 1.1) with 2030-08-18 Change Date |
+| 1.7.8 | 2026-08-19 | Lateralus Labs | Added platform logging consolidation (`internal/services/logging`, `g8e.log`, `OpenForAppend`/`OpenForRead`), `PSUBSCRIBE` glob-pattern subscriptions on gateway pubsub with fail-closed topic ACLs, typed MCP native tool request/result structs, and `docs/architecture/overview.md` |
+| 2.0.0 | 2026-08-25 | Lateralus Labs | Updated platform version to v2.0.0; documented polyglot monorepo reunification shipping Go platform, in-tree Python ensemble (`ensemble/`), Node.js dashboard (`dashboard/`), unified Docker compose orchestration, and updated test suite metrics |
 
 ---
 
