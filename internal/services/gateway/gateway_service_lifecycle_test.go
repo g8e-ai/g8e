@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 func TestGatewayModeService_StartStop(t *testing.T) {

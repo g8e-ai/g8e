@@ -11,9 +11,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // mockExecutionHandler is a test-only implementation of ExecutionHandler.

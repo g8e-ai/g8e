@@ -11,7 +11,7 @@
 // This file re-exports the canonical format strings so protocol constants remain usable.
 package constants
 
-import "github.com/g8e-ai/g8e/internal/timesvc"
+import "github.com/g8e-ai/g8e/v2/internal/timesvc"
 
 // FormatRFC3339 is the canonical timestamp format string for RFC3339 with timezone offset.
 //

@@ -23,9 +23,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/cli/tui"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
+	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 )
 
 // demoVerbose controls demo output verbosity. When false (default), step-by-step

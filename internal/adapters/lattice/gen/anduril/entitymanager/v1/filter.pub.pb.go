@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -1719,8 +1719,8 @@ const file_anduril_entitymanager_v1_filter_pub_proto_rawDesc = "" +
 	"\x17COMPARATOR_RANGE_CLOSED\x10\f*I\n" +
 	"\x0eListComparator\x12\x1b\n" +
 	"\x17LIST_COMPARATOR_INVALID\x10\x00\x12\x1a\n" +
-	"\x16LIST_COMPARATOR_ANY_OF\x10\x01B\xaa\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\vFilterProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x16LIST_COMPARATOR_ANY_OF\x10\x01B\xad\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\vFilterProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_filter_pub_proto_rawDescOnce sync.Once

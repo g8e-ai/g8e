@@ -7,7 +7,7 @@
 
 package mcp
 
-import "github.com/g8e-ai/g8e/internal/constants"
+import "github.com/g8e-ai/g8e/v2/internal/constants"
 
 // getFieldPaths returns the field path registry for all collections.
 // Canonical source: protocol/constants/field_paths.json (mirrored in internal/constants).

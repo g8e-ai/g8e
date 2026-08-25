@@ -20,14 +20,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/adapters/lattice"
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/exitcode"
-	"github.com/g8e-ai/g8e/internal/services"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/logging"
+	"github.com/g8e-ai/g8e/v2/internal/adapters/lattice"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/exitcode"
+	"github.com/g8e-ai/g8e/v2/internal/services"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/logging"
 )
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.

@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/g8e-ai/g8e/protocol"
+	"github.com/g8e-ai/g8e/v2/protocol"
 )
 
 func main() {

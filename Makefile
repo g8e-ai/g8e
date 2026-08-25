@@ -649,11 +649,11 @@ swagger-generate:
 	@echo "Generating Swagger/OpenAPI documentation..."
 	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
 		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
-		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
+		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e/v2,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	else \
 		echo "swag not found, installing via go install..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
-		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e,github.com/go-webauthn,encoding/json 2>/dev/null; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependencyLevel 1 --packagePrefix github.com/g8e-ai/g8e/v2,github.com/go-webauthn,encoding/json 2>/dev/null; \
 	fi
 	@echo "Swagger documentation generated successfully."
 
@@ -810,9 +810,9 @@ _ci-test:
 #   3. make release        (tags, pushes — workflows create the release)
 #
 # The protocol/v* tag triggers the Python PyPI release workflow.
-# The Go module is part of the root module (github.com/g8e-ai/g8e)
+# The Go module is part of the root module (github.com/g8e-ai/g8e/v2)
 # and is versioned by the v* tag. External consumers use:
-#   go get github.com/g8e-ai/g8e@vX.Y.Z
+#   go get github.com/g8e-ai/g8e/v2@vX.Y.Z
 # The protocol/v* tag is NOT used for Go module versioning.
 
 .PHONY: release

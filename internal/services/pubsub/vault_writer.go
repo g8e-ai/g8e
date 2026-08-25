@@ -13,10 +13,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 // VaultWriter owns consolidated vault persistence for command executions and file diffs.

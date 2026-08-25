@@ -14,7 +14,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Broker is the interface for the GatewayWebSocketHandler to avoid import cycles.

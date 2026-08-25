@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FieldPathRegistry holds the schema registry for allowed field paths per collection

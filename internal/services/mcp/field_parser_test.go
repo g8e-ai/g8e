@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func TestNewFieldPathRegistry(t *testing.T) {

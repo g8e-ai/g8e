@@ -19,13 +19,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govpkg "github.com/g8e-ai/g8e/internal/governance"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
-	"github.com/g8e-ai/g8e/internal/services/system"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/v2/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
+	"github.com/g8e-ai/g8e/v2/internal/services/system"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 

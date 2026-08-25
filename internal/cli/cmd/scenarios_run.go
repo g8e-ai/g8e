@@ -18,10 +18,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 )
 
 var (

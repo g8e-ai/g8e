@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 // AuditEvidenceReader provides read-only access to audit store evidence

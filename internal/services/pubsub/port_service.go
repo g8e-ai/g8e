@@ -14,10 +14,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -60,8 +60,8 @@ const file_anduril_api_v1_annotations_proto_rawDesc = "" +
 	"\n" +
 	" anduril/api/v1/annotations.proto\x12\x0eanduril.api.v1\x1a\x19anduril/api/v1/http.proto\x1a google/protobuf/descriptor.proto:N\n" +
 	"\x04http\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x01(\v2\x18.anduril.api.v1.HttpRuleR\x04http:j\n" +
-	"\x0fmessage_options\x12\x1f.google.protobuf.MessageOptions\x18φ\x03 \x01(\v2\x1e.anduril.api.v1.MessageOptionsR\x0emessageOptionsB|\n" +
-	"\x0fcom.anduril.apiB\x10AnnotationsProtoP\x01ZNgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1;annotations\xa2\x02\x04AAPIb\x06proto3"
+	"\x0fmessage_options\x12\x1f.google.protobuf.MessageOptions\x18φ\x03 \x01(\v2\x1e.anduril.api.v1.MessageOptionsR\x0emessageOptionsB\x7f\n" +
+	"\x0fcom.anduril.apiB\x10AnnotationsProtoP\x01ZQgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1;annotations\xa2\x02\x04AAPIb\x06proto3"
 
 var file_anduril_api_v1_annotations_proto_goTypes = []any{
 	(*descriptorpb.MethodOptions)(nil),  // 0: google.protobuf.MethodOptions

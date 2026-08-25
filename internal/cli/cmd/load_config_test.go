@@ -11,8 +11,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -11,8 +11,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 // The FedRAMP "Sovereign Cloud Governance" scenarios exercise the REAL g8e

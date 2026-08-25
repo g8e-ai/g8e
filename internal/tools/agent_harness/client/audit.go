@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	harnessconfig "github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by

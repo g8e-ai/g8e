@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // TestPaths holds test-specific filesystem paths.

@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/services/network"
 )
 
 // newOutputCmd creates a cobra.Command whose output is captured in the returned buffer.

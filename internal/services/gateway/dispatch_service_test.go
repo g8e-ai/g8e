@@ -22,11 +22,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // --- stubs for Tier 1 unit tests ---

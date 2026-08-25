@@ -8,8 +8,8 @@
 package main
 
 import (
-	clicmd "github.com/g8e-ai/g8e/internal/cli/cmd"
-	"github.com/g8e-ai/g8e/internal/constants"
+	clicmd "github.com/g8e-ai/g8e/v2/internal/cli/cmd"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Version information (set via ldflags during build)

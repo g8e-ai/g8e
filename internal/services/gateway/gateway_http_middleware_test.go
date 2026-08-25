@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/response"
 )
 
 // newMiddlewareTestHandler creates a minimal HTTPHandler with only the fields

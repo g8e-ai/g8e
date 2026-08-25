@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	v1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/ontology/v1"
+	v1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/ontology/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -159,8 +159,8 @@ const file_anduril_entitymanager_v1_ontology_pub_proto_rawDesc = "" +
 	"\bOntology\x12(\n" +
 	"\rplatform_type\x18\x03 \x01(\tB\x03\xc8>\x01R\fplatformType\x12(\n" +
 	"\rspecific_type\x18\x04 \x01(\tB\x03\xc8>\x01R\fspecificType\x12>\n" +
-	"\btemplate\x18\x02 \x01(\x0e2\".anduril.entitymanager.v1.TemplateR\btemplateJ\x04\b\x01\x10\x02R\vdescriptorsB\xac\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\rOntologyProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\btemplate\x18\x02 \x01(\x0e2\".anduril.entitymanager.v1.TemplateR\btemplateJ\x04\b\x01\x10\x02R\vdescriptorsB\xaf\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\rOntologyProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_ontology_pub_proto_rawDescOnce sync.Once

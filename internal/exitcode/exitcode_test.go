@@ -11,7 +11,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 func TestFromError_NilReturnsSuccess(t *testing.T) {

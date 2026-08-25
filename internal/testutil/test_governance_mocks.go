@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // MockReplayStore implements ReplayStore interface for testing.

@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	v2 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2"
+	v2 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -1578,8 +1578,8 @@ const file_anduril_tasks_v2_shared_isr_pub_proto_rawDesc = "" +
 	"\x15ORBIT_PATTERN_INVALID\x10\x00\x12\x18\n" +
 	"\x14ORBIT_PATTERN_CIRCLE\x10\x01\x12\x1b\n" +
 	"\x17ORBIT_PATTERN_RACETRACK\x10\x02\x12\x1e\n" +
-	"\x1aORBIT_PATTERN_FIGURE_EIGHT\x10\x03Bk\n" +
-	"\x14com.anduril.tasks.v2P\x01ZQgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
+	"\x1aORBIT_PATTERN_FIGURE_EIGHT\x10\x03Bn\n" +
+	"\x14com.anduril.tasks.v2P\x01ZTgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_shared_isr_pub_proto_rawDescOnce sync.Once

@@ -11,8 +11,8 @@ import (
 	"crypto/tls"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/httpclient"
+	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 )
 
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.

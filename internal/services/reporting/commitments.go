@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 func reportCommitments(ctx context.Context, outDir string, cl *storage.CommitmentLedger) (FileResult, error) {

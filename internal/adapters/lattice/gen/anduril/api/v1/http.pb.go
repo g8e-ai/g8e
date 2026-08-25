@@ -695,8 +695,8 @@ const file_anduril_api_v1_http_proto_rawDesc = "" +
 	"\x0eMessageOptions\x12\x1f\n" +
 	"\vschema_name\x18\x01 \x01(\tR\n" +
 	"schemaName\x12%\n" +
-	"\x0eforce_generate\x18\x02 \x01(\bR\rforceGenerateBu\n" +
-	"\x0fcom.anduril.apiB\tHttpProtoP\x01ZNgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1;annotations\xa2\x02\x04AAPIb\x06proto3"
+	"\x0eforce_generate\x18\x02 \x01(\bR\rforceGenerateBx\n" +
+	"\x0fcom.anduril.apiB\tHttpProtoP\x01ZQgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1;annotations\xa2\x02\x04AAPIb\x06proto3"
 
 var (
 	file_anduril_api_v1_http_proto_rawDescOnce sync.Once

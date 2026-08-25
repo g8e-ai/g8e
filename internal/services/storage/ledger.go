@@ -23,9 +23,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	vault "github.com/g8e-ai/g8e/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	vault "github.com/g8e-ai/g8e/v2/internal/services/vault"
 )
 
 // ── Types ───────────────────────────────────────────────────────────────

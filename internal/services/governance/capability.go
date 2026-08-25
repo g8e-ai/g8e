@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // Capability is a just-in-time, single-action, self-dissolving permission derived

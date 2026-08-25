@@ -671,8 +671,8 @@ const file_anduril_ontology_v1_type_pub_proto_rawDesc = "" +
 	"\x15NATIONALITY_VENEZUELA\x10V\x12\x17\n" +
 	"\x13NATIONALITY_VIETNAM\x10G\x12\x15\n" +
 	"\x11NATIONALITY_YEMEN\x10[\x12\x18\n" +
-	"\x14NATIONALITY_ZIMBABWE\x10aBq\n" +
-	"\x1bcom.anduril.ontology.v1.apiP\x01ZPgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/ontology/v1;ontologyb\x06proto3"
+	"\x14NATIONALITY_ZIMBABWE\x10aBt\n" +
+	"\x1bcom.anduril.ontology.v1.apiP\x01ZSgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/ontology/v1;ontologyb\x06proto3"
 
 var (
 	file_anduril_ontology_v1_type_pub_proto_rawDescOnce sync.Once

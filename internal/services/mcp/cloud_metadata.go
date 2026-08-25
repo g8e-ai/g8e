@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // CloudMetadataTool provides cloud provider metadata detection and information for AWS, Azure, and GCP.

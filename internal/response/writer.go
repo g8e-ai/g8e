@@ -12,7 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // JSONRPCRequest represents a standard JSON-RPC 2.0 request.

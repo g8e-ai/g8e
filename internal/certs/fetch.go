@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FetchTrustBundle fetches the hub trust bundle from the given URL

@@ -79,8 +79,8 @@ const file_anduril_entitymanager_v1_rate_limit_pub_proto_rawDesc = "" +
 	"\n" +
 	"-anduril/entitymanager/v1/rate_limit.pub.proto\x12\x18anduril.entitymanager.v1\"G\n" +
 	"\tRateLimit\x12:\n" +
-	"\x1aupdate_per_entity_limit_ms\x18\x01 \x01(\rR\x16updatePerEntityLimitMsB\xad\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x0eRateLimitProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x1aupdate_per_entity_limit_ms\x18\x01 \x01(\rR\x16updatePerEntityLimitMsB\xb0\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x0eRateLimitProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_rate_limit_pub_proto_rawDescOnce sync.Once

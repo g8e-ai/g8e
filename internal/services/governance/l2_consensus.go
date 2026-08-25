@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
 )
 
 // L2ConsensusPolicy is the generic consensus policy consumed by the L4 Warden.

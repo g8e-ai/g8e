@@ -12,9 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // GovKit carries the governance context the scenarios need.

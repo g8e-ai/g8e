@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -883,8 +883,8 @@ const file_anduril_entitymanager_v1_entity_manager_api_pub_proto_rawDesc = "" +
 	"\tGetEntity\x12*.anduril.entitymanager.v1.GetEntityRequest\x1a+.anduril.entitymanager.v1.GetEntityResponse\x12s\n" +
 	"\x0eOverrideEntity\x12/.anduril.entitymanager.v1.OverrideEntityRequest\x1a0.anduril.entitymanager.v1.OverrideEntityResponse\x12\x85\x01\n" +
 	"\x14RemoveEntityOverride\x125.anduril.entitymanager.v1.RemoveEntityOverrideRequest\x1a6.anduril.entitymanager.v1.RemoveEntityOverrideResponse\x12\x8d\x01\n" +
-	"\x16StreamEntityComponents\x127.anduril.entitymanager.v1.StreamEntityComponentsRequest\x1a8.anduril.entitymanager.v1.StreamEntityComponentsResponse0\x01B\xb4\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x15EntityManagerApiProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x16StreamEntityComponents\x127.anduril.entitymanager.v1.StreamEntityComponentsRequest\x1a8.anduril.entitymanager.v1.StreamEntityComponentsResponse0\x01B\xb7\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x15EntityManagerApiProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_entity_manager_api_pub_proto_rawDescOnce sync.Once

@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/internal/timesvc"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
 // DocumentStoreService provides collection/ID-based document CRUD operations.

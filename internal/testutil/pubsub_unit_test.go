@@ -18,7 +18,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/httpclient"
+	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )

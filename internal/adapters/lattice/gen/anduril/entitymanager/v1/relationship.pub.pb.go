@@ -502,8 +502,8 @@ const file_anduril_entitymanager_v1_relationship_pub_proto_rawDesc = "" +
 	"\vGroupParent\"\f\n" +
 	"\n" +
 	"MergedFrom\"\x0e\n" +
-	"\fActiveTargetB\xb0\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x11RelationshipProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\fActiveTargetB\xb3\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x11RelationshipProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_relationship_pub_proto_rawDescOnce sync.Once

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 type testEntry struct {

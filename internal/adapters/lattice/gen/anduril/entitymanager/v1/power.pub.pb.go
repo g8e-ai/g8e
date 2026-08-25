@@ -412,9 +412,9 @@ const file_anduril_entitymanager_v1_power_pub_proto_rawDesc = "" +
 	"\x12POWER_TYPE_INVALID\x10\x00\x12\x16\n" +
 	"\x12POWER_TYPE_UNKNOWN\x10\x01\x12\x12\n" +
 	"\x0ePOWER_TYPE_GAS\x10\x02\x12\x16\n" +
-	"\x12POWER_TYPE_BATTERY\x10\x03B\xa9\x01\n" +
+	"\x12POWER_TYPE_BATTERY\x10\x03B\xac\x01\n" +
 	"\x1ccom.anduril.entitymanager.v1B\n" +
-	"PowerProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"PowerProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_power_pub_proto_rawDescOnce sync.Once

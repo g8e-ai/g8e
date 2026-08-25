@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 func TestApiKeyNote(t *testing.T) {

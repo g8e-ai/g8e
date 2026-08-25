@@ -7,7 +7,7 @@
 package tasks
 
 import (
-	v1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1"
+	v1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -359,8 +359,8 @@ const file_anduril_tasks_v2_shared_agent_plan_graph_pub_proto_rawDesc = "" +
 	"\n" +
 	"Sequential\x125\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x1f.anduril.tasks.v2.AgentPlanTaskR\x05tasksB\a\n" +
-	"\x05modelBk\n" +
-	"\x14com.anduril.tasks.v2P\x01ZQgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
+	"\x05modelBn\n" +
+	"\x14com.anduril.tasks.v2P\x01ZTgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/tasks/v2/shared;tasksb\x06proto3"
 
 var (
 	file_anduril_tasks_v2_shared_agent_plan_graph_pub_proto_rawDescOnce sync.Once

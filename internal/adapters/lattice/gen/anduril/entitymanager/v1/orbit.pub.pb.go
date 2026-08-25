@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -73,9 +73,9 @@ const file_anduril_entitymanager_v1_orbit_pub_proto_rawDesc = "" +
 	"\n" +
 	"(anduril/entitymanager/v1/orbit.pub.proto\x12\x18anduril.entitymanager.v1\x1a\x1canduril/type/orbit.pub.proto\"X\n" +
 	"\x05Orbit\x12O\n" +
-	"\x13orbit_mean_elements\x18\x01 \x01(\v2\x1f.anduril.type.OrbitMeanElementsR\x11orbitMeanElementsB\xa9\x01\n" +
+	"\x13orbit_mean_elements\x18\x01 \x01(\v2\x1f.anduril.type.OrbitMeanElementsR\x11orbitMeanElementsB\xac\x01\n" +
 	"\x1ccom.anduril.entitymanager.v1B\n" +
-	"OrbitProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"OrbitProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_orbit_pub_proto_rawDescOnce sync.Once

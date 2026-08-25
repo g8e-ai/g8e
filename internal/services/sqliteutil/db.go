@@ -19,7 +19,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // DBConfig holds common configuration for opening a SQLite database.
