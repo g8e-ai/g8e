@@ -74,9 +74,9 @@ type GatewayWebSocketHandler struct {
 	// recorded in the gateway's SQLAuditStore, and the envelope is fanned
 	// out to subscribers. When nil (the default), the receipts: relay path
 	// is disabled and publishes to receipts: are rejected fail-closed.
-	receiptRelayMu        sync.RWMutex
-	receiptSignerStore    governance.SignerStore
-	receiptAuditRecorder  ReceiptRecorder
+	receiptRelayMu       sync.RWMutex
+	receiptSignerStore   governance.SignerStore
+	receiptAuditRecorder ReceiptRecorder
 }
 
 // ReceiptRecorder is the narrow interface wrapping

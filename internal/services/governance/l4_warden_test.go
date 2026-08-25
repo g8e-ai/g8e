@@ -51,7 +51,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		l3Notary,
 		NewL1Doctrine(),          // doctrine required
 		constants.AllActionTypes, // Use SSOT for action types
-		nil, // Clock defaults to RealClock
+		nil,                      // Clock defaults to RealClock
 	), privKey
 }
 

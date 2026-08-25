@@ -493,7 +493,7 @@ func TestSetReceiptRelayDeps(t *testing.T) {
 	assert.Nil(t, broker.receiptAuditRecorder, "recorder must be nil before SetReceiptRelayDeps")
 	broker.receiptRelayMu.RUnlock()
 
-	signerStore := &stubSignerStore{keys: map[string]ed25519.PublicKey{"k1": ed25519.PublicKey{1, 2, 3}}}
+	signerStore := &stubSignerStore{keys: map[string]ed25519.PublicKey{"k1": {1, 2, 3}}}
 	recorder := &stubReceiptRecorder{}
 	broker.SetReceiptRelayDeps(signerStore, recorder)
 

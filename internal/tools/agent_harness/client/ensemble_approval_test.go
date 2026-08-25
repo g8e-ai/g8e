@@ -32,10 +32,10 @@ import (
 func newApprovalTestClient(t *testing.T, ensembleURL string) *Client {
 	t.Helper()
 	c, err := New(config.Config{
-		MTLSBaseURL:    ensembleURL,
-		PublicBaseURL:  ensembleURL,
+		MTLSBaseURL:     ensembleURL,
+		PublicBaseURL:   ensembleURL,
 		EnsembleBaseURL: ensembleURL,
-		Auth:           config.Auth{},
+		Auth:            config.Auth{},
 	})
 	require.NoError(t, err)
 	return c
@@ -47,10 +47,10 @@ func newApprovalTestClient(t *testing.T, ensembleURL string) *Client {
 func buildSSEData(t *testing.T, eventType string, approvalID string, extraData map[string]any) string {
 	t.Helper()
 	dataMap := map[string]any{
-		"approval_id": approvalID,
-		"user_id":     "user-123",
-		"cli_session_id": "cli-session-123",
-		"case_id":         "case-123",
+		"approval_id":      approvalID,
+		"user_id":          "user-123",
+		"cli_session_id":   "cli-session-123",
+		"case_id":          "case-123",
 		"investigation_id": "inv-123",
 	}
 	for k, v := range extraData {
@@ -99,8 +99,8 @@ func TestHandleSSEEvent_FileEditApprovalDispatchesApproval(t *testing.T) {
 
 	c := newApprovalTestClient(t, srv.URL)
 	ap := NewApprovalAutoApprover(c, Persona{
-		ID:          "test",
-		UserID:      "user-123",
+		ID:           "test",
+		UserID:       "user-123",
 		CLISessionID: "cli-session-123",
 	}, srv.URL)
 
@@ -133,11 +133,11 @@ func TestHandleSSEEvent_BoundOperatorStampsContext(t *testing.T) {
 
 	c := newApprovalTestClient(t, srv.URL)
 	ap := NewApprovalAutoApprover(c, Persona{
-		ID:                 "test",
-		UserID:             "user-123",
-		CLISessionID:       "cli-session-123",
-		OperatorID:         "operator-456",
-		OperatorSessionID:  "operator-session-789",
+		ID:                "test",
+		UserID:            "user-123",
+		CLISessionID:      "cli-session-123",
+		OperatorID:        "operator-456",
+		OperatorSessionID: "operator-session-789",
 	}, srv.URL)
 
 	ap.handleSSEEvent("", buildSSEData(t, FileEditApprovalEventType, "approval-1", nil))
@@ -330,8 +330,8 @@ func TestRespondApproval_PersonaFallback(t *testing.T) {
 
 	c := newApprovalTestClient(t, srv.URL)
 	ap := NewApprovalAutoApprover(c, Persona{
-		ID:          "test",
-		UserID:      "persona-user",
+		ID:           "test",
+		UserID:       "persona-user",
 		CLISessionID: "persona-cli",
 	}, srv.URL)
 

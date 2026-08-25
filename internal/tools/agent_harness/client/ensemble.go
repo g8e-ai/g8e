@@ -25,19 +25,19 @@ import (
 // overrides. The harness fills the context from the persona and GovKit so
 // scenarios do not construct it by hand.
 type EnsembleChatRequest struct {
-	Context               EnsembleRequestContext    `json:"context"`
-	Message               string                    `json:"message"`
-	SentinelMode          bool                      `json:"sentinel_mode"`
-	ResourceCreation      *EnsembleResourceCreation `json:"resource_creation,omitempty"`
-	LLMPrimaryProvider    string                    `json:"llm_primary_provider,omitempty"`
-	LLMPrimaryModel       string                    `json:"llm_primary_model,omitempty"`
-	LLMPrimaryEndpoint    string                    `json:"llm_primary_endpoint,omitempty"`
-	LLMAssistantProvider  string                    `json:"llm_assistant_provider,omitempty"`
-	LLMAssistantModel     string                    `json:"llm_assistant_model,omitempty"`
-	LLMAssistantEndpoint  string                    `json:"llm_assistant_endpoint,omitempty"`
-	LLMLiteProvider       string                    `json:"llm_lite_provider,omitempty"`
-	LLMLiteModel          string                    `json:"llm_lite_model,omitempty"`
-	LLMLiteEndpoint       string                    `json:"llm_lite_endpoint,omitempty"`
+	Context              EnsembleRequestContext    `json:"context"`
+	Message              string                    `json:"message"`
+	SentinelMode         bool                      `json:"sentinel_mode"`
+	ResourceCreation     *EnsembleResourceCreation `json:"resource_creation,omitempty"`
+	LLMPrimaryProvider   string                    `json:"llm_primary_provider,omitempty"`
+	LLMPrimaryModel      string                    `json:"llm_primary_model,omitempty"`
+	LLMPrimaryEndpoint   string                    `json:"llm_primary_endpoint,omitempty"`
+	LLMAssistantProvider string                    `json:"llm_assistant_provider,omitempty"`
+	LLMAssistantModel    string                    `json:"llm_assistant_model,omitempty"`
+	LLMAssistantEndpoint string                    `json:"llm_assistant_endpoint,omitempty"`
+	LLMLiteProvider      string                    `json:"llm_lite_provider,omitempty"`
+	LLMLiteModel         string                    `json:"llm_lite_model,omitempty"`
+	LLMLiteEndpoint      string                    `json:"llm_lite_endpoint,omitempty"`
 }
 
 // EnsembleBoundOperator mirrors the Python BoundOperator model in the
