@@ -9,7 +9,7 @@ syntax = "proto3";
 
 package g8e.pubsub.v1;
 
-option go_package = "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1;pubsubv1";
+option go_package = "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/pubsub/v1;pubsubv1";
 
 // PubSubMessage is the client-to-server WebSocket frame for pub/sub operations.
 // Clients send this message to subscribe, unsubscribe, or publish on a channel.

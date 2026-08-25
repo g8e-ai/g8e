@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/cli/serve"
+	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
 )
 
 // versionCmd reports g8e build metadata. With --fips it additionally runs a

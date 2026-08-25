@@ -7,8 +7,8 @@
 package entitymanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -530,8 +530,8 @@ const file_anduril_entitymanager_v1_location_pub_proto_rawDesc = "" +
 	"\x03myy\x18\x04 \x01(\x02R\x03myy\x12\x10\n" +
 	"\x03myz\x18\x05 \x01(\x02R\x03myz\x12\x10\n" +
 	"\x03mzz\x18\x06 \x01(\x02R\x03mzz:\x19\xfa\xb4\x18\x15\n" +
-	"\x13EntityManager.TMat3B\xac\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\rLocationProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x13EntityManager.TMat3B\xaf\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\rLocationProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_location_pub_proto_rawDescOnce sync.Once

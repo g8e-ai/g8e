@@ -11,7 +11,7 @@ package exitcode
 import (
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FromError analyzes an error and returns the appropriate exit code.

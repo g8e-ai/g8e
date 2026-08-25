@@ -16,7 +16,7 @@ import (
 	"os"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 // Posture is the Gateway enforcement mode a scenario needs.

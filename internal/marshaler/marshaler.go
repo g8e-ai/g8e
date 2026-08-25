@@ -25,7 +25,7 @@
 package marshaler
 
 import (
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // CollectionName converts a CollectionName constant to string for database operations.

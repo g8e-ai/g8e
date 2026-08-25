@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/g8e-ai/g8e/internal/services/fs"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/internal/services/vault"
-	"github.com/g8e-ai/g8e/internal/timesvc"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/pathutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/services/vault"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 )
 
 // AuditStoreConfig holds configuration for the SQL audit store

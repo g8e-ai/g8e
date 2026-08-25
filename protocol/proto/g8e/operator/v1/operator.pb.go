@@ -14,7 +14,7 @@
 package operatorv1
 
 import (
-	_ "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	_ "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	structpb "google.golang.org/protobuf/types/known/structpb"
@@ -8979,7 +8979,7 @@ const file_g8e_operator_v1_operator_proto_rawDesc = "" +
 	"\rCancelCommand\x12'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n" +
 	"\bEditFile\x12\".g8e.operator.v1.FileEditRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n" +
 	"\x0eListFileSystem\x12 .g8e.operator.v1.FsListRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n" +
-	"\x0eReadFileSystem\x12 .g8e.operator.v1.FsReadRequested\x1a\x1e.g8e.operator.v1.CommandResultBAZ?github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1;operatorv1b\x06proto3"
+	"\x0eReadFileSystem\x12 .g8e.operator.v1.FsReadRequested\x1a\x1e.g8e.operator.v1.CommandResultBDZBgithub.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1;operatorv1b\x06proto3"
 
 var (
 	file_g8e_operator_v1_operator_proto_rawDescOnce sync.Once

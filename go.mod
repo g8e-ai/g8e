@@ -1,4 +1,4 @@
-module github.com/g8e-ai/g8e
+module github.com/g8e-ai/g8e/v2
 
 go 1.26.6
 

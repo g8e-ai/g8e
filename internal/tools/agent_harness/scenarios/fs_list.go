@@ -10,7 +10,7 @@ package scenarios
 import (
 	"encoding/json"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
 // fsListArgs builds the fs_list arguments_json string using proper JSON

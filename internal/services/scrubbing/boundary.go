@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 // tokenPattern matches {{UEI_N}} placeholders in rehydration.

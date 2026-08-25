@@ -10,7 +10,7 @@ package gateway
 import (
 	"net/http"
 
-	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 )
 
 // MCPController handles MCP/A2A ingress endpoints. It is a thin wrapper around

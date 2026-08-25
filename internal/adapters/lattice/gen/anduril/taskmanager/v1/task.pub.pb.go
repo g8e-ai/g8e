@@ -7,8 +7,8 @@
 package taskmanager
 
 import (
-	_ "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/api/v1"
-	v1 "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1"
+	_ "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/api/v1"
+	v1 "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	anypb "google.golang.org/protobuf/types/known/anypb"
@@ -2106,8 +2106,8 @@ const file_anduril_taskmanager_v1_task_pub_proto_rawDesc = "" +
 	"\x1bDELIVERY_ERROR_CODE_INVALID\x10\x00\x12#\n" +
 	"\x1fDELIVERY_ERROR_CODE_UNAVAILABLE\x10\x01\x12\x1f\n" +
 	"\x1bDELIVERY_ERROR_CODE_TIMEOUT\x10\x02\x12 \n" +
-	"\x1cDELIVERY_ERROR_CODE_REJECTED\x10\x03B\xa0\x01\n" +
-	"\x1acom.anduril.taskmanager.v1B\tTaskProtoP\x01ZVgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
+	"\x1cDELIVERY_ERROR_CODE_REJECTED\x10\x03B\xa3\x01\n" +
+	"\x1acom.anduril.taskmanager.v1B\tTaskProtoP\x01ZYgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/taskmanager/v1;taskmanager\xa2\x02\x03ATX\xaa\x02\x16Anduril.Taskmanager.V1b\x06proto3"
 
 var (
 	file_anduril_taskmanager_v1_task_pub_proto_rawDescOnce sync.Once

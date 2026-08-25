@@ -10,7 +10,7 @@ package models
 import (
 	"time"
 
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 type ExecutionRequestPayload struct {

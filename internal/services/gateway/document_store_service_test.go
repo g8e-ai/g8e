@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
-	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/internal/timesvc"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	"github.com/g8e-ai/g8e/v2/internal/timesvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -17,7 +17,7 @@ buf export buf.build/anduril/lattice-sdk:<commit> --output third_party/anduril/
 
 All `go_package` options have been remapped from the original
 `ghe.anduril.dev/anduril/andurilapis-go/` to
-`github.com/g8e-ai/g8e/internal/adapters/lattice/gen/` so that generated code
+`github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/` so that generated code
 lands in the g8e module.
 
 ## Directory Structure
@@ -81,7 +81,7 @@ buf registry module commit list buf.build/anduril/lattice-sdk
 # 2. Export and remap go_package options
 buf export buf.build/anduril/lattice-sdk:<new-commit> --output third_party/anduril/
 find third_party/anduril -name '*.proto' -exec sed -i \
-    's|ghe.anduril.dev/anduril/andurilapis-go/|github.com/g8e-ai/g8e/internal/adapters/lattice/gen/|g' {} +
+    's|ghe.anduril.dev/anduril/andurilapis-go/|github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/|g' {} +
 
 # 3. Regenerate stubs
 rm -rf internal/adapters/lattice/gen

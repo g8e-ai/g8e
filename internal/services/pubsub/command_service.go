@@ -15,13 +15,13 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
-	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
+	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
+	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // StatusUpdateInterval is the interval between periodic status updates during long-running commands.

@@ -142,8 +142,8 @@ const file_anduril_entitymanager_v1_symbology_pub_proto_rawDesc = "" +
 	"\n" +
 	"\bstandard\"!\n" +
 	"\vMilStd2525C\x12\x12\n" +
-	"\x04sidc\x18\x01 \x01(\tR\x04sidcB\xad\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x0eSymbologyProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x04sidc\x18\x01 \x01(\tR\x04sidcB\xb0\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x0eSymbologyProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_symbology_pub_proto_rawDescOnce sync.Once

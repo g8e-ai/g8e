@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 )
 
 func reportLedgerMerkleRoot(ctx context.Context, outDir string, ledger *storage.GitLedgerService) (FileResult, error) {

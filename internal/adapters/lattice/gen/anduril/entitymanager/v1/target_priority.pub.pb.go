@@ -271,8 +271,8 @@ const file_anduril_entitymanager_v1_target_priority_pub_proto_rawDesc = "" +
 	"\x19high_value_target_list_id\x18\x01 \x01(\tR\x15highValueTargetListId\x12F\n" +
 	" high_value_target_description_id\x18\x02 \x01(\tR\x1chighValueTargetDescriptionId\"%\n" +
 	"\x06Threat\x12\x1b\n" +
-	"\tis_threat\x18\x01 \x01(\bR\bisThreatB\xb2\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x13TargetPriorityProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\tis_threat\x18\x01 \x01(\bR\bisThreatB\xb5\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x13TargetPriorityProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_target_priority_pub_proto_rawDescOnce sync.Once

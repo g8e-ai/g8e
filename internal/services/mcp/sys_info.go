@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // SysInfoTool provides system information including hostname, OS version, kernel, uptime, and load average.

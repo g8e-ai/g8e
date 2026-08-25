@@ -13,7 +13,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // browserCommandExecutor is an interface for executing commands, allowing dependency injection for testing.

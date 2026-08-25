@@ -7,7 +7,7 @@
 package entitymanager
 
 import (
-	_type "github.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type"
+	_type "github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
@@ -1047,8 +1047,8 @@ const file_anduril_entitymanager_v1_geoentity_pub_proto_rawDesc = "" +
 	"\x1dCONTROL_AREA_TYPE_LOITER_ZONE\x10\a*N\n" +
 	"\rACMDetailType\x12\x1b\n" +
 	"\x17ACM_DETAIL_TYPE_INVALID\x10\x00\x12 \n" +
-	"\x1cACM_DETAIL_TYPE_LANDING_ZONE\x10\x10B\xad\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x0eGeoentityProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x1cACM_DETAIL_TYPE_LANDING_ZONE\x10\x10B\xb0\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x0eGeoentityProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_geoentity_pub_proto_rawDescOnce sync.Once

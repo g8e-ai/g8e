@@ -83,8 +83,8 @@ const file_anduril_entitymanager_v1_route_details_pub_proto_rawDesc = "" +
 	"0anduril/entitymanager/v1/route_details.pub.proto\x12\x18anduril.entitymanager.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8b\x01\n" +
 	"\fRouteDetails\x12)\n" +
 	"\x10destination_name\x18\x01 \x01(\tR\x0fdestinationName\x12P\n" +
-	"\x16estimated_arrival_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x14estimatedArrivalTimeB\xb0\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\x11RouteDetailsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x16estimated_arrival_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x14estimatedArrivalTimeB\xb3\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\x11RouteDetailsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_route_details_pub_proto_rawDescOnce sync.Once

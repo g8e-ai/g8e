@@ -23,8 +23,8 @@ import (
 	"github.com/pkg/sftp"
 	sshlib "golang.org/x/crypto/ssh"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/pkg/ssh"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/pkg/ssh"
 )
 
 // OperatorDeployTool deploys the g8e operator to remote hosts.

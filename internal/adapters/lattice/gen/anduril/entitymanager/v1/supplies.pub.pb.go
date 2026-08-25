@@ -271,8 +271,8 @@ const file_anduril_entitymanager_v1_supplies_pub_proto_rawDesc = "" +
 	"\x1foperational_requirement_gallons\x18\x06 \x01(\rR\x1doperationalRequirementGallons\x12Y\n" +
 	"\x13data_classification\x18\a \x01(\v2(.anduril.entitymanager.v1.ClassificationR\x12dataClassification\x12\x1f\n" +
 	"\vdata_source\x18\b \x01(\tR\n" +
-	"dataSourceB\xac\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\rSuppliesProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"dataSourceB\xaf\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\rSuppliesProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var (
 	file_anduril_entitymanager_v1_supplies_pub_proto_rawDescOnce sync.Once

@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/security"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 )
 
 // SysOOMDetectTool scans system logs for OOM killer events.

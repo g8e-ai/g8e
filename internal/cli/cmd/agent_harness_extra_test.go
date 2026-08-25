@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
-	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

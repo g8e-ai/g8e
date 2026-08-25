@@ -12,7 +12,7 @@ import (
 	"crypto/x509"
 	"sync"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // FIPSCurvePreferences returns the FIPS 140-3 compliant TLS key agreement

@@ -58,8 +58,8 @@ const file_anduril_entitymanager_v1_options_pub_proto_rawDesc = "" +
 	"\n" +
 	"*anduril/entitymanager/v1/options.pub.proto\x12\x18anduril.entitymanager.v1\x1a google/protobuf/descriptor.proto:@\n" +
 	"\voverridable\x12\x1d.google.protobuf.FieldOptions\x18\xe9\a \x01(\bR\voverridable:P\n" +
-	"\x13componentIdentifier\x12\x1d.google.protobuf.FieldOptions\x18\xea\a \x01(\bR\x13componentIdentifierB\xab\x01\n" +
-	"\x1ccom.anduril.entitymanager.v1B\fOptionsProtoP\x01ZZgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
+	"\x13componentIdentifier\x12\x1d.google.protobuf.FieldOptions\x18\xea\a \x01(\bR\x13componentIdentifierB\xae\x01\n" +
+	"\x1ccom.anduril.entitymanager.v1B\fOptionsProtoP\x01Z]github.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/entitymanager/v1;entitymanager\xa2\x02\x03AEX\xaa\x02\x18Anduril.Entitymanager.V1b\x06proto3"
 
 var file_anduril_entitymanager_v1_options_pub_proto_goTypes = []any{
 	(*descriptorpb.FieldOptions)(nil), // 0: google.protobuf.FieldOptions

@@ -8,8 +8,8 @@
 package gateway
 
 import (
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func validatePlatformEnrollmentTransition(from, to models.PlatformEnrollmentState) error {

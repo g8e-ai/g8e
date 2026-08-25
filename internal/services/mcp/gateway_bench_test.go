@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/v2/internal/response"
 )
 
 // BenchmarkJSONRPCUnmarshal benchmarks JSON-RPC request parsing, which happens

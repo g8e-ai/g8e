@@ -2383,8 +2383,8 @@ const file_anduril_type_coords_pub_proto_rawDesc = "" +
 	"\x03myy\x18\x03 \x01(\x01R\x03myy\"|\n" +
 	"\x0eRigidTransform\x124\n" +
 	"\brotation\x18\x03 \x01(\v2\x18.anduril.type.QuaternionR\brotation\x124\n" +
-	"\vtranslation\x18\x04 \x01(\v2\x12.anduril.type.Vec3R\vtranslationB]\n" +
-	"\x10com.anduril.typeP\x01ZGgithub.com/g8e-ai/g8e/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
+	"\vtranslation\x18\x04 \x01(\v2\x12.anduril.type.Vec3R\vtranslationB`\n" +
+	"\x10com.anduril.typeP\x01ZJgithub.com/g8e-ai/g8e/v2/internal/adapters/lattice/gen/anduril/type;atypesb\x06proto3"
 
 var (
 	file_anduril_type_coords_pub_proto_rawDescOnce sync.Once
