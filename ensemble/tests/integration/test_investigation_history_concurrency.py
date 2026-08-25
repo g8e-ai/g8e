@@ -6,7 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,7 +26,7 @@ def mock_cache_aside_service():
 
 @pytest.fixture
 def service(mock_cache_aside_service):
-    return InvestigationDataService(mock_cache_aside_service, MagicMock())
+    return InvestigationDataService(mock_cache_aside_service, AsyncMock())
 
 
 @pytest.mark.asyncio

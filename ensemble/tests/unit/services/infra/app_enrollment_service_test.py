@@ -710,7 +710,9 @@ class TestEnrollPlatformEnrollment:
         proof = service._sign_transcript(private_key, transcript)
 
         # Decode the base64url proof and verify it as an ASN.1 DER ECDSA signature.
-        signature = base64.urlsafe_b64decode(proof)
+        # _sign_transcript strips "=" padding to match Go's base64.RawURLEncoding,
+        # so re-pad before decoding with Python's urlsafe_b64decode.
+        signature = base64.urlsafe_b64decode(proof + "=" * (-len(proof) % 4))
         digest = hashes.Hash(hashes.SHA256())
         digest.update(transcript)
         digest_bytes = digest.finalize()
