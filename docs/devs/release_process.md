@@ -97,11 +97,16 @@ For every renamed, removed, or changed identifier, search the docs:
 # Search docs for identifiers that were removed or renamed
 grep -rnE 'OldName|old_command|OLD_CONSTANT|removedEndpoint' docs/ protocol/docs/ --include='*.md'
 
+# Find docs with explicit g8e version callouts (go get, pip install, pip download) that
+# reference the previous release version. These must be updated every release.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md --include='*.md' \
+  | grep -v release_notes | grep -v CHANGELOG
+
 # Check which docs were modified in the release range
 git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/
 ```
 
-Any doc that references something that was removed or renamed is stale and must be updated. Any doc that should document a new feature but doesn't is missing and must be added.
+Any doc that references something that was removed or renamed is stale and must be updated. Any doc that should document a new feature but doesn't is missing and must be added. Any doc with a version callout referencing the previous release version must be updated to the new release version, regardless of whether it was touched by a code change.
 
 ---
 
@@ -116,11 +121,12 @@ This is the core work of a release. The change inventory from the previous secti
 1. **Inaccuracy**: The doc describes something that is no longer true (a renamed command, a removed endpoint, a changed default, a corrected behavior). Fix the inaccurate prose so it matches the code.
 2. **Missing feature**: The release adds a user-visible feature, command, endpoint, or config option that has no documentation at all. Add the missing documentation.
 3. **Stale reference**: The doc references something that was removed or renamed in this release (e.g., a deprecated alias, a deleted route, a renamed constant, a deleted file). Remove or update the reference.
+4. **Stale version callout**: The doc contains an explicit version callout — a `go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`, or any other install/fetch command that pins a specific release version — that references the previous release version. These callouts are version-bearing content and must be updated to the new release version in every release, regardless of whether the doc was touched by a code change. Bump the doc's `Version:`/`Last Updated:` headers in the same pass since the content changed.
 
 **Do NOT update a doc when:**
 
 - The doc is already accurate; even if the underlying code was refactored internally, if the user-facing behavior and interface are unchanged, the doc is fine as-is.
-- The doc wasn't touched by any code change in this release; leave its version header and content alone.
+- The doc wasn't touched by any code change in this release and contains no stale version callouts; leave its version header and content alone.
 - You're tempted to "improve" prose that isn't wrong; cosmetic rewrites are not part of the release process.
 
 > **Principle: Fix what's broken, document what's missing, leave the rest alone.** The goal is accuracy, not thoroughness. A doc that correctly describes the current behavior is done; don't rewrite it just because you read it.
@@ -138,7 +144,7 @@ Review the following documentation areas against the change inventory. For each 
 
 ### How to Reconcile
 
-For each doc that falls in scope (any doc touched by a code change in the release, or any doc that references an identifier that was renamed, removed, or changed), do a **full review of the entire doc against the current code** — not just the specific stale reference that flagged it. Read the whole file, verify every claim, command, path, signature, and behavior description against the actual source, and update everything that is inaccurate or missing. The version header bump is part of this review, not a separate mechanical step: a doc whose content was reviewed and updated gets its `Version:` and `Last Updated:` headers bumped in the same pass.
+For each doc that falls in scope (any doc touched by a code change in the release, any doc that references an identifier that was renamed, removed, or changed, or any doc that contains a stale version callout per condition 4 above), do a **full review of the entire doc against the current code** — not just the specific stale reference that flagged it. Read the whole file, verify every claim, command, path, signature, and behavior description against the actual source, and update everything that is inaccurate or missing. The version header bump is part of this review, not a separate mechanical step: a doc whose content was reviewed and updated gets its `Version:` and `Last Updated:` headers bumped in the same pass.
 
 1. Open the doc file
 2. Read the entire doc end to end, checking every statement against the current code
@@ -391,13 +397,13 @@ The following doc directories intentionally do **not** carry release `Version:` 
 `make release` handles version syncing, tagging, and pushing (see [Release Workflow](#release-workflow)). The following must still be done manually:
 
 - [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
-- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, or referencing a renamed/removed/changed identifier), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
+- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. `VERSION`**: Set to `vX.Y.Z`
 - [ ] **5. Sync Python files**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`) and `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`) to match `VERSION` (no `v` prefix). This is required so CI's version sync check passes on the PR. The agent edits these files manually; it cannot run `make release` to do it. `make release` re-syncs them after merge as a no-op safety net.
 - [ ] **6. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
 - [ ] **7. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
-- [ ] **8. Run [Verification](#verification)** to catch any missed files
+- [ ] **8. Run [Verification](#verification)** to catch any missed files — including stale version callouts (step 8 of Verification)
 - [ ] **9. Hand off**: The agent stops here. It does NOT `git add`, `git commit`, `git push`, open a PR, or run `make release`. The prepared working tree is handed back to the release owner.
 - [ ] **10. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **11. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
@@ -451,9 +457,21 @@ grep -rniE '^(\*\*)?last updated:' docs/ protocol/docs/ --include='*.md' --exclu
 # 7. Verify no stale references remain; grep for identifiers that were removed or
 #    renamed in this release and confirm no docs still reference them.
 grep -rnE 'OldName|old_command|OLD_CONSTANT' docs/ protocol/docs/ --include='*.md'
+
+# 8. Find any explicit g8e version callouts in docs that still reference a
+#    previous release version. These are install/fetch commands like
+#    `go get github.com/g8e-ai/g8e/v2@vX.Y.Z`, `pip install g8e==X.Y.Z`, and
+#    `pip download g8e==X.Y.Z`. Every such callout must be updated to the new
+#    release version in every release, regardless of whether the doc was touched
+#    by a code change. Should return nothing. Third-party tool version pins
+#    (e.g., `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`) are not g8e
+#    callouts and are excluded by the pattern.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md --include='*.md' \
+  | grep -v release_notes | grep -v CHANGELOG \
+  | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set both to `X.Y.Z` matching `VERSION`) before handing off to the release owner. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing.
+If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set both to `X.Y.Z` matching `VERSION`) before handing off to the release owner. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
 
 ---
 
