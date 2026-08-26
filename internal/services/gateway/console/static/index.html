@@ -132,6 +132,19 @@ main { flex: 1; padding: 24px; max-width: 720px; margin: 0 auto; width: 100%; }
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
 }
 .code-box code { flex: 1; user-select: all; }
+.collapsible-section { border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; background: var(--bg); }
+.collapsible-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; cursor: pointer; user-select: none; font-size: 0.85rem;
+  font-weight: 600; color: var(--text);
+}
+.collapsible-header:hover { background: rgba(88,166,255,0.06); }
+.collapsible-header .chevron {
+  font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; flex-shrink: 0;
+}
+.collapsible-section.expanded .collapsible-header .chevron { transform: rotate(90deg); }
+.collapsible-content { display: none; padding: 0 12px 12px; }
+.collapsible-section.expanded .collapsible-content { display: block; }
 footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
 </style>
 </head>
@@ -882,11 +895,19 @@ function renderOperatorDownloadsCard() {
   );
   card.appendChild(quickSection);
 
-  // Individual platform binaries
-  var binSection = el('div', null,
-    el('div', {style:'font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text)'}, 'Platform Binaries')
+  // Individual platform binaries — collapsible, collapsed by default.
+  var binSection = el('div', {className:'collapsible-section'},
+    el('div', {
+      className: 'collapsible-header',
+      onclick: function() { this.parentElement.classList.toggle('expanded'); }
+    },
+      el('span', null, 'Platform Binaries'),
+      el('span', {className: 'chevron'}, '\u25B6')
+    ),
+    el('div', {className: 'collapsible-content'})
   );
 
+  var binList = binSection.querySelector('.collapsible-content');
   operatorBinaries.forEach(function(b) {
     var downloadPath = '/.well-known/g8e/bin/' + b.filename;
     var fullDownloadUrl = httpOrigin + downloadPath;
@@ -913,7 +934,7 @@ function renderOperatorDownloadsCard() {
       headerRow,
       buildCodeBox(runCmd)
     );
-    binSection.appendChild(item);
+    binList.appendChild(item);
   });
 
   card.appendChild(binSection);
