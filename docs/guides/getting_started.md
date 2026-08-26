@@ -37,13 +37,23 @@ docker compose up -d --build
 
 `docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 (HTTP discovery, MCP) and port 8443 (HTTPS/mTLS, Web Console). Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and wait for owner enrollment before starting.
 
-### 2. Extract the CLI binary
+### 2. Get the CLI binary
 
-Copy the compiled CLI binary from the running gateway container to your host:
+The CLI binary must run on the same workstation where you complete the browser-based WebAuthn passkey ceremony in Step 3, because `auth enroll user` opens a browser on the local machine. If your workstation with a browser is the same host where the gateway is running, copy the binary out of the gateway container:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
 ```
+
+If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that nodes can bootstrap before they hold credentials:
+
+```bash
+# From your workstation, targeting the gateway host's HTTP port
+curl -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-linux-amd64
+chmod +x g8e-linux-amd64
+```
+
+Replace `g8e-linux-amd64` with the binary matching your workstation platform. Available filenames follow the pattern `g8e-{linux,darwin,windows}-{amd64,arm64,386}` (with `.exe` appended for Windows), for example `g8e-darwin-arm64` for Apple Silicon macOS or `g8e-windows-amd64.exe` for Windows. If the gateway is fronted by HTTPS, swap the scheme and port accordingly.
 
 ### 3. Enroll the first owner
 
