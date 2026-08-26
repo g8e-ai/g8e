@@ -1,0 +1,131 @@
+# Build-context filter for the g8e Gateway/Operator image (root Dockerfile).
+#
+# The root Dockerfile builds the Go gateway/operator binary from the repo root
+# using vendored deps, then copies protocol/constants and docs/reference into
+# the runtime image. Everything else is dead weight (or worse — secrets and
+# local runtime state) and is excluded here.
+#
+# The polyglot services (ensemble, dashboard) build from the same context root
+# but carry their own per-Dockerfile ignore files (ensemble/Dockerfile.dockerignore,
+# dashboard/Dockerfile.dockerignore), which take precedence over this file under
+# BuildKit. This file therefore does not need to keep their source trees visible.
+
+# Git
+.git/
+.gitignore
+.gitmodules
+.gitattributes
+
+# IDE / editor / agent tooling
+.vscode/
+.idea/
+.windsurf/
+.claude/
+.devin/
+.gemini/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development / agent scratch
+.local.dev/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+__pycache__/
+.cache/
+
+# Polyglot build artifacts
+node_modules/
+coverage/
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.vitest-cache/
+
+# Go build artifacts
+build/
+bin/
+dist/
+target/
+*.o
+*.a
+*.so
+*.dylib
+*.test
+*.out
+*.manifest
+*.spec
+g8e
+g8e-fips
+buf
+operator
+go.work
+go.work.sum
+
+# Logs
+*.log
+*.logs
+logs/
+
+# Runtime state, secrets, and PKI that leaked into the source tree.
+# Matches .gitignore's **/.g8e* rule; covers .g8e and .g8e-test-tmp at any depth.
+**/.g8e*
+*.key
+*.pem
+*.crt
+*.secret
+*.p12
+*.pfx
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*-shm
+*-wal
+
+# Test results, auditor output, coverage reports
+test-results/
+auditor-out/
+reports/
+cover.out
+.coverage
+htmlcov/
+coverage.xml
+coverage.html
+coverage.txt
+
+# Polyglot services — built from their own per-Dockerfile ignore files, not
+# needed for the gateway/operator image.
+ensemble/
+dashboard/
+
+# Demos, evals, tests — not needed for platform deployment
+demos/
+evals/
+test/
+
+# Documentation — not needed at runtime except docs/reference (KSI catalog,
+# COSAiS overlays), which the root Dockerfile copies into the image for the
+# compliance CLI.
+docs/*
+!docs/reference/
+*.md
+!README.md
+
+# CI/CD, scripts, third-party reference, generated site — not needed in any
+# container.
+.github/
+scripts/
+third_party/
+.build/
+site/
+
+# Go vendor — REQUIRED in build context for air-gapped vendored builds.
+# (Do NOT exclude vendor/ or the Dockerfile COPY will fail.)

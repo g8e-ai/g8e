@@ -12,6 +12,8 @@ services:
       - ./doctrine:/etc/g8e/doctrine:ro
       - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
       - ./cloudop.sh:/usr/local/bin/cloudop:ro
+      - /etc/hosts:/etc/hosts.host:ro
+      - /etc/hostname:/etc/hostname.host:ro
     ports:
       - "8088:8080"
       - "8451:8443"

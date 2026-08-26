@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-26
+Version: v2.0.2
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -266,6 +266,7 @@ The platform provides zero-configuration ingress for agentic CLI coding tools th
 
 The gateway detects the machine's network identity (IPs, hostnames, and aliases) at startup. This detection includes:
 - **Network Interface IPs**: IPv4 addresses from all non-loopback interfaces.
+- **Host-mounted hosts and hostname files**: When the gateway runs in a Docker container, the host's `/etc/hosts` and `/etc/hostname` are bind-mounted read-only at `/etc/hosts.host` and `/etc/hostname.host` (see the root `docker-compose.yml` and each demo's `compose.yml`). The detector reads these host-mounted files first, then the container's own `/etc/hosts` and `/etc/hostname`, so the serving certificate's SANs cover the host's real IPs and hostname rather than the container's loopback identity. IP and alias entries are de-duplicated across both sources.
 - **Hostnames**: From system configuration and system calls.
 - **Hosts File Aliases**: Local aliases pointing to the machine's IPs.
 - **mDNS names**: Local `.local` names via mDNS services.
@@ -273,7 +274,7 @@ The gateway detects the machine's network identity (IPs, hostnames, and aliases)
 - **SSH known_hosts**: Hostnames pointing to this machine.
 - **Windows Identity**: NetBIOS and AD FQDN names.
 
-This information is used for certificate SAN generation and peer discovery.
+This information is used for certificate SAN generation and peer discovery. The serving certificate is regenerated on startup when SAN drift is detected — if the expected IPs or DNS names are not present in the existing certificate (additive drift), the certificate is regenerated so new IPs and hostnames are covered. Removal of a name from the host does not trigger regeneration.
 
 ---
 

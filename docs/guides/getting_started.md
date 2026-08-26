@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-08-25
-Version: v2.0.1
+Last Updated: 2026-08-26
+Version: v2.0.2
 
 ---
 
@@ -37,13 +37,33 @@ docker compose up -d --build
 
 `docker compose up -d` starts the central Policy Decision Point (`g8e-gateway`) on port 8080 (HTTP discovery, MCP) and port 8443 (HTTPS/mTLS, Web Console). Platform workloads (`g8e-operator`, `ensemble`, `dashboard`) belong to the `bootstrapped` profile and wait for owner enrollment before starting.
 
-### 2. Extract the CLI binary
+### 2. Get the CLI binary
 
-Copy the compiled CLI binary from the running gateway container to your host:
+The CLI binary must run on the same workstation where you complete the browser-based WebAuthn passkey ceremony in Step 3, because `auth enroll user` opens a browser on the local machine. If your workstation with a browser is the same host where the gateway is running, copy the binary out of the gateway container:
 
 ```bash
 docker cp g8e-gateway:/g8e ./g8e
 ```
+
+If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that g8e binary can be placed on remote hosts as soon as the Gateway is started:
+
+```bash
+# From your workstation, targeting the gateway host's HTTP port
+curl -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-linux-amd64
+chmod +x g8e-linux-amd64
+```
+
+On Windows PowerShell, `curl` is an alias for `Invoke-WebRequest` and does not accept curl-style flags. Use the real `curl.exe` (ships with Windows 10+) or `Invoke-WebRequest` directly:
+
+```powershell
+# Option 1: real curl (Windows 10+)
+curl.exe -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-windows-amd64.exe
+
+# Option 2: Invoke-WebRequest
+Invoke-WebRequest http://<gateway-host>:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e-windows-amd64.exe
+```
+
+Replace `g8e-linux-amd64` (or `g8e-windows-amd64.exe`) with the binary matching your workstation platform. Available filenames follow the pattern `g8e-{linux,darwin,windows}-{amd64,arm64,386}` (with `.exe` appended for Windows), for example `g8e-darwin-arm64` for Apple Silicon macOS or `g8e-windows-amd64.exe` for Windows. If the gateway is fronted by HTTPS, swap the scheme and port accordingly.
 
 ### 3. Enroll the first owner
 
@@ -143,7 +163,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.1
+go get github.com/g8e-ai/g8e/v2@v2.0.2
 ```
 
 Import the protocol packages in your Go code:
@@ -170,7 +190,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.0.0
+pip install g8e==2.0.2
 ```
 
 The package provides:
