@@ -373,7 +373,23 @@ build-all:
 		env $$FIPS_ENV CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build $(TRIMPATH) -tags $(BUILD_TAGS) -ldflags "$(LDFLAGS) $(STRIP_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
 		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
 	done
+	@HOST_NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
+	if [ "$(HOST_OS)" = "windows" ]; then \
+		HOST_NODE_BINARY=$$HOST_NODE_BINARY.exe; \
+		ROOT_COPY=g8e.exe; \
+	else \
+		ROOT_COPY=g8e; \
+	fi; \
+	if [ -f "./$$ROOT_COPY" ] && pgrep -f "$$ROOT_COPY --doctrine" > /dev/null 2>&1; then \
+		echo "Error: Unable to copy host binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
+		exit 1; \
+	fi; \
+	cp $$HOST_NODE_BINARY $$ROOT_COPY; \
+	mkdir -p demos/bin; \
+	cp $$ROOT_COPY demos/bin/g8e
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
+	@echo "Host binary copied: ./g8e ($(HOST_OS)/$(HOST_ARCH))"
+	@echo "Demo binary: demos/bin/g8e"
 
 .PHONY: build-darwin
 build-darwin:

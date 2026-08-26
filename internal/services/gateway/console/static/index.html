@@ -116,6 +116,22 @@ main { flex: 1; padding: 24px; max-width: 720px; margin: 0 auto; width: 100%; }
   background: var(--bg); color: var(--text); font-size: 0.75rem;
 }
 .audit-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 24px 0; }
+.badge {
+  font-size: 0.7rem; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+  background: var(--surface); border: 1px solid var(--accent); color: var(--accent);
+  margin-left: 6px; white-space: nowrap;
+}
+.download-item {
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.download-item:last-child { border-bottom: none; }
+.code-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 10px; font-family: monospace; font-size: 0.75rem; color: var(--text);
+  word-break: break-all; white-space: pre-wrap; margin-top: 6px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.code-box code { flex: 1; user-select: all; }
 footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
 </style>
 </head>
@@ -159,7 +175,12 @@ function bufToB64url(b) {
 }
 function el(tag, attrs) {
   var e = document.createElement(tag);
-  if (attrs) Object.keys(attrs).forEach(function(k) { if (attrs[k] != null) e[k] = attrs[k]; });
+  if (attrs) Object.keys(attrs).forEach(function(k) {
+    if (attrs[k] != null) {
+      if (k === 'style') e.style.cssText = attrs[k];
+      else e[k] = attrs[k];
+    }
+  });
   for (var i = 2; i < arguments.length; i++) {
     var c = arguments[i];
     if (c != null) e.append(typeof c === 'string' ? document.createTextNode(c) : c);
@@ -780,6 +801,125 @@ function renderPlatformEnrollmentsCard() {
   return card;
 }
 
+// ---- Operator Binary Downloads ----
+// renderOperatorDownloadsCard builds the Operator Binary Download section.
+// It provides direct download links for each supported platform binary and
+// displays the command strings a user would copy and run on their workstation.
+var operatorBinaries = [
+  { name: 'Linux (x86_64 / amd64)', badge: 'FIPS 140-3', filename: 'g8e-linux-amd64', os: 'linux', target: 'g8e' },
+  { name: 'Linux (ARM64 / aarch64)', filename: 'g8e-linux-arm64', os: 'linux', target: 'g8e' },
+  { name: 'Linux (i386 / 32-bit)', filename: 'g8e-linux-386', os: 'linux', target: 'g8e' },
+  { name: 'macOS (Apple Silicon / ARM64)', filename: 'g8e-darwin-arm64', os: 'darwin', target: 'g8e' },
+  { name: 'macOS (Intel / amd64)', filename: 'g8e-darwin-amd64', os: 'darwin', target: 'g8e' },
+  { name: 'Windows (x86_64 / amd64)', filename: 'g8e-windows-amd64.exe', os: 'windows', target: 'g8e.exe' },
+  { name: 'Windows (ARM64)', filename: 'g8e-windows-arm64.exe', os: 'windows', target: 'g8e.exe' }
+];
+
+function copyToClipboard(text, btn) {
+  var done = function() {
+    if (btn) {
+      var orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = orig; }, 2000);
+    }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function() {
+      fallbackCopy(text, done);
+    });
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  done();
+}
+
+function buildCodeBox(cmd) {
+  var copyBtn = el('button', {className:'btn btn-sm', style:'flex-shrink:0;padding:2px 8px;font-size:0.7rem'}, 'Copy');
+  copyBtn.onclick = function() { copyToClipboard(cmd, copyBtn); };
+  return el('div', {className:'code-box'},
+    el('code', null, cmd),
+    copyBtn
+  );
+}
+
+function renderOperatorDownloadsCard() {
+  var gwHost = location.hostname || '127.0.0.1';
+  // Binary downloads and deploy scripts are served on the plain HTTP port
+  // (default 8080), not the HTTPS console port (default 8443). Construct an
+  // HTTP origin so displayed and copyable URLs resolve to a live endpoint.
+  var httpOrigin = location.protocol === 'http:'
+    ? (location.origin || (location.protocol + '//' + location.host))
+    : 'http://' + gwHost + ':8080';
+  var portFlag = (location.port && location.port !== '8443' && location.port !== '8080') ? ' -p ' + location.port : '';
+
+  var card = el('div', {className:'card'},
+    el('h2', null, 'Operator Binary Download'),
+    el('p', {style:'color:var(--muted);font-size:0.85rem;margin-bottom:12px'},
+      'Download the g8e Operator binary for your workstation or remote host. Run the command to start the operator and connect to this Gateway as a Policy Execution Point (PEP).')
+  );
+
+  // Quick auto-detect deploy scripts
+  var quickLinuxCmd = 'curl -fsSL ' + httpOrigin + '/g8e-deploy.sh | bash';
+  var quickWinCmd = 'iwr ' + httpOrigin + '/g8e-deploy.ps1 | iex';
+
+  var quickSection = el('div', {style:'margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)'},
+    el('div', {style:'font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--text)'}, 'Quick Auto-Detect Deploy'),
+    el('div', {style:'font-size:0.75rem;color:var(--muted);margin-bottom:4px'}, 'Linux / macOS:'),
+    buildCodeBox(quickLinuxCmd),
+    el('div', {style:'font-size:0.75rem;color:var(--muted);margin-top:8px;margin-bottom:4px'}, 'Windows (PowerShell):'),
+    buildCodeBox(quickWinCmd)
+  );
+  card.appendChild(quickSection);
+
+  // Individual platform binaries
+  var binSection = el('div', null,
+    el('div', {style:'font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text)'}, 'Platform Binaries')
+  );
+
+  operatorBinaries.forEach(function(b) {
+    var downloadPath = '/.well-known/g8e/bin/' + b.filename;
+    var fullDownloadUrl = httpOrigin + downloadPath;
+    var runCmd;
+    if (b.os === 'windows') {
+      runCmd = 'Invoke-WebRequest -Uri "' + fullDownloadUrl + '" -OutFile "' + b.target + '"; .\\' + b.target + ' operator start -e ' + gwHost + portFlag;
+    } else {
+      runCmd = 'curl -fsSL ' + fullDownloadUrl + ' -o ' + b.target + ' && chmod +x ' + b.target + ' && ./' + b.target + ' operator start -e ' + gwHost + portFlag;
+    }
+
+    var headerRow = el('div', {style:'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px'},
+      el('div', {style:'font-size:0.85rem;font-weight:500;color:var(--text)'},
+        b.name,
+        b.badge ? el('span', {className:'badge'}, b.badge) : null
+      ),
+      el('a', {
+        href: fullDownloadUrl,
+        download: b.filename,
+        className: 'btn btn-primary btn-sm'
+      }, 'Download ' + b.filename)
+    );
+
+    var item = el('div', {className:'download-item'},
+      headerRow,
+      buildCodeBox(runCmd)
+    );
+    binSection.appendChild(item);
+  });
+
+  card.appendChild(binSection);
+  return card;
+}
+
 async function revokePasskey(credId) {
   if (!confirm('Revoke this passkey?')) return;
   var r = await api('/api/v1/auth/passkeys/' + encodeURIComponent(credId) + '?user_id=' + user.id, { method: 'DELETE' });
@@ -1011,6 +1151,7 @@ function render() {
         }}, 'Register')
       ));
     }
+    m.appendChild(renderOperatorDownloadsCard());
     return;
   }
 
@@ -1066,6 +1207,9 @@ function render() {
   // Platform Workload Enrollment Requests — owner-visible pending list.
   // The list never includes requester tokens, CSR PEM, or certificates.
   m.appendChild(renderPlatformEnrollmentsCard());
+
+  // Operator Binary Downloads
+  m.appendChild(renderOperatorDownloadsCard());
 
   // Live Audit Stream
   var auditCard = el('div', {className:'card'},
