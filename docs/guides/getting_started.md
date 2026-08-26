@@ -45,7 +45,7 @@ The CLI binary must run on the same workstation where you complete the browser-b
 docker cp g8e-gateway:/g8e ./g8e
 ```
 
-If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that nodes can bootstrap before they hold credentials:
+If your workstation is on a different host than the gateway, download the binary over HTTP from the gateway's bootstrap endpoint instead. The gateway serves all platform binaries built by the Dockerfile at `/.well-known/g8e/bin/{filename}` on the HTTP discovery port (8080 by default), with no authentication required so that g8e binary can be placed on remote hosts as soon as the Gateway is started:
 
 ```bash
 # From your workstation, targeting the gateway host's HTTP port
@@ -53,7 +53,17 @@ curl -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-linux-amd64
 chmod +x g8e-linux-amd64
 ```
 
-Replace `g8e-linux-amd64` with the binary matching your workstation platform. Available filenames follow the pattern `g8e-{linux,darwin,windows}-{amd64,arm64,386}` (with `.exe` appended for Windows), for example `g8e-darwin-arm64` for Apple Silicon macOS or `g8e-windows-amd64.exe` for Windows. If the gateway is fronted by HTTPS, swap the scheme and port accordingly.
+On Windows PowerShell, `curl` is an alias for `Invoke-WebRequest` and does not accept curl-style flags. Use the real `curl.exe` (ships with Windows 10+) or `Invoke-WebRequest` directly:
+
+```powershell
+# Option 1: real curl (Windows 10+)
+curl.exe -fSLO http://<gateway-host>:8080/.well-known/g8e/bin/g8e-windows-amd64.exe
+
+# Option 2: Invoke-WebRequest
+Invoke-WebRequest http://<gateway-host>:8080/.well-known/g8e/bin/g8e-windows-amd64.exe -OutFile g8e-windows-amd64.exe
+```
+
+Replace `g8e-linux-amd64` (or `g8e-windows-amd64.exe`) with the binary matching your workstation platform. Available filenames follow the pattern `g8e-{linux,darwin,windows}-{amd64,arm64,386}` (with `.exe` appended for Windows), for example `g8e-darwin-arm64` for Apple Silicon macOS or `g8e-windows-amd64.exe` for Windows. If the gateway is fronted by HTTPS, swap the scheme and port accordingly.
 
 ### 3. Enroll the first owner
 

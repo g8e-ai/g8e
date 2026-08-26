@@ -46,6 +46,8 @@ services:
     volumes:
       - g8e-gateway-data:/root/.g8e
       - g8e-shared-tmp:/tmp
+      - /etc/hosts:/etc/hosts.host:ro
+      - /etc/hostname:/etc/hostname.host:ro
     ports:
       - "${G8E_HTTP_PORT:-8080}:8080"
       - "${G8E_HTTPS_PORT:-8443}:8443"
