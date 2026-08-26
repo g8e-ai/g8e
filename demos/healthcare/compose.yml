@@ -48,6 +48,8 @@ services:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
       - ./paop.sh:/usr/local/bin/paop:ro
+      - /etc/hosts:/etc/hosts.host:ro
+      - /etc/hostname:/etc/hostname.host:ro
     ports:
       - "8081:8080"
       - "8444:8443"

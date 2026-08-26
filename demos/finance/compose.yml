@@ -46,6 +46,8 @@ services:
     volumes:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
+      - /etc/hosts:/etc/hosts.host:ro
+      - /etc/hostname:/etc/hostname.host:ro
     ports:
       - "8082:8080"
       - "8445:8443"

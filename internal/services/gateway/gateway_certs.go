@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -372,6 +373,14 @@ func (pki *PKIAuthority) loadOrGenerateServiceCertWithNames(extraIPs []net.IP, e
 					} else {
 						if isExpiringSoon(cert) {
 							pki.logger.Info("[PKI] Service certificate expiring soon, renewing")
+							needService = true
+						} else if missingDNS, missingIPs := detectServiceCertDrift(cert, extraIPs, extraDNSNames); len(missingDNS) > 0 || len(missingIPs) > 0 {
+							missing := make([]string, 0, len(missingDNS)+len(missingIPs))
+							missing = append(missing, missingDNS...)
+							for _, ip := range missingIPs {
+								missing = append(missing, ip.String())
+							}
+							pki.logger.Info("[PKI] Service certificate SAN drift detected, regenerating", "missing", missing)
 							needService = true
 						} else {
 							pki.serviceCert = cert
@@ -1194,6 +1203,50 @@ func isExpiringSoon(cert tls.Certificate) bool {
 		return true
 	}
 	return time.Until(x509Cert.NotAfter) < 30*24*time.Hour
+}
+
+// detectServiceCertDrift compares the SANs in an existing service certificate against expected IPs and DNS names.
+// It returns any expected DNS names or IPs that are missing from the certificate (additive drift).
+// Removal of a name from the host does not trigger drift (missing slices will be empty).
+func detectServiceCertDrift(cert tls.Certificate, expectedIPs []net.IP, expectedDNSNames []string) ([]string, []net.IP) {
+	if len(cert.Certificate) == 0 {
+		return expectedDNSNames, expectedIPs
+	}
+	x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return expectedDNSNames, expectedIPs
+	}
+
+	existingDNS := make(map[string]struct{}, len(x509Cert.DNSNames))
+	for _, name := range x509Cert.DNSNames {
+		existingDNS[strings.ToLower(name)] = struct{}{}
+	}
+
+	var missingDNS []string
+	for _, name := range expectedDNSNames {
+		if _, ok := existingDNS[strings.ToLower(name)]; !ok {
+			missingDNS = append(missingDNS, name)
+		}
+	}
+
+	var missingIPs []net.IP
+	for _, expIP := range expectedIPs {
+		if expIP == nil {
+			continue
+		}
+		found := false
+		for _, certIP := range x509Cert.IPAddresses {
+			if certIP.Equal(expIP) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingIPs = append(missingIPs, expIP)
+		}
+	}
+
+	return missingDNS, missingIPs
 }
 
 // isCurveP256 checks if a public key uses the P-256 elliptic curve.

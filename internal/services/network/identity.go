@@ -269,9 +269,17 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 	return &identity, nil
 }
 
-// detectIPs detects all IP addresses on all network interfaces.
+// detectIPs detects all IP addresses on all network interfaces and in hosts files.
 func (d *Detector) detectIPs() ([]string, error) {
-	ips := make([]string, 0)
+	ipSet := make(map[string]bool)
+	var ips []string
+
+	addIP := func(ipStr string) {
+		if ipStr != "" && !ipSet[ipStr] {
+			ipSet[ipStr] = true
+			ips = append(ips, ipStr)
+		}
+	}
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -296,23 +304,44 @@ func (d *Detector) detectIPs() ([]string, error) {
 			if ip != nil {
 				// IPv4 only — IPv6 is not supported
 				if ip.To4() != nil && !ip.IsLoopback() {
-					ips = append(ips, ip.String())
+					addIP(ip.String())
+				}
+			}
+		}
+	}
+
+	// Extract IPv4 addresses from host-mounted /etc/hosts.host and local hosts file
+	hostsPaths := []string{constants.PathEtcHostsHost, getHostsFilePath()}
+	for _, hp := range hostsPaths {
+		if aliases, err := parseHostsFile(hp); err == nil {
+			for _, ha := range aliases {
+				parsed := net.ParseIP(ha.IP)
+				if parsed != nil && parsed.To4() != nil && !parsed.IsLoopback() {
+					addIP(ha.IP)
 				}
 			}
 		}
 	}
 
 	// Always add localhost (IPv4 only)
-	ips = append(ips, "127.0.0.1")
+	addIP("127.0.0.1")
 
 	return ips, nil
 }
 
-// detectHostnames detects hostnames from /etc/hostname and hostname command.
+// detectHostnames detects hostnames from /etc/hostname.host, /etc/hostname, and hostname command.
 func (d *Detector) detectHostnames() ([]string, error) {
 	hostnameSet := make(map[string]bool)
 
-	// Try /etc/hostname first
+	// Try host-mounted /etc/hostname.host first (when running in Docker container)
+	if hostname, err := os.ReadFile(constants.PathEtcHostnameHost); err == nil {
+		hn := strings.TrimSpace(string(hostname))
+		if hn != "" {
+			hostnameSet[hn] = true
+		}
+	}
+
+	// Try /etc/hostname
 	if hostname, err := os.ReadFile(constants.PathEtcHostname); err == nil {
 		hn := strings.TrimSpace(string(hostname))
 		if hn != "" {
@@ -353,35 +382,21 @@ func getHostsFilePath() string {
 	return constants.PathEtcHosts
 }
 
-// detectEtcHosts parses the hosts file for aliases pointing to this machine's IPs.
-func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
-	aliases := make([]HostAlias, 0)
-
-	// Get local IPs first
-	localIPs, err := d.detectIPs()
-	if err != nil {
-		return nil, err
-	}
-
-	localIPSet := make(map[string]bool)
-	for _, ip := range localIPs {
-		localIPSet[ip] = true
-	}
-
-	// Parse hosts file (OS-specific path)
-	hostsPath := getHostsFilePath()
+// parseHostsFile reads a hosts file and returns all non-comment IP-to-alias entries.
+func parseHostsFile(hostsPath string) ([]HostAlias, error) {
 	file, err := os.Open(hostsPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("network: open hosts file: %w", err)
 	}
 	defer file.Close()
 
+	var aliases []HostAlias
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.TrimSpace(line)
-
-		// Skip comments and empty lines
+		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "#") || line == "" {
 			continue
 		}
@@ -391,19 +406,62 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 			continue
 		}
 
-		ip := fields[0]
-		if localIPSet[ip] {
-			aliases = append(aliases, HostAlias{
-				IP:      ip,
-				Aliases: fields[1:],
-			})
-		}
+		aliases = append(aliases, HostAlias{
+			IP:      fields[0],
+			Aliases: fields[1:],
+		})
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("network: scan hosts file: %w", err)
 	}
 
 	return aliases, nil
+}
+
+// detectEtcHosts parses host-mounted /etc/hosts.host and the system hosts file for aliases.
+func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
+	var allAliases []HostAlias
+	seenAlias := make(map[string]map[string]bool)
+
+	// Check host-mounted /etc/hosts.host first (when running in Docker container)
+	if hostMountedAliases, err := parseHostsFile(constants.PathEtcHostsHost); err == nil && len(hostMountedAliases) > 0 {
+		for _, alias := range hostMountedAliases {
+			allAliases = append(allAliases, alias)
+			if seenAlias[alias.IP] == nil {
+				seenAlias[alias.IP] = make(map[string]bool)
+			}
+			for _, a := range alias.Aliases {
+				seenAlias[alias.IP][a] = true
+			}
+		}
+	}
+
+	// Check local hosts file
+	hostsPath := getHostsFilePath()
+	if localAliases, err := parseHostsFile(hostsPath); err == nil {
+		for _, alias := range localAliases {
+			var newNames []string
+			if seenAlias[alias.IP] == nil {
+				seenAlias[alias.IP] = make(map[string]bool)
+			}
+			for _, a := range alias.Aliases {
+				if !seenAlias[alias.IP][a] {
+					seenAlias[alias.IP][a] = true
+					newNames = append(newNames, a)
+				}
+			}
+			if len(newNames) > 0 {
+				allAliases = append(allAliases, HostAlias{
+					IP:      alias.IP,
+					Aliases: newNames,
+				})
+			}
+		}
+	} else {
+		return nil, err
+	}
+
+	return allAliases, nil
 }
 
 // detectMDNS detects mDNS/Bonjour *.local names.
@@ -691,11 +749,15 @@ func (ni *NetworkIdentity) GetAllDNSNames() []string {
 // GetAllIPs returns all IP addresses that should be included in the certificate.
 func (ni *NetworkIdentity) GetAllIPs() []net.IP {
 	var ips []net.IP
+	seen := make(map[string]bool)
 
 	for _, ipStr := range ni.IPs {
 		ip := net.ParseIP(ipStr)
 		if ip != nil && ip.To4() != nil {
-			ips = append(ips, ip)
+			if !seen[ip.String()] {
+				seen[ip.String()] = true
+				ips = append(ips, ip)
+			}
 		}
 	}
 

@@ -10,6 +10,8 @@ package network
 import (
 	"context"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -936,4 +938,82 @@ func TestDetector_DetectWindowsIdentity_PublicWrapper(t *testing.T) {
 		// but we've thoroughly tested the logic via detectWindowsIdentityWithExecutor
 		t.Skip("Public wrapper requires Windows environment")
 	}
+}
+
+func TestParseHostsFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run("parses valid hosts file with comments and whitespace", func(t *testing.T) {
+		t.Parallel()
+		tempDir := testutil.TempDir(t)
+		hostsFile := filepath.Join(tempDir, "hosts")
+		content := `# Host aliases
+127.0.0.1 localhost
+127.0.1.1 bobuntu
+
+192.168.1.62 dev dev.g8e.local
+192.168.1.68 portland portland.g8e.local
+`
+		require.NoError(t, os.WriteFile(hostsFile, []byte(content), 0600))
+
+		aliases, err := parseHostsFile(hostsFile)
+		require.NoError(t, err)
+		require.Len(t, aliases, 4)
+
+		assert.Equal(t, "127.0.0.1", aliases[0].IP)
+		assert.Equal(t, []string{"localhost"}, aliases[0].Aliases)
+
+		assert.Equal(t, "127.0.1.1", aliases[1].IP)
+		assert.Equal(t, []string{"bobuntu"}, aliases[1].Aliases)
+
+		assert.Equal(t, "192.168.1.62", aliases[2].IP)
+		assert.Equal(t, []string{"dev", "dev.g8e.local"}, aliases[2].Aliases)
+
+		assert.Equal(t, "192.168.1.68", aliases[3].IP)
+		assert.Equal(t, []string{"portland", "portland.g8e.local"}, aliases[3].Aliases)
+	})
+
+	t.Run("returns empty slice for non-existent file", func(t *testing.T) {
+		t.Parallel()
+		aliases, err := parseHostsFile(filepath.Join(testutil.TempDir(t), "non-existent"))
+		require.NoError(t, err)
+		assert.Nil(t, aliases)
+	})
+}
+
+func TestNetworkIdentity_GetAllDNSNames_IncludesHostsFileAliases(t *testing.T) {
+	t.Parallel()
+
+	identity := &NetworkIdentity{
+		Hostnames: []string{"dev.g8e.local"},
+		EtcHosts: []HostAlias{
+			{IP: "192.168.1.62", Aliases: []string{"dev", "dev.g8e.local"}},
+			{IP: "192.168.1.68", Aliases: []string{"portland", "portland.g8e.local"}},
+			{IP: "127.0.1.1", Aliases: []string{"bobuntu"}},
+		},
+		MDNSNames: []string{"dev.local", "bobuntu.local"},
+	}
+
+	dnsNames := identity.GetAllDNSNames()
+	assert.Contains(t, dnsNames, "dev.g8e.local")
+	assert.Contains(t, dnsNames, "dev")
+	assert.Contains(t, dnsNames, "portland")
+	assert.Contains(t, dnsNames, "portland.g8e.local")
+	assert.Contains(t, dnsNames, "bobuntu")
+	assert.Contains(t, dnsNames, "localhost")
+	assert.Contains(t, dnsNames, "dev.local")
+	assert.Contains(t, dnsNames, "bobuntu.local")
+}
+
+func TestNetworkIdentity_GetAllIPs_Deduplication(t *testing.T) {
+	t.Parallel()
+
+	identity := &NetworkIdentity{
+		IPs: []string{"192.168.1.62", "192.168.1.62", "127.0.0.1", "127.0.0.1"},
+	}
+
+	ips := identity.GetAllIPs()
+	require.Len(t, ips, 2)
+	assert.Equal(t, net.ParseIP("192.168.1.62"), ips[0])
+	assert.Equal(t, net.ParseIP("127.0.0.1"), ips[1])
 }

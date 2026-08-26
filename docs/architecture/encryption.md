@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-26
+Version: v2.0.2
 
 ## Overview
 
@@ -214,7 +214,7 @@ The gateway maintains a revocation list in the canonical database. Revoked certi
 
 ### Auto-Renewal
 
-The gateway automatically regenerates its serving certificate if it is missing or within 30 days of expiry. CA private keys missing from the keystore trigger CA regeneration.
+The gateway automatically regenerates its serving certificate if it is missing, within 30 days of expiry, or if SAN drift is detected at startup. SAN drift is additive: if the network identity detector discovers IPs or DNS names that are not present in the existing certificate's SAN list, the certificate is regenerated so the new IPs and hostnames are covered. Removal of a name from the host does not trigger regeneration. CA private keys missing from the keystore trigger CA regeneration.
 
 ## Migration Path
 

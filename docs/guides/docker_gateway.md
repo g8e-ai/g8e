@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-26
+Version: v2.0.2
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -240,6 +240,18 @@ Mount a persistent volume to preserve state across container lifecycles:
 docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw start -f --posture doctrine
 ```
 
+### Host Identity Bind Mounts
+
+So the gateway serving certificate covers the host's real IPs and hostname when the gateway runs in a container, the root `docker-compose.yml` and each demo's `compose.yml` bind-mount the host's `/etc/hosts` and `/etc/hostname` read-only into the container at `/etc/hosts.host` and `/etc/hostname.host`:
+
+```yaml
+volumes:
+  - /etc/hosts:/etc/hosts.host:ro
+  - /etc/hostname:/etc/hostname.host:ro
+```
+
+The network identity detector reads these host-mounted files before the container's own `/etc/hosts` and `/etc/hostname`, de-duplicating IPs and aliases across both sources. The serving certificate is regenerated on startup when SAN drift is detected (expected IPs or DNS names missing from the existing certificate). See [Network Architecture](../architecture/network.md#8-network-identity-detection) for the detection pipeline.
+
 ### Governance Posture
 
 Specify the security posture at startup using the `--posture` flag:
@@ -269,7 +281,7 @@ The build links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) and enters 
 Protocol constants are bundled from the `protocol/` directory. The Python protocol package (`g8e`) can be installed separately:
 
 ```bash
-pip install g8e==2.0.0
+pip install g8e==2.0.2
 ```
 
 Or configure `G8E_PROTOCOL_DIR=/protocol` to direct the Python package to bundled constants. See [Protocol Library](../architecture/protocol.md) for details.

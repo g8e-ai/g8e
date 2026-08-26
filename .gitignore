@@ -136,7 +136,6 @@ yarn-error.log*
 
 
 # --- Deployment ---
-.dockerignore
 /site
 
 # --- Claude Code ---

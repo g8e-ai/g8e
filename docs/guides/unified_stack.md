@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-26
+Version: v2.0.2
 
 This guide describes how to bring up the complete g8e platform — gateway, operator, ensemble (g8ee), and dashboard (g8ed) — as a single Docker Compose stack from the repository root, using either Docker Compose directly or the first-class `./g8e docker` CLI management commands.
 
@@ -153,7 +153,7 @@ G8E_HTTP_PORT=18080 G8E_HTTPS_PORT=18443 G8E_DASHBOARD_PORT=13000 docker compose
 
 ## mTLS, PKI, and Workload Identity
 
-The gateway generates its own root CA on startup and initializes its PKI under the `g8e-gateway-data` named volume at `/root/.g8e`. The canonical gateway trust bundle is maintained at `.g8e/pki/trust/g8eg-ca-bundle.pem` and served over plain HTTP at `http://<gateway>:8080/.well-known/g8e/pki/ca-bundle`.
+The gateway generates its own root CA on startup and initializes its PKI under the `g8e-gateway-data` named volume at `/root/.g8e`. The canonical gateway trust bundle is maintained at `.g8e/pki/trust/g8eg-ca-bundle.pem` and served over plain HTTP at `http://<gateway>:8080/.well-known/g8e/pki/ca-bundle`. The compose file bind-mounts the host's `/etc/hosts` and `/etc/hostname` read-only into the gateway container at `/etc/hosts.host` and `/etc/hostname.host` so the network identity detector covers the host's real IPs and hostname in the serving certificate SANs; the certificate is regenerated on startup when SAN drift is detected. See [Docker Gateway Guide](./docker_gateway.md#host-identity-bind-mounts) for details.
 
 The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending enrollment requests. The operator, ensemble, and dashboard each enroll via the owner-approved platform enrollment protocol: they submit a platform enrollment request (containing a CSR and system fingerprint) to the gateway's plain-HTTP discovery surface, the owner approves the request by exact request ID via authenticated mTLS, and the component signs a canonical completion transcript and receives its enrolled credentials. See [auth.md](../architecture/auth.md) §1.5 for the full protocol specification.
 
