@@ -179,7 +179,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dataController.handleDataDB))
 	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dataController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dataController.handlePubSubPublish)
-	mux.Handle(constants.APIPaths.PubSubStream, h.authMiddleware.Middleware(http.HandlerFunc(h.pubsubController.handleWebSocket)))
+	if h.authMiddleware != nil {
+		mux.Handle(constants.APIPaths.PubSubStream, h.authMiddleware.Middleware(http.HandlerFunc(h.pubsubController.handleWebSocket)))
+	} else {
+		mux.Handle(constants.APIPaths.PubSubStream, http.HandlerFunc(h.pubsubController.handleWebSocket))
+	}
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
@@ -209,7 +213,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkeyController.listCredentials)
 	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkeyController.revokeCredential))
 
-	return h.corsMiddleware(h.pathTraversalGuard(h.authMiddleware.Middleware(mux)))
+	var handler http.Handler = mux
+	if h.authMiddleware != nil {
+		handler = h.authMiddleware.Middleware(mux)
+	}
+	return h.corsMiddleware(h.pathTraversalGuard(handler))
 }
 
 // buildMCPHandler creates the rate-limited, auth-wrapped handler for all MCP/A2A ingress routes.

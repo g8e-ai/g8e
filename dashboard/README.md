@@ -48,10 +48,6 @@ See the repo-root `docker-compose.yml` for the unified stack wiring (gateway + o
 | `GATEWAY_HEALTH_URL` | `http://g8e-gateway:8080` | Gateway health base URL (Docker entrypoint) |
 | `GATEWAY_HEALTH_PATH` | `/api/v1/health` | Gateway health path (Docker entrypoint) |
 
-## Relationship to `demos/frontend/`
-
-The repo also ships `demos/frontend/` — a minimal single-file nginx-served HTML enrollment smoke test. That demo is distinct from this dashboard: `demos/frontend/` exercises the gateway enrollment flow end to end with the smallest possible UI surface, while `dashboard/` is the full operator web UI. Both are kept; they serve different purposes.
-
 ## License
 
 Copyright (c) 2026 Lateralus Labs, LLC. Licensed under the Business Source License 1.1 — see [LICENSE](./LICENSE) for details. As of the Change Date (2030-08-18), this software converts to Apache License 2.0.

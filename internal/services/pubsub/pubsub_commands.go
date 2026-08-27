@@ -82,7 +82,7 @@ type OperatorPubSubService struct {
 	governedDocStore governance.GovernedDocumentStore
 
 	// MCP gateway for protocol translation egress
-	mcpGateway *mcp.GatewayService
+	mcpGateway atomic.Pointer[mcp.GatewayService]
 
 	// platformEnrollment dispatches the five platform enrollment
 	// governance actions. Nil in outbound (operator) mode; the handlers
@@ -90,20 +90,10 @@ type OperatorPubSubService struct {
 	platformEnrollment *PlatformEnrollmentHandler
 }
 
-// GovernanceDeps holds the governance dependencies required for transaction
-// verification in gateway mode. It embeds GovernanceCoreDeps and adds
-// gateway-only fields. In outbound mode, OutboundModeDeps is used instead.
-type GovernanceDeps struct {
-	GovernanceCoreDeps
-	GovernedDocStore     governance.GovernedDocumentStore
-	ConsensusPolicyStore governance.L2ConsensusPolicyStore
-	FieldReader          mcp.FieldReader
-}
-
 // CommandServiceConfig holds non-governance dependencies for
 // OperatorPubSubService in both outbound and gateway modes. Governance
-// dependencies are passed separately via GovernanceDeps. Gateway-only fields
-// (MCPGateway, GovDeps) are in GatewayCommandServiceConfig to enforce mode
+// dependencies are passed separately via OutboundModeDeps or GatewayModeDeps.
+// Gateway-only fields are in GatewayCommandServiceConfig to enforce mode
 // bifurcation at the type level.
 type CommandServiceConfig struct {
 	Config         *config.Config
@@ -123,63 +113,13 @@ type CommandServiceConfig struct {
 	ActuatorKeyID      string
 }
 
-// GatewayEnvProcAdapter is a lazy forwarding wrapper that implements
-// governance.EnvelopeProcessor by delegating to OperatorPubSubService
-// once it is constructed. This breaks the circular dependency between
-// mcp.GatewayService (needs EnvProc) and OperatorPubSubService (needs
-// mcpGateway for egress).
-type GatewayEnvProcAdapter struct {
-	target atomic.Pointer[OperatorPubSubService]
-}
-
-func (a *GatewayEnvProcAdapter) SetTarget(target *OperatorPubSubService) {
-	a.target.Store(target)
-}
-
-func (a *GatewayEnvProcAdapter) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
-	t := a.target.Load()
-	if t == nil {
-		return nil, constants.ErrGatewayNotReady
-	}
-	return t.ProcessEnvelope(ctx, payload)
-}
-
-// GatewaySessionValidatorAdapter is a lazy forwarding wrapper that
-// implements mcp.SessionValidator by delegating to OperatorPubSubService.
-type GatewaySessionValidatorAdapter struct {
-	target atomic.Pointer[OperatorPubSubService]
-}
-
-func (a *GatewaySessionValidatorAdapter) SetTarget(target *OperatorPubSubService) {
-	a.target.Store(target)
-}
-
-func (a *GatewaySessionValidatorAdapter) ValidateSession(operatorSessionID string) (bool, error) {
-	t := a.target.Load()
-	if t == nil {
-		return false, constants.ErrGatewayNotReady
-	}
-	return t.ValidateSession(operatorSessionID)
-}
-
 // GatewayCommandServiceConfig embeds CommandServiceConfig and adds
 // gateway-only fields that are not applicable in outbound mode.
 //
-// MCPGateway is the egress dispatcher for protocol translation.
-// GovDeps provides the governance dependencies that are shared between
-// gateway construction and the pubsub command service.
+// GovDeps provides the mode-specific gateway governance dependencies.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	GovDeps                 *GovernanceDeps
-	MCPGateway              *mcp.GatewayService
-	L2ConsensusDeliberator  mcp.L2ConsensusDeliberator
-	EnvProcAdapter          *GatewayEnvProcAdapter
-	SessionValidatorAdapter *GatewaySessionValidatorAdapter
-	// PlatformEnrollmentDeps provides the gateway-side services required
-	// by the five platform enrollment governance handlers. Required in
-	// gateway mode; nil in outbound (operator) mode, where the handlers
-	// are never registered.
-	PlatformEnrollmentDeps *PlatformEnrollmentDeps
+	GovDeps *GatewayModeDeps
 }
 
 func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore, governedDocStore governance.GovernedDocumentStore) (*OperatorPubSubService, error) {
@@ -273,14 +213,24 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	return rs, nil
 }
 
+// SetMCPGateway sets the MCP gateway used for egress dispatch on verified MCP_CALL/A2A transactions.
+// Backed by atomic.Pointer, called once during boot before Start.
+func (rs *OperatorPubSubService) SetMCPGateway(gw *mcp.GatewayService) {
+	rs.mcpGateway.Store(gw)
+}
+
+// GetMCPGateway returns the MCP gateway for egress dispatch, or nil if not set.
+func (rs *OperatorPubSubService) GetMCPGateway() *mcp.GatewayService {
+	return rs.mcpGateway.Load()
+}
+
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config for outbound mode.
 func NewOperatorPubSubService(c CommandServiceConfig, deps OutboundModeDeps) (*OperatorPubSubService, error) {
 	return newOperatorPubSubServiceInternal(c, deps.GovernanceCoreDeps, nil, nil)
 }
 
 // NewGatewayOperatorPubSubService creates the dispatcher for gateway mode,
-// wiring gateway-only dependencies (MCPGateway, GovDeps) after base
-// construction. Use NewOperatorPubSubService for outbound mode.
+// wiring gateway-only dependencies from GovDeps. Use NewOperatorPubSubService for outbound mode.
 func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPubSubService, error) {
 	if c.GovDeps == nil {
 		return nil, fmt.Errorf("%w: GovDeps is required for gateway mode", constants.ErrInternal)
@@ -291,29 +241,11 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 		return nil, err
 	}
 
-	rs.mcpGateway = c.MCPGateway
-
-	// Wire the platform enrollment handler when gateway-side dependencies
-	// are provided. The handler is constructed after the base service so
-	// it can share the logger. When PlatformEnrollmentDeps is nil the
-	// handlers are not registered and dispatch fails closed with
-	// ErrTxUnknownActionType.
-	if c.PlatformEnrollmentDeps != nil {
-		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.PlatformEnrollmentDeps, c.Logger)
-	}
-
-	// Wire the MCP gateway's runtime governance dependencies. This is the single
-	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
-	// public base URL) are owned by the gateway's own construction in
-	// GatewayModeService.initHandlersAndServers and must not be re-set here.
-	// MCPGateway is used as the egress dispatcher for protocol translation.
-	if rs.mcpGateway != nil {
-		if c.EnvProcAdapter != nil {
-			c.EnvProcAdapter.SetTarget(rs)
-		}
-		if c.SessionValidatorAdapter != nil {
-			c.SessionValidatorAdapter.SetTarget(rs)
-		}
+	// Wire the platform enrollment handler from gateway-side dependencies.
+	// In gateway mode, platform enrollment dependencies are required and wired
+	// at construction so rs.platformEnrollment is always non-nil.
+	if c.GovDeps.PlatformEnrollmentDeps != nil {
+		rs.platformEnrollment = newPlatformEnrollmentHandler(*c.GovDeps.PlatformEnrollmentDeps, c.Logger)
 	}
 
 	return rs, nil
@@ -796,33 +728,16 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	// actuator to stamp into the signed final receipt. These event types
 	// are not registered in the handlers map (they use a different
 	// signature), so they must be dispatched before the handler lookup.
-	// When platformEnrollment is nil (outbound/operator mode), dispatch
-	// fails closed with ErrTxUnknownActionType.
 	switch eventType {
 	case constants.EventPlatformEnrollmentCreateRequested:
-		if rs.platformEnrollment == nil {
-			break
-		}
 		return rs.platformEnrollment.HandleCreate(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentDecideRequested:
-		if rs.platformEnrollment == nil {
-			break
-		}
 		return rs.platformEnrollment.HandleDecide(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentIssueRequested:
-		if rs.platformEnrollment == nil {
-			break
-		}
 		return rs.platformEnrollment.HandleIssue(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentPersistPolicyRequested:
-		if rs.platformEnrollment == nil {
-			break
-		}
 		return rs.platformEnrollment.HandlePersistPolicy(ctx, pubsubMsg)
 	case constants.EventPlatformEnrollmentCreateSessionRequested:
-		if rs.platformEnrollment == nil {
-			break
-		}
 		return rs.platformEnrollment.HandleCreateSession(ctx, pubsubMsg)
 	}
 
@@ -855,7 +770,8 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
 func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	if rs.mcpGateway == nil {
+	gw := rs.GetMCPGateway()
+	if gw == nil {
 		return "", constants.ErrPubSubMCPGateway
 	}
 
@@ -881,13 +797,13 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 		"tool", mcpReq.ToolName,
 		"transaction_id", msg.ID)
 
-	summary, err := rs.mcpGateway.DispatchToDownstream(ctx, mcpReq.ToolName, args, msg.OperatorSessionID)
+	summary, err := gw.DispatchToDownstream(ctx, mcpReq.ToolName, args, msg.OperatorSessionID)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}
 	// Bound the receipt summary on external tools to avoid unbounded growth on chatty tools.
 	// Native tools return structured JSON payloads (e.g. audit queries) and must not be truncated.
-	if mcpReq.ToolName != "read_field" && !rs.mcpGateway.IsNativeTool(mcpReq.ToolName) && len(summary) > constants.ReceiptSummaryMaxBytes {
+	if mcpReq.ToolName != "read_field" && !gw.IsNativeTool(mcpReq.ToolName) && len(summary) > constants.ReceiptSummaryMaxBytes {
 		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 
@@ -899,7 +815,8 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 // server via the gateway, and returns the textual result so the Actuator can
 // stamp it into the signed ActionReceipt.
 func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
-	if rs.mcpGateway == nil {
+	gw := rs.GetMCPGateway()
+	if gw == nil {
 		return "", constants.ErrPubSubA2AGateway
 	}
 
@@ -925,7 +842,7 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 		"skill", a2aReq.SkillName,
 		"transaction_id", msg.ID)
 
-	summary, err := rs.mcpGateway.DispatchToA2ADownstream(ctx, a2aReq.SkillName, payload)
+	summary, err := gw.DispatchToA2ADownstream(ctx, a2aReq.SkillName, payload)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}

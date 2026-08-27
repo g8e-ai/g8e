@@ -259,7 +259,6 @@ const (
 	DemosOrgFinance          = "finance"
 	DemosOrgDHS              = "dhs"
 	DemosOrgFedRAMP          = "fedramp"
-	DemosOrgFrontend         = "frontend"
 )
 
 // Container paths for Docker exec commands in demo environments.

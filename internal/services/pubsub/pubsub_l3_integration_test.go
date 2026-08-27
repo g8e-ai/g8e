@@ -68,7 +68,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 			ActuatorKeyID:      "test-key",
 			Scrubbing:          mustNewScrubbingSvc(t, logger),
 		},
-		GovDeps: &GovernanceDeps{
+		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
 				L3Notary:          rejectingL3,
 				ReplayStore:       replayStore,
@@ -200,7 +200,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 			ActuatorKeyID:      "test-key",
 			Scrubbing:          mustNewScrubbingSvc(t, logger),
 		},
-		GovDeps: &GovernanceDeps{
+		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
 				L3Notary:          acceptingL3,
 				ReplayStore:       replayStore,
@@ -333,7 +333,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 			ActuatorKeyID:      "test-key",
 			Scrubbing:          mustNewScrubbingSvc(t, logger),
 		},
-		GovDeps: &GovernanceDeps{
+		GovDeps: &GatewayModeDeps{
 			GovernanceCoreDeps: GovernanceCoreDeps{
 				L3Notary:          nil, // Explicitly nil to test fail-closed
 				ReplayStore:       replayStore,

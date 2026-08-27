@@ -441,7 +441,7 @@ func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
 		t.Parallel()
-		f.Svc.mcpGateway = nil
+		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Mcp.CallRequested,
 			ID:        "msg-1",
@@ -457,7 +457,7 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.mcpGateway = nil
+		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
@@ -1725,11 +1725,9 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	_ = gwDeps.PlatformEnrollmentDeps
 	_ = gwDeps.Posture
 
-	// GatewayCommandServiceConfig must have MCPGateway and GovDeps.
+	// GatewayCommandServiceConfig must have GovDeps.
 	var gw GatewayCommandServiceConfig
-	_ = gw.MCPGateway
 	_ = gw.GovDeps
-	_ = gw.L2ConsensusDeliberator
 
 	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
 	// fields are accessible.
@@ -1788,4 +1786,48 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 	require.NotNil(t, svc)
 	require.NotNil(t, svc.l4warden, "l4warden must be initialized")
 	assert.Nil(t, svc.l4warden.Doctrine(), "nil Doctrine must not be defaulted at the call site; wire it in the mode's dependency wiring instead")
+}
+
+// TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall verifies thread safety
+// of the single atomic egress setter under concurrent egress traffic and SetMCPGateway calls.
+func TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	msg := &PubSubCommandMessage{
+		EventType: constants.Event.Operator.Mcp.CallRequested,
+		ID:        "msg-race",
+		Payload:   mustMarshalProto(t, &operatorv1.McpCallRequested{ToolName: "test"}),
+	}
+
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// Goroutine 1: concurrently calls SetMCPGateway
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				f.Svc.SetMCPGateway(nil)
+				f.Svc.SetMCPGateway(&mcp.GatewayService{})
+			}
+		}
+	}()
+
+	// Goroutine 2: concurrently reads mcpGateway via handleMcpCallRequestSync
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_, _ = f.Svc.handleMcpCallRequestSync(context.Background(), msg)
+			_ = f.Svc.GetMCPGateway()
+		}
+		close(done)
+	}()
+
+	wg.Wait()
 }

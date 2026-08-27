@@ -765,19 +765,14 @@ The following packages are test-only and are not part of the production dependen
 - `setup_metabase.py` - Metabase initialization and dashboard setup
 - `init.sql` - Database schema initialization for healthcare data
 
-**`demos/frontend/`** - Third-party frontend enrollment demo
-- `app/` - Frontend application source
-- `compose.yml` - Docker Compose configuration for frontend demo environment
-
 **`demos/finance/`** - Financial data governance demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4, frontend: 1) and `printDemoEndpoints` (prints available endpoints per org) support listing.
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4) and `printDemoEndpoints` (prints available endpoints per org) support listing.
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (4 scenarios, each calls `harnessRun`). `defaultDHSHarnessConfig()` returns `defaultHarnessConfig("agent-coalition")`.
 - `demo_fedramp.go` - FedRAMP demo scenarios (4 scenarios, each calls `harnessRun`). `defaultFedRAMPHarnessConfig()` returns `defaultHarnessConfig("agent-runtime")`.
-- `demo_frontend.go` - Frontend demo scenario (1 scenario: third-party frontend enrollment via `runFrontendScenario`).
 - `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions (including `--cli-cert`/`--cli-key`/`--cli-ca` for the host CLI mTLS material used by notary submits), `applyAgentHarnessFlags` (populates `cfg.CLIAuth` from the CLI flags), `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`, `failedScenariosError` helper. `setupGovKit` passes `GovKit` with `{OperatorID, OperatorSessionID, UserID}` for human browser approval via `WaitForHumanApproval`. `failedScenariosError` collects failed scenario names and returns a formatted error when any `Result.OK` is false.
 - `scenarios_run_test.go` - Tests for `failedScenariosError` helper: all-OK (nil), all-failed (error with all names), mixed (error with only failed names), empty results (nil), single failed (error).
 - `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`). Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.

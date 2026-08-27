@@ -38,8 +38,10 @@ func newTestGovernanceController(t *testing.T) *GovernanceController {
 	return newGovernanceController(GovernanceControllerDeps{Cfg: cfg, Logger: logger, Responder: responder, Consensus: nil})
 }
 
-func newTestRouterHandler(t *testing.T, cfg *config.Config, cs *consensus.ConsensusService) *HTTPHandler {
+func newTestRouterHandler(t *testing.T, posture config.GatewayPosture, cs *consensus.ConsensusService) *HTTPHandler {
 	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	cfg.Gateway.Posture = posture
 	logger := testutil.NewTestLogger()
 	responder := response.NewWriter(logger)
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -62,34 +64,27 @@ func newTestRouterHandler(t *testing.T, cfg *config.Config, cs *consensus.Consen
 }
 
 func TestHTTPRouter_ConsensusDeliberate_PostureDoctrine_Returns404(t *testing.T) {
-	cfg := testutil.NewTestConfig(t)
-	cfg.Gateway.Posture = config.PostureDoctrine
-
-	h := newTestRouterHandler(t, cfg, nil)
-	router := h.buildHTTPRouter()
+	h := newTestRouterHandler(t, config.PostureDoctrine, nil)
+	router := h.buildPublicRouter()
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ConsensusDeliberate, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
-
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestHTTPRouter_ConsensusDeliberate_PostureConsensus_RoutesToDeliberate(t *testing.T) {
-	cfg := testutil.NewTestConfig(t)
-	cfg.Gateway.Posture = config.PostureConsensus
 	logger := testutil.NewTestLogger()
 	responder := response.NewWriter(logger)
 
 	cs := consensus.NewConsensusService("test-cluster", nil, nil, logger, responder)
-	h := newTestRouterHandler(t, cfg, cs)
+	h := newTestRouterHandler(t, config.PostureConsensus, cs)
 
-	router := h.buildHTTPRouter()
+	router := h.buildPublicRouter()
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.ConsensusDeliberate, bytes.NewReader([]byte(`{}`)))
 	w := httptest.NewRecorder()
-
 	router.ServeHTTP(w, req)
 
 	// Deliberate with invalid empty body returns 400 Bad Request, not 404 Not Found
