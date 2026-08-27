@@ -12,6 +12,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -61,6 +62,27 @@ func resolveOperatorEndpoint(endpoint string) string {
 		return trimmed
 	}
 	return constants.DefaultEndpoint
+}
+
+// buildGatewayHTTPBaseURL constructs a plain-HTTP gateway base URL from an
+// endpoint flag value. If the endpoint already has a scheme, it is preserved.
+// If it has a port, that port is used; otherwise the operator HTTP default
+// port is appended. The returned string has no trailing slash.
+func buildGatewayHTTPBaseURL(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+
+	if strings.Contains(endpoint, "://") {
+		return strings.TrimRight(endpoint, "/")
+	}
+
+	if _, _, err := net.SplitHostPort(endpoint); err == nil {
+		return "http://" + endpoint
+	}
+
+	return fmt.Sprintf("http://%s:%d", endpoint, constants.Ports.OperatorHttp)
 }
 
 // resolveWorkingDir returns workingDir if set, otherwise falls back to launchDir.
@@ -246,7 +268,8 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	trustLoaded := LoadTrustBundle(context.Background(), logger, opts.TrustBundlePath, fileSvc, trustStore)
 	if !trustLoaded {
 		if opts.Endpoint != "" {
-			trustURL := fmt.Sprintf("http://%s:%d%s", opts.Endpoint, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
+			baseURL := buildGatewayHTTPBaseURL(opts.Endpoint)
+			trustURL := baseURL + constants.WellKnownPKICABundle
 			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
 			pemData, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
 			if err != nil {
@@ -280,7 +303,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	// the same request and key material.
 	if privateKey == "" && clientCert == "" && opts.Endpoint != "" {
 		logger.Info("No installed operator credentials found; starting platform enrollment", "endpoint", opts.Endpoint)
-		gatewayHTTPURL := fmt.Sprintf("http://%s:%d", opts.Endpoint, constants.Ports.OperatorHttp)
+		gatewayHTTPURL := buildGatewayHTTPBaseURL(opts.Endpoint)
 		hostname, err := os.Hostname()
 		if err != nil {
 			logger.Error("Failed to resolve hostname for enrollment", string(constants.ConnectionStateError), err)

@@ -26,7 +26,24 @@ import (
 func TestHandleUsers(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
 		c, _ := setupTestUserController(t)
-		testMethodNotAllowed(t, c.handleUsers, http.MethodGet, "/api/v1/users")
+		testMethodNotAllowed(t, c.handleUsers, http.MethodPut, "/api/v1/users")
+	})
+
+	t.Run("Success - lists users", func(t *testing.T) {
+		c, _ := setupTestUserController(t)
+		_, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleUsers(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp []map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Len(t, resp, 1)
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {

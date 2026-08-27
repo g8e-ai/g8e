@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Operator
 
 Last Updated: 2026-08-27
-Version: v2.0.3
+Version: v2.0.4
 
 ---
 
@@ -146,7 +146,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.3
+go get github.com/g8e-ai/g8e/v2@v2.0.4
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -158,7 +158,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.0.3
+pip install g8e==2.0.4
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

@@ -199,7 +199,7 @@ func (c *PlatformEnrollmentController) handlePlatformEnrollmentComplete(w http.R
 }
 
 // handlePlatformEnrollmentPending returns owner-visible metadata for all
-// non-terminal platform enrollment requests. The response never includes
+// pending platform enrollment requests. The response never includes
 // token hashes, CSR PEM, certificates, or raw tokens. The caller must be
 // authenticated as the active first user (enforced here after the auth
 // middleware stamps the user ID from the web session or mTLS cert).
