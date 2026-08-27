@@ -341,18 +341,6 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-// SetAuditLogger sets the audit logger. Called by NewGatewayOperatorPubSubService
-// after construction.
-func (g *GatewayService) SetAuditLogger(l AuditLogger) {
-	g.auditLogger = l
-}
-
-// SetL2ConsensusDeliberator sets the L2 consensus deliberator. Called
-// after construction when consensus is bootstrapped.
-func (g *GatewayService) SetL2ConsensusDeliberator(d L2ConsensusDeliberator) {
-	g.l2ConsensusDeliberator = d
-}
-
 // IsNativeTool checks if a tool name is a native tool compiled into the Operator.
 func (g *GatewayService) IsNativeTool(name string) bool {
 	return g.isNativeTool(name)

@@ -155,8 +155,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AdminConsensusByID, http.HandlerFunc(h.adminController.handleDeleteConsensus))
 
 	// Consensus deliberate endpoint (mTLS-guarded, enrolled principal).
-	// Returns 503 if consensus is not configured for the current posture.
-	mux.HandleFunc(constants.APIPaths.ConsensusDeliberate, h.governanceController.handleConsensusDeliberate)
+	// Posture-gated (B1): registered only when posture requires L2 consensus (consensus or notary).
+	// Under doctrine posture, the endpoint is omitted and returns 404.
+	if h.cfg.Gateway.Posture != config.PostureDoctrine && h.cfg.Gateway.Posture != "" {
+		mux.HandleFunc(constants.APIPaths.ConsensusDeliberate, h.governanceController.handleConsensusDeliberate)
+	}
 
 	// Rate-limited governance envelope
 	govEnvMux := http.NewServeMux()

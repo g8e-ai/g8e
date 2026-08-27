@@ -25,7 +25,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -78,7 +77,7 @@ type GatewayModeService struct {
 	envProcAdapter          *pubsub.GatewayEnvProcAdapter
 	sessionValidatorAdapter *pubsub.GatewaySessionValidatorAdapter
 	platformEnrollmentSvc   *PlatformEnrollmentService
-	consensusSvc            atomic.Pointer[consensus.ConsensusService]
+	consensusSvc            *consensus.ConsensusService
 	dispatchSvc             *DispatchService
 	responder               *response.Writer
 	server                  *http.Server
@@ -240,6 +239,11 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	envProcAdapter := &pubsub.GatewayEnvProcAdapter{}
 	sessionValidatorAdapter := &pubsub.GatewaySessionValidatorAdapter{}
 
+	var auditLogger mcp.AuditLogger
+	if stores.AuditStore != nil {
+		auditLogger = pubsub.NewAuditLogger(stores.AuditStore, logger)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:            logger,
 		Responder:         res,
@@ -259,6 +263,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		DownstreamURL:     cfg.Gateway.MCPDownstreamURL,
 		DBService:         stores.DocStore,
 		SessionValidator:  sessionValidatorAdapter,
+		AuditLogger:       auditLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
@@ -418,23 +423,18 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 
 // SetConsensusService wires the consensus service after construction.
 // Called once before Start(). Nil is valid (consensus not configured for the
-// current posture, e.g. doctrine mode). The consensus service is constructed
-// between NewGatewayModeService and Start because it reads from the DB that
-// the constructor opens (via ConsensusBootstrap). The HTTP handler built in
-// the constructor captures a pointer to ls.consensusSvc (an atomic.Pointer),
-// so storing a value before Start() is observed by the GovernanceController
-// at request time without rebuilding the handler. The atomic.Pointer provides
-// the memory ordering guarantees that a raw **T lacks.
+// current posture, e.g. doctrine mode).
 func (ls *GatewayModeService) SetConsensusService(svc *consensus.ConsensusService) {
-	ls.consensusSvc.Store(svc)
+	ls.consensusSvc = svc
+	if ls.handler != nil && ls.handler.governanceController != nil {
+		ls.handler.governanceController.consensus = svc
+	}
 }
 
 // LoadConsensusService returns the currently wired consensus service, or nil
-// if consensus is not configured for the current posture. Thread-safe; use
-// this accessor instead of touching the atomic.Pointer directly from outside
-// the package.
+// if consensus is not configured for the current posture.
 func (ls *GatewayModeService) LoadConsensusService() *consensus.ConsensusService {
-	return ls.consensusSvc.Load()
+	return ls.consensusSvc
 }
 
 // initHTTPHandler is the internal constructor for the HTTP handler and
@@ -603,7 +603,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Cfg:       cfg,
 			Logger:    logger,
 			Responder: ls.responder,
-			Consensus: &ls.consensusSvc,
+			Consensus: ls.consensusSvc,
 			EnvProc:   envProc,
 		},
 		MCPControllerDeps: MCPControllerDeps{

@@ -308,17 +308,6 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	// GatewayModeService.initHandlersAndServers and must not be re-set here.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
 	if rs.mcpGateway != nil {
-		var auditLogger mcp.AuditLogger
-		if c.AuditStore != nil {
-			auditLogger = &pubsubAuditLogger{store: c.AuditStore, logger: c.Logger}
-		}
-
-		rs.mcpGateway.SetAuditLogger(auditLogger)
-
-		if c.L2ConsensusDeliberator != nil {
-			rs.mcpGateway.SetL2ConsensusDeliberator(c.L2ConsensusDeliberator)
-		}
-
 		if c.EnvProcAdapter != nil {
 			c.EnvProcAdapter.SetTarget(rs)
 		}
@@ -1117,6 +1106,14 @@ func (rs *OperatorPubSubService) SendAutomaticHeartbeat() error {
 type pubsubAuditLogger struct {
 	store  AuditEventRecorder
 	logger *slog.Logger
+}
+
+// NewAuditLogger constructs an mcp.AuditLogger backed by an audit event recorder.
+func NewAuditLogger(store AuditEventRecorder, logger *slog.Logger) mcp.AuditLogger {
+	return &pubsubAuditLogger{
+		store:  store,
+		logger: logger,
+	}
 }
 
 func (l *pubsubAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value mcp.FieldValue) error {

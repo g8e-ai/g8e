@@ -55,25 +55,29 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
-	// Create command service with rejecting L3 notary
-	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:             cfg,
-		Logger:             logger,
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       NewInProcessPubSubClient(nil),
-		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          mustNewScrubbingSvc(t, logger),
-	}, OutboundModeDeps{
-		GovernanceCoreDeps: GovernanceCoreDeps{
-			L3Notary:          rejectingL3,
-			ReplayStore:       replayStore,
-			StateRootProvider: stateRootProvider,
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			SignerStore:       signerStore,
-			Doctrine:          governance.NewL1Doctrine(),
+	// Create command service with rejecting L3 notary in gateway mode (required for L2/L3 posture verification)
+	cmdSvc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
+		CommandServiceConfig: CommandServiceConfig{
+			Config:             cfg,
+			Logger:             logger,
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       NewInProcessPubSubClient(nil),
+			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+			ActuatorSigningKey: privKey,
+			ActuatorKeyID:      "test-key",
+			Scrubbing:          mustNewScrubbingSvc(t, logger),
+		},
+		GovDeps: &GovernanceDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				L3Notary:          rejectingL3,
+				ReplayStore:       replayStore,
+				StateRootProvider: stateRootProvider,
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				SignerStore:       signerStore,
+				Doctrine:          governance.NewL1Doctrine(),
+			},
+			ConsensusPolicyStore: testConsensusStore(),
 		},
 	})
 	if err != nil {
@@ -183,25 +187,29 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
-	// Create command service with accepting L3 notary
-	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:             cfg,
-		Logger:             logger,
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       NewInProcessPubSubClient(nil),
-		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          mustNewScrubbingSvc(t, logger),
-	}, OutboundModeDeps{
-		GovernanceCoreDeps: GovernanceCoreDeps{
-			L3Notary:          acceptingL3,
-			ReplayStore:       replayStore,
-			StateRootProvider: stateRootProvider,
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			SignerStore:       signerStore,
-			Doctrine:          governance.NewL1Doctrine(),
+	// Create command service with accepting L3 notary in gateway mode (required for L2/L3 posture verification)
+	cmdSvc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
+		CommandServiceConfig: CommandServiceConfig{
+			Config:             cfg,
+			Logger:             logger,
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       NewInProcessPubSubClient(nil),
+			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+			ActuatorSigningKey: privKey,
+			ActuatorKeyID:      "test-key",
+			Scrubbing:          mustNewScrubbingSvc(t, logger),
+		},
+		GovDeps: &GovernanceDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				L3Notary:          acceptingL3,
+				ReplayStore:       replayStore,
+				StateRootProvider: stateRootProvider,
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				SignerStore:       signerStore,
+				Doctrine:          governance.NewL1Doctrine(),
+			},
+			ConsensusPolicyStore: testConsensusStore(),
 		},
 	})
 	if err != nil {
@@ -312,25 +320,29 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
-	// Create command service with nil L3 notary (should fail-closed)
-	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:             cfg,
-		Logger:             logger,
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       NewInProcessPubSubClient(nil),
-		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          mustNewScrubbingSvc(t, logger),
-	}, OutboundModeDeps{
-		GovernanceCoreDeps: GovernanceCoreDeps{
-			L3Notary:          nil, // Explicitly nil to test fail-closed
-			ReplayStore:       replayStore,
-			StateRootProvider: stateRootProvider,
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			SignerStore:       signerStore,
-			Doctrine:          governance.NewL1Doctrine(),
+	// Create command service with nil L3 notary in gateway mode (should fail-closed)
+	cmdSvc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
+		CommandServiceConfig: CommandServiceConfig{
+			Config:             cfg,
+			Logger:             logger,
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       NewInProcessPubSubClient(nil),
+			ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+			ActuatorSigningKey: privKey,
+			ActuatorKeyID:      "test-key",
+			Scrubbing:          mustNewScrubbingSvc(t, logger),
+		},
+		GovDeps: &GovernanceDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				L3Notary:          nil, // Explicitly nil to test fail-closed
+				ReplayStore:       replayStore,
+				StateRootProvider: stateRootProvider,
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				SignerStore:       signerStore,
+				Doctrine:          governance.NewL1Doctrine(),
+			},
+			ConsensusPolicyStore: testConsensusStore(),
 		},
 	})
 	if err != nil {
