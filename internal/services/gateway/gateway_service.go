@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -33,7 +32,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
@@ -102,7 +100,6 @@ type gatewayServiceBuilder struct {
 	logger       *slog.Logger
 	fileSvc      fs.RuntimeFileService
 	db           *CanonicalDBService
-	stores       *DBStores
 	consensusSvc *consensus.ConsensusService
 	deliberator  *consensus.LocalDeliberator
 	cmdSvc       *pubsub.OperatorPubSubService
@@ -113,10 +110,9 @@ func newGatewayServiceBuilder(cfg *config.Config, fileSvc fs.RuntimeFileService,
 	return &gatewayServiceBuilder{cfg: cfg, logger: logger, fileSvc: fileSvc}
 }
 
-// withDB configures an existing database and stores.
-func (b *gatewayServiceBuilder) withDB(db *CanonicalDBService, stores *DBStores) *gatewayServiceBuilder {
+// withDB configures an existing database.
+func (b *gatewayServiceBuilder) withDB(db *CanonicalDBService) *gatewayServiceBuilder {
 	b.db = db
-	b.stores = stores
 	return b
 }
 
@@ -144,11 +140,11 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- DB and pubsub ---
 	var db *CanonicalDBService
-	var stores *DBStores
+	var stores *Stores
 	var err error
-	if b.db != nil && b.stores != nil {
+	if b.db != nil {
 		db = b.db
-		stores = b.stores
+		stores = b.db.GetStores()
 	} else {
 		db, stores, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
@@ -272,14 +268,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway: load actuator signing key: %w", err)
 	}
-
-	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
-	_ = stores.SignerStore.AddTrustedSigner(models.TrustedSigner{
-		ID:        actuatorKeyID,
-		PublicKey: hex.EncodeToString(actuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
 
 	// --- Consensus bootstrap (C2 inverted order: before pubsub and mcpGateway) ---
 	consensusSvc := b.consensusSvc
@@ -466,8 +454,8 @@ func NewGatewayModeServiceWithConsensus(cfg *config.Config, fileSvc fs.RuntimeFi
 }
 
 // NewGatewayModeServiceWithDB creates a new gateway mode service with existing DB and pre-configured consensus.
-func NewGatewayModeServiceWithDB(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, stores *DBStores, cs *consensus.ConsensusService, delib *consensus.LocalDeliberator) (*GatewayModeService, error) {
-	return newGatewayServiceBuilder(cfg, fileSvc, logger).withDB(db, stores).withConsensus(cs, delib).build()
+func NewGatewayModeServiceWithDB(cfg *config.Config, fileSvc fs.RuntimeFileService, logger *slog.Logger, db *CanonicalDBService, cs *consensus.ConsensusService, delib *consensus.LocalDeliberator) (*GatewayModeService, error) {
+	return newGatewayServiceBuilder(cfg, fileSvc, logger).withDB(db).withConsensus(cs, delib).build()
 }
 
 type networkIdentityDetector interface {

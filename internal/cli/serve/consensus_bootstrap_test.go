@@ -471,7 +471,7 @@ func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
 
-func TestBootstrapConsensusPolicy_ValidConfigNilServiceOnlyChecksServiceAfterParse(t *testing.T) {
+func TestBootstrapConsensusPolicy_ValidConfigNilStoresOnlyChecksStoresAfterParse(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
@@ -484,14 +484,14 @@ func TestBootstrapConsensusPolicy_ValidConfigNilServiceOnlyChecksServiceAfterPar
 	}`), 0600)
 	require.NoError(t, err)
 
-	// With nil service, the file is read and parsed successfully, then
-	// svc == nil check triggers ErrGatewayServiceNil (not a DB error).
+	// With nil stores, the file is read and parsed successfully, then
+	// stores == nil check triggers ErrGatewayStoresNil (not a DB error).
 	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil))
+	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil))
 }
 
-func TestBootstrapConsensusPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
+func TestBootstrapConsensusPolicy_NilStoresWithInvalidSeedHex(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
@@ -504,22 +504,22 @@ func TestBootstrapConsensusPolicy_NilServiceWithInvalidSeedHex(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	// Even with nil service, the nil check happens after parse but before
-	// seed derivation. So we should get ErrGatewayServiceNil, not a seed error.
+	// Even with nil stores, the nil check happens after parse but before
+	// seed derivation. So we should get ErrGatewayStoresNil, not a seed error.
 	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"nil service check occurs before seed derivation")
+	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
+		"nil stores check occurs before seed derivation")
 }
 
-// TestBootstrapConsensusPolicy_NilServiceWithMemberSeeds proves the
+// TestBootstrapConsensusPolicy_NilStoresWithMemberSeeds proves the
 // member_seeds JSON format parses cleanly through parseConsensusBootstrapConfig
-// before the nil-service guard fires. This is the Tier 1 proof that
+// before the nil-stores guard fires. This is the Tier 1 proof that
 // member_seeds is a valid config format; validation that every member has a
 // seed (ErrConsensusBootstrapMissingFields) is only reachable past the
-// nil-service guard and is exercised at the Tier 2 bootstrap level with a
+// nil-stores guard and is exercised at the Tier 2 bootstrap level with a
 // real GatewayModeService fixture.
-func TestBootstrapConsensusPolicy_NilServiceWithMemberSeeds(t *testing.T) {
+func TestBootstrapConsensusPolicy_NilStoresWithMemberSeeds(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
@@ -536,51 +536,13 @@ func TestBootstrapConsensusPolicy_NilServiceWithMemberSeeds(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	// With nil service, the file is read and parsed successfully, then
-	// svc == nil check triggers ErrGatewayServiceNil (not a parse error).
+	// With nil stores, the file is read and parsed successfully, then
+	// stores == nil check triggers ErrGatewayStoresNil (not a parse error).
 	// This proves the member_seeds format parses cleanly.
 	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"member_seeds format must parse cleanly; nil service check fires after parse")
-}
-
-// ---------------------------------------------------------------------------
-// ConsensusBootstrap — additional nil-service edge cases (Tier 1 — no DB)
-// ---------------------------------------------------------------------------
-
-func TestConsensusBootstrap_NilServiceWithNonEmptyConsensusID(t *testing.T) {
-	_, priv, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err = ConsensusBootstrap(nil, "some-consensus-id", priv, "actuator-key-id",
-		constants.TestPathShortSecrets, logger)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil))
-}
-
-func TestConsensusBootstrap_NilServiceWithEmptySecretsDir(t *testing.T) {
-	_, priv, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err = ConsensusBootstrap(nil, "trib-001", priv, "key-id", "", logger)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"nil service check happens before secretsDir is used")
-}
-
-func TestConsensusBootstrap_NilServiceWithNilPrivateKey(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err := ConsensusBootstrap(nil, "trib-001", nil, "key-id",
-		constants.TestPathShortSecrets, logger)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"nil service check happens before private key is used")
+	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
+		"member_seeds format must parse cleanly; nil stores check fires after parse")
 }
 
 // ---------------------------------------------------------------------------

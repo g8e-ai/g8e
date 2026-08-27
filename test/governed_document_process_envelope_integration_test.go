@@ -101,8 +101,8 @@ func TestProcessEnvelope_ConcurrentInvestigationTitleMergePreservesFields(t *tes
 
 	ctx := context.Background()
 	stateRootSvc := f.Service.GetGovernanceDeps().StateRootProvider
-	envProc := f.Service.GetEnvProcAdapter()
-	require.NotNil(t, envProc, "EnvProcAdapter must be wired")
+	envProc := f.Service.GetCommandService()
+	require.NotNil(t, envProc, "CommandService must be wired")
 
 	const (
 		collection    = "investigations"
