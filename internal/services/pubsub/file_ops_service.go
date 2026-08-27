@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/security"
 	execution "github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/v2/internal/services/storage"
@@ -109,6 +110,14 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		return
 	}
 
+	// Begin ledger two-phase commit (pre-mutation snapshot).
+	// The path must be resolved to absolute to match ExecuteFileEdit's internal
+	// security.ValidatePath resolution, since the ledger methods use os.Stat/os.ReadFile.
+	var ledgerResult *storage.LedgerResult
+	if fs.ledger != nil && operation != "read" {
+		ledgerResult = fs.beginLedgerTwoPhaseCommit(filePath, operation)
+	}
+
 	result, err := fs.fileEdit.ExecuteFileEdit(ctx, editReq)
 	if err != nil {
 		fs.logger.Error("File edit execution failed", "error", err)
@@ -117,6 +126,13 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 	if result == nil {
 		fs.logger.Error("File edit returned no result")
 		return
+	}
+
+	// Complete ledger two-phase commit (post-mutation snapshot) on successful execution.
+	if ledgerResult != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		if err := fs.completeLedgerTwoPhaseCommit(ledgerResult); err != nil {
+			fs.logger.Warn("Failed to complete ledger two-phase commit", "error", err)
+		}
 	}
 
 	commandStr := fmt.Sprintf("file_%s: %s", operation, filePath)
@@ -172,29 +188,33 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 				"file_path", filePath,
 				"operation", operation)
 
-			if fs.ledger != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-				var mutationOp storage.FileMutationOperation
-				switch operation {
-				case "write":
-					mutationOp = storage.FileMutationWrite
-				case "delete":
-					mutationOp = storage.FileMutationDelete
-				default:
-					mutationOp = storage.FileMutationWrite
-				}
-
+			if fs.ledger != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED && ledgerResult != nil {
 				mutation := &storage.FileMutationLog{
-					EventID:   eventID,
-					Filepath:  filePath,
-					Operation: mutationOp,
+					EventID:          eventID,
+					Filepath:         filePath,
+					Operation:        ledgerResult.Operation,
+					LedgerHashBefore: ledgerResult.LedgerHashBefore,
+					LedgerHashAfter:  ledgerResult.LedgerHashAfter,
+					DiffStat:         ledgerResult.DiffStat,
 				}
 
 				if err := fs.auditStore.RecordFileMutation(mutation); err != nil {
 					fs.logger.Warn("Failed to record file mutation in audit log", "error", err)
 				}
 
-				if fs.vaultWriter != nil {
-					fs.vaultWriter.StoreFileDiffFromLedger(ctx, filePath, operation, fmt.Sprintf("%d", eventID), fs.config.OperatorSessionId, result.CaseID, fs.ledger)
+				if fs.vaultWriter != nil && ledgerResult.DiffContent != "" {
+					fs.vaultWriter.WriteFileDiff(ctx, fileDiffWriteParams{
+						diffID:            fmt.Sprintf("diff_%d_%d", eventID, time.Now().UnixNano()),
+						timestamp:         time.Now().UTC(),
+						filePath:          filePath,
+						operation:         operation,
+						ledgerHashBefore:  ledgerResult.LedgerHashBefore,
+						ledgerHashAfter:   ledgerResult.LedgerHashAfter,
+						diffStat:          ledgerResult.DiffStat,
+						diffContent:       ledgerResult.DiffContent,
+						caseID:            result.CaseID,
+						operatorSessionID: fs.config.OperatorSessionId,
+					})
 				}
 			}
 		}
@@ -248,6 +268,65 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			fs.logger.Error("Failed to publish file edit result", "error", err)
 		}
 	}
+}
+
+// beginLedgerTwoPhaseCommit starts the pre-mutation snapshot phase of the git ledger
+// two-phase commit. It resolves the file path to absolute (matching ExecuteFileEdit's
+// security.ValidatePath resolution), determines whether the operation creates a new file
+// or modifies an existing one, and calls the appropriate ledger begin method.
+// Returns nil if the ledger is not ready or the path cannot be resolved (best-effort).
+func (fs *FileOpsService) beginLedgerTwoPhaseCommit(filePath, operation string) *storage.LedgerResult {
+	absFilePath, err := security.ValidatePath(filePath, fs.config.WorkDir)
+	if err != nil {
+		fs.logger.Warn("Failed to resolve file path for ledger pre-mutation", "error", err)
+		return nil
+	}
+
+	fileExists := fileExistsOnDisk(absFilePath)
+
+	var ledgerResult *storage.LedgerResult
+	var ledgerErr error
+
+	switch {
+	case !fileExists && (operation == "write" || operation == "create"):
+		ledgerResult, ledgerErr = fs.ledger.MirrorFileCreate(fs.config.OperatorSessionId, absFilePath)
+	case fileExists:
+		ledgerResult, ledgerErr = fs.ledger.LedgerFileWrite(fs.config.OperatorSessionId, absFilePath)
+	default:
+		// File does not exist and operation is not a creation (e.g., replace/insert/delete
+		// on a non-existent file). ExecuteFileEdit will fail; skip the ledger snapshot.
+		return nil
+	}
+
+	if ledgerErr != nil {
+		fs.logger.Warn("Failed to begin ledger two-phase commit", "error", ledgerErr)
+		return nil
+	}
+
+	return ledgerResult
+}
+
+// completeLedgerTwoPhaseCommit completes the post-mutation snapshot phase of the git
+// ledger two-phase commit by dispatching to the appropriate CompleteMirror* method
+// based on the LedgerResult.Operation. Returns nil if result is nil.
+func (fs *FileOpsService) completeLedgerTwoPhaseCommit(result *storage.LedgerResult) error {
+	if result == nil {
+		return nil
+	}
+	switch result.Operation {
+	case storage.FileMutationCreate:
+		return fs.ledger.CompleteMirrorCreate(result, fs.config.OperatorSessionId)
+	case storage.FileMutationDelete:
+		return fs.ledger.CompleteMirrorDelete(result, fs.config.OperatorSessionId)
+	default:
+		return fs.ledger.CompleteMirrorWrite(result, fs.config.OperatorSessionId)
+	}
+}
+
+// fileExistsOnDisk reports whether a regular file (not a directory) exists at the given path.
+func fileExistsOnDisk(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // HandleFsListRequest processes an inbound filesystem list request.
