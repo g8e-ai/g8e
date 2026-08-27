@@ -25,16 +25,11 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
-	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
-	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	gateway "github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
-	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/system"
 )
 
@@ -144,20 +139,27 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	}
 	gatewayCfg.Version = vi.Version
 
-	svc, err := gateway.NewGatewayModeService(gatewayCfg, fileSvc, logger)
-	if err != nil {
-		return fmt.Errorf("gateway: create service: %w", err)
-	}
+	// Git for ledger (embedded go-git)
+	gatewayCfg.GitPath = system.GitEmbedded
+	gatewayCfg.GitAvailable = true
 
-	// Consensus bootstrap: if --consensus-bootstrap is set, seed the trusted
-	// signer(s) and ConsensusPolicy from a JSON config file before L2 posture
-	// validation runs. This enables deterministic demo deployments where the
-	// gateway and harness share the same Ed25519 seed. The seed-derived private
-	// key is also saved to disk so the in-process LocalDeliberator can sign L2
-	// votes via the FileKeyProvider during ConsensusBootstrap.
+	var svc *gateway.GatewayModeService
 	if cfg.ConsensusBootstrap != "" {
-		if err := consensusPolicyBootstrap(svc, cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
+		db, stores, err := gateway.OpenCanonicalDBService(gatewayCfg.Gateway.DataDir, gatewayCfg.Gateway.VaultDir, logger, gatewayCfg.Gateway.VaultKeyPath, nil, fileSvc)
+		if err != nil {
+			return fmt.Errorf("gateway: failed to initialize database: %w", err)
+		}
+		if err := consensusPolicyBootstrap(stores, cfg.ConsensusBootstrap, cfg.SecretsDir, logger); err != nil {
 			return fmt.Errorf("gateway: consensus bootstrap: %w", err)
+		}
+		svc, err = gateway.NewGatewayModeServiceWithDB(gatewayCfg, fileSvc, logger, db, nil, nil)
+		if err != nil {
+			return fmt.Errorf("gateway: create service: %w", err)
+		}
+	} else {
+		svc, err = gateway.NewGatewayModeService(gatewayCfg, fileSvc, logger)
+		if err != nil {
+			return fmt.Errorf("gateway: create service: %w", err)
 		}
 	}
 
@@ -181,20 +183,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Initialize In-Process Execution Gateway
-	logger.Info("Initializing in-process execution Gateway...")
-	execSvc := execution.NewExecutionService(gatewayCfg, logger)
-	fileEditSvc := execution.NewFileEditService(gatewayCfg, logger)
-
-	// Git for ledger (embedded go-git)
-	gatewayCfg.GitPath = system.GitEmbedded
-	gatewayCfg.GitAvailable = true
-
-	// Use the gateway-mode database for everything
-	govDeps := svc.GetGovernanceDeps()
+	// Export Actuator public key for receipt verification by evals harness
 	sm, err := svc.GetSecretManager()
 	if err != nil {
 		return fmt.Errorf("gateway: get secret manager: %w", err)
@@ -205,95 +194,19 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		return fmt.Errorf("gateway: load actuator signing key: %w", err)
 	}
 
-	// Export Actuator public key for receipt verification by evals harness
 	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", actuatorKeyID)
 	if err := govsvc.ExportActuatorPublicKey(fileSvc, actuatorPub, actuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 
-	// Loopback Pub/Sub for in-process command dispatch
-	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetGatewayWebSocketHandler())
-
-	// Resolve the MCP gateway up-front so the pubsub command service can
-	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
-	mcpSvc := svc.GetMCPGateway()
-
-	// Get the GatewayDBService's AuditStore for full audit storage
-	// This ensures ActionReceipts are persisted in the receipts table
-	var auditStore *storage.SQLAuditStore
-	if svc != nil && svc.GetAuditStore() != nil {
-		auditStore = svc.GetAuditStore()
-		logger.Info("Gateway AuditStore enabled for full audit storage")
-	} else {
-		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
+	cmdSvc := svc.GetCommandService()
+	if cmdSvc == nil {
+		return fmt.Errorf("gateway: command service not initialized")
 	}
 
-	scrubbingSvc, err := scrubbing.NewScrubbingService(ctx, scrubbing.DefaultConfig(), logger, nil)
-	if err != nil {
-		return fmt.Errorf("gateway: failed to initialize scrubbing service: %w", err)
-	}
-
-	// Bootstrap Consensus service for L2-requiring postures before constructing
-	// the pubsub command service, so the L2ConsensusDeliberator can be passed
-	// through GatewayCommandServiceConfig into the MCP gateway's Dependencies.
-	// Under doctrine posture, the Consensus is not constructed.
-	var consensusSvc *consensus.ConsensusService
-	var l2Deliberator *consensus.LocalDeliberator
-	if (cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary) && cfg.ConsensusID != "" {
-		consensusSvc, err = ConsensusBootstrap(svc, cfg.ConsensusID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
-		if err != nil {
-			return fmt.Errorf("gateway: bootstrap consensus service: %w", err)
-		}
-		l2Deliberator = consensus.NewLocalDeliberator(consensusSvc)
-		logger.Info("Consensus service bootstrapped", "consensus_id", cfg.ConsensusID)
-	}
-
-	psConfig := pubsub.GatewayCommandServiceConfig{
-		CommandServiceConfig: pubsub.CommandServiceConfig{
-			Config:             gatewayCfg,
-			Logger:             logger,
-			Execution:          execSvc,
-			FileEdit:           fileEditSvc,
-			PubSubClient:       loopbackClient,
-			ResultsService:     nil, // Results handled via direct loopback publish if needed
-			ExecutionVault:     nil, // Not used in gateway mode
-			AuditStore:         auditStore,
-			Ledger:             nil, // P1: Ledger in gateway mode
-			HistoryHandler:     nil, // P1: History in gateway mode
-			Scrubbing:          scrubbingSvc,
-			ActuatorSigningKey: actuatorPriv,
-			ActuatorKeyID:      actuatorKeyID,
-		},
-		GovDeps:                 govDeps,
-		MCPGateway:              mcpSvc,
-		L2ConsensusDeliberator:  l2Deliberator,
-		EnvProcAdapter:          svc.GetEnvProcAdapter(),
-		SessionValidatorAdapter: svc.GetSessionValidatorAdapter(),
-		PlatformEnrollmentDeps: &pubsub.PlatformEnrollmentDeps{
-			DocStore:         svc.GetDocStore(),
-			PKI:              svc.GetPKI(),
-			CLISessions:      svc.GetCLISessionService(),
-			OperatorSessions: svc.GetOperatorSessionService(),
-			Posture:          string(gatewayCfg.Gateway.Posture),
-		},
-	}
-
-	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)
-	if err != nil {
-		return fmt.Errorf("gateway: initialize command service: %w", err)
-	}
-
-	// The MCP gateway's runtime governance dependencies (gateway processor,
-	// signing identity, audit logger, L2 consensus deliberator, etc.) are wired
-	// by NewGatewayOperatorPubSubService, which received mcpSvc and l2Deliberator
-	// through GatewayCommandServiceConfig. No additional gateway wiring is needed.
-
-	// Wire the consensus service into the already-constructed HTTP handler.
-	// The handler was built during NewGatewayModeService with consensusSvc nil;
-	// SetConsensusService updates the field that GovernanceController reads at
-	// request time. Nil is valid (doctrine posture or no consensus configured).
-	svc.SetConsensusService(consensusSvc)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -429,7 +342,12 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 // omitted, a fresh key pair is generated and shared across members. The
 // ConsensusPolicy is then created in the database. This is idempotent: if the
 // consensus already exists, the bootstrap is skipped.
-func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
+//
+// Under the C2 inverted construction order, this is called BEFORE
+// NewGatewayModeServiceWithDB so that build() reads the seeded policy from
+// the DB and constructs the ConsensusService internally. Member private keys
+// are saved to secretsDir so build()'s FileKeyProvider can load them.
+func consensusPolicyBootstrap(stores *gateway.Stores, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapReadConfig, err)
@@ -440,12 +358,12 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 		return fmt.Errorf("%w: %w", constants.ErrConsensusBootstrapParseConfig, err)
 	}
 
-	if svc == nil {
-		return constants.ErrGatewayServiceNil
+	if stores == nil {
+		return constants.ErrGatewayStoresNil
 	}
 
 	// Check if consensus already exists (idempotent)
-	existing, err := svc.GetConsensusStore().GetConsensus(boot.ConsensusID)
+	existing, err := stores.ConsensusStore.GetConsensus(boot.ConsensusID)
 	if err != nil {
 		return fmt.Errorf("consensus bootstrap: check existing: %w", err)
 	}
@@ -517,7 +435,7 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 			AddedAt:   time.Now().UTC(),
 			Enabled:   true,
 		}
-		if err := svc.GetSignerStore().AddTrustedSigner(signer); err != nil {
+		if err := stores.SignerStore.AddTrustedSigner(signer); err != nil {
 			return fmt.Errorf("consensus bootstrap: register signer %s: %w", appID, err)
 		}
 		if err := consensus.SaveMemberKey(secretsDir, boot.ConsensusID, appID, privKey); err != nil {
@@ -534,46 +452,9 @@ func consensusPolicyBootstrap(svc *gateway.GatewayModeService, bootstrapPath str
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	if err := svc.GetConsensusStore().AddConsensus(policy); err != nil {
+	if err := stores.ConsensusStore.AddConsensus(policy); err != nil {
 		return fmt.Errorf("consensus bootstrap: create policy: %w", err)
 	}
 	logger.Info("Consensus policy created", "consensus_id", boot.ConsensusID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
 	return nil
-}
-
-// ConsensusBootstrap constructs a ConsensusService from the ConsensusPolicy stored
-// in the database. For single-member consensus, the gateway's actuator signing
-// key is used as the member private key (Option C from the design doc). For
-// multi-member consensus, member keys are loaded from disk via FileKeyProvider
-// (CS-9), falling back to the actuator key for the matching member.
-func ConsensusBootstrap(svc *gateway.GatewayModeService, consensusID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*consensus.ConsensusService, error) {
-	if svc == nil {
-		return nil, constants.ErrGatewayServiceNil
-	}
-	policy, err := svc.GetConsensusStore().GetConsensus(consensusID)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrap consensus: load policy: %w", err)
-	}
-	if policy == nil {
-		return nil, fmt.Errorf("bootstrap consensus: %w: %s", constants.ErrTxL2ConsensusNotConfigured, consensusID)
-	}
-
-	fileProvider := consensus.NewFileKeyProvider(secretsDir, consensusID)
-
-	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
-		if key, err := fileProvider.GetMemberKey(appID); err == nil {
-			logger.Info("Consensus member key loaded from file", "member_app_id", appID)
-			return key, nil
-		}
-
-		if appID == actuatorKeyID {
-			return actuatorPriv, nil
-		}
-		return nil, fmt.Errorf("bootstrap consensus: %w: %s (no file key and not the actuator)", constants.ErrConsensusMemberKeyNotFound, appID)
-	})
-
-	doctrine := govsvc.NewL1Doctrine()
-	responder := response.NewWriter(logger)
-
-	return consensus.NewConsensusFromPolicy(policy, keyProvider, doctrine, logger, responder)
 }

@@ -69,6 +69,11 @@ directory (default: .g8e/data/compliance/).`,
 				return fmt.Errorf("%w: unsupported format: %s (only 'oscal' is supported)", constants.ErrValidationFailed, format)
 			}
 
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+
 			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
@@ -90,13 +95,13 @@ directory (default: .g8e/data/compliance/).`,
 				return fmt.Errorf("compliance: generate component-definition: %w", err)
 			}
 
-			resultSet := evaluateKSIs(cmd.Context(), fileSvc, cat, certClass)
+			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass)
 			if resultSet == nil {
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
 
 			historyStore := newKSIHistoryStore(fileSvc)
-			if err := saveKSIHistorySnapshot(cmd.Context(), historyStore, resultSet); err != nil {
+			if err := saveKSIHistorySnapshot(ctx, historyStore, resultSet); err != nil {
 				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
 			}
 
@@ -109,11 +114,6 @@ directory (default: .g8e/data/compliance/).`,
 			relOutDir := outDir
 			if relOutDir == "" {
 				relOutDir = filepath.Join(constants.DataDirname, constants.ComplianceDirname)
-			}
-
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
 			}
 
 			if err := fileSvc.MkdirAll(ctx, relOutDir, constants.PermDirStandard); err != nil {
@@ -167,6 +167,11 @@ func complianceKSICmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Ru
 		Long: `Evaluate g8e's live state against the FedRAMP 20x Key Security Indicators
 for the specified certification class and print the KSIResultSet as JSON.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+
 			fileSvc, err := fileSvcFactory("", slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
@@ -181,13 +186,13 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 			if err != nil {
 				return err
 			}
-			resultSet := evaluateKSIs(cmd.Context(), fileSvc, cat, certClass)
+			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass)
 			if resultSet == nil {
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
 
 			historyStore := newKSIHistoryStore(fileSvc)
-			if err := saveKSIHistorySnapshot(cmd.Context(), historyStore, resultSet); err != nil {
+			if err := saveKSIHistorySnapshot(ctx, historyStore, resultSet); err != nil {
 				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
 			}
 

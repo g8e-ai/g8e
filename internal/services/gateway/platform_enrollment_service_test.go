@@ -21,7 +21,6 @@ package gateway
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -43,9 +42,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/services/execution"
-	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 )
 
 // platformEnrollmentTestEnv bundles the services needed by the enrollment
@@ -63,78 +59,15 @@ type platformEnrollmentTestEnv struct {
 }
 
 // setupPlatformEnrollmentEnv constructs a full GatewayModeService under
-// doctrine posture, wires the in-process OperatorPubSubService with
-// PlatformEnrollmentDeps, and returns the env. The gateway is NOT started
-// (no port binding); the enrollment service operates through the wired
-// envProcAdapter without an HTTP listener. If createOwner is true, a first
+// doctrine posture (with the in-process OperatorPubSubService and PlatformEnrollmentService
+// constructed via C2 lifecycle) and returns the env. The gateway is NOT started
+// (no port binding); the enrollment service operates through the concrete
+// OperatorPubSubService without an HTTP listener. If createOwner is true, a first
 // user is created to bootstrap the gateway and the owner ID is returned.
 func setupPlatformEnrollmentEnv(t *testing.T, createOwner bool) *platformEnrollmentTestEnv {
 	t.Helper()
 
 	ls := newTestGatewayService(t, testGatewayOpts{posture: config.PostureDoctrine})
-
-	cfg := ls.cfg
-	logger := ls.logger
-
-	execSvc := execution.NewExecutionService(cfg, logger)
-	fileEditSvc := execution.NewFileEditService(cfg, logger)
-	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), logger, nil)
-	require.NoError(t, err)
-
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
-
-	// Add actuator key to signer store so governance signatures are trusted.
-	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetSignerStore().AddTrustedSigner(models.TrustedSigner{
-		ID:        actuatorKeyID,
-		PublicKey: hexEncode(actuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	loopbackClient := pubsub.NewInProcessPubSubClient(ls.GetGatewayWebSocketHandler())
-
-	_, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
-		CommandServiceConfig: pubsub.CommandServiceConfig{
-			Config:             cfg,
-			Logger:             logger,
-			Execution:          execSvc,
-			FileEdit:           fileEditSvc,
-			PubSubClient:       loopbackClient,
-			Scrubbing:          scrubbingSvc,
-			ActuatorSigningKey: actuatorPriv,
-			ActuatorKeyID:      actuatorKeyID,
-		},
-		GovDeps: &pubsub.GovernanceDeps{
-			ReplayStore:          govDeps.ReplayStore,
-			StateRootProvider:    govDeps.StateRootProvider,
-			TransactionAudit:     govDeps.TransactionAudit,
-			SignerStore:          govDeps.SignerStore,
-			ConsensusPolicyStore: govDeps.ConsensusPolicyStore,
-			L3Notary:             govDeps.L3Notary,
-			FieldReader:          govDeps.FieldReader,
-			Doctrine:             govDeps.Doctrine,
-		},
-		MCPGateway:              mcpGateway,
-		EnvProcAdapter:          ls.GetEnvProcAdapter(),
-		SessionValidatorAdapter: ls.GetSessionValidatorAdapter(),
-		PlatformEnrollmentDeps: &pubsub.PlatformEnrollmentDeps{
-			DocStore:         ls.GetDocStore(),
-			PKI:              ls.GetPKI(),
-			CLISessions:      ls.GetCLISessionService(),
-			OperatorSessions: ls.GetOperatorSessionService(),
-			Posture:          string(cfg.Gateway.Posture),
-		},
-	})
-	require.NoError(t, err)
 
 	env := &platformEnrollmentTestEnv{
 		svc:       ls,

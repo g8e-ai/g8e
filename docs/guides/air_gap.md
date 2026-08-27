@@ -106,7 +106,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `g8e` binary (produced at `bin/g8e-<os>-<arch>` with a root copy at `./g8e`).
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the unified platform compose (`docker-compose.yml` deploying `g8e-gateway`, `g8e-operator`, `ensemble`, and `dashboard`) or the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, `demos/fedramp`, and `demos/frontend` as reference. Compose files build the gateway and operator images from the repo-root `Dockerfile` via `context: ../..` (the production image, always-FIPS, compiles from source using vendored modules in-container).
+3. **Optional Container Build**: For containerized deployments, use the unified platform compose (`docker-compose.yml` deploying `g8e-gateway`, `g8e-operator`, `ensemble`, and `dashboard`) or the demo configurations in `demos/healthcare`, `demos/finance`, `demos/dhs`, and `demos/fedramp` as reference. Compose files build the gateway and operator images from the repo-root `Dockerfile` via `context: ../..` (the production image, always-FIPS, compiles from source using vendored modules in-container).
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
    ./g8e demos pull

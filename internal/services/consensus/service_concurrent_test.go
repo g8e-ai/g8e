@@ -13,10 +13,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/governance"
+	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 )
 
 // TestConsensusService_Deliberate_ConcurrentIdempotency verifies that
@@ -42,9 +45,9 @@ func TestConsensusService_Deliberate_ConcurrentIdempotency(t *testing.T) {
 			defer wg.Done()
 			// Each goroutine gets its own copy of the envelope to avoid
 			// concurrent mutation of the Governance field.
-			envCopy := *env
+			envCopy := proto.Clone(env).(*governance.GovernanceEnvelope)
 			envCopy.Governance = nil
-			result, err := svc.Deliberate(&envCopy)
+			result, err := svc.Deliberate(envCopy)
 			results[idx] = result
 			errs[idx] = err
 		}(i)

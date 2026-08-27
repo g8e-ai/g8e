@@ -159,23 +159,84 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 ## Dependency Construction Model
 
-`mcp.GatewayService` uses a **single-phase construction model**: all dependencies are passed to `NewGatewayService` via the `Dependencies` struct and are immutable after construction. There is no `SetRuntimeDeps`, no `atomic.Pointer`, and no `runtimeReady()` gate.
+The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
 
-**Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `ThreatScanner`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`, `AuditStore`, `AuditReceiptQuery`, `FieldPathRegistryFactory`, `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`, `L2ConsensusDeliberator`.
+### ModeDeps shape
 
-**Lazy forwarding adapters** break the circular dependency between `mcp.GatewayService` (needs `EnvProc` / `SessionValidator`) and `OperatorPubSubService` (needs `mcpGateway` for egress). Each adapter's target field is an `atomic.Pointer[OperatorPubSubService]`; `SetTarget` calls `Store` (during boot) and the request-path method calls `Load`. The `atomic.Pointer` provides the memory ordering guarantees a raw pointer lacks - the target is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means the real target is not yet wired; the adapter returns `constants.ErrGatewayNotReady` (fail-closed) in that case.
+Two first-class struct types, one per mode, each fully populated for its mode. A shared `GovernanceCoreDeps` base is embedded by both so the shared fields are declared once. The types live in `internal/services/pubsub/mode_deps.go` (the `pubsub` package already imports `consensus`, `config`, and `mcp` transitively, and `GatewayModeDeps.PlatformEnrollmentDeps` is same-package; placing the types in `internal/services/gateway` would create an import cycle because `gateway` imports `pubsub`).
 
-- `pubsub.GatewayEnvProcAdapter` - implements `governance.EnvelopeProcessor`, delegates to `OperatorPubSubService` once it is constructed. The adapter is pre-allocated in `GatewayModeService.build()` and passed to `NewGatewayService` as `EnvProc`. `NewGatewayOperatorPubSubService` calls `adapter.SetTarget(rs)` to wire the real target. Before `SetTarget` is called, `ProcessEnvelope` returns `constants.ErrGatewayNotReady` (fail-closed).
-- `pubsub.GatewaySessionValidatorAdapter` - same pattern for `mcp.SessionValidator`.
+```go
+// GovernanceCoreDeps holds the governance dependencies required by both
+// outbound and gateway modes. Embedded by GatewayModeDeps and OutboundModeDeps
+// so the shared fields are declared once.
+type GovernanceCoreDeps struct {
+    ReplayStore       governance.ReplayStore
+    StateRootProvider governance.StateRootProvider
+    TransactionAudit  governance.TransactionAuditStore
+    L3Notary          governance.L3Notary
+    SignerStore       governance.SignerStore
+    Doctrine          *governance.L1Doctrine
+}
 
-**Narrow setters for genuinely late-bound deps** (no circular dependency, no `atomic.Pointer`, no `runtimeReady()` guard - the fields are nil-checked at their call sites):
+// GatewayModeDeps embeds GovernanceCoreDeps and adds gateway-only fields.
+// All fields are non-nil at construction (except Consensus, nil only when
+// Posture == Doctrine); the constructor rejects nils with typed errors. There
+// is no SetConsensusService, no EnvProcAdapter, no SessionValidatorAdapter —
+// consensus and the envelope processor are wired at construction.
+// PlatformEnrollmentDeps and GovernedDocStore are gateway-only; the compiler
+// proves they do not exist in outbound mode.
+type GatewayModeDeps struct {
+    GovernanceCoreDeps
+    GovernedDocStore       governance.GovernedDocumentStore
+    ConsensusPolicyStore   governance.L2ConsensusPolicyStore
+    FieldReader            mcp.FieldReader
+    Consensus              *consensus.ConsensusService // nil only when Posture == Doctrine
+    PlatformEnrollmentDeps *pubsub.PlatformEnrollmentDeps
+    Posture                config.GatewayPosture
+}
 
-- `SetAuditLogger` - `AuditStore` comes from `CommandServiceConfig.AuditStore`, configured in `serve/gateway.go` after `GatewayModeService` exists.
-- `SetL2ConsensusDeliberator` - the deliberator requires `GatewayModeService` to exist for `ConsensusBootstrap`.
+// OutboundModeDeps embeds GovernanceCoreDeps only. There is no
+// GovernedDocStore, no ConsensusPolicyStore, no FieldReader, no Consensus, no
+// MCPGateway, no PlatformEnrollmentDeps — the type statically proves they do not
+// exist in outbound mode.
+type OutboundModeDeps struct {
+    GovernanceCoreDeps
+}
+```
 
-These two setters are the only post-construction mutators on `mcp.GatewayService`. All other dependencies are construction-phase only.
+Two constructor functions, `NewGatewayModeDeps(...) (*GatewayModeDeps, error)` and `NewOutboundModeDeps(...) (*OutboundModeDeps, error)`, reject nil required dependencies with typed errors from `internal/constants/errors.go`. The previous shared `pubsub.GovernanceDeps` struct is removed; `GovernanceCoreDeps` replaces it as the embedded base. `TestCommandServiceConfig_NoGatewayFields` asserts via reflection that `OutboundModeDeps` has no `GovernedDocStore`, `ConsensusPolicyStore`, `FieldReader`, `Consensus`, `PlatformEnrollmentDeps`, or `Posture` fields, mirroring the compile-time proof at the test level.
 
-**`GatewayModeService.SetConsensusService`** is a narrow setter on `GatewayModeService` (not `mcp.GatewayService`) for a genuinely late-bound dependency: `ConsensusService` is built between `NewGatewayModeService` and `Start` because it reads from the DB the constructor opens (via `ConsensusBootstrap`). The `consensusSvc` field is an `atomic.Pointer[consensus.ConsensusService]`; `SetConsensusService` calls `Store`, and the `GovernanceController` (which captures `&ls.consensusSvc` at construction time) calls `Load` on the request path. The `atomic.Pointer` provides the memory ordering guarantees that a raw `**T` lacks - the cell is read on the request path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means consensus is not configured for the current posture (e.g. doctrine mode); `handleConsensusDeliberate` returns 503 in that case.
+### Posture sub-typing (B1)
+
+Within gateway mode, posture (doctrine / consensus / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil only when `Posture == Doctrine`). The `GovernanceController`'s consensus route is registered only in consensus/notary postures; the doctrine-posture gateway has no consensus endpoint registered. This makes the previous 503-on-nil guard unreachable (the route is not registered, so the request gets 404) rather than removing the guard. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
+
+### C2 inverted construction order
+
+The `mcp.GatewayService` ↔ `OperatorPubSubService` cycle that previously required lazy adapters is broken by inverting the construction order. `OperatorPubSubService` does not need `mcpGateway` for its own construction; `mcpGateway` was only used to wire mcpGateway's own dependencies back into it (`SetAuditLogger`, `SetL2ConsensusDeliberator`) and to set adapter targets. Moving those wirings to `mcp.GatewayService`'s construction and eliminating the adapters makes `mcpGateway` a post-construction egress dependency.
+
+The gateway-mode boot path (`RunGateway`) constructs dependencies in this order:
+
+1. Open DB, construct typed stores (`gateway.OpenCanonicalDBService`).
+2. Run `ConsensusBootstrap` (moved here from after `NewGatewayModeService`; it reads from the DB the constructor opens, and the DB is now open). Produces the `*consensus.ConsensusService` (or nil for doctrine posture).
+3. Build `OperatorPubSubService` via `NewGatewayOperatorPubSubService` using `GatewayModeDeps` (no `mcpGateway` yet — egress is nil at construction). The `PlatformEnrollmentHandler` is wired here from `GatewayModeDeps.PlatformEnrollmentDeps` (gateway-mode only), and `GovernedDocStore` is wired directly from `GatewayModeDeps`.
+4. Build `PlatformEnrollmentService` with `envProc: pubsubSvc` (concrete injection, no adapter). This moves out of `gatewayServiceBuilder.build()` because the adapter is eliminated and the concrete pubsub service must exist first.
+5. Build `mcp.GatewayService` via `mcp.NewGatewayService` with `EnvProc: pubsubSvc` and `SessionValidator: pubsubSvc` (concrete injection, no adapter). `AuditLogger` (from `stores.AuditStore`, available at step 1) and `L2ConsensusDeliberator` (the bootstrapped consensus service, available after step 2; nil only in doctrine posture) are also wired here at construction.
+6. Wire egress: `pubsubSvc.SetMCPGateway(mcpGateway)` — the single remaining narrow setter, backed by `atomic.Pointer`, resolved once during boot before `Start`.
+7. Build `GatewayModeService` with `GovernanceController` wired with the already-constructed consensus (no `SetConsensusService`) and `PlatformEnrollmentControllerDeps.EnrollSvc` set to the `PlatformEnrollmentService` from step 4. `initHTTPHandler` runs here at the end of the wiring phase (after the passkey orchestrator and passkey handler, which also depend on `mcpGateway`), populating the `handler`, `server`, and `publicServer` fields that `Start()` reads.
+
+`SetAuditLogger` and `SetL2ConsensusDeliberator` are eliminated from `mcp.GatewayService` because C2 moves `ConsensusBootstrap` into the construction flow, making both construction-phase. `SetConsensusService` is eliminated from `GatewayModeService` because consensus is wired at construction via `GatewayModeDeps`. `GatewayEnvProcAdapter` and `GatewaySessionValidatorAdapter` are eliminated because the concrete `OperatorPubSubService` is injected directly as `EnvProc` and `SessionValidator`.
+
+### Narrow setters
+
+The only post-construction mutator in the gateway boot path is `OperatorPubSubService.SetMCPGateway`, the egress setter. Egress is a genuine two-phase dependency: `OperatorPubSubService` must exist before `mcpGateway` (which injects it as `EnvProc`/`SessionValidator`), but `OperatorPubSubService` needs `mcpGateway` for egress dispatch. The setter is backed by `atomic.Pointer[mcp.GatewayService]`; `SetMCPGateway` calls `Store` once during boot (before `Start`), and the egress dispatch path calls `Load`. The `atomic.Pointer` provides the memory ordering guarantees a raw pointer lacks — the cell is read on the egress path and written during boot, so unsynchronized aliasing is a data race under `-race`. A `Load` returning nil means egress is not yet wired; the dispatch path returns `constants.ErrGatewayNotReady` (fail-closed) in that case. This is the minimum honest surface for the one genuine two-phase dependency; one narrow setter is preferable to a sum type whose "wrong mode" accessors would reintroduce runtime guards for what should be compile-time proofs.
+
+### Platform enrollment handler typing
+
+`PlatformEnrollmentHandler` is a required field in the gateway-mode `OperatorPubSubService` constructor (sourced from `GatewayModeDeps.PlatformEnrollmentDeps`); it is absent in outbound mode (the field does not exist on `OutboundModeDeps`). The five platform enrollment event types (`EventPlatformEnrollment*Requested`) are gateway-initiated governance actions dispatched only via `ExecuteVerifiedTransaction` after envelope verification; outbound mode never produces platform enrollment envelopes, so the dispatch paths are unreachable there. The five `if rs.platformEnrollment == nil { break }` guards in `ExecuteVerifiedTransaction` are eliminated by making the handler construction mode-specific, not by guarding at the call site.
+
+### Posture-conditional fail-closed guards (retained)
+
+The `L4Warden` posture-conditional guards for `doctrine == nil` (`ErrTxDoctrineMissing`) and `l3Notary == nil` (`ErrTxL3NotaryNotConfigured`) are retained. These enforce posture rules (a posture that requires L1/L3 must have the dependency wired), not mode-bifurcation smells. The `consensusPolicyStore == nil` guard in `verifyL2Consensus` is also retained as the posture-conditional fail-closed path: in gateway mode the store is always wired; in outbound mode the posture never requires L2.
 
 ## Constants & Doctrines
 

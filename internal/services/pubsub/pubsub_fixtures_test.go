@@ -107,14 +107,15 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		PubSubClient:       db,
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",
-	}, GovernanceDeps{
-		ReplayStore:          &testutil.MockReplayStore{},
-		StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:     &testutil.MockTransactionAudit{},
-		L3Notary:             &testutil.MockL3Notary{},
-		SignerStore:          signerStore,
-		ConsensusPolicyStore: testConsensusStore(),
-		Doctrine:             governance.NewL1Doctrine(),
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			SignerStore:       signerStore,
+			Doctrine:          governance.NewL1Doctrine(),
+		},
 	})
 	if err != nil {
 		t.Fatalf("failed to create OperatorPubSubService: %v", err)
