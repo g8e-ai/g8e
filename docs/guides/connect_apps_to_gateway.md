@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-08-26
-Version: v2.0.2
+Last Updated: 2026-08-27
+Version: v2.0.3
 
 ---
 
@@ -373,7 +373,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.2
+go get github.com/g8e-ai/g8e/v2@v2.0.3
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -381,7 +381,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.0.2
+pip install g8e==2.0.3
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
