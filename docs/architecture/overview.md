@@ -5,8 +5,8 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-27
+Version: v2.0.3
 
 ## What g8e Is
 
