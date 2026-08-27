@@ -40,7 +40,7 @@ import (
 // All mutations route through the canonical governance gauntlet by
 // submitting GovernanceEnvelope messages to the injected
 // governance.EnvelopeProcessor (the gateway's in-process
-// OperatorPubSubService via GatewayEnvProcAdapter). The single exception
+// OperatorPubSubService). The single exception
 // is the initial pending-request write, which is a non-mutation DocSet
 // performed before the CREATE envelope is submitted for audit (CREATE is
 // classified as non-mutation in IsMutation, so invariant 17 does not
@@ -72,7 +72,7 @@ type PlatformEnrollmentService struct {
 
 // NewPlatformEnrollmentService creates a new PlatformEnrollmentService.
 // The envProc and stateRoot are the gateway's in-process governance
-// pipeline: envProc is the GatewayEnvProcAdapter, stateRoot is the
+// pipeline: envProc is the concrete OperatorPubSubService, stateRoot is the
 // StateRootService. StartCleanup must be called to register the managed
 // cleanup goroutine with the gateway lifecycle context.
 func NewPlatformEnrollmentService(

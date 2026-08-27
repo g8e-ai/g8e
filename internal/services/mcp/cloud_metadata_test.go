@@ -171,14 +171,14 @@ func TestRuntimeDeps_L2ConsensusDeliberator(t *testing.T) {
 
 	t.Run("deliberator accessible via field", func(t *testing.T) {
 		t.Parallel()
-		g := &GatewayService{
-			logger:            slog.Default(),
-			envProc:           &fakeEnvelopeProcessor{},
-			stateRootProvider: &fakeStateRootProvider{root: "test"},
-			downstreamURL:     "http://downstream",
-		}
 		mock := &mockL2ConsensusDeliberator{}
-		g.SetL2ConsensusDeliberator(mock)
+		g := &GatewayService{
+			logger:                 slog.Default(),
+			envProc:                &fakeEnvelopeProcessor{},
+			stateRootProvider:      &fakeStateRootProvider{root: "test"},
+			downstreamURL:          "http://downstream",
+			l2ConsensusDeliberator: mock,
+		}
 		assert.Same(t, mock, g.l2ConsensusDeliberator)
 	})
 }

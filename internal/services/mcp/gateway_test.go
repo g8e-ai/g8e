@@ -1521,14 +1521,14 @@ func TestGatewayService_Dependencies(t *testing.T) {
 		envProc := &fakeEnvelopeProcessor{}
 		stateRoot := &fakeStateRootProvider{root: "test"}
 		g := &GatewayService{
-			logger:            slog.Default(),
-			envProc:           envProc,
-			stateRootProvider: stateRoot,
-			signingKey:        privKey,
-			keyID:             "key-1",
-			downstreamURL:     "http://downstream",
+			logger:                 slog.Default(),
+			envProc:                envProc,
+			stateRootProvider:      stateRoot,
+			signingKey:             privKey,
+			keyID:                  "key-1",
+			downstreamURL:          "http://downstream",
+			l2ConsensusDeliberator: mock,
 		}
-		g.SetL2ConsensusDeliberator(mock)
 
 		require.Same(t, envProc, g.envProc)
 		require.Same(t, stateRoot, g.stateRootProvider)

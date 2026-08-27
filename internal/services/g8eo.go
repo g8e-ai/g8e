@@ -319,16 +319,21 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		ActuatorKeyID:      actuatorKeyID,
 	}
 
-	govDeps := pubsub.GovernanceDeps{
-		ReplayStore:       vs.replayStore,
-		StateRootProvider: stateRootProvider,
-		TransactionAudit:  transactionAudit,
-		SignerStore:       signerStore,
-		L3Notary:          cliL3Notary,
-		Doctrine:          governance.NewL1Doctrine(),
+	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{
+		GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+			ReplayStore:       vs.replayStore,
+			StateRootProvider: stateRootProvider,
+			TransactionAudit:  transactionAudit,
+			SignerStore:       signerStore,
+			L3Notary:          cliL3Notary,
+			Doctrine:          governance.NewL1Doctrine(),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("g8eo: outbound mode deps: %w", err)
 	}
 
-	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)
+	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, *outboundDeps)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}

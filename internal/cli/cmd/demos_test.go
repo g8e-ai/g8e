@@ -218,7 +218,6 @@ func TestDemosRunCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
 		assert.Contains(t, cmd.Long, "Sovereign Multi-Source Ingest")
 		assert.Contains(t, cmd.Long, "Governed Cloud Resource Provisioning")
-		assert.Contains(t, cmd.Long, "Third-Party Frontend Enrollment")
 	})
 }
 
@@ -228,11 +227,10 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 1, scenarioCounts["finance"])
 		assert.Equal(t, 4, scenarioCounts["dhs"])
 		assert.Equal(t, 4, scenarioCounts["fedramp"])
-		assert.Equal(t, 1, scenarioCounts["frontend"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "finance", "dhs", "fedramp", "frontend"}
+		expectedOrgs := []string{"healthcare", "finance", "dhs", "fedramp"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -240,20 +238,19 @@ func TestScenarioCounts(t *testing.T) {
 	})
 
 	t.Run("scenario counts map does not contain removed demos", func(t *testing.T) {
-		removedOrgs := []string{"secure-data", "dow", "swarm", "gov"}
+		removedOrgs := []string{"secure-data", "dow", "swarm", "gov", "frontend"}
 		for _, org := range removedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.False(t, exists, "scenarioCounts should NOT have entry for removed demo %s", org)
 		}
 	})
 
-	t.Run("scenario counts map keys exactly match remaining 5 demo orgs", func(t *testing.T) {
+	t.Run("scenario counts map keys exactly match remaining 4 demo orgs", func(t *testing.T) {
 		expectedOrgs := map[string]bool{
 			"healthcare": true,
 			"finance":    true,
 			"dhs":        true,
 			"fedramp":    true,
-			"frontend":   true,
 		}
 		assert.Equal(t, len(expectedOrgs), len(scenarioCounts),
 			"scenarioCounts should have exactly %d entries", len(expectedOrgs))

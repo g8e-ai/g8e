@@ -42,16 +42,12 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/services/consensus"
-	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/gateway"
 	govsvc "github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/mcp"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
-	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/v2/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 )
 
 // GatewayFixture provides a reusable gateway setup for integration tests.
@@ -229,38 +225,14 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	ls, err := gateway.NewGatewayModeService(cfg, fileSvc, testutil.NewTestLogger())
+	// C2 inverted construction order: open DB + stores first, seed consensus
+	// policy into the DB before NewGatewayModeServiceWithDB (build() reads the
+	// policy from the DB and wires the ConsensusService at construction via
+	// GatewayModeDeps — no SetConsensusService, no second pubsub construction,
+	// no adapter wiring).
+	db, stores, err := gateway.OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
 	require.NoError(t, err)
 
-	execSvc := execution.NewExecutionService(cfg, testutil.NewTestLogger())
-	fileEditSvc := execution.NewFileEditService(cfg, testutil.NewTestLogger())
-	govDeps := ls.GetGovernanceDeps()
-	sm, err := ls.GetSecretManager()
-	require.NoError(t, err)
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
-	require.NoError(t, err)
-
-	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	err = ls.GetSignerStore().AddTrustedSigner(models.TrustedSigner{
-		ID:        ActuatorKeyID,
-		PublicKey: hex.EncodeToString(ActuatorPub),
-		AddedAt:   time.Now().UTC(),
-		Enabled:   true,
-	})
-	require.NoError(t, err)
-
-	mcpGateway := ls.GetMCPGateway()
-	require.NotNil(t, mcpGateway)
-
-	scrubbingSvc, err := scrubbing.NewScrubbingService(context.Background(), scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil)
-	require.NoError(t, err)
-
-	// Auto-wire a Consensus for postures that require L2 signatures (consensus, notary).
-	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
-	// This must happen before NewGatewayOperatorPubSubService so the deliberator
-	// can be passed through GatewayCommandServiceConfig.L2ConsensusDeliberator
-	// into the MCP gateway's RuntimeDependencies.
 	var consensusSvc *consensus.ConsensusService
 	var l2Deliberator *consensus.LocalDeliberator
 	if posture == config.PostureConsensus || posture == config.PostureNotary {
@@ -280,59 +252,33 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if nServiceMembers == 0 {
 			nServiceMembers = 1
 		}
-		cs := SetupConsensus(t, &GatewayFixture{
-			Config:        cfg,
-			Service:       ls,
-			MCPGateway:    mcpGateway,
-			ActuatorPriv:  ActuatorPriv,
-			ActuatorKeyID: ActuatorKeyID,
-		}, consensusID, nMembers, quorum, nServiceMembers)
+		cs := SetupConsensus(t, stores, consensusID, nMembers, quorum, nServiceMembers)
 		consensusSvc = cs.Service
 		l2Deliberator = cs.Deliberator
 	}
 
-	// Construct the in-process command service. The returned service is not
-	// retained (cmdSvc) — the important side effect is wiring the
-	// EnvProcAdapter and SessionValidatorAdapter targets so the HTTP handler's
-	// GovernanceController can delegate envelope submission to this service.
-	_, err = pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
-		CommandServiceConfig: pubsub.CommandServiceConfig{
-			Config:             cfg,
-			Logger:             testutil.NewTestLogger(),
-			Execution:          execSvc,
-			FileEdit:           fileEditSvc,
-			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetGatewayWebSocketHandler()),
-			Scrubbing:          scrubbingSvc,
-			ActuatorSigningKey: ActuatorPriv,
-			ActuatorKeyID:      ActuatorKeyID,
-		},
-		GovDeps: &pubsub.GovernanceDeps{
-			ReplayStore:          govDeps.ReplayStore,
-			StateRootProvider:    govDeps.StateRootProvider,
-			TransactionAudit:     govDeps.TransactionAudit,
-			GovernedDocStore:     govDeps.GovernedDocStore,
-			SignerStore:          govDeps.SignerStore,
-			ConsensusPolicyStore: govDeps.ConsensusPolicyStore,
-			L3Notary:             RejectingL3Notary{},
-			FieldReader:          govDeps.FieldReader,
-			Doctrine:             govDeps.Doctrine,
-		},
-		MCPGateway:              mcpGateway,
-		L2ConsensusDeliberator:  l2Deliberator,
-		EnvProcAdapter:          ls.GetEnvProcAdapter(),
-		SessionValidatorAdapter: ls.GetSessionValidatorAdapter(),
+	ls, err := gateway.NewGatewayModeServiceWithDB(cfg, fileSvc, testutil.NewTestLogger(), db, consensusSvc, l2Deliberator)
+	require.NoError(t, err)
+
+	// Obtain the actuator signing key and MCP gateway from the constructed
+	// service.
+	sm, err := ls.GetSecretManager()
+	require.NoError(t, err)
+	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
+	require.NoError(t, err)
+
+	// Add Actuator key to SignerStore so Implicit L2 signatures from the gateway are trusted in fixture tests
+	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
+	err = ls.GetSignerStore().AddTrustedSigner(models.TrustedSigner{
+		ID:        ActuatorKeyID,
+		PublicKey: hex.EncodeToString(ActuatorPub),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
 	})
 	require.NoError(t, err)
 
-	// The MCP gateway's runtime governance dependencies are wired by
-	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
-	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
-
-	// Wire the consensus service into the already-constructed HTTP handler.
-	// The handler was built during NewGatewayModeService with consensusSvc nil;
-	// SetConsensusService updates the field that GovernanceController reads at
-	// request time. Nil is valid (no consensus configured for this fixture).
-	ls.SetConsensusService(consensusSvc)
+	mcpGateway := ls.GetMCPGateway()
+	require.NotNil(t, mcpGateway)
 
 	// Seed platform_settings required for health check
 	err = ls.GetDocStore().DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
@@ -398,13 +344,6 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
-}
-
-// RejectingL3Notary is a test implementation that always rejects L3 proofs.
-type RejectingL3Notary struct{}
-
-func (RejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
-	return false, nil
 }
 
 func mustMarshal(v interface{}) json.RawMessage {
@@ -682,15 +621,20 @@ type ConsensusSetup struct {
 	Deliberator *consensus.LocalDeliberator
 }
 
-// SetupConsensus wires a real ConsensusService into the gateway fixture for consensus
-// posture integration tests. It generates nMembers Ed25519 key pairs, registers each
-// member's public key as a TrustedSigner, creates a ConsensusPolicy in the ConsensusStore,
-// constructs a ConsensusService via the shared consensus.NewConsensusFromPolicy factory,
-// and returns a LocalDeliberator via ConsensusSetup.Deliberator. The caller
-// passes the deliberator through GatewayCommandServiceConfig.L2ConsensusDeliberator
-// so it is wired into the MCP gateway's RuntimeDependencies. The returned
-// ConsensusSetup.Service is wired into the gateway via SetConsensusService by
-// the caller.
+// SetupConsensus seeds a real ConsensusService for consensus/notary posture
+// integration tests. It generates nMembers Ed25519 key pairs, registers each
+// member's public key as a TrustedSigner in the raw stores, creates a
+// ConsensusPolicy in the ConsensusStore, constructs a ConsensusService via the
+// shared consensus.NewConsensusFromPolicy factory, and returns a
+// LocalDeliberator via ConsensusSetup.Deliberator. The caller passes the
+// returned ConsensusService and Deliberator to NewGatewayModeServiceWithDB so
+// they are wired at construction via the builder's withConsensus path (no
+// SetConsensusService, no second pubsub construction).
+//
+// SetupConsensus operates against the raw *gateway.Stores so it can run BEFORE
+// NewGatewayModeServiceWithDB — the consensus policy must be seeded into the DB
+// before build() reads it, and the consensus service must be constructed before
+// build() wires it into GatewayModeDeps and mcp.GatewayService.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve
@@ -699,7 +643,7 @@ type ConsensusSetup struct {
 //
 // This uses the same consensus.NewConsensusFromPolicy factory as production ConsensusBootstrap
 // in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
-func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
+func SetupConsensus(t *testing.T, stores *gateway.Stores, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
@@ -713,7 +657,7 @@ func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMember
 		pub, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = f.Service.GetSignerStore().AddTrustedSigner(models.TrustedSigner{
+		err = stores.SignerStore.AddTrustedSigner(models.TrustedSigner{
 			ID:        appID,
 			PublicKey: hex.EncodeToString(pub),
 			AddedAt:   time.Now().UTC(),
@@ -737,7 +681,7 @@ func SetupConsensus(t *testing.T, f *GatewayFixture, consensusID string, nMember
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := f.Service.GetConsensusStore().AddConsensus(policy)
+	err := stores.ConsensusStore.AddConsensus(policy)
 	require.NoError(t, err)
 
 	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {

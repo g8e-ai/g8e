@@ -15,14 +15,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/services/execution"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
@@ -84,11 +86,14 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Execution:    execSvc,
 			FileEdit:     fileEditSvc,
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, pubsub.GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, pubsub.OutboundModeDeps{
+			GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, cmdSvc)

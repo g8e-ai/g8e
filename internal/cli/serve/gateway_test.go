@@ -9,7 +9,6 @@ package serve
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -837,34 +836,6 @@ func TestGatewayConfigToOptions_DownstreamWithPosture(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ConsensusBootstrap nil behavior (Tier 1 — no DB)
-// ---------------------------------------------------------------------------
-
-func TestConsensusBootstrap_NilServiceReturnsError(t *testing.T) {
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err = ConsensusBootstrap(nil, "trib-001", priv, "key-id", constants.TestPathShortSecrets, logger)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"ConsensusBootstrap with nil service should return ErrGatewayServiceNil")
-}
-
-func TestConsensusBootstrap_EmptyConsensusID(t *testing.T) {
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	_, err = ConsensusBootstrap(nil, "", priv, "key-id", constants.TestPathShortSecrets, logger)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"ConsensusBootstrap with nil service returns error regardless of consensus ID")
-}
-
-// ---------------------------------------------------------------------------
 // GatewayConfig round-trip mapping integrity
 // ---------------------------------------------------------------------------
 
@@ -1118,7 +1089,7 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 // consensusPolicyBootstrap error-path tests (Tier 2 — file I/O)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapConsensusPolicy_NilServiceReturnsError(t *testing.T) {
+func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := testutil.TempDir(t)
@@ -1133,8 +1104,8 @@ func TestBootstrapConsensusPolicy_NilServiceReturnsError(t *testing.T) {
 
 	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
-		"consensusPolicyBootstrap with nil service should return ErrGatewayServiceNil")
+	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
+		"consensusPolicyBootstrap with nil stores should return ErrGatewayStoresNil")
 }
 
 func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {

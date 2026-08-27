@@ -166,7 +166,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
 | [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
-| [Dashboard (g8ed)](./dashboard.md) | Operator dashboard: role, connection model, relationship to demos/frontend/, build and test. |
+| [Dashboard (g8ed)](./dashboard.md) | Operator dashboard: role, connection model, build and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |
 | [Consensus](./consensus.md) | L2 consensus policy, declarative bootstrap, member key management, deliberation, L4 vote verification. |
 | [Authentication & Authorization](./auth.md) | CLI enrollment state machine, recovery and rotation, headless enrollment, WebAuthn notary, session binding. |

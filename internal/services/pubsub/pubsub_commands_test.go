@@ -17,9 +17,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -33,12 +41,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestNewOperatorPubSubService(t *testing.T) {
@@ -49,11 +51,14 @@ func TestNewOperatorPubSubService(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, svc)
@@ -70,12 +75,14 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 		Config:       cfg,
 		Logger:       testutil.NewTestLogger(),
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
-		Doctrine:          governance.NewL1Doctrine(),
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			Doctrine:          governance.NewL1Doctrine(),
+		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc.l4warden)
@@ -171,12 +178,15 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
-			SignerStore:       &governance.FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				SignerStore:       &governance.FailClosedSignerStore{Signers: map[string]ed25519.PublicKey{}},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		svc.SetActuator(nil)
@@ -431,7 +441,7 @@ func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
 		t.Parallel()
-		f.Svc.mcpGateway = nil
+		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Mcp.CallRequested,
 			ID:        "msg-1",
@@ -447,7 +457,7 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.mcpGateway = nil
+		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
@@ -837,11 +847,14 @@ func TestOperatorPubSubService_Start(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -943,11 +956,14 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		svc.l4warden = nil
@@ -1414,11 +1430,14 @@ func TestOperatorPubSubService_SetL4Warden(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1437,11 +1456,14 @@ func TestOperatorPubSubService_handleEvalAnswerRequest(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1470,11 +1492,14 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1505,11 +1530,14 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1538,11 +1566,14 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 			ResultsService:     mockPublisher,
 			ActuatorSigningKey: privKey,
 			ActuatorKeyID:      "test-key",
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1598,11 +1629,14 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1618,11 +1652,14 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 			Config:       cfg,
 			Logger:       testutil.NewTestLogger(),
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 
@@ -1632,11 +1669,12 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 	})
 }
 
-// TestCommandServiceConfig_NoGatewayFields is a compile-time test that verifies
-// CommandServiceConfig does not have MCPGateway, FieldReader, or any governance
-// fields. These fields live in GovernanceDeps (shared) and
-// GatewayCommandServiceConfig (gateway-only) to enforce mode bifurcation at
-// the type level.
+// TestCommandServiceConfig_NoGatewayFields is a compile-time and reflection test
+// that verifies CommandServiceConfig and OutboundModeDeps do not have gateway-only
+// fields (GovernedDocStore, ConsensusPolicyStore, FieldReader, Consensus,
+// PlatformEnrollmentDeps, Posture, MCPGateway). These fields exist only in
+// GatewayModeDeps (and GatewayCommandServiceConfig) to enforce mode bifurcation
+// at the type level.
 func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	t.Parallel()
 
@@ -1644,21 +1682,52 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	var base CommandServiceConfig
 	_ = base
 
-	// GovernanceDeps must have all governance fields.
-	var gd GovernanceDeps
-	_ = gd.ReplayStore
-	_ = gd.StateRootProvider
-	_ = gd.TransactionAudit
-	_ = gd.L3Notary
-	_ = gd.SignerStore
-	_ = gd.ConsensusPolicyStore
-	_ = gd.FieldReader
+	// OutboundModeDeps must have core governance fields accessible.
+	var ob OutboundModeDeps
+	_ = ob.ReplayStore
+	_ = ob.StateRootProvider
+	_ = ob.TransactionAudit
+	_ = ob.L3Notary
+	_ = ob.SignerStore
+	_ = ob.Doctrine
 
-	// GatewayCommandServiceConfig must have MCPGateway and GovDeps.
+	// OutboundModeDeps must NOT contain gateway-only fields (verified via reflection).
+	obType := reflect.TypeOf(OutboundModeDeps{})
+	gatewayOnlyFields := []string{
+		"GovernedDocStore",
+		"ConsensusPolicyStore",
+		"FieldReader",
+		"Consensus",
+		"PlatformEnrollmentDeps",
+		"Posture",
+		"MCPGateway",
+		"L2ConsensusDeliberator",
+		"EnvProcAdapter",
+		"SessionValidatorAdapter",
+	}
+	for _, fieldName := range gatewayOnlyFields {
+		_, found := obType.FieldByName(fieldName)
+		assert.False(t, found, "OutboundModeDeps must not contain gateway-only field %s", fieldName)
+	}
+
+	// GatewayModeDeps must have both core and gateway-only fields.
+	var gwDeps GatewayModeDeps
+	_ = gwDeps.ReplayStore
+	_ = gwDeps.StateRootProvider
+	_ = gwDeps.TransactionAudit
+	_ = gwDeps.L3Notary
+	_ = gwDeps.SignerStore
+	_ = gwDeps.Doctrine
+	_ = gwDeps.GovernedDocStore
+	_ = gwDeps.ConsensusPolicyStore
+	_ = gwDeps.FieldReader
+	_ = gwDeps.Consensus
+	_ = gwDeps.PlatformEnrollmentDeps
+	_ = gwDeps.Posture
+
+	// GatewayCommandServiceConfig must have GovDeps.
 	var gw GatewayCommandServiceConfig
-	_ = gw.MCPGateway
 	_ = gw.GovDeps
-	_ = gw.L2ConsensusDeliberator
 
 	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
 	// fields are accessible.
@@ -1667,9 +1736,9 @@ func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 }
 
 // TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil verifies that
-// nil ConsensusPolicyStore and FieldReader in GovernanceDeps are preserved as
-// nil during construction. Call sites nil-check with fail-closed behavior
-// instead of relying on no-op stubs.
+// OutboundModeDeps has no ConsensusPolicyStore or FieldReader fields, and that
+// constructing OperatorPubSubService in outbound mode initializes l4warden with
+// a nil consensus policy store without runtime errors.
 func TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
@@ -1677,12 +1746,14 @@ func TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil(t *testing.T
 		Config:       cfg,
 		Logger:       testutil.NewTestLogger(),
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
-		// ConsensusPolicyStore and FieldReader intentionally left nil
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			Doctrine:          governance.NewL1Doctrine(),
+		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc)
@@ -1690,8 +1761,8 @@ func TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil(t *testing.T
 }
 
 // TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite verifies that
-// a nil Doctrine in GovernanceDeps is NOT silently replaced with NewL1Doctrine()
-// at the call site. The doctrine default belongs in the mode's dependency wiring
+// a nil Doctrine in GovernanceCoreDeps is NOT silently replaced with NewL1Doctrine()
+// at the call site when NewOperatorPubSubService is called directly. The doctrine default belongs in the mode's dependency wiring
 // (g8eo.go for outbound mode), not in initializeGovernance. A nil doctrine here
 // is a wiring bug; L4Warden fail-closes at verification time with
 // ErrTxDoctrineMissing rather than silently running with a default doctrine.
@@ -1702,15 +1773,61 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 		Config:       cfg,
 		Logger:       testutil.NewTestLogger(),
 		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
-		// Doctrine intentionally left nil — must not be defaulted at the call site.
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			// Doctrine intentionally left nil — must not be defaulted at the call site.
+		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, svc)
 	require.NotNil(t, svc.l4warden, "l4warden must be initialized")
 	assert.Nil(t, svc.l4warden.Doctrine(), "nil Doctrine must not be defaulted at the call site; wire it in the mode's dependency wiring instead")
+}
+
+// TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall verifies thread safety
+// of the single atomic egress setter under concurrent egress traffic and SetMCPGateway calls.
+func TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall(t *testing.T) {
+	t.Parallel()
+	f := newPubsubFixture(t)
+
+	msg := &PubSubCommandMessage{
+		EventType: constants.Event.Operator.Mcp.CallRequested,
+		ID:        "msg-race",
+		Payload:   mustMarshalProto(t, &operatorv1.McpCallRequested{ToolName: "test"}),
+	}
+
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+
+	// Goroutine 1: concurrently calls SetMCPGateway
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				f.Svc.SetMCPGateway(nil)
+				f.Svc.SetMCPGateway(&mcp.GatewayService{})
+			}
+		}
+	}()
+
+	// Goroutine 2: concurrently reads mcpGateway via handleMcpCallRequestSync
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_, _ = f.Svc.handleMcpCallRequestSync(context.Background(), msg)
+			_ = f.Svc.GetMCPGateway()
+		}
+		close(done)
+	}()
+
+	wg.Wait()
 }

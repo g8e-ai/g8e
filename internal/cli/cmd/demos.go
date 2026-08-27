@@ -572,11 +572,6 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  Gateway HTTP:  http://localhost:8088")
 		cmd.Println("  Gateway HTTPS: https://localhost:8451")
 		cmd.Println("  Console:       https://localhost:8451/console/")
-	case constants.DemosOrgFrontend:
-		cmd.Println("  Gateway HTTP:  http://localhost:8083")
-		cmd.Println("  Gateway HTTPS: https://localhost:8446")
-		cmd.Println("  Console:       https://localhost:8446/console/")
-		cmd.Println("  Frontend App:  http://localhost:3003")
 	default:
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -589,7 +584,6 @@ var demoGatewayHTTPPort = map[string]string{
 	constants.DemosOrgFinance:    "8082",
 	constants.DemosOrgDHS:        "8087",
 	constants.DemosOrgFedRAMP:    "8088",
-	constants.DemosOrgFrontend:   "8083",
 }
 
 // demoOperatorContainer maps each demo org to its operator container name,
@@ -599,7 +593,6 @@ var demoOperatorContainer = map[string]string{
 	constants.DemosOrgFinance:    "finance-operator",
 	constants.DemosOrgDHS:        "dhs-operator",
 	constants.DemosOrgFedRAMP:    "g8e-fedramp-operator",
-	constants.DemosOrgFrontend:   "frontend-operator",
 }
 
 // printPlatformEnrollmentInstructions prints the owner-approved platform
@@ -1077,7 +1070,6 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgFinance:    1,
 	constants.DemosOrgDHS:        4,
 	constants.DemosOrgFedRAMP:    4,
-	constants.DemosOrgFrontend:   1,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -1105,9 +1097,7 @@ Available scenarios:
     1 - Governed Cloud Resource Provisioning
     2 - Unauthorized Audit Trail Destruction Blocked (CR-26)
     3 - Governed Configuration Revert (CM-7)
-    4 - Gateway Audit Vault Destruction Blocked (CR-26)
-  frontend: 1
-    1 - Third-Party Frontend Enrollment`,
+    4 - Gateway Audit Vault Destruction Blocked (CR-26)`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDemosRun(cmd, args, useTUI)
@@ -1313,8 +1303,6 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgFedRAMP:
 		return runFedRAMPScenario(demoDir, scenario)
-	case constants.DemosOrgFrontend:
-		return runFrontendScenario(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}

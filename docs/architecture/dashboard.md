@@ -12,8 +12,6 @@ Version: v2.0.0
 
 g8ed is the g8e operator dashboard. It is a Node.js 22 / Express web application that provides the operator-facing UI for the g8e platform: a chat interface for driving agentic ensembles, an operator management panel for binding and monitoring governed operators, an audit view for inspecting signed receipts and governance events, and a settings console for platform configuration. g8ed is a first-party component of the g8e platform, reunited in-tree in v2.0.0, and lives at `dashboard/` in the repository root.
 
-g8ed is the real product UI, distinct from `demos/frontend/` which is a minimal enrollment smoke test. See the [Demos README](../../demos/README.md) for the distinction.
-
 ## Role in the Platform
 
 g8ed sits in the operator-facing tier of the platform. It is a consumer of the gateway surface:
@@ -39,15 +37,6 @@ The dashboard ships with its own Dockerfile (`dashboard/Dockerfile`), rooted at 
 - `make build-dashboard` — builds the dashboard Docker image.
 
 The dashboard test suite is co-located under `dashboard/test/` and is not moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 3-tier test model as Tier 1 (unit, in-component) and Tier 3 (Docker E2E against the unified compose). See the [Unified Docker Stack guide](../guides/unified_stack.md) for bringing up the whole platform.
-
-## Relationship to `demos/frontend/`
-
-`demos/frontend/` and `dashboard/` are two different things and both ship in-tree:
-
-- `demos/frontend/` is a minimal enrollment smoke test: a single-file nginx-served HTML app that exercises WebAuthn passkey enrollment and SSE event streaming against the gateway on an isolated demo network. It exists to prove the enrollment and CORS path end to end.
-- `dashboard/` is the real product UI (g8ed): a Node.js 22 / Express app with EJS views, vitest tests, and its own `dashboard/Dockerfile`. It runs as the `dashboard` service in the unified platform compose.
-
-Keep both. The demo proves a narrow protocol path; the dashboard is the operator-facing product.
 
 ## License
 

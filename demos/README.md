@@ -42,12 +42,6 @@ demos/
 │   ├── cloudsvc.py             # Sovereign Cloud Service (L5 actuator, Python HTTP server)
 │   ├── verify_ops.py           # Verifies cloudsvc recorded governed operations
 │   └── README.md               # FedRAMP-specific documentation
-├── frontend/                   # Frontend enrollment demo (minimal enrollment smoke test; distinct from dashboard/)
-│   ├── compose.yml             # builds from repo-root Dockerfile (context: ../..)
-│   ├── config/
-│   ├── doctrine/               # Frontend security rules (API access, CORS spoofing, session hijacking)
-│   ├── app/                    # Single-file HTML frontend app served by nginx
-│   └── README.md               # Frontend-specific documentation
 ```
 
 ## Two Deployment Modes
@@ -58,16 +52,6 @@ g8e ships two Docker Compose deployment modes that serve different purposes and 
 - **Per-demo composes** — `demos/<org>/compose.yml`. Each demo is an org-specific, hermetically sealed deployment on five isolated networks (untrusted, perimeter, internal, secure, mgmt) that exercises a particular compliance scenario. They build the gateway/operator image from the repo-root `Dockerfile` via `context: ../..` and are driven by the `g8e demos` CLI. The per-demo composes do not include the ensemble or dashboard; they are a separate deployment mode focused on org-specific isolated-network scenarios.
 
 The two modes share the repo-root `Dockerfile` (the Go gateway/operator image) but are otherwise independent: the unified compose adds the ensemble and dashboard services and uses a single flat network, while the per-demo composes use isolated multi-network topologies and are scoped to a single org.
-
-## `demos/frontend/` vs `dashboard/`
-
-`demos/frontend/` and `dashboard/` are two different things and both ship in-tree:
-
-- `demos/frontend/` is a minimal enrollment smoke test: a single-file nginx-served HTML app that exercises WebAuthn passkey enrollment and SSE event streaming against the gateway on an isolated demo network. It exists to prove the enrollment and CORS path end to end.
-- `dashboard/` is the real product UI (g8ed): a Node.js 22 / Express app with EJS views, vitest tests, and its own `dashboard/Dockerfile`. It is a first-party component of the platform, reunited in v2.0.0, and runs as the `dashboard` service in the unified platform compose.
-
-Keep both. The demo proves a narrow protocol path; the dashboard is the operator-facing product.
-
 
 ## Network Topology
 
@@ -101,20 +85,18 @@ The `dhs` demo deploys a real `agent-coalition` container (the exec target for `
 
 The `fedramp` demo deploys a real `agent-runtime` container (the exec target for `g8e demos run`) on net_internal, a real `cloudsvc` Python HTTP actuator on net_secure, a `bad-actor` on net_untrusted, and an `observability` container on net_mgmt. The `agent-runtime` container is a real g8e binary that submits genuine `GovernanceEnvelope`s driving cloud resource operations (provision, configure, destroy, revert) through the `cloudop.sh` wrapper when driven by the CLI.
 
-The `frontend` demo deploys a nginx-served static HTML app on net_perimeter for WebAuthn passkey enrollment and SSE event streaming. No target system or bad actor container. The gateway runs in doctrine posture with CORS and passkey RP origins pre-configured for the frontend origin.
-
 ## Org Differentiation
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Healthcare | Finance | DHS | FedRAMP | Frontend |
-|---|---|---|---|---|---|
-| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SI-4 privilege escalation, SC-8 cross-domain, CM-7 config management | Unauthorized API access, CORS origin spoofing, session hijacking |
-| Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories | None (frontend enrollment demo) |
-| Gateway posture | doctrine | doctrine | consensus | consensus | doctrine |
-| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator | Browser-based frontend app (WebAuthn + SSE) |
-| Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) | None (nginx-served static HTML) |
-| Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity | Third-party frontend enrollment with CORS and passkey authentication |
+| Dimension | Healthcare | Finance | DHS | FedRAMP |
+|---|---|---|---|---|
+| Doctrine content | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | USPER PII minimization, cross-domain release, sovereign destruction | CR-26 audit integrity, AC-2 access control, SI-4 privilege escalation, SC-8 cross-domain, CM-7 config management |
+| Target data content | Simulated EHR / PA records | Simulated ledger / positions | Mock multi-source coalition feeds + sovereign manifest | Cloud resources (VMs, DBs, IAM) and KSI control categories |
+| Gateway posture | doctrine | doctrine | consensus | consensus |
+| Agent principal type | Clinical AI agent | Algorithmic trading agent | Coalition source connectors + predictive-analytics agent | FedRAMP cloud service operator |
+| Target system mock | EHR / PA processor | Trade execution API | Sovereign data vault + partner fusion COP | Sovereign cloud service (provision, configure, destroy, revert) |
+| Demo narrative | PHI scrub + PA approval flow | Unauthorized trade blocked | Sovereign coalition data plane: govern ingest, release, use, destruction | Sovereign cloud governance: provision, destroy, revert, audit integrity |
 
 ## Quick Start
 
@@ -242,9 +224,6 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run fedramp 2` - Unauthorized Audit Trail Destruction Blocked (CR-26)
 - `g8e demos run fedramp 3` - Governed Configuration Revert (CM-7)
 - `g8e demos run fedramp 4` - Gateway Audit Vault Destruction Blocked (CR-26)
-
-**Frontend Demo Scenarios:**
-- `g8e demos run frontend 1` - Third-Party Frontend Enrollment
 
 ### Ensemble Demo Scenarios
 
@@ -378,7 +357,6 @@ Each org uses different host ports to allow simultaneous deployment:
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | dhs | 8087 | 8450 | |
 | fedramp | 8088 | 8451 | FIPS 140-3 approved mode is the default for all orgs (single Dockerfile) |
-| frontend | 8083 | 8446 | Frontend App: 3003 |
 
 All demo images build with FIPS 140-3 approved mode enabled (`GOFIPS140=v1.0.0` in the Dockerfile builder stage). Enforcement is off by default; set `GODEBUG=fips140=only` in a service's `environment:` block to reject non-approved primitives at runtime. See [FIPS 140-3 Compliance](../docs/reference/fips140-3.md) for details.
 
@@ -398,7 +376,7 @@ This reflects real deployment: the Operator on a remote air-gapped host has no f
 
 ## Observability
 
-The observability container mounts audit vault and state volumes read-only, providing out-of-band inspection of the audit trail and actuator state without requiring live network connections to services. In the `healthcare`, `finance`, `dhs`, and `frontend` demos it actively tails the gateway platform log (`/data/gateway/logs/g8e.log`); the `fedramp` observability container exposes the mounted volumes for manual `docker compose exec` inspection.
+The observability container mounts audit vault and state volumes read-only, providing out-of-band inspection of the audit trail and actuator state without requiring live network connections to services. In the `healthcare`, `finance`, and `dhs` demos it actively tails the gateway platform log (`/data/gateway/logs/g8e.log`); the `fedramp` observability container exposes the mounted volumes for manual `docker compose exec` inspection.
 
 ## Troubleshooting
 

@@ -154,7 +154,6 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Finance**: High-integrity ledger and audit requirements (`demos/finance/`).
 - **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture (`demos/dhs/`).
 - **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval (`demos/fedramp/`).
-- **Frontend**: Minimal frontend enrollment smoke test with WebAuthn passkey authentication, CORS, and SSE live event streaming (`demos/frontend/`).
 
 To run a demo:
 
