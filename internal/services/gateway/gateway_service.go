@@ -56,34 +56,34 @@ type GatewayModeService struct {
 	fileSvc  fs.RuntimeFileService
 	doctrine *governance.L1Doctrine
 
-	db                      *CanonicalDBService
-	docStore                *DocumentStoreService
-	consensusStore          *ConsensusStoreService
-	signerStore             *SignerStoreService
-	auditStore              *storage.SQLAuditStore
-	stateRootSvc            *StateRootService
-	kvStore                 *KVStoreService
-	replayStore             *ReplayStoreService
-	pubsub                  *GatewayWebSocketHandler
-	auth                    *AuthService
-	pki                     *PKIAuthority
-	reg                     *RegistrationService
-	passkey                 *PasskeyHandler
-	enrollmentTokenSvc      *EnrollmentTokenService
-	userSvc                 *UserService
-	cliSessionSvc           *CLISessionService
-	operatorSessionSvc      *OperatorSessionService
-	webSessionSvc           *WebSessionService
-	suspendedTxService      *storage.SuspendedTransactionService
-	mcpGateway              *mcp.GatewayService
-	cmdSvc                  *pubsub.OperatorPubSubService
-	envProc                 governance.EnvelopeProcessor
-	platformEnrollmentSvc   *PlatformEnrollmentService
-	consensusSvc            *consensus.ConsensusService
-	dispatchSvc             *DispatchService
-	responder               *response.Writer
-	server                  *http.Server
-	publicServer            *http.Server
+	db                    *CanonicalDBService
+	docStore              *DocumentStoreService
+	consensusStore        *ConsensusStoreService
+	signerStore           *SignerStoreService
+	auditStore            *storage.SQLAuditStore
+	stateRootSvc          *StateRootService
+	kvStore               *KVStoreService
+	replayStore           *ReplayStoreService
+	pubsub                *GatewayWebSocketHandler
+	auth                  *AuthService
+	pki                   *PKIAuthority
+	reg                   *RegistrationService
+	passkey               *PasskeyHandler
+	enrollmentTokenSvc    *EnrollmentTokenService
+	userSvc               *UserService
+	cliSessionSvc         *CLISessionService
+	operatorSessionSvc    *OperatorSessionService
+	webSessionSvc         *WebSessionService
+	suspendedTxService    *storage.SuspendedTransactionService
+	mcpGateway            *mcp.GatewayService
+	cmdSvc                *pubsub.OperatorPubSubService
+	envProc               governance.EnvelopeProcessor
+	platformEnrollmentSvc *PlatformEnrollmentService
+	consensusSvc          *consensus.ConsensusService
+	dispatchSvc           *DispatchService
+	responder             *response.Writer
+	server                *http.Server
+	publicServer          *http.Server
 
 	handler *HTTPHandler
 
@@ -120,12 +120,6 @@ func (b *gatewayServiceBuilder) withDB(db *CanonicalDBService) *gatewayServiceBu
 func (b *gatewayServiceBuilder) withConsensus(cs *consensus.ConsensusService, delib *consensus.LocalDeliberator) *gatewayServiceBuilder {
 	b.consensusSvc = cs
 	b.deliberator = delib
-	return b
-}
-
-// withCommandService configures a pre-constructed command service.
-func (b *gatewayServiceBuilder) withCommandService(cmdSvc *pubsub.OperatorPubSubService) *gatewayServiceBuilder {
-	b.cmdSvc = cmdSvc
 	return b
 }
 
@@ -561,7 +555,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 	passkey := ls.passkey
 	userSvc := ls.userSvc
 
-	var envProc governance.EnvelopeProcessor = ls.envProc
+	envProc := ls.envProc
 	if envProc == nil && ls.cmdSvc != nil {
 		envProc = ls.cmdSvc
 	}
