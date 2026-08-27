@@ -123,7 +123,7 @@ func TestDataUsersCmdWithConfig_ValidResponse(t *testing.T) {
 	assert.Contains(t, buf.String(), "Users (2 total)")
 	assert.Contains(t, buf.String(), "user1")
 	assert.Contains(t, buf.String(), "user2")
-	assert.Equal(t, []string{"/api/users"}, client.getCalls)
+	assert.Equal(t, []string{constants.APIPaths.Users}, client.getCalls)
 }
 
 // saveDataTestCredentials writes a Credentials with the given userID so that
@@ -354,7 +354,7 @@ func TestDataAuditListCmdWithConfig_ValidQuery(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{postResp: []byte(`[{"type":"login"}]`)}
+	client := &mockAPIClient{getResp: []byte(`{"success":true,"events":[{"id":1,"operator_session_id":"sess-123","timestamp":"2026-08-27T10:00:00Z","type":"login","command_raw":"ls","command_exit_code":0}],"count":1}`)}
 	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("operator-session-id", "sess-123")
 	var buf bytes.Buffer
@@ -364,15 +364,15 @@ func TestDataAuditListCmdWithConfig_ValidQuery(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "Audit events for session sess-123")
-	assert.Len(t, client.postCalls, 1)
-	assert.Equal(t, "/db/audit_events/_query", client.postCalls[0].path)
+	assert.Len(t, client.getCalls, 1)
+	assert.Equal(t, constants.APIPaths.AuditEvents+"?limit=100&operator_session_id=sess-123", client.getCalls[0])
 }
 
-func TestDataAuditListCmdWithConfig_PostError(t *testing.T) {
+func TestDataAuditListCmdWithConfig_GetError(t *testing.T) {
 	env := newDataTestEnv(t)
 
 	loader := func(string) (*config.Config, error) { return env.cfg, nil }
-	client := &mockAPIClient{postErr: errors.New("query failed")}
+	client := &mockAPIClient{getErr: errors.New("query failed")}
 	cmd := dataAuditListCmdWithConfig(loader, mockClientFactory(client), fileSvcFactoryFor(env.fileSvc))
 	cmd.Flags().Set("operator-session-id", "sess-123")
 	var buf bytes.Buffer
@@ -381,5 +381,5 @@ func TestDataAuditListCmdWithConfig_PostError(t *testing.T) {
 
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "query audit events")
+	assert.Contains(t, err.Error(), "fetch audit events")
 }

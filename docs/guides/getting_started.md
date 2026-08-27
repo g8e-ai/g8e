@@ -6,7 +6,7 @@ parent: Guides
 # Getting Started
 
 Last Updated: 2026-08-27
-Version: v2.0.3
+Version: v2.0.4
 
 ---
 
@@ -163,7 +163,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.3
+go get github.com/g8e-ai/g8e/v2@v2.0.4
 ```
 
 Import the protocol packages in your Go code:
@@ -190,7 +190,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.0.3
+pip install g8e==2.0.4
 ```
 
 The package provides:
@@ -455,7 +455,6 @@ The `demos/` directory contains Docker Compose environments for five demo enviro
 - **Finance**: trading controls
 - **DHS**: persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction
 - **FedRAMP**: sovereign cloud governance with CR-26 audit integrity, access control, and cross-domain protection
-- **Frontend**: third-party frontend enrollment with CORS, passkey, and SSE protection
 
 ### What the demos use Docker for
 

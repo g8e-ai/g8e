@@ -43,49 +43,60 @@ func newUserController(deps UserControllerDeps) *UserController {
 	}
 }
 
-// @Summary		Create user
-// @Description	Creates a new user with a generated ID. Zero-PII: users are created with only
-// @Description	a generated ID and passkey credentials.
+// @Summary		List or create users
+// @Description	GET lists all users; POST creates a new user with a generated ID.
+// @Description	Zero-PII: users are created with only a generated ID and passkey credentials.
 // @Tags			users
 // @Accept			json
 // @Produce		json
+// @Success		200		{array}		models.User
 // @Success		201		{object}	models.UserCreateResponse
 // @Failure		405		{string}	string	"Method Not Allowed"
 // @Failure		409		{string}	string	"Conflict — user creation failed"
-// @Router			/api/v1/users [post]
+// @Router			/api/v1/users [get,post]
 func (c *UserController) handleUsers(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		users, err := c.userSvc.List()
+		if err != nil {
+			c.logger.Error("Failed to list users", "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+			return
+		}
+		c.responder.JSON(w, http.StatusOK, users)
+
+	case http.MethodPost:
+		body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
+		if err != nil {
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+			return
+		}
+
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+			return
+		}
+
+		// Zero-PII: Email-based user creation removed
+		// Users are created with only a generated ID and passkey credentials
+		user, err := c.userSvc.CreateUser()
+		if err != nil {
+			c.logger.Warn("Failed to create user", "error", err)
+			c.responder.Error(w, http.StatusConflict, err.Error())
+			return
+		}
+
+		c.responder.JSON(w, http.StatusCreated, models.UserCreateResponse{
+			Success: true,
+			UserID:  user.ID,
+		})
+
+	default:
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
 	}
-
-	body, err := readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	var req struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	// Zero-PII: Email-based user creation removed
-	// Users are created with only a generated ID and passkey credentials
-	user, err := c.userSvc.CreateUser()
-	if err != nil {
-		c.logger.Warn("Failed to create user", "error", err)
-		c.responder.Error(w, http.StatusConflict, err.Error())
-		return
-	}
-
-	c.responder.JSON(w, http.StatusCreated, models.UserCreateResponse{
-		Success: true,
-		UserID:  user.ID,
-	})
 }
 
 // @Summary		Get current user

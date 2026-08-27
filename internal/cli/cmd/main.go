@@ -113,6 +113,8 @@ func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
 	}
 	rootCmd := NewRootCmd(version, vi)
 	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

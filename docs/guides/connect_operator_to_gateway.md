@@ -6,7 +6,7 @@ parent: Guides
 # Connect g8e Operator to g8e Gateway
 
 Last Updated: 2026-08-27
-Version: v2.0.3
+Version: v2.0.4
 
 ---
 
@@ -117,7 +117,7 @@ On the remote host, generate a CSR and enroll with the gateway:
 ./g8e auth enroll operator -e <gateway-ip>
 ```
 
-The endpoint is the gateway IP address. The HTTP port (8080) is appended automatically. This command generates an operator CSR, submits it to the gateway, and saves the signed certificates to the PKI directory.
+The endpoint accepts a gateway hostname, IP address, host-and-port pair, or URL. A plain host or IP uses HTTP port 8080 by default; an explicit scheme or port is preserved. This command generates an operator CSR, submits it to the gateway, and saves the signed certificates to the PKI directory.
 
 #### 4. Start the Operator
 
@@ -267,7 +267,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.3
+go get github.com/g8e-ai/g8e/v2@v2.0.4
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -279,7 +279,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==2.0.3
+pip install g8e==2.0.4
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

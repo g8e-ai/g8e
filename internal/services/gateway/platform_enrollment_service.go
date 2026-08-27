@@ -396,10 +396,10 @@ func (s *PlatformEnrollmentService) Decide(ctx context.Context, actorUserID stri
 	}, nil
 }
 
-// ListPending returns owner-visible metadata for all non-terminal
-// requests. The response never includes token hashes, CSR PEM,
-// certificates, or raw tokens. The caller must be authenticated as the
-// active first user (enforced by the controller before calling this
+// ListPending returns owner-visible metadata for all pending, non-expired
+// platform enrollment requests. The response never includes token hashes,
+// CSR PEM, certificates, or raw tokens. The caller must be authenticated as
+// the active first user (enforced by the controller before calling this
 // method).
 func (s *PlatformEnrollmentService) ListPending(ctx context.Context) (*models.PlatformEnrollmentPendingResponse, error) {
 	_ = ctx
@@ -416,7 +416,7 @@ func (s *PlatformEnrollmentService) ListPending(ctx context.Context) (*models.Pl
 			s.logger.Warn("platform enrollment: list pending: decode failed", "doc_id", doc.ID, "error", err)
 			continue
 		}
-		if req.State.IsTerminal() {
+		if req.State != models.PlatformEnrollmentStatePending {
 			continue
 		}
 		if now.After(req.ExpiresAt) {

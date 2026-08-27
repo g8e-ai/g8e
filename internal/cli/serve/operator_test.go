@@ -246,6 +246,29 @@ func TestResolveOperatorEndpoint_PreservesInternalWhitespace(t *testing.T) {
 		"only leading/trailing whitespace should be trimmed; internal whitespace preserved")
 }
 
+func TestBuildGatewayHTTPBaseURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		expected string
+	}{
+		{"empty endpoint", "", ""},
+		{"hostname only", "localhost", "http://localhost:8080"},
+		{"hostname with port", "localhost:8081", "http://localhost:8081"},
+		{"ip with port", "127.0.0.1:8443", "http://127.0.0.1:8443"},
+		{"http scheme with port", "http://localhost:8081", "http://localhost:8081"},
+		{"https scheme no port", "https://gateway.local", "https://gateway.local"},
+		{"trailing slash removed", "http://localhost:8081/", "http://localhost:8081"},
+		{"whitespace trimmed", "  localhost:8081  ", "http://localhost:8081"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, buildGatewayHTTPBaseURL(tt.endpoint))
+		})
+	}
+}
+
 func TestResolveOperatorEndpoint_MixedWhitespaceTypes(t *testing.T) {
 	result := resolveOperatorEndpoint("\t\n\r  10.0.0.1  \r\n\t")
 	assert.Equal(t, "10.0.0.1", result)

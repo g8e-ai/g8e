@@ -12,7 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -69,7 +71,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return fmt.Errorf("data: create API client: %w", err)
 			}
 
-			resp, err := client.Get("/api/users")
+			resp, err := client.Get(constants.APIPaths.Users)
 			if err != nil {
 				return fmt.Errorf("data: fetch users: %w", err)
 			}
@@ -313,20 +315,26 @@ to control the number of results.`,
 				return constants.ErrOperatorSessionIDRequired
 			}
 
-			query := models.DocQueryRequest{
-				Filters: []models.DocFilter{
-					{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
-				},
-				Limit: limit,
-			}
+			query := url.Values{}
+			query.Set("operator_session_id", operatorSessionID)
+			query.Set("limit", strconv.Itoa(limit))
 
-			resp, err := client.Post("/db/audit_events/_query", query)
+			path := constants.APIPaths.AuditEvents + "?" + query.Encode()
+			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("data: query audit events: %w", err)
+				return fmt.Errorf("data: fetch audit events: %w", err)
 			}
 
-			cmd.Printf("Audit events for session %s:\n", operatorSessionID)
-			cmd.Println(string(resp))
+			var eventResp models.AuditEventsResponse
+			if err := json.Unmarshal(resp, &eventResp); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+			}
+
+			cmd.Printf("Audit events for session %s (%d total):\n", operatorSessionID, eventResp.Count)
+			cmd.Println(strings.Repeat("=", 110))
+			for _, e := range eventResp.Events {
+				cmd.Printf("  %s  %s  exit=%d  %s\n", e.Timestamp, e.Type, e.CommandExitCode, e.CommandRaw)
+			}
 
 			return nil
 		},

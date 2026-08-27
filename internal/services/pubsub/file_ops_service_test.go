@@ -9,6 +9,7 @@ package pubsub
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -537,61 +538,109 @@ func TestFileOpsService_HandleFsListRequest(t *testing.T) {
 	})
 }
 
-func TestFileOpsService_LedgerTwoPhaseCommitNotCalledDuringFileEdit(t *testing.T) {
-	t.Run("documents ledger integration gap for file write", func(t *testing.T) {
+func TestFileExistsOnDisk(t *testing.T) {
+	t.Run("returns true for existing file", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := testutil.TempDir(t)
+		testFile := filepath.Join(tmpDir, "exists.txt")
+		require.NoError(t, os.WriteFile(testFile, []byte("test"), constants.PermFilePrivate))
 
-		// This test documents a CRITICAL GAP identified during the ledger path audit:
-		//
-		// The GitLedgerService has comprehensive two-phase commit methods:
-		// - LedgerFileWrite / CompleteMirrorWrite (for file writes)
-		// - MirrorFileCreate / CompleteMirrorCreate (for file creation)
-		// - MirrorFileDelete / CompleteMirrorDelete (for file deletion)
-		//
-		// These methods are well-tested in ledger_test.go and properly record:
-		// - Pre-mutation state (LedgerHashBefore)
-		// - Post-mutation state (LedgerHashAfter)
-		// - Diff statistics and content
-		//
-		// HOWEVER, these methods are NEVER called in the production code path:
-		// - FileEditService.ExecuteFileEdit performs file mutations directly
-		// - FileOpsService.HandleFileEditRequest calls ExecuteFileEdit
-		// - Only StoreFileDiffFromLedger is called AFTER the fact to READ from ledger
-		//
-		// This means:
-		// 1. File mutations are NOT being recorded in the git-backed ledger
-		// 2. The ledger's two-phase commit architecture is not being utilized
-		// 3. StoreFileDiffFromLedger likely fails because there's no ledger history to read
-		//
-		// REQUIRED FIX:
-		// The FileEditService or FileOpsService must call the ledger two-phase commit
-		// methods before and after file mutations to ensure proper recording.
-
-		t.Log("CRITICAL GAP IDENTIFIED:")
-		t.Log("1. Ledger two-phase commit methods exist and are tested (ledger_test.go)")
-		t.Log("2. These methods are NOT called in FileEditService.ExecuteFileEdit")
-		t.Log("3. These methods are NOT called in FileOpsService.HandleFileEditRequest")
-		t.Log("4. File mutations are NOT being recorded in the git-backed ledger")
-		t.Log("5. StoreFileDiffFromLedger cannot read diff history that was never written")
-		t.Log("")
-		t.Log("AFFECTED OPERATIONS:")
-		t.Log("- executeWrite (write operation)")
-		t.Log("- executeReplace (replace operation)")
-		t.Log("- executeInsert (insert operation)")
-		t.Log("- executeDelete (delete operation)")
-		t.Log("")
-		t.Log("RECOMMENDED FIX:")
-		t.Log("Option 1: Add ledger calls to FileEditService before/after each mutation")
-		t.Log("Option 2: Add ledger calls to FileOpsService.HandleFileEditRequest")
-		t.Log("Option 3: Create a middleware layer that wraps file operations with ledger calls")
+		assert.True(t, fileExistsOnDisk(testFile))
 	})
 
-	t.Run("documents ledger integration gap for file delete", func(t *testing.T) {
+	t.Run("returns false for non-existent file", func(t *testing.T) {
 		t.Parallel()
+		tmpDir := testutil.TempDir(t)
 
-		t.Log("DELETE OPERATION GAP:")
-		t.Log("- MirrorFileDelete should be called before file deletion")
-		t.Log("- CompleteMirrorDelete should be called after file deletion")
-		t.Log("- Currently, neither is called in the production code path")
+		assert.False(t, fileExistsOnDisk(filepath.Join(tmpDir, "missing.txt")))
+	})
+
+	t.Run("returns false for directory", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := testutil.TempDir(t)
+
+		assert.False(t, fileExistsOnDisk(tmpDir))
+	})
+}
+
+func TestFileOpsService_BeginLedgerTwoPhaseCommit(t *testing.T) {
+	t.Run("returns nil when ledger is not git-ready", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := testutil.TempDir(t)
+		cfg := testutil.NewTestConfig(t)
+		cfg.WorkDir = tmpDir
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+		svc.ledger = &storage.GitLedgerService{}
+
+		testFile := filepath.Join(tmpDir, "test.txt")
+		require.NoError(t, os.WriteFile(testFile, []byte("content"), constants.PermFilePrivate))
+
+		result := svc.beginLedgerTwoPhaseCommit(testFile, "write")
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns nil for path traversal attempt", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := testutil.TempDir(t)
+		cfg := testutil.NewTestConfig(t)
+		cfg.WorkDir = tmpDir
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+		svc.ledger = &storage.GitLedgerService{}
+
+		result := svc.beginLedgerTwoPhaseCommit(filepath.Join(tmpDir, "..", "escape.txt"), "write")
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns nil when file does not exist and operation is not create/write", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := testutil.TempDir(t)
+		cfg := testutil.NewTestConfig(t)
+		cfg.WorkDir = tmpDir
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+		svc.ledger = &storage.GitLedgerService{}
+
+		nonExistentFile := filepath.Join(tmpDir, "missing.txt")
+		result := svc.beginLedgerTwoPhaseCommit(nonExistentFile, "replace")
+		assert.Nil(t, result)
+	})
+}
+
+func TestFileOpsService_CompleteLedgerTwoPhaseCommit(t *testing.T) {
+	t.Run("returns nil when ledger is not git-ready", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+		svc.ledger = &storage.GitLedgerService{}
+
+		ledgerResult := &storage.LedgerResult{
+			Operation: storage.FileMutationWrite,
+		}
+		err := svc.completeLedgerTwoPhaseCommit(ledgerResult)
+		assert.NoError(t, err)
+	})
+
+	t.Run("returns nil for nil ledger result", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+		svc.ledger = &storage.GitLedgerService{}
+
+		err := svc.completeLedgerTwoPhaseCommit(nil)
+		assert.NoError(t, err)
 	})
 }

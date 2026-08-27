@@ -264,6 +264,25 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
+// List retrieves all users in the system.
+func (s *UserService) List() ([]models.User, error) {
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 0)
+	if err != nil {
+		return nil, fmt.Errorf("user service: list users: %w", err)
+	}
+
+	users := make([]models.User, 0, len(docs))
+	for _, doc := range docs {
+		user, err := s.docToUser(doc)
+		if err != nil {
+			s.logger.Warn("user service: list users: decode failed", "doc_id", doc.ID, "error", err)
+			continue
+		}
+		users = append(users, *user)
+	}
+	return users, nil
+}
+
 // GetByID retrieves a user by ID.
 func (s *UserService) GetByID(userID string) (*models.User, error) {
 	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
