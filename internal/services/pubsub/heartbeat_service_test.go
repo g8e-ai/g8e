@@ -630,14 +630,15 @@ func TestNewOperatorPubSubService_HeartbeatActuatorWired(t *testing.T) {
 			PubSubClient:       db,
 			ActuatorSigningKey: priv,
 			ActuatorKeyID:      "Actuator-key",
-		}, GovernanceDeps{
-			ReplayStore:          &testutil.MockReplayStore{},
-			StateRootProvider:    testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:     &testutil.MockTransactionAudit{},
-			L3Notary:             &testutil.MockL3Notary{},
-			SignerStore:          signerStore,
-			ConsensusPolicyStore: testConsensusStore(),
-			Doctrine:             governance.NewL1Doctrine(),
+		}, OutboundModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				SignerStore:       signerStore,
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, svc)

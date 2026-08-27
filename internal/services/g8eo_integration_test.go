@@ -84,11 +84,14 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Execution:    execSvc,
 			FileEdit:     fileEditSvc,
 			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
-		}, pubsub.GovernanceDeps{
-			ReplayStore:       &testutil.MockReplayStore{},
-			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-			TransactionAudit:  &testutil.MockTransactionAudit{},
-			L3Notary:          &testutil.MockL3Notary{},
+		}, pubsub.OutboundModeDeps{
+			GovernanceCoreDeps: pubsub.GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
 		})
 		require.NoError(t, err)
 		require.NotNil(t, cmdSvc)

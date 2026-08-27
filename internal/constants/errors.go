@@ -351,6 +351,19 @@ var (
 	ErrAuditStoreDecryptFailed            = errors.New("failed to decrypt content")
 	ErrAuditStoreRequired                 = errors.New("audit store is required: AuditStore must be wired at construction, not defaulted to a no-op")
 
+	// Mode dependency errors
+	ErrReplayStoreRequired            = errors.New("replay store is required")
+	ErrStateRootProviderRequired      = errors.New("state root provider is required")
+	ErrTransactionAuditRequired       = errors.New("transaction audit store is required")
+	ErrSignerStoreRequired            = errors.New("signer store is required")
+	ErrDoctrineRequired               = errors.New("doctrine is required")
+	ErrL3NotaryRequired               = errors.New("L3 notary is required")
+	ErrGovernedDocStoreRequired       = errors.New("governed document store is required")
+	ErrConsensusPolicyStoreRequired   = errors.New("consensus policy store is required")
+	ErrFieldReaderRequired            = errors.New("field reader is required")
+	ErrConsensusServiceRequired       = errors.New("consensus service is required for non-doctrine posture")
+	ErrPlatformEnrollmentDepsRequired = errors.New("platform enrollment deps are required")
+
 	// Execution vault errors
 	ErrExecutionVaultVaultLocked   = errors.New("execution vault: vault is locked, cannot encrypt/decrypt content")
 	ErrExecutionVaultEncryptFailed = errors.New("execution vault: failed to encrypt content")

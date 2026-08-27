@@ -16,9 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 func TestNextReconnectDelay_ExponentialProgression(t *testing.T) {
@@ -186,11 +188,14 @@ func TestListenForCommands_SuccessfulReceiptResetsAttempts(t *testing.T) {
 		PubSubClient:       mockClient,
 		ActuatorSigningKey: ed25519.PrivateKey(make([]byte, ed25519.PrivateKeySize)),
 		ActuatorKeyID:      "test-key",
-	}, GovernanceDeps{
-		ReplayStore:       &testutil.MockReplayStore{},
-		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
-		TransactionAudit:  &testutil.MockTransactionAudit{},
-		L3Notary:          &testutil.MockL3Notary{},
+	}, OutboundModeDeps{
+		GovernanceCoreDeps: GovernanceCoreDeps{
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+			Doctrine:          governance.NewL1Doctrine(),
+		},
 	})
 	require.NoError(t, err)
 	svc.reconnectBaseDelay = 1 * time.Millisecond

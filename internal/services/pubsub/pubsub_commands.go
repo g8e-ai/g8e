@@ -91,21 +91,13 @@ type OperatorPubSubService struct {
 }
 
 // GovernanceDeps holds the governance dependencies required for transaction
-// verification in both outbound and gateway modes. These interfaces are
-// implemented by CanonicalDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and the governance L3Notary. In outbound mode,
-// ConsensusPolicyStore and FieldReader are nil (feature not configured);
-// call sites nil-check with fail-closed behavior.
+// verification in gateway mode. It embeds GovernanceCoreDeps and adds
+// gateway-only fields. In outbound mode, OutboundModeDeps is used instead.
 type GovernanceDeps struct {
-	ReplayStore          governance.ReplayStore
-	StateRootProvider    governance.StateRootProvider
-	TransactionAudit     governance.TransactionAuditStore
+	GovernanceCoreDeps
 	GovernedDocStore     governance.GovernedDocumentStore
-	L3Notary             governance.L3Notary
-	SignerStore          governance.SignerStore
 	ConsensusPolicyStore governance.L2ConsensusPolicyStore
 	FieldReader          mcp.FieldReader
-	Doctrine             *governance.L1Doctrine
 }
 
 // CommandServiceConfig holds non-governance dependencies for
@@ -190,8 +182,7 @@ type GatewayCommandServiceConfig struct {
 	PlatformEnrollmentDeps *PlatformEnrollmentDeps
 }
 
-// NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
-func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*OperatorPubSubService, error) {
+func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore, governedDocStore governance.GovernedDocumentStore) (*OperatorPubSubService, error) {
 	client := c.PubSubClient
 	if client == nil {
 		return nil, fmt.Errorf("%w: PubSubClient is required", constants.ErrPubSubEmptyPayload)
@@ -244,9 +235,9 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 
 	rs.buildHandlers()
 
-	rs.governedDocStore = govDeps.GovernedDocStore
+	rs.governedDocStore = governedDocStore
 
-	rs.signerStore = govDeps.SignerStore
+	rs.signerStore = core.SignerStore
 	if rs.signerStore == nil {
 		// Provide a fallback empty signer store instead of loading from filesystem.
 		// This ensures outbound mode fails closed if no signer store is provided.
@@ -255,17 +246,17 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	}
 
 	// Validate required governance dependencies (fail-closed: missing deps = fatal error)
-	if govDeps.ReplayStore == nil {
+	if core.ReplayStore == nil {
 		return nil, constants.ErrTxReplayStoreMissing
 	}
-	if govDeps.StateRootProvider == nil {
+	if core.StateRootProvider == nil {
 		return nil, constants.ErrTxStateRootRequired
 	}
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize governance services after trusted signers are loaded
-	if err := rs.initializeGovernance(c, govDeps); err != nil {
+	if err := rs.initializeGovernance(c, core, consensusPolicyStore); err != nil {
 		return nil, err
 	}
 	// Wire the heartbeat service's actuator after initializeGovernance has
@@ -282,6 +273,11 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	return rs, nil
 }
 
+// NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config for outbound mode.
+func NewOperatorPubSubService(c CommandServiceConfig, deps OutboundModeDeps) (*OperatorPubSubService, error) {
+	return newOperatorPubSubServiceInternal(c, deps.GovernanceCoreDeps, nil, nil)
+}
+
 // NewGatewayOperatorPubSubService creates the dispatcher for gateway mode,
 // wiring gateway-only dependencies (MCPGateway, GovDeps) after base
 // construction. Use NewOperatorPubSubService for outbound mode.
@@ -290,7 +286,7 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 		return nil, fmt.Errorf("%w: GovDeps is required for gateway mode", constants.ErrInternal)
 	}
 
-	rs, err := NewOperatorPubSubService(c.CommandServiceConfig, *c.GovDeps)
+	rs, err := newOperatorPubSubServiceInternal(c.CommandServiceConfig, c.GovDeps.GovernanceCoreDeps, c.GovDeps.ConsensusPolicyStore, c.GovDeps.GovernedDocStore)
 	if err != nil {
 		return nil, err
 	}
@@ -334,14 +330,14 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	return rs, nil
 }
 
-func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps) error {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore) error {
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		SQLAuditStore:     c.AuditStore,
-		ConsoleAuditStore: govDeps.TransactionAudit,
-		StateRootProvider: govDeps.StateRootProvider,
+		ConsoleAuditStore: core.TransactionAudit,
+		StateRootProvider: core.StateRootProvider,
 		ExecutionHandler:  rs, // OperatorPubSubService implements ExecutionHandler
 		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
@@ -366,12 +362,12 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, go
 	knownActionTypes := constants.AllActionTypes
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
-		govDeps.ReplayStore,
-		govDeps.StateRootProvider,
+		core.ReplayStore,
+		core.StateRootProvider,
 		rs.signerStore,
-		govDeps.ConsensusPolicyStore,
-		govDeps.L3Notary,
-		govDeps.Doctrine,
+		consensusPolicyStore,
+		core.L3Notary,
+		core.Doctrine,
 		knownActionTypes,
 		nil, // Clock defaults to RealClock
 	)
