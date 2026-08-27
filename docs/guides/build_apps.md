@@ -6,7 +6,7 @@ parent: Guides
 # Build g8e-Compatible Applications
 
 Last Updated: 2026-08-27
-Version: v2.0.3
+Version: v2.0.4
 
 ---
 
@@ -82,7 +82,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.3
+go get github.com/g8e-ai/g8e/v2@v2.0.4
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -94,7 +94,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==2.0.3
+pip install g8e==2.0.4
 ```
 
 The package provides runtime loaders for JSON protocol constants, dynamic enum generation from those constants, and Pydantic v2 models for protocol data structures including request contexts, platform settings, SSE event wire models, and `GovernanceEnvelope` with deterministic transaction hash generation.
