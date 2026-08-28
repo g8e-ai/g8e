@@ -10,7 +10,10 @@
 package gateway
 
 import (
+	"bytes"
+	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -149,6 +152,107 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 	require.Len(t, priv, ed25519.PrivateKeySize)
 	assert.Equal(t, readSecretFromDB(t, db, "actuator_key_id"), keyID)
 	assert.Equal(t, hex.EncodeToString(priv.Public().(ed25519.PublicKey)), keyID)
+}
+
+func convertToLegacyAuditorState(t *testing.T, sm *SecretManager) {
+	t.Helper()
+	manifest, err := sm.readDigestManifest()
+	require.NoError(t, err)
+	delete(manifest.Secrets, constants.SecretsFileAuditorSigningKey)
+	delete(manifest.Secrets, constants.SecretsFileAuditorKeyID)
+	data, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	require.NoError(t, sm.fileSvc.WriteFile(context.Background(), filepath.Join(constants.SecretsDirname, constants.SecretsFileBootstrapDigest), data, constants.PermFilePrivate))
+	require.NoError(t, sm.fileSvc.Remove(context.Background(), filepath.Join(constants.SecretsDirname, constants.SecretsFileAuditorSigningKey)))
+	require.NoError(t, sm.fileSvc.Remove(context.Background(), filepath.Join(constants.SecretsDirname, constants.SecretsFileAuditorKeyID)))
+}
+
+func TestSecretManager_InitAppSettings_CreatesDistinctAuditorIdentity(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	fileSvc := newTestFileSvc(t)
+	sm := newTestSecretManager(t, db, fileSvc)
+	require.NoError(t, sm.InitAppSettings())
+
+	actuatorKey, actuatorKeyID, err := sm.GetActuatorKey()
+	require.NoError(t, err)
+	auditorKey, auditorKeyID, err := sm.GetAuditorKey()
+	require.NoError(t, err)
+	assert.NotEqual(t, actuatorKeyID, auditorKeyID)
+	assert.NotEqual(t, actuatorKey.Seed(), auditorKey.Seed())
+}
+
+func TestSecretManager_InitAppSettings_MigratesAuditorIdentityWithoutChangingExistingSecrets(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	fileSvc := newTestFileSvc(t)
+	sm := newTestSecretManager(t, db, fileSvc)
+	require.NoError(t, sm.InitAppSettings())
+	convertToLegacyAuditorState(t, sm)
+
+	before := make(map[string][]byte)
+	for _, name := range requiredBootstrapSecrets {
+		if name == constants.SecretsFileAuditorSigningKey || name == constants.SecretsFileAuditorKeyID {
+			continue
+		}
+		data, err := fileSvc.ReadFile(context.Background(), filepath.Join(constants.SecretsDirname, name))
+		require.NoError(t, err)
+		before[name] = data
+	}
+
+	require.NoError(t, sm.InitAppSettings())
+	_, _, err := sm.GetAuditorKey()
+	require.NoError(t, err)
+	manifest, err := sm.readDigestManifest()
+	require.NoError(t, err)
+	for name, expected := range before {
+		actual, err := fileSvc.ReadFile(context.Background(), filepath.Join(constants.SecretsDirname, name))
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+		sum := sha256.Sum256(expected)
+		assert.Equal(t, hex.EncodeToString(sum[:]), manifest.Secrets[name].SHA256)
+	}
+}
+
+func TestSecretManager_InitAppSettings_ResumesCompletedAuditorFileWrites(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	fileSvc := newTestFileSvc(t)
+	sm := newTestSecretManager(t, db, fileSvc)
+	require.NoError(t, sm.InitAppSettings())
+	convertToLegacyAuditorState(t, sm)
+
+	seed := bytes.Repeat([]byte{7}, ed25519.SeedSize)
+	privateKey := ed25519.NewKeyFromSeed(seed)
+	keyID := hex.EncodeToString(privateKey.Public().(ed25519.PublicKey))
+	require.NoError(t, sm.keystore.EncryptSecret(constants.SecretsFileAuditorSigningKey, hex.EncodeToString(seed)))
+	require.NoError(t, sm.keystore.EncryptSecret(constants.SecretsFileAuditorKeyID, keyID))
+
+	require.NoError(t, sm.InitAppSettings())
+	migratedKey, migratedKeyID, err := sm.GetAuditorKey()
+	require.NoError(t, err)
+	assert.Equal(t, keyID, migratedKeyID)
+	assert.Equal(t, seed, migratedKey.Seed())
+}
+
+func TestSecretManager_InitAppSettings_RejectsPartialAuditorMigration(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	fileSvc := newTestFileSvc(t)
+	sm := newTestSecretManager(t, db, fileSvc)
+	require.NoError(t, sm.InitAppSettings())
+	convertToLegacyAuditorState(t, sm)
+	require.NoError(t, sm.keystore.EncryptSecret(constants.SecretsFileAuditorSigningKey, strings.Repeat("a", ed25519.SeedSize*2)))
+
+	err := sm.InitAppSettings()
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestSecretManager_InitAppSettings_RejectsMalformedAuditorIdentity(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	fileSvc := newTestFileSvc(t)
+	sm := newTestSecretManager(t, db, fileSvc)
+	require.NoError(t, sm.InitAppSettings())
+	require.NoError(t, sm.keystore.EncryptSecret(constants.SecretsFileAuditorSigningKey, "invalid"))
+
+	err := sm.InitAppSettings()
+	require.Error(t, err)
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {

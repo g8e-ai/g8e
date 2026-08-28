@@ -526,11 +526,7 @@ message CommitmentAttestation {
   // envelope.StateMerkleRoot the L2 consensus signed over.
   string state_root_at_commit = 4;
 
-  // L2SignatureDigest, WardenIntentSignatureDigest and
-  // HumanSignatureDigest are SHA-256 of the corresponding signatures,
-  // captured so the attestation cryptographically binds all three
-  // authorities into a single commitment without duplicating their
-  // raw signatures here.
+  // L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest bind each authority's signatures without duplicating them. The digest input removes empty signature strings, sorts the remaining UTF-8 strings by byte value, prefixes the list with its unsigned 32-bit big-endian count, and appends each string as an unsigned 32-bit big-endian byte length followed by its bytes. The digest is the lowercase hexadecimal SHA-256 of that input, or the empty string when no signatures remain.
   string l2_signature_digest = 5;
   string warden_intent_signature_digest = 6;
   string human_signature_digest = 7;
@@ -546,10 +542,10 @@ message CommitmentAttestation {
   // AuditorKeyID identifies which Auditor key signed this attestation.
   string auditor_key_id = 11;
 
-  // ED25519 signature over canonical serialization of fields 1-11
+  // ED25519 signature over the canonical serialization of fields 1-11. String fields are UTF-8 encoded in field-number order as an unsigned 32-bit big-endian byte length followed by the bytes. CommittedAtUnixMs is encoded as a signed 64-bit two's-complement big-endian integer without a length prefix.
   string signature = 12;
 
-  // SHA-256 of fields 1-11. It is what the next attestation chains to.
+  // Lowercase hexadecimal SHA-256 of the canonical serialization signed by Signature. It is what the next attestation chains to.
   string hash = 13;
 }
 

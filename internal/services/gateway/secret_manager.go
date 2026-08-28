@@ -33,6 +33,8 @@ var requiredBootstrapSecrets = []string{
 	constants.SecretsFileSessionEncryptionKey,
 	constants.SecretsFileActuatorSigningKey,
 	constants.SecretsFileActuatorKeyID,
+	constants.SecretsFileAuditorSigningKey,
+	constants.SecretsFileAuditorKeyID,
 	constants.SecretsFileAuditorHMACKey,
 }
 
@@ -86,6 +88,9 @@ func (m *SecretManager) InitAppSettings() error {
 
 	if err := m.cleanupStaleAppSettings(); err != nil {
 		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
+	}
+	if err := m.migrateAuditorIdentity(); err != nil {
+		return fmt.Errorf("secret_manager: init app settings: migrate auditor identity: %w", err)
 	}
 
 	return m.validateAppSettings()
@@ -171,6 +176,64 @@ func (m *SecretManager) recreateAppSettings() error {
 	return m.createAppSettings(time.Now().UTC())
 }
 
+func (m *SecretManager) migrateAuditorIdentity() error {
+	manifest, err := m.readDigestManifest()
+	if err != nil {
+		return err
+	}
+	auditorSecrets := []string{constants.SecretsFileAuditorSigningKey, constants.SecretsFileAuditorKeyID}
+	_, hasSigningKey := manifest.Secrets[constants.SecretsFileAuditorSigningKey]
+	_, hasKeyID := manifest.Secrets[constants.SecretsFileAuditorKeyID]
+	if hasSigningKey && hasKeyID {
+		_, _, err := m.GetAuditorKey()
+		return err
+	}
+	if hasSigningKey || hasKeyID {
+		return constants.ErrValidationFailed
+	}
+	for _, name := range requiredBootstrapSecrets {
+		if name == constants.SecretsFileAuditorSigningKey || name == constants.SecretsFileAuditorKeyID {
+			continue
+		}
+		if err := m.validateManifestSecret(manifest, name); err != nil {
+			return err
+		}
+	}
+	existing := 0
+	for _, name := range auditorSecrets {
+		exists, err := m.fileSvc.FileExists(context.Background(), filepath.Join(constants.SecretsDirname, name))
+		if err != nil {
+			return fmt.Errorf("check %s: %w", name, err)
+		}
+		if exists {
+			existing++
+		}
+	}
+	if existing == 1 {
+		return constants.ErrValidationFailed
+	}
+	if existing == 0 {
+		seed, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+		if err != nil {
+			return err
+		}
+		priv := ed25519.NewKeyFromSeed(seed)
+		secrets := map[string]string{
+			constants.SecretsFileAuditorSigningKey: hex.EncodeToString(seed),
+			constants.SecretsFileAuditorKeyID:      hex.EncodeToString(priv.Public().(ed25519.PublicKey)),
+		}
+		for _, name := range auditorSecrets {
+			if err := m.keystore.EncryptSecret(name, secrets[name]); err != nil {
+				return fmt.Errorf("encrypt %s: %w", name, err)
+			}
+		}
+	}
+	if _, _, err := m.GetAuditorKey(); err != nil {
+		return err
+	}
+	return m.writeDigestManifestFromEncryptedFiles(time.Now().UTC())
+}
+
 func (m *SecretManager) createAppSettings(now time.Time) error {
 	if err := m.rejectPreexistingBootstrapState(); err != nil {
 		return fmt.Errorf("secret_manager: create app settings: %w", err)
@@ -184,6 +247,13 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	ActuatorPriv := ed25519.NewKeyFromSeed(ActuatorSeedBytes)
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	ActuatorKeyID := hex.EncodeToString(ActuatorPub)
+	auditorSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
+	if err != nil {
+		return fmt.Errorf("secret_manager: create app settings: %w", err)
+	}
+	auditorSeed := hex.EncodeToString(auditorSeedBytes)
+	auditorPriv := ed25519.NewKeyFromSeed(auditorSeedBytes)
+	auditorKeyID := hex.EncodeToString(auditorPriv.Public().(ed25519.PublicKey))
 
 	sessionEncryptionKey, err := m.generateSecureToken(32)
 	if err != nil {
@@ -198,6 +268,8 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 		constants.SecretsFileSessionEncryptionKey: sessionEncryptionKey,
 		constants.SecretsFileActuatorSigningKey:   ActuatorSeed, // Seed for ED25519
 		constants.SecretsFileActuatorKeyID:        ActuatorKeyID,
+		constants.SecretsFileAuditorSigningKey:    auditorSeed,
+		constants.SecretsFileAuditorKeyID:         auditorKeyID,
 		constants.SecretsFileAuditorHMACKey:       auditorHMACKey,
 	}
 
@@ -261,22 +333,28 @@ func (m *SecretManager) validateAppSettings() error {
 	}
 
 	for _, name := range requiredBootstrapSecrets {
-		// Verify encrypted file digest matches manifest (what g8e-compatible agentic ensembles will check)
-		entry, ok := manifest.Secrets[name]
-		if !ok || entry.SHA256 == "" {
-			return fmt.Errorf("secret_manager: validate app settings: %s: %w", name, constants.ErrNotFound)
-		}
-		relPath := filepath.Join(constants.SecretsDirname, name)
-		encryptedData, err := m.fileSvc.ReadFile(context.Background(), relPath)
-		if err != nil {
-			return fmt.Errorf("secret_manager: validate app settings: read secret %s: %w", name, err)
-		}
-		encryptedDigest := sha256.Sum256(encryptedData)
-		if actual := hex.EncodeToString(encryptedDigest[:]); actual != entry.SHA256 {
-			return fmt.Errorf("secret_manager: validate app settings: %s: %w", name, constants.ErrValidationFailed)
+		if err := m.validateManifestSecret(manifest, name); err != nil {
+			return fmt.Errorf("secret_manager: validate app settings: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func (m *SecretManager) validateManifestSecret(manifest *bootstrapDigestManifest, name string) error {
+	entry, ok := manifest.Secrets[name]
+	if !ok || entry.SHA256 == "" {
+		return fmt.Errorf("%s: %w", name, constants.ErrNotFound)
+	}
+	relPath := filepath.Join(constants.SecretsDirname, name)
+	encryptedData, err := m.fileSvc.ReadFile(context.Background(), relPath)
+	if err != nil {
+		return fmt.Errorf("read secret %s: %w", name, err)
+	}
+	encryptedDigest := sha256.Sum256(encryptedData)
+	if actual := hex.EncodeToString(encryptedDigest[:]); actual != entry.SHA256 {
+		return fmt.Errorf("%s: %w", name, constants.ErrValidationFailed)
+	}
 	return nil
 }
 
@@ -457,6 +535,30 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 		return nil, "", fmt.Errorf("secret_manager: get actuator key: %w", constants.ErrValidationFailed)
 	}
 
+	return priv, keyID, nil
+}
+
+// GetAuditorKey retrieves the Auditor's ED25519 signing key and key ID.
+func (m *SecretManager) GetAuditorKey() (ed25519.PrivateKey, string, error) {
+	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileAuditorSigningKey)
+	if err != nil {
+		return nil, "", fmt.Errorf("secret_manager: get auditor key: decrypt seed: %w", err)
+	}
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, "", fmt.Errorf("secret_manager: get auditor key: decode seed: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, "", fmt.Errorf("secret_manager: get auditor key: %w", constants.ErrValidationFailed)
+	}
+	keyID, err := m.keystore.DecryptSecret(constants.SecretsFileAuditorKeyID)
+	if err != nil {
+		return nil, "", fmt.Errorf("secret_manager: get auditor key: decrypt key ID: %w", err)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	if keyID == "" || keyID != hex.EncodeToString(priv.Public().(ed25519.PublicKey)) {
+		return nil, "", fmt.Errorf("secret_manager: get auditor key: %w", constants.ErrValidationFailed)
+	}
 	return priv, keyID, nil
 }
 

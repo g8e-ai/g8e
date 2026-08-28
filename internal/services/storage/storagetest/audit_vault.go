@@ -438,7 +438,7 @@ CREATE TABLE IF NOT EXISTS commitment_ledger (
 	prior_commitment_hash TEXT NOT NULL,
 	state_root_at_commit TEXT,
 	l2_signature_digest TEXT,
-	actuator_intent_signature_digest TEXT,
+	warden_intent_signature_digest TEXT,
 	human_signature_digest TEXT,
 	action_type TEXT,
 	target_resource TEXT,

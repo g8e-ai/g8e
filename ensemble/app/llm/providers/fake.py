@@ -102,6 +102,10 @@ class FakeProvider(LLMProvider):
                     return " ".join(parts)
         return ""
 
+    @staticmethod
+    def _has_tool_response(contents: list[Content]) -> bool:
+        return any(part.tool_response is not None for content in contents for part in content.parts)
+
     def _extract_file_path(self, message: str) -> str:
         """Extract a file path from the user message, falling back to default."""
         match = _FILE_PATH_RE.search(message)
@@ -224,6 +228,11 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
+        if self._has_tool_response(contents):
+            yield StreamChunkFromModel(
+                text="Tool execution completed successfully.", finish_reason="STOP"
+            )
+            return
         message = self._extract_last_user_message(contents)
         logger.info("[FAKE-PROVIDER] stream_primary: message=%s", message[:100])
         for chunk in self._build_stream_chunks(message):
@@ -243,6 +252,18 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
+        if self._has_tool_response(contents):
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[Part(text="Tool execution completed successfully.")],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ]
+            )
         message = self._extract_last_user_message(contents)
         logger.info("[FAKE-PROVIDER] primary: message=%s", message[:100])
         return self._build_tool_call_response(message)

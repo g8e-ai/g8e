@@ -40,6 +40,7 @@ from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
+from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_auth_service import OperatorAuthService
 from app.services.operator.session_auth_listener import SessionAuthListener
@@ -304,7 +305,9 @@ class ServiceFactory:
 
         operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
 
-        certificate_service = CertificateService(data_service=data_services.operator_data_service)
+        certificate_service = CertificateService(
+            data_service=CertificateDataService(cache_aside_service)
+        )
 
         operator_auth_service = OperatorAuthService(
             api_key_service=api_key_service,

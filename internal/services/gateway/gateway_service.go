@@ -262,6 +262,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gateway: load actuator signing key: %w", err)
 	}
+	auditorPriv, auditorKeyID, err := sm.GetAuditorKey()
+	if err != nil {
+		return nil, fmt.Errorf("gateway: load auditor signing key: %w", err)
+	}
 
 	// --- Consensus bootstrap (C2 inverted order: before pubsub and mcpGateway) ---
 	consensusSvc := b.consensusSvc
@@ -332,6 +336,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 				Scrubbing:          scrubbingService,
 				ActuatorSigningKey: actuatorPriv,
 				ActuatorKeyID:      actuatorKeyID,
+				AuditorSigningKey:  auditorPriv,
+				AuditorKeyID:       auditorKeyID,
 			},
 			GovDeps: govModeDeps,
 		})

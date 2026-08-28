@@ -9,6 +9,7 @@ package reporting
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,7 +17,9 @@ import (
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const (
@@ -48,9 +51,9 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 	if ctx.Err() != nil {
 		return FileResult{}, vr, ctx.Err()
 	}
-	commitments, err := cl.ListCommitments()
-	if err != nil {
-		addRow("commitment_chain", "commitment_ledger", "all", verifyResultSkipped, fmt.Sprintf("could not read commitments: %v", err))
+	commitments, commitmentsErr := cl.ListCommitments()
+	if commitmentsErr != nil {
+		addRow("commitment_chain", "commitment_ledger", "all", verifyResultSkipped, fmt.Sprintf("could not read commitments: %v", commitmentsErr))
 	} else if len(commitments) == 0 {
 		addRow("commitment_chain", "commitment_ledger", "all", verifyResultPass, "ledger empty (genesis)")
 	} else {
@@ -83,49 +86,44 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 	}
 	if len(commitments) > 0 {
 		allHashesOK := true
+		allSignaturesOK := true
 		for _, c := range commitments {
-			if c.Seq == 0 {
+			var attestation operatorv1.CommitmentAttestation
+			if err := json.Unmarshal(c.AttestationJSON, &attestation); err != nil {
+				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultFail, fmt.Sprintf("invalid attestation JSON: %v", err))
+				allHashesOK = false
+				allSignaturesOK = false
 				continue
 			}
-			// Reconstruct JSON to recompute hash the same way AppendCommitmentJSON does:
-			// The hash is SHA-256 of the attestation JSON that was stored.
-			// We don't have the full attestation_json here, but we can verify
-			// using the structured fields we have.
-			type hashFields struct {
-				TransactionID   string `json:"transaction_id"`
-				TransactionHash string `json:"transaction_hash"`
-				PriorHash       string `json:"prior_commitment_hash"`
-				ActionType      string `json:"action_type"`
-				TargetResource  string `json:"target_resource"`
+			if !commitmentRowMatchesAttestation(c, &attestation) {
+				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultFail, "structured commitment columns diverge from attestation JSON")
+				allHashesOK = false
 			}
-			payload := hashFields{
-				TransactionID:   c.TransactionID,
-				TransactionHash: c.TransactionHash,
-				PriorHash:       c.PriorCommitmentHash,
-				ActionType:      c.ActionType,
-				TargetResource:  c.TargetResource,
-			}
-			b, err := json.Marshal(payload)
+			canonical, err := governance.CanonicalizeCommitmentAttestation(&attestation)
 			if err != nil {
-				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultSkipped,
-					fmt.Sprintf("failed to marshal hash fields: %v", err))
+				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultFail, fmt.Sprintf("canonicalization failed: %v", err))
 				allHashesOK = false
-				break
+				allSignaturesOK = false
+				continue
 			}
-			computed := sha256.Sum256(b)
+			computed := sha256.Sum256(canonical)
 			computedHex := hex.EncodeToString(computed[:])
-			if computedHex != c.Hash {
-				// Note: the hash stored may have been computed from the full attestation_json.
-				// We mark as SKIPPED rather than FAIL since we can't recompute it exactly
-				// without the original attestation_json.
-				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultSkipped,
-					"hash recompute requires full attestation_json (not stored in structured columns)")
+			if computedHex != c.Hash || computedHex != attestation.Hash || attestation.PriorCommitmentHash != c.PriorCommitmentHash {
+				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultFail, "stored commitment does not match its canonical attestation hash")
 				allHashesOK = false
-				break
+			}
+			publicKey, keyErr := hex.DecodeString(attestation.AuditorKeyId)
+			signature, signatureErr := hex.DecodeString(attestation.Signature)
+			if keyErr != nil || signatureErr != nil || len(publicKey) != ed25519.PublicKeySize || !ed25519.Verify(ed25519.PublicKey(publicKey), canonical, signature) {
+				addRow("commitment_signature", "commitment_ledger", c.Hash, verifyResultFail, "Auditor signature verification failed")
+				allSignaturesOK = false
 			}
 		}
 		if allHashesOK {
 			addRow("commitment_hash_recompute", "commitment_ledger", "all", verifyResultPass, "all commitment hashes verified")
+		}
+		if allSignaturesOK {
+			addRow("commitment_signature", "commitment_ledger", "all", verifyResultPass, "all Auditor signatures verified")
 		}
 	}
 
@@ -182,7 +180,7 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 	if ctx.Err() != nil {
 		return FileResult{}, vr, ctx.Err()
 	}
-	if auditStore != nil && commitments != nil {
+	if auditStore != nil && commitmentsErr == nil {
 		missingReceipts := 0
 		for _, c := range commitments {
 			if c.TransactionID == "" {
@@ -216,4 +214,20 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 	}
 	res.Filename = constants.ReportVerificationFilename
 	return res, vr, nil
+}
+
+func commitmentRowMatchesAttestation(row *storage.CommitmentRow, attestation *operatorv1.CommitmentAttestation) bool {
+	return row.TransactionID == attestation.TransactionId &&
+		row.TransactionHash == attestation.TransactionHash &&
+		row.PriorCommitmentHash == attestation.PriorCommitmentHash &&
+		row.Hash == attestation.Hash &&
+		row.StateRootAtCommit == attestation.StateRootAtCommit &&
+		row.L2SignatureDigest == attestation.L2SignatureDigest &&
+		row.WardenIntentSignatureDigest == attestation.WardenIntentSignatureDigest &&
+		row.HumanSignatureDigest == attestation.HumanSignatureDigest &&
+		row.ActionType == attestation.ActionType &&
+		row.TargetResource == attestation.TargetResource &&
+		row.CommittedAt.UnixMilli() == attestation.CommittedAtUnixMs &&
+		row.AuditorKeyID == attestation.AuditorKeyId &&
+		row.Signature == attestation.Signature
 }

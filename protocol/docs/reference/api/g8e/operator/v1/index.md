@@ -454,15 +454,15 @@ authorized to be executed.
 | transaction_hash | [string](#string) |  |  |
 | prior_commitment_hash | [string](#string) |  | PriorCommitmentHash is the Hash of the immediately-preceding CommitmentAttestation in the ledger, or GenesisPriorHash for the first commitment. This is what makes the ledger a chain. |
 | state_root_at_commit | [string](#string) |  | StateRootAtCommit is the Gateway&#39;s state root at the moment the Auditor signed this attestation. It is checked against the envelope.StateMerkleRoot the L2 consensus signed over. |
-| l2_signature_digest | [string](#string) |  | L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest are SHA-256 of the corresponding signatures, captured so the attestation cryptographically binds all three authorities into a single commitment without duplicating their raw signatures here. |
+| l2_signature_digest | [string](#string) |  | L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest bind each authority&#39;s signatures without duplicating them. The digest input removes empty signature strings, sorts the remaining UTF-8 strings by byte value, prefixes the list with its unsigned 32-bit big-endian count, and appends each string as an unsigned 32-bit big-endian byte length followed by its bytes. The digest is the lowercase hexadecimal SHA-256 of that input, or the empty string when no signatures remain. |
 | warden_intent_signature_digest | [string](#string) |  |  |
 | human_signature_digest | [string](#string) |  |  |
 | action_type | [string](#string) |  | ActionType and TargetResource are carried for ledger readability without re-fetching the original envelope. |
 | target_resource | [string](#string) |  |  |
 | committed_at_unix_ms | [int64](#int64) |  | CommittedAtUnixMs is the Auditor&#39;s local timestamp at signing. |
 | auditor_key_id | [string](#string) |  | AuditorKeyID identifies which Auditor key signed this attestation. |
-| signature | [string](#string) |  | ED25519 signature over canonical serialization of fields 1-11 |
-| hash | [string](#string) |  | SHA-256 of fields 1-11. It is what the next attestation chains to. |
+| signature | [string](#string) |  | ED25519 signature over the canonical serialization of fields 1-11. String fields are UTF-8 encoded in field-number order as an unsigned 32-bit big-endian byte length followed by the bytes. CommittedAtUnixMs is encoded as a signed 64-bit two&#39;s-complement big-endian integer without a length prefix. |
+| hash | [string](#string) |  | Lowercase hexadecimal SHA-256 of the canonical serialization signed by Signature. It is what the next attestation chains to. |
 
 
 

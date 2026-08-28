@@ -8,12 +8,16 @@
 package governance
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -81,8 +85,10 @@ type L5Actuator struct {
 	ReceiptPublisher ReceiptPublisher
 
 	// L5Actuator's own signing identity for ActionReceipts
-	SigningKey ed25519.PrivateKey
-	KeyID      string
+	SigningKey        ed25519.PrivateKey
+	KeyID             string
+	AuditorSigningKey ed25519.PrivateKey
+	AuditorKeyID      string
 
 	wg sync.WaitGroup
 }
@@ -102,6 +108,17 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	if len(w.SigningKey) == 0 {
 		return nil, constants.ErrL5ActuatorSigningKeyMissing
 	}
+	if w.SQLAuditStore != nil {
+		if len(w.AuditorSigningKey) == 0 {
+			return nil, constants.ErrL5ActuatorAuditorKeyMissing
+		}
+		if w.AuditorKeyID == "" {
+			return nil, constants.ErrL5ActuatorAuditorKeyIDMissing
+		}
+		if w.SQLAuditStore.CommitmentLedger() == nil {
+			return nil, constants.ErrL5ActuatorCommitmentLedger
+		}
+	}
 
 	eventType := constants.MapActionTypeToEventType(vt.ActionType)
 
@@ -114,6 +131,11 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	if err := w.signAndLogReceipt(vt, receipt); err != nil {
 		return nil, err
+	}
+	if w.SQLAuditStore != nil {
+		if err := w.persistCommitment(vt, receipt); err != nil {
+			return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
+		}
 	}
 
 	if err := w.rehydratePayload(ctx, vt, cmdMsg); err != nil {
@@ -216,6 +238,118 @@ func (w *L5Actuator) signAndLogReceipt(vt *VerifiedTransaction, receipt *operato
 		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 	}
 	return nil
+}
+
+func CanonicalizeCommitmentAttestation(attestation *operatorv1.CommitmentAttestation) ([]byte, error) {
+	if attestation == nil {
+		return nil, constants.ErrTxInvalidEnvelope
+	}
+	var payload bytes.Buffer
+	for _, value := range []string{
+		attestation.TransactionId,
+		attestation.TransactionHash,
+		attestation.PriorCommitmentHash,
+		attestation.StateRootAtCommit,
+		attestation.L2SignatureDigest,
+		attestation.WardenIntentSignatureDigest,
+		attestation.HumanSignatureDigest,
+		attestation.ActionType,
+		attestation.TargetResource,
+	} {
+		writeCanonicalString(&payload, value)
+	}
+	var timestamp [8]byte
+	binary.BigEndian.PutUint64(timestamp[:], uint64(attestation.CommittedAtUnixMs))
+	payload.Write(timestamp[:])
+	writeCanonicalString(&payload, attestation.AuditorKeyId)
+	return payload.Bytes(), nil
+}
+
+func writeCanonicalString(payload *bytes.Buffer, value string) {
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(len(value)))
+	payload.Write(length[:])
+	payload.WriteString(value)
+}
+
+func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+	if len(w.AuditorSigningKey) != ed25519.PrivateKeySize {
+		return constants.ErrL5ActuatorAuditorKeyMissing
+	}
+	publicKey := w.AuditorSigningKey.Public().(ed25519.PublicKey)
+	if w.AuditorKeyID != hex.EncodeToString(publicKey) {
+		return constants.ErrValidationFailed
+	}
+	return w.SQLAuditStore.CommitmentLedger().AppendCommitment(func(priorHash string) ([]byte, string, error) {
+		attestation := &operatorv1.CommitmentAttestation{
+			TransactionId:               vt.Envelope.Id,
+			TransactionHash:             vt.Envelope.TransactionHash,
+			PriorCommitmentHash:         priorHash,
+			StateRootAtCommit:           receipt.StateRootBefore,
+			L2SignatureDigest:           l2SignatureDigest(vt.Envelope),
+			WardenIntentSignatureDigest: signatureDigest([]string{receipt.Signature}),
+			HumanSignatureDigest:        humanSignatureDigest(vt.Envelope),
+			ActionType:                  string(vt.ActionType),
+			TargetResource:              vt.Envelope.TargetResource,
+			CommittedAtUnixMs:           time.Now().UnixMilli(),
+			AuditorKeyId:                w.AuditorKeyID,
+		}
+		canonical, err := CanonicalizeCommitmentAttestation(attestation)
+		if err != nil {
+			return nil, "", err
+		}
+		hash := sha256.Sum256(canonical)
+		attestation.Hash = hex.EncodeToString(hash[:])
+		attestation.Signature = hex.EncodeToString(ed25519.Sign(w.AuditorSigningKey, canonical))
+		payload, err := json.Marshal(attestation)
+		if err != nil {
+			return nil, "", fmt.Errorf("commitment attestation: marshal: %w", err)
+		}
+		return payload, attestation.Hash, nil
+	})
+}
+
+func l2SignatureDigest(env *govtypes.GovernanceEnvelope) string {
+	if env == nil || env.Governance == nil || env.Governance.L2 == nil {
+		return ""
+	}
+	signatures := make([]string, 0, len(env.Governance.L2.Votes))
+	for _, vote := range env.Governance.L2.Votes {
+		if vote != nil {
+			signatures = append(signatures, vote.ConsensusSignature)
+		}
+	}
+	return signatureDigest(signatures)
+}
+
+func humanSignatureDigest(env *govtypes.GovernanceEnvelope) string {
+	if env == nil || env.Governance == nil || env.Governance.L3 == nil || env.Governance.L3.Proof == nil {
+		return ""
+	}
+	proof := env.Governance.L3.Proof
+	return signatureDigest([]string{proof.Signature, proof.CliSignature})
+}
+
+func signatureDigest(signatures []string) string {
+	values := make([]string, 0, len(signatures))
+	for _, signature := range signatures {
+		if signature != "" {
+			values = append(values, signature)
+		}
+	}
+	if len(values) == 0 {
+		return ""
+	}
+	sort.Strings(values)
+	var payload bytes.Buffer
+	var count [4]byte
+	binary.BigEndian.PutUint32(count[:], uint32(len(values)))
+	payload.Write(count[:])
+	for _, value := range values {
+		writeCanonicalString(&payload, value)
+	}
+	digest := sha256.Sum256(payload.Bytes())
+	return hex.EncodeToString(digest[:])
 }
 
 // rehydratePayload rehydrates the command message payload in place. Fail-closed: returns error on rehydration failure.

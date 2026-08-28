@@ -15,9 +15,9 @@ dependencies = [
     # Data validation and modeling
     "pydantic==2.12.5",
     # Async HTTP and TLS
-    "aiohttp==3.14.2",
+    "aiohttp==3.14.3",
     "httpx==0.28.1",
-    "cryptography==48.0.0",
+    "cryptography==50.0.0",
     # Protocol Buffers (runtime parsing + build-time stub generation)
     "protobuf==7.35.1",
     "grpcio-tools==1.83.0",

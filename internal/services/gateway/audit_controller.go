@@ -123,21 +123,23 @@ func (c *AuditController) handleAuditReceiptsExport(w http.ResponseWriter, r *ht
 		}
 	}
 
-	receipts, err := c.auditStore.ListActionReceiptsSince(since, limit)
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+	var receipts []*models.ActionReceiptRecord
+	var err error
+	if operatorSessionID != "" {
+		receipts, err = c.auditStore.ListActionReceipts(operatorSessionID, limit, 0)
+	} else {
+		receipts, err = c.auditStore.ListActionReceiptsSince(since, limit)
+	}
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReceiptsExport: %w", err).Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.WriteHeader(http.StatusOK)
-	encoder := json.NewEncoder(w)
-	for _, r := range receipts {
-		if err := encoder.Encode(r); err != nil {
-			c.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, string(constants.ConnectionStateError), err)
-			break
-		}
-	}
+	c.responder.JSON(w, http.StatusOK, models.AuditReceiptsResponse{
+		Success:  true,
+		Receipts: receipts,
+	})
 }
 
 func (c *AuditController) handleAuditEvents(w http.ResponseWriter, r *http.Request) {

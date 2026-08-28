@@ -54,7 +54,7 @@ ENV GOFLAGS=-mod=vendor
 # Copy only the source the Go build needs. vendor/ was already copied above;
 # don't re-copy it. This keeps the layer minimal and prevents unrelated file
 # changes (tests, docs, scripts) from invalidating the build cache.
-COPY Makefile ./
+COPY Makefile VERSION ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY protocol/ ./protocol/
@@ -64,8 +64,9 @@ COPY docs/reference/ ./docs/reference/
 # GOFIPS140=v1.0.0 for linux targets and explicitly unsets it for non-linux
 # targets. CGO_ENABLED=0 is intentional: the Go FIPS module is pure Go and
 # does not require CGO. Binaries are written to /build/bin/g8e-{os}-{arch}.
+ARG BUILD_ID=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    make build-all
+    make build-all BUILD_ID="${BUILD_ID}"
 
 # Verify the linux/amd64 binary built and runs.
 RUN /build/bin/g8e-linux-amd64 --help

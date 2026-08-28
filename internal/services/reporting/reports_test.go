@@ -302,8 +302,8 @@ func TestReportCommitments_EmptyLedger(t *testing.T) {
 
 func TestReportCommitments_WithRecords(t *testing.T) {
 	cl, _ := setupTestCommitmentLedger(t)
-	insertCommitment(t, cl, "tx-1", "hash-1", "", "commit-hash-1", "FS_WRITE", "/file1")
-	insertCommitment(t, cl, "tx-2", "hash-2", "commit-hash-1", "commit-hash-2", "FS_WRITE", "/file2")
+	firstHash := insertCommitment(t, cl, "tx-1", "hash-1", "", "FS_WRITE", "/file1")
+	insertCommitment(t, cl, "tx-2", "hash-2", firstHash, "FS_WRITE", "/file2")
 
 	outDir := testutil.TempDir(t)
 	res, err := reportCommitments(context.Background(), outDir, cl)

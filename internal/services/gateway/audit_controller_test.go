@@ -17,6 +17,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func setupTestAuditController(t *testing.T) *AuditController {
@@ -107,7 +109,12 @@ func TestAuditControllerHandleAuditReceiptsExport(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditReceiptsExport(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "application/x-ndjson", rr.Header().Get("Content-Type"))
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.True(t, json.Valid(rr.Body.Bytes()))
+
+		var response models.AuditReceiptsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &response))
+		assert.True(t, response.Success)
 	})
 
 	t.Run("GET - with since parameter RFC3339", func(t *testing.T) {

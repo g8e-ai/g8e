@@ -468,3 +468,45 @@ func TestL5ActuatorExecuteReceiptPublisherErrorDoesNotFailExecution(t *testing.T
 	require.NotNil(t, receipt)
 	require.Equal(t, 1, publisher.callCount(), "PublishActionReceipt must still be attempted")
 }
+
+func TestCanonicalizeCommitmentAttestation_ProtocolVector(t *testing.T) {
+	t.Parallel()
+	attestation := &operatorv1.CommitmentAttestation{
+		TransactionId:               "tx-1",
+		TransactionHash:             "abc123",
+		StateRootAtCommit:           "state-1",
+		L2SignatureDigest:           "l2",
+		WardenIntentSignatureDigest: "warden",
+		HumanSignatureDigest:        "human",
+		ActionType:                  "FILE_EDIT",
+		TargetResource:              "/tmp/example",
+		CommittedAtUnixMs:           1700000000123,
+		AuditorKeyId:                "0123",
+		Signature:                   "excluded",
+		Hash:                        "excluded",
+	}
+
+	canonical, err := CanonicalizeCommitmentAttestation(attestation)
+	require.NoError(t, err)
+	assert.Equal(t, "0000000474782d3100000006616263313233000000000000000773746174652d31000000026c320000000677617264656e0000000568756d616e0000000946494c455f454449540000000c2f746d702f6578616d706c650000018bcfe5687b0000000430313233", hex.EncodeToString(canonical))
+}
+
+func TestSignatureDigest_ProtocolVectors(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		signatures []string
+		expected   string
+	}{
+		{name: "no signatures", signatures: nil, expected: ""},
+		{name: "single signature", signatures: []string{"aa"}, expected: "e9e797104fd871e7e240d637b2bba89f78211d032586b6ce20080025db015bec"},
+		{name: "sorted nonempty signatures", signatures: []string{"bb", "", "aa"}, expected: "ee23674743e070fa0543cbf985228c7e34e18e6f64652da9cb1bec62887d9518"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := append([]string(nil), tt.signatures...)
+			assert.Equal(t, tt.expected, signatureDigest(input))
+			assert.Equal(t, tt.signatures, input)
+		})
+	}
+}

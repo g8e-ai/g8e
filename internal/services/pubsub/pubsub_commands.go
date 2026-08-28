@@ -111,6 +111,8 @@ type CommandServiceConfig struct {
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
+	AuditorSigningKey  ed25519.PrivateKey
+	AuditorKeyID       string
 }
 
 // GatewayCommandServiceConfig embeds CommandServiceConfig and adds
@@ -263,6 +265,8 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
+		AuditorSigningKey: c.AuditorSigningKey,
+		AuditorKeyID:      c.AuditorKeyID,
 	}
 
 	// Wire the ReceiptPublisher so the actuator publishes signed

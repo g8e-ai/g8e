@@ -286,6 +286,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
+	auditorPriv, auditorKeyID, err := vs.secretManager.GetAuditorKey()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+	}
 
 	// Load trusted L2 signers from filesystem
 	trustedSignersDir := paths.Infra.TrustedSignersDir
@@ -317,6 +321,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Scrubbing:          scrubbingService,
 		ActuatorSigningKey: actuatorPriv,
 		ActuatorKeyID:      actuatorKeyID,
+		AuditorSigningKey:  auditorPriv,
+		AuditorKeyID:       auditorKeyID,
 	}
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{

@@ -3776,11 +3776,7 @@ type CommitmentAttestation struct {
 	// Auditor signed this attestation. It is checked against the
 	// envelope.StateMerkleRoot the L2 consensus signed over.
 	StateRootAtCommit string `protobuf:"bytes,4,opt,name=state_root_at_commit,json=stateRootAtCommit,proto3" json:"state_root_at_commit,omitempty"`
-	// L2SignatureDigest, WardenIntentSignatureDigest and
-	// HumanSignatureDigest are SHA-256 of the corresponding signatures,
-	// captured so the attestation cryptographically binds all three
-	// authorities into a single commitment without duplicating their
-	// raw signatures here.
+	// L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest bind each authority's signatures without duplicating them. The digest input removes empty signature strings, sorts the remaining UTF-8 strings by byte value, prefixes the list with its unsigned 32-bit big-endian count, and appends each string as an unsigned 32-bit big-endian byte length followed by its bytes. The digest is the lowercase hexadecimal SHA-256 of that input, or the empty string when no signatures remain.
 	L2SignatureDigest           string `protobuf:"bytes,5,opt,name=l2_signature_digest,json=l2SignatureDigest,proto3" json:"l2_signature_digest,omitempty"`
 	WardenIntentSignatureDigest string `protobuf:"bytes,6,opt,name=warden_intent_signature_digest,json=wardenIntentSignatureDigest,proto3" json:"warden_intent_signature_digest,omitempty"`
 	HumanSignatureDigest        string `protobuf:"bytes,7,opt,name=human_signature_digest,json=humanSignatureDigest,proto3" json:"human_signature_digest,omitempty"`
@@ -3792,9 +3788,9 @@ type CommitmentAttestation struct {
 	CommittedAtUnixMs int64 `protobuf:"varint,10,opt,name=committed_at_unix_ms,json=committedAtUnixMs,proto3" json:"committed_at_unix_ms,omitempty"`
 	// AuditorKeyID identifies which Auditor key signed this attestation.
 	AuditorKeyId string `protobuf:"bytes,11,opt,name=auditor_key_id,json=auditorKeyId,proto3" json:"auditor_key_id,omitempty"`
-	// ED25519 signature over canonical serialization of fields 1-11
+	// ED25519 signature over the canonical serialization of fields 1-11. String fields are UTF-8 encoded in field-number order as an unsigned 32-bit big-endian byte length followed by the bytes. CommittedAtUnixMs is encoded as a signed 64-bit two's-complement big-endian integer without a length prefix.
 	Signature string `protobuf:"bytes,12,opt,name=signature,proto3" json:"signature,omitempty"`
-	// SHA-256 of fields 1-11. It is what the next attestation chains to.
+	// Lowercase hexadecimal SHA-256 of the canonical serialization signed by Signature. It is what the next attestation chains to.
 	Hash          string `protobuf:"bytes,13,opt,name=hash,proto3" json:"hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

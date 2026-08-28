@@ -100,13 +100,14 @@ type FileMutationLog struct {
 
 // SQLAuditStore provides pure SQL audit data storage
 type SQLAuditStore struct {
-	db              *sqliteutil.DB
-	config          *AuditStoreConfig
-	logger          *slog.Logger
-	fileSvc         fs.RuntimeFileService
-	encryptionVault *vault.Vault
-	pruner          *sqliteutil.Pruner
-	closeOnce       sync.Once
+	db               *sqliteutil.DB
+	config           *AuditStoreConfig
+	logger           *slog.Logger
+	fileSvc          fs.RuntimeFileService
+	encryptionVault  *vault.Vault
+	pruner           *sqliteutil.Pruner
+	commitmentLedger *CommitmentLedger
+	closeOnce        sync.Once
 
 	muWrites sync.WaitGroup
 }
@@ -144,6 +145,13 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 		"encryption_enabled", encryptionEnabled)
 
 	return ass, nil
+}
+
+func (ass *SQLAuditStore) CommitmentLedger() *CommitmentLedger {
+	if ass == nil {
+		return nil
+	}
+	return ass.commitmentLedger
 }
 
 // bootstrap initializes the audit store (directory structure, database)
@@ -213,8 +221,13 @@ func (ass *SQLAuditStore) initDatabase() error {
 		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
+	if err := migrateCommitmentColumns(db, ass.logger); err != nil {
+		db.Close()
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
+	}
 
 	ass.db = db
+	ass.commitmentLedger = NewCommitmentLedger(db, ass.logger)
 
 	ass.logger.Info("Database schema initialized")
 	return nil
@@ -253,6 +266,37 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		}
 		logger.Info("Audit store migration: added column", "column", col)
 	}
+	return nil
+}
+
+func migrateCommitmentColumns(db *sqliteutil.DB, logger *slog.Logger) error {
+	cols, err := db.QueryWithRetry("PRAGMA table_info(commitment_ledger)")
+	if err != nil {
+		return fmt.Errorf("audit_store: migrate commitments: pragma: %w", err)
+	}
+	defer cols.Close()
+
+	existing := make(map[string]bool)
+	for cols.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := cols.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("audit_store: migrate commitments: scan: %w", err)
+		}
+		existing[name] = true
+	}
+	if existing["warden_intent_signature_digest"] {
+		return nil
+	}
+	if !existing["actuator_intent_signature_digest"] {
+		return fmt.Errorf("audit_store: migrate commitments: %w", constants.ErrMissingRequiredField)
+	}
+	if _, err := db.Exec("ALTER TABLE commitment_ledger RENAME COLUMN actuator_intent_signature_digest TO warden_intent_signature_digest"); err != nil {
+		return fmt.Errorf("audit_store: migrate commitments: rename intent digest: %w", err)
+	}
+	logger.Info("Audit store migration: renamed commitment intent digest column")
 	return nil
 }
 
@@ -322,7 +366,7 @@ CREATE TABLE IF NOT EXISTS commitment_ledger (
 	prior_commitment_hash TEXT NOT NULL,
 	state_root_at_commit TEXT,
 	l2_signature_digest TEXT,
-	actuator_intent_signature_digest TEXT,
+	warden_intent_signature_digest TEXT,
 	human_signature_digest TEXT,
 	action_type TEXT,
 	target_resource TEXT,

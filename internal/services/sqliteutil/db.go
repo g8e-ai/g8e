@@ -336,6 +336,49 @@ func (db *DB) ExecInTxWithRetry(fn func(tx *sql.Tx) error) error {
 	return fmt.Errorf("sqliteutil: transaction failed after %d retries: %w", maxRetries, lastErr)
 }
 
+// ExecInImmediateTxWithRetry executes a SQLite BEGIN IMMEDIATE transaction on one connection and retries SQLITE_BUSY failures.
+func (db *DB) ExecInImmediateTxWithRetry(ctx context.Context, fn func(*sql.Conn) error) error {
+	var lastErr error
+	for i := 0; i < db.config.MaxRetries; i++ {
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			return fmt.Errorf("sqliteutil: acquire transaction connection: %w", err)
+		}
+		if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+			conn.Close()
+			if isBusyError(err) {
+				db.backoff(i)
+				lastErr = err
+				continue
+			}
+			return fmt.Errorf("sqliteutil: begin immediate transaction: %w", err)
+		}
+		err = fn(conn)
+		if err != nil {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+			conn.Close()
+			if isBusyError(err) {
+				db.backoff(i)
+				lastErr = err
+				continue
+			}
+			return err
+		}
+		_, err = conn.ExecContext(ctx, "COMMIT")
+		conn.Close()
+		if err == nil {
+			return nil
+		}
+		if isBusyError(err) {
+			db.backoff(i)
+			lastErr = err
+			continue
+		}
+		return fmt.Errorf("sqliteutil: commit immediate transaction: %w", err)
+	}
+	return fmt.Errorf("sqliteutil: immediate transaction failed after %d retries: %w", db.config.MaxRetries, lastErr)
+}
+
 // MaterializeRows executes a query and immediately materializes all rows into memory,
 // closing the cursor before returning. This prevents long-held cursor locks that can
 // block WAL checkpoints and write transactions. The scan function is called for each row.

@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.models.settings import G8eeAppSettings
+from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.service_factory import ServiceFactory
 
@@ -76,6 +77,7 @@ class TestServiceFactorySmoke:
             assert hasattr(services, "tool_service")
             assert hasattr(services, "investigation_service")
             assert hasattr(services, "ssh_inventory_service")
+            assert isinstance(services.certificate_service.data_service, CertificateDataService)
 
         finally:
             Path(ssh_config_path).unlink()

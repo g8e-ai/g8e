@@ -53,13 +53,16 @@ Expected: `g8e version` prints the version, build id, and platform; `g8e --help`
 
 ### 2. Build and start the gateway
 
-Check for containers left by an earlier run before starting:
+Every smoke-test run starts from clean Docker volumes and an empty local CLI identity. The reset deletes the existing gateway PKI and sessions, the operator vault and audit ledger, and all ensemble and dashboard state. Export any evidence that must be retained before proceeding, then run:
 
 ```bash
 docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
+./g8e docker clean
+./g8e auth logout
+docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
 ```
 
-Expected for a fresh run: no output. If containers appear, inspect them before proceeding. Preserve prior state with `./g8e docker stop`, or explicitly remove prior containers and runtime state with `./g8e docker clean` before starting a fresh smoke test.
+The first container listing records any state left by an earlier run. The final listing must produce no output. `docker clean` removes the Docker containers, volumes, and network but does not remove host-side CLI credentials; `auth logout` removes the local credentials so enrollment cannot accidentally reuse a certificate or session from the deleted gateway PKI.
 
 If the Docker image is not already built, build it first. This step is only needed once.
 
@@ -127,6 +130,8 @@ Approve each request by its exact request ID. The order does not matter, but ens
 This is the owner-approved platform enrollment protocol described in `docs/architecture/ensemble.md`. After approval the operator connects over its outbound-only mTLS tunnel and the ensemble and dashboard receive their SPIFFE app certificates.
 
 ### 6. Verify the full stack
+
+Workloads poll for enrollment approval with backoff, so approval can take up to a few minutes to propagate. Repeat `./g8e docker status` until all four services report healthy before running the remaining checks.
 
 ```bash
 ./g8e docker status
@@ -286,9 +291,9 @@ awk -F, '$1 == "receipt_commitment_crosslink" && $4 == "PASS" { print; found=1 }
 test -z "$(awk -F, '$4 == "FAIL" { print }' "${REPORT_DIR}/verification_summary.csv")"
 ```
 
-Expected: the command writes deterministic CSV files for the audit vault, receipts, ledger, document stores, and secrets stores. Each `awk` command prints its matching `PASS` row, the file-mutation row reports a non-zero mutation count, and the final command exits zero only when no verification row reports `FAIL`. These checks verify commitment-chain integrity, capture a non-empty Git ledger root, validate mutation-to-ledger linkage, and cross-link commitments to receipts. The report exports receipt and commitment signatures but does not currently cryptographically re-verify those signatures.
+Expected: the command writes deterministic CSV files for the audit vault, receipts, ledger, document stores, and secrets stores. Each `awk` command prints its matching `PASS` row, the file-mutation row reports a non-zero mutation count, and the final command exits zero only when no verification row reports `FAIL`. These checks capture a non-empty Git ledger root and validate mutation-to-ledger linkage. The commitment checks currently pass with `ledger empty (genesis)` and `no commitments to cross-link` because governed execution does not yet append production commitment attestations; they confirm internal consistency but do not provide non-vacuous commitment-chain evidence. The report exports receipt and commitment signatures when present but does not currently cryptographically re-verify those signatures.
 
-The `file_diffs.csv` and `file_mutations.csv` reports are populated by the `FILE_EDIT` receipt from step 8. The `events.csv`, `executions.csv`, `commitments.csv`, and `replay_nonces.csv` reports contain evidence from governed execution paths, including the file and document scenarios. If the file-specific reports contain only their header row, the file scenario did not write a receipt. `receipts.csv` should contain `FILE_EDIT` and `DOCUMENT_UPDATE` rows in addition to the `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows from steps 3 through 6. The investigations document-store CSV should contain the document produced by `ensemble-document-update`.
+The `file_diffs.csv` and `file_mutations.csv` reports are populated by the `FILE_EDIT` receipt from step 8. The `events.csv`, `executions.csv`, and `replay_nonces.csv` reports contain evidence from governed execution paths, including the file and document scenarios. `commitments.csv` currently contains only its header because no production governance path writes the commitment ledger. If the file-specific reports contain only their header row, the file scenario did not write a receipt. `receipts.csv` should contain `FILE_EDIT` and `DOCUMENT_UPDATE` rows in addition to the `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows from steps 3 through 6. The investigations document-store CSV should contain the document produced by `ensemble-document-update`.
 
 ### 11. Verify the binary distribution endpoint
 

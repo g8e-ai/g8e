@@ -63,6 +63,47 @@ class TestFakeProviderFileCreate:
         assert tool_calls[0].args["file_path"] == "/tmp/test.txt"
         assert tool_calls[0].args["content"] == "test content"
 
+    @pytest.mark.asyncio
+    async def test_stream_primary_returns_final_text_after_tool_response(self, provider, settings):
+        contents = _user_content(
+            "Create a new file at /tmp/test.txt with the content: test content"
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution completed successfully."
+        assert chunks[0].tool_calls == []
+
+    @pytest.mark.asyncio
+    async def test_generate_primary_returns_final_text_after_tool_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Create a new file at /tmp/test.txt with the content: test content"
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        response = await provider.generate_content_primary("fake-model", contents, settings)
+
+        assert response.text == "Tool execution completed successfully."
+        assert response.tool_calls == []
+
 
 class TestFakeProviderFileWrite:
     """Verify the fake provider generates file_write tool calls."""

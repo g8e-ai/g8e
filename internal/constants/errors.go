@@ -857,6 +857,10 @@ var (
 	// L5 Actuator errors
 	ErrL5ActuatorExecutionHandlerNotSet = errors.New("L5Actuator: ExecutionHandler not set")
 	ErrL5ActuatorSigningKeyMissing      = errors.New("L5Actuator: signing key missing")
+	ErrL5ActuatorAuditorKeyMissing      = errors.New("L5Actuator: auditor signing key missing")
+	ErrL5ActuatorAuditorKeyIDMissing    = errors.New("L5Actuator: auditor key ID missing")
+	ErrL5ActuatorCommitmentLedger       = errors.New("L5Actuator: commitment ledger unavailable")
+	ErrL5ActuatorCommitmentPersist      = errors.New("L5Actuator: failed to persist commitment")
 	ErrL5ActuatorSignReceipt            = errors.New("failed to sign action receipt")
 	ErrL5ActuatorLogReceipt             = errors.New("failed to log action receipt")
 	ErrL5ActuatorMarshalReceipt         = errors.New("failed to marshal receipt for canonicalization")
