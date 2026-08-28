@@ -31,15 +31,16 @@ func authContextCmdWithConfig(
 	clientFactory apiClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
-	return &cobra.Command{
+	var projectRoot string
+	cmd := &cobra.Command{
 		Use:   "context",
 		Short: "Print the canonical local CLI authentication context as JSON",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := configLoader("")
+			cfg, err := configLoader(projectRoot)
 			if err != nil {
 				return err
 			}
-			fileSvc, err := fileSvcFactory("", slog.Default())
+			fileSvc, err := fileSvcFactory(projectRoot, slog.Default())
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
@@ -62,6 +63,8 @@ func authContextCmdWithConfig(
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root containing the "+constants.RuntimeDirname+" runtime (default: current working directory)")
+	return cmd
 }
 
 func resolveClientOperatorContext(client apiClient, context *auth.ClientAuthContext) error {

@@ -34,10 +34,10 @@ def test_load_cli_auth_context_uses_typed_go_cli_output(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(subprocess, "run", run)
 
-    context = load_cli_auth_context("./g8e")
+    context = load_cli_auth_context("./g8e", "/runtime/project")
 
     assert context == CLIAuthContext(**payload)
-    assert calls == [["./g8e", "auth", "context"]]
+    assert calls == [["./g8e", "auth", "context", "--project-root", "/runtime/project"]]
 
 
 @pytest.mark.parametrize(
@@ -56,4 +56,4 @@ def test_load_cli_auth_context_fails_closed(
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: process)
 
     with pytest.raises(AuthBridgeError, match=message):
-        load_cli_auth_context("./g8e")
+        load_cli_auth_context("./g8e", "/runtime/project")

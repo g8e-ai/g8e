@@ -133,7 +133,7 @@ def test_auth_wiring_matches_protocol_constants(fake_pki):
     assert "X-G8E-User-ID" not in h
 
 
-def test_typed_cli_context_supplies_identity_without_secret_environment(fake_pki, monkeypatch):
+def test_typed_cli_context_supplies_identity_and_distinct_service_endpoints(fake_pki, monkeypatch):
     for name in (
         "G8E_OPERATOR_SESSION_ID",
         "G8E_CLI_SESSION_ID",
@@ -152,8 +152,14 @@ def test_typed_cli_context_supplies_identity_without_secret_environment(fake_pki
         client_key=str(fake_pki["key"]),
     )
 
-    context = AuthContext.from_env(cli_context=cli_context)
+    context = AuthContext.from_env(
+        cli_context=cli_context,
+        g8ee_url="http://g8ee:8000",
+        operator_url="https://gateway:8443",
+    )
 
+    assert context.g8ee_url == "http://g8ee:8000"
+    assert context.operator_url == "https://gateway:8443"
     assert context.operator_session_id == cli_context.operator_session_id
     assert context.cli_session_id == cli_context.cli_session_id
     assert context.user_id == cli_context.user_id

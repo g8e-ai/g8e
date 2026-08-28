@@ -128,6 +128,7 @@ class G8eeChatSUT:
         # with the Go CLI. See evals/tests/test_auth_wiring_parity.py for the contract test.
         self.env = AuthContext.from_env(
             operator_session_id=config.operator_session_id,
+            g8ee_url=config.g8ee_url,
             operator_url=config.operator_url,
             cli_context=config.auth_context,
         )

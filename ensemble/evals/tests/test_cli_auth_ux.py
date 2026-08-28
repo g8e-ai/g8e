@@ -68,6 +68,8 @@ def test_session_id_equal_to_operator_id_is_hard_error():
             "run",
             "--suite", "ifeval_subset",
             "--mode", "receipt",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
             "--operator-session-id", bad,
         ],
         env={"G8E_OPERATOR_ID": bad},
@@ -80,15 +82,28 @@ def test_session_id_equal_to_operator_id_is_hard_error():
 
 
 def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(cli, "load_cli_auth_context", lambda _: (_ for _ in ()).throw(AuthBridgeError("not authenticated")))
+    calls: list[tuple[str, str]] = []
+
+    def load_auth_context(g8e_cli: str, project_root: str):
+        calls.append((g8e_cli, project_root))
+        raise AuthBridgeError("not authenticated")
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", load_auth_context)
     runner = CliRunner()
 
     result = _invoke(
         runner,
-        ["run", "--suite", "ifeval_subset", "--mode", "receipt"],
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--mode", "receipt",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+        ],
     )
 
     assert result.exit_code == 2, result.output
+    assert calls == [("./g8e", "/runtime/project")]
     assert "./g8e auth enroll user" in result.output
     assert "./g8e auth refresh" in result.output
     assert "./g8e login" not in result.output
@@ -100,7 +115,24 @@ def test_run_help_describes_canonical_authentication_bridge():
     assert result.exit_code == 0, result.output
     assert "canonical CLI identity" in result.output
     assert "--g8e-cli" in result.output
+    assert "--auth-project-root" in result.output
+    assert "--g8ee-url" in result.output
     assert "./g8e login" not in result.output
+
+
+def test_run_requires_explicit_g8ee_endpoint():
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--mode", "receipt",
+            "--auth-project-root", "/runtime/project",
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert "Missing option '--g8ee-url'" in result.output
 
 
 def test_dead_operator_id_flag_is_removed():

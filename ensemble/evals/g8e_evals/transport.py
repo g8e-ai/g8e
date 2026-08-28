@@ -92,6 +92,7 @@ class AuthContext:
         cls,
         *,
         operator_session_id: str | None = None,
+        g8ee_url: str | None = None,
         operator_url: str | None = None,
         runtime_identity: RuntimeIdentity = RuntimeIdentity.APP,
         cli_context: CLIAuthContext | None = None,
@@ -153,7 +154,7 @@ class AuthContext:
         trust_bundle = resolve_trust_bundle(runtime_identity)
 
         operator_https_port = PORTS["ports"]["OperatorHttps"]["value"]
-        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{operator_https_port}").rstrip("/")
+        app_url = (g8ee_url or os.environ.get("G8E_G8EE_URL") or "").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_OPERATOR_URL")
@@ -161,7 +162,7 @@ class AuthContext:
         ).rstrip("/")
 
         return cls(
-            g8ee_url=g8ee_url,
+            g8ee_url=app_url,
             operator_url=op_url,
             trust_bundle=trust_bundle,
             client_cert=client_cert,

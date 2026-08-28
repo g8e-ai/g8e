@@ -28,10 +28,10 @@ class CLIAuthContext(BaseModel):
     client_key: str = Field(min_length=1)
 
 
-def load_cli_auth_context(g8e_cli: str) -> CLIAuthContext:
+def load_cli_auth_context(g8e_cli: str, project_root: str) -> CLIAuthContext:
     try:
         result = subprocess.run(
-            [g8e_cli, "auth", "context"],
+            [g8e_cli, "auth", "context", "--project-root", project_root],
             capture_output=True,
             check=False,
             text=True,

@@ -36,6 +36,7 @@ class LLMRoleConfig:
 
 @dataclass
 class SUTConfig:
+    g8ee_url: str
     primary: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     assistant: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     lite: LLMRoleConfig = field(default_factory=LLMRoleConfig)

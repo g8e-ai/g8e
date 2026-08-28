@@ -64,11 +64,16 @@ def main():
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
+@click.option("--g8ee-url", envvar="G8E_G8EE_URL", required=True,
+              help="URL of the g8ee application endpoint.")
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id override. The default comes from the canonical CLI identity.")
 @click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
               help="Path to the g8e CLI used to load the canonical authentication context.")
+@click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
+              envvar="G8E_AUTH_PROJECT_ROOT", required=True,
+              help="Project root containing the canonical CLI runtime identity.")
 @click.option("--mode", type=click.Choice(["receipt", "baseline"]), default="receipt",
               help="Receipt mode (default) verifies on-Gateway receipts; baseline mode runs without binding")
 @click.option("--state-root", default="test-state-root-v1")
@@ -86,7 +91,7 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, g8e_cli, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
@@ -100,7 +105,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         )
 
     try:
-        auth_context = load_cli_auth_context(g8e_cli)
+        auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
     except AuthBridgeError as error:
         raise click.UsageError(
             f"Could not load the canonical CLI identity: {error}. "
@@ -108,6 +113,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         ) from error
 
     config = SUTConfig(
+        g8ee_url=g8ee_url,
         primary=LLMRoleConfig(provider=provider, model=model, api_key=primary_api_key, endpoint=primary_endpoint),
         assistant=LLMRoleConfig(provider=assistant_provider, model=assistant_model, api_key=assistant_api_key, endpoint=assistant_endpoint),
         lite=LLMRoleConfig(provider=lite_provider, model=lite_model, api_key=lite_api_key, endpoint=lite_endpoint),
