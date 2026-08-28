@@ -271,7 +271,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     collector = ReceiptCollector(config.operator_url)
 
     # Load warden pub key for verification
-    warden_pub_path = Path(os.environ.get("G8E_PKI_DIR", ".g8e/pki")) / "warden_pub.pem"
+    warden_pub_path = Path(os.environ.get("G8E_GATEWAY_PKI_DIR", ".g8e/pki")) / "warden_pub.pem"
     warden_pub = ""
     if warden_pub_path.exists():
         warden_pub = warden_pub_path.read_text()
@@ -401,7 +401,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 def verify_receipts(report_dir, pki_dir):
     """Re-verify all receipts in a report directory offline"""
     if not pki_dir:
-        pki_dir = Path(os.environ.get("G8E_PKI_DIR", ".g8e/pki"))
+        pki_dir = Path(os.environ.get("G8E_GATEWAY_PKI_DIR", ".g8e/pki"))
 
     warden_pub_path = pki_dir / "warden_pub.pem"
     if not warden_pub_path.exists():

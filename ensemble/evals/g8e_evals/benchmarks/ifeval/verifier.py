@@ -55,13 +55,11 @@ class IFEvalVerifier:
         )
 
     def _check_instruction(self, inst_id: str, kw: dict[str, Any], answer: str) -> bool:
-        if inst_id == "punctuation:no_punctuation":
-            # Check if answer contains any punctuation
-            # IFEval usually excludes basic punctuation .,!?;:
-            # Must contain at least some content
-            if not answer.strip():
-                return False
-            return not any(c in ".,!?;:" for c in answer)
+        if inst_id == "punctuation:no_comma":
+            # Check if the answer contains a comma
+            # Canonical IFEval no_comma permits all other punctuation
+            # The global non-empty check rejects empty responses
+            return "," not in answer
 
         if inst_id == "keywords:forbidden_words":
             forbidden = kw.get("forbidden_words", [])
@@ -79,7 +77,7 @@ class IFEvalVerifier:
                     return False
             return True
 
-        if inst_id == "format:json":
+        if inst_id == "detectable_format:json_format":
             try:
                 json.loads(answer)
                 return True
@@ -94,26 +92,30 @@ class IFEvalVerifier:
                         pass
                 return False
 
-        if inst_id == "length:min_words":
-            min_words = kw.get("num_words", 0)
-            word_count = len(re.findall(r"\w+", answer))
-            return word_count >= min_words
-
-        if inst_id == "length:max_words":
-            max_words = kw.get("num_words", 1000000)
-            word_count = len(re.findall(r"\w+", answer))
-            if word_count == 0:
+        if inst_id == "length_constraints:number_words":
+            num_words = kw.get("num_words")
+            relation = kw.get("relation")
+            if not isinstance(num_words, int) or not isinstance(relation, str):
                 return False
-            return word_count <= max_words
+            word_count = len(re.findall(r"\w+", answer))
+            if relation == "at least":
+                return word_count >= num_words
+            if relation == "less than":
+                return word_count < num_words
+            if relation == "at most":
+                return word_count <= num_words
+            if relation == "more than":
+                return word_count > num_words
+            return False
 
-        if inst_id == "case:uppercase":
+        if inst_id == "change_case:english_capital":
             # Check if the whole response is uppercase (ignoring non-alpha)
             alpha_only = "".join(c for c in answer if c.isalpha())
             if not alpha_only:
                 return False
             return alpha_only.isupper()
 
-        if inst_id == "case:lowercase":
+        if inst_id == "change_case:english_lowercase":
             alpha_only = "".join(c for c in answer if c.isalpha())
             if not alpha_only:
                 return False

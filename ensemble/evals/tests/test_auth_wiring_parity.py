@@ -70,8 +70,8 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "G8E_USER_ID": "user-parity-001",
         "G8E_CLI_CERT": str(fake_pki["cert"]),
         "G8E_CLI_KEY": str(fake_pki["key"]),
-        "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),
-        "G8E_PKI_DIR": str(fake_pki["pki"]),
+        "G8E_APP_TRUST_BUNDLE": str(fake_pki["bundle"]),
+        "G8E_APP_PKI_DIR": str(fake_pki["pki"]),
         "G8E_G8EE_URL": f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
         "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
         # Make sure no stray optional headers leak in from the dev env.

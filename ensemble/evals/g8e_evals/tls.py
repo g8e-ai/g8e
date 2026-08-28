@@ -17,6 +17,7 @@ from pathlib import Path
 APP_TRUST_BUNDLE_NAME = "hub-bundle.pem"
 GATEWAY_TRUST_BUNDLE_NAME = "g8eg-ca-bundle.pem"
 TRUST_DIRECTORY_NAME = "trust"
+DEFAULT_PKI_DIRECTORY = ".g8e/pki"
 
 
 class RuntimeIdentity(StrEnum):
@@ -26,13 +27,15 @@ class RuntimeIdentity(StrEnum):
 
 def resolve_trust_bundle(identity: RuntimeIdentity) -> str:
     """Resolve and validate the trust bundle for an app or gateway client."""
-    explicit = os.environ.get("G8E_TRUST_BUNDLE", "").strip()
-    if explicit:
-        bundle = Path(explicit)
+    if identity is RuntimeIdentity.APP:
+        explicit = os.environ.get("G8E_APP_TRUST_BUNDLE", "").strip()
+        pki_dir = os.environ.get("G8E_APP_PKI_DIR", DEFAULT_PKI_DIRECTORY)
+        filename = APP_TRUST_BUNDLE_NAME
     else:
-        pki_dir = Path(os.environ.get("G8E_PKI_DIR", ".g8e/pki"))
-        filename = APP_TRUST_BUNDLE_NAME if identity is RuntimeIdentity.APP else GATEWAY_TRUST_BUNDLE_NAME
-        bundle = pki_dir / TRUST_DIRECTORY_NAME / filename
+        explicit = os.environ.get("G8E_GATEWAY_TRUST_BUNDLE", "").strip()
+        pki_dir = os.environ.get("G8E_GATEWAY_PKI_DIR", DEFAULT_PKI_DIRECTORY)
+        filename = GATEWAY_TRUST_BUNDLE_NAME
+    bundle = Path(explicit) if explicit else Path(pki_dir) / TRUST_DIRECTORY_NAME / filename
 
     if not bundle.is_file():
         raise FileNotFoundError(f"{identity.value} trust bundle not found: {bundle}")
