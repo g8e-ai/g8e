@@ -6,14 +6,18 @@
 # released under the Apache License, Version 2.0.
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
+
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
 
 def test_ifeval_loader():
     base_dir = Path(__file__).parent.parent
-    gold_set = base_dir / "gold_sets/ifeval/input_data.jsonl"
+    gold_set = base_dir / "gold_sets/ifeval_subset/input_data.jsonl"
+    if not gold_set.exists():
+        pytest.skip("ifeval_subset data has not been imported with provenance metadata")
     loader = IFEvalLoader(gold_set)
     tasks = list(loader.load())
     assert len(tasks) == 5
@@ -65,5 +69,18 @@ def test_ifeval_verifier_forbidden_words():
     assert score.passed
 
     score = verifier.verify("1005", "prompt", "I like apple pie", ["keywords:forbidden_words"], [{"forbidden_words": ["apple"]}])
+    assert not score.passed
+
+
+def test_ifeval_verifier_rejects_unsupported_language_instruction():
+    verifier = IFEvalVerifier()
+    score = verifier.verify(
+        "1006",
+        "prompt",
+        "This answer is nonempty",
+        ["language:response_language"],
+        [{"language": "english"}],
+    )
+
     assert not score.passed
 

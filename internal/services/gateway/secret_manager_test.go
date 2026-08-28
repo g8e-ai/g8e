@@ -23,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -31,8 +34,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // newSecretManagerTestDB opens a raw sqliteutil.DB with just the documents +
@@ -54,18 +55,21 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 // newTestSecretManager creates a SecretManager with the in-memory keyring.
 func newTestSecretManager(t *testing.T, db *sqliteutil.DB, fileSvc fs.RuntimeFileService) *SecretManager {
 	t.Helper()
-	keyring := keystoretest.NewMemoryKeyring()
+	return newTestSecretManagerWithKeyring(t, db, fileSvc, keystoretest.NewMemoryKeyring())
+}
+
+func newTestSecretManagerWithKeyring(t *testing.T, db *sqliteutil.DB, fileSvc fs.RuntimeFileService, keyring keystore.Keyring) *SecretManager {
+	t.Helper()
 	ks, err := keystore.NewWithKeyringAndFS(testutil.NewTestLogger(), keyring, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
-	sm := &SecretManager{
+	return &SecretManager{
 		db:       db,
 		logger:   testutil.NewTestLogger(),
 		fileSvc:  fileSvc,
 		keystore: ks,
 	}
-	return sm
 }
 
 func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
@@ -303,15 +307,16 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
@@ -357,15 +362,16 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
 	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
@@ -388,12 +394,13 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey)))
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// Missing file causes read error during validation
@@ -403,12 +410,13 @@ func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *tes
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)))
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	// Should recreate secrets instead of failing
 	require.NoError(t, sm2.InitAppSettings())
 	// Verify manifest was recreated
@@ -420,8 +428,9 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
 	secretsDir := fileSvc.Resolve(constants.SecretsDirname)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 	manifestPath := filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)
 	data, err := os.ReadFile(manifestPath)
@@ -433,7 +442,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(manifestPath, mutated, 0600))
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	err = sm2.InitAppSettings()
 	require.Error(t, err)
 }
@@ -441,8 +450,9 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
 	fileSvc := newTestFileSvc(t)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	sm := newTestSecretManager(t, db, fileSvc)
+	sm := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	require.NoError(t, sm.InitAppSettings())
 
 	_, err := db.Exec(
@@ -451,7 +461,7 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t
 	)
 	require.NoError(t, err)
 
-	sm2 := newTestSecretManager(t, db, fileSvc)
+	sm2 := newTestSecretManagerWithKeyring(t, db, fileSvc, keyring)
 	err = sm2.InitAppSettings()
 	// This test is no longer valid since InitAppSettings doesn't read platform_settings on subsequent boots
 	// It only checks for existence and then validates secrets

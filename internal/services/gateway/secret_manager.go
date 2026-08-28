@@ -90,6 +90,9 @@ func (m *SecretManager) InitAppSettings() error {
 		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
 	}
 	if err := m.migrateAuditorIdentity(); err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return m.recreateAppSettings()
+		}
 		return fmt.Errorf("secret_manager: init app settings: migrate auditor identity: %w", err)
 	}
 

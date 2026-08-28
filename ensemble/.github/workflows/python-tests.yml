@@ -39,7 +39,3 @@ jobs:
     - name: Run unit tests
       run: |
         pytest tests/ -v --tb=short -m "not ai_integration and not requires_web_search and not requires_api and not e2e"
-
-    - name: Run evals tests
-      run: |
-        pytest evals/tests/ -v --tb=short

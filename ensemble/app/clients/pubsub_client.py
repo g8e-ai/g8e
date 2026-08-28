@@ -29,7 +29,7 @@ import uuid
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from app.proto.pubsub_pb2 import PubSubMessage, PubSubEvent
+from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 from google.protobuf.message import DecodeError
 import aiohttp
 

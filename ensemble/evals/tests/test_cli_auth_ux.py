@@ -63,7 +63,7 @@ def test_session_id_equal_to_operator_id_is_hard_error():
         runner,
         [
             "run",
-            "--suite", "ifeval",
+            "--suite", "ifeval_subset",
             "--mode", "receipt",
             "--operator-session-id", bad,
         ],
@@ -82,7 +82,7 @@ def test_receipt_mode_without_session_points_at_zero_arg_login():
     runner = CliRunner()
     result = _invoke(
         runner,
-        ["run", "--suite", "ifeval", "--mode", "receipt"],
+        ["run", "--suite", "ifeval_subset", "--mode", "receipt"],
     )
     assert result.exit_code == 2, result.output
     assert "operator-session-id is required" in result.output
@@ -101,7 +101,7 @@ def test_dead_operator_id_flag_is_removed():
         runner,
         [
             "run",
-            "--suite", "ifeval",
+            "--suite", "ifeval_subset",
             "--mode", "baseline",
             "--operator-id", "ignored",
         ],

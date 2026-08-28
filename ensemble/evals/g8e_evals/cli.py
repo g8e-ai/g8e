@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -16,17 +17,21 @@ from typing import Optional
 import click
 from rich.console import Console
 
-from g8e.generated_paths import PathConstants, PortConstants
+from g8e.constants import PORTS
+from g8e.receipts import (
+    action_receipt_to_dict,
+    parse_action_receipt,
+    verify_action_receipt_signature,
+)
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
-from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError, ChatEvaluationReceipt
+from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
 from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
 from g8e_evals.receipts.collector import ReceiptCollector
-from g8e_evals.receipts.verify import verify_receipt_signature
 from g8e_evals.report.aggregate import aggregate_results
 from g8e_evals.report.cli_renderer import render_summary
-from g8e_evals.models import ActionReceipt, ScoreDetails
+from g8e_evals.models import ScoreDetails
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -47,7 +52,7 @@ def main():
     logger.info("evals CLI initialized")
 
 @main.command()
-@click.option("--suite", type=click.Choice(["ifeval"]), required=True)
+@click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
 @click.option("--provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_PRIMARY_PROVIDER", help="Primary LLM provider")
 @click.option("--model", envvar="G8E_TEST_LLM_PRIMARY_MODEL", help="Primary model name (e.g., gpt-4o)")
 @click.option("--assistant-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_ASSISTANT_PROVIDER", help="Assistant LLM provider")
@@ -58,7 +63,7 @@ def main():
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
-@click.option("--operator-url", default=f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}")
+@click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
                    "only pass this flag to override the cached session.")
@@ -115,9 +120,9 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0):
     # 1. Load benchmark
-    if suite == "ifeval":
+    if suite == "ifeval_subset":
         if not gold_set:
-            gold_set = Path("gold_sets/ifeval/input_data.jsonl")
+            gold_set = Path("gold_sets/ifeval_subset/input_data.jsonl")
         loader = IFEvalLoader(gold_set)
         tasks = list(loader.load())
         if limit:
@@ -238,7 +243,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         console.print("     - G8E_TEST_LLM_PRIMARY_ENDPOINT_URL (if using custom endpoint)")
         console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
         console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
-        console.print("  ./g8e evals bench --suite ifeval --provider openai --model gpt-4o")
+        console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
         return
 
     if llm_settings:
@@ -260,7 +265,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             console.print("     - G8E_TEST_LLM_PRIMARY_ENDPOINT_URL (if using custom endpoint)")
             console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
             console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
-            console.print("  ./g8e evals bench --suite ifeval --provider openai --model gpt-4o")
+            console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
             return
 
     collector = ReceiptCollector(config.operator_url)
@@ -280,9 +285,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     for task in tasks:
         # Create a descriptive summary for the task
         intent = ""
-        if suite == "ifeval" and "instruction_id_list" in task.metadata:
+        if suite == "ifeval_subset" and task.metadata.instruction_id_list:
             # Extract short names from instruction IDs (e.g., 'length:min_words' -> 'min_words')
-            constraints = [id.split(":")[-1] for id in task.metadata["instruction_id_list"]]
+            constraints = [instruction_id.split(":")[-1] for instruction_id in task.metadata.instruction_id_list]
             intent = f" [dim][{', '.join(constraints)}][/dim]"
 
         prompt_preview = task.prompt.replace("\n", " ")[:50]
@@ -299,40 +304,22 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         response = await sut.get_answer(task)
         current_renderer["r"] = None
 
-        # Extract terminal_event from receipt (ChatEvaluationReceipt)
-        terminal_event = None
-        if isinstance(response.receipt, ChatEvaluationReceipt):
-            terminal_event = response.receipt.terminal_event
-        elif response.receipt and hasattr(response.receipt, "terminal_event"):
-            terminal_event = response.receipt.terminal_event
+        terminal_event = response.chat_evidence.terminal_event if response.chat_evidence else None
 
         renderer.finish(
             terminal_event=terminal_event,
             answer_chars=len(response.answer or ""),
         )
 
-        # Collect on-Gateway receipt (if any) and merge with the in-bench
-        # agent trail. The agent_trail is the canonical evidence the chat
-        # pipeline ran end-to-end; an Operator-issued signed receipt only
-        # exists when the agent triggered a mutation (Tribunal->Warden path).
         if response.binding == BindingType.RECEIPT_BOUND and response.transaction_id:
             on_chain_receipt = await collector.collect_receipt(response.transaction_id)
             if on_chain_receipt:
-                # Store the Gateway receipt in the response
-                # We keep the original receipt (ChatEvaluationReceipt) and add Gateway data
-                if isinstance(response.receipt, ChatEvaluationReceipt):
-                    # Convert to dict for merging, then back to model
-                    receipt_dict = response.receipt.model_dump()
-                    receipt_dict["Gateway_receipt"] = on_chain_receipt.model_dump()
-                    response.receipt = receipt_dict  # Temporarily store as dict
-                else:
-                    response.receipt = {"Gateway_receipt": on_chain_receipt.model_dump()}
-                response.receipt_signature = on_chain_receipt.signature
+                response.action_receipt = on_chain_receipt
                 if warden_pub:
-                    response.receipt_verified = verify_receipt_signature(on_chain_receipt, warden_pub)
+                    response.receipt_verified = verify_action_receipt_signature(on_chain_receipt, warden_pub)
 
         # Score
-        if suite == "ifeval":
+        if suite == "ifeval_subset":
             score = verifier.verify(
                 task.id,
                 task.prompt,
@@ -354,12 +341,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         elif response.unbound_reason:
             receipt_status = f" [yellow]({response.unbound_reason})[/yellow]"
 
-        # Extract event_count from receipt (ChatEvaluationReceipt)
-        event_count = 0
-        if isinstance(response.receipt, ChatEvaluationReceipt):
-            event_count = response.receipt.event_count
-        elif response.receipt and hasattr(response.receipt, "event_count"):
-            event_count = response.receipt.event_count
+        event_count = response.chat_evidence.event_count if response.chat_evidence else 0
 
         console.print(
             f"  [dim]{task.id}[/dim] [{status_color}]{'PASS' if score.passed else 'FAIL'}[/{status_color}]"
@@ -377,13 +359,12 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     report_dir.mkdir(parents=True, exist_ok=True)
 
     def row_to_dict(r: RowResult):
-        # Serialize Pydantic models to dicts
-        receipt_data = None
-        if r.response.receipt:
-            if isinstance(r.response.receipt, (ChatEvaluationReceipt, ActionReceipt)):
-                receipt_data = r.response.receipt.model_dump()
-            else:
-                receipt_data = r.response.receipt  # Already a dict
+        chat_evidence = r.response.chat_evidence.model_dump() if r.response.chat_evidence else None
+        action_receipt = (
+            action_receipt_to_dict(r.response.action_receipt)
+            if r.response.action_receipt
+            else None
+        )
 
         details_data = None
         if r.score.details:
@@ -397,8 +378,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             "prompt": r.task.prompt,
             "answer": r.response.answer,
             "transaction_id": r.response.transaction_id,
-            "receipt": receipt_data,
-            "receipt_signature": r.response.receipt_signature,
+            "chat_evidence": chat_evidence,
+            "action_receipt": action_receipt,
             "receipt_verified": r.response.receipt_verified,
             "passed": r.score.passed,
             "details": details_data,
@@ -443,18 +424,18 @@ def verify_receipts(report_dir, pki_dir):
     with open(results_path) as f:
         for line in f:
             data = json.loads(line)
-            receipt = data.get("receipt")
+            receipt = data.get("action_receipt")
             if not receipt:
                 continue
 
             total += 1
             try:
-                receipt_model = ActionReceipt.model_validate(receipt)
+                receipt_model = parse_action_receipt(receipt)
             except Exception:
                 failed += 1
                 console.print(f"  [red]FAILED:[/red] Could not parse receipt for task {data.get('task_id')} (TX: {data.get('transaction_id')})")
                 continue
-            if verify_receipt_signature(receipt_model, warden_pub):
+            if verify_action_receipt_signature(receipt_model, warden_pub):
                 verified += 1
             else:
                 failed += 1
@@ -470,7 +451,7 @@ def verify_receipts(report_dir, pki_dir):
         console.print(f"  Failed: {failed}")
 
         if failed > 0:
-            exit(1)
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()

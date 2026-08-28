@@ -127,7 +127,7 @@ async def test_drain_events_propagates_auth_failure(monkeypatch):
     monkeypatch.setattr("g8e_evals.sut.g8ee_chat.aconnect_sse", lambda *a, **kw: MockContextManager())
 
     client = AsyncMock(spec=httpx.AsyncClient)
-    answer, trail, terminal, error = await sut._drain_events(client, since_id=0, investigation_id="inv-123")
+    _answer, _trail, terminal, error = await sut._drain_events(client, since_id=0, investigation_id="inv-123")
 
     assert error == "sse_auth_failed: 401"
     assert terminal is None
@@ -231,7 +231,7 @@ async def test_get_answer_surfaces_sse_error(monkeypatch):
         async def __aexit__(self, *args):
             pass
 
-    monkeypatch.setattr(sut, "_client", lambda: MockClientCM())
+    monkeypatch.setattr(sut, "_client", MockClientCM)
 
     # 3. Mock _drain_events to return an error
     monkeypatch.setattr(sut, "_drain_events", AsyncMock(return_value=("partial text", [], None, "sse_auth_failed: 401")))

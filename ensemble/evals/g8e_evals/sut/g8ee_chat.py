@@ -57,7 +57,6 @@ from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
-from g8e_evals.models import ActionReceipt
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
 
@@ -244,7 +243,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
             )
@@ -254,7 +253,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=None,
-                receipt=receipt,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason="baseline mode (binding disabled)",
             )
@@ -264,7 +263,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
@@ -275,7 +274,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
@@ -285,7 +284,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                chat_evidence=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
 
@@ -293,7 +292,7 @@ class G8eeChatSUT:
             answer=answer_text,
             model=self.model_provider,
             transaction_id=None,
-            receipt=receipt,
+            chat_evidence=receipt,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
         )

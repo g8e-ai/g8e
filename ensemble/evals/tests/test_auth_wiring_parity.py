@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from app.constants.generated_paths import PathConstants, PortConstants
+from g8e.constants import PORTS
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
     SOURCE_COMPONENT_CLIENT,
@@ -39,11 +39,6 @@ from g8e_evals.transport import (
 from app.models.http_context import BoundOperator
 from app.constants import G8EE_COMPONENT
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths
-
-
-import sys
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "services" / "g8ee"))
 from app.constants.api_paths import InternalAPIPaths
 
 
@@ -75,8 +70,8 @@ def _baseline_env(fake_pki: dict[str, Path]) -> dict[str, str]:
         "G8E_CLI_KEY": str(fake_pki["key"]),
         "G8E_TRUST_BUNDLE": str(fake_pki["bundle"]),
         "G8E_PKI_DIR": str(fake_pki["pki"]),
-        "G8E_G8EE_URL": f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}",
-        "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}",
+        "G8E_G8EE_URL": f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
+        "G8E_INTERNAL_HTTP_URL": f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}",
         # Make sure no stray optional headers leak in from the dev env.
         "G8E_CASE_ID": "",
         "G8E_INVESTIGATION_ID": "",

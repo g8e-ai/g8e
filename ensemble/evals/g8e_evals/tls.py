@@ -5,30 +5,35 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Trust bundle resolution for evals clients.
-
-The harness contacts the Operator over mTLS. The trust anchor is the hub
-trust bundle that every other g8e client uses. Disabling TLS verification
-defeats the receipt-binding guarantee the harness claims to measure, so
-resolution is strict: an explicit path that does not exist raises.
-"""
+"""Trust bundle resolution for eval clients with explicit runtime identities."""
 
 from __future__ import annotations
 
 import os
+from enum import StrEnum
 from pathlib import Path
 
-from g8e.paths import get_trust_bundle
+
+APP_TRUST_BUNDLE_NAME = "hub-bundle.pem"
+GATEWAY_TRUST_BUNDLE_NAME = "g8eg-ca-bundle.pem"
+TRUST_DIRECTORY_NAME = "trust"
 
 
-def resolve_trust_bundle() -> str:
-    """Return the path to the hub trust bundle.
+class RuntimeIdentity(StrEnum):
+    APP = "app"
+    GATEWAY = "gateway"
 
-    Resolution order:
-      1. ``G8E_TRUST_BUNDLE`` (explicit override)
-      2. ``${G8E_PKI_DIR:-.g8e/pki}/trust/hub-bundle.pem``
 
-    Raises ``FileNotFoundError`` if no bundle is available. Callers should
-    pass the returned path to ``httpx`` via ``verify=...``.
-    """
-    return get_trust_bundle()
+def resolve_trust_bundle(identity: RuntimeIdentity) -> str:
+    """Resolve and validate the trust bundle for an app or gateway client."""
+    explicit = os.environ.get("G8E_TRUST_BUNDLE", "").strip()
+    if explicit:
+        bundle = Path(explicit)
+    else:
+        pki_dir = Path(os.environ.get("G8E_PKI_DIR", ".g8e/pki"))
+        filename = APP_TRUST_BUNDLE_NAME if identity is RuntimeIdentity.APP else GATEWAY_TRUST_BUNDLE_NAME
+        bundle = pki_dir / TRUST_DIRECTORY_NAME / filename
+
+    if not bundle.is_file():
+        raise FileNotFoundError(f"{identity.value} trust bundle not found: {bundle}")
+    return str(bundle)

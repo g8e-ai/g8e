@@ -17,13 +17,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // ---------------------------------------------------------------------------
@@ -65,7 +67,7 @@ func TestReportReceipts_WithRecords(t *testing.T) {
 		OperatorSessionID: sessionID,
 		ActionType:        constants.ActionTypeFileEdit,
 		TargetResource:    "/file1",
-		Status:            2,
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		ExecutedAt:        now,
 		SignerKeyID:       "key-1",
 		Signature:         "sig-1",
@@ -77,7 +79,7 @@ func TestReportReceipts_WithRecords(t *testing.T) {
 		OperatorSessionID: sessionID,
 		ActionType:        constants.ActionTypeFsRead,
 		TargetResource:    "/file2",
-		Status:            2,
+		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 		ExecutedAt:        now.Add(time.Second),
 		SignerKeyID:       "key-2",
 		Signature:         "sig-2",
@@ -98,6 +100,8 @@ func TestReportReceipts_WithRecords(t *testing.T) {
 	require.Len(t, records, 3, "header + 2 rows")
 	txIDs := []string{records[1][0], records[2][0]}
 	assert.ElementsMatch(t, []string{"tx-1", "tx-2"}, txIDs)
+	statuses := []string{records[1][6], records[2][6]}
+	assert.ElementsMatch(t, []string{"EXECUTION_STATUS_COMPLETED", "EXECUTION_STATUS_FAILED"}, statuses)
 }
 
 func TestReportReceipts_CancelledContext(t *testing.T) {

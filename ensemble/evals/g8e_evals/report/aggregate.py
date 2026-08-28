@@ -5,8 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from typing import List, Dict, Any
-from g8e_evals.harness import RowResult, Aggregate, BindingType
+from g8e_evals.harness import Aggregate, BindingType, RowResult
 
 def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
     total = len(results)

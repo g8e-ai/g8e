@@ -5,16 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import hashlib
 import base64
 import binascii
-from datetime import datetime, timezone, timedelta, UTC
-from typing import Optional, Dict, Any
-from google.protobuf import json_format
-from google.protobuf.timestamp_pb2 import Timestamp
-import nacl.signing
+import hashlib
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from g8e_evals.proto import common_pb2
+import nacl.signing
+from google.protobuf import json_format
+
+from g8e.common.v1 import common_pb2
 
 def format_rfc3339_nano(dt: datetime) -> str:
     """Format datetime as RFC3339Nano (compatible with Go's time.RFC3339Nano)."""

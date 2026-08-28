@@ -30,7 +30,7 @@ from app.models.command_request_payloads import (
     DocumentUpdateRequestPayload,
     G8eCommandPayload,
 )
-from app.proto import operator_pb2
+from g8e.operator.v1 import operator_pb2
 from app.clients.governance_client import PAYLOAD_TYPE_MAPPING
 from typing import get_args
 

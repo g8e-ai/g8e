@@ -5,21 +5,23 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Literal, Union
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any, Literal
 
-from g8e.generated_paths import PathConstants, PortConstants
-from g8e_evals.models import ActionReceipt, ScoreDetails, TaskMetadata
+from g8e.constants import PORTS
+from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e_evals.models import ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt
 
 
-class BindingType(str, Enum):
+class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
 
@@ -41,7 +43,7 @@ class SUTConfig:
     web_search_app: str | None = None
     web_search_api_key: str | None = None
 
-    operator_url: str = f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
+    operator_url: str = f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}"
     operator_session_id: str | None = None
     state_root: str = "test-state-root-v1"
 
@@ -61,9 +63,8 @@ class Response:
     answer: str
     model: str
     transaction_id: str | None = None
-    # receipt can be either ChatEvaluationReceipt (from chat SUT) or ActionReceipt (from Gateway)
-    receipt: Union[ChatEvaluationReceipt, ActionReceipt] | None = None
-    receipt_signature: str | None = None
+    chat_evidence: ChatEvaluationReceipt | None = None
+    action_receipt: ActionReceipt | None = None
     receipt_verified: bool = False
     binding: BindingType = BindingType.UNBOUND
     unbound_reason: str | None = None

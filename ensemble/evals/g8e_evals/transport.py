@@ -34,16 +34,17 @@ from typing import Optional
 
 import httpx
 
-from g8e.constants import ComponentName
-from g8e.headers import (
-    AUTHORIZATION,
-    CONTENT_TYPE,
-    CLI_SESSION_ID,
+from g8e.constants import (
+    CLI_SESSION_ID_HEADER,
+    HTTP_AUTHORIZATION_HEADER,
+    HTTP_CONTENT_TYPE_HEADER,
+    PORTS,
+    ComponentName,
 )
-from g8e.generated_paths import PathConstants, PortConstants
+from app.constants import G8EE_COMPONENT
 from app.models.http_context import RequestContext, BoundOperator
 
-from g8e_evals.tls import resolve_trust_bundle
+from g8e_evals.tls import RuntimeIdentity, resolve_trust_bundle
 
 
 class AuthenticationError(Exception):
@@ -79,7 +80,7 @@ class AuthContext:
     bound_operators: list[BoundOperator] = field(default_factory=list)
     task_id: str = ""
     web_session_id: str = ""
-    source_component: ComponentName = ComponentName.CLIENT
+    source_component: str = ComponentName.CLIENT.value
     system_fingerprint: str = ""
     operator_id: str = ""
     # Filled in by from_env() so callers can introspect what was loaded.
@@ -91,6 +92,7 @@ class AuthContext:
         *,
         operator_session_id: str | None = None,
         operator_url: str | None = None,
+        runtime_identity: RuntimeIdentity = RuntimeIdentity.APP,
     ) -> AuthContext:
         """Resolve the canonical auth context from the process environment.
 
@@ -104,16 +106,16 @@ class AuthContext:
         oid = (os.environ.get("G8E_ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
 
-        source = ComponentName.CLIENT
+        source = ComponentName.CLIENT.value
         raw_source = os.environ.get("G8E_SOURCE_COMPONENT")
+        valid_sources = {component.value for component in ComponentName} | {G8EE_COMPONENT}
         if raw_source:
-            try:
-                source = ComponentName(raw_source)
-            except ValueError:
+            if raw_source not in valid_sources:
                 raise ValueError(
                     f"Invalid G8E_SOURCE_COMPONENT='{raw_source}'. "
-                    f"Must be one of: {[c.value for c in ComponentName]}"
-                ) from None
+                    f"Must be one of: {sorted(valid_sources)}"
+                )
+            source = raw_source
 
         missing: list[str] = []
         if not sid:
@@ -138,13 +140,14 @@ class AuthContext:
                 "(G8E_CLI_CERT / G8E_CLI_KEY). Run `./g8e login` to mint one."
             )
 
-        trust_bundle = resolve_trust_bundle()
+        trust_bundle = resolve_trust_bundle(runtime_identity)
 
-        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}").rstrip("/")
+        operator_https_port = PORTS["ports"]["OperatorHttps"]["value"]
+        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{operator_https_port}").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_OPERATOR_URL")
-            or f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
+            or f"https://localhost:{operator_https_port}"
         ).rstrip("/")
 
         return cls(
@@ -170,14 +173,14 @@ class AuthContext:
         Mirrors the Go CLI auth headers.
         """
         headers: dict[str, str] = {
-            CONTENT_TYPE: "application/json",
+            HTTP_CONTENT_TYPE_HEADER: "application/json",
         }
         if self.operator_session_id:
             # Gateway uses Authorization: Bearer <token>.
-            headers[AUTHORIZATION] = f"Bearer {self.operator_session_id}"
+            headers[HTTP_AUTHORIZATION_HEADER] = f"Bearer {self.operator_session_id}"
 
         if self.cli_session_id:
-            headers[CLI_SESSION_ID] = self.cli_session_id
+            headers[CLI_SESSION_ID_HEADER] = self.cli_session_id
 
         return headers
 
@@ -187,7 +190,7 @@ class AuthContext:
         case_id: str | None = None,
         investigation_id: str | None = None,
         task_id: str | None = None,
-        source_component: ComponentName | None = None,
+        source_component: str | ComponentName | None = None,
         web_session_id: str | None = None,
         operator_id: str | None = None,
         operator_session_id: str | None = None,

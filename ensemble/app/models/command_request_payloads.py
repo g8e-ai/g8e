@@ -22,7 +22,7 @@ from google.protobuf.struct_pb2 import Struct
 
 from app.constants import FileOperation
 from app.models.base import G8eBaseModel, Field
-from app.proto import operator_pb2
+from g8e.operator.v1 import operator_pb2
 
 __all__ = [
     "CheckPortRequestPayload",

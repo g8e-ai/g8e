@@ -34,7 +34,7 @@ class IFEvalLoader:
                     id=str(data.get("key")),
                     prompt=data.get("prompt"),
                     metadata=TaskMetadata(
-                        benchmark="ifeval",
+                        benchmark="ifeval_subset",
                         instruction_id_list=data.get("instruction_id_list", []),
                         kwargs=data.get("kwargs", [])
                     )
