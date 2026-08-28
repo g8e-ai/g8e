@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -41,8 +42,10 @@ def load_cli_auth_context(g8e_cli: str) -> CLIAuthContext:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
         raise AuthBridgeError(detail)
     try:
-        return CLIAuthContext.model_validate_json(result.stdout)
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise AuthBridgeError(f"invalid JSON from {g8e_cli} auth context: {error}") from error
+    try:
+        return CLIAuthContext.model_validate(payload)
     except ValidationError as error:
         raise AuthBridgeError(f"invalid authentication context: {error}") from error
-    except ValueError as error:
-        raise AuthBridgeError(f"invalid JSON from {g8e_cli} auth context: {error}") from error

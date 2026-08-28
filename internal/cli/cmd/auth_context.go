@@ -11,21 +11,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
 func authContextCmd() *cobra.Command {
-	return authContextCmdWithConfig(loadConfig, newFileSvc)
+	return authContextCmdWithConfig(loadConfig, defaultAPIClientFactory, newFileSvc)
 }
 
 func authContextCmdWithConfig(
 	configLoader func(string) (*config.Config, error),
+	clientFactory apiClientFactory,
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 ) *cobra.Command {
 	return &cobra.Command{
@@ -44,10 +47,46 @@ func authContextCmdWithConfig(
 			if err != nil {
 				return err
 			}
+			if context.OperatorSessionID == "" {
+				client, err := clientFactory(fileSvc, cfg)
+				if err != nil {
+					return err
+				}
+				if err := resolveClientOperatorContext(client, context); err != nil {
+					return err
+				}
+			}
 			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(context); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 			return nil
 		},
 	}
+}
+
+func resolveClientOperatorContext(client apiClient, context *auth.ClientAuthContext) error {
+	query := url.Values{"user_id": {context.UserID}}
+	response, err := client.Get(constants.APIPaths.Operators + "?" + query.Encode())
+	if err != nil {
+		return fmt.Errorf("auth context: resolve operator: %w", err)
+	}
+	var slots models.OperatorSlotResponse
+	if err := json.Unmarshal(response, &slots); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+	matches := make([]models.OperatorDocumentGo, 0, len(slots.Operators))
+	for _, operator := range slots.Operators {
+		if operator.OperatorSessionID == "" {
+			continue
+		}
+		if context.OperatorID == "" || operator.ID == context.OperatorID {
+			matches = append(matches, operator)
+		}
+	}
+	if len(matches) != 1 {
+		return fmt.Errorf("%w: expected one active operator binding, found %d", constants.ErrNotAuthenticated, len(matches))
+	}
+	context.OperatorID = matches[0].ID
+	context.OperatorSessionID = matches[0].OperatorSessionID
+	return nil
 }

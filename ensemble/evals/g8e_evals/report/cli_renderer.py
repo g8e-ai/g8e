@@ -28,12 +28,11 @@ def render_summary(agg: Aggregate, mode: str | None = None):
     if agg.receipt_coverage_pct == 0 and mode != "receipt":
         console.print(Panel(
             "[bold yellow]HINT:[/bold yellow] Receipt coverage is 0.00%. To enable receipts:\n"
-            "1. Start the platform: [cyan]./g8e platform start[/cyan] "
-            "(auto-provisions the sandbox bootstrap superuser)\n"
-            "2. Authenticate the local CLI: [cyan]./g8e login[/cyan] "
-            "(no flags needed in sandbox; switch users with [cyan]--email <addr>[/cyan])\n"
-            "3. Re-run without [cyan]--mode baseline[/cyan]. Credentials are auto-loaded "
-            "from [cyan]~/.g8e/credentials[/cyan].",
+            "1. Start the gateway: [cyan]./g8e gw start[/cyan]\n"
+            "2. Enroll the local CLI: [cyan]./g8e auth enroll user[/cyan]\n"
+            "3. Refresh an expired session if needed: [cyan]./g8e auth refresh[/cyan]\n"
+            "4. Re-run without [cyan]--mode baseline[/cyan]. Authentication is loaded "
+            "through [cyan]./g8e auth context[/cyan].",
             border_style="yellow"
         ))
     elif agg.receipt_coverage_pct > 0 and agg.receipt_verification_pct < 100.0:

@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
 )
 
 func TestAuthContextCmdWithConfig_ExportsCanonicalCLIIdentity(t *testing.T) {
@@ -32,7 +33,7 @@ func TestAuthContextCmdWithConfig_ExportsCanonicalCLIIdentity(t *testing.T) {
 	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
 	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
 
-	cmd := authContextCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+	cmd := authContextCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), fileSvcFactoryFor(fileSvc))
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 
@@ -46,6 +47,32 @@ func TestAuthContextCmdWithConfig_ExportsCanonicalCLIIdentity(t *testing.T) {
 	assert.Equal(t, creds.OperatorID, got.OperatorID)
 	assert.Equal(t, cfg.CLICertFile(), got.ClientCert)
 	assert.Equal(t, cfg.CLIKeyFile(), got.ClientKey)
+}
+
+func TestAuthContextCmdWithConfig_ResolvesOperatorBinding(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	creds := &auth.Credentials{UserID: "user-123", CLISessionID: "cli-session-123"}
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
+	response, err := json.Marshal(models.OperatorSlotResponse{Operators: []models.OperatorDocumentGo{{
+		ID:                "operator-123",
+		UserID:            creds.UserID,
+		OperatorSessionID: "operator-session-123",
+	}}})
+	require.NoError(t, err)
+	client := &mockAPIClient{getResp: response}
+	cmd := authContextCmdWithConfig(configLoaderFor(cfg), mockClientFactory(client), fileSvcFactoryFor(fileSvc))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	var got auth.ClientAuthContext
+	require.NoError(t, json.Unmarshal(output.Bytes(), &got))
+	assert.Equal(t, "operator-123", got.OperatorID)
+	assert.Equal(t, "operator-session-123", got.OperatorSessionID)
+	assert.Equal(t, []string{constants.APIPaths.Operators + "?user_id=user-123"}, client.getCalls)
 }
 
 func TestAuthContextCmdWithConfig_RejectsIncompleteIdentity(t *testing.T) {
@@ -63,7 +90,7 @@ func TestAuthContextCmdWithConfig_RejectsIncompleteIdentity(t *testing.T) {
 			if tt.creds != nil {
 				require.NoError(t, auth.SaveCredentials(fileSvc, cfg, tt.creds))
 			}
-			cmd := authContextCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc))
+			cmd := authContextCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), fileSvcFactoryFor(fileSvc))
 
 			err := cmd.RunE(cmd, nil)
 

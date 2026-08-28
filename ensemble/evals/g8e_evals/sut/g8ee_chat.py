@@ -129,6 +129,7 @@ class G8eeChatSUT:
         self.env = AuthContext.from_env(
             operator_session_id=config.operator_session_id,
             operator_url=config.operator_url,
+            cli_context=config.auth_context,
         )
 
         # Used by the report header / CLI banner.
@@ -196,7 +197,7 @@ class G8eeChatSUT:
                 if resp.status_code == 401:
                     reason = (
                         "g8ee chat returned HTTP 401 Unauthorized. Your session may have expired. "
-                        "Run `./g8e login` to re-authenticate."
+                        "Run `./g8e auth refresh` to re-authenticate."
                     )
                 return Response(
                     answer="",

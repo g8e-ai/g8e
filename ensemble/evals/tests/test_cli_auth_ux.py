@@ -13,10 +13,9 @@ These cover the well-known footguns observed in the field:
    silently 401 downstream because the Gateway has no session matching
    that id. The CLI now rejects this with a hard ``UsageError``.
 
-2. Receipt mode without a session id used to error with a stale message
-   suggesting ``./g8e login --email superadmin@g8e.local``. The sandbox
-   default now is zero-arg ``./g8e login``; the error string must reflect
-   that.
+2. Missing canonical CLI identity state points to the supported enrollment
+   and session-refresh commands without claiming credential files are parsed
+   by Python.
 
 3. The dead ``--operator-id`` flag has been removed; passing it must fail
    with click's standard "no such option" error rather than silently being
@@ -29,6 +28,8 @@ import os
 import pytest
 from click.testing import CliRunner
 
+from g8e_evals import cli
+from g8e_evals.auth_bridge import AuthBridgeError
 from g8e_evals.cli import main
 
 pytestmark = pytest.mark.unit
@@ -74,23 +75,32 @@ def test_session_id_equal_to_operator_id_is_hard_error():
 
     assert result.exit_code == 2, result.output
     assert "operator_id UUID, not a session id" in result.output
-    assert "./g8e login" in result.output
+    assert "./g8e auth context" in result.output
+    assert "./g8e login" not in result.output
 
 
-def test_receipt_mode_without_session_points_at_zero_arg_login():
-    """Sandbox UX: the missing-session error must suggest ``./g8e login``
-    (no flags), matching the new zero-arg sandbox onboarding.
-    """
+def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(cli, "load_cli_auth_context", lambda _: (_ for _ in ()).throw(AuthBridgeError("not authenticated")))
     runner = CliRunner()
+
     result = _invoke(
         runner,
         ["run", "--suite", "ifeval_subset", "--mode", "receipt"],
     )
+
     assert result.exit_code == 2, result.output
-    assert "operator-session-id is required" in result.output
-    assert "./g8e login" in result.output
-    # The legacy --email flag must not be advertised as required for sandbox.
-    assert "--email superadmin@g8e.local" not in result.output
+    assert "./g8e auth enroll user" in result.output
+    assert "./g8e auth refresh" in result.output
+    assert "./g8e login" not in result.output
+
+
+def test_run_help_describes_canonical_authentication_bridge():
+    result = _invoke(CliRunner(), ["run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "canonical CLI identity" in result.output
+    assert "--g8e-cli" in result.output
+    assert "./g8e login" not in result.output
 
 
 def test_dead_operator_id_flag_is_removed():

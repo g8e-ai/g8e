@@ -101,7 +101,7 @@ func TestLogoutCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 func TestAuthContextCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
-	cmd := authContextCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory))
+	cmd := authContextCmdWithConfig(configLoaderFor(cfg), panickingClientFactory(), failingFileSvcFactory(errFactory))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

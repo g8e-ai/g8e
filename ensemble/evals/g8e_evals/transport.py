@@ -44,6 +44,7 @@ from g8e.constants import (
 from app.constants import G8EE_COMPONENT
 from app.models.http_context import RequestContext, BoundOperator
 
+from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.tls import RuntimeIdentity, resolve_trust_bundle
 
 
@@ -62,7 +63,7 @@ SOURCE_COMPONENT_CLIENT = "client"
 class AuthContext:
     """Resolved transport + auth context for talking to g8ee + Operator.
 
-    Built once per bench run from the environment exported by the Go CLI.
+    Built once per bench run from the typed context exported by the Go CLI.
     """
 
     g8ee_url: str
@@ -93,16 +94,26 @@ class AuthContext:
         operator_session_id: str | None = None,
         operator_url: str | None = None,
         runtime_identity: RuntimeIdentity = RuntimeIdentity.APP,
+        cli_context: CLIAuthContext | None = None,
     ) -> AuthContext:
-        """Resolve the canonical auth context from the process environment.
+        """Resolve the canonical auth context from CLI identity and process configuration.
 
         Raises :class:`RuntimeError` if a required value is missing or if
         the mTLS client certificate files do not exist on disk.
         """
-        sid = (operator_session_id or os.environ.get("G8E_OPERATOR_SESSION_ID") or "").strip()
-        cli_sid = (os.environ.get("G8E_CLI_SESSION_ID") or "").strip()
+        sid = (
+            operator_session_id
+            or (cli_context.operator_session_id if cli_context else "")
+            or os.environ.get("G8E_OPERATOR_SESSION_ID")
+            or ""
+        ).strip()
+        cli_sid = (
+            (cli_context.cli_session_id if cli_context else "")
+            or os.environ.get("G8E_CLI_SESSION_ID")
+            or ""
+        ).strip()
         web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or "").strip()
-        uid = (os.environ.get("G8E_USER_ID") or "").strip()
+        uid = ((cli_context.user_id if cli_context else "") or os.environ.get("G8E_USER_ID") or "").strip()
         oid = (os.environ.get("G8E_ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
 
@@ -127,17 +138,16 @@ class AuthContext:
         if missing:
             raise AuthenticationError(
                 "evals transport requires an authenticated session. "
-                "Run `./g8e login` (or start the platform so the bootstrap "
-                "superuser is auto-provisioned), then re-run. Missing: "
+                "Run `./g8e auth enroll user` or `./g8e auth refresh`, then re-run. Missing: "
                 + ", ".join(missing)
             )
 
-        client_cert = os.environ.get("G8E_CLI_CERT") or ""
-        client_key = os.environ.get("G8E_CLI_KEY") or ""
+        client_cert = (cli_context.client_cert if cli_context else "") or os.environ.get("G8E_CLI_CERT") or ""
+        client_key = (cli_context.client_key if cli_context else "") or os.environ.get("G8E_CLI_KEY") or ""
         if not (client_cert and client_key and os.path.isfile(client_cert) and os.path.isfile(client_key)):
             raise AuthenticationError(
-                "evals transport requires an mTLS client certificate "
-                "(G8E_CLI_CERT / G8E_CLI_KEY). Run `./g8e login` to mint one."
+                "evals transport requires a valid mTLS client certificate. "
+                "Run `./g8e auth enroll user` to create one."
             )
 
         trust_bundle = resolve_trust_bundle(runtime_identity)
@@ -163,6 +173,7 @@ class AuthContext:
             organization_id=oid,
             source_component=source,
             system_fingerprint=fingerprint,
+            operator_id=cli_context.operator_id if cli_context else "",
         )
 
     # ---- Header / cookie construction ---------------------------------

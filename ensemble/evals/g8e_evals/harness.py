@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from g8e.constants import PORTS
 from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.models import ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
@@ -45,6 +46,7 @@ class SUTConfig:
 
     operator_url: str = f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}"
     operator_session_id: str | None = None
+    auth_context: CLIAuthContext | None = None
     state_root: str = "test-state-root-v1"
 
     l2_private_key: str | None = None

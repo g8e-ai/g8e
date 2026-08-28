@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 
 from g8e.constants import PORTS
+from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
     SOURCE_COMPONENT_CLIENT,
@@ -130,6 +131,35 @@ def test_auth_wiring_matches_protocol_constants(fake_pki):
     # into the minimal auth header set; that context is body-embedded instead.
     assert "X-G8E-Source-Component" not in h
     assert "X-G8E-User-ID" not in h
+
+
+def test_typed_cli_context_supplies_identity_without_secret_environment(fake_pki, monkeypatch):
+    for name in (
+        "G8E_OPERATOR_SESSION_ID",
+        "G8E_CLI_SESSION_ID",
+        "G8E_USER_ID",
+        "G8E_CLI_CERT",
+        "G8E_CLI_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("G8E_APP_TRUST_BUNDLE", str(fake_pki["bundle"]))
+    cli_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert=str(fake_pki["cert"]),
+        client_key=str(fake_pki["key"]),
+    )
+
+    context = AuthContext.from_env(cli_context=cli_context)
+
+    assert context.operator_session_id == cli_context.operator_session_id
+    assert context.cli_session_id == cli_context.cli_session_id
+    assert context.user_id == cli_context.user_id
+    assert context.operator_id == cli_context.operator_id
+    assert context.client_cert == cli_context.client_cert
+    assert context.client_key == cli_context.client_key
 
 
 def test_api_path_parity_g8ee_chat(fake_pki):

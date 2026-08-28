@@ -102,8 +102,18 @@ func LoadClientAuthContext(fileSvc fs.RuntimeFileService, cfg *config.Config) (*
 	if err != nil {
 		return nil, err
 	}
-	if creds == nil || creds.OperatorSessionID == "" || creds.CLISessionID == "" || creds.UserID == "" {
-		return nil, fmt.Errorf("%w: run './g8e auth enroll user' or './g8e auth refresh'", constants.ErrNotAuthenticated)
+	if creds == nil {
+		return nil, fmt.Errorf("%w: local CLI credentials are absent; run './g8e auth enroll user'", constants.ErrNotAuthenticated)
+	}
+	missing := make([]string, 0, 2)
+	if creds.CLISessionID == "" {
+		missing = append(missing, "cli_session_id")
+	}
+	if creds.UserID == "" {
+		missing = append(missing, "user_id")
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("%w: local CLI credentials are missing %s; run './g8e auth enroll user' or './g8e auth refresh'", constants.ErrNotAuthenticated, strings.Join(missing, ", "))
 	}
 	paths := []string{cfg.CLICertFile(), cfg.CLIKeyFile()}
 	for _, path := range paths {

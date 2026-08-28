@@ -23,6 +23,7 @@ from g8e.receipts import (
     parse_action_receipt,
     verify_action_receipt_signature,
 )
+from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
 from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
 from g8e_evals.agent_trail_renderer import TurnRenderer
@@ -65,8 +66,9 @@ def main():
               help="Seconds without an SSE event before declaring a task idle")
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
-              help="Operator session id. Auto-loaded from ~/.g8e/credentials after `./g8e login`; "
-                   "only pass this flag to override the cached session.")
+              help="Operator session id override. The default comes from the canonical CLI identity.")
+@click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
+              help="Path to the g8e CLI used to load the canonical authentication context.")
 @click.option("--mode", type=click.Choice(["receipt", "baseline"]), default="receipt",
               help="Receipt mode (default) verifies on-Gateway receipts; baseline mode runs without binding")
 @click.option("--state-root", default="test-state-root-v1")
@@ -84,14 +86,8 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, operator_url, operator_session_id, g8e_cli, mode, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
-    if mode == "receipt" and not operator_session_id:
-        raise click.UsageError(
-            "operator-session-id is required for receipt mode. Run `./g8e login` first; "
-            "the credentials file is then auto-loaded and no flag is needed."
-        )
-
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
     # has no session matching that id. Fail fast with an actionable hint
@@ -100,16 +96,24 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
     if operator_session_id and operator_id_env and operator_session_id == operator_id_env:
         raise click.UsageError(
             "--operator-session-id was given the operator_id UUID, not a session id. "
-            "Drop the flag entirely - `./g8e login` already cached the correct session "
-            "in ~/.g8e/credentials and it is auto-loaded by this command."
+            "Drop the flag so `./g8e auth context` can load the canonical session."
         )
+
+    try:
+        auth_context = load_cli_auth_context(g8e_cli)
+    except AuthBridgeError as error:
+        raise click.UsageError(
+            f"Could not load the canonical CLI identity: {error}. "
+            "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
+        ) from error
 
     config = SUTConfig(
         primary=LLMRoleConfig(provider=provider, model=model, api_key=primary_api_key, endpoint=primary_endpoint),
         assistant=LLMRoleConfig(provider=assistant_provider, model=assistant_model, api_key=assistant_api_key, endpoint=assistant_endpoint),
         lite=LLMRoleConfig(provider=lite_provider, model=lite_model, api_key=lite_api_key, endpoint=lite_endpoint),
         operator_url=operator_url,
-        operator_session_id=operator_session_id,
+        operator_session_id=operator_session_id or auth_context.operator_session_id,
+        auth_context=auth_context,
         state_root=state_root,
         l2_private_key=l2_key,
         l2_key_id=l2_key_id,
@@ -179,7 +183,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     except AuthenticationError as e:
         console.print("[bold red]Authentication Error:[/bold red]")
         console.print(f"  {e}")
-        console.print("\n[yellow]Did you run ./g8e login?[/yellow]")
+        console.print("\n[yellow]Run ./g8e auth enroll user or ./g8e auth refresh.[/yellow]")
         return
 
     llm_settings = remote_settings.llm if remote_settings else None
