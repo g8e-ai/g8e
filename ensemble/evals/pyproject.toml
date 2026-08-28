@@ -44,8 +44,15 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-config", "--strict-markers"]
+markers = [
+    "unit: Tier 1 tests with no filesystem, process, network, database, or provider dependencies",
+    "integration: Tier 2 tests using local filesystem, subprocess, or in-process dependencies",
+    "e2e: Tier 3 tests requiring a live g8e stack or provider",
+]
 
 [tool.pyright]
 include = ["g8e_evals", "tests"]
+extraPaths = [".."]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"

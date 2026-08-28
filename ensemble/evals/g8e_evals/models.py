@@ -19,14 +19,22 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class InstructionResult(BaseModel):
+    instruction: str
+    passed: bool
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
 class ScoreDetails(BaseModel):
     """Typed details for Score evaluation results."""
     model_config = ConfigDict(extra="ignore")
 
     # Common evaluation metrics
+    error: str = ""
     error_message: str = ""
     error_type: str = ""
     validation_errors: list[str] = Field(default_factory=list)
+    instructions: list[InstructionResult] = Field(default_factory=list)
 
     # Benchmark-specific details can be added as extra fields
     benchmark_specific: dict[str, Any] = Field(default_factory=dict)

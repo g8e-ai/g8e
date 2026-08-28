@@ -18,6 +18,10 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 INFRA_SH = REPO_ROOT / "scripts" / "cmd" / "infra.sh"
 
@@ -53,12 +57,13 @@ def _run_login_arg_parser(*args: str, env: dict[str, str] | None = None) -> str:
         printf '%s\\n' "$_login_email"
         """
     )
+    process_env: dict[str, str] = {} if env is None else env
     proc = subprocess.run(
         ["bash", "-c", script, "_test_", *args],
         capture_output=True,
         text=True,
         check=True,
-        env={**(env or {})},
+        env=process_env,
     )
     return proc.stdout.strip()
 

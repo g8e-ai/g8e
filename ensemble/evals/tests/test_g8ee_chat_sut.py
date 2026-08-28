@@ -31,6 +31,8 @@ import pytest
 from g8e_evals.harness import BindingType, Task, Response
 from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AgentTrailEvent, _extract_Gateway_transaction_id
 
+pytestmark = pytest.mark.unit
+
 
 def test_extract_Gateway_transaction_id_ignores_investigation_only_trail():
     trail = [

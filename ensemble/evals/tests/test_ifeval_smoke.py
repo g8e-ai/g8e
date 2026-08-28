@@ -13,6 +13,7 @@ import pytest
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
 
+@pytest.mark.integration
 def test_ifeval_loader():
     base_dir = Path(__file__).parent.parent
     gold_set = base_dir / "gold_sets/ifeval_subset/input_data.jsonl"
@@ -24,6 +25,7 @@ def test_ifeval_loader():
     assert tasks[0].id == "1001"
     assert "no punctuation" in tasks[0].prompt
 
+@pytest.mark.unit
 def test_ifeval_verifier_punctuation():
     verifier = IFEvalVerifier()
     # Task 1001: no punctuation
@@ -33,6 +35,7 @@ def test_ifeval_verifier_punctuation():
     score = verifier.verify("1001", "prompt", "This is NOT fine.", ["punctuation:no_punctuation"], [{}])
     assert not score.passed
 
+@pytest.mark.unit
 def test_ifeval_verifier_uppercase():
     verifier = IFEvalVerifier()
     # Task 1002: uppercase
@@ -42,6 +45,7 @@ def test_ifeval_verifier_uppercase():
     score = verifier.verify("1002", "prompt", "Not all uppercase", ["case:uppercase"], [{}])
     assert not score.passed
 
+@pytest.mark.unit
 def test_ifeval_verifier_json():
     verifier = IFEvalVerifier()
     # Task 1003: JSON
@@ -51,6 +55,7 @@ def test_ifeval_verifier_json():
     score = verifier.verify("1003", "prompt", "not json", ["format:json"], [{}])
     assert not score.passed
 
+@pytest.mark.unit
 def test_ifeval_verifier_min_words():
     verifier = IFEvalVerifier()
     # Task 1004: min 10 words
@@ -62,6 +67,7 @@ def test_ifeval_verifier_min_words():
     score = verifier.verify("1004", "prompt", answer, ["length:min_words"], [{"num_words": 10}])
     assert not score.passed
 
+@pytest.mark.unit
 def test_ifeval_verifier_forbidden_words():
     verifier = IFEvalVerifier()
     # Task 1005: forbidden word 'apple'
@@ -72,6 +78,7 @@ def test_ifeval_verifier_forbidden_words():
     assert not score.passed
 
 
+@pytest.mark.unit
 def test_ifeval_verifier_rejects_unsupported_language_instruction():
     verifier = IFEvalVerifier()
     score = verifier.verify(

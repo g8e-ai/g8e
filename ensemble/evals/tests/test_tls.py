@@ -25,6 +25,8 @@ from g8e_evals.tls import (
 )
 from g8e_evals.receipts import collector as collector_mod
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def clean_env(monkeypatch):

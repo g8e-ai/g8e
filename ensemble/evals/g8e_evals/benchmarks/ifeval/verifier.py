@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from g8e_evals.harness import Score
+from g8e_evals.models import InstructionResult, ScoreDetails
 
 
 class IFEvalVerifier:
@@ -27,37 +28,30 @@ class IFEvalVerifier:
         """
         # Global non-empty check
         if not answer or not answer.strip():
-            results = []
-            for inst_id, kw in zip(instructions, kwargs, strict=True):
-                results.append(
-                    {
-                        "instruction": inst_id,
-                        "passed": False,
-                        "kwargs": kw,
-                    }
-                )
+            results = [
+                InstructionResult(instruction=inst_id, passed=False, kwargs=kw)
+                for inst_id, kw in zip(instructions, kwargs, strict=True)
+            ]
             return Score(
                 task_id=task_id,
                 passed=False,
-                details={"instructions": results, "error": "Empty answer"},
+                details=ScoreDetails(instructions=results, error="Empty answer"),
             )
 
-        results = []
-        for inst_id, kw in zip(instructions, kwargs, strict=True):
-            passed = self._check_instruction(inst_id, kw, answer)
-            results.append(
-                {
-                    "instruction": inst_id,
-                    "passed": passed,
-                    "kwargs": kw,
-                }
+        results = [
+            InstructionResult(
+                instruction=inst_id,
+                passed=self._check_instruction(inst_id, kw, answer),
+                kwargs=kw,
             )
+            for inst_id, kw in zip(instructions, kwargs, strict=True)
+        ]
 
-        all_passed = all(r["passed"] for r in results)
+        all_passed = all(result.passed for result in results)
         return Score(
             task_id=task_id,
             passed=all_passed,
-            details={"instructions": results},
+            details=ScoreDetails(instructions=results),
         )
 
     def _check_instruction(self, inst_id: str, kw: dict[str, Any], answer: str) -> bool:

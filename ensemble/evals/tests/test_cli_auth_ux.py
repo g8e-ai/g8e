@@ -31,6 +31,8 @@ from click.testing import CliRunner
 
 from g8e_evals.cli import main
 
+pytestmark = pytest.mark.unit
+
 
 def _invoke(runner: CliRunner, args: list[str], env: dict[str, str] | None = None):
     """Invoke the CLI with a controlled environment.

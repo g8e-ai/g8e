@@ -19,7 +19,14 @@ PROTO_FILES = (
     Path("g8e/operator/v1/operator.proto"),
     Path("g8e/pubsub/v1/pubsub.proto"),
 )
-GENERATED_FILES = tuple(path.with_name(f"{path.stem}_pb2.py") for path in PROTO_FILES)
+GENERATED_FILES = tuple(
+    generated
+    for path in PROTO_FILES
+    for generated in (
+        path.with_name(f"{path.stem}_pb2.py"),
+        path.with_name(f"{path.stem}_pb2.pyi"),
+    )
+)
 
 
 def generate(output_root: Path) -> None:
@@ -28,6 +35,7 @@ def generate(output_root: Path) -> None:
         f"--proto_path={PROTO_ROOT}",
         f"--proto_path={files('grpc_tools') / '_proto'}",
         f"--python_out={output_root}",
+        f"--pyi_out={output_root}",
         *(str(path) for path in PROTO_FILES),
     ]
     result = protoc.main(args)

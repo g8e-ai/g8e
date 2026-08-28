@@ -41,6 +41,8 @@ from app.constants import G8EE_COMPONENT
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths
 from app.constants.api_paths import InternalAPIPaths
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def fake_pki(tmp_path: Path) -> dict[str, Path]:

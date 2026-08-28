@@ -29,6 +29,8 @@ from g8e_evals.sut.g8ee_chat import (
 )
 from g8e_evals.sut.wire import SSEWireEnvelope
 
+pytestmark = pytest.mark.unit
+
 
 SESSION_WIRE_FIXTURE = {
     "web_session_id": "sess-123",

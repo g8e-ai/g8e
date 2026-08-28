@@ -482,7 +482,7 @@ def _extract_text_chunk(payload_obj: dict[str, Any]) -> str:
     return envelope.text_chunk() if envelope is not None else ""
 
 
-def _extract_investigation_id(payload_obj: dict[str, Any]) -> str:
+def _extract_investigation_id(payload_obj: object) -> str:
     envelope = SSEWireEnvelope.parse(payload_obj)
     return envelope.investigation_id() if envelope is not None else ""
 
