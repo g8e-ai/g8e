@@ -311,6 +311,47 @@ func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *te
 	require.NoError(t, err)
 }
 
+func TestVerifyEnvelopeIdentityBinding_MatchingCLISessionWithOperatorClaims_ReturnsNil(t *testing.T) {
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/cli/user-1/cli-sess-1")
+	require.NoError(t, parseErr)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		OperatorId:        "op-1",
+		OperatorSessionId: "operator-sess-1",
+		CliSessionId:      "cli-sess-1",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.NoError(t, err)
+}
+
+func TestVerifyEnvelopeIdentityBinding_MismatchedCLISessionWithOperatorClaims_ReturnsError(t *testing.T) {
+	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/cli/user-1/other-cli-sess")
+	require.NoError(t, parseErr)
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+	envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		ActionType:        string(constants.ActionTypeDocumentUpdate),
+		OperatorId:        "op-1",
+		OperatorSessionId: "operator-sess-1",
+		CliSessionId:      "cli-sess-1",
+		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
+	})
+	err := verifyEnvelopeIdentityBinding(req, envelope)
+	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrURISANMismatch)
+}
+
 func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *testing.T) {
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
 	require.NoError(t, parseErr)

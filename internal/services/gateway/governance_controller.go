@@ -67,7 +67,7 @@ func (c *GovernanceController) handleConsensusDeliberate(w http.ResponseWriter, 
 
 // verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding
 // (Plan §2). It extracts the mTLS certificate's URI SANs and verifies they match
-// the envelope's internal identity claims (operator_session_id, operator_id, source_component).
+// the envelope's internal identity claims (cli_session_id, operator_session_id, operator_id, source_component).
 // This prevents an Agent cert from impersonating another workload's envelope.
 func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	// Ensure mTLS is present
@@ -91,6 +91,7 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		return nil
 	}
 
+	cliSessionID := envelope.GetCliSessionId()
 	operatorSessionID := envelope.GetOperatorSessionId()
 	operatorID := envelope.GetOperatorId()
 	sourceComponent := envelope.GetSourceComponent()
@@ -118,6 +119,12 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		spiffeID := uri.String()
 
 		// Check CLI session match — works with or without operator_id
+		if cliSessionID != "" {
+			if wid.MatchesCLISessionOnly(spiffeID, cliSessionID) {
+				return nil
+			}
+		}
+
 		if operatorSessionID != "" {
 			if wid.MatchesCLISessionOnly(spiffeID, operatorSessionID) {
 				return nil
