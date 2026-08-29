@@ -13,9 +13,11 @@ import { DocsTreeResponse, DocsFileResponse, ErrorResponse } from '../../models/
  * @param {Object} options
  * @param {Object} options.config - Platform configuration object
  * @param {Object} options.authMiddleware - Auth middleware object
+ * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createDocsRouter({ config, authMiddleware }) {
+export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
     const { optionalAuth } = authMiddleware;
+    const { apiRateLimiter } = rateLimiters;
     const router = express.Router();
 
     const docsDir = config.docs_dir || DEFAULT_DOCS_DIR;
@@ -47,7 +49,7 @@ export function createDocsRouter({ config, authMiddleware }) {
         return nodes;
     }
 
-    router.get(DocsPaths.TREE, (req, res, next) => {
+    router.get(DocsPaths.TREE, apiRateLimiter, (req, res, next) => {
         try {
             if (!fs.existsSync(docsDir)) {
                 return res.status(503).json(new ErrorResponse({ error: 'Docs directory not available' }).forClient());
@@ -63,7 +65,7 @@ export function createDocsRouter({ config, authMiddleware }) {
         }
     });
 
-    router.get(DocsPaths.FILE, optionalAuth, (req, res, next) => {
+    router.get(DocsPaths.FILE, apiRateLimiter, optionalAuth, (req, res, next) => {
         const filePath = req.query.path;
         if (!filePath) {
             return res.status(400).json(new ErrorResponse({ error: 'Missing path parameter' }).forClient());
@@ -82,9 +84,15 @@ export function createDocsRouter({ config, authMiddleware }) {
             }
         }
 
+        const docsRoot = path.resolve(docsDir);
         const resolved = path.resolve(docsDir, filePath);
-        if (!resolved.startsWith(path.resolve(docsDir) + path.sep) && resolved !== path.resolve(docsDir)) {
+        const relative = path.relative(docsRoot, resolved);
+        if (relative.startsWith('..')) {
             logger.warn('[DOCS] Path traversal attempt blocked', { filePath, userId: req.userId });
+            return res.status(403).json(new ErrorResponse({ error: 'Access denied' }).forClient());
+        }
+        if (path.isAbsolute(relative)) {
+            logger.warn('[DOCS] Cross-drive path blocked', { filePath, userId: req.userId });
             return res.status(403).json(new ErrorResponse({ error: 'Access denied' }).forClient());
         }
 
