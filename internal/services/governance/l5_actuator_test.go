@@ -90,6 +90,8 @@ func TestL5ActuatorRecordRejectedTransactionSignsFailedStageEvidence(t *testing.
 	signature, err := hex.DecodeString(receipt.Signature)
 	require.NoError(t, err)
 	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+	require.NotNil(t, receipt.FinalPersistenceAttestation)
+	assert.NoError(t, VerifyReceiptPersistenceAttestation(receipt, publicKey))
 }
 
 func TestL5ActuatorExecuteHappyPath(t *testing.T) {
@@ -298,6 +300,81 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 	require.Error(t, err)
 	require.Error(t, err)
 	require.Nil(t, receipt)
+}
+
+func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) {
+	t.Parallel()
+	actuator, _ := newTestActuator(t)
+	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
+	writeErr := errors.New("final persistence attestation write failed")
+	callCount := 0
+	consoleAuditStore.DocSetFunc = func(collection, id string, data json.RawMessage) error {
+		callCount++
+		if callCount == 3 {
+			return writeErr
+		}
+		return nil
+	}
+	vt := &VerifiedTransaction{
+		Envelope: &govtypes.GovernanceEnvelope{
+			Id:                uuid.NewString(),
+			TransactionHash:   "test-final-persistence-write-failure",
+			OperatorId:        "test-operator",
+			OperatorSessionId: "test-operator-session",
+			ActionType:        string(constants.ActionTypeExecuteBash),
+			TargetResource:    "localhost",
+		},
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrL5ActuatorLogReceipt)
+	assert.ErrorIs(t, err, writeErr)
+	require.NotNil(t, receipt)
+	assert.NotNil(t, receipt.FinalPersistenceAttestation)
+	assert.Equal(t, 3, callCount)
+}
+
+func TestVerifyReceiptPersistenceAttestationRejectsSemanticallyUnboundFields(t *testing.T) {
+	t.Parallel()
+	actuator, publicKey := newTestActuator(t)
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId: "test-transaction",
+		SignerKeyId:   actuator.KeyID,
+		Signature:     "abcd",
+	}
+	tests := []struct {
+		name   string
+		mutate func(*operatorv1.ReceiptPersistenceAttestation)
+	}{
+		{name: "transaction mismatch", mutate: func(attestation *operatorv1.ReceiptPersistenceAttestation) {
+			attestation.TransactionId = "other-transaction"
+		}},
+		{name: "audit record mismatch", mutate: func(attestation *operatorv1.ReceiptPersistenceAttestation) {
+			attestation.AuditRecordId = "other-record"
+		}},
+		{name: "signer mismatch", mutate: func(attestation *operatorv1.ReceiptPersistenceAttestation) {
+			attestation.SignerKeyId = "other-signer"
+		}},
+		{name: "missing persistence timestamp", mutate: func(attestation *operatorv1.ReceiptPersistenceAttestation) {
+			attestation.PersistedAtUnixMs = 0
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attestation, err := actuator.signReceiptPersistenceAttestation(receipt)
+			require.NoError(t, err)
+			tt.mutate(attestation)
+			canonical, err := CanonicalizeReceiptPersistenceAttestation(attestation)
+			require.NoError(t, err)
+			attestation.Signature = hex.EncodeToString(ed25519.Sign(actuator.SigningKey, canonical))
+			receipt.FinalPersistenceAttestation = attestation
+
+			assert.ErrorIs(t, VerifyReceiptPersistenceAttestation(receipt, publicKey), constants.ErrReceiptPersistenceAttestationInvalid)
+		})
+	}
 }
 
 func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {

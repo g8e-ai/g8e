@@ -28,8 +28,17 @@ type actionReceiptCanonicalizationVector struct {
 	PublicKeyHex  string          `json:"public_key_hex"`
 }
 
+type receiptPersistenceCanonicalizationVector struct {
+	Attestation  json.RawMessage `json:"attestation"`
+	CanonicalHex string          `json:"canonical_hex"`
+	PublicKeyHex string          `json:"public_key_hex"`
+}
+
 //go:embed vectors/action_receipt_canonicalization.json
 var actionReceiptCanonicalizationVectorJSON []byte
+
+//go:embed vectors/receipt_persistence_attestation_canonicalization.json
+var receiptPersistenceCanonicalizationVectorJSON []byte
 
 func TestActionReceiptCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector actionReceiptCanonicalizationVector
@@ -49,4 +58,25 @@ func TestActionReceiptCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	signature, err := hex.DecodeString(receipt.Signature)
 	require.NoError(t, err)
 	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+}
+
+func TestReceiptPersistenceAttestationCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var receiptVector actionReceiptCanonicalizationVector
+	require.NoError(t, json.Unmarshal(actionReceiptCanonicalizationVectorJSON, &receiptVector))
+	var persistenceVector receiptPersistenceCanonicalizationVector
+	require.NoError(t, json.Unmarshal(receiptPersistenceCanonicalizationVectorJSON, &persistenceVector))
+
+	receipt := &operatorv1.ActionReceipt{}
+	require.NoError(t, protojson.Unmarshal(receiptVector.Receipt, receipt))
+	attestation := &operatorv1.ReceiptPersistenceAttestation{}
+	require.NoError(t, protojson.Unmarshal(persistenceVector.Attestation, attestation))
+	receipt.FinalPersistenceAttestation = attestation
+
+	canonical, err := governance.CanonicalizeReceiptPersistenceAttestation(attestation)
+	require.NoError(t, err)
+	assert.Equal(t, persistenceVector.CanonicalHex, hex.EncodeToString(canonical))
+
+	publicKey, err := hex.DecodeString(persistenceVector.PublicKeyHex)
+	require.NoError(t, err)
+	assert.NoError(t, governance.VerifyReceiptPersistenceAttestation(receipt, publicKey))
 }

@@ -25,6 +25,7 @@ from g8e.receipts import (
     action_receipt_to_dict,
     parse_action_receipt,
     verify_action_receipt_signature,
+    verify_receipt_persistence_attestation,
 )
 from g8e_evals.arms import ALL_ARMS, ARM_DEFINITIONS, Arm, GovernancePosture, get_arm_definition
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
@@ -491,7 +492,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             if on_chain_receipt:
                 response.action_receipt = on_chain_receipt
                 if warden_pub:
-                    response.receipt_verified = verify_action_receipt_signature(on_chain_receipt, warden_pub)
+                    response.receipt_verified = (
+                        verify_action_receipt_signature(on_chain_receipt, warden_pub)
+                        and verify_receipt_persistence_attestation(on_chain_receipt, warden_pub)
+                    )
 
         # Score
         if suite == "ifeval_subset":
@@ -541,6 +545,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 run_id,
                 attempt_id,
                 action_receipt=response.action_receipt,
+                receipt_verified=response.receipt_verified,
             )
             if response.chat_evidence
             else None
@@ -721,7 +726,10 @@ def verify_receipts(report_dir, pki_dir):
                 failed += 1
                 console.print(f"  [red]FAILED:[/red] Could not parse receipt for task {data.get('task_id')} (TX: {data.get('transaction_id')})")
                 continue
-            if verify_action_receipt_signature(receipt_model, warden_pub):
+            if (
+                verify_action_receipt_signature(receipt_model, warden_pub)
+                and verify_receipt_persistence_attestation(receipt_model, warden_pub)
+            ):
                 verified += 1
             else:
                 failed += 1

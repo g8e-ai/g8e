@@ -25,13 +25,17 @@ from g8e.receipts import (
     PUBLIC_KEY_PEM_BEGIN,
     PUBLIC_KEY_PEM_END,
     canonicalize_action_receipt,
+    canonicalize_receipt_persistence_attestation,
     parse_action_receipt,
     verify_action_receipt_signature,
+    verify_receipt_persistence_attestation,
 )
 
 VECTORS_DIRECTORY_NAME = "vectors"
 VECTOR_FILENAME = "action_receipt_canonicalization.json"
+PERSISTENCE_VECTOR_FILENAME = "receipt_persistence_attestation_canonicalization.json"
 VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / VECTOR_FILENAME
+PERSISTENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / PERSISTENCE_VECTOR_FILENAME
 
 
 @pytest.fixture
@@ -84,3 +88,34 @@ def test_action_receipt_parser_rejects_unknown_fields(vector):
     receipt_data["unknown_proof"] = "must fail closed"
     with pytest.raises(ParseError):
         parse_action_receipt(receipt_data)
+
+
+def test_receipt_persistence_attestation_matches_cross_language_vector(vector):
+    persistence_vector = json.loads(PERSISTENCE_VECTOR_PATH.read_text())
+    receipt_data = dict(vector["receipt"])
+    receipt_data["final_persistence_attestation"] = persistence_vector["attestation"]
+    receipt = parse_action_receipt(receipt_data)
+
+    assert canonicalize_receipt_persistence_attestation(receipt.final_persistence_attestation).hex() == persistence_vector["canonical_hex"]
+    assert verify_receipt_persistence_attestation(receipt, persistence_vector["public_key_hex"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("transaction_id", "tx-tampered"),
+        ("receipt_signature_digest", "0" * 64),
+        ("persisted_at_unix_ms", 1777777777457),
+        ("audit_record_id", "audit-tampered"),
+        ("signer_key_id", "signer-tampered"),
+        ("signature", "00"),
+    ],
+)
+def test_receipt_persistence_attestation_verification_rejects_tampering(vector, field, value):
+    persistence_vector = json.loads(PERSISTENCE_VECTOR_PATH.read_text())
+    receipt_data = dict(vector["receipt"])
+    receipt_data["final_persistence_attestation"] = persistence_vector["attestation"]
+    receipt = parse_action_receipt(receipt_data)
+    setattr(receipt.final_persistence_attestation, field, value)
+
+    assert not verify_receipt_persistence_attestation(receipt, persistence_vector["public_key_hex"])

@@ -514,7 +514,7 @@ func CanonicalizeReceiptPersistenceAttestation(attestation *operatorv1.ReceiptPe
 
 func (w *L5Actuator) signReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt) (*operatorv1.ReceiptPersistenceAttestation, error) {
 	attestation := &operatorv1.ReceiptPersistenceAttestation{
-		TransactionId:         receipt.TransactionId,
+		TransactionId:          receipt.TransactionId,
 		ReceiptSignatureDigest: signatureDigest([]string{receipt.Signature}),
 		PersistedAtUnixMs:      time.Now().UnixMilli(),
 		AuditRecordId:          receipt.TransactionId,
@@ -533,7 +533,15 @@ func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publ
 		return constants.ErrReceiptPersistenceAttestationMissing
 	}
 	attestation := receipt.FinalPersistenceAttestation
-	if attestation.ReceiptSignatureDigest != signatureDigest([]string{receipt.Signature}) {
+	if receipt.TransactionId == "" ||
+		attestation.TransactionId != receipt.TransactionId ||
+		attestation.AuditRecordId != receipt.TransactionId ||
+		receipt.SignerKeyId == "" ||
+		attestation.SignerKeyId != receipt.SignerKeyId ||
+		attestation.PersistedAtUnixMs <= 0 {
+		return constants.ErrReceiptPersistenceAttestationInvalid
+	}
+	if receipt.Signature == "" || attestation.ReceiptSignatureDigest != signatureDigest([]string{receipt.Signature}) {
 		return constants.ErrReceiptPersistenceSignatureMismatch
 	}
 	signature, err := hex.DecodeString(attestation.Signature)

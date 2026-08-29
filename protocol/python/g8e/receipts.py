@@ -21,7 +21,7 @@ import nacl.signing
 from google.protobuf import json_format
 from nacl.bindings import crypto_sign_PUBLICKEYBYTES
 
-from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e.operator.v1.operator_pb2 import ActionReceipt, ReceiptPersistenceAttestation
 
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 PUBLIC_KEY_PEM_BEGIN = "-----BEGIN PUBLIC KEY-----"
@@ -83,6 +83,34 @@ def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
     return payload.encode()
 
 
+def _canonical_string(value: str) -> bytes:
+    encoded = value.encode()
+    return struct.pack(">I", len(encoded)) + encoded
+
+
+def _signature_digest(signatures: list[str]) -> str:
+    values = sorted(signature for signature in signatures if signature)
+    if not values:
+        return ""
+    payload = struct.pack(">I", len(values))
+    payload += b"".join(_canonical_string(value) for value in values)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def canonicalize_receipt_persistence_attestation(
+    attestation: ReceiptPersistenceAttestation,
+) -> bytes:
+    return b"".join(
+        (
+            _canonical_string(attestation.transaction_id),
+            _canonical_string(attestation.receipt_signature_digest),
+            struct.pack(">Q", attestation.persisted_at_unix_ms),
+            _canonical_string(attestation.audit_record_id),
+            _canonical_string(attestation.signer_key_id),
+        )
+    )
+
+
 def decode_ed25519_public_key(public_key: str | bytes) -> bytes:
     """Decode an Ed25519 public key from raw bytes, hexadecimal, or SPKI PEM."""
     if isinstance(public_key, bytes):
@@ -116,5 +144,37 @@ def verify_action_receipt_signature(
         verify_key = nacl.signing.VerifyKey(decode_ed25519_public_key(public_key))
         verify_key.verify(canonicalize_action_receipt(receipt), signature)
     except (ValueError, binascii.Error, nacl.exceptions.BadSignatureError):
+        return False
+    return True
+
+
+def verify_receipt_persistence_attestation(
+    receipt: ActionReceipt,
+    public_key: str | bytes,
+) -> bool:
+    try:
+        if not receipt.HasField("final_persistence_attestation"):
+            return False
+        attestation = receipt.final_persistence_attestation
+        if (
+            not receipt.transaction_id
+            or attestation.transaction_id != receipt.transaction_id
+            or attestation.audit_record_id != receipt.transaction_id
+            or not receipt.signer_key_id
+            or attestation.signer_key_id != receipt.signer_key_id
+            or attestation.persisted_at_unix_ms <= 0
+            or attestation.receipt_signature_digest != _signature_digest([receipt.signature])
+        ):
+            return False
+        signature = binascii.unhexlify(attestation.signature)
+        verify_key = nacl.signing.VerifyKey(decode_ed25519_public_key(public_key))
+        verify_key.verify(canonicalize_receipt_persistence_attestation(attestation), signature)
+    except (
+        ValueError,
+        OverflowError,
+        struct.error,
+        binascii.Error,
+        nacl.exceptions.BadSignatureError,
+    ):
         return False
     return True

@@ -290,6 +290,7 @@ def _receipt_stages(
     receipt: ActionReceipt,
     run_id: str,
     attempt_id: str,
+    receipt_verified: bool,
 ) -> list[StageObservation]:
     kinds = {
         DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: StageKind.DETERMINISTIC_DOCTRINE,
@@ -344,6 +345,22 @@ def _receipt_stages(
             doctrine_bundle_version=observation.doctrine_bundle_version,
             parent_stage_id=observation.parent_stage_id or None,
         ))
+    if receipt.HasField("final_persistence_attestation"):
+        attestation = receipt.final_persistence_attestation
+        stages.append(StageObservation(
+            stage_id=f"{attempt_id}:receipt:persistence:final",
+            attempt_id=attempt_id,
+            run_id=run_id,
+            kind=StageKind.RECEIPT_PERSISTENCE,
+            timing_source="signed_persistence_attestation",
+            decision="verified" if receipt_verified else "unverified",
+            transaction_id=attestation.transaction_id,
+            signer_key_id=attestation.signer_key_id,
+            receipt_signature_digest=attestation.receipt_signature_digest,
+            audit_record_id=attestation.audit_record_id,
+            persisted_at_unix_ms=attestation.persisted_at_unix_ms,
+            parent_stage_id=stages[-1].stage_id if stages else None,
+        ))
     return stages
 
 
@@ -352,6 +369,7 @@ def normalize_attempt_evidence(
     run_id: str,
     attempt_id: str,
     action_receipt: ActionReceipt | None = None,
+    receipt_verified: bool = False,
 ) -> NormalizedAttemptEvidence:
     wire = evidence.model_dump()
     if wire.get("binding") == "direct_provider":
@@ -371,7 +389,7 @@ def normalize_attempt_evidence(
             for stage in stages
         ]
     if action_receipt is not None:
-        stages.extend(_receipt_stages(action_receipt, run_id, attempt_id))
+        stages.extend(_receipt_stages(action_receipt, run_id, attempt_id, receipt_verified))
 
     model_stages = [
         stage

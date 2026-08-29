@@ -291,19 +291,27 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         prior_commitment_hash="prior-hash",
         signer_key_id="auditor-key",
     )
+    receipt.final_persistence_attestation.transaction_id = "tx-1"
+    receipt.final_persistence_attestation.receipt_signature_digest = "receipt-digest"
+    receipt.final_persistence_attestation.persisted_at_unix_ms = 1_777_777_777_456
+    receipt.final_persistence_attestation.audit_record_id = "tx-1"
+    receipt.final_persistence_attestation.signer_key_id = "warden-key"
+    receipt.final_persistence_attestation.signature = "attestation-signature"
 
     normalized = normalize_attempt_evidence(
         evidence,
         run_id="run",
         attempt_id="attempt",
         action_receipt=receipt,
+        receipt_verified=True,
     )
 
     assert [stage.kind for stage in normalized.stages] == [
         StageKind.L4_VERIFICATION,
         StageKind.COMMITMENT_APPEND,
+        StageKind.RECEIPT_PERSISTENCE,
     ]
-    l4_stage, commitment_stage = normalized.stages
+    l4_stage, commitment_stage, final_persistence_stage = normalized.stages
     assert l4_stage.monotonic_start == 2.0
     assert l4_stage.monotonic_end == 2.5
     assert l4_stage.clock_domain == "g8e-operator-process"
@@ -318,6 +326,13 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert commitment_stage.commitment_hash == "commitment-hash"
     assert commitment_stage.prior_commitment_hash == "prior-hash"
     assert commitment_stage.signer_key_id == "auditor-key"
+    assert final_persistence_stage.stage_id == "attempt:receipt:persistence:final"
+    assert final_persistence_stage.decision == "verified"
+    assert final_persistence_stage.transaction_id == "tx-1"
+    assert final_persistence_stage.receipt_signature_digest == "receipt-digest"
+    assert final_persistence_stage.audit_record_id == "tx-1"
+    assert final_persistence_stage.signer_key_id == "warden-key"
+    assert final_persistence_stage.persisted_at_unix_ms == 1_777_777_777_456
 
 
 def test_chat_usage_reconciliation_flags_token_total_mismatch():

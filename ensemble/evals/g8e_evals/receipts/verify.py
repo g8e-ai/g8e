@@ -9,7 +9,14 @@
 
 from g8e.receipts import (
     canonicalize_action_receipt,
+    canonicalize_receipt_persistence_attestation,
     verify_action_receipt_signature,
+    verify_receipt_persistence_attestation,
 )
 
-__all__ = ["canonicalize_action_receipt", "verify_action_receipt_signature"]
+__all__ = [
+    "canonicalize_action_receipt",
+    "canonicalize_receipt_persistence_attestation",
+    "verify_action_receipt_signature",
+    "verify_receipt_persistence_attestation",
+]
