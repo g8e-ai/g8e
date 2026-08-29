@@ -244,3 +244,82 @@ async def test_get_answer_surfaces_sse_error(monkeypatch):
     assert response.binding == BindingType.UNBOUND
     assert response.unbound_reason == "sse_auth_failed: 401"
     assert response.answer == "partial text"
+
+
+@pytest.mark.asyncio
+async def test_drain_events_extracts_event_type_from_envelope_not_sse_name(monkeypatch):
+    """The Gateway SSE stream wraps every g8e event in a generic ``message``
+    SSE frame. The canonical g8e event type lives inside the payload at
+    ``envelope.event.type``. The drain loop must use that inner type for
+    terminal-event matching, not the SSE wire event name."""
+    config = MagicMock()
+    config.operator_session_id = "session-123"
+    config.operator_url = "http://operator"
+    config.primary.provider = "test"
+    config.primary.model = "model"
+
+    mock_env = MagicMock()
+    mock_env.operator_url = "http://operator"
+    mock_env.auth_headers.return_value = {"Authorization": "Bearer token"}
+    mock_env.cli_session_id = "cli-123"
+
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.AuthContext.from_env", lambda **kw: mock_env)
+
+    sut = G8eeChatSUT(config=config, idle_timeout_s=5)
+
+    # Simulate a Gateway SSE stream that wraps g8e events in "message" frames.
+    # The SSE event field is "message" but the real g8e event type is inside
+    # the payload's event.type field.
+    chunk_payload = json.dumps({
+        "cli_session_id": "cli-123",
+        "event": {
+            "type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+            "data": {"content": "Hello ", "investigation_id": "inv-123"},
+        },
+    })
+    completed_payload = json.dumps({
+        "cli_session_id": "cli-123",
+        "event": {
+            "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+            "data": {"content": "Hello world", "investigation_id": "inv-123"},
+        },
+    })
+
+    class MockEventSource:
+        async def _events(self):
+            for evt in [
+                ("message", chunk_payload, "1"),
+                ("message", completed_payload, "2"),
+            ]:
+                event = MagicMock()
+                event.event = evt[0]
+                event.data = evt[1]
+                event.id = evt[2]
+                yield event
+
+        def aiter_sse(self):
+            return self._events()
+
+    class MockContextManager:
+        async def __aenter__(self):
+            return MockEventSource()
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.aconnect_sse", lambda *a, **kw: MockContextManager())
+
+    answer, trail, terminal, error = await sut._drain_events(
+        AsyncMock(spec=httpx.AsyncClient),
+        since_id=0,
+        investigation_id="inv-123",
+    )
+
+    assert error is None
+    assert terminal == "g8e.v1.ai.llm.chat.iteration.text.completed"
+    # The trail must record the canonical g8e event type, not "message".
+    assert trail[0].event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
+    assert trail[1].event_type == "g8e.v1.ai.llm.chat.iteration.text.completed"
+    # The text.completed terminal event carries the full response content.
+    assert answer == "Hello world"
+    assert len(trail) == 2

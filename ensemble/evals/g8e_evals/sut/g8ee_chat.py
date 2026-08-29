@@ -408,9 +408,18 @@ class G8eeChatSUT:
                             payload_obj = {"_raw": event.data}
 
                         row_id = int(event.id) if event.id else 0
-                        event_type = event.event or "unknown"
+                        sse_event_name = event.event or "unknown"
 
                         envelope = SSEWireEnvelope.parse(payload_obj)
+
+                        # The Gateway SSE stream wraps every g8e event in a
+                        # generic SSE "message" frame. The canonical g8e
+                        # event type lives inside the payload at
+                        # envelope.event.type, not in the SSE event field.
+                        if envelope is not None and envelope.event is not None:
+                            event_type = envelope.event.type or sse_event_name
+                        else:
+                            event_type = sse_event_name
 
                         # Filter on the current investigation when available
                         if investigation_id and envelope is not None:
@@ -424,11 +433,20 @@ class G8eeChatSUT:
                             payload=payload_obj,
                         ))
 
-                        # Accumulate response text.
+                        # Accumulate response text from streaming chunks.
                         if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
                             chunk = envelope.text_chunk()
                             if chunk:
                                 text_buf.append(chunk)
+
+                        # The text.completed terminal event carries the full
+                        # response content. If we missed earlier chunks (e.g.
+                        # SSE subscription started mid-stream), use the complete
+                        # payload as the authoritative answer text.
+                        if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and envelope is not None:
+                            complete_text = envelope.text_chunk()
+                            if complete_text:
+                                text_buf = [complete_text]
 
                         if self.on_event is not None:
                             try:
