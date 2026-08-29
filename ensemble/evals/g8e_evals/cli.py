@@ -29,6 +29,7 @@ from g8e.receipts import (
 )
 from g8e_evals.arms import ALL_ARMS, ARM_DEFINITIONS, Arm, GovernancePosture, get_arm_definition
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.schema import (
@@ -108,6 +109,8 @@ def main():
               help="Experiment arm: direct (raw provider call), ensemble_ungoverned (g8ee without governance), doctrine (L1), consensus (L1+L2), notary (L1+L2+L3)")
 @click.option("--state-root", default="test-state-root-v1")
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
+@click.option("--evidence-key-file", type=click.Path(path_type=Path, dir_okay=False), envvar="G8E_EVIDENCE_KEY_FILE",
+              help='Owner-only JSON key file: {"version":1,"key_id":"...","key_b64":"<32-byte-base64>"}.')
 @click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
 @click.option("--limit", type=int, help="Limit number of tasks to run")
 @click.option("--l2-key", help="L2 private key hex")
@@ -121,7 +124,7 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
@@ -142,6 +145,15 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
             "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
         ) from error
 
+    if evidence_key_file is None:
+        raise click.UsageError(
+            "--evidence-key-file or G8E_EVIDENCE_KEY_FILE is required to encrypt restricted evidence."
+        )
+    try:
+        evidence_key = load_evidence_encryption_key(evidence_key_file)
+    except ValueError as error:
+        raise click.UsageError(f"Could not load the evidence encryption key: {error}") from error
+
     selected_arm = Arm(arm)
 
     config = SUTConfig(
@@ -159,11 +171,11 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
     )
 
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None):
     # 1. Load benchmark
     if suite == "ifeval_subset":
         if not gold_set:
@@ -349,6 +361,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
                 console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
                 raise EvaluationRunError("provider preflight failed: no model configured")
+
+    if evidence_key is None:
+        raise EvaluationRunError("restricted evidence encryption key is required")
 
     # 5. Build the run manifest. Required hashes: dataset hash (always),
     #    grader bundle hash (computed from verifier source), prompt bundle
@@ -619,22 +634,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")
 
+    encrypted_evidence_artifacts = [
+        encrypt_evidence_artifact(artifact, evidence_key)
+        for artifact in evidence_artifacts
+    ]
     with open(report_dir / "evidence-index.jsonl", "w") as f:
-        for artifact in evidence_artifacts:
+        for artifact in encrypted_evidence_artifacts:
             f.write(artifact.index.model_dump_json() + "\n")
 
-    for artifact in evidence_artifacts:
+    for artifact in encrypted_evidence_artifacts:
         artifact_path = report_dir / artifact.index.storage_location
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        artifact_path.write_text(artifact.content)
+        artifact_path.write_text(artifact.envelope_json)
 
     # 10. Aggregate & Report
     agg = aggregate_results(suite, results)
     render_summary(agg, arm=config.arm)
 
     # 11. Save legacy artifacts (results.jsonl, summary.json)
-    def row_to_dict(r: RowResult):
-        chat_evidence = r.response.chat_evidence.model_dump() if r.response.chat_evidence else None
+    evidence_index_by_attempt = {
+        artifact.index.attempt_id: artifact.index
+        for artifact in encrypted_evidence_artifacts
+        if artifact.index.attempt_id
+    }
+
+    def row_to_dict(r: RowResult, attempt: AttemptRecord):
+        evidence_index = evidence_index_by_attempt.get(attempt.attempt_id)
         action_receipt = (
             action_receipt_to_dict(r.response.action_receipt)
             if r.response.action_receipt
@@ -648,12 +673,17 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             else:
                 details_data = r.score.details  # Already a dict
 
+        prompt_bytes = r.task.prompt.encode()
+        answer_bytes = (r.response.answer or "").encode()
         return {
             "task_id": r.task.id,
-            "prompt": r.task.prompt,
-            "answer": r.response.answer,
+            "prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
+            "prompt_length": len(prompt_bytes),
+            "answer_sha256": hashlib.sha256(answer_bytes).hexdigest(),
+            "answer_length": len(answer_bytes),
             "transaction_id": r.response.transaction_id,
-            "chat_evidence": chat_evidence,
+            "chat_evidence_ref": evidence_index.artifact_id if evidence_index else None,
+            "chat_evidence_sha256": evidence_index.sha256 if evidence_index else None,
             "action_receipt": action_receipt,
             "receipt_verified": r.response.receipt_verified,
             "passed": r.score.passed,
@@ -662,8 +692,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         }
 
     with open(report_dir / "results.jsonl", "w") as f:
-        for r in results:
-            f.write(json.dumps(row_to_dict(r)) + "\n")
+        for result, attempt in zip(results, attempt_records, strict=True):
+            f.write(json.dumps(row_to_dict(result, attempt)) + "\n")
 
     with open(report_dir / "summary.json", "w") as f:
         f.write(json.dumps(agg.__dict__, indent=2))

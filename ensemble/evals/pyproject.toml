@@ -18,6 +18,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "protobuf==7.35.1",
     "httpx-sse>=0.4.0",
+    "cryptography==50.0.0",
 ]
 
 [project.scripts]

@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.5.0"
+SCHEMA_VERSION = "1.6.0"
 
 
 class TerminalStatus(StrEnum):
@@ -80,6 +80,14 @@ class VerificationStatus(StrEnum):
     VERIFIED = "verified"
     FAILED = "failed"
     NOT_APPLICABLE = "not_applicable"
+
+
+class EvidenceEncryptionAlgorithm(StrEnum):
+    AES_256_GCM = "aes-256-gcm"
+
+
+class EvidenceAccessPolicy(StrEnum):
+    NAMED_KEY_HOLDERS = "named_key_holders"
 
 
 class ModelIdentity(BaseModel):
@@ -448,6 +456,23 @@ class MetricObservation(BaseModel):
     evidence_refs: list[str] = Field(default_factory=list)
 
 
+class EvidenceEncryption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    algorithm: EvidenceEncryptionAlgorithm
+    key_id: str
+    aad_sha256: str
+    ciphertext_sha256: str
+    ciphertext_byte_length: int
+
+
+class EvidenceAccessControl(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    policy: EvidenceAccessPolicy
+    authorization_scope: str
+
+
 class EvidenceIndex(BaseModel):
     """Index entry for one evidence artifact.
 
@@ -472,5 +497,7 @@ class EvidenceIndex(BaseModel):
 
     privacy_classification: PrivacyClassification = PrivacyClassification.INTERNAL
     storage_location: str = ""
+    encryption: EvidenceEncryption | None = None
+    access_control: EvidenceAccessControl | None = None
 
     parent_evidence_refs: list[str] = Field(default_factory=list)

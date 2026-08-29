@@ -651,6 +651,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "cryptography" },
     { name = "g8e" },
     { name = "g8ee" },
     { name = "httpx" },
@@ -673,6 +674,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
+    { name = "cryptography", specifier = "==50.0.0" },
     { name = "g8e", directory = "../../protocol/python" },
     { name = "g8ee", editable = "../" },
     { name = "httpx", specifier = "==0.28.1" },

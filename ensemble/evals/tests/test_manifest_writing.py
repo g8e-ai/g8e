@@ -24,12 +24,17 @@ import pytest
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
+from g8e_evals.evidence import EvidenceEncryptionKey, decrypt_evidence_artifact
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
 from g8e_evals.schema import AttemptRecord, EvidenceIndex, MetricObservation, RunManifest, StageObservation, TaskDefinition
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
 
 pytestmark = pytest.mark.unit
+
+
+def _evidence_key() -> EvidenceEncryptionKey:
+    return EvidenceEncryptionKey(key_id="test-key", key=b"k" * 32)
 
 
 def _auth_context() -> CLIAuthContext:
@@ -174,7 +179,7 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
         arm=Arm.DOCTRINE,
     )
 
-    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     assert len(report_dirs) == 1
@@ -215,7 +220,7 @@ async def test_tasks_jsonl_written_with_schema_valid_records(tmp_path, monkeypat
         arm=Arm.DOCTRINE,
     )
 
-    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     tasks_path = report_dirs[0] / "tasks.jsonl"
@@ -254,7 +259,7 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
         arm=Arm.DOCTRINE,
     )
 
-    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     attempts_path = report_dirs[0] / "attempts.jsonl"
@@ -275,7 +280,19 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     assert metrics[0].metric_id == "stage_usage_reconciled"
     assert metrics[0].evidence_refs == [evidence[0].artifact_id]
     assert len(evidence) == 1
-    assert (report_dirs[0] / evidence[0].storage_location).exists()
+    assert evidence[0].encryption is not None
+    assert evidence[0].access_control is not None
+    artifact_path = report_dirs[0] / evidence[0].storage_location
+    assert artifact_path.exists()
+    encrypted_content = artifact_path.read_text()
+    assert "agent_trail" not in encrypted_content
+    assert "agent_trail" in decrypt_evidence_artifact(encrypted_content, evidence[0], _evidence_key())
+    legacy_result = json.loads((report_dirs[0] / "results.jsonl").read_text())
+    assert "prompt" not in legacy_result
+    assert "answer" not in legacy_result
+    assert "chat_evidence" not in legacy_result
+    assert legacy_result["chat_evidence_ref"] == evidence[0].artifact_id
+    assert legacy_result["chat_evidence_sha256"] == evidence[0].sha256
 
 
 @pytest.mark.asyncio
@@ -291,7 +308,7 @@ async def test_direct_arm_refuses_without_primary_model_identity(tmp_path, monke
     )
 
     with pytest.raises(cli.EvaluationRunError, match="direct arm requires a primary model identity"):
-        await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     # No report directory should be created for a refusal.
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
@@ -322,7 +339,7 @@ async def test_manifest_records_arm_and_posture(tmp_path, monkeypatch):
         arm=Arm.CONSENSUS,
     )
 
-    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     manifest_data = json.loads((report_dirs[0] / "manifest.json").read_text())
@@ -356,7 +373,7 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
         arm=Arm.NOTARY,
     )
 
-    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     attempts_path = report_dirs[0] / "attempts.jsonl"

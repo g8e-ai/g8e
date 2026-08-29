@@ -147,6 +147,7 @@ def test_run_help_describes_canonical_authentication_bridge():
     assert "--g8e-cli" in result.output
     assert "--auth-project-root" in result.output
     assert "--g8ee-url" in result.output
+    assert "--evidence-key-file" in result.output
     assert "./g8e login" not in result.output
 
 
@@ -166,7 +167,36 @@ def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.M
         )
 
     monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
+    monkeypatch.setattr(cli, "load_evidence_encryption_key", lambda *_: object())
     monkeypatch.setattr(cli, "_run_suite", fail_run)
+
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+            "--evidence-key-file", "/runtime/evidence-key.json",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "invalid evidence" in result.output
+    assert "diagnostic report retained" in result.output
+
+
+def test_run_requires_explicit_evidence_encryption_key(monkeypatch: pytest.MonkeyPatch):
+    auth_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+    monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
 
     result = _invoke(
         CliRunner(),
@@ -179,9 +209,8 @@ def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.M
         ],
     )
 
-    assert result.exit_code == 1, result.output
-    assert "invalid evidence" in result.output
-    assert "diagnostic report retained" in result.output
+    assert result.exit_code == 2, result.output
+    assert "--evidence-key-file or G8E_EVIDENCE_KEY_FILE is required" in result.output
 
 
 def test_run_requires_explicit_g8ee_endpoint():

@@ -29,6 +29,7 @@ command output only. This is the current behavior and these tests pin it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -38,11 +39,16 @@ import pytest
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
+from g8e_evals.evidence import EvidenceEncryptionKey
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt, AuthenticationError
 
 pytestmark = pytest.mark.unit
+
+
+def _evidence_key() -> EvidenceEncryptionKey:
+    return EvidenceEncryptionKey(key_id="test-key", key=b"k" * 32)
 
 
 def _auth_context() -> CLIAuthContext:
@@ -187,7 +193,7 @@ async def test_run_suite_settings_401_raises_and_writes_no_report(tmp_path, monk
     _patch_collector(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="preflight authentication failed"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     # Preflight failures raise before the execution loop; no report directory
     # is created. The diagnostic surface is the command output only.
@@ -204,7 +210,7 @@ async def test_run_suite_settings_403_raises_and_writes_no_report(tmp_path, monk
     _patch_collector(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="preflight authentication failed"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = list(tmp_path.iterdir())
     assert report_dirs == [], f"no report directory expected for preflight failure, got {report_dirs}"
@@ -228,7 +234,7 @@ async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatc
     _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     _assert_report_has_results(tmp_path, expected_answer="")
 
@@ -247,7 +253,7 @@ async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatc
     _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     _assert_report_has_results(tmp_path, expected_answer="")
 
@@ -266,7 +272,7 @@ async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_pa
     _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     _assert_report_has_results(tmp_path, expected_answer="partial text")
 
@@ -286,7 +292,7 @@ async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_pa
     _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     _assert_report_has_results(tmp_path, expected_answer="")
 
@@ -306,7 +312,7 @@ async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkey
     _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     _assert_report_has_results(tmp_path, expected_answer="")
 
@@ -330,7 +336,7 @@ async def test_run_suite_valid_response_writes_report_and_does_not_raise(tmp_pat
     _patch_posture(monkeypatch)
 
     # Must not raise.
-    await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+    await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     rows = _assert_report_has_results(tmp_path, expected_answer="A valid answer without commas.")
     assert rows[0]["passed"] is True
@@ -358,7 +364,7 @@ async def test_run_suite_governance_rejection_classifies_as_governance_rejected(
     _patch_posture(monkeypatch, GovernancePosture.L2_CONSENSUS)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
-        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1, evidence_key=_evidence_key())
 
     report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     attempts_path = report_dirs[0] / "attempts.jsonl"
@@ -381,6 +387,11 @@ def _assert_report_has_results(output_dir: Path, expected_answer: str) -> list[d
     lines = results_path.read_text().splitlines()
     assert len(lines) == 1, f"expected one result row, got {len(lines)}"
     row = json.loads(lines[0])
-    assert row["answer"] == expected_answer
-    assert "chat_evidence" in row
+    assert row["answer_sha256"] == hashlib.sha256(expected_answer.encode()).hexdigest()
+    assert row["answer_length"] == len(expected_answer.encode())
+    assert "answer" not in row
+    assert "prompt" not in row
+    assert "chat_evidence" not in row
+    assert row["chat_evidence_ref"]
+    assert row["chat_evidence_sha256"]
     return [row]
