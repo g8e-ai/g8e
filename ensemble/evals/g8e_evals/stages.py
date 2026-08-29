@@ -12,6 +12,20 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from g8e.operator.v1.operator_pb2 import (
+    ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
+    DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+    DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+    DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+    DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
+    DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+    DETERMINISTIC_STAGE_OUTCOME_FAILED,
+    DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+)
 from g8e_evals.schema import (
     EvidenceIndex,
     EvidenceMediaType,
@@ -272,10 +286,70 @@ def _chat_stages(
     return stages, expected_call_count, (reported_input, reported_output, reported_thinking)
 
 
+def _receipt_stages(
+    receipt: ActionReceipt,
+    run_id: str,
+    attempt_id: str,
+) -> list[StageObservation]:
+    kinds = {
+        DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: StageKind.DETERMINISTIC_DOCTRINE,
+        DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: StageKind.PROTOCOL_L2,
+        DETERMINISTIC_STAGE_KIND_L3_NOTARY: StageKind.L3_CEREMONY,
+        DETERMINISTIC_STAGE_KIND_L4_VERIFICATION: StageKind.L4_VERIFICATION,
+        DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE: StageKind.RECEIPT_PERSISTENCE,
+        DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND: StageKind.COMMITMENT_APPEND,
+        DETERMINISTIC_STAGE_KIND_L5_EXECUTION: StageKind.L5_EXECUTION,
+    }
+    outcomes = {
+        DETERMINISTIC_STAGE_OUTCOME_VERIFIED: "verified",
+        DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: "not_required",
+        DETERMINISTIC_STAGE_OUTCOME_COMPLETED: "completed",
+        DETERMINISTIC_STAGE_OUTCOME_FAILED: "failed",
+    }
+    stages: list[StageObservation] = []
+    for index, observation in enumerate(receipt.deterministic_stage_evidence, start=1):
+        kind = kinds.get(observation.kind)
+        if kind is None:
+            continue
+        stages.append(StageObservation(
+            stage_id=observation.stage_id or f"{attempt_id}:receipt:{index}",
+            attempt_id=attempt_id,
+            run_id=run_id,
+            kind=kind,
+            monotonic_start=observation.monotonic_start_ns / 1_000_000_000,
+            monotonic_end=observation.monotonic_end_ns / 1_000_000_000,
+            clock_domain=observation.clock_domain,
+            timing_source=observation.timing_source,
+            decision=outcomes.get(observation.outcome),
+            transaction_id=observation.transaction_id,
+            transaction_hash=observation.transaction_hash,
+            action_type=observation.action_type,
+            operator_id=observation.operator_id,
+            operator_session_id=observation.operator_session_id,
+            requestor_user_id=observation.requestor_user_id,
+            acting_app_id=observation.acting_app_id,
+            case_id=observation.case_id,
+            investigation_id=observation.investigation_id,
+            task_id=observation.task_id,
+            state_root_before=observation.state_root_before,
+            state_root_after=observation.state_root_after,
+            signer_key_id=observation.signer_key_id,
+            receipt_signature_digest=observation.receipt_signature_digest,
+            commitment_hash=observation.commitment_hash,
+            prior_commitment_hash=observation.prior_commitment_hash,
+            l2_signature_digest=observation.l2_signature_digest,
+            l3_signature_digest=observation.l3_signature_digest,
+            audit_record_id=observation.audit_record_id,
+            parent_stage_id=observation.parent_stage_id or None,
+        ))
+    return stages
+
+
 def normalize_attempt_evidence(
     evidence: Any,
     run_id: str,
     attempt_id: str,
+    action_receipt: ActionReceipt | None = None,
 ) -> NormalizedAttemptEvidence:
     wire = evidence.model_dump()
     if wire.get("binding") == "direct_provider":
@@ -294,6 +368,8 @@ def normalize_attempt_evidence(
             stage.model_copy(update={"output_artifact_hash": stage.output_artifact_hash or raw_evidence.index.sha256})
             for stage in stages
         ]
+    if action_receipt is not None:
+        stages.extend(_receipt_stages(action_receipt, run_id, attempt_id))
 
     model_stages = [
         stage

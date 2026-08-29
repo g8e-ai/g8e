@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
@@ -26,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -83,6 +85,7 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	}
 
 	// Execute
+	startedAt := time.Now().Add(-time.Second)
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
@@ -98,15 +101,35 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persistedReceipt.Status)
 	require.Equal(t, "completed", persistedReceipt.ResultSummary)
 	require.NotEmpty(t, persistedReceipt.Signature, "Persisted receipt should have signature")
+	require.NotNil(t, persistedReceipt.ActionReceipt)
+	require.Len(t, persistedReceipt.ActionReceipt.DeterministicStageEvidence, 3)
+	commitmentEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[1]
+	require.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, commitmentEvidence.Kind)
+	require.NotEmpty(t, commitmentEvidence.CommitmentHash)
+	require.Equal(t, actuator.AuditorKeyID, commitmentEvidence.SignerKeyId)
 
 	commitments, err := auditStore.CommitmentLedger().ListCommitments()
 	require.NoError(t, err)
 	require.Len(t, commitments, 1)
 	require.Equal(t, envelope.Id, commitments[0].TransactionID)
 	require.Equal(t, envelope.TransactionHash, commitments[0].TransactionHash)
+	require.Equal(t, commitments[0].PriorCommitmentHash, commitmentEvidence.PriorCommitmentHash)
+	require.Equal(t, commitments[0].Hash, commitmentEvidence.CommitmentHash)
 	require.Equal(t, actuator.AuditorKeyID, commitments[0].AuditorKeyID)
 	require.NotEmpty(t, commitments[0].WardenIntentSignatureDigest)
 	require.NotEmpty(t, commitments[0].Signature)
+
+	listedReceipts, err := auditStore.ListActionReceipts(envelope.OperatorSessionId, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, listedReceipts, 1)
+	require.True(t, proto.Equal(receipt, listedReceipts[0].ActionReceipt),
+		"ListActionReceipts must return the same canonical ActionReceipt persisted by L5")
+
+	exportedReceipts, err := auditStore.ListActionReceiptsSince(startedAt, 10)
+	require.NoError(t, err)
+	require.Len(t, exportedReceipts, 1)
+	require.True(t, proto.Equal(receipt, exportedReceipts[0].ActionReceipt),
+		"ListActionReceiptsSince must return the same canonical ActionReceipt persisted by L5")
 }
 
 func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {

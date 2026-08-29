@@ -15,6 +15,8 @@ import pytest
 from google.protobuf.json_format import ParseError
 
 from g8e.operator.v1.operator_pb2 import (
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
     L2_STATUS_REQUIRED_VALID,
     L3_STATUS_REQUIRED_FAILED,
 )
@@ -49,6 +51,24 @@ def test_action_receipt_verification_rejects_l2_tampering(vector):
     receipt = parse_action_receipt(vector["receipt"])
     receipt.l2_status = 1
     assert not verify_action_receipt_signature(receipt, vector["public_key_hex"])
+
+
+def test_action_receipt_canonicalization_binds_deterministic_stage_evidence(vector):
+    receipt = parse_action_receipt(vector["receipt"])
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx:l4",
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+        transaction_id=receipt.transaction_id,
+        transaction_hash=receipt.transaction_hash,
+        monotonic_start_ns=100,
+        monotonic_end_ns=200,
+    )
+    canonical = canonicalize_action_receipt(receipt)
+
+    receipt.deterministic_stage_evidence[0].monotonic_end_ns = 201
+
+    assert canonicalize_action_receipt(receipt) != canonical
 
 
 def test_action_receipt_verification_accepts_ed25519_spki_pem(vector):

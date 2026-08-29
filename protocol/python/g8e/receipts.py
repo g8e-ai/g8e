@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
+import struct
 from collections.abc import Mapping
 
 import nacl.exceptions
@@ -42,6 +44,17 @@ def action_receipt_to_dict(receipt: ActionReceipt) -> dict[str, object]:
     )
 
 
+def _deterministic_stage_evidence_hash(receipt: ActionReceipt) -> str:
+    if not receipt.deterministic_stage_evidence:
+        return ""
+    payload = bytearray()
+    for stage in receipt.deterministic_stage_evidence:
+        encoded = stage.SerializeToString(deterministic=True)
+        payload.extend(struct.pack(">Q", len(encoded)))
+        payload.extend(encoded)
+    return hashlib.sha256(payload).hexdigest()
+
+
 def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
     """Produce the exact bytes signed by Go CanonicalizeActionReceipt."""
     data = {
@@ -56,6 +69,9 @@ def canonicalize_action_receipt(receipt: ActionReceipt) -> bytes:
         "l2_status": receipt.l2_status,
         "l3_status": receipt.l3_status,
     }
+    stage_evidence_hash = _deterministic_stage_evidence_hash(receipt)
+    if stage_evidence_hash:
+        data["deterministic_stage_evidence_hash"] = stage_evidence_hash
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     payload = (
         payload.replace("<", "\\u003c")

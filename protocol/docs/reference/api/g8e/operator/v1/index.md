@@ -23,6 +23,7 @@
     - [CommitmentAttestation](#g8e-operator-v1-CommitmentAttestation)
     - [CreateDeviceLinkRequested](#g8e-operator-v1-CreateDeviceLinkRequested)
     - [DeleteDeviceLinkRequested](#g8e-operator-v1-DeleteDeviceLinkRequested)
+    - [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence)
     - [DeviceLink](#g8e-operator-v1-DeviceLink)
     - [DeviceLinkResult](#g8e-operator-v1-DeviceLinkResult)
     - [DirectCommandAuditRequested](#g8e-operator-v1-DirectCommandAuditRequested)
@@ -110,6 +111,8 @@
     - [UserDetails](#g8e-operator-v1-UserDetails)
     - [VersionInfo](#g8e-operator-v1-VersionInfo)
   
+    - [DeterministicStageKind](#g8e-operator-v1-DeterministicStageKind)
+    - [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome)
     - [ExecutionStatus](#g8e-operator-v1-ExecutionStatus)
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
     - [L2Status](#g8e-operator-v1-L2Status)
@@ -163,9 +166,10 @@ It is emitted by the Warden after execution.
 | state_root_after | [string](#string) |  | State root after execution |
 | executed_at_unix_ms | [int64](#int64) |  | Timestamp when execution finished |
 | signer_key_id | [string](#string) |  | ID of the Warden&#39;s signing key |
-| signature | [string](#string) |  | ED25519 signature over canonical serialization of fields 1-8 |
+| signature | [string](#string) |  | ED25519 signature over the canonical receipt fields and deterministic stage evidence hash. |
 | l2_status | [L2Status](#g8e-operator-v1-L2Status) |  | Status of L2 (Consensus) signature verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
+| deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
 
 
 
@@ -500,6 +504,47 @@ authorized to be executed.
 | ----- | ---- | ----- | ----------- |
 | token | [string](#string) |  |  |
 | user_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-DeterministicStageEvidence"></a>
+
+### DeterministicStageEvidence
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| stage_id | [string](#string) |  |  |
+| kind | [DeterministicStageKind](#g8e-operator-v1-DeterministicStageKind) |  |  |
+| monotonic_start_ns | [int64](#int64) |  |  |
+| monotonic_end_ns | [int64](#int64) |  |  |
+| clock_domain | [string](#string) |  |  |
+| timing_source | [string](#string) |  |  |
+| outcome | [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome) |  |  |
+| transaction_id | [string](#string) |  |  |
+| transaction_hash | [string](#string) |  |  |
+| action_type | [string](#string) |  |  |
+| operator_id | [string](#string) |  |  |
+| operator_session_id | [string](#string) |  |  |
+| requestor_user_id | [string](#string) |  |  |
+| acting_app_id | [string](#string) |  |  |
+| case_id | [string](#string) |  |  |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| state_root_before | [string](#string) |  |  |
+| state_root_after | [string](#string) |  |  |
+| signer_key_id | [string](#string) |  |  |
+| receipt_signature_digest | [string](#string) |  |  |
+| commitment_hash | [string](#string) |  |  |
+| prior_commitment_hash | [string](#string) |  |  |
+| l2_signature_digest | [string](#string) |  |  |
+| l3_signature_digest | [string](#string) |  |  |
+| audit_record_id | [string](#string) |  |  |
+| parent_stage_id | [string](#string) |  |  |
 
 
 
@@ -2128,6 +2173,39 @@ A stored passkey credential for a user
 
 
  
+
+
+<a name="g8e-operator-v1-DeterministicStageKind"></a>
+
+### DeterministicStageKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| DETERMINISTIC_STAGE_KIND_UNSPECIFIED | 0 |  |
+| DETERMINISTIC_STAGE_KIND_L1_DOCTRINE | 1 |  |
+| DETERMINISTIC_STAGE_KIND_PROTOCOL_L2 | 2 |  |
+| DETERMINISTIC_STAGE_KIND_L3_NOTARY | 3 |  |
+| DETERMINISTIC_STAGE_KIND_L4_VERIFICATION | 4 |  |
+| DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE | 5 |  |
+| DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND | 6 |  |
+| DETERMINISTIC_STAGE_KIND_L5_EXECUTION | 7 |  |
+
+
+
+<a name="g8e-operator-v1-DeterministicStageOutcome"></a>
+
+### DeterministicStageOutcome
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED | 0 |  |
+| DETERMINISTIC_STAGE_OUTCOME_VERIFIED | 1 |  |
+| DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED | 2 |  |
+| DETERMINISTIC_STAGE_OUTCOME_COMPLETED | 3 |  |
+| DETERMINISTIC_STAGE_OUTCOME_FAILED | 4 |  |
+
 
 
 <a name="g8e-operator-v1-ExecutionStatus"></a>

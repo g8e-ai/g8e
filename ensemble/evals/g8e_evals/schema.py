@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.3.0"
 
 
 class TerminalStatus(StrEnum):
@@ -390,6 +390,26 @@ class StageObservation(BaseModel):
     source: str = ""
     scrub_count: int = 0
     scrub_types: list[str] = Field(default_factory=list)
+
+    transaction_id: str = ""
+    transaction_hash: str = ""
+    action_type: str = ""
+    operator_id: str = ""
+    operator_session_id: str = ""
+    requestor_user_id: str = ""
+    acting_app_id: str = ""
+    case_id: str = ""
+    investigation_id: str = ""
+    task_id: str = ""
+    state_root_before: str = ""
+    state_root_after: str = ""
+    signer_key_id: str = ""
+    receipt_signature_digest: str = ""
+    commitment_hash: str = ""
+    prior_commitment_hash: str = ""
+    l2_signature_digest: str = ""
+    l3_signature_digest: str = ""
+    audit_record_id: str = ""
 
     parent_stage_id: str | None = None
     child_stage_ids: list[str] = Field(default_factory=list)

@@ -536,7 +536,12 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
         attempt_id = f"{run_id}:{task.id}:{arm_def.arm_id.value}:1"
         normalized = (
-            normalize_attempt_evidence(response.chat_evidence, run_id, attempt_id)
+            normalize_attempt_evidence(
+                response.chat_evidence,
+                run_id,
+                attempt_id,
+                action_receipt=response.action_receipt,
+            )
             if response.chat_evidence
             else None
         )

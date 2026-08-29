@@ -65,7 +65,11 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, receipt)
+		if receipt.ActionReceipt == nil {
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrMissingRequiredField.Error())
+			return
+		}
+		c.responder.ProtoJSON(w, http.StatusOK, receipt.ActionReceipt)
 		return
 	}
 

@@ -22,6 +22,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // ============================================================================
@@ -68,6 +69,17 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 		SignerKeyID:       "key-1",
 		Signature:         "signature-xyz",
 		Timestamp:         time.Now().UTC(),
+		ActionReceipt: &operatorv1.ActionReceipt{
+			TransactionId:   "tx-123",
+			TransactionHash: "hash-abc123",
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			Signature:       "signature-xyz",
+			DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{
+				StageId: "tx-123:l1",
+				Kind:    operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+				Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+			}},
+		},
 	}
 
 	err = avs.RecordActionReceipt(record)
@@ -90,6 +102,21 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	assert.Equal(t, "root-after-456", persisted.StateRootAfter)
 	assert.Equal(t, "key-1", persisted.SignerKeyID)
 	assert.Equal(t, "signature-xyz", persisted.Signature)
+	require.NotNil(t, persisted.ActionReceipt)
+	assert.True(t, proto.Equal(record.ActionReceipt, persisted.ActionReceipt),
+		"GetActionReceipt must return the same canonical ActionReceipt persisted by RecordActionReceipt")
+
+	receipts, err := avs.ListActionReceipts("session-1", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, receipts, 1)
+	assert.True(t, proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt),
+		"ListActionReceipts must return the same canonical ActionReceipt persisted by RecordActionReceipt")
+
+	receipts, err = avs.ListActionReceiptsSince(record.Timestamp.Add(-time.Second), 10)
+	require.NoError(t, err)
+	require.Len(t, receipts, 1)
+	assert.True(t, proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt),
+		"ListActionReceiptsSince must return the same canonical ActionReceipt persisted by RecordActionReceipt")
 }
 
 func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {

@@ -14,11 +14,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func setupTestAuditController(t *testing.T) *AuditController {
@@ -69,6 +73,47 @@ func TestAuditControllerHandleAuditReceipts(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditReceipts(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("GET by tx_id returns canonical action receipt", func(t *testing.T) {
+		receipt := &operatorv1.ActionReceipt{
+			TransactionId:   "tx-evidence",
+			TransactionHash: "hash-evidence",
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			SignerKeyId:     "warden-key",
+			Signature:       "signature",
+			DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{
+				StageId:         "tx-evidence:l4",
+				Kind:            operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+				Outcome:         operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+				TransactionId:   "tx-evidence",
+				TransactionHash: "hash-evidence",
+			}},
+		}
+		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
+			TransactionID:   receipt.TransactionId,
+			TransactionHash: receipt.TransactionHash,
+			OperatorID:      "operator-1",
+			ActionType:      constants.ActionTypeExecuteBash,
+			Status:          receipt.Status,
+			ExecutedAt:      time.Now(),
+			SignerKeyID:     receipt.SignerKeyId,
+			Signature:       receipt.Signature,
+			Timestamp:       time.Now(),
+			ActionReceipt:   receipt,
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=tx-evidence", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		parsed := &operatorv1.ActionReceipt{}
+		require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), parsed))
+		assert.Equal(t, receipt.TransactionId, parsed.TransactionId)
+		require.Len(t, parsed.DeterministicStageEvidence, 1)
+		assert.Equal(t, receipt.DeterministicStageEvidence[0], parsed.DeterministicStageEvidence[0])
 	})
 
 	t.Run("GET list - success with defaults", func(t *testing.T) {

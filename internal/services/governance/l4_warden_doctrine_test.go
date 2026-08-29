@@ -12,8 +12,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // TestL4Warden_Doctrine_ValidNonMutationPasses verifies that a valid
@@ -175,4 +179,46 @@ func TestL4Warden_Doctrine_MissingVerifierDependenciesReject(t *testing.T) {
 			t.Fatalf("expected state root provider rejection, got %v", err)
 		}
 	})
+}
+
+func TestL4WardenVerifyEnvelopeProducesAuthoritativeDeterministicStageEvidence(t *testing.T) {
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	envelope := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "doctrine")
+	envelope.Governance.L2 = nil
+	envelope.Governance.L3 = nil
+	envelope.CaseId = "case-1"
+	envelope.InvestigationId = "investigation-1"
+	envelope.TaskId = "task-1"
+	rehash(t, envelope)
+
+	verified, err := verifier.VerifyEnvelope(context.Background(), envelope)
+	require.NoError(t, err)
+	require.Len(t, verified.DeterministicStageEvidence, 4)
+
+	expected := []struct {
+		kind    operatorv1.DeterministicStageKind
+		outcome operatorv1.DeterministicStageOutcome
+	}{
+		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED},
+		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED},
+		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED},
+		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED},
+	}
+	l4StageID := verified.DeterministicStageEvidence[3].StageId
+	for index, want := range expected {
+		stage := verified.DeterministicStageEvidence[index]
+		assert.Equal(t, want.kind, stage.Kind)
+		assert.Equal(t, want.outcome, stage.Outcome)
+		assert.Equal(t, envelope.Id, stage.TransactionId)
+		assert.Equal(t, envelope.TransactionHash, stage.TransactionHash)
+		assert.Equal(t, envelope.CaseId, stage.CaseId)
+		assert.Equal(t, envelope.InvestigationId, stage.InvestigationId)
+		assert.Equal(t, envelope.TaskId, stage.TaskId)
+		assert.Equal(t, "g8e-operator-process", stage.ClockDomain)
+		assert.Equal(t, "go_monotonic", stage.TimingSource)
+		assert.GreaterOrEqual(t, stage.MonotonicEndNs, stage.MonotonicStartNs)
+		if want.kind != operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION {
+			assert.Equal(t, l4StageID, stage.ParentStageId)
+		}
+	}
 }

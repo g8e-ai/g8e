@@ -37,6 +37,25 @@ class HeartbeatType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     HEARTBEAT_TYPE_UNSPECIFIED: _ClassVar[HeartbeatType]
     HEARTBEAT_TYPE_AUTOMATIC: _ClassVar[HeartbeatType]
     HEARTBEAT_TYPE_MANUAL: _ClassVar[HeartbeatType]
+
+class DeterministicStageKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DETERMINISTIC_STAGE_KIND_UNSPECIFIED: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_L3_NOTARY: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND: _ClassVar[DeterministicStageKind]
+    DETERMINISTIC_STAGE_KIND_L5_EXECUTION: _ClassVar[DeterministicStageKind]
+
+class DeterministicStageOutcome(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED: _ClassVar[DeterministicStageOutcome]
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED: _ClassVar[DeterministicStageOutcome]
+    DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: _ClassVar[DeterministicStageOutcome]
+    DETERMINISTIC_STAGE_OUTCOME_COMPLETED: _ClassVar[DeterministicStageOutcome]
+    DETERMINISTIC_STAGE_OUTCOME_FAILED: _ClassVar[DeterministicStageOutcome]
 EXECUTION_STATUS_UNSPECIFIED: ExecutionStatus
 EXECUTION_STATUS_EXECUTING: ExecutionStatus
 EXECUTION_STATUS_COMPLETED: ExecutionStatus
@@ -54,6 +73,19 @@ L2_STATUS_REQUIRED_FAILED: L2Status
 HEARTBEAT_TYPE_UNSPECIFIED: HeartbeatType
 HEARTBEAT_TYPE_AUTOMATIC: HeartbeatType
 HEARTBEAT_TYPE_MANUAL: HeartbeatType
+DETERMINISTIC_STAGE_KIND_UNSPECIFIED: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_L3_NOTARY: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_L4_VERIFICATION: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND: DeterministicStageKind
+DETERMINISTIC_STAGE_KIND_L5_EXECUTION: DeterministicStageKind
+DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED: DeterministicStageOutcome
+DETERMINISTIC_STAGE_OUTCOME_VERIFIED: DeterministicStageOutcome
+DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED: DeterministicStageOutcome
+DETERMINISTIC_STAGE_OUTCOME_COMPLETED: DeterministicStageOutcome
+DETERMINISTIC_STAGE_OUTCOME_FAILED: DeterministicStageOutcome
 
 class CommandRequested(_message.Message):
     __slots__ = ("command", "execution_id", "justification", "vault_mode", "timeout_seconds", "intent", "environment", "working_directory")
@@ -646,8 +678,66 @@ class McpPromptGetRequested(_message.Message):
     execution_id: str
     def __init__(self, name: _Optional[str] = ..., execution_id: _Optional[str] = ...) -> None: ...
 
+class DeterministicStageEvidence(_message.Message):
+    __slots__ = ("stage_id", "kind", "monotonic_start_ns", "monotonic_end_ns", "clock_domain", "timing_source", "outcome", "transaction_id", "transaction_hash", "action_type", "operator_id", "operator_session_id", "requestor_user_id", "acting_app_id", "case_id", "investigation_id", "task_id", "state_root_before", "state_root_after", "signer_key_id", "receipt_signature_digest", "commitment_hash", "prior_commitment_hash", "l2_signature_digest", "l3_signature_digest", "audit_record_id", "parent_stage_id")
+    STAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    MONOTONIC_START_NS_FIELD_NUMBER: _ClassVar[int]
+    MONOTONIC_END_NS_FIELD_NUMBER: _ClassVar[int]
+    CLOCK_DOMAIN_FIELD_NUMBER: _ClassVar[int]
+    TIMING_SOURCE_FIELD_NUMBER: _ClassVar[int]
+    OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
+    TRANSACTION_HASH_FIELD_NUMBER: _ClassVar[int]
+    ACTION_TYPE_FIELD_NUMBER: _ClassVar[int]
+    OPERATOR_ID_FIELD_NUMBER: _ClassVar[int]
+    OPERATOR_SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    REQUESTOR_USER_ID_FIELD_NUMBER: _ClassVar[int]
+    ACTING_APP_ID_FIELD_NUMBER: _ClassVar[int]
+    CASE_ID_FIELD_NUMBER: _ClassVar[int]
+    INVESTIGATION_ID_FIELD_NUMBER: _ClassVar[int]
+    TASK_ID_FIELD_NUMBER: _ClassVar[int]
+    STATE_ROOT_BEFORE_FIELD_NUMBER: _ClassVar[int]
+    STATE_ROOT_AFTER_FIELD_NUMBER: _ClassVar[int]
+    SIGNER_KEY_ID_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_SIGNATURE_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    COMMITMENT_HASH_FIELD_NUMBER: _ClassVar[int]
+    PRIOR_COMMITMENT_HASH_FIELD_NUMBER: _ClassVar[int]
+    L2_SIGNATURE_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    L3_SIGNATURE_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    AUDIT_RECORD_ID_FIELD_NUMBER: _ClassVar[int]
+    PARENT_STAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    stage_id: str
+    kind: DeterministicStageKind
+    monotonic_start_ns: int
+    monotonic_end_ns: int
+    clock_domain: str
+    timing_source: str
+    outcome: DeterministicStageOutcome
+    transaction_id: str
+    transaction_hash: str
+    action_type: str
+    operator_id: str
+    operator_session_id: str
+    requestor_user_id: str
+    acting_app_id: str
+    case_id: str
+    investigation_id: str
+    task_id: str
+    state_root_before: str
+    state_root_after: str
+    signer_key_id: str
+    receipt_signature_digest: str
+    commitment_hash: str
+    prior_commitment_hash: str
+    l2_signature_digest: str
+    l3_signature_digest: str
+    audit_record_id: str
+    parent_stage_id: str
+    def __init__(self, stage_id: _Optional[str] = ..., kind: _Optional[_Union[DeterministicStageKind, str]] = ..., monotonic_start_ns: _Optional[int] = ..., monotonic_end_ns: _Optional[int] = ..., clock_domain: _Optional[str] = ..., timing_source: _Optional[str] = ..., outcome: _Optional[_Union[DeterministicStageOutcome, str]] = ..., transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., action_type: _Optional[str] = ..., operator_id: _Optional[str] = ..., operator_session_id: _Optional[str] = ..., requestor_user_id: _Optional[str] = ..., acting_app_id: _Optional[str] = ..., case_id: _Optional[str] = ..., investigation_id: _Optional[str] = ..., task_id: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., signer_key_id: _Optional[str] = ..., receipt_signature_digest: _Optional[str] = ..., commitment_hash: _Optional[str] = ..., prior_commitment_hash: _Optional[str] = ..., l2_signature_digest: _Optional[str] = ..., l3_signature_digest: _Optional[str] = ..., audit_record_id: _Optional[str] = ..., parent_stage_id: _Optional[str] = ...) -> None: ...
+
 class ActionReceipt(_message.Message):
-    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status")
+    __slots__ = ("transaction_id", "transaction_hash", "status", "result_summary", "state_root_before", "state_root_after", "executed_at_unix_ms", "signer_key_id", "signature", "l2_status", "l3_status", "deterministic_stage_evidence")
     TRANSACTION_ID_FIELD_NUMBER: _ClassVar[int]
     TRANSACTION_HASH_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
@@ -659,6 +749,7 @@ class ActionReceipt(_message.Message):
     SIGNATURE_FIELD_NUMBER: _ClassVar[int]
     L2_STATUS_FIELD_NUMBER: _ClassVar[int]
     L3_STATUS_FIELD_NUMBER: _ClassVar[int]
+    DETERMINISTIC_STAGE_EVIDENCE_FIELD_NUMBER: _ClassVar[int]
     transaction_id: str
     transaction_hash: str
     status: ExecutionStatus
@@ -670,7 +761,8 @@ class ActionReceipt(_message.Message):
     signature: str
     l2_status: L2Status
     l3_status: L3Status
-    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ...) -> None: ...
+    deterministic_stage_evidence: _containers.RepeatedCompositeFieldContainer[DeterministicStageEvidence]
+    def __init__(self, transaction_id: _Optional[str] = ..., transaction_hash: _Optional[str] = ..., status: _Optional[_Union[ExecutionStatus, str]] = ..., result_summary: _Optional[str] = ..., state_root_before: _Optional[str] = ..., state_root_after: _Optional[str] = ..., executed_at_unix_ms: _Optional[int] = ..., signer_key_id: _Optional[str] = ..., signature: _Optional[str] = ..., l2_status: _Optional[_Union[L2Status, str]] = ..., l3_status: _Optional[_Union[L3Status, str]] = ..., deterministic_stage_evidence: _Optional[_Iterable[_Union[DeterministicStageEvidence, _Mapping]]] = ...) -> None: ...
 
 class CommitmentAttestation(_message.Message):
     __slots__ = ("transaction_id", "transaction_hash", "prior_commitment_hash", "state_root_at_commit", "l2_signature_digest", "warden_intent_signature_digest", "human_signature_digest", "action_type", "target_resource", "committed_at_unix_ms", "auditor_key_id", "signature", "hash")

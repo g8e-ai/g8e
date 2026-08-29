@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -32,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // ChaosEvent represents a chaos test event (test-only).
@@ -326,8 +328,8 @@ func (avs *TestSQLAuditStore) initDatabase() error {
 	return nil
 }
 
-// migrateReceiptsColumns adds requestor_user_id and acting_app_id columns to
-// the receipts table for databases created before these columns existed.
+// migrateReceiptsColumns adds requestor_user_id, acting_app_id, and receipt_json
+// columns to the receipts table for databases created before these columns existed.
 func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 	cols, err := db.QueryWithRetry("PRAGMA table_info(receipts)")
 	if err != nil {
@@ -347,7 +349,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		existing[name] = true
 	}
 
-	for _, col := range []string{"requestor_user_id", "acting_app_id"} {
+	for _, col := range []string{"requestor_user_id", "acting_app_id", "receipt_json"} {
 		if existing[col] {
 			continue
 		}
@@ -414,6 +416,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	executed_at_ms INTEGER NOT NULL,
 	signer_key_id TEXT NOT NULL,
 	signature TEXT NOT NULL,
+	receipt_json TEXT,
 	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
 	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
 );
@@ -779,6 +782,20 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 	return eventID, err
 }
 
+// parseStoredActionReceipt decodes the canonical protojson receipt payload
+// persisted in the receipt_json column. Returns nil without error when the
+// column is absent or empty, mirroring the production helper.
+func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionReceipt, error) {
+	if !receiptJSON.Valid || receiptJSON.String == "" {
+		return nil, nil
+	}
+	receipt := &operatorv1.ActionReceipt{}
+	if err := protojson.Unmarshal([]byte(receiptJSON.String), receipt); err != nil {
+		return nil, err
+	}
+	return receipt, nil
+}
+
 // RecordActionReceipt records a signed ActionReceipt in the audit vault.
 // This is the authoritative transaction-native audit record.
 func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
@@ -801,20 +818,30 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		)
 	}
 
+	receiptJSON := []byte(nil)
+	if record.ActionReceipt != nil {
+		var err error
+		receiptJSON, err = protojson.Marshal(record.ActionReceipt)
+		if err != nil {
+			return fmt.Errorf("%w: marshal canonical receipt: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+		}
+	}
+
 	query := `
 	INSERT INTO receipts (
 		transaction_id, transaction_hash, operator_id, operator_session_id,
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		signer_key_id, signature, receipt_json, timestamp
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_id) DO UPDATE SET
 		status = excluded.status,
 		result_summary = excluded.result_summary,
 		state_root_after = excluded.state_root_after,
 		executed_at_ms = excluded.executed_at_ms,
 		signature = excluded.signature,
+		receipt_json = excluded.receipt_json,
 		timestamp = excluded.timestamp
 	`
 
@@ -834,6 +861,7 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		record.ExecutedAt.UnixMilli(),
 		record.SignerKeyID,
 		record.Signature,
+		receiptJSON,
 		timesvc.FormatTimestamp(record.Timestamp),
 	)
 	if err != nil {
@@ -858,7 +886,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	WHERE transaction_id = ?
 	`
@@ -867,12 +895,13 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	var executedAtMs int64
 	var timestampStr string
 	var sessionID sql.NullString
+	var receiptJSON sql.NullString
 	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
 		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &sessionID,
 		&r.RequestorUserID, &r.ActingAppID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
-		&r.SignerKeyID, &r.Signature, &timestampStr,
+		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
 	)
 	r.OperatorSessionID = sessionID.String
 	if err == sql.ErrNoRows {
@@ -884,6 +913,10 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 
 	r.ExecutedAt = time.UnixMilli(executedAtMs)
 	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
+	r.ActionReceipt, err = parseStoredActionReceipt(receiptJSON)
+	if err != nil {
+		return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreGetReceiptFailed, err)
+	}
 
 	return &r, nil
 }
@@ -904,7 +937,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	`)
 
@@ -922,6 +955,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		executedAtMs int64
 		timestampStr string
 		sessionID    sql.NullString
+		receiptJSON  sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
@@ -931,7 +965,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
-			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
@@ -944,6 +978,10 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
 		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
+		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
+		if err != nil {
+			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsFailed, err)
+		}
 		results = append(results, &row.record)
 	}
 
@@ -965,7 +1003,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	WHERE timestamp > ?
 	ORDER BY timestamp ASC
@@ -977,6 +1015,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		executedAtMs int64
 		timestampStr string
 		sessionID    sql.NullString
+		receiptJSON  sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
@@ -986,7 +1025,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
-			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
@@ -999,6 +1038,10 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
 		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
+		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
+		if err != nil {
+			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsSinceFailed, err)
+		}
 		results = append(results, &row.record)
 	}
 

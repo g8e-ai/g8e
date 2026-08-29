@@ -160,6 +160,7 @@ type ActionReceiptRecord struct {
 	L2Valid           bool                       `json:"l2_valid"`
 	L3Valid           bool                       `json:"l3_valid"`
 	Timestamp         time.Time                  `json:"timestamp"`
+	ActionReceipt     *operatorv1.ActionReceipt  `json:"action_receipt,omitempty"`
 }
 
 // BlobMetaResponse is the typed response for GET /blob/{namespace}/{id}/meta.

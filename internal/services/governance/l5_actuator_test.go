@@ -16,15 +16,16 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -89,6 +90,14 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	require.Equal(t, "test-state-root-123", receipt.StateRootAfter)
 	require.Equal(t, "test-Actuator-key", receipt.SignerKeyId)
 	require.NotEmpty(t, receipt.Signature)
+	require.Len(t, receipt.DeterministicStageEvidence, 2)
+	assert.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE, receipt.DeterministicStageEvidence[0].Kind)
+	assert.NotEmpty(t, receipt.DeterministicStageEvidence[0].ReceiptSignatureDigest)
+	assert.Equal(t, envelope.Id, receipt.DeterministicStageEvidence[0].AuditRecordId)
+	assert.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION, receipt.DeterministicStageEvidence[1].Kind)
+	assert.Equal(t, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED, receipt.DeterministicStageEvidence[1].Outcome)
+	assert.Equal(t, receipt.StateRootBefore, receipt.DeterministicStageEvidence[1].StateRootBefore)
+	assert.Equal(t, receipt.StateRootAfter, receipt.DeterministicStageEvidence[1].StateRootAfter)
 
 	// Verify signature
 	canonical, err := CanonicalizeActionReceipt(receipt)
@@ -99,6 +108,12 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 
 	valid := ed25519.Verify(pubKey, canonical, sigBytes)
 	require.True(t, valid, "Receipt signature should verify against L5Actuator public key")
+
+	tampered := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+	tampered.DeterministicStageEvidence[1].StateRootAfter = "tampered-root"
+	tamperedCanonical, err := CanonicalizeActionReceipt(tampered)
+	require.NoError(t, err)
+	assert.False(t, ed25519.Verify(pubKey, tamperedCanonical, sigBytes))
 
 	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)

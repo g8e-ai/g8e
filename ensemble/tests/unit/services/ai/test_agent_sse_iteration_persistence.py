@@ -25,8 +25,9 @@ These tests pin the contract that ``on_iteration_text``:
 from __future__ import annotations
 
 import pytest
+from g8e.models.events import ScrubbingTelemetry
 
-from app.constants import StreamChunkFromModelType
+from app.constants import EventType, StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
@@ -68,6 +69,55 @@ def _complete(reason: str = "STOP") -> StreamChunkFromModel:
 async def _stream(*chunks: StreamChunkFromModel):
     for chunk in chunks:
         yield chunk
+
+
+async def test_terminal_event_carries_ordered_scrubbing_observations():
+    observations = [
+        ScrubbingTelemetry(
+            source="user_chat",
+            enabled=True,
+            was_modified=True,
+            scrub_count=1,
+            scrub_types=["email"],
+            monotonic_start=1.0,
+            monotonic_end=1.1,
+            input_artifact_hash="input-user",
+            output_artifact_hash="output-user",
+        ),
+        ScrubbingTelemetry(
+            source="user_terminal",
+            enabled=False,
+            was_modified=False,
+            scrub_count=0,
+            scrub_types=[],
+            monotonic_start=2.0,
+            monotonic_end=2.1,
+            input_artifact_hash="input-terminal",
+            output_artifact_hash="output-terminal",
+        ),
+    ]
+    inputs, state = make_agent_run_args(scrubbing_observations=observations)
+    event_svc = make_event_service()
+
+    await deliver_via_sse(
+        stream=_stream(_text("Complete answer."), _complete()),
+        inputs=inputs,
+        state=state,
+        event_service=event_svc,
+    )
+
+    terminal_events = [
+        event
+        for event in event_svc._published_events
+        if event.event_type == EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED
+    ]
+    assert len(terminal_events) == 1
+    payload = terminal_events[0].payload
+    assert payload.scrubbing_observations == observations
+    assert [observation.source for observation in payload.scrubbing_observations] == [
+        "user_chat",
+        "user_terminal",
+    ]
 
 
 async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():

@@ -11,6 +11,13 @@ import json
 
 import pytest
 
+from g8e.operator.v1.operator_pb2 import (
+    ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+)
 from g8e_evals.schema import StageKind
 from g8e_evals.stages import normalize_attempt_evidence
 from g8e_evals.sut.direct_provider import DirectCallEvidence, _DirectEvidenceWrapper
@@ -236,6 +243,77 @@ def test_chat_trail_normalizes_authoritative_scrubbing_observations():
     assert stage.scrub_count == 1
     assert stage.scrub_types == ["email"]
     assert stage.source == "user_chat"
+
+
+def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=0,
+        event_counts_by_type={},
+        agent_trail=[],
+    )
+    receipt = ActionReceipt(transaction_id="tx-1", transaction_hash="hash-1")
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx-1:l4",
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        monotonic_start_ns=2_000_000_000,
+        monotonic_end_ns=2_500_000_000,
+        clock_domain="g8e-operator-process",
+        timing_source="go_monotonic",
+        outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+        transaction_id="tx-1",
+        transaction_hash="hash-1",
+        action_type="FILE_EDIT",
+        operator_id="operator-1",
+        operator_session_id="session-1",
+        case_id="case-1",
+        investigation_id="investigation-1",
+        task_id="task-1",
+        state_root_before="root-before",
+        l2_signature_digest="l2-digest",
+    )
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx-1:commitment",
+        kind=DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
+        monotonic_start_ns=3_000_000_000,
+        monotonic_end_ns=3_250_000_000,
+        clock_domain="g8e-operator-process",
+        timing_source="go_monotonic",
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        transaction_id="tx-1",
+        transaction_hash="hash-1",
+        commitment_hash="commitment-hash",
+        prior_commitment_hash="prior-hash",
+        signer_key_id="auditor-key",
+    )
+
+    normalized = normalize_attempt_evidence(
+        evidence,
+        run_id="run",
+        attempt_id="attempt",
+        action_receipt=receipt,
+    )
+
+    assert [stage.kind for stage in normalized.stages] == [
+        StageKind.L4_VERIFICATION,
+        StageKind.COMMITMENT_APPEND,
+    ]
+    l4_stage, commitment_stage = normalized.stages
+    assert l4_stage.monotonic_start == 2.0
+    assert l4_stage.monotonic_end == 2.5
+    assert l4_stage.clock_domain == "g8e-operator-process"
+    assert l4_stage.cross_process_timing is False
+    assert l4_stage.transaction_id == "tx-1"
+    assert l4_stage.operator_session_id == "session-1"
+    assert l4_stage.state_root_before == "root-before"
+    assert l4_stage.l2_signature_digest == "l2-digest"
+    assert commitment_stage.decision == "completed"
+    assert commitment_stage.commitment_hash == "commitment-hash"
+    assert commitment_stage.prior_commitment_hash == "prior-hash"
+    assert commitment_stage.signer_key_id == "auditor-key"
 
 
 def test_chat_usage_reconciliation_flags_token_total_mismatch():

@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
 	"github.com/g8e-ai/g8e/v2/internal/marshaler"
@@ -129,13 +131,38 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	receipt := w.buildInitialReceipt(vt)
 
+	receiptPersistenceStart := governanceMonotonicNow()
 	if err := w.signAndLogReceipt(vt, receipt); err != nil {
 		return nil, err
 	}
+	receiptPersistenceStage := newDeterministicStageEvidence(
+		vt.Envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
+		receiptPersistenceStart,
+		operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+	)
+	receiptPersistenceStage.SignerKeyId = receipt.SignerKeyId
+	receiptPersistenceStage.ReceiptSignatureDigest = signatureDigest([]string{receipt.Signature})
+	receiptPersistenceStage.AuditRecordId = receipt.TransactionId
+	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, receiptPersistenceStage)
 	if w.SQLAuditStore != nil {
-		if err := w.persistCommitment(vt, receipt); err != nil {
+		commitmentStart := governanceMonotonicNow()
+		attestation, err := w.persistCommitment(vt, receipt)
+		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCommitmentPersist, err)
 		}
+		commitmentStage := newDeterministicStageEvidence(
+			vt.Envelope,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
+			commitmentStart,
+			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+		)
+		commitmentStage.SignerKeyId = attestation.AuditorKeyId
+		commitmentStage.CommitmentHash = attestation.Hash
+		commitmentStage.PriorCommitmentHash = attestation.PriorCommitmentHash
+		commitmentStage.L2SignatureDigest = attestation.L2SignatureDigest
+		commitmentStage.L3SignatureDigest = attestation.HumanSignatureDigest
+		receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, commitmentStage)
 	}
 
 	if err := w.rehydratePayload(ctx, vt, cmdMsg); err != nil {
@@ -155,12 +182,26 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 
 	execCtx := ContextWithCapability(ctx, cap)
 
+	executionStart := governanceMonotonicNow()
 	summary, execErr := w.ExecutionHandler.ExecuteVerifiedTransaction(execCtx, eventType, cmdMsg)
+	executionOutcome := operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED
+	if execErr != nil {
+		executionOutcome = operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED
+	}
+	executionStage := newDeterministicStageEvidence(
+		vt.Envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+		executionStart,
+		executionOutcome,
+	)
+	executionStage.StateRootBefore = receipt.StateRootBefore
+	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, executionStage)
 
 	cap.Dissolve()
 	w.Logger.Info("Dissolved JIT capability", "message_id", vt.Envelope.Id, "action_type", vt.ActionType)
 
 	w.finalizeReceipt(receipt, summary, execErr)
+	executionStage.StateRootAfter = receipt.StateRootAfter
 
 	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
 		return receipt, err
@@ -212,15 +253,16 @@ func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.Ac
 	}
 
 	return &operatorv1.ActionReceipt{
-		TransactionId:    vt.Envelope.Id,
-		TransactionHash:  vt.Envelope.TransactionHash,
-		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
-		ResultSummary:    "executing",
-		StateRootBefore:  stateBefore,
-		ExecutedAtUnixMs: time.Now().UnixMilli(),
-		SignerKeyId:      w.KeyID,
-		L2Status:         l2Status,
-		L3Status:         l3Status,
+		TransactionId:              vt.Envelope.Id,
+		TransactionHash:            vt.Envelope.TransactionHash,
+		Status:                     operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		ResultSummary:              "executing",
+		StateRootBefore:            stateBefore,
+		ExecutedAtUnixMs:           time.Now().UnixMilli(),
+		SignerKeyId:                w.KeyID,
+		L2Status:                   l2Status,
+		L3Status:                   l3Status,
+		DeterministicStageEvidence: append([]*operatorv1.DeterministicStageEvidence(nil), vt.DeterministicStageEvidence...),
 	}
 }
 
@@ -272,15 +314,16 @@ func writeCanonicalString(payload *bytes.Buffer, value string) {
 	payload.WriteString(value)
 }
 
-func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operatorv1.ActionReceipt) (*operatorv1.CommitmentAttestation, error) {
 	if len(w.AuditorSigningKey) != ed25519.PrivateKeySize {
-		return constants.ErrL5ActuatorAuditorKeyMissing
+		return nil, constants.ErrL5ActuatorAuditorKeyMissing
 	}
 	publicKey := w.AuditorSigningKey.Public().(ed25519.PublicKey)
 	if w.AuditorKeyID != hex.EncodeToString(publicKey) {
-		return constants.ErrValidationFailed
+		return nil, constants.ErrValidationFailed
 	}
-	return w.SQLAuditStore.CommitmentLedger().AppendCommitment(func(priorHash string) ([]byte, string, error) {
+	var persisted *operatorv1.CommitmentAttestation
+	err := w.SQLAuditStore.CommitmentLedger().AppendCommitment(func(priorHash string) ([]byte, string, error) {
 		attestation := &operatorv1.CommitmentAttestation{
 			TransactionId:               vt.Envelope.Id,
 			TransactionHash:             vt.Envelope.TransactionHash,
@@ -305,8 +348,13 @@ func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operato
 		if err != nil {
 			return nil, "", fmt.Errorf("commitment attestation: marshal: %w", err)
 		}
+		persisted = attestation
 		return payload, attestation.Hash, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return persisted, nil
 }
 
 func l2SignatureDigest(env *govtypes.GovernanceEnvelope) string {
@@ -415,35 +463,60 @@ func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *op
 // canonicalReceipt is the typed representation for ActionReceipt canonicalization.
 // This ensures strict typing and deterministic JSON marshaling for signing/verification.
 type canonicalReceipt struct {
-	TransactionID    string `json:"transaction_id"`
-	TransactionHash  string `json:"transaction_hash"`
-	Status           int32  `json:"status"`
-	ResultSummary    string `json:"result_summary"`
-	StateRootBefore  string `json:"state_root_before"`
-	StateRootAfter   string `json:"state_root_after"`
-	ExecutedAtUnixMs int64  `json:"executed_at_unix_ms"`
-	SignerKeyID      string `json:"signer_key_id"`
-	L2Status         int32  `json:"l2_status"`
-	L3Status         int32  `json:"l3_status"`
+	TransactionID                  string `json:"transaction_id"`
+	TransactionHash                string `json:"transaction_hash"`
+	Status                         int32  `json:"status"`
+	ResultSummary                  string `json:"result_summary"`
+	StateRootBefore                string `json:"state_root_before"`
+	StateRootAfter                 string `json:"state_root_after"`
+	ExecutedAtUnixMs               int64  `json:"executed_at_unix_ms"`
+	SignerKeyID                    string `json:"signer_key_id"`
+	L2Status                       int32  `json:"l2_status"`
+	L3Status                       int32  `json:"l3_status"`
+	DeterministicStageEvidenceHash string `json:"deterministic_stage_evidence_hash,omitempty"`
+}
+
+func deterministicStageEvidenceHash(stages []*operatorv1.DeterministicStageEvidence) (string, error) {
+	if len(stages) == 0 {
+		return "", nil
+	}
+	var payload bytes.Buffer
+	for _, stage := range stages {
+		encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(stage)
+		if err != nil {
+			return "", err
+		}
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(len(encoded)))
+		payload.Write(length[:])
+		payload.Write(encoded)
+	}
+	digest := sha256.Sum256(payload.Bytes())
+	return hex.EncodeToString(digest[:]), nil
 }
 
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, l2_status, l3_status.
-// All fields are included in the canonical form.
+// state_root_after, executed_at_unix_ms, signer_key_id, l2_status, l3_status, and the
+// deterministic stage evidence hash when stage evidence is present.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
+	stageEvidenceHash, err := deterministicStageEvidenceHash(r.DeterministicStageEvidence)
+	if err != nil {
+		return nil, fmt.Errorf("%w: deterministic stage evidence: %w", constants.ErrL5ActuatorCanonicalizeReceipt, err)
+	}
 	canonical := canonicalReceipt{
-		TransactionID:    r.TransactionId,
-		TransactionHash:  r.TransactionHash,
-		Status:           int32(r.Status),
-		ResultSummary:    r.ResultSummary,
-		StateRootBefore:  r.StateRootBefore,
-		StateRootAfter:   r.StateRootAfter,
-		ExecutedAtUnixMs: r.ExecutedAtUnixMs,
-		SignerKeyID:      r.SignerKeyId,
-		L2Status:         int32(r.L2Status),
-		L3Status:         int32(r.L3Status),
+		TransactionID:                  r.TransactionId,
+		TransactionHash:                r.TransactionHash,
+		Status:                         int32(r.Status),
+		ResultSummary:                  r.ResultSummary,
+		StateRootBefore:                r.StateRootBefore,
+		StateRootAfter:                 r.StateRootAfter,
+		ExecutedAtUnixMs:               r.ExecutedAtUnixMs,
+		SignerKeyID:                    r.SignerKeyId,
+		L2Status:                       int32(r.L2Status),
+		L3Status:                       int32(r.L3Status),
+		DeterministicStageEvidenceHash: stageEvidenceHash,
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {
@@ -536,6 +609,7 @@ func BuildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionRe
 		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),
+		ActionReceipt:     proto.Clone(r).(*operatorv1.ActionReceipt),
 	}
 }
 
