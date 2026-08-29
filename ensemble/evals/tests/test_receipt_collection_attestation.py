@@ -64,3 +64,33 @@ async def test_collector_preserves_signature_valid_final_persistence_attestation
     assert collected.HasField("final_persistence_attestation")
     assert verify_action_receipt_signature(collected, PUBLIC_KEY_HEX)
     assert verify_receipt_persistence_attestation(collected, PUBLIC_KEY_HEX)
+
+
+@pytest.mark.asyncio
+async def test_collector_resolves_receipt_by_authoritative_investigation_correlation():
+    receipt = ActionReceipt(
+        transaction_id="tx-investigation-001",
+        transaction_hash="hash-investigation-001",
+    )
+    response = MagicMock(status_code=200)
+    response.json.return_value = action_receipt_to_dict(receipt)
+    client = MagicMock()
+    client.get = AsyncMock(return_value=response)
+    client_context = MagicMock()
+    client_context.__aenter__ = AsyncMock(return_value=client)
+    client_context.__aexit__ = AsyncMock(return_value=None)
+    auth = MagicMock()
+    auth.auth_headers.return_value = {}
+    auth.make_async_client.return_value = client_context
+
+    collected = await ReceiptCollector(
+        "https://gateway:8443", auth=auth
+    ).collect_receipt_for_investigation("investigation-001")
+
+    assert collected is not None
+    assert collected.transaction_id == receipt.transaction_id
+    client.get.assert_awaited_with(
+        "https://gateway:8443/api/v1/audit/receipts",
+        params={"investigation_id": "investigation-001"},
+        headers={},
+    )

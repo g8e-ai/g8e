@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.model_telemetry import ModelCallTelemetry
+from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
@@ -132,6 +133,7 @@ def _patch_sut(monkeypatch, *, settings=None, answer_response=None) -> MagicMock
 def _patch_collector(monkeypatch) -> MagicMock:
     collector = MagicMock()
     collector.collect_receipt = AsyncMock(return_value=None)
+    collector.collect_receipt_for_investigation = AsyncMock(return_value=None)
     monkeypatch.setattr(cli, "ReceiptCollector", lambda *a, **kw: collector)
     return collector
 
@@ -200,6 +202,49 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     assert manifest.dataset_hash is not None
     assert manifest.prompt_bundle_hash is not None
     assert manifest.grader_bundle_hash is not None
+
+
+@pytest.mark.asyncio
+async def test_governed_attempt_resolves_receipt_from_investigation_correlation(tmp_path, monkeypatch):
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    collector = _patch_collector(monkeypatch)
+    collector.collect_receipt_for_investigation.return_value = ActionReceipt(
+        transaction_id="tx-correlated",
+        transaction_hash="hash-correlated",
+    )
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    collector.collect_receipt_for_investigation.assert_awaited_once_with("inv-1")
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    attempt = AttemptRecord.model_validate_json(
+        (report_dir / "attempts.jsonl").read_text().splitlines()[0]
+    )
+    assert attempt.correlation_ids["transaction_id"] == "tx-correlated"
 
 
 @pytest.mark.asyncio

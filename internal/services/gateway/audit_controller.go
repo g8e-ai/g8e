@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -55,10 +56,36 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 	}
 
 	txID := r.URL.Query().Get("tx_id")
+	investigationID := r.URL.Query().Get("investigation_id")
+	if txID != "" && investigationID != "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrAuditStoreReceiptLookupConflict.Error())
+		return
+	}
 	if txID != "" {
 		receipt, err := c.auditStore.GetActionReceipt(txID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReceipts: %w", err).Error())
+			return
+		}
+		if receipt == nil {
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
+			return
+		}
+		if receipt.ActionReceipt == nil {
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrMissingRequiredField.Error())
+			return
+		}
+		c.responder.ProtoJSON(w, http.StatusOK, receipt.ActionReceipt)
+		return
+	}
+	if investigationID != "" {
+		receipt, err := c.auditStore.GetActionReceiptByInvestigationID(investigationID)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, constants.ErrAuditStoreReceiptCorrelationDuplicate) {
+				status = http.StatusConflict
+			}
+			c.responder.Error(w, status, fmt.Errorf("audit_controller: handleAuditReceipts: %w", err).Error())
 			return
 		}
 		if receipt == nil {

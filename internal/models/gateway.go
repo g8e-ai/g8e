@@ -144,6 +144,7 @@ type PubSubPublishResponse struct {
 type ActionReceiptRecord struct {
 	TransactionID     string                     `json:"transaction_id"`
 	TransactionHash   string                     `json:"transaction_hash"`
+	InvestigationID   string                     `json:"investigation_id"`
 	OperatorID        string                     `json:"operator_id"`
 	OperatorSessionID string                     `json:"operator_session_id"`
 	RequestorUserID   string                     `json:"requestor_user_id"`

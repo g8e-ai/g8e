@@ -168,6 +168,7 @@ def _patch_sut(
 def _patch_collector(monkeypatch) -> MagicMock:
     collector = MagicMock()
     collector.collect_receipt = AsyncMock(return_value=None)
+    collector.collect_receipt_for_investigation = AsyncMock(return_value=None)
     monkeypatch.setattr(cli, "ReceiptCollector", lambda *a, **kw: collector)
     return collector
 

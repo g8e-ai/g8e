@@ -711,6 +711,7 @@ func BuildReceiptRecord(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionRe
 	return &models.ActionReceiptRecord{
 		TransactionID:     r.TransactionId,
 		TransactionHash:   r.TransactionHash,
+		InvestigationID:   env.InvestigationId,
 		OperatorID:        env.OperatorId,
 		OperatorSessionID: env.OperatorSessionId,
 		RequestorUserID:   env.RequestorUserId,

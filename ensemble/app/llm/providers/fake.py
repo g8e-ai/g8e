@@ -93,6 +93,15 @@ class FakeProvider(LLMProvider):
         """Fake provider validation - always valid (no external dependencies)."""
         return []
 
+    @staticmethod
+    def _usage_metadata() -> UsageMetadata:
+        return UsageMetadata(
+            prompt_token_count=100,
+            candidates_token_count=50,
+            total_token_count=150,
+            usage_reported=True,
+        )
+
     def _extract_last_user_message(self, contents: list[Content]) -> str:
         """Extract the text of the last user message from the contents list."""
         for content in reversed(contents):
@@ -141,7 +150,8 @@ class FakeProvider(LLMProvider):
                         ),
                         finish_reason="STOP",
                     )
-                ]
+                ],
+                usage_metadata=self._usage_metadata(),
             )
 
         tool_call = ToolCall(
@@ -165,12 +175,7 @@ class FakeProvider(LLMProvider):
                     finish_reason="STOP",
                 )
             ],
-            usage_metadata=UsageMetadata(
-                prompt_token_count=100,
-                candidates_token_count=50,
-                total_token_count=150,
-                usage_reported=True,
-            ),
+            usage_metadata=self._usage_metadata(),
         )
 
     def _build_stream_chunks(self, message: str) -> list[StreamChunkFromModel]:
@@ -186,6 +191,7 @@ class FakeProvider(LLMProvider):
                 StreamChunkFromModel(
                     text="No tool call needed for this request.",
                     finish_reason="STOP",
+                    usage_metadata=self._usage_metadata(),
                 )
             ]
 
@@ -207,12 +213,7 @@ class FakeProvider(LLMProvider):
             StreamChunkFromModel(
                 tool_calls=[tool_call],
                 finish_reason="STOP",
-                usage_metadata=UsageMetadata(
-                    prompt_token_count=100,
-                    candidates_token_count=50,
-                    total_token_count=150,
-                    usage_reported=True,
-                ),
+                usage_metadata=self._usage_metadata(),
             ),
         ]
 
@@ -232,7 +233,9 @@ class FakeProvider(LLMProvider):
         )
         if self._has_tool_response(contents):
             yield StreamChunkFromModel(
-                text="Tool execution completed successfully.", finish_reason="STOP"
+                text="Tool execution completed successfully.",
+                finish_reason="STOP",
+                usage_metadata=self._usage_metadata(),
             )
             return
         message = self._extract_last_user_message(contents)
@@ -264,7 +267,8 @@ class FakeProvider(LLMProvider):
                         ),
                         finish_reason="STOP",
                     )
-                ]
+                ],
+                usage_metadata=self._usage_metadata(),
             )
         message = self._extract_last_user_message(contents)
         logger.info("[FAKE-PROVIDER] primary: message=%s", message[:100])
@@ -284,7 +288,11 @@ class FakeProvider(LLMProvider):
                 "assistant_llm_settings": assistant_llm_settings,
             }
         )
-        yield StreamChunkFromModel(text="Fake assistant response.", finish_reason="STOP")
+        yield StreamChunkFromModel(
+            text="Fake assistant response.",
+            finish_reason="STOP",
+            usage_metadata=self._usage_metadata(),
+        )
 
     async def generate_content_assistant(
         self,
@@ -306,7 +314,8 @@ class FakeProvider(LLMProvider):
                     content=Content(role="model", parts=[Part(text="Fake assistant response.")]),
                     finish_reason="STOP",
                 )
-            ]
+            ],
+            usage_metadata=self._usage_metadata(),
         )
 
     async def generate_content_stream_lite(
@@ -323,7 +332,11 @@ class FakeProvider(LLMProvider):
                 "lite_llm_settings": lite_llm_settings,
             }
         )
-        yield StreamChunkFromModel(text="Fake lite response.", finish_reason="STOP")
+        yield StreamChunkFromModel(
+            text="Fake lite response.",
+            finish_reason="STOP",
+            usage_metadata=self._usage_metadata(),
+        )
 
     async def generate_content_lite(
         self,
@@ -346,7 +359,8 @@ class FakeProvider(LLMProvider):
                     content=Content(role="model", parts=[Part(text=text)]),
                     finish_reason="STOP",
                 )
-            ]
+            ],
+            usage_metadata=self._usage_metadata(),
         )
 
     @staticmethod
@@ -368,6 +382,19 @@ class FakeProvider(LLMProvider):
         schema = getattr(rf.json_schema, "json_schema_dict", None) or {}
         properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
         prop_names = set(properties.keys()) if isinstance(properties, dict) else set()
+
+        if {"complexity", "intent", "intent_summary"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "complexity": "complex",
+                    "complexity_confidence": "high",
+                    "intent": "action",
+                    "intent_confidence": "high",
+                    "intent_summary": "Execute the requested deterministic operator action.",
+                    "request_posture": "normal",
+                    "posture_confidence": "high",
+                }
+            )
 
         # FileOperationRiskAnalysis: risk_level, is_system_file, safe_to_proceed,
         # blocking_issues, approval_prompt

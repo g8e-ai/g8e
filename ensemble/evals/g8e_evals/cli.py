@@ -49,7 +49,7 @@ from g8e_evals.schema import (
     VerificationStatus,
 )
 from g8e_evals.sut.direct_provider import DirectProviderSUT
-from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
+from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt, G8eeChatSUT, AuthenticationError
 from g8e_evals.posture import observe_gateway_posture
 from g8e_evals.transport import AuthContext
 from g8e_evals.agent_trail_renderer import TurnRenderer
@@ -505,10 +505,19 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             answer_chars=len(response.answer or ""),
         )
 
-        if response.binding == BindingType.RECEIPT_BOUND and response.transaction_id:
-            on_chain_receipt = await collector.collect_receipt(response.transaction_id)
+        on_chain_receipt = None
+        if arm_def.receipt_binding:
+            if response.transaction_id:
+                on_chain_receipt = await collector.collect_receipt(response.transaction_id)
+            elif isinstance(response.chat_evidence, ChatEvaluationReceipt):
+                on_chain_receipt = await collector.collect_receipt_for_investigation(
+                    response.chat_evidence.investigation_id
+                )
             if on_chain_receipt:
+                response.transaction_id = on_chain_receipt.transaction_id
                 response.action_receipt = on_chain_receipt
+                response.binding = BindingType.RECEIPT_BOUND
+                response.unbound_reason = None
                 if warden_pub:
                     response.receipt_verified = (
                         verify_action_receipt_signature(on_chain_receipt, warden_pub)

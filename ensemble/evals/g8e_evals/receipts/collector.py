@@ -10,6 +10,7 @@ import time
 
 from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e.receipts import parse_action_receipt
+from app.constants.api_paths import GatewayAPIPaths
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.tls import RuntimeIdentity
 from g8e_evals.transport import AuthContext
@@ -42,33 +43,39 @@ class ReceiptCollector:
 
     async def collect_receipt(self, transaction_id: str) -> ActionReceipt | None:
         """Poll the Operator for an ActionReceipt by transaction_id."""
+        return await self._collect_receipt(
+            params={"tx_id": transaction_id},
+            expected_transaction_id=transaction_id,
+        )
+
+    async def collect_receipt_for_investigation(
+        self, investigation_id: str
+    ) -> ActionReceipt | None:
+        return await self._collect_receipt(params={"investigation_id": investigation_id})
+
+    async def _collect_receipt(
+        self,
+        params: dict[str, str],
+        expected_transaction_id: str | None = None,
+    ) -> ActionReceipt | None:
         start_time = time.time()
         headers = self.auth.auth_headers()
         async with self.auth.make_async_client() as client:
             while time.time() - start_time < self.timeout_seconds:
                 try:
-                    # Endpoint from listen_http.go:
-                    #   mux.HandleFunc("/api/audit/receipts", h.handleAuditReceipts)
                     resp = await client.get(
-                        f"{self.operator_url}/api/audit/receipts",
-                        params={"tx_id": transaction_id},
+                        f"{self.operator_url}{GatewayAPIPaths.AUDIT_RECEIPTS}",
+                        params=params,
                         headers=headers,
                     )
                     if resp.status_code == 200:
-                        data = resp.json()
-                        raw_receipt = None
-                        if isinstance(data, list) and len(data) > 0:
-                            raw_receipt = data[0]
-                        elif isinstance(data, dict) and data.get("transaction_id") == transaction_id:
-                            raw_receipt = data
-
-                        if raw_receipt:
-                            return parse_action_receipt(raw_receipt)
-
-                    # 404 == not yet committed; any other status falls through
-                    # to the retry/backoff path.
+                        receipt = parse_action_receipt(resp.json())
+                        if (
+                            expected_transaction_id is None
+                            or receipt.transaction_id == expected_transaction_id
+                        ):
+                            return receipt
                 except Exception:
-                    # Connection blip - keep polling until the deadline.
                     pass
 
                 await asyncio.sleep(0.5)

@@ -93,6 +93,7 @@ func TestAuditControllerHandleAuditReceipts(t *testing.T) {
 		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
 			TransactionID:   receipt.TransactionId,
 			TransactionHash: receipt.TransactionHash,
+			InvestigationID: "investigation-evidence",
 			OperatorID:      "operator-1",
 			ActionType:      constants.ActionTypeExecuteBash,
 			Status:          receipt.Status,
@@ -118,6 +119,24 @@ func TestAuditControllerHandleAuditReceipts(t *testing.T) {
 		assert.Equal(t, receipt.TransactionId, parsed.TransactionId)
 		require.Len(t, parsed.DeterministicStageEvidence, 1)
 		assert.Equal(t, receipt.DeterministicStageEvidence[0], parsed.DeterministicStageEvidence[0])
+	})
+
+	t.Run("GET by investigation_id returns canonical action receipt", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?investigation_id=investigation-evidence", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		parsed := &operatorv1.ActionReceipt{}
+		require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), parsed))
+		assert.Equal(t, "tx-evidence", parsed.TransactionId)
+	})
+
+	t.Run("GET with multiple correlation fields is rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=tx-evidence&investigation_id=investigation-evidence", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("GET list - success with defaults", func(t *testing.T) {

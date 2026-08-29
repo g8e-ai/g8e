@@ -84,6 +84,8 @@ class TestFakeProviderFileCreate:
         assert len(chunks) == 1
         assert chunks[0].text == "Tool execution completed successfully."
         assert chunks[0].tool_calls == []
+        assert chunks[0].usage_metadata.usage_reported is True
+        assert chunks[0].usage_metadata.total_token_count > 0
 
     @pytest.mark.asyncio
     async def test_generate_primary_returns_final_text_after_tool_response(
@@ -297,3 +299,19 @@ class TestFakeProviderLiteStructuredResponse:
         assert parsed["category"] == "a"
         assert parsed["count"] == 0
         assert parsed["enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_schema_valid_triage_with_reported_usage(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.agents.triage import TriageResult
+
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(TriageResult.model_json_schema())
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("classify request"), settings
+        )
+
+        TriageResult.model_validate_json(response.text)
+        assert response.usage_metadata.usage_reported is True
+        assert response.usage_metadata.total_token_count > 0
