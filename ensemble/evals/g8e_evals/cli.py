@@ -561,6 +561,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 attempt_id,
                 action_receipt=response.action_receipt,
                 receipt_verified=response.receipt_verified,
+                grading_model_calls=score.model_calls,
             )
             if response.chat_evidence
             else None

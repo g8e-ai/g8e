@@ -12,6 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from app.models.model_telemetry import ModelCallTelemetry
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
     DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
@@ -367,12 +368,42 @@ def _receipt_stages(
     return stages
 
 
+def _grading_stages(
+    model_calls: list[ModelCallTelemetry], run_id: str, attempt_id: str
+) -> list[StageObservation]:
+    return [
+        StageObservation(
+            stage_id=f"{attempt_id}:grading:{index}",
+            attempt_id=attempt_id,
+            run_id=run_id,
+            kind=StageKind.GRADING,
+            agent_role=call.agent_role,
+            provider=call.provider,
+            model=call.model,
+            monotonic_start=call.monotonic_start,
+            monotonic_end=call.monotonic_end,
+            clock_domain="g8e-evals-process",
+            timing_source="provider_call_monotonic",
+            input_tokens=call.input_tokens,
+            output_tokens=call.output_tokens,
+            thinking_tokens=call.thinking_tokens,
+            retry_count=call.retry_count,
+            finish_reason=call.finish_reason,
+            input_artifact_hash=call.input_artifact_hash or None,
+            output_artifact_hash=call.output_artifact_hash or None,
+            decision="completed" if call.succeeded else "failed",
+        )
+        for index, call in enumerate(model_calls, start=1)
+    ]
+
+
 def normalize_attempt_evidence(
     evidence: Any,
     run_id: str,
     attempt_id: str,
     action_receipt: ActionReceipt | None = None,
     receipt_verified: bool = False,
+    grading_model_calls: list[ModelCallTelemetry] | None = None,
 ) -> NormalizedAttemptEvidence:
     wire = evidence.model_dump()
     if wire.get("binding") == "direct_provider":
@@ -393,6 +424,14 @@ def normalize_attempt_evidence(
         ]
     if action_receipt is not None:
         stages.extend(_receipt_stages(action_receipt, run_id, attempt_id, receipt_verified))
+    grading_stages = _grading_stages(grading_model_calls or [], run_id, attempt_id)
+    stages.extend(grading_stages)
+    expected_call_count += len(grading_stages)
+    reported_tokens = (
+        reported_tokens[0] + sum(stage.input_tokens or 0 for stage in grading_stages),
+        reported_tokens[1] + sum(stage.output_tokens or 0 for stage in grading_stages),
+        reported_tokens[2] + sum(stage.thinking_tokens or 0 for stage in grading_stages),
+    )
 
     model_stages = [
         stage

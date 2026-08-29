@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from app.models.model_telemetry import ModelCallTelemetry
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
     DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
@@ -362,6 +363,56 @@ def test_receipt_normalization_rejects_unknown_deterministic_stage_enums(kind, o
 
     with pytest.raises(ValueError, match=message):
         normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", action_receipt=receipt)
+
+
+def test_eval_judge_calls_are_attached_to_stages_and_reconciliation():
+    evidence = _DirectEvidenceWrapper(
+        DirectCallEvidence(
+            provider="ollama",
+            model="qwen",
+            prompt_token_count=10,
+            candidates_token_count=4,
+            thinking_token_count=1,
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+        )
+    )
+    judge_calls = [
+        ModelCallTelemetry(
+            agent_role="judge",
+            provider="OllamaProvider",
+            model="qwen-judge",
+            monotonic_start=3.0,
+            monotonic_end=4.0,
+            input_tokens=12,
+            output_tokens=3,
+            total_tokens=15,
+            input_artifact_hash="judge-input",
+            output_artifact_hash="judge-output",
+        )
+    ]
+
+    normalized = normalize_attempt_evidence(
+        evidence,
+        run_id="run",
+        attempt_id="attempt",
+        grading_model_calls=judge_calls,
+    )
+
+    assert [(stage.kind, stage.agent_role) for stage in normalized.stages] == [
+        (StageKind.MODEL_INFERENCE, "direct"),
+        (StageKind.GRADING, "judge"),
+    ]
+    judge_stage = normalized.stages[1]
+    assert judge_stage.clock_domain == "g8e-evals-process"
+    assert judge_stage.input_artifact_hash == "judge-input"
+    assert judge_stage.output_artifact_hash == "judge-output"
+    assert normalized.usage.reported_input_tokens == 22
+    assert normalized.usage.reported_output_tokens == 7
+    assert normalized.usage.reported_thinking_tokens == 1
+    assert normalized.usage.expected_call_count == 2
+    assert normalized.usage.observed_call_count == 2
+    assert normalized.usage.reconciled is True
 
 
 def test_chat_usage_reconciliation_flags_token_total_mismatch():

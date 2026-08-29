@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
+from app.models.model_telemetry import ModelCallTelemetry
 from g8e.constants import PORTS
 from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e_evals.arms import Arm, ArmDefinition, get_arm_definition
@@ -102,6 +103,7 @@ class Score:
     task_id: str
     passed: bool
     details: ScoreDetails = field(default_factory=ScoreDetails)
+    model_calls: list[ModelCallTelemetry] = field(default_factory=list)
 
 
 @dataclass

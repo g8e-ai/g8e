@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.model_telemetry import ModelCallTelemetry
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
@@ -64,10 +65,10 @@ def _receipt(terminal_event: str | None = None) -> ChatEvaluationReceipt:
     )
 
 
-def _score(passed: bool = True):
+def _score(passed: bool = True, model_calls: list[ModelCallTelemetry] | None = None):
     from g8e_evals.harness import Score
 
-    return Score(task_id="1001", passed=passed, details=ScoreDetails())
+    return Score(task_id="1001", passed=passed, details=ScoreDetails(), model_calls=model_calls or [])
 
 
 def _patch_loader(monkeypatch, tasks: list[Task]) -> None:
@@ -134,9 +135,13 @@ def _patch_collector(monkeypatch) -> MagicMock:
     return collector
 
 
-def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
+def _patch_verifier(
+    monkeypatch,
+    passed: bool = True,
+    model_calls: list[ModelCallTelemetry] | None = None,
+) -> MagicMock:
     verifier = MagicMock()
-    verifier.verify.return_value = _score(passed)
+    verifier.verify.return_value = _score(passed, model_calls)
     monkeypatch.setattr(cli, "IFEvalVerifier", lambda: verifier)
     return verifier
 
@@ -293,6 +298,60 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     assert "chat_evidence" not in legacy_result
     assert legacy_result["chat_evidence_ref"] == evidence[0].artifact_id
     assert legacy_result["chat_evidence_sha256"] == evidence[0].sha256
+
+
+@pytest.mark.asyncio
+async def test_run_suite_attaches_eval_judge_calls_to_attempt_reconciliation(tmp_path, monkeypatch):
+    judge_call = ModelCallTelemetry(
+        agent_role="judge",
+        provider="OllamaProvider",
+        model="judge-model",
+        monotonic_start=10.0,
+        monotonic_end=11.0,
+        input_tokens=8,
+        output_tokens=2,
+        total_tokens=10,
+        input_artifact_hash="judge-input",
+        output_artifact_hash="judge-output",
+    )
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch, model_calls=[judge_call])
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
+
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    stages = [StageObservation.model_validate_json(line) for line in (report_dir / "stages.jsonl").read_text().splitlines()]
+    attempt = AttemptRecord.model_validate_json((report_dir / "attempts.jsonl").read_text())
+    assert len(stages) == 1
+    assert stages[0].kind.value == "grading"
+    assert stages[0].agent_role == "judge"
+    assert stages[0].input_artifact_hash == "judge-input"
+    assert attempt.usage_reconciliation is not None
+    assert attempt.usage_reconciliation.expected_call_count == 1
+    assert attempt.usage_reconciliation.observed_call_count == 1
+    assert attempt.usage_reconciliation.reconciled is True
 
 
 @pytest.mark.asyncio
