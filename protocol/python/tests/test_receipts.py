@@ -34,8 +34,10 @@ from g8e.receipts import (
 VECTORS_DIRECTORY_NAME = "vectors"
 VECTOR_FILENAME = "action_receipt_canonicalization.json"
 PERSISTENCE_VECTOR_FILENAME = "receipt_persistence_attestation_canonicalization.json"
+STAGE_EVIDENCE_VECTOR_FILENAME = "action_receipt_stage_evidence_canonicalization.json"
 VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / VECTOR_FILENAME
 PERSISTENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / PERSISTENCE_VECTOR_FILENAME
+STAGE_EVIDENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIRECTORY_NAME / STAGE_EVIDENCE_VECTOR_FILENAME
 
 
 @pytest.fixture
@@ -73,6 +75,44 @@ def test_action_receipt_canonicalization_binds_deterministic_stage_evidence(vect
     receipt.deterministic_stage_evidence[0].monotonic_end_ns = 201
 
     assert canonicalize_action_receipt(receipt) != canonical
+
+
+def test_action_receipt_stage_evidence_matches_cross_language_vector():
+    vector = json.loads(STAGE_EVIDENCE_VECTOR_PATH.read_text())
+    receipt = parse_action_receipt(vector["receipt"])
+
+    assert canonicalize_action_receipt(receipt).decode() == vector["canonical_utf8"]
+    assert verify_action_receipt_signature(receipt, vector["public_key_hex"])
+
+
+def test_action_receipt_verification_rejects_stage_reordering():
+    vector = json.loads(STAGE_EVIDENCE_VECTOR_PATH.read_text())
+    receipt = parse_action_receipt(vector["receipt"])
+    first = type(receipt.deterministic_stage_evidence[0])()
+    first.CopyFrom(receipt.deterministic_stage_evidence[0])
+    second = type(receipt.deterministic_stage_evidence[1])()
+    second.CopyFrom(receipt.deterministic_stage_evidence[1])
+    del receipt.deterministic_stage_evidence[:]
+    receipt.deterministic_stage_evidence.extend([second, first])
+
+    assert not verify_action_receipt_signature(receipt, vector["public_key_hex"])
+
+
+@pytest.mark.parametrize(
+    ("stage_index", "field", "value"),
+    [
+        (0, "kind", 999),
+        (0, "doctrine_bundle_hash", "sha256:tampered"),
+        (1, "outcome", 999),
+        (1, "parent_stage_id", "tx:tampered-parent"),
+    ],
+)
+def test_action_receipt_verification_rejects_stage_field_tampering(stage_index, field, value):
+    vector = json.loads(STAGE_EVIDENCE_VECTOR_PATH.read_text())
+    receipt = parse_action_receipt(vector["receipt"])
+    setattr(receipt.deterministic_stage_evidence[stage_index], field, value)
+
+    assert not verify_action_receipt_signature(receipt, vector["public_key_hex"])
 
 
 def test_action_receipt_verification_accepts_ed25519_spki_pem(vector):

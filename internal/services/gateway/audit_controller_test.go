@@ -109,6 +109,10 @@ func TestAuditControllerHandleAuditReceipts(t *testing.T) {
 		auditController.handleAuditReceipts(rr, req)
 
 		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, constants.HeaderValueApplicationJSON, rr.Header().Get(constants.HeaderContentType))
+		assert.Equal(t, constants.HeaderValueNoSniff, rr.Header().Get(constants.HeaderXContentTypeOptions))
+		assert.Equal(t, constants.HeaderValueDeny, rr.Header().Get(constants.HeaderXFrameOptions))
+		assert.Equal(t, constants.HeaderValueCSPNone, rr.Header().Get(constants.HeaderContentSecurityPolicy))
 		parsed := &operatorv1.ActionReceipt{}
 		require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), parsed))
 		assert.Equal(t, receipt.TransactionId, parsed.TransactionId)

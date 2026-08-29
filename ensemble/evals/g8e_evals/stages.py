@@ -311,7 +311,10 @@ def _receipt_stages(
     for index, observation in enumerate(receipt.deterministic_stage_evidence, start=1):
         kind = kinds.get(observation.kind)
         if kind is None:
-            continue
+            raise ValueError(f"unknown deterministic stage kind: {observation.kind}")
+        outcome = outcomes.get(observation.outcome)
+        if outcome is None:
+            raise ValueError(f"unknown deterministic stage outcome: {observation.outcome}")
         stages.append(StageObservation(
             stage_id=observation.stage_id or f"{attempt_id}:receipt:{index}",
             attempt_id=attempt_id,
@@ -321,7 +324,7 @@ def _receipt_stages(
             monotonic_end=observation.monotonic_end_ns / 1_000_000_000,
             clock_domain=observation.clock_domain,
             timing_source=observation.timing_source,
-            decision=outcomes.get(observation.outcome),
+            decision=outcome,
             transaction_id=observation.transaction_id,
             transaction_hash=observation.transaction_hash,
             action_type=observation.action_type,

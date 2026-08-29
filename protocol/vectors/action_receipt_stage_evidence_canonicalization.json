@@ -1,0 +1,56 @@
+{
+  "name": "completed_with_ordered_stage_evidence",
+  "receipt": {
+    "transaction_id": "tx-stage-golden-001",
+    "transaction_hash": "sha256:stage-transaction",
+    "status": "EXECUTION_STATUS_COMPLETED",
+    "result_summary": "completed",
+    "state_root_before": "sha256:before",
+    "state_root_after": "sha256:after",
+    "executed_at_unix_ms": "1777777777123",
+    "signer_key_id": "warden-golden-key",
+    "signature": "07b97d940c3935f24f07e6255f941fb031d42b0cb6ab70b3138a78bcfdefa314ac3852df25f3927e004bc2c94c217aa5c04b965cb58ef307e49d25983f743f0b",
+    "l2_status": "L2_STATUS_REQUIRED_VALID",
+    "l3_status": "L3_STATUS_REQUIRED_VALID",
+    "deterministic_stage_evidence": [
+      {
+        "stage_id": "tx-stage-golden-001:l1",
+        "kind": "DETERMINISTIC_STAGE_KIND_L1_DOCTRINE",
+        "monotonic_start_ns": "100",
+        "monotonic_end_ns": "200",
+        "clock_domain": "g8e-operator-process",
+        "timing_source": "go_monotonic",
+        "outcome": "DETERMINISTIC_STAGE_OUTCOME_VERIFIED",
+        "transaction_id": "tx-stage-golden-001",
+        "transaction_hash": "sha256:stage-transaction",
+        "action_type": "FILE_EDIT",
+        "operator_id": "operator-1",
+        "operator_session_id": "session-1",
+        "requestor_user_id": "user-1",
+        "acting_app_id": "app-1",
+        "case_id": "case-1",
+        "investigation_id": "investigation-1",
+        "task_id": "task-1",
+        "state_root_before": "sha256:before",
+        "doctrine_bundle_hash": "sha256:doctrine",
+        "doctrine_bundle_version": "builtin-v1+external-v2"
+      },
+      {
+        "stage_id": "tx-stage-golden-001:l4",
+        "kind": "DETERMINISTIC_STAGE_KIND_L4_VERIFICATION",
+        "monotonic_start_ns": "201",
+        "monotonic_end_ns": "300",
+        "clock_domain": "g8e-operator-process",
+        "timing_source": "go_monotonic",
+        "outcome": "DETERMINISTIC_STAGE_OUTCOME_VERIFIED",
+        "transaction_id": "tx-stage-golden-001",
+        "transaction_hash": "sha256:stage-transaction",
+        "l2_signature_digest": "sha256:l2",
+        "l3_signature_digest": "sha256:l3",
+        "parent_stage_id": "tx-stage-golden-001:l1"
+      }
+    ]
+  },
+  "canonical_utf8": "{\"transaction_id\":\"tx-stage-golden-001\",\"transaction_hash\":\"sha256:stage-transaction\",\"status\":2,\"result_summary\":\"completed\",\"state_root_before\":\"sha256:before\",\"state_root_after\":\"sha256:after\",\"executed_at_unix_ms\":1777777777123,\"signer_key_id\":\"warden-golden-key\",\"l2_status\":2,\"l3_status\":2,\"deterministic_stage_evidence_hash\":\"09e9c2ac851b33649c749c926e14f55e4826c096c7060d6c589f4f9c28fe6e2d\"}",
+  "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"
+}

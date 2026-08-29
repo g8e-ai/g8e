@@ -335,6 +335,35 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert final_persistence_stage.persisted_at_unix_ms == 1_777_777_777_456
 
 
+@pytest.mark.parametrize(
+    ("kind", "outcome", "message"),
+    [
+        (999, DETERMINISTIC_STAGE_OUTCOME_VERIFIED, "unknown deterministic stage kind"),
+        (DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, 999, "unknown deterministic stage outcome"),
+    ],
+)
+def test_receipt_normalization_rejects_unknown_deterministic_stage_enums(kind, outcome, message):
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=0,
+        event_counts_by_type={},
+        agent_trail=[],
+    )
+    receipt = ActionReceipt(transaction_id="tx-1", transaction_hash="hash-1")
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx-1:stage",
+        kind=kind,
+        outcome=outcome,
+        transaction_id="tx-1",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", action_receipt=receipt)
+
+
 def test_chat_usage_reconciliation_flags_token_total_mismatch():
     evidence = ChatEvaluationReceipt(
         case_id="case",

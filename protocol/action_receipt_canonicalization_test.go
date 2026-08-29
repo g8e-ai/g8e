@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -40,6 +41,9 @@ var actionReceiptCanonicalizationVectorJSON []byte
 //go:embed vectors/receipt_persistence_attestation_canonicalization.json
 var receiptPersistenceCanonicalizationVectorJSON []byte
 
+//go:embed vectors/action_receipt_stage_evidence_canonicalization.json
+var actionReceiptStageEvidenceCanonicalizationVectorJSON []byte
+
 func TestActionReceiptCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector actionReceiptCanonicalizationVector
 	require.NoError(t, json.Unmarshal(actionReceiptCanonicalizationVectorJSON, &vector))
@@ -58,6 +62,39 @@ func TestActionReceiptCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	signature, err := hex.DecodeString(receipt.Signature)
 	require.NoError(t, err)
 	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+}
+
+func TestActionReceiptStageEvidenceCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
+	var vector actionReceiptCanonicalizationVector
+	require.NoError(t, json.Unmarshal(actionReceiptStageEvidenceCanonicalizationVectorJSON, &vector))
+	receipt := &operatorv1.ActionReceipt{}
+	require.NoError(t, protojson.Unmarshal(vector.Receipt, receipt))
+	require.Len(t, receipt.DeterministicStageEvidence, 2)
+
+	canonical, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	assert.Equal(t, vector.CanonicalUTF8, string(canonical))
+	publicKey, err := hex.DecodeString(vector.PublicKeyHex)
+	require.NoError(t, err)
+	signature, err := hex.DecodeString(receipt.Signature)
+	require.NoError(t, err)
+	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+
+	t.Run("stage order", func(t *testing.T) {
+		tampered := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+		tampered.DeterministicStageEvidence[0], tampered.DeterministicStageEvidence[1] = tampered.DeterministicStageEvidence[1], tampered.DeterministicStageEvidence[0]
+		payload, canonicalErr := governance.CanonicalizeActionReceipt(tampered)
+		require.NoError(t, canonicalErr)
+		assert.False(t, ed25519.Verify(publicKey, payload, signature))
+	})
+
+	t.Run("stage field", func(t *testing.T) {
+		tampered := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+		tampered.DeterministicStageEvidence[0].DoctrineBundleHash = "sha256:tampered"
+		payload, canonicalErr := governance.CanonicalizeActionReceipt(tampered)
+		require.NoError(t, canonicalErr)
+		assert.False(t, ed25519.Verify(publicKey, payload, signature))
+	})
 }
 
 func TestReceiptPersistenceAttestationCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
