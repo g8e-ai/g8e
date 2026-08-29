@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.6.0"
+SCHEMA_VERSION = "1.7.0"
 
 
 class TerminalStatus(StrEnum):
@@ -283,11 +283,14 @@ class UsageReconciliation(BaseModel):
     reported_input_tokens: int = 0
     reported_output_tokens: int = 0
     reported_thinking_tokens: int = 0
+    reported_cache_tokens: int = 0
     observed_input_tokens: int = 0
     observed_output_tokens: int = 0
     observed_thinking_tokens: int = 0
+    observed_cache_tokens: int = 0
     observed_call_count: int = 0
     expected_call_count: int = 0
+    missing_provider_usage_call_count: int = 0
 
     @property
     def input_token_delta(self) -> int:
@@ -302,12 +305,22 @@ class UsageReconciliation(BaseModel):
         return self.observed_thinking_tokens - self.reported_thinking_tokens
 
     @property
+    def cache_token_delta(self) -> int:
+        return self.observed_cache_tokens - self.reported_cache_tokens
+
+    @property
+    def exact_reconciliation_possible(self) -> bool:
+        return self.missing_provider_usage_call_count == 0
+
+    @property
     def reconciled(self) -> bool:
         return (
-            self.observed_call_count == self.expected_call_count
+            self.exact_reconciliation_possible
+            and self.observed_call_count == self.expected_call_count
             and self.input_token_delta == 0
             and self.output_token_delta == 0
             and self.thinking_token_delta == 0
+            and self.cache_token_delta == 0
         )
 
 
@@ -384,6 +397,7 @@ class StageObservation(BaseModel):
     output_tokens: int | None = None
     thinking_tokens: int | None = None
     cache_tokens: int | None = None
+    usage_reported: bool = False
     usage_estimated: bool = False
 
     retry_count: int = 0

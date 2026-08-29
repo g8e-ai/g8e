@@ -166,13 +166,19 @@ def _content_to_genai(content: Content) -> dict:
     return {"role": role, "parts": [p.model_dump(by_alias=True, exclude_none=True) for p in parts]}
 
 
+def _token_count(value) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def _usage_from_sdk(um) -> UsageMetadata:
     """Build canonical UsageMetadata from an SDK usage_metadata object."""
     return UsageMetadata(
-        prompt_token_count=getattr(um, "prompt_token_count", 0) or 0,
-        candidates_token_count=getattr(um, "candidates_token_count", 0) or 0,
-        total_token_count=getattr(um, "total_token_count", 0) or 0,
-        thinking_token_count=getattr(um, "thoughts_token_count", 0) or 0,
+        prompt_token_count=_token_count(getattr(um, "prompt_token_count", 0)),
+        candidates_token_count=_token_count(getattr(um, "candidates_token_count", 0)),
+        total_token_count=_token_count(getattr(um, "total_token_count", 0)),
+        thinking_token_count=_token_count(getattr(um, "thoughts_token_count", 0)),
+        cache_token_count=_token_count(getattr(um, "cached_content_token_count", 0)),
+        usage_reported=True,
     )
 
 
@@ -604,7 +610,7 @@ class GeminiProvider(LLMProvider):
                     finish_reason=finish_reason,
                 )
             ],
-            usage_metadata=usage,
+            usage_metadata=usage or UsageMetadata(),
             grounding_raw=grounding_raw,
         )
 

@@ -69,6 +69,7 @@ async def _emit_pass_observation(
     input_tokens = getattr(usage, "prompt_token_count", 0)
     output_tokens = getattr(usage, "candidates_token_count", 0)
     thinking_tokens = getattr(usage, "thinking_token_count", 0)
+    cache_tokens = getattr(usage, "cache_token_count", 0)
     candidates = response.candidates if response and isinstance(response.candidates, list) else []
     finish_reason = candidates[0].finish_reason if candidates else None
     response_text = response.text if response else ""
@@ -85,6 +86,8 @@ async def _emit_pass_observation(
             input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
             output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
             thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
+            cache_tokens=cache_tokens if isinstance(cache_tokens, int) else 0,
+            usage_reported=usage.usage_reported if usage else False,
             finish_reason=finish_reason if isinstance(finish_reason, str) else None,
             monotonic_start=monotonic_start,
             monotonic_end=time.monotonic(),

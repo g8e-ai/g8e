@@ -294,6 +294,7 @@ class g8eEnsemble:
         total_input_tokens = sum(call.input_tokens for call in model_calls)
         total_output_tokens = sum(call.output_tokens for call in model_calls)
         total_thinking_tokens = sum(call.thinking_tokens for call in model_calls)
+        total_cache_tokens = sum(call.cache_tokens for call in model_calls)
         total_tokens = sum(call.total_tokens for call in model_calls)
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
@@ -395,7 +396,9 @@ class g8eEnsemble:
                     input_tokens=turn_result.input_tokens,
                     output_tokens=turn_result.output_tokens,
                     thinking_tokens=turn_result.thinking_tokens,
+                    cache_tokens=turn_result.cache_tokens,
                     total_tokens=turn_result.total_tokens,
+                    usage_reported=turn_result.usage_reported,
                     finish_reason=turn_result.finish_reason,
                     retry_count=retry_count,
                     input_artifact_hash=input_artifact_hash,
@@ -405,6 +408,7 @@ class g8eEnsemble:
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
                 total_thinking_tokens += turn_result.thinking_tokens
+                total_cache_tokens += turn_result.cache_tokens
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
@@ -487,8 +491,10 @@ class g8eEnsemble:
                 output_tokens=total_output_tokens,
                 total_tokens=total_tokens,
                 thinking_tokens=total_thinking_tokens,
+                cache_tokens=total_cache_tokens,
+                usage_reported=all(call.usage_reported for call in model_calls),
             )
-            if (total_input_tokens or total_output_tokens or total_tokens)
+            if model_calls
             else None
         )
 

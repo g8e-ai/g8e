@@ -64,6 +64,8 @@ class DirectCallEvidence(BaseModel):
     candidates_token_count: int = 0
     total_token_count: int = 0
     thinking_token_count: int = 0
+    cache_token_count: int = 0
+    usage_reported: bool = False
     monotonic_start: float = 0.0
     monotonic_end: float = 0.0
     input_artifact_hash: str = ""
@@ -166,6 +168,8 @@ class DirectProviderSUT:
             candidates_token_count=usage.candidates_token_count,
             total_token_count=usage.total_token_count,
             thinking_token_count=usage.thinking_token_count,
+            cache_token_count=usage.cache_token_count,
+            usage_reported=usage.usage_reported,
             monotonic_start=start,
             monotonic_end=end,
             input_artifact_hash=input_artifact_hash,

@@ -184,6 +184,11 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
     return parts
 
 
+def _cache_token_count(response_usage) -> int:
+    cache_tokens = getattr(response_usage, "cache_read_input_tokens", 0)
+    return cache_tokens if isinstance(cache_tokens, int) else 0
+
+
 def _build_usage(response_usage) -> UsageMetadata:
     """Build UsageMetadata from an Anthropic response usage object."""
     if not response_usage:
@@ -194,6 +199,8 @@ def _build_usage(response_usage) -> UsageMetadata:
         prompt_token_count=input_tokens,
         candidates_token_count=output_tokens,
         total_token_count=input_tokens + output_tokens,
+        cache_token_count=_cache_token_count(response_usage),
+        usage_reported=True,
     )
 
 
@@ -348,10 +355,14 @@ class AnthropicProvider(LLMProvider):
                         if usage:
                             um = UsageMetadata(
                                 candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                                usage_reported=True,
                             )
                         if stop_reason:
                             finish_reason_received = True
-                            yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+                            yield StreamChunkFromModel(
+                                finish_reason=stop_reason,
+                                usage_metadata=um or UsageMetadata(),
+                            )
 
                     elif event_type == "message_start":
                         msg = getattr(event, "message", None)
@@ -361,6 +372,8 @@ class AnthropicProvider(LLMProvider):
                                 yield StreamChunkFromModel(
                                     usage_metadata=UsageMetadata(
                                         prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                                        cache_token_count=_cache_token_count(usage),
+                                        usage_reported=True,
                                     )
                                 )
                 stream_exhausted = True
@@ -486,10 +499,14 @@ class AnthropicProvider(LLMProvider):
                         if usage:
                             um = UsageMetadata(
                                 candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                                usage_reported=True,
                             )
                         if stop_reason:
                             finish_reason_received = True
-                            yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+                            yield StreamChunkFromModel(
+                                finish_reason=stop_reason,
+                                usage_metadata=um or UsageMetadata(),
+                            )
 
                     elif event_type == "message_start":
                         msg = getattr(event, "message", None)
@@ -499,6 +516,8 @@ class AnthropicProvider(LLMProvider):
                                 yield StreamChunkFromModel(
                                     usage_metadata=UsageMetadata(
                                         prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                                        cache_token_count=_cache_token_count(usage),
+                                        usage_reported=True,
                                     )
                                 )
                 stream_exhausted = True

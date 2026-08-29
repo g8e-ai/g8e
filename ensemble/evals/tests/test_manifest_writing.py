@@ -311,6 +311,7 @@ async def test_run_suite_attaches_eval_judge_calls_to_attempt_reconciliation(tmp
         input_tokens=8,
         output_tokens=2,
         total_tokens=10,
+        usage_reported=True,
         input_artifact_hash="judge-input",
         output_artifact_hash="judge-output",
     )

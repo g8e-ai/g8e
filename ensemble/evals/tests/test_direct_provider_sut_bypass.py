@@ -62,6 +62,8 @@ async def test_direct_provider_sut_bypasses_g8ee_http(monkeypatch):
         candidates_token_count=5,
         total_token_count=15,
         thinking_token_count=0,
+        cache_token_count=2,
+        usage_reported=True,
     )
 
     sut._provider = MagicMock()
@@ -92,6 +94,8 @@ async def test_direct_provider_sut_produces_no_sse_trail(monkeypatch):
         candidates_token_count=5,
         total_token_count=15,
         thinking_token_count=0,
+        cache_token_count=2,
+        usage_reported=True,
     )
 
     sut._provider = MagicMock()
@@ -120,6 +124,8 @@ async def test_direct_provider_sut_no_receipt_collected(monkeypatch):
         candidates_token_count=3,
         total_token_count=8,
         thinking_token_count=0,
+        cache_token_count=2,
+        usage_reported=True,
     )
 
     sut._provider = MagicMock()
@@ -177,6 +183,8 @@ async def test_direct_call_evidence_captures_token_usage():
         candidates_token_count=50,
         total_token_count=150,
         thinking_token_count=10,
+        cache_token_count=20,
+        usage_reported=True,
     )
 
     sut._provider = MagicMock()
@@ -192,6 +200,8 @@ async def test_direct_call_evidence_captures_token_usage():
     assert dump["candidates_token_count"] == 50
     assert dump["total_token_count"] == 150
     assert dump["thinking_token_count"] == 10
+    assert dump["cache_token_count"] == 20
+    assert dump["usage_reported"] is True
     assert dump["finish_reason"] == "STOP"
 
 
@@ -206,6 +216,8 @@ async def test_direct_call_evidence_uses_provider_outbound_payload_hash():
         candidates_token_count=3,
         total_token_count=8,
         thinking_token_count=0,
+        cache_token_count=2,
+        usage_reported=True,
     )
     sut._provider = MagicMock()
     sut._provider.input_artifact_hash = "provider-outbound-payload-hash"

@@ -294,6 +294,8 @@ class TurnResult(G8eBaseModel):
     output_tokens: int
     total_tokens: int
     thinking_tokens: int = 0
+    cache_tokens: int = 0
+    usage_reported: bool = False
 
 
 class ToolCallResponse(G8eBaseModel):

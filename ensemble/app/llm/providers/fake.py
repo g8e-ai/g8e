@@ -169,6 +169,7 @@ class FakeProvider(LLMProvider):
                 prompt_token_count=100,
                 candidates_token_count=50,
                 total_token_count=150,
+                usage_reported=True,
             ),
         )
 
@@ -210,6 +211,7 @@ class FakeProvider(LLMProvider):
                     prompt_token_count=100,
                     candidates_token_count=50,
                     total_token_count=150,
+                    usage_reported=True,
                 ),
             ),
         ]

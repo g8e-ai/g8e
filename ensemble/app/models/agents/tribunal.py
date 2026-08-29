@@ -429,6 +429,8 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     thinking_tokens: int = 0
+    cache_tokens: int = 0
+    usage_reported: bool = False
     finish_reason: str | None = None
     monotonic_start: float | None = None
     monotonic_end: float | None = None

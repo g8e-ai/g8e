@@ -134,6 +134,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	assert.NotEmpty(t, receipt.DeterministicStageEvidence[0].ReceiptSignatureDigest)
 	assert.Equal(t, envelope.Id, receipt.DeterministicStageEvidence[0].AuditRecordId)
 	assert.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION, receipt.DeterministicStageEvidence[1].Kind)
+	assert.Equal(t, receipt.DeterministicStageEvidence[1].StageId, receipt.DeterministicStageEvidence[0].ParentStageId)
 	assert.Equal(t, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED, receipt.DeterministicStageEvidence[1].Outcome)
 	assert.Equal(t, receipt.StateRootBefore, receipt.DeterministicStageEvidence[1].StateRootBefore)
 	assert.Equal(t, receipt.StateRootAfter, receipt.DeterministicStageEvidence[1].StateRootAfter)

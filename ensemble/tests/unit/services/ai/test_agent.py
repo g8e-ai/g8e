@@ -727,7 +727,7 @@ class TestTokenAccumulation:
         assert len(complete_chunk.data.model_calls[0].output_artifact_hash) == 64
         assert complete_chunk.data.model_calls[0].monotonic_end >= complete_chunk.data.model_calls[0].monotonic_start
 
-    async def test_emits_none_token_usage_when_no_tokens(self):
+    async def test_emits_explicit_missing_usage_when_provider_omits_metadata(self):
         tool_executor = MagicMock()
         provider = MagicMock()
 
@@ -756,7 +756,11 @@ class TestTokenAccumulation:
             chunks.append(chunk)
 
         complete_chunk = next(c for c in chunks if c.type == StreamChunkFromModelType.COMPLETE)
-        assert complete_chunk.data.token_usage is None
+        assert complete_chunk.data.token_usage is not None
+        assert complete_chunk.data.token_usage.input_tokens == 0
+        assert complete_chunk.data.token_usage.output_tokens == 0
+        assert complete_chunk.data.token_usage.cache_tokens == 0
+        assert complete_chunk.data.token_usage.usage_reported is False
 
 
 # =============================================================================

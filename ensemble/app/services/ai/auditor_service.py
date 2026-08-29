@@ -279,6 +279,7 @@ async def call_auditor_llm(
     input_tokens = getattr(usage, "prompt_token_count", 0)
     output_tokens = getattr(usage, "candidates_token_count", 0)
     thinking_tokens = getattr(usage, "thinking_token_count", 0)
+    cache_tokens = getattr(usage, "cache_token_count", 0)
     total_tokens = getattr(usage, "total_token_count", 0)
     finish_reason = response.candidates[0].finish_reason if response.candidates else None
     error = None
@@ -307,7 +308,9 @@ async def call_auditor_llm(
             input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
             output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
             thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
+            cache_tokens=cache_tokens if isinstance(cache_tokens, int) else 0,
             total_tokens=total_tokens if isinstance(total_tokens, int) else 0,
+            usage_reported=usage.usage_reported,
             finish_reason=finish_reason if isinstance(finish_reason, str) else None,
             retry_count=attempt,
             succeeded=error is None,

@@ -17,7 +17,9 @@ class ModelCallTelemetry(G8eBaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     thinking_tokens: int = 0
+    cache_tokens: int = 0
     total_tokens: int = 0
+    usage_reported: bool = False
     finish_reason: str | None = None
     retry_count: int = 0
     succeeded: bool = True

@@ -16,6 +16,7 @@ from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
     DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
     DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 )
@@ -33,6 +34,7 @@ def test_direct_provider_call_normalizes_to_one_model_stage():
             provider="ollama",
             model="qwen",
             finish_reason="stop",
+            usage_reported=True,
             prompt_token_count=12,
             candidates_token_count=4,
             total_token_count=16,
@@ -61,13 +63,13 @@ def test_chat_trail_normalizes_primary_and_tribunal_model_stages():
         AgentTrailEvent(
             id=1,
             event_type="g8e.v1.ai.consensus.voting.pass.completed",
-            payload={"event": {"type": "g8e.v1.ai.consensus.voting.pass.completed", "data": {"member": "axiom", "model": "qwen", "provider": "ollama", "input_tokens": 7, "output_tokens": 3, "finish_reason": "stop"}}},
+            payload={"event": {"type": "g8e.v1.ai.consensus.voting.pass.completed", "data": {"member": "axiom", "model": "qwen", "provider": "ollama", "input_tokens": 7, "output_tokens": 3, "usage_reported": True, "finish_reason": "stop"}}},
             monotonic_received_at=20.0,
         ),
         AgentTrailEvent(
             id=2,
             event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
-            payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "model_calls": [{"agent_role": "sage", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 11, "output_tokens": 5, "finish_reason": "stop"}], "token_usage": {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16}}}},
+            payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "model_calls": [{"agent_role": "sage", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 11, "output_tokens": 5, "usage_reported": True, "finish_reason": "stop"}], "token_usage": {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16, "usage_reported": True}}}},
             monotonic_received_at=22.0,
         ),
     ]
@@ -132,8 +134,8 @@ def test_chat_trail_normalizes_each_auditor_retry_as_a_model_stage():
                 id=1,
                 event_type="g8e.v1.ai.consensus.voting.audit.completed",
                 payload={"event": {"type": "g8e.v1.ai.consensus.voting.audit.completed", "data": {"model_calls": [
-                    {"agent_role": "auditor", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 10, "output_tokens": 2, "retry_count": 0, "input_artifact_hash": "input-1", "output_artifact_hash": "output-1"},
-                    {"agent_role": "auditor", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 6.0, "monotonic_end": 7.0, "input_tokens": 12, "output_tokens": 4, "retry_count": 1, "input_artifact_hash": "input-2", "output_artifact_hash": "output-2"},
+                    {"agent_role": "auditor", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 10, "output_tokens": 2, "usage_reported": True, "retry_count": 0, "input_artifact_hash": "input-1", "output_artifact_hash": "output-1"},
+                    {"agent_role": "auditor", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 6.0, "monotonic_end": 7.0, "input_tokens": 12, "output_tokens": 4, "usage_reported": True, "retry_count": 1, "input_artifact_hash": "input-2", "output_artifact_hash": "output-2"},
                 ]}}},
                 monotonic_received_at=20.0,
             )
@@ -191,8 +193,8 @@ def test_chat_trail_normalizes_each_warden_call_as_a_grading_stage():
                 id=1,
                 event_type="g8e.v1.ai.consensus.session.warden.blocked",
                 payload={"event": {"type": "g8e.v1.ai.consensus.session.warden.blocked", "data": {"model_calls": [
-                    {"agent_role": "warden_command_risk", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 8, "output_tokens": 1, "succeeded": True},
-                    {"agent_role": "warden_error", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 6.0, "monotonic_end": 7.0, "input_tokens": 12, "output_tokens": 3, "succeeded": False, "error_type": "OllamaEmptyResponseError"},
+                    {"agent_role": "warden_command_risk", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 8, "output_tokens": 1, "usage_reported": True, "succeeded": True},
+                    {"agent_role": "warden_error", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 6.0, "monotonic_end": 7.0, "input_tokens": 12, "output_tokens": 3, "usage_reported": True, "succeeded": False, "error_type": "OllamaEmptyResponseError"},
                 ]}}},
             )
         ],
@@ -277,6 +279,7 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         l2_signature_digest="l2-digest",
         doctrine_bundle_hash="doctrine-hash",
         doctrine_bundle_version="doctrine-v1",
+        parent_stage_id="tx-1:l5",
     )
     receipt.deterministic_stage_evidence.add(
         stage_id="tx-1:commitment",
@@ -291,6 +294,18 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         commitment_hash="commitment-hash",
         prior_commitment_hash="prior-hash",
         signer_key_id="auditor-key",
+        parent_stage_id="tx-1:l5",
+    )
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx-1:l5",
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        monotonic_start_ns=3_500_000_000,
+        monotonic_end_ns=4_000_000_000,
+        clock_domain="g8e-operator-process",
+        timing_source="go_monotonic",
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        transaction_id="tx-1",
+        transaction_hash="hash-1",
     )
     receipt.final_persistence_attestation.transaction_id = "tx-1"
     receipt.final_persistence_attestation.receipt_signature_digest = "receipt-digest"
@@ -310,9 +325,10 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert [stage.kind for stage in normalized.stages] == [
         StageKind.L4_VERIFICATION,
         StageKind.COMMITMENT_APPEND,
+        StageKind.L5_EXECUTION,
         StageKind.RECEIPT_PERSISTENCE,
     ]
-    l4_stage, commitment_stage, final_persistence_stage = normalized.stages
+    l4_stage, commitment_stage, execution_stage, final_persistence_stage = normalized.stages
     assert l4_stage.monotonic_start == 2.0
     assert l4_stage.monotonic_end == 2.5
     assert l4_stage.clock_domain == "g8e-operator-process"
@@ -327,6 +343,8 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert commitment_stage.commitment_hash == "commitment-hash"
     assert commitment_stage.prior_commitment_hash == "prior-hash"
     assert commitment_stage.signer_key_id == "auditor-key"
+    assert l4_stage.parent_stage_id == execution_stage.stage_id
+    assert commitment_stage.parent_stage_id == execution_stage.stage_id
     assert final_persistence_stage.stage_id == "attempt:receipt:persistence:final"
     assert final_persistence_stage.decision == "verified"
     assert final_persistence_stage.transaction_id == "tx-1"
@@ -334,6 +352,12 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert final_persistence_stage.audit_record_id == "tx-1"
     assert final_persistence_stage.signer_key_id == "warden-key"
     assert final_persistence_stage.persisted_at_unix_ms == 1_777_777_777_456
+    assert final_persistence_stage.parent_stage_id == execution_stage.stage_id
+    assert execution_stage.child_stage_ids == [
+        l4_stage.stage_id,
+        commitment_stage.stage_id,
+        final_persistence_stage.stage_id,
+    ]
 
 
 @pytest.mark.parametrize(
@@ -365,11 +389,40 @@ def test_receipt_normalization_rejects_unknown_deterministic_stage_enums(kind, o
         normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", action_receipt=receipt)
 
 
+def test_receipt_normalization_rejects_unknown_parent_stage():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=0,
+        event_counts_by_type={},
+        agent_trail=[],
+    )
+    receipt = ActionReceipt(transaction_id="tx-1", transaction_hash="hash-1")
+    receipt.deterministic_stage_evidence.add(
+        stage_id="tx-1:l4",
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+        transaction_id="tx-1",
+        parent_stage_id="tx-1:missing",
+    )
+
+    with pytest.raises(ValueError, match="unknown parent deterministic stage"):
+        normalize_attempt_evidence(
+            evidence,
+            run_id="run",
+            attempt_id="attempt",
+            action_receipt=receipt,
+        )
+
+
 def test_eval_judge_calls_are_attached_to_stages_and_reconciliation():
     evidence = _DirectEvidenceWrapper(
         DirectCallEvidence(
             provider="ollama",
             model="qwen",
+            usage_reported=True,
             prompt_token_count=10,
             candidates_token_count=4,
             thinking_token_count=1,
@@ -387,6 +440,7 @@ def test_eval_judge_calls_are_attached_to_stages_and_reconciliation():
             input_tokens=12,
             output_tokens=3,
             total_tokens=15,
+            usage_reported=True,
             input_artifact_hash="judge-input",
             output_artifact_hash="judge-output",
         )
@@ -427,7 +481,7 @@ def test_chat_usage_reconciliation_flags_token_total_mismatch():
             AgentTrailEvent(
                 id=1,
                 event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
-                payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "token_usage": {"input_tokens": 20, "output_tokens": 10}, "model_calls": [{"agent_role": "sage", "input_tokens": 18, "output_tokens": 10}]}}},
+                payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "token_usage": {"input_tokens": 20, "output_tokens": 10, "usage_reported": True}, "model_calls": [{"agent_role": "sage", "input_tokens": 18, "output_tokens": 10, "usage_reported": True}]}}},
             )
         ],
     )
@@ -436,6 +490,81 @@ def test_chat_usage_reconciliation_flags_token_total_mismatch():
 
     assert normalized.usage.reconciled is False
     assert normalized.usage.input_token_delta == -2
+
+
+def test_direct_provider_missing_usage_is_not_treated_as_reported_zero():
+    evidence = _DirectEvidenceWrapper(
+        DirectCallEvidence(
+            provider="ollama",
+            model="qwen",
+            usage_reported=False,
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+        )
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    stage = normalized.stages[0]
+    assert stage.input_tokens is None
+    assert stage.output_tokens is None
+    assert stage.cache_tokens is None
+    assert stage.usage_reported is False
+    assert normalized.usage.missing_provider_usage_call_count == 1
+    assert normalized.usage.exact_reconciliation_possible is False
+    assert normalized.usage.reconciled is False
+
+
+def test_direct_provider_reported_zero_usage_remains_exact():
+    evidence = _DirectEvidenceWrapper(
+        DirectCallEvidence(
+            provider="ollama",
+            model="qwen",
+            usage_reported=True,
+            prompt_token_count=0,
+            candidates_token_count=0,
+            cache_token_count=0,
+            monotonic_start=1.0,
+            monotonic_end=2.0,
+        )
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    stage = normalized.stages[0]
+    assert stage.input_tokens == 0
+    assert stage.output_tokens == 0
+    assert stage.cache_tokens == 0
+    assert stage.usage_reported is True
+    assert normalized.usage.missing_provider_usage_call_count == 0
+    assert normalized.usage.exact_reconciliation_possible is True
+    assert normalized.usage.reconciled is True
+
+
+def test_chat_usage_reconciliation_accounts_for_cache_tokens():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=1,
+        event_counts_by_type={},
+        agent_trail=[
+            AgentTrailEvent(
+                id=1,
+                event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
+                payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "token_usage": {"input_tokens": 20, "output_tokens": 10, "cache_tokens": 7, "usage_reported": True}, "model_calls": [{"agent_role": "sage", "input_tokens": 20, "output_tokens": 10, "cache_tokens": 7, "usage_reported": True}]}}},
+            )
+        ],
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    assert normalized.stages[0].cache_tokens == 7
+    assert normalized.usage.reported_cache_tokens == 7
+    assert normalized.usage.observed_cache_tokens == 7
+    assert normalized.usage.cache_token_delta == 0
+    assert normalized.usage.reconciled is True
 
 
 def test_chat_usage_reconciliation_flags_uninstrumented_calls():

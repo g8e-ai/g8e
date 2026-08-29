@@ -247,15 +247,27 @@ class TestOpenAIProvider:
         mock_chunk.choices[0].delta.content = "hello"
         mock_chunk.choices[0].delta.reasoning_content = "thinking"
         mock_chunk.choices[0].finish_reason = None
+        mock_chunk.usage = None
 
         mock_final_chunk = MagicMock()
         mock_final_chunk.choices = [MagicMock()]
         mock_final_chunk.choices[0].delta = None
         mock_final_chunk.choices[0].finish_reason = "stop"
+        mock_final_chunk.usage = None
+
+        mock_usage_chunk = MagicMock()
+        mock_usage_chunk.choices = []
+        mock_usage_chunk.usage = MagicMock(
+            prompt_tokens=5,
+            completion_tokens=2,
+            total_tokens=7,
+            prompt_tokens_details=MagicMock(cached_tokens=3),
+        )
 
         async def mock_stream_iter():
             yield mock_chunk
             yield mock_final_chunk
+            yield mock_usage_chunk
 
         provider._client.chat.completions.create = AsyncMock(return_value=mock_stream_iter())
 
@@ -278,6 +290,12 @@ class TestOpenAIProvider:
 
         # 3rd chunk: finish reason
         assert chunks[2].finish_reason == "stop"
+
+        assert chunks[3].usage_metadata.prompt_token_count == 5
+        assert chunks[3].usage_metadata.cache_token_count == 3
+        assert chunks[3].usage_metadata.usage_reported is True
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["stream_options"] == {"include_usage": True}
 
     @pytest.mark.asyncio
     async def test_generate_content_primary_error_translation(self):
@@ -336,7 +354,12 @@ class TestOpenAIProvider:
         )
         mock_choice.finish_reason = "stop"
         mock_response.choices = [mock_choice]
-        mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=10, total_tokens=20)
+        mock_response.usage = MagicMock(
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+            prompt_tokens_details=MagicMock(cached_tokens=4),
+        )
 
         provider._client.chat.completions.create = AsyncMock(return_value=mock_response)
 
@@ -352,6 +375,8 @@ class TestOpenAIProvider:
         assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
         assert response.candidates[0].content.parts[0].text == "direct response"
         assert response.usage_metadata.total_token_count == 20
+        assert response.usage_metadata.cache_token_count == 4
+        assert response.usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
     async def test_generate_content_primary_with_reasoning(self):

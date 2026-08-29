@@ -121,12 +121,15 @@ class TestUsageFromSdk:
         mock_um.candidates_token_count = 20
         mock_um.total_token_count = 30
         mock_um.thoughts_token_count = 5
+        mock_um.cached_content_token_count = 7
 
         usage = _usage_from_sdk(mock_um)
         assert usage.prompt_token_count == 10
         assert usage.candidates_token_count == 20
         assert usage.total_token_count == 30
         assert usage.thinking_token_count == 5
+        assert usage.cache_token_count == 7
+        assert usage.usage_reported is True
 
     def test_usage_missing_fields(self):
         mock_um = MagicMock(spec=[])

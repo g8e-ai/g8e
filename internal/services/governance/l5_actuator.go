@@ -195,6 +195,17 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		executionOutcome,
 	)
 	executionStage.StateRootBefore = receipt.StateRootBefore
+	for _, stage := range receipt.DeterministicStageEvidence {
+		if stage == nil {
+			continue
+		}
+		switch stage.Kind {
+		case operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND:
+			stage.ParentStageId = executionStage.StageId
+		}
+	}
 	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, executionStage)
 
 	cap.Dissolve()
@@ -280,6 +291,15 @@ func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.Ac
 		}
 	}
 
+	stages := make([]*operatorv1.DeterministicStageEvidence, len(vt.DeterministicStageEvidence))
+	for index, stage := range vt.DeterministicStageEvidence {
+		if stage == nil {
+			continue
+		}
+		stages[index] = &operatorv1.DeterministicStageEvidence{}
+		proto.Merge(stages[index], stage)
+	}
+
 	return &operatorv1.ActionReceipt{
 		TransactionId:              vt.Envelope.Id,
 		TransactionHash:            vt.Envelope.TransactionHash,
@@ -290,7 +310,7 @@ func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.Ac
 		SignerKeyId:                w.KeyID,
 		L2Status:                   l2Status,
 		L3Status:                   l3Status,
-		DeterministicStageEvidence: append([]*operatorv1.DeterministicStageEvidence(nil), vt.DeterministicStageEvidence...),
+		DeterministicStageEvidence: stages,
 	}
 }
 

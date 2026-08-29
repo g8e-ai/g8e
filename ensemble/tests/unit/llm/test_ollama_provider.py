@@ -184,6 +184,8 @@ class TestOllamaProviderGeneration:
         assert response.usage_metadata is not None
         assert response.usage_metadata.prompt_token_count == 10
         assert response.usage_metadata.candidates_token_count == 5
+        assert response.usage_metadata.cache_token_count == 0
+        assert response.usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
     async def test_generate_content_stream_primary(self, provider):

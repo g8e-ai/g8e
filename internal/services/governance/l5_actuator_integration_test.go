@@ -105,8 +105,12 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	require.NotNil(t, persistedReceipt.ActionReceipt.FinalPersistenceAttestation)
 	require.NoError(t, VerifyReceiptPersistenceAttestation(persistedReceipt.ActionReceipt, actuator.SigningKey.Public().(ed25519.PublicKey)))
 	require.Len(t, persistedReceipt.ActionReceipt.DeterministicStageEvidence, 3)
+	receiptPersistenceEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[0]
 	commitmentEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[1]
+	executionEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[2]
 	require.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, commitmentEvidence.Kind)
+	require.Equal(t, executionEvidence.StageId, receiptPersistenceEvidence.ParentStageId)
+	require.Equal(t, executionEvidence.StageId, commitmentEvidence.ParentStageId)
 	require.NotEmpty(t, commitmentEvidence.CommitmentHash)
 	require.Equal(t, actuator.AuditorKeyID, commitmentEvidence.SignerKeyId)
 
