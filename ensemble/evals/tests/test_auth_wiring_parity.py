@@ -167,6 +167,15 @@ def test_typed_cli_context_supplies_identity_and_distinct_service_endpoints(fake
     assert context.client_cert == cli_context.client_cert
     assert context.client_key == cli_context.client_key
 
+    request_context = context.to_request_context()
+    assert request_context.bound_operators == [
+        BoundOperator(
+            operator_id=cli_context.operator_id,
+            operator_session_id=cli_context.operator_session_id,
+            status="bound",
+        )
+    ]
+
 
 def test_api_path_parity_g8ee_chat(fake_pki):
     """Ensure Python InternalAPIPaths matches protocol constants for G8EE_CHAT."""

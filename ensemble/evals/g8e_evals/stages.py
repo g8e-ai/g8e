@@ -416,7 +416,7 @@ def _receipt_stages(
             persisted_at_unix_ms=attestation.persisted_at_unix_ms,
             parent_stage_id=stages[-1].stage_id if stages else None,
         ))
-    return stages
+    return _link_stage_relationships(stages)
 
 
 def _grading_stages(

@@ -72,7 +72,6 @@ __all__ = ["AgentTrailEvent", "AuthenticationError", "G8eeChatSUT", "_extract_Ga
 # Terminal SSE event types that conclude a single chat turn.
 _TERMINAL_EVENTS = {
     "g8e.v1.ai.llm.chat.iteration.text.completed",
-    "g8e.v1.ai.llm.chat.iteration.completed",
     "g8e.v1.ai.llm.chat.iteration.failed",
     "g8e.v1.ai.llm.chat.iteration.stopped",
     "g8e.v1.ai.llm.chat.message.processing.failed",

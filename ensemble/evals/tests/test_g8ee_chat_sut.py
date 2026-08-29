@@ -276,6 +276,13 @@ async def test_drain_events_extracts_event_type_from_envelope_not_sse_name(monke
             "data": {"content": "Hello ", "investigation_id": "inv-123"},
         },
     })
+    iteration_completed_payload = json.dumps({
+        "cli_session_id": "cli-123",
+        "event": {
+            "type": "g8e.v1.ai.llm.chat.iteration.completed",
+            "data": {"turn": 1, "investigation_id": "inv-123"},
+        },
+    })
     completed_payload = json.dumps({
         "cli_session_id": "cli-123",
         "event": {
@@ -288,7 +295,8 @@ async def test_drain_events_extracts_event_type_from_envelope_not_sse_name(monke
         async def _events(self):
             for evt in [
                 ("message", chunk_payload, "1"),
-                ("message", completed_payload, "2"),
+                ("message", iteration_completed_payload, "2"),
+                ("message", completed_payload, "3"),
             ]:
                 event = MagicMock()
                 event.event = evt[0]
@@ -318,7 +326,8 @@ async def test_drain_events_extracts_event_type_from_envelope_not_sse_name(monke
     assert terminal == "g8e.v1.ai.llm.chat.iteration.text.completed"
     # The trail must record the canonical g8e event type, not "message".
     assert trail[0].event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
-    assert trail[1].event_type == "g8e.v1.ai.llm.chat.iteration.text.completed"
+    assert trail[1].event_type == "g8e.v1.ai.llm.chat.iteration.completed"
+    assert trail[2].event_type == "g8e.v1.ai.llm.chat.iteration.text.completed"
     # The text.completed terminal event carries the full response content.
     assert answer == "Hello world"
-    assert len(trail) == 2
+    assert len(trail) == 3

@@ -41,6 +41,7 @@ from g8e.constants import (
     PORTS,
     ComponentName,
 )
+from g8e.enums import OperatorStatus
 from app.constants import G8EE_COMPONENT
 from app.models.http_context import RequestContext, BoundOperator
 
@@ -160,6 +161,17 @@ class AuthContext:
             or os.environ.get("G8E_OPERATOR_URL")
             or f"https://localhost:{operator_https_port}"
         ).rstrip("/")
+        bound_operators = (
+            [
+                BoundOperator(
+                    operator_id=cli_context.operator_id,
+                    operator_session_id=sid,
+                    status=OperatorStatus.BOUND,
+                )
+            ]
+            if cli_context and cli_context.operator_id
+            else []
+        )
 
         return cls(
             g8ee_url=app_url,
@@ -172,6 +184,7 @@ class AuthContext:
             web_session_id=web_sid,
             user_id=uid,
             organization_id=oid,
+            bound_operators=bound_operators,
             source_component=source,
             system_fingerprint=fingerprint,
             operator_id=cli_context.operator_id if cli_context else "",

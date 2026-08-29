@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -444,3 +445,53 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
     assert ar.posture.observed_posture == GovernancePosture.L3_NOTARY
     assert ar.posture.observation_source == "gateway_health_endpoint"
     assert ar.posture.posture_match is True
+
+
+@pytest.mark.asyncio
+async def test_keyless_fake_provider_passes_preflight(tmp_path, monkeypatch):
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    sut = _patch_sut(
+        monkeypatch,
+        settings=SimpleNamespace(
+            llm=SimpleNamespace(
+                primary_model="fake-model",
+                assistant_model=None,
+                lite_model=None,
+                primary_api_key=None,
+                openai_api_key=None,
+                anthropic_api_key=None,
+                gemini_api_key=None,
+            )
+        ),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="fake-model",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="fake", model="fake-model"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset",
+        config,
+        None,
+        tmp_path,
+        limit=1,
+        evidence_key=_evidence_key(),
+    )
+
+    sut.get_answer.assert_awaited_once()

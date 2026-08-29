@@ -64,6 +64,9 @@ from g8e_evals.models import ScoreDetails
 console = Console()
 logger = logging.getLogger(__name__)
 
+_PROVIDER_CHOICES = ["openai", "anthropic", "gemini", "ollama", "llamacpp", "fake"]
+_KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
+
 
 class EvaluationRunError(Exception):
     pass
@@ -85,11 +88,11 @@ def main():
 
 @main.command()
 @click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
-@click.option("--provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_PRIMARY_PROVIDER", help="Primary LLM provider")
+@click.option("--provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_PRIMARY_PROVIDER", help="Primary LLM provider")
 @click.option("--model", envvar="G8E_TEST_LLM_PRIMARY_MODEL", help="Primary model name (e.g., gpt-4o)")
-@click.option("--assistant-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_ASSISTANT_PROVIDER", help="Assistant LLM provider")
+@click.option("--assistant-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_ASSISTANT_PROVIDER", help="Assistant LLM provider")
 @click.option("--assistant-model", envvar="G8E_TEST_LLM_ASSISTANT_MODEL", help="Assistant model name")
-@click.option("--lite-provider", type=click.Choice(["openai", "anthropic", "gemini", "ollama", "llamacpp"]), envvar="G8E_TEST_LLM_LITE_PROVIDER", help="Lite LLM provider")
+@click.option("--lite-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_LITE_PROVIDER", help="Lite LLM provider")
 @click.option("--lite-model", envvar="G8E_TEST_LLM_LITE_MODEL", help="Lite model name")
 @click.option("--verbose-text/--no-verbose-text", default=False,
               help="Stream the agent's response text inline as chunks arrive")
@@ -237,7 +240,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             provider=rc.provider,
             model=rc.model,
             endpoint=rc.endpoint,
-            endpoint_class="local" if rc.provider in ("ollama", "llamacpp") or (rc.endpoint or "").startswith(("http://localhost", "http://127.")) else "remote",
+            endpoint_class="local" if rc.provider in _KEYLESS_PROVIDERS or (rc.endpoint or "").startswith(("http://localhost", "http://127.")) else "remote",
             api_key_present=bool(rc.api_key),
         )
 
@@ -289,7 +292,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             if not role_config or not role_config.provider:
                 continue
 
-            if role_config.provider in ("ollama", "llamacpp"):
+            if role_config.provider in _KEYLESS_PROVIDERS:
                 continue
 
             if role_config.api_key:

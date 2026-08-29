@@ -103,6 +103,7 @@ class AuthService:
                         user = AuthenticatedUser(
                             uid=binding.user_id,
                             user_id=binding.user_id,
+                            operator_id=binding.operator_id,
                             operator_session_id=bearer_token,
                             cli_session_id=cli_session_id,
                             auth_method=AuthMethod.OPERATOR_SESSION,

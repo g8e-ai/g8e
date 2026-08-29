@@ -119,6 +119,7 @@ class TestAuthServiceOperatorSessionAuthentication:
         user = await auth_service.authenticate_request(request, MagicMock())
 
         assert user.user_id == "user-123"
+        assert user.operator_id == "operator-456"
         assert user.operator_session_id == "operator-session-123"
         assert user.cli_session_id == "cli-session-789"
         mock_internal_http_client.validate_operator_session.assert_awaited_once_with(
@@ -180,6 +181,61 @@ class TestAuthServiceGetValidatedContext:
         assert len(validated.bound_operators) == 1
         assert validated.bound_operators[0].operator_id == "op-1"
         assert validated.has_bound_operator() is True
+
+    @pytest.mark.asyncio
+    async def test_get_validated_context_rejects_operator_id_outside_authoritative_binding(
+        self, auth_service
+    ):
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+            bound_operators=[
+                BoundOperator(
+                    operator_id="operator-other",
+                    operator_session_id="operator-session-123",
+                    status=OperatorStatus.BOUND,
+                )
+            ],
+        )
+        user = AuthenticatedUser(
+            uid="user-123",
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            operator_id="operator-456",
+            operator_session_id="operator-session-123",
+            auth_method=AuthMethod.OPERATOR_SESSION,
+        )
+
+        with pytest.raises(AuthenticationError):
+            await auth_service.get_validated_context(request, user)
+
+    @pytest.mark.asyncio
+    async def test_get_validated_context_rejects_routing_operator_outside_authoritative_binding(
+        self, auth_service
+    ):
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+            operator_id="operator-other",
+            operator_session_id="operator-session-123",
+        )
+        user = AuthenticatedUser(
+            uid="user-123",
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            operator_id="operator-456",
+            operator_session_id="operator-session-123",
+            auth_method=AuthMethod.OPERATOR_SESSION,
+        )
+
+        with pytest.raises(AuthenticationError):
+            await auth_service.get_validated_context(request, user)
 
     @pytest.mark.asyncio
     async def test_get_validated_context_fallback_derives_from_authenticated_user(
