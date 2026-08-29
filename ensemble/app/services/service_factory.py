@@ -318,10 +318,7 @@ class ServiceFactory:
             cache_aside=cache_aside_service,
         )
 
-        auth_service = AuthService(
-            operator_session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-        )
+        auth_service = AuthService(internal_http_client=core_services.internal_http_client)
 
         session_auth_listener = SessionAuthListener(
             pubsub_client=pubsub_client,

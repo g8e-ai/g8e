@@ -37,6 +37,10 @@ from g8e_evals.models import ScoreDetails
 console = Console()
 logger = logging.getLogger(__name__)
 
+
+class EvaluationRunError(Exception):
+    pass
+
 @click.group()
 def main():
     """g8e High-Fidelity AI Evaluation Harness"""
@@ -126,7 +130,10 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         mode=mode
     )
 
-    asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout))
+    try:
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout))
+    except EvaluationRunError as error:
+        raise click.ClickException(str(error)) from error
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0):
     # 1. Load benchmark
@@ -190,7 +197,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         console.print("[bold red]Authentication Error:[/bold red]")
         console.print(f"  {e}")
         console.print("\n[yellow]Run ./g8e auth enroll user or ./g8e auth refresh.[/yellow]")
-        return
+        raise EvaluationRunError(f"preflight authentication failed: {e}") from e
 
     llm_settings = remote_settings.llm if remote_settings else None
 
@@ -233,7 +240,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         for err in errors:
             console.print(f"  - {err}")
         console.print("\n[yellow]Provide keys via --primary-api-key, etc. or configure them in g8ee settings.[/yellow]")
-        return
+        raise EvaluationRunError("provider preflight failed: " + "; ".join(errors))
 
     # Validate that at least one LLM model is configured (either in g8ee settings or via CLI flags)
     has_cli_primary = bool(config.primary.provider and config.primary.model)
@@ -254,7 +261,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
         console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
         console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
-        return
+        raise EvaluationRunError("provider preflight failed: no model configured")
 
     if llm_settings:
         has_settings_primary = bool(llm_settings.primary_model)
@@ -276,7 +283,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             console.print("  4. Restart g8ee: ./g8e apps restart g8ee")
             console.print("\n[yellow]Alternatively, use CLI flags:[/yellow]")
             console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
-            return
+            raise EvaluationRunError("provider preflight failed: no model configured")
 
     collector = ReceiptCollector(config.operator_url, cli_context=config.auth_context)
 
@@ -404,6 +411,22 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f.write(json.dumps(agg.__dict__, indent=2))
 
     console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
+
+    invalid_results = [
+        result
+        for result in results
+        if not result.response.answer
+        or not result.response.chat_evidence
+        or not result.response.chat_evidence.terminal_event
+        or result.response.chat_evidence.terminal_event.endswith(("failed", "stopped", "dead.lettered"))
+        or "HTTP 401" in (result.response.unbound_reason or "")
+        or "HTTP 403" in (result.response.unbound_reason or "")
+    ]
+    if invalid_results:
+        failed_ids = ", ".join(str(result.task.id) for result in invalid_results)
+        raise EvaluationRunError(
+            f"run produced invalid evidence for task(s) {failed_ids}; diagnostic report retained at {report_dir}"
+        )
 
 @main.command()
 @click.argument("report_dir", type=click.Path(exists=True, path_type=Path))

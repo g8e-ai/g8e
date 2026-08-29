@@ -30,8 +30,7 @@ from app.models.http_context import G8eHttpContext, RequestContext
 
 if TYPE_CHECKING:
     from app.models.settings import G8eeAppSettings
-    from app.services.operator.operator_session_service import OperatorSessionService
-    from app.services.operator.operator_data_service import OperatorDataService
+    from app.services.infra.internal_http_client import InternalHttpClient
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +38,8 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """Unified authentication and context validation service."""
 
-    def __init__(
-        self,
-        operator_session_service: OperatorSessionService,
-        operator_data_service: OperatorDataService,
-    ):
-        self._operator_session_service = operator_session_service
-        self._operator_data_service = operator_data_service
+    def __init__(self, internal_http_client: InternalHttpClient):
+        self._internal_http_client = internal_http_client
 
     async def authenticate_request(
         self,
@@ -92,49 +86,30 @@ class AuthService:
             auth_header = request.headers.get(AUTHORIZATION, "")
             if auth_header.startswith("Bearer "):
                 bearer_token = auth_header[len("Bearer ") :]
-                session = await self._operator_session_service.validate_operator_session(
-                    bearer_token
-                )
-                if session and session.user_id:
-                    # Prefer cli_session_id from body-embedded context if available
-                    g8e_context = getattr(request.state, "g8e_context", None)
-                    cli_session_id = None
-                    if g8e_context:
-                        cli_session_id = g8e_context.cli_session_id
-
-                    if not cli_session_id:
-                        cli_session_id = request.headers.get(CLI_SESSION_ID)
-
-                    logger.debug(
-                        "[AuthService] Authenticated via operator session Bearer token",
-                        extra={"user_id": session.user_id, "operator_session_id": bearer_token[:8]},
+                g8e_context = getattr(request.state, "g8e_context", None)
+                cli_session_id = (
+                    g8e_context.cli_session_id if g8e_context else None
+                ) or request.headers.get(CLI_SESSION_ID)
+                user_id = g8e_context.user_id if g8e_context else None
+                if cli_session_id and user_id:
+                    binding = await self._internal_http_client.validate_operator_session(
+                        bearer_token, cli_session_id, user_id
                     )
-                    user = AuthenticatedUser(
-                        uid=session.user_id,
-                        user_id=session.user_id,
-                        operator_session_id=bearer_token,
-                        cli_session_id=cli_session_id,
-                        auth_method=AuthMethod.OPERATOR_SESSION,
-                    )
+                    if binding:
+                        logger.debug(
+                            "[AuthService] Authenticated via authoritative operator session binding",
+                            extra={"user_id": binding.user_id, "operator_session_id": bearer_token[:8]},
+                        )
+                        user = AuthenticatedUser(
+                            uid=binding.user_id,
+                            user_id=binding.user_id,
+                            operator_session_id=bearer_token,
+                            cli_session_id=cli_session_id,
+                            auth_method=AuthMethod.OPERATOR_SESSION,
+                        )
 
         if not user:
             raise AuthenticationError("Authentication required", component=G8EE_COMPONENT)
-
-        # [PIVOT] Validate session bindings for CLI sessions (Plan §4.6)
-        # If a CLI session ID is provided for an operator session, it must be bound to the
-        # authenticated operator session. This prevents cross-session routing leaks.
-        if user.auth_method == AuthMethod.OPERATOR_SESSION and user.cli_session_id:
-            if not user.operator_session_id:
-                raise AuthenticationError(
-                    "CLI session requires operator session", component=G8EE_COMPONENT
-                )
-
-            if not await self._operator_data_service.validate_cli_session_ownership(
-                user.cli_session_id, user.operator_session_id
-            ):
-                raise AuthenticationError(
-                    "CLI session ownership mismatch", component=G8EE_COMPONENT
-                )
 
         return user
 

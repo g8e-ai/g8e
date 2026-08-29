@@ -418,13 +418,16 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 2)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: auth: query operator session: %w", err)
 	}
 
 	if len(docs) == 0 {
 		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionInvalid.Error(), Status: http.StatusUnauthorized}
+	}
+	if len(docs) != 1 {
+		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionDuplicate.Error(), Status: http.StatusUnauthorized}
 	}
 
 	// Convert Document to OperatorDocumentGo
@@ -461,6 +464,42 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	}
 
 	return &op, nil
+}
+
+func (s *AuthService) ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, userID string) (*models.OperatorDocumentGo, error) {
+	op, err := s.ValidateOperatorSession(operatorSessionID)
+	if err != nil {
+		return nil, err
+	}
+	if op.UserID != userID {
+		return nil, &AuthError{Message: constants.ErrGatewayOperatorSessionUserMismatch.Error(), Status: http.StatusUnauthorized}
+	}
+	if cliSessionID == "" {
+		return nil, &AuthError{Message: constants.ErrCLIL3SessionIDRequired.Error(), Status: http.StatusUnauthorized}
+	}
+	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: auth: load CLI session binding: %w", err)
+	}
+	if doc == nil {
+		return nil, &AuthError{Message: constants.ErrCLISessionNotFound.Error(), Status: http.StatusUnauthorized}
+	}
+	b, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: auth: marshal CLI session binding: %w: %w", err, constants.ErrRequestMarshalFailed)
+	}
+	var cliSession models.CLISession
+	if err := json.Unmarshal(b, &cliSession); err != nil {
+		return nil, fmt.Errorf("gateway: auth: unmarshal CLI session binding: %w: %w", err, constants.ErrResponseParseFailed)
+	}
+	checkTime := time.Now()
+	if !cliSession.IsActive || (!cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(checkTime)) || (!cliSession.AbsoluteExpiresAt.IsZero() && cliSession.AbsoluteExpiresAt.Before(checkTime)) || (!cliSession.IdleExpiresAt.IsZero() && cliSession.IdleExpiresAt.Before(checkTime)) {
+		return nil, &AuthError{Message: constants.ErrCLISessionExpired.Error(), Status: http.StatusUnauthorized}
+	}
+	if cliSession.UserID != userID || cliSession.OperatorSessionID != operatorSessionID {
+		return nil, &AuthError{Message: constants.ErrGatewayCLISessionBindingMismatch.Error(), Status: http.StatusUnauthorized}
+	}
+	return op, nil
 }
 
 // extractOperatorSessionIDFromMTLS extracts the operator session ID from the mTLS certificate's SPIFFE URI SAN.

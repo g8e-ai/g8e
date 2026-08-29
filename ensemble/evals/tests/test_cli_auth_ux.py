@@ -150,6 +150,40 @@ def test_run_help_describes_canonical_authentication_bridge():
     assert "./g8e login" not in result.output
 
 
+def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.MonkeyPatch):
+    auth_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+
+    async def fail_run(*args, **kwargs):
+        raise cli.EvaluationRunError(
+            "run produced invalid evidence; diagnostic report retained at /reports/failed"
+        )
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
+    monkeypatch.setattr(cli, "_run_suite", fail_run)
+
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--mode", "receipt",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "invalid evidence" in result.output
+    assert "diagnostic report retained" in result.output
+
+
 def test_run_requires_explicit_g8ee_endpoint():
     result = _invoke(
         CliRunner(),

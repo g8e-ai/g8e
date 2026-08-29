@@ -52,6 +52,35 @@ func (c *OperatorController) readBody(r *http.Request) ([]byte, error) {
 	return readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 }
 
+func (c *OperatorController) handleValidateOperatorSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	var req models.OperatorSessionValidationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	op, err := c.auth.ValidateOperatorCLISessionBinding(req.OperatorSessionID, req.CLISessionID, req.UserID)
+	if err != nil {
+		var authErr *AuthError
+		if errors.As(err, &authErr) {
+			c.responder.Error(w, authErr.Status, authErr.Message)
+			return
+		}
+		c.logger.Error("gateway: validate operator CLI session binding", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.OperatorSessionValidationResponse{Valid: true, OperatorID: op.ID, UserID: op.UserID})
+}
+
 // GET /api/v1/operators
 func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

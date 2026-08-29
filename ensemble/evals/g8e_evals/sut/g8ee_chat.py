@@ -152,8 +152,14 @@ class G8eeChatSUT:
                 )
                 if resp.status_code == 200:
                     return G8eeUserSettings.model_validate(resp.json())
+                if resp.status_code in (401, 403):
+                    raise AuthenticationError(
+                        f"g8ee settings returned HTTP {resp.status_code}"
+                    )
                 logger.warning("Failed to fetch settings from g8ee: HTTP %s", resp.status_code)
                 return None
+            except AuthenticationError:
+                raise
             except Exception as e:
                 logger.warning("Error fetching settings from g8ee: %s", e)
                 return None

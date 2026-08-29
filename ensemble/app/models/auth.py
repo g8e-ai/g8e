@@ -10,6 +10,18 @@ from app.constants import AuthMethod
 from .base import Field, G8eBaseModel
 
 
+class OperatorSessionValidationRequest(G8eBaseModel):
+    operator_session_id: str
+    cli_session_id: str
+    user_id: str
+
+
+class OperatorSessionValidationResponse(G8eBaseModel):
+    valid: bool
+    operator_id: str
+    user_id: str
+
+
 class AuthenticatedUser(G8eBaseModel):
     """Authenticated user context returned by g8ee auth dependencies."""
 
