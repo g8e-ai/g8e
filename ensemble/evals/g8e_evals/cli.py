@@ -278,7 +278,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
             return
 
-    collector = ReceiptCollector(config.operator_url)
+    collector = ReceiptCollector(config.operator_url, cli_context=config.auth_context)
 
     # Load warden pub key for verification
     warden_pub_path = Path(os.environ.get("G8E_GATEWAY_PKI_DIR", ".g8e/pki")) / "warden_pub.pem"

@@ -140,9 +140,10 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Derive the operator binding and cert fingerprint for the new session.
-	// When the old session exists, inherit its binding. When it does not
-	// (e.g., after a gateway volume reset that wiped CLI sessions but left
-	// operator sessions intact), look up the user's active operator session
+	// When the old session exists and has an operator session ID, inherit its
+	// binding. When it does not (e.g., initial CLI bootstrap before operator
+	// enrollment, or after a gateway volume reset that wiped CLI sessions but
+	// left operator sessions intact), look up the user's active operator session
 	// to inherit its binding. If no active operator session exists, return
 	// a clear actionable error — the caller must re-enroll to establish a
 	// fresh operator binding.
@@ -153,7 +154,8 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		certFingerprint = oldSession.CertFingerprint
 		certSerial = oldSession.CertSerial
 		loginMethod = oldSession.LoginMethod
-	} else if c.operatorSessionSvc != nil {
+	}
+	if operatorSessionID == "" && c.operatorSessionSvc != nil {
 		opSession, opErr := c.operatorSessionSvc.GetActiveSessionForUser(userID)
 		if opErr != nil {
 			c.logger.Error("CLI refresh: failed to look up active operator session",
@@ -165,7 +167,9 @@ func (c *CLIRefreshController) handleRefresh(w http.ResponseWriter, r *http.Requ
 		}
 		if opSession != nil {
 			operatorSessionID = opSession.ID
-			loginMethod = opSession.LoginMethod
+			if loginMethod == "" {
+				loginMethod = opSession.LoginMethod
+			}
 		}
 	}
 	if operatorSessionID == "" {

@@ -10,6 +10,7 @@ import time
 
 from g8e.operator.v1.operator_pb2 import ActionReceipt
 from g8e.receipts import parse_action_receipt
+from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.tls import RuntimeIdentity
 from g8e_evals.transport import AuthContext
 
@@ -29,12 +30,14 @@ class ReceiptCollector:
         operator_url: str,
         timeout_seconds: int = 30,
         auth: AuthContext | None = None,
+        cli_context: CLIAuthContext | None = None,
     ):
         self.operator_url = operator_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.auth = auth or AuthContext.from_env(
             operator_url=operator_url,
             runtime_identity=RuntimeIdentity.GATEWAY,
+            cli_context=cli_context,
         )
 
     async def collect_receipt(self, transaction_id: str) -> ActionReceipt | None:

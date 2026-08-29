@@ -9,7 +9,10 @@ package gateway
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -700,8 +703,16 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		}
 
 		match := false
+		fingerprintMatch := matchesCertificateFingerprint(cert, cliSession.CertFingerprint)
 		for _, uri := range cert.URIs {
-			if wid.MatchesCLI(uri.String(), cliSession.UserID, cliSessionID) {
+			uriString := uri.String()
+			if wid.MatchesCLI(uriString, cliSession.UserID, cliSessionID) {
+				match = true
+				break
+			}
+			certUserID, userOK := wid.ExtractUserID(uriString)
+			certSessionID, sessionOK := wid.ExtractCLISessionID(uriString)
+			if fingerprintMatch && userOK && sessionOK && certUserID == cliSession.UserID && wid.MatchesCLI(uriString, certUserID, certSessionID) {
 				match = true
 				break
 			}
@@ -725,6 +736,15 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 	}
 
 	return false
+}
+
+func matchesCertificateFingerprint(cert *x509.Certificate, expected string) bool {
+	if cert == nil || expected == "" {
+		return false
+	}
+	fingerprint := sha256.Sum256(cert.Raw)
+	actual := hex.EncodeToString(fingerprint[:])
+	return subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
 // handleCLIRefreshAuth is the fail-closed auth path for the CLI session

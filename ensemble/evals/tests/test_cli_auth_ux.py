@@ -29,8 +29,10 @@ import pytest
 from click.testing import CliRunner
 
 from g8e_evals import cli
-from g8e_evals.auth_bridge import AuthBridgeError
+from g8e_evals.auth_bridge import AuthBridgeError, CLIAuthContext
 from g8e_evals.cli import main
+from g8e_evals.receipts.collector import ReceiptCollector
+from g8e_evals.tls import RuntimeIdentity
 
 pytestmark = pytest.mark.unit
 
@@ -107,6 +109,34 @@ def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pyte
     assert "./g8e auth enroll user" in result.output
     assert "./g8e auth refresh" in result.output
     assert "./g8e login" not in result.output
+
+
+def test_receipt_collector_uses_typed_cli_context(monkeypatch: pytest.MonkeyPatch):
+    cli_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+    auth = object()
+    calls = []
+
+    def from_env(**kwargs):
+        calls.append(kwargs)
+        return auth
+
+    monkeypatch.setattr("g8e_evals.receipts.collector.AuthContext.from_env", from_env)
+
+    collector = ReceiptCollector("https://gateway:8443", cli_context=cli_context)
+
+    assert collector.auth is auth
+    assert calls == [{
+        "operator_url": "https://gateway:8443",
+        "runtime_identity": RuntimeIdentity.GATEWAY,
+        "cli_context": cli_context,
+    }]
 
 
 def test_run_help_describes_canonical_authentication_bridge():

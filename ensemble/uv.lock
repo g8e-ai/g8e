@@ -887,6 +887,7 @@ dependencies = [
     { name = "openai" },
     { name = "protobuf" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
     { name = "tenacity" },
     { name = "uvicorn" },
 ]
@@ -945,6 +946,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.15.1" },
     { name = "pytest-timeout", marker = "extra == 'test'", specifier = ">=2.4.0" },
     { name = "pytest-xdist", extras = ["psutil"], marker = "extra == 'test'", specifier = ">=3.8.0" },
+    { name = "python-dotenv", specifier = "==1.1.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.12" },
     { name = "ruff", marker = "extra == 'test'", specifier = "==0.15.12" },
     { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=2.2.0" },
@@ -2494,6 +2496,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/38/b7/ac44da2cf0e53ada0e419033c2d058219c95dc1403126f163304c9e814b1/python_discovery-1.5.2.tar.gz", hash = "sha256:45fd4f20a4e3f9b7bf2e0817870bc8e3b320a19658da177af800768c82dbf354", size = 82350, upload-time = "2026-08-12T14:05:26.419Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/45/689603d04b3bb8d7faa00f25c24acef993aab7813b3dbbfc472a459ab0b5/python_discovery-1.5.2-py3-none-any.whl", hash = "sha256:3e338c2d0f15dfaeea57493f4c2c6caebe0e998ea815c30ae8bf8ee21f1112d3", size = 38350, upload-time = "2026-08-12T14:05:25.113Z" },
+]
+
+[[package]]
+name = "python-dotenv"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/b0/4bc07ccd3572a2f9df7e6782f52b0c6c90dcbb803ac4a167702d7d0dfe1e/python_dotenv-1.1.1.tar.gz", hash = "sha256:a8a6399716257f45be6a007360200409fce5cda2661e3dec71d23dc15f6189ab", size = 41978, upload-time = "2025-06-24T04:21:07.341Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/ed/539768cf28c661b5b068d66d96a2f155c4971a5d55684a514c1a0e0dec2f/python_dotenv-1.1.1-py3-none-any.whl", hash = "sha256:31f23644fe2602f88ff55e1f5c79ba497e01224ee7737937930c448e4d0e24dc", size = 20556, upload-time = "2025-06-24T04:21:06.073Z" },
 ]
 
 [[package]]
