@@ -400,6 +400,7 @@ async def deliver_via_sse(
                     else {},
                     token_usage=token_usage.model_dump(mode="json") if token_usage else {},
                     model_calls=[call.model_dump(mode="json") for call in state.model_calls],
+                    scrubbing_observations=inputs.scrubbing_observations,
                     agent_mode=agent_mode,
                 ),
             )

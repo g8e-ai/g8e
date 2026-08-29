@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 
 class TerminalStatus(StrEnum):
@@ -386,6 +386,10 @@ class StageObservation(BaseModel):
 
     decision: str | None = None
     confidence: float | None = None
+
+    source: str = ""
+    scrub_count: int = 0
+    scrub_types: list[str] = Field(default_factory=list)
 
     parent_stage_id: str | None = None
     child_stage_ids: list[str] = Field(default_factory=list)

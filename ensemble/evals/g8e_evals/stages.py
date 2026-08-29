@@ -106,6 +106,32 @@ def _chat_stages(
     for index, event in enumerate(evidence.agent_trail, start=1):
         data = _event_data(event.payload)
         event_type = event.event_type
+        scrubbing_observations = data.get("scrubbing_observations")
+        if isinstance(scrubbing_observations, list):
+            for scrub_index, observation in enumerate(scrubbing_observations, start=1):
+                if not isinstance(observation, dict):
+                    continue
+                enabled = bool(observation.get("enabled", False))
+                modified = bool(observation.get("was_modified", False))
+                stages.append(StageObservation(
+                    stage_id=f"{attempt_id}:sse:{event.id or index}:scrub:{scrub_index}",
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    kind=StageKind.SCRUBBING,
+                    agent_role="sentinel",
+                    monotonic_start=float(observation.get("monotonic_start") or 0.0),
+                    monotonic_end=float(observation.get("monotonic_end") or 0.0),
+                    clock_domain="g8ee-process",
+                    timing_source="scrubber_monotonic",
+                    decision="modified" if modified else "unchanged" if enabled else "disabled",
+                    input_artifact_hash=str(observation.get("input_artifact_hash") or "") or None,
+                    output_artifact_hash=str(observation.get("output_artifact_hash") or "") or None,
+                    source=str(observation.get("source") or ""),
+                    scrub_count=_int(observation.get("scrub_count")),
+                    scrub_types=[value for value in observation.get("scrub_types", []) if isinstance(value, str)]
+                    if isinstance(observation.get("scrub_types"), list)
+                    else [],
+                ))
         model_calls = data.get("model_calls")
         if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and isinstance(model_calls, list) and model_calls:
             declared_primary_calls = max(declared_primary_calls, len(model_calls))

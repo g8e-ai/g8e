@@ -201,6 +201,43 @@ def test_chat_trail_normalizes_each_warden_call_as_a_grading_stage():
     assert normalized.usage.reconciled is True
 
 
+def test_chat_trail_normalizes_authoritative_scrubbing_observations():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=1,
+        event_counts_by_type={},
+        agent_trail=[
+            AgentTrailEvent(
+                id=1,
+                event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
+                payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "scrubbing_observations": [{"source": "user_chat", "enabled": True, "was_modified": True, "scrub_count": 1, "scrub_types": ["email"], "monotonic_start": 2.0, "monotonic_end": 2.5, "input_artifact_hash": "input-hash", "output_artifact_hash": "output-hash"}]}}},
+                monotonic_received_at=10.0,
+            )
+        ],
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    scrubbing_stages = [stage for stage in normalized.stages if stage.kind == StageKind.SCRUBBING]
+    assert len(scrubbing_stages) == 1
+    stage = scrubbing_stages[0]
+    assert stage.agent_role == "sentinel"
+    assert stage.monotonic_start == 2.0
+    assert stage.monotonic_end == 2.5
+    assert stage.clock_domain == "g8ee-process"
+    assert stage.timing_source == "scrubber_monotonic"
+    assert stage.cross_process_timing is False
+    assert stage.decision == "modified"
+    assert stage.input_artifact_hash == "input-hash"
+    assert stage.output_artifact_hash == "output-hash"
+    assert stage.scrub_count == 1
+    assert stage.scrub_types == ["email"]
+    assert stage.source == "user_chat"
+
+
 def test_chat_usage_reconciliation_flags_token_total_mismatch():
     evidence = ChatEvaluationReceipt(
         case_id="case",

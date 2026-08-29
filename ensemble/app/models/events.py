@@ -50,6 +50,7 @@ from g8e.models.events import (
 )
 from g8e.models.events import (
     SessionEventWire as _G8eSessionEventWire,
+    ScrubbingTelemetry,
 )
 from g8e.models.events import (
     BackgroundEventWire as _G8eBackgroundEventWire,

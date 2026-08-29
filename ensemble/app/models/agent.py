@@ -28,6 +28,7 @@ from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
+from app.models.events import ScrubbingTelemetry
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
@@ -200,6 +201,7 @@ class AgentInputs(G8eBaseModel):
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
+    scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     context_sizes: dict[str, int] = Field(default_factory=dict)
 
     @property
