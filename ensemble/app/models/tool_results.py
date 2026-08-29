@@ -26,6 +26,7 @@ from app.constants import (
     RiskLevel,
 )
 from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.ssh_inventory import SshHost
 from app.models.whitelist import WhitelistedCommand
 
@@ -194,10 +195,12 @@ class FileOperationRiskContext(G8eBaseModel):
 
 class CommandRiskAnalysis(G8eBaseModel):
     risk_level: RiskLevel = Field(description="Classified risk level")
+    model_call: ModelCallTelemetry | None = None
 
 
 class ErrorAnalysisResult(G8eBaseModel):
     error_category: ErrorAnalysisCategory = Field(description="LLM-classified failure category")
+    model_call: ModelCallTelemetry | None = None
     root_cause: str = Field(description="Brief root cause analysis")
     can_auto_fix: bool = Field(description="Whether the error can be automatically fixed")
     suggested_fix: str | None = Field(default=None, description="Description of the suggested fix")
@@ -211,6 +214,7 @@ class ErrorAnalysisResult(G8eBaseModel):
 
 class FileOperationRiskAnalysis(G8eBaseModel):
     risk_level: RiskLevel = Field(description="Classified risk level")
+    model_call: ModelCallTelemetry | None = None
     is_system_file: bool | None = Field(
         default=None, description="Whether the target is a system file"
     )

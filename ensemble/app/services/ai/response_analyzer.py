@@ -17,8 +17,10 @@ from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -189,6 +191,7 @@ class AIResponseAnalyzer:
         fallback_no_response: Callable[[], T],
         fallback_exception: Callable[[Exception], T],
         log_context: str,
+        agent_role: str,
         post_process: Callable[[T], None] | None = None,
     ) -> T:
         if not lite_model:
@@ -197,39 +200,106 @@ class AIResponseAnalyzer:
 
         try:
             client = get_llm_provider(settings.llm, is_lite=True)
+            response_schema = response_model.model_json_schema()
+            response_schema.get("properties", {}).pop("model_call", None)
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=lite_model,
                 max_tokens=settings.llm.llm_max_tokens,
                 system_instructions=prompt,
-                response_format=types.ResponseFormat.from_pydantic_schema(
-                    response_model.model_json_schema()
-                ),
+                response_format=types.ResponseFormat.from_pydantic_schema(response_schema),
             )
-            llm_call_start = time.time()
+            contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
+            input_artifact_hash = model_boundary_hash({
+                "model": lite_model,
+                "contents": contents,
+                "settings": config,
+            })
+        except Exception as exc:
+            logger.error("%s setup failed: %s", log_context, exc, exc_info=True)
+            return fallback_exception(exc)
+
+        monotonic_start = time.monotonic()
+        response = None
+        response_text = ""
+        try:
             response = await client.generate_content_lite(
                 model=lite_model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                contents=contents,
                 lite_llm_settings=config,
             )
-            llm_call_duration_ms = (time.time() - llm_call_start) * 1000
+            monotonic_end = time.monotonic()
             logger.info(
-                "[WARDEN-LLM] %s LLM call duration_ms=%.2f", log_context, llm_call_duration_ms
+                "[WARDEN-LLM] %s LLM call duration_ms=%.2f",
+                log_context,
+                (monotonic_end - monotonic_start) * 1000,
             )
-
-            response_text = response.text
+            response_text = response.text or ""
             analysis = parse_structured_response(response_text, response_model)
+        except Exception as exc:
+            monotonic_end = time.monotonic()
+            telemetry = self._model_call_telemetry(
+                agent_role=agent_role,
+                provider=type(client).__name__,
+                model=lite_model,
+                monotonic_start=monotonic_start,
+                monotonic_end=monotonic_end,
+                input_artifact_hash=input_artifact_hash,
+                response=response,
+                response_text=response_text,
+                error=exc,
+            )
+            if isinstance(exc, OllamaEmptyResponseError):
+                logger.error("%s: LLM returned no text content: %s", log_context, exc)
+                return fallback_no_response().model_copy(update={"model_call": telemetry})
+            logger.error("%s failed: %s", log_context, exc, exc_info=True)
+            return fallback_exception(exc).model_copy(update={"model_call": telemetry})
 
-            if post_process:
-                post_process(analysis)
+        telemetry = self._model_call_telemetry(
+            agent_role=agent_role,
+            provider=type(client).__name__,
+            model=lite_model,
+            monotonic_start=monotonic_start,
+            monotonic_end=monotonic_end,
+            input_artifact_hash=input_artifact_hash,
+            response=response,
+            response_text=response_text,
+        )
+        analysis = analysis.model_copy(update={"model_call": telemetry})
+        if post_process:
+            post_process(analysis)
+        logger.info("%s completed", log_context)
+        return analysis
 
-            logger.info("%s completed", log_context)
-            return analysis
-        except Exception as e:
-            if isinstance(e, OllamaEmptyResponseError):
-                logger.error("%s: LLM returned no text content: %s", log_context, e)
-                return fallback_no_response()
-            logger.error("%s failed: %s", log_context, e, exc_info=True)
-            return fallback_exception(e)
+    @staticmethod
+    def _model_call_telemetry(
+        agent_role: str,
+        provider: str,
+        model: str,
+        monotonic_start: float,
+        monotonic_end: float,
+        input_artifact_hash: str,
+        response: types.GenerateContentResponse | None,
+        response_text: str,
+        error: Exception | None = None,
+    ) -> ModelCallTelemetry:
+        usage = response.usage_metadata if response else types.UsageMetadata()
+        finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
+        return ModelCallTelemetry(
+            agent_role=agent_role,
+            provider=provider,
+            model=model,
+            monotonic_start=monotonic_start,
+            monotonic_end=monotonic_end,
+            input_tokens=usage.prompt_token_count,
+            output_tokens=usage.candidates_token_count,
+            thinking_tokens=usage.thinking_token_count,
+            total_tokens=usage.total_token_count,
+            finish_reason=finish_reason,
+            succeeded=error is None,
+            error_type=type(error).__name__ if error else None,
+            input_artifact_hash=input_artifact_hash,
+            output_artifact_hash=model_boundary_hash(response_text),
+        )
 
     async def analyze_command_risk(
         self,
@@ -280,6 +350,7 @@ class AIResponseAnalyzer:
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             log_context="Command risk analysis",
+            agent_role="warden_command_risk",
             post_process=log_result,
         )
 
@@ -381,6 +452,7 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
             log_context="Error analysis",
+            agent_role="warden_error",
             post_process=post_process,
         )
 
@@ -466,5 +538,6 @@ class AIResponseAnalyzer:
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
             ),
             log_context="File operation risk analysis",
+            agent_role="warden_file_risk",
             post_process=post_process,
         )

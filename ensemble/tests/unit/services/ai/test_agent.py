@@ -166,6 +166,14 @@ class TestStreamResponseRetryLoop:
         assert chunks[0].data.attempt == 2
         assert chunks[0].data.max_attempts == AGENT_MAX_RETRIES + 1
         assert chunks[1].type == StreamChunkFromModelType.TEXT
+        complete_chunk = chunks[2]
+        assert complete_chunk.type == StreamChunkFromModelType.COMPLETE
+        assert len(complete_chunk.data.model_calls) == 2
+        assert complete_chunk.data.model_calls[0].succeeded is False
+        assert complete_chunk.data.model_calls[0].error_type == "ConnectionError"
+        assert complete_chunk.data.model_calls[0].retry_count == 0
+        assert complete_chunk.data.model_calls[1].succeeded is True
+        assert complete_chunk.data.model_calls[1].retry_count == 1
         assert call_count == 2
 
     async def test_no_retry_after_streaming_starts(self):
@@ -201,6 +209,9 @@ class TestStreamResponseRetryLoop:
         assert chunks[0].type == StreamChunkFromModelType.TEXT
         assert chunks[1].type == StreamChunkFromModelType.ERROR
         assert "Network error after text" in chunks[1].data.error
+        assert len(chunks[1].data.model_calls) == 1
+        assert chunks[1].data.model_calls[0].succeeded is False
+        assert chunks[1].data.model_calls[0].error_type == "ConnectionError"
 
     async def test_exponential_backoff_between_retries(self):
         tool_executor = MagicMock()

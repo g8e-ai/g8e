@@ -16,7 +16,7 @@ Covers:
 - Resilience to malformed JSON or empty model responses
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -205,6 +205,9 @@ async def test_triage_defaults_to_complex_on_malformed_json(fake_provider, mock_
 
     assert result.complexity == TriageComplexityClassification.COMPLEX
     assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type
 
 
 async def test_triage_defaults_to_complex_on_empty_model_response(fake_provider, mock_settings):
@@ -224,6 +227,30 @@ async def test_triage_defaults_to_complex_on_empty_model_response(fake_provider,
 
     assert result.complexity == TriageComplexityClassification.COMPLEX
     assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "EmptyResponseError"
+
+
+async def test_triage_defaults_to_complex_on_provider_exception(fake_provider, mock_settings):
+    fake_provider.generate_content_lite = AsyncMock(side_effect=RuntimeError("provider down"))
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="hello",
+        agent_mode=AgentMode.G8E_NOT_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "RuntimeError"
+    assert result.model_call.monotonic_end >= result.model_call.monotonic_start
+    assert result.model_call.input_artifact_hash
 
 
 async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_settings):

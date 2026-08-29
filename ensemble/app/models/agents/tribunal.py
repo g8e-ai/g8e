@@ -434,6 +434,8 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     monotonic_end: float | None = None
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
+    succeeded: bool = True
+    error_type: str | None = None
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )
@@ -554,6 +556,7 @@ class TribunalWardenBlockedPayload(G8eBaseModel):
     risk_level: RiskLevel
     error: str
     is_conflict: bool = False
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )
@@ -642,6 +645,7 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
     final_command: str
     outcome: CommandGenerationOutcome
     vote_score: float
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )

@@ -142,6 +142,9 @@ async def _build_and_emit_result(
             final_command=final_command or "",
             outcome=outcome,
             vote_score=vote_score or 0.0,
+            model_calls=[warden_risk_analysis.model_call]
+            if warden_risk_analysis and warden_risk_analysis.model_call
+            else [],
         ),
     )
     return result

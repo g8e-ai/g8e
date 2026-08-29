@@ -7,9 +7,9 @@
 
 from unittest.mock import AsyncMock, MagicMock, ANY
 import pytest
-from app.constants import EventType, RiskLevel
+from app.constants import ErrorAnalysisCategory, EventType, RiskLevel
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.models.tool_results import CommandRiskAnalysis
+from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
 from app.models.agents.tribunal import TribunalWardenBlockedError
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
@@ -45,7 +45,14 @@ class TestRunWardenStage:
             return_value=CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
         )
         analyzer.analyze_error_and_suggest_fix = AsyncMock(
-            return_value=MagicMock(user_message="Risk!")
+            return_value=ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="Risk",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="Risk",
+                user_message="Risk!",
+            )
         )
 
         emitter = MagicMock(spec=TribunalEmitter)

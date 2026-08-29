@@ -147,21 +147,53 @@ class TriageAgent:
                     logger.warning(
                         "[TRIAGE] Empty response text from lite model, defaulting to complex"
                     )
+                    failed_call = model_call.model_copy(update={
+                        "succeeded": False,
+                        "error_type": "EmptyResponseError",
+                    })
                     return self._escalation_result(
                         "Triage unavailable: lite model returned empty text. Check model availability and connectivity, then retry.",
                         error_code="MODEL_EMPTY_RESPONSE",
-                    ).model_copy(update={"model_call": model_call})
+                    ).model_copy(update={"model_call": failed_call})
                 result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
             except OllamaEmptyResponseError as exc:
                 logger.warning(
                     "[TRIAGE] No response from lite model, defaulting to complex: %s", exc
+                )
+                failed_call = ModelCallTelemetry(
+                    agent_role="triage",
+                    provider=type(provider).__name__,
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=time.monotonic(),
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                    input_artifact_hash=input_artifact_hash,
                 )
                 return self._escalation_result(
                     f"Triage unavailable: lite model returned empty response ({exc}). Check model availability and connectivity, then retry.",
                     error_code="MODEL_EMPTY_RESPONSE",
                     error_class=exc.__class__.__name__,
                     error_message=str(exc),
+                ).model_copy(update={"model_call": failed_call})
+            except Exception as exc:
+                logger.exception("[TRIAGE] Provider call failed, defaulting to complex")
+                failed_call = ModelCallTelemetry(
+                    agent_role="triage",
+                    provider=type(provider).__name__,
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=time.monotonic(),
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                    input_artifact_hash=input_artifact_hash,
                 )
+                return self._escalation_result(
+                    f"Triage unavailable: classification failed ({exc}). Escalating to full LLM for complexity classification. Check provider configuration and retry.",
+                    error_code="CLASSIFICATION_ERROR",
+                    error_class=exc.__class__.__name__,
+                    error_message=str(exc),
+                ).model_copy(update={"model_call": failed_call})
 
             try:
                 logger.info(
@@ -176,12 +208,16 @@ class TriageAgent:
                 logger.warning(
                     "[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text
                 )
+                failed_call = model_call.model_copy(update={
+                    "succeeded": False,
+                    "error_type": type(e).__name__,
+                })
                 return self._escalation_result(
                     f"Triage unavailable: failed to parse model response ({e}). Escalating to full LLM for complexity classification.",
                     error_code="PARSE_FAILURE",
                     error_class=e.__class__.__name__,
                     error_message=str(e),
-                ).model_copy(update={"model_call": model_call})
+                ).model_copy(update={"model_call": failed_call})
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")

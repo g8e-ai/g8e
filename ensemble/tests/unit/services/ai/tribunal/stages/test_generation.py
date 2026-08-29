@@ -91,7 +91,9 @@ class TestRunGenerationPass:
         mock_provider = make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("Connection refused")
         )
-        emitter = TribunalEmitter(None, mock_g8e_context)
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context)
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -109,6 +111,12 @@ class TestRunGenerationPass:
         assert result is None
         assert len(pass_errors) == 1
         assert "Connection refused" in pass_errors[0]
+        event = event_service.publish.await_args.args[0]
+        assert event.payload.success is False
+        assert event.payload.succeeded is False
+        assert event.payload.error_type == "RuntimeError"
+        assert event.payload.monotonic_end >= event.payload.monotonic_start
+        assert event.payload.input_artifact_hash
 
     async def test_empty_response_appends_to_pass_errors(
         self, make_mock_provider, mock_g8e_context, mock_operator_context
@@ -117,7 +125,9 @@ class TestRunGenerationPass:
         mock_response.text = ""
 
         mock_provider = make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, mock_g8e_context)
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context)
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -135,6 +145,10 @@ class TestRunGenerationPass:
         assert result is None
         assert len(pass_errors) == 1
         assert "empty response" in pass_errors[0]
+        event = event_service.publish.await_args.args[0]
+        assert event.payload.succeeded is False
+        assert event.payload.error_type == "EmptyResponseError"
+        assert event.payload.output_artifact_hash
 
 
 @pytest.mark.asyncio

@@ -138,10 +138,14 @@ def _chat_stages(
                     output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
                 ))
             continue
-        if event_type in {
-            "g8e.v1.ai.consensus.voting.audit.completed",
-            "g8e.v1.ai.consensus.session.auditor.failed",
-        } and isinstance(model_calls, list):
+        model_call_event_kinds = {
+            "g8e.v1.ai.consensus.voting.audit.completed": StageKind.TRIBUNAL_AUDITOR,
+            "g8e.v1.ai.consensus.session.auditor.failed": StageKind.TRIBUNAL_AUDITOR,
+            "g8e.v1.ai.consensus.session.completed": StageKind.GRADING,
+            "g8e.v1.ai.consensus.session.warden.blocked": StageKind.GRADING,
+            "g8e.v1.ai.agent.conflict.detected": StageKind.GRADING,
+        }
+        if event_type in model_call_event_kinds and isinstance(model_calls, list):
             for call_index, call in enumerate(model_calls, start=1):
                 if not isinstance(call, dict):
                     continue
@@ -155,7 +159,7 @@ def _chat_stages(
                     stage_id=f"{attempt_id}:sse:{event.id or index}:call:{call_index}",
                     attempt_id=attempt_id,
                     run_id=run_id,
-                    kind=StageKind.TRIBUNAL_AUDITOR,
+                    kind=model_call_event_kinds[event_type],
                     agent_role=str(call.get("agent_role") or "auditor"),
                     provider=str(call.get("provider") or ""),
                     model=str(call.get("model") or ""),
@@ -220,7 +224,11 @@ def _chat_stages(
                 usage_estimated=bool(usage.get("estimated", False)),
                 retry_count=_int(data.get("retry_count")),
                 finish_reason=data.get("finish_reason") if isinstance(data.get("finish_reason"), str) else None,
-                decision=data.get("decision") if isinstance(data.get("decision"), str) else None,
+                decision=(
+                    data.get("decision")
+                    if isinstance(data.get("decision"), str)
+                    else "completed" if data.get("succeeded", True) else "failed"
+                ),
                 input_artifact_hash=str(data.get("input_artifact_hash") or "") or None,
                 output_artifact_hash=str(data.get("output_artifact_hash") or "") or None,
             )

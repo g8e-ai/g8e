@@ -86,6 +86,31 @@ def test_chat_trail_normalizes_primary_and_tribunal_model_stages():
     assert normalized.raw_evidence.index.sha256
 
 
+def test_chat_trail_normalizes_failed_tribunal_generation_call():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.consensus.voting.pass.completed",
+        answer_chars=0,
+        event_count=1,
+        event_counts_by_type={},
+        agent_trail=[
+            AgentTrailEvent(
+                id=1,
+                event_type="g8e.v1.ai.consensus.voting.pass.completed",
+                payload={"event": {"type": "g8e.v1.ai.consensus.voting.pass.completed", "data": {"member": "axiom", "model": "qwen", "provider": "ollama", "input_tokens": 7, "output_tokens": 0, "succeeded": False, "error_type": "RuntimeError"}}},
+            )
+        ],
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    assert len(normalized.stages) == 1
+    assert normalized.stages[0].kind == StageKind.TRIBUNAL_GENERATION
+    assert normalized.stages[0].decision == "failed"
+    assert normalized.usage.observed_call_count == 1
+
+
 def test_chat_trail_normalizes_each_auditor_retry_as_a_model_stage():
     evidence = ChatEvaluationReceipt(
         case_id="case",
@@ -143,6 +168,37 @@ def test_chat_trail_normalizes_failed_auditor_call():
     assert normalized.stages[0].kind == StageKind.TRIBUNAL_AUDITOR
     assert normalized.stages[0].decision == "failed"
     assert normalized.usage.observed_call_count == 1
+
+
+def test_chat_trail_normalizes_each_warden_call_as_a_grading_stage():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.consensus.session.warden.blocked",
+        answer_chars=0,
+        event_count=1,
+        event_counts_by_type={},
+        agent_trail=[
+            AgentTrailEvent(
+                id=1,
+                event_type="g8e.v1.ai.consensus.session.warden.blocked",
+                payload={"event": {"type": "g8e.v1.ai.consensus.session.warden.blocked", "data": {"model_calls": [
+                    {"agent_role": "warden_command_risk", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 8, "output_tokens": 1, "succeeded": True},
+                    {"agent_role": "warden_error", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 6.0, "monotonic_end": 7.0, "input_tokens": 12, "output_tokens": 3, "succeeded": False, "error_type": "OllamaEmptyResponseError"},
+                ]}}},
+            )
+        ],
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    assert len(normalized.stages) == 2
+    assert all(stage.kind == StageKind.GRADING for stage in normalized.stages)
+    assert [stage.agent_role for stage in normalized.stages] == ["warden_command_risk", "warden_error"]
+    assert [stage.decision for stage in normalized.stages] == ["completed", "failed"]
+    assert normalized.usage.observed_call_count == 2
+    assert normalized.usage.expected_call_count == 2
+    assert normalized.usage.reconciled is True
 
 
 def test_chat_usage_reconciliation_flags_token_total_mismatch():
