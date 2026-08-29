@@ -330,6 +330,7 @@ class AnthropicProvider(LLMProvider):
         """Shared streaming handler for assistant/lite calls (text output only)."""
         finish_reason_received = False
         stream_exhausted = False
+        self._record_model_boundary(kwargs)
         async with self._client.messages.stream(**kwargs) as stream:
             try:
                 async for event in stream:
@@ -416,9 +417,9 @@ class AnthropicProvider(LLMProvider):
         finish_reason_received = False
         stream_exhausted = False
 
-        async with self._client.messages.stream(
-            **request.model_dump(mode="json", exclude_none=True)
-        ) as stream:
+        payload = request.model_dump(mode="json", exclude_none=True)
+        self._record_model_boundary(payload)
+        async with self._client.messages.stream(**payload) as stream:
             try:
                 async for event in stream:
                     event_type = event.type
@@ -539,10 +540,10 @@ class AnthropicProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
 
+        payload = request.model_dump(mode="json", exclude_none=True)
         try:
-            response = await self._client.messages.create(
-                **request.model_dump(mode="json", exclude_none=True)
-            )
+            self._record_model_boundary(payload)
+            response = await self._client.messages.create(**payload)
         except Exception as e:
             translate_capability_error(
                 e,
@@ -628,9 +629,9 @@ class AnthropicProvider(LLMProvider):
             thinking_config=None,
         )
 
-        response = await self._client.messages.create(
-            **request.model_dump(mode="json", exclude_none=True)
-        )
+        payload = request.model_dump(mode="json", exclude_none=True)
+        self._record_model_boundary(payload)
+        response = await self._client.messages.create(**payload)
         return self._build_response(response)
 
     async def generate_content_stream_lite(
@@ -704,7 +705,7 @@ class AnthropicProvider(LLMProvider):
             thinking_config=None,
         )
 
-        response = await self._client.messages.create(
-            **request.model_dump(mode="json", exclude_none=True)
-        )
+        payload = request.model_dump(mode="json", exclude_none=True)
+        self._record_model_boundary(payload)
+        response = await self._client.messages.create(**payload)
         return self._build_response(response)

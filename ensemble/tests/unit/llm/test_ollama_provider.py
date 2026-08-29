@@ -29,6 +29,7 @@ from app.llm.llm_types import (
     ToolCallingConfig,
     ToolConfig,
 )
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.ollama import OllamaProvider
 
 PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
@@ -134,7 +135,7 @@ class TestOllamaProviderGeneration:
             yield provider, mock_client
 
     @pytest.mark.asyncio
-    async def test_generate_content_primary(self, provider):
+    async def test_generate_content_primary_records_exact_scrubbed_outbound_payload(self, provider):
         provider, mock_client = provider
 
         mock_response = MagicMock()
@@ -146,7 +147,7 @@ class TestOllamaProviderGeneration:
         mock_response.eval_count = 5
         mock_client.chat = AsyncMock(return_value=mock_response)
 
-        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        contents = [Content(role="user", parts=[Part(text="[REDACTED_EMAIL]")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
             max_output_tokens=1000,
@@ -169,6 +170,14 @@ class TestOllamaProviderGeneration:
             "num_ctx must be explicitly set; Ollama's 4096 default silently "
             "truncates real-world prompts and starves thinking models of output budget"
         )
+        assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
+        unsanitized_kwargs = {
+            **call_kwargs,
+            "messages": [*call_kwargs["messages"][:-1], {"role": "user", "content": "canary@example.com"}],
+        }
+        assert "[REDACTED_EMAIL]" in str(call_kwargs)
+        assert "canary@example.com" not in str(call_kwargs)
+        assert provider.input_artifact_hash != model_boundary_hash(unsanitized_kwargs)
         assert len(response.candidates) == 1
         assert response.candidates[0].content.parts[0].text == "Thinking..."
         assert response.candidates[0].content.parts[1].text == "Hello World"

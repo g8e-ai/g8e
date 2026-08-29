@@ -38,6 +38,7 @@ from app.llm.llm_types import (
     ResponseFormat,
     ResponseJsonSchema,
 )
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.gemini import (
     _content_to_genai,
     _usage_from_sdk,
@@ -514,6 +515,13 @@ class TestGeminiProvider:
                 "model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings
             )
             mock_retry.assert_called_once()
+            model, contents, config = mock_retry.call_args.args
+            payload = {
+                "model": model,
+                "contents": contents,
+                "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
+            }
+            assert provider.input_artifact_hash == model_boundary_hash(payload)
 
     @patch("google.genai.Client")
     async def test_generate_content_assistant(self, mock_client):

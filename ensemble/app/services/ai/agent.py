@@ -38,7 +38,7 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agent import (
     AgentInputs,
@@ -348,6 +348,7 @@ class g8eEnsemble:
                     investigation_id,
                 )
 
+                llm_provider.clear_input_artifact_hash()
                 input_artifact_hash = model_boundary_hash({
                     "model": model_name,
                     "contents": contents,
@@ -368,7 +369,9 @@ class g8eEnsemble:
                         yield chunk
 
                     gated = gated_result_out[0]
+                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
                 except Exception as exc:
+                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
                     model_calls.append(ModelCallTelemetry(
                         agent_role=inputs.agent_mode.value,
                         provider=type(llm_provider).__name__,

@@ -24,6 +24,7 @@ from app.llm.llm_types import (
     ToolGroup,
     Type,
 )
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.open_ai import OpenAIProvider, _contents_to_messages, _tools_to_openai
 
 pytestmark = [pytest.mark.unit]
@@ -347,6 +348,8 @@ class TestOpenAIProvider:
             primary_llm_settings=settings,
         )
 
+        call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+        assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
         assert response.candidates[0].content.parts[0].text == "direct response"
         assert response.usage_metadata.total_token_count == 20
 

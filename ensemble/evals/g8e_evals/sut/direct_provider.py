@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, computed_field
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.llm_types import (
     Content,
     GenerateContentResponse,
@@ -119,6 +119,7 @@ class DirectProviderSUT:
             thinking_config=ThinkingConfig(),
         )
 
+        self._provider.clear_input_artifact_hash()
         input_artifact_hash = model_boundary_hash({
             "model": self._model,
             "contents": contents,
@@ -132,6 +133,7 @@ class DirectProviderSUT:
                 primary_llm_settings=primary_settings,
             )
         except Exception as e:
+            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
             end = time.monotonic()
             logger.warning("Direct provider call failed for task %s: %s", task.id, e)
             evidence = DirectCallEvidence(
@@ -151,6 +153,7 @@ class DirectProviderSUT:
                 chat_evidence=_DirectEvidenceWrapper(evidence),
             )
 
+        input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
         end = time.monotonic()
         answer_text = response.text or ""
         usage = response.usage_metadata

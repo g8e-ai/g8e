@@ -17,7 +17,7 @@ from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
 from app.models.model_telemetry import ModelCallTelemetry
@@ -209,6 +209,7 @@ class AIResponseAnalyzer:
                 response_format=types.ResponseFormat.from_pydantic_schema(response_schema),
             )
             contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
+            client.clear_input_artifact_hash()
             input_artifact_hash = model_boundary_hash({
                 "model": lite_model,
                 "contents": contents,
@@ -227,6 +228,7 @@ class AIResponseAnalyzer:
                 contents=contents,
                 lite_llm_settings=config,
             )
+            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
             logger.info(
                 "[WARDEN-LLM] %s LLM call duration_ms=%.2f",
@@ -236,6 +238,7 @@ class AIResponseAnalyzer:
             response_text = response.text or ""
             analysis = parse_structured_response(response_text, response_model)
         except Exception as exc:
+            input_artifact_hash = recorded_model_boundary_hash(client, input_artifact_hash)
             monotonic_end = time.monotonic()
             telemetry = self._model_call_telemetry(
                 agent_role=agent_role,

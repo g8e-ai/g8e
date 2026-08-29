@@ -243,6 +243,7 @@ class OpenAIProvider(LLMProvider):
                 stream=False,
                 thinking_config=primary_llm_settings.thinking_config,
             )
+            self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
@@ -287,6 +288,7 @@ class OpenAIProvider(LLMProvider):
                 stream=True,
                 thinking_config=primary_llm_settings.thinking_config,
             )
+            self._record_model_boundary(kwargs)
             stream = await self._client.chat.completions.create(**kwargs)
 
             async for chunk in stream:
@@ -331,6 +333,7 @@ class OpenAIProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
         try:
+            self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
         except Exception as e:
             translate_capability_error(
@@ -437,6 +440,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
@@ -498,6 +502,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=False,
         )
+        self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
@@ -574,6 +579,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
@@ -633,6 +639,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=False,
         )
+        self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
 
         parts = []

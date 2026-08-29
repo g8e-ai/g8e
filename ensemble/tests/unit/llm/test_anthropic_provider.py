@@ -42,6 +42,7 @@ from app.llm.llm_types import (
     ToolResponse,
     Type,
 )
+from app.llm.model_evidence import model_boundary_hash
 
 pytestmark = [pytest.mark.unit]
 
@@ -564,6 +565,7 @@ class TestPublicMethodsDelegateCorrectly:
         assert "top_p" not in call_kwargs
         assert call_kwargs["top_k"] == 50
         assert call_kwargs["system"] == "test"
+        assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
         assert result.candidates[0].content.parts[0].text == "ok"
 
     @pytest.mark.asyncio

@@ -193,3 +193,28 @@ async def test_direct_call_evidence_captures_token_usage():
     assert dump["total_token_count"] == 150
     assert dump["thinking_token_count"] == 10
     assert dump["finish_reason"] == "STOP"
+
+
+@pytest.mark.asyncio
+async def test_direct_call_evidence_uses_provider_outbound_payload_hash():
+    sut = DirectProviderSUT(_config())
+    mock_response = MagicMock()
+    mock_response.text = "Answer."
+    mock_response.candidates = [MagicMock(finish_reason="STOP")]
+    mock_response.usage_metadata = MagicMock(
+        prompt_token_count=5,
+        candidates_token_count=3,
+        total_token_count=8,
+        thinking_token_count=0,
+    )
+    sut._provider = MagicMock()
+    sut._provider.input_artifact_hash = "provider-outbound-payload-hash"
+    sut._provider.generate_content_primary = AsyncMock(return_value=mock_response)
+    sut._provider.force_close = AsyncMock()
+
+    response = await sut.get_answer(Task(id="1001", prompt="Write a sentence."))
+
+    assert response.chat_evidence is not None
+    assert response.chat_evidence.model_dump()["input_artifact_hash"] == (
+        "provider-outbound-payload-hash"
+    )

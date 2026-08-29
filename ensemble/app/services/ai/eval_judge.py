@@ -29,7 +29,7 @@ from typing import Any
 from app.models.base import BaseModel, Field, field_validator
 
 from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
@@ -254,6 +254,7 @@ class EvalJudge:
         """Make the LLM call and parse the response into an EvalGrade."""
         if not self._model:
             raise EvalJudgeError("Model is not set", model_calls=model_calls)
+        self._provider.clear_input_artifact_hash()
         input_artifact_hash = model_boundary_hash({
             "model": self._model,
             "contents": contents,
@@ -266,7 +267,9 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
+            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
         except Exception as exc:
+            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
             model_calls.append(self._model_call_telemetry(
                 response=None,
                 response_text="",

@@ -13,6 +13,7 @@ All provider implementations must implement this interface.
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from contextvars import ContextVar
 
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -22,6 +23,7 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     StreamChunkFromModel,
 )
+from app.llm.model_evidence import model_boundary_hash
 
 
 class LLMProvider(ABC):
@@ -29,6 +31,21 @@ class LLMProvider(ABC):
 
     def __init__(self):
         self._is_cached_singleton = False
+        self._input_artifact_hash: ContextVar[str] = ContextVar(
+            f"{type(self).__name__}_input_artifact_hash_{id(self)}", default=""
+        )
+
+    @property
+    def input_artifact_hash(self) -> str:
+        return self._input_artifact_hash.get()
+
+    def clear_input_artifact_hash(self) -> None:
+        self._input_artifact_hash.set("")
+
+    def _record_model_boundary(self, payload: object) -> str:
+        digest = model_boundary_hash(payload)
+        self._input_artifact_hash.set(digest)
+        return digest
 
     @abstractmethod
     async def generate_content_stream_primary(

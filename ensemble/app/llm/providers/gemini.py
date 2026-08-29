@@ -354,6 +354,13 @@ class GeminiProvider(LLMProvider):
         )
         logger.info("Gemini provider initialized")
 
+    def _record_genai_boundary(self, model: str, contents: list[dict], config) -> str:
+        return self._record_model_boundary({
+            "model": model,
+            "contents": contents,
+            "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
+        })
+
     async def _close_resources(self):
         """Clean up SDK client using public API."""
         try:
@@ -683,6 +690,7 @@ class GeminiProvider(LLMProvider):
                 genai_tools.extend(_tool_group_to_genai(tool_group))
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         try:
             async for chunk in self._stream_with_retry(model, genai_contents, gen_config):
                 yield chunk
@@ -712,6 +720,7 @@ class GeminiProvider(LLMProvider):
                 genai_tools.extend(_tool_group_to_genai(tool_group))
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         try:
             return await self._generate_with_retry(model, genai_contents, gen_config)
         except Exception as e:
@@ -751,6 +760,7 @@ class GeminiProvider(LLMProvider):
 
         genai_contents = [_content_to_genai(c) for c in contents]
         gen_config = self._build_genai_config(assistant_llm_settings, None, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         async for chunk in self._stream_with_retry(model, genai_contents, gen_config):
             yield chunk
 
@@ -762,6 +772,7 @@ class GeminiProvider(LLMProvider):
     ) -> GenerateContentResponse:
         genai_contents = [_content_to_genai(c) for c in contents]
         gen_config = self._build_genai_config(assistant_llm_settings, None, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         return await self._generate_with_retry(model, genai_contents, gen_config)
 
     async def generate_content_stream_lite(
@@ -788,6 +799,7 @@ class GeminiProvider(LLMProvider):
 
         genai_contents = [_content_to_genai(c) for c in contents]
         gen_config = self._build_genai_config(lite_llm_settings, None, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         async for chunk in self._stream_with_retry(model, genai_contents, gen_config):
             yield chunk
 
@@ -799,4 +811,5 @@ class GeminiProvider(LLMProvider):
     ) -> GenerateContentResponse:
         genai_contents = [_content_to_genai(c) for c in contents]
         gen_config = self._build_genai_config(lite_llm_settings, None, model)
+        self._record_genai_boundary(model, genai_contents, gen_config)
         return await self._generate_with_retry(model, genai_contents, gen_config)

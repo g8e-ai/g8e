@@ -18,7 +18,7 @@ import time
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
 from app.errors import OllamaEmptyResponseError
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
@@ -114,6 +114,7 @@ class TriageAgent:
             )
 
             try:
+                provider.clear_input_artifact_hash()
                 contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
                 input_artifact_hash = model_boundary_hash({
                     "model": model,
@@ -126,6 +127,7 @@ class TriageAgent:
                     contents=contents,
                     lite_llm_settings=config,
                 )
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 monotonic_end = time.monotonic()
                 usage = response.usage_metadata
                 finish_reason = response.candidates[0].finish_reason if response.candidates else None
@@ -157,6 +159,7 @@ class TriageAgent:
                     ).model_copy(update={"model_call": failed_call})
                 result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
             except OllamaEmptyResponseError as exc:
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 logger.warning(
                     "[TRIAGE] No response from lite model, defaulting to complex: %s", exc
                 )
@@ -177,6 +180,7 @@ class TriageAgent:
                     error_message=str(exc),
                 ).model_copy(update={"model_call": failed_call})
             except Exception as exc:
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 logger.exception("[TRIAGE] Provider call failed, defaulting to complex")
                 failed_call = ModelCallTelemetry(
                     agent_role="triage",

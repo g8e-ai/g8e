@@ -38,3 +38,8 @@ def model_boundary_hash(value: Any) -> str:
         sort_keys=True,
     ).encode()
     return hashlib.sha256(canonical).hexdigest()
+
+
+def recorded_model_boundary_hash(provider: object, fallback: str) -> str:
+    digest = getattr(provider, "input_artifact_hash", "")
+    return digest if isinstance(digest, str) and digest else fallback

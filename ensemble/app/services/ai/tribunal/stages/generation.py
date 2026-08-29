@@ -23,7 +23,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, GenerateContentResponse, Part, Role, ResponseFormat
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -167,6 +167,7 @@ async def _run_generation_pass(
     )
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
+    provider.clear_input_artifact_hash()
     input_artifact_hash = model_boundary_hash({
         "model": model,
         "contents": contents,
@@ -180,6 +181,7 @@ async def _run_generation_pass(
             contents=contents,
             lite_llm_settings=settings,
         )
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         if not response.text or not response.text.strip():
             error_msg = f"Pass {pass_index} ({member.value}): empty response"
             pass_errors.append(error_msg)
@@ -252,6 +254,7 @@ async def _run_generation_pass(
         return normalised
 
     except OllamaEmptyResponseError as exc:
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg)
@@ -261,6 +264,7 @@ async def _run_generation_pass(
         )
         return None
     except Exception as exc:
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)

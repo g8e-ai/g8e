@@ -303,6 +303,7 @@ class OllamaProvider(LLMProvider):
             stream=True,
         )
         try:
+            self._record_model_boundary(chat_kwargs)
             stream = await self._client.chat(**chat_kwargs)
         except Exception as e:
             translate_capability_error(
@@ -400,6 +401,7 @@ class OllamaProvider(LLMProvider):
             stream=False,
         )
         try:
+            self._record_model_boundary(chat_kwargs)
             response = await self._client.chat(**chat_kwargs)
         except Exception as e:
             translate_capability_error(
@@ -487,6 +489,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         stream = await self._client.chat(**chat_kwargs)
 
         async for chunk in stream:
@@ -538,6 +541,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
 
         _raise_on_empty_content(
@@ -602,6 +606,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         stream = await self._client.chat(**chat_kwargs)
 
         async for chunk in stream:
@@ -653,6 +658,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
 
         _raise_on_empty_content(

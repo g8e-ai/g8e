@@ -37,7 +37,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, Part, Role, ResponseFormat
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -241,6 +241,7 @@ async def call_auditor_llm(
         current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
 
     contents = [Content(role=Role.USER, parts=[Part.from_text(current_prompt)])]
+    provider.clear_input_artifact_hash()
     input_artifact_hash = model_boundary_hash({
         "model": model,
         "contents": contents,
@@ -253,7 +254,9 @@ async def call_auditor_llm(
             contents=contents,
             lite_llm_settings=settings,
         )
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
     except Exception as exc:
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
         return AuditorLLMCallResult(
             raw_text="",
             telemetry=ModelCallTelemetry(
