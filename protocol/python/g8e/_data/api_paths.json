@@ -13,6 +13,7 @@
   "governance_signers_prefix": "/api/v1/governance/signers/",
   "operators": "/api/v1/operators",
   "operators_by_id": "/api/v1/operators/",
+  "operators_validate": "/api/v1/operators/validate",
   "operators_bind": "/api/v1/operators/bind",
   "operators_unbind": "/api/v1/operators/unbind",
   "operators_target": "/api/v1/operators/target",
