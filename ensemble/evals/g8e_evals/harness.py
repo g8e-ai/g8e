@@ -10,10 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from g8e.constants import PORTS
 from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e_evals.arms import Arm, ArmDefinition, get_arm_definition
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.models import ScoreDetails, TaskMetadata
 
@@ -52,7 +53,12 @@ class SUTConfig:
 
     l2_private_key: str | None = None
     l2_key_id: str | None = None
-    mode: Literal["receipt", "baseline"] = "receipt"
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
+
+    @property
+    def arm_definition(self) -> ArmDefinition:
+        """Return the static arm definition for this config's arm."""
+        return get_arm_definition(self.arm)
 
 @dataclass
 class Task:
@@ -65,6 +71,7 @@ class Task:
 class Response:
     answer: str
     model: str
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     transaction_id: str | None = None
     chat_evidence: ChatEvaluationReceipt | None = None
     action_receipt: ActionReceipt | None = None
@@ -85,6 +92,7 @@ class RowResult:
     task: Task
     response: Response
     score: Score
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 

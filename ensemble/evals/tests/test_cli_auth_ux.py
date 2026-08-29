@@ -69,7 +69,7 @@ def test_session_id_equal_to_operator_id_is_hard_error():
         [
             "run",
             "--suite", "ifeval_subset",
-            "--mode", "receipt",
+            "--arm", "doctrine",
             "--g8ee-url", "http://g8ee:8000",
             "--auth-project-root", "/runtime/project",
             "--operator-session-id", bad,
@@ -98,7 +98,7 @@ def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pyte
         [
             "run",
             "--suite", "ifeval_subset",
-            "--mode", "receipt",
+            "--arm", "doctrine",
             "--g8ee-url", "http://g8ee:8000",
             "--auth-project-root", "/runtime/project",
         ],
@@ -173,7 +173,7 @@ def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.M
         [
             "run",
             "--suite", "ifeval_subset",
-            "--mode", "receipt",
+            "--arm", "doctrine",
             "--g8ee-url", "http://g8ee:8000",
             "--auth-project-root", "/runtime/project",
         ],
@@ -190,7 +190,7 @@ def test_run_requires_explicit_g8ee_endpoint():
         [
             "run",
             "--suite", "ifeval_subset",
-            "--mode", "receipt",
+            "--arm", "doctrine",
             "--auth-project-root", "/runtime/project",
         ],
     )
@@ -210,7 +210,7 @@ def test_dead_operator_id_flag_is_removed():
         [
             "run",
             "--suite", "ifeval_subset",
-            "--mode", "baseline",
+            "--arm", "ensemble_ungoverned",
             "--operator-id", "ignored",
         ],
     )

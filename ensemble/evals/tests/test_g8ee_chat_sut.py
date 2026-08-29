@@ -196,7 +196,6 @@ async def test_get_answer_surfaces_sse_error(monkeypatch):
     config.operator_url = "http://operator"
     config.primary.provider = "test"
     config.primary.model = "model"
-    config.mode = "real"
 
     mock_env = MagicMock()
     mock_env.g8ee_url = "http://g8ee"

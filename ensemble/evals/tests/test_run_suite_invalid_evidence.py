@@ -36,6 +36,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from g8e_evals import cli
+from g8e_evals.arms import Arm
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
@@ -62,7 +63,7 @@ def _config() -> SUTConfig:
         operator_url="https://gateway:8443",
         operator_session_id="op-session",
         auth_context=_auth_context(),
-        mode="receipt",
+        arm=Arm.DOCTRINE,
     )
 
 
@@ -98,6 +99,33 @@ def _patch_loader(monkeypatch, tasks: list[Task]) -> None:
             yield from tasks
 
     monkeypatch.setattr(cli, "IFEvalLoader", _StubLoader)
+
+
+def _patch_provenance(monkeypatch) -> None:
+    """Replace load_provenance with a stub returning a minimal provenance."""
+    from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance, DatasetOutput
+
+    provenance = DatasetProvenance(
+        schema_version=1,
+        benchmark="ifeval_subset",
+        source=__import__("g8e_evals.benchmarks.ifeval.provenance", fromlist=["DatasetSource"]).DatasetSource(
+            url="https://example.com",
+            revision="rev",
+            license_spdx="Apache-2.0",
+            license_url="https://example.com",
+            sha256="0" * 64,
+        ),
+        selected_keys=[1001],
+        transformation=__import__("g8e_evals.benchmarks.ifeval.provenance", fromlist=["DatasetTransformation"]).DatasetTransformation(
+            description="stub",
+            code_path="stub",
+            code_sha256="0" * 64,
+            fixture_path="stub",
+            fixture_sha256="0" * 64,
+        ),
+        output=DatasetOutput(path="input_data.jsonl", rows=1, sha256="0" * 64),
+    )
+    monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
 
 def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
@@ -145,6 +173,7 @@ def _patch_collector(monkeypatch) -> MagicMock:
 @pytest.mark.asyncio
 async def test_run_suite_settings_401_raises_and_writes_no_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings_error=AuthenticationError("g8ee settings returned HTTP 401"))
     _patch_collector(monkeypatch)
@@ -161,6 +190,7 @@ async def test_run_suite_settings_401_raises_and_writes_no_report(tmp_path, monk
 @pytest.mark.asyncio
 async def test_run_suite_settings_403_raises_and_writes_no_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings_error=AuthenticationError("g8ee settings returned HTTP 403"))
     _patch_collector(monkeypatch)
@@ -179,6 +209,7 @@ async def test_run_suite_settings_403_raises_and_writes_no_report(tmp_path, monk
 @pytest.mark.asyncio
 async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -196,6 +227,7 @@ async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatc
 @pytest.mark.asyncio
 async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -213,6 +245,7 @@ async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatc
 @pytest.mark.asyncio
 async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -230,6 +263,7 @@ async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_pa
 @pytest.mark.asyncio
 async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -248,6 +282,7 @@ async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_pa
 @pytest.mark.asyncio
 async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(
@@ -270,6 +305,7 @@ async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkey
 @pytest.mark.asyncio
 async def test_run_suite_valid_response_writes_report_and_does_not_raise(tmp_path, monkeypatch):
     _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch, passed=True)
     _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
                answer_response=Response(

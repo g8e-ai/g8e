@@ -56,6 +56,7 @@ from app.models.internal_api import (
 from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths
+from g8e_evals.arms import Arm
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
@@ -195,6 +196,7 @@ class G8eeChatSUT:
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=f"g8ee chat POST failed: {e}",
                 )
@@ -209,6 +211,7 @@ class G8eeChatSUT:
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=reason,
                 )
@@ -219,6 +222,7 @@ class G8eeChatSUT:
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=f"g8ee chat returned invalid body: {e}",
                 )
@@ -250,26 +254,29 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
+                arm=self.config.arm,
                 transaction_id=Gateway_tx_id,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
             )
 
-        if self.config.mode == "baseline":
+        if not self.config.arm_definition.receipt_binding:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
+                arm=self.config.arm,
                 transaction_id=None,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
-                unbound_reason="baseline mode (binding disabled)",
+                unbound_reason=f"{self.config.arm.value} arm (binding disabled)",
             )
 
         if terminal_event in _FAILURE_TERMINAL_EVENTS:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
+                arm=self.config.arm,
                 transaction_id=Gateway_tx_id,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
@@ -281,6 +288,7 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
+                arm=self.config.arm,
                 transaction_id=Gateway_tx_id,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
@@ -291,6 +299,7 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
+                arm=self.config.arm,
                 transaction_id=Gateway_tx_id,
                 chat_evidence=receipt,
                 binding=BindingType.RECEIPT_BOUND,
@@ -299,6 +308,7 @@ class G8eeChatSUT:
         return Response(
             answer=answer_text,
             model=self.model_provider,
+            arm=self.config.arm,
             transaction_id=None,
             chat_evidence=receipt,
             binding=BindingType.UNBOUND,
