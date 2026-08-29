@@ -28,6 +28,7 @@ from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
 from app.models.command_request_payloads import TargetedOperatorBase
@@ -225,6 +226,7 @@ class AgentStreamState(G8eBaseModel):
 
     response_text: str = ""
     token_usage: TokenUsage | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     finish_reason: str | None = None
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
@@ -259,6 +261,7 @@ class StreamChunkData(G8eBaseModel):
     response_length: int | None = None
     grounding_used: bool | None = None
     token_usage: TokenUsage | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     error: str | None = None
     error_type: str | None = None
     success: bool | None = None
@@ -288,6 +291,7 @@ class TurnResult(G8eBaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
+    thinking_tokens: int = 0
 
 
 class ToolCallResponse(G8eBaseModel):

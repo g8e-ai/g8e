@@ -15,6 +15,7 @@ from app.constants import (
 from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
 from app.models.investigations import ConversationHistoryMessage
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 
 
@@ -73,3 +74,4 @@ class TriageResult(G8eBaseModel):
         default=None,
         description="Detailed error message for internal logging/tracking only, never exposed to AI in prompt context.",
     )
+    model_call: ModelCallTelemetry | None = None

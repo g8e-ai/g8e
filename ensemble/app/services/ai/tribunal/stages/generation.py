@@ -7,6 +7,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Any
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
@@ -22,6 +23,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, Part, Role, ResponseFormat
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -121,11 +123,19 @@ async def _run_generation_pass(
     )
 
     try:
+        contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
+        input_artifact_hash = model_boundary_hash({
+            "model": model,
+            "contents": contents,
+            "settings": settings,
+        })
+        monotonic_start = time.monotonic()
         response = await provider.generate_content_lite(
             model=model,
-            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
+            contents=contents,
             lite_llm_settings=settings,
         )
+        monotonic_end = time.monotonic()
 
         if not response.text or not response.text.strip():
             error_msg = f"Pass {pass_index} ({member.value}): empty response"
@@ -168,6 +178,11 @@ async def _run_generation_pass(
             normalised[:80],
         )
 
+        usage = response.usage_metadata
+        input_tokens = getattr(usage, "prompt_token_count", 0)
+        output_tokens = getattr(usage, "candidates_token_count", 0)
+        thinking_tokens = getattr(usage, "thinking_token_count", 0)
+        finish_reason = response.candidates[0].finish_reason if response.candidates else None
         await emitter.emit(
             EventType.AI_CONSENSUS_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
@@ -175,6 +190,16 @@ async def _run_generation_pass(
                 member=member,
                 candidate=normalised,
                 success=True,
+                provider=type(provider).__name__,
+                model=model,
+                input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
+                output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
+                thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
+                finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+                monotonic_start=monotonic_start,
+                monotonic_end=monotonic_end,
+                input_artifact_hash=input_artifact_hash,
+                output_artifact_hash=model_boundary_hash(response.text),
             ),
         )
 

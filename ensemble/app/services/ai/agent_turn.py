@@ -55,6 +55,7 @@ class TurnState(BaseModel):
     finish_reason: str = DEFAULT_FINISH_REASON
     input_tokens: int = 0
     output_tokens: int = 0
+    thinking_tokens: int = 0
     total_tokens: int = 0
 
     def flush_thinking_block(self) -> None:
@@ -75,9 +76,11 @@ def handle_usage_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> N
         usage = chunk.usage_metadata
         chunk_in = usage.prompt_token_count or 0
         chunk_out = usage.candidates_token_count or 0
+        chunk_thinking = usage.thinking_token_count or 0
         chunk_total = usage.total_token_count or 0
         state.input_tokens += chunk_in
         state.output_tokens += chunk_out
+        state.thinking_tokens += chunk_thinking
         state.total_tokens += chunk_total
         logger.info("[TOKEN_USAGE] Chunk: in=%d out=%d total=%d", chunk_in, chunk_out, chunk_total)
 
@@ -280,6 +283,7 @@ async def process_provider_turn(
             input_tokens=state.input_tokens,
             output_tokens=state.output_tokens,
             total_tokens=state.total_tokens,
+            thinking_tokens=state.thinking_tokens,
         )
     )
 

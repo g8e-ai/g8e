@@ -81,6 +81,8 @@ class TestRunGenerationPass:
         assert event.payload.input_tokens == 13
         assert event.payload.output_tokens == 5
         assert event.payload.thinking_tokens == 2
+        assert len(event.payload.input_artifact_hash) == 64
+        assert len(event.payload.output_artifact_hash) == 64
         assert event.payload.monotonic_end >= event.payload.monotonic_start
 
     async def test_exception_appends_to_pass_errors(

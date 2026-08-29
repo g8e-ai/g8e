@@ -678,6 +678,7 @@ class TestTokenAccumulation:
                 chunk.usage_metadata = MagicMock()
                 chunk.usage_metadata.prompt_token_count = 10
                 chunk.usage_metadata.candidates_token_count = 5
+                chunk.usage_metadata.thinking_token_count = 2
                 chunk.usage_metadata.total_token_count = 15
                 yield chunk
 
@@ -703,7 +704,17 @@ class TestTokenAccumulation:
         assert complete_chunk.data.token_usage is not None
         assert complete_chunk.data.token_usage.input_tokens == 10
         assert complete_chunk.data.token_usage.output_tokens == 5
+        assert complete_chunk.data.token_usage.thinking_tokens == 2
         assert complete_chunk.data.token_usage.total_tokens == 15
+        assert len(complete_chunk.data.model_calls) == 1
+        assert complete_chunk.data.model_calls[0].agent_role == context.agent_mode.value
+        assert complete_chunk.data.model_calls[0].model == "test-model"
+        assert complete_chunk.data.model_calls[0].input_tokens == 10
+        assert complete_chunk.data.model_calls[0].output_tokens == 5
+        assert complete_chunk.data.model_calls[0].thinking_tokens == 2
+        assert len(complete_chunk.data.model_calls[0].input_artifact_hash) == 64
+        assert len(complete_chunk.data.model_calls[0].output_artifact_hash) == 64
+        assert complete_chunk.data.model_calls[0].monotonic_end >= complete_chunk.data.model_calls[0].monotonic_start
 
     async def test_emits_none_token_usage_when_no_tokens(self):
         tool_executor = MagicMock()

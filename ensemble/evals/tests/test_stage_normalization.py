@@ -59,7 +59,7 @@ def test_chat_trail_normalizes_primary_and_tribunal_model_stages():
         AgentTrailEvent(
             id=2,
             event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
-            payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "finish_reason": "stop", "token_usage": {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16}}}},
+            payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "model_calls": [{"agent_role": "sage", "provider": "OllamaProvider", "model": "qwen", "monotonic_start": 4.0, "monotonic_end": 5.0, "input_tokens": 11, "output_tokens": 5, "finish_reason": "stop"}], "token_usage": {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16}}}},
             monotonic_received_at=22.0,
         ),
     ]
@@ -84,6 +84,29 @@ def test_chat_trail_normalizes_primary_and_tribunal_model_stages():
     assert normalized.raw_evidence is not None
     assert json.loads(normalized.raw_evidence.content)["investigation_id"] == "investigation"
     assert normalized.raw_evidence.index.sha256
+
+
+def test_chat_usage_reconciliation_flags_token_total_mismatch():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=1,
+        event_counts_by_type={},
+        agent_trail=[
+            AgentTrailEvent(
+                id=1,
+                event_type="g8e.v1.ai.llm.chat.iteration.text.completed",
+                payload={"event": {"type": "g8e.v1.ai.llm.chat.iteration.text.completed", "data": {"agent_mode": "sage", "token_usage": {"input_tokens": 20, "output_tokens": 10}, "model_calls": [{"agent_role": "sage", "input_tokens": 18, "output_tokens": 10}]}}},
+            )
+        ],
+    )
+
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+
+    assert normalized.usage.reconciled is False
+    assert normalized.usage.input_token_delta == -2
 
 
 def test_chat_usage_reconciliation_flags_uninstrumented_calls():

@@ -423,6 +423,16 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     candidate: str | None = None
     success: bool = False
     error: str | None = None
+    provider: str = ""
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    finish_reason: str | None = None
+    monotonic_start: float | None = None
+    monotonic_end: float | None = None
+    input_artifact_hash: str = ""
+    output_artifact_hash: str = ""
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )

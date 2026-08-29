@@ -25,10 +25,11 @@ import logging
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.llm_types import (
     Content,
     GenerateContentResponse,
@@ -65,8 +66,11 @@ class DirectCallEvidence(BaseModel):
     thinking_token_count: int = 0
     monotonic_start: float = 0.0
     monotonic_end: float = 0.0
+    input_artifact_hash: str = ""
+    output_artifact_hash: str = ""
     error: str | None = None
 
+    @computed_field
     @property
     def elapsed_s(self) -> float:
         return self.monotonic_end - self.monotonic_start
@@ -115,6 +119,11 @@ class DirectProviderSUT:
             thinking_config=ThinkingConfig(),
         )
 
+        input_artifact_hash = model_boundary_hash({
+            "model": self._model,
+            "contents": contents,
+            "settings": primary_settings,
+        })
         start = time.monotonic()
         try:
             response: GenerateContentResponse = await self._provider.generate_content_primary(
@@ -130,6 +139,7 @@ class DirectProviderSUT:
                 model=self._model,
                 monotonic_start=start,
                 monotonic_end=end,
+                input_artifact_hash=input_artifact_hash,
                 error=str(e),
             )
             return Response(
@@ -155,6 +165,8 @@ class DirectProviderSUT:
             thinking_token_count=usage.thinking_token_count,
             monotonic_start=start,
             monotonic_end=end,
+            input_artifact_hash=input_artifact_hash,
+            output_artifact_hash=model_boundary_hash(answer_text),
         )
 
         return Response(

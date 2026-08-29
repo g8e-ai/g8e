@@ -121,6 +121,11 @@ async def test_triage_returns_simple_classification_from_llm(fake_provider, mock
     assert result.complexity == TriageComplexityClassification.SIMPLE
     assert result.intent == TriageIntentClassification.INFORMATION
     assert result.complexity_confidence == TriageConfidence.HIGH
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "triage"
+    assert result.model_call.model == "lite-model"
+    assert len(result.model_call.input_artifact_hash) == 64
+    assert len(result.model_call.output_artifact_hash) == 64
 
 
 async def test_triage_returns_complex_classification_from_llm(fake_provider, mock_settings):

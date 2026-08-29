@@ -24,6 +24,7 @@ All other concerns live in dedicated modules:
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
@@ -37,10 +38,12 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
+    ModelCallTelemetry,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
@@ -279,9 +282,12 @@ class g8eEnsemble:
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
 
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_tokens = 0
+        triage_call = inputs.triage_result.model_call if inputs.triage_result else None
+        total_input_tokens = triage_call.input_tokens if triage_call else 0
+        total_output_tokens = triage_call.output_tokens if triage_call else 0
+        total_thinking_tokens = triage_call.thinking_tokens if triage_call else 0
+        total_tokens = triage_call.total_tokens if triage_call else 0
+        model_calls: list[ModelCallTelemetry] = [triage_call] if triage_call else []
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
         tool_response_sizes: list[int] = []
@@ -335,6 +341,12 @@ class g8eEnsemble:
                     investigation_id,
                 )
 
+                input_artifact_hash = model_boundary_hash({
+                    "model": model_name,
+                    "contents": contents,
+                    "settings": generation_config,
+                })
+                monotonic_start = time.monotonic()
                 stream_response = llm_provider.generate_content_stream_primary(
                     model=model_name,
                     contents=contents,
@@ -349,9 +361,25 @@ class g8eEnsemble:
 
                 gated = gated_result_out[0]
                 turn_result = gated.turn_result
+                monotonic_end = time.monotonic()
+                model_calls.append(ModelCallTelemetry(
+                    agent_role=inputs.agent_mode.value,
+                    provider=type(llm_provider).__name__,
+                    model=model_name,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=monotonic_end,
+                    input_tokens=turn_result.input_tokens,
+                    output_tokens=turn_result.output_tokens,
+                    thinking_tokens=turn_result.thinking_tokens,
+                    total_tokens=turn_result.total_tokens,
+                    finish_reason=turn_result.finish_reason,
+                    input_artifact_hash=input_artifact_hash,
+                    output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                ))
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
+                total_thinking_tokens += turn_result.thinking_tokens
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
@@ -433,6 +461,7 @@ class g8eEnsemble:
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
                 total_tokens=total_tokens,
+                thinking_tokens=total_thinking_tokens,
             )
             if (total_input_tokens or total_output_tokens or total_tokens)
             else None
@@ -450,6 +479,7 @@ class g8eEnsemble:
             data=StreamChunkData(
                 finish_reason=final_finish_reason or DEFAULT_FINISH_REASON,
                 token_usage=token_usage,
+                model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
             ),
         )

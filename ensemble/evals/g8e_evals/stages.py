@@ -90,15 +90,54 @@ def _direct_stage(wire: dict[str, Any], run_id: str, attempt_id: str) -> StageOb
         output_tokens=_int(wire.get("candidates_token_count")),
         thinking_tokens=_int(wire.get("thinking_token_count")),
         finish_reason=wire.get("finish_reason") if isinstance(wire.get("finish_reason"), str) else None,
+        input_artifact_hash=str(wire.get("input_artifact_hash") or "") or None,
+        output_artifact_hash=str(wire.get("output_artifact_hash") or "") or None,
     )
 
 
-def _chat_stages(evidence: Any, run_id: str, attempt_id: str) -> tuple[list[StageObservation], int]:
+def _chat_stages(
+    evidence: Any, run_id: str, attempt_id: str
+) -> tuple[list[StageObservation], int, tuple[int, int, int]]:
     stages: list[StageObservation] = []
-    expected_call_count = 0
+    declared_primary_calls = 0
+    reported_input = 0
+    reported_output = 0
+    reported_thinking = 0
     for index, event in enumerate(evidence.agent_trail, start=1):
         data = _event_data(event.payload)
         event_type = event.event_type
+        model_calls = data.get("model_calls")
+        if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and isinstance(model_calls, list) and model_calls:
+            declared_primary_calls = max(declared_primary_calls, len(model_calls))
+            aggregate_usage = data.get("token_usage")
+            if isinstance(aggregate_usage, dict):
+                reported_input += _int(aggregate_usage.get("input_tokens"))
+                reported_output += _int(aggregate_usage.get("output_tokens"))
+                reported_thinking += _int(aggregate_usage.get("thinking_tokens"))
+            for call_index, call in enumerate(model_calls, start=1):
+                if not isinstance(call, dict):
+                    continue
+                stages.append(StageObservation(
+                    stage_id=f"{attempt_id}:sse:{event.id or index}:call:{call_index}",
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    kind=StageKind.MODEL_INFERENCE,
+                    agent_role=str(call.get("agent_role") or data.get("agent_mode") or "primary"),
+                    provider=str(call.get("provider") or ""),
+                    model=str(call.get("model") or ""),
+                    monotonic_start=float(call.get("monotonic_start") or 0.0),
+                    monotonic_end=float(call.get("monotonic_end") or 0.0),
+                    clock_domain="g8ee-process",
+                    timing_source="provider_call_monotonic",
+                    input_tokens=_int(call.get("input_tokens")),
+                    output_tokens=_int(call.get("output_tokens")),
+                    thinking_tokens=_int(call.get("thinking_tokens")),
+                    retry_count=_int(call.get("retry_count")),
+                    finish_reason=call.get("finish_reason") if isinstance(call.get("finish_reason"), str) else None,
+                    input_artifact_hash=str(call.get("input_artifact_hash") or "") or None,
+                    output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
+                ))
+            continue
         kind: StageKind | None = None
         role = ""
         deterministic_kinds = {
@@ -121,7 +160,7 @@ def _chat_stages(evidence: Any, run_id: str, attempt_id: str) -> tuple[list[Stag
         elif event_type == "g8e.v1.ai.llm.chat.iteration.text.completed":
             kind = StageKind.MODEL_INFERENCE
             role = str(data.get("agent_mode") or "primary")
-            expected_call_count = max(expected_call_count, _int(data.get("model_call_count")))
+            declared_primary_calls = max(declared_primary_calls, _int(data.get("model_call_count")))
         if kind is None:
             continue
         usage_value = data.get("token_usage")
@@ -147,13 +186,21 @@ def _chat_stages(evidence: Any, run_id: str, attempt_id: str) -> tuple[list[Stag
                 retry_count=_int(data.get("retry_count")),
                 finish_reason=data.get("finish_reason") if isinstance(data.get("finish_reason"), str) else None,
                 decision=data.get("decision") if isinstance(data.get("decision"), str) else None,
+                input_artifact_hash=str(data.get("input_artifact_hash") or "") or None,
+                output_artifact_hash=str(data.get("output_artifact_hash") or "") or None,
             )
         )
+        if kind in {StageKind.MODEL_INFERENCE, StageKind.TRIBUNAL_GENERATION, StageKind.TRIBUNAL_AUDITOR, StageKind.GRADING}:
+            reported_input += _int(usage.get("input_tokens"))
+            reported_output += _int(usage.get("output_tokens"))
+            reported_thinking += _int(usage.get("thinking_tokens"))
     model_call_count = sum(
         stage.kind in {StageKind.MODEL_INFERENCE, StageKind.TRIBUNAL_GENERATION, StageKind.TRIBUNAL_AUDITOR, StageKind.GRADING}
         for stage in stages
     )
-    return stages, expected_call_count or model_call_count
+    observed_primary_calls = sum(stage.kind == StageKind.MODEL_INFERENCE for stage in stages)
+    expected_call_count = (declared_primary_calls or observed_primary_calls) + model_call_count - observed_primary_calls
+    return stages, expected_call_count, (reported_input, reported_output, reported_thinking)
 
 
 def normalize_attempt_evidence(
@@ -166,11 +213,16 @@ def normalize_attempt_evidence(
         stages = [_direct_stage(wire, run_id, attempt_id)]
         raw_evidence = None
         expected_call_count = 1
+        reported_tokens = (
+            _int(wire.get("prompt_token_count")),
+            _int(wire.get("candidates_token_count")),
+            _int(wire.get("thinking_token_count")),
+        )
     else:
-        stages, expected_call_count = _chat_stages(evidence, run_id, attempt_id)
+        stages, expected_call_count, reported_tokens = _chat_stages(evidence, run_id, attempt_id)
         raw_evidence = _raw_artifact(evidence, run_id, attempt_id)
         stages = [
-            stage.model_copy(update={"output_artifact_hash": raw_evidence.index.sha256})
+            stage.model_copy(update={"output_artifact_hash": stage.output_artifact_hash or raw_evidence.index.sha256})
             for stage in stages
         ]
 
@@ -183,9 +235,9 @@ def normalize_attempt_evidence(
     observed_output = sum(stage.output_tokens or 0 for stage in model_stages)
     observed_thinking = sum(stage.thinking_tokens or 0 for stage in model_stages)
     usage = UsageReconciliation(
-        reported_input_tokens=observed_input,
-        reported_output_tokens=observed_output,
-        reported_thinking_tokens=observed_thinking,
+        reported_input_tokens=reported_tokens[0],
+        reported_output_tokens=reported_tokens[1],
+        reported_thinking_tokens=reported_tokens[2],
         observed_input_tokens=observed_input,
         observed_output_tokens=observed_output,
         observed_thinking_tokens=observed_thinking,
