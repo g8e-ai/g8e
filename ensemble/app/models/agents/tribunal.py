@@ -15,6 +15,7 @@ from app.constants import (
     AuditorReason,
     RiskLevel,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.tool_results import CommandRiskAnalysis
 
 
@@ -454,6 +455,7 @@ class TribunalAuditorCompletedPayload(G8eBaseModel):
     revision: str | None = None
     reason: AuditorReason
     error: str | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     swap_to_cluster: str | None = Field(
         default=None,
         description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)",
@@ -569,6 +571,7 @@ class TribunalAuditorFailedPayload(G8eBaseModel):
     reason: AuditorReason
     error: str | None = None
     candidate_command: str
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
 
 
 class TribunalVotingCompletedPayload(G8eBaseModel):

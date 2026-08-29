@@ -138,6 +138,41 @@ def _chat_stages(
                     output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
                 ))
             continue
+        if event_type in {
+            "g8e.v1.ai.consensus.voting.audit.completed",
+            "g8e.v1.ai.consensus.session.auditor.failed",
+        } and isinstance(model_calls, list):
+            for call_index, call in enumerate(model_calls, start=1):
+                if not isinstance(call, dict):
+                    continue
+                input_tokens = _int(call.get("input_tokens"))
+                output_tokens = _int(call.get("output_tokens"))
+                thinking_tokens = _int(call.get("thinking_tokens"))
+                reported_input += input_tokens
+                reported_output += output_tokens
+                reported_thinking += thinking_tokens
+                stages.append(StageObservation(
+                    stage_id=f"{attempt_id}:sse:{event.id or index}:call:{call_index}",
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    kind=StageKind.TRIBUNAL_AUDITOR,
+                    agent_role=str(call.get("agent_role") or "auditor"),
+                    provider=str(call.get("provider") or ""),
+                    model=str(call.get("model") or ""),
+                    monotonic_start=float(call.get("monotonic_start") or 0.0),
+                    monotonic_end=float(call.get("monotonic_end") or 0.0),
+                    clock_domain="g8ee-process",
+                    timing_source="provider_call_monotonic",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    thinking_tokens=thinking_tokens,
+                    retry_count=_int(call.get("retry_count")),
+                    finish_reason=call.get("finish_reason") if isinstance(call.get("finish_reason"), str) else None,
+                    input_artifact_hash=str(call.get("input_artifact_hash") or "") or None,
+                    output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
+                    decision="completed" if call.get("succeeded", True) else "failed",
+                ))
+            continue
         kind: StageKind | None = None
         role = ""
         deterministic_kinds = {

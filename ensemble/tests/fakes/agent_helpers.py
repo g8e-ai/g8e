@@ -285,7 +285,6 @@ def make_event_service():
     ):
         """Capture investigation event calls and create proper SessionEvent."""
         from app.models.http_context import RequestContext
-        
 
         ctx = RequestContext(
             web_session_id=web_session_id,

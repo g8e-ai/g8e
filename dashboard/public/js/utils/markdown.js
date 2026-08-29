@@ -347,7 +347,10 @@ class MarkdownRenderer {
                 
                 const id = `mermaid-${crypto.randomUUID()}`;
                 const { svg } = await mermaid.render(id, content);
-                element.innerHTML = svg;
+                const sanitizedSvg = this._DOMPurify
+                    ? this._DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+                    : svg;
+                element.innerHTML = sanitizedSvg;
                 element.classList.remove('mermaid');
                 element.classList.add('mermaid-rendered');
             } catch (err) {

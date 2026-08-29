@@ -20,5 +20,7 @@ class ModelCallTelemetry(G8eBaseModel):
     total_tokens: int = 0
     finish_reason: str | None = None
     retry_count: int = 0
+    succeeded: bool = True
+    error_type: str | None = None
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""

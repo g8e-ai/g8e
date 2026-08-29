@@ -81,7 +81,7 @@ export class OperatorSlotService {
         await this.operatorDataService.updateOperator(operatorId, terminateData);
 
         const slotNumber = oldOperator.slot_number;
-        const newOperatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const newOperatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${crypto.randomUUID()}`;
         const newApiKey = this.generateOperatorApiKey(newOperatorId);
 
         let newCertInfo = CertInfo.empty();
@@ -127,7 +127,7 @@ export class OperatorSlotService {
 
     async createOperatorSlot(params) {
         const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix } = params;
-        const operatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const operatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${crypto.randomUUID()}`;
         const apiKey = this.generateOperatorApiKey(operatorId);
 
         let certInfo = CertInfo.empty();
