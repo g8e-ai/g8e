@@ -340,6 +340,8 @@ def _receipt_stages(
             l2_signature_digest=observation.l2_signature_digest,
             l3_signature_digest=observation.l3_signature_digest,
             audit_record_id=observation.audit_record_id,
+            doctrine_bundle_hash=observation.doctrine_bundle_hash,
+            doctrine_bundle_version=observation.doctrine_bundle_version,
             parent_stage_id=observation.parent_stage_id or None,
         ))
     return stages

@@ -148,8 +148,14 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	if err == nil {
 		t.Error("Expected L3 rejection error, got nil")
 	}
-	if receipt != nil {
-		t.Error("Expected nil receipt on L3 rejection, got receipt")
+	if receipt == nil {
+		t.Fatal("Expected signed failed receipt on L3 rejection, got nil")
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED || receipt.Signature == "" {
+		t.Fatalf("Expected signed failed receipt on L3 rejection, got: %#v", receipt)
+	}
+	if len(receipt.DeterministicStageEvidence) < 2 || receipt.DeterministicStageEvidence[len(receipt.DeterministicStageEvidence)-2].Kind != operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY || receipt.DeterministicStageEvidence[len(receipt.DeterministicStageEvidence)-2].Outcome != operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED {
+		t.Fatalf("Expected failed L3 stage evidence, got: %#v", receipt.DeterministicStageEvidence)
 	}
 
 	// Verify the error is an L3-related error
@@ -416,8 +422,11 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	if !errors.Is(err, governance.ErrL3NotaryNotConfigured) {
 		t.Fatalf("Expected ErrL3NotaryNotConfigured, got: %v", err)
 	}
-	if receipt != nil {
-		t.Error("Expected nil receipt with nil L3 notary, got receipt")
+	if receipt == nil {
+		t.Fatal("Expected signed failed receipt with nil L3 notary, got nil")
+	}
+	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED || receipt.Signature == "" {
+		t.Fatalf("Expected signed failed receipt with nil L3 notary, got: %#v", receipt)
 	}
 }
 

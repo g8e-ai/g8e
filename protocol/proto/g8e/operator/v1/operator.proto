@@ -515,10 +515,21 @@ message DeterministicStageEvidence {
   string l3_signature_digest = 25;
   string audit_record_id = 26;
   string parent_stage_id = 27;
+  string doctrine_bundle_hash = 28;
+  string doctrine_bundle_version = 29;
 }
 
 // ActionReceipt is the signed proof of a completed or failed mutation.
 // It is emitted by the Warden after execution.
+message ReceiptPersistenceAttestation {
+  string transaction_id = 1;
+  string receipt_signature_digest = 2;
+  int64 persisted_at_unix_ms = 3;
+  string audit_record_id = 4;
+  string signer_key_id = 5;
+  string signature = 6;
+}
+
 message ActionReceipt {
   // Original GovernanceEnvelope ID
   string transaction_id = 1;
@@ -556,6 +567,7 @@ message ActionReceipt {
   L3Status l3_status = 12;
 
   repeated DeterministicStageEvidence deterministic_stage_evidence = 13;
+  ReceiptPersistenceAttestation final_persistence_attestation = 14;
 }
 
 // CommitmentAttestation is the Auditor's signed record that a verified

@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.3.0"
+SCHEMA_VERSION = "1.4.0"
 
 
 class TerminalStatus(StrEnum):
@@ -410,6 +410,8 @@ class StageObservation(BaseModel):
     l2_signature_digest: str = ""
     l3_signature_digest: str = ""
     audit_record_id: str = ""
+    doctrine_bundle_hash: str = ""
+    doctrine_bundle_version: str = ""
 
     parent_stage_id: str | None = None
     child_stage_ids: list[str] = Field(default_factory=list)

@@ -149,10 +149,16 @@ func TestL4Warden_Doctrine_ReplayAndStateRootReject(t *testing.T) {
 		t.Parallel()
 		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true))
 		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey, "doctrine")
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
+		rejected, err := verifier.VerifyEnvelope(context.Background(), env)
 		if !errors.Is(err, ErrStateRootMismatch) {
 			t.Fatalf("expected state root mismatch, got %v", err)
 		}
+		require.NotNil(t, rejected)
+		require.Len(t, rejected.DeterministicStageEvidence, 2)
+		assert.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE, rejected.DeterministicStageEvidence[0].Kind)
+		assert.Equal(t, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED, rejected.DeterministicStageEvidence[0].Outcome)
+		assert.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, rejected.DeterministicStageEvidence[1].Kind)
+		assert.Equal(t, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED, rejected.DeterministicStageEvidence[1].Outcome)
 	})
 }
 
@@ -204,6 +210,10 @@ func TestL4WardenVerifyEnvelopeProducesAuthoritativeDeterministicStageEvidence(t
 		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED},
 		{operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED},
 	}
+	l1Stage := verified.DeterministicStageEvidence[0]
+	assert.NotEmpty(t, l1Stage.DoctrineBundleHash)
+	assert.NotEmpty(t, l1Stage.DoctrineBundleVersion)
+
 	l4StageID := verified.DeterministicStageEvidence[3].StageId
 	for index, want := range expected {
 		stage := verified.DeterministicStageEvidence[index]

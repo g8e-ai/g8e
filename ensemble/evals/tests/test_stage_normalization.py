@@ -274,6 +274,8 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         task_id="task-1",
         state_root_before="root-before",
         l2_signature_digest="l2-digest",
+        doctrine_bundle_hash="doctrine-hash",
+        doctrine_bundle_version="doctrine-v1",
     )
     receipt.deterministic_stage_evidence.add(
         stage_id="tx-1:commitment",
@@ -310,6 +312,8 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert l4_stage.operator_session_id == "session-1"
     assert l4_stage.state_root_before == "root-before"
     assert l4_stage.l2_signature_digest == "l2-digest"
+    assert l4_stage.doctrine_bundle_hash == "doctrine-hash"
+    assert l4_stage.doctrine_bundle_version == "doctrine-v1"
     assert commitment_stage.decision == "completed"
     assert commitment_stage.commitment_hash == "commitment-hash"
     assert commitment_stage.prior_commitment_hash == "prior-hash"

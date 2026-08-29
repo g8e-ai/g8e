@@ -91,6 +91,7 @@
     - [PerformanceMetrics](#g8e-operator-v1-PerformanceMetrics)
     - [PortCheckEntry](#g8e-operator-v1-PortCheckEntry)
     - [PortCheckResult](#g8e-operator-v1-PortCheckResult)
+    - [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation)
     - [RestoreFileRequested](#g8e-operator-v1-RestoreFileRequested)
     - [RestoreFileResult](#g8e-operator-v1-RestoreFileResult)
     - [RevokeCertificateRequested](#g8e-operator-v1-RevokeCertificateRequested)
@@ -152,8 +153,7 @@ Mirrors McpCallRequested for the Agent-to-Agent JSON protocol.
 <a name="g8e-operator-v1-ActionReceipt"></a>
 
 ### ActionReceipt
-ActionReceipt is the signed proof of a completed or failed mutation.
-It is emitted by the Warden after execution.
+
 
 
 | Field | Type | Label | Description |
@@ -170,6 +170,7 @@ It is emitted by the Warden after execution.
 | l2_status | [L2Status](#g8e-operator-v1-L2Status) |  | Status of L2 (Consensus) signature verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
+| final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
 
 
 
@@ -545,6 +546,8 @@ authorized to be executed.
 | l3_signature_digest | [string](#string) |  |  |
 | audit_record_id | [string](#string) |  |  |
 | parent_stage_id | [string](#string) |  |  |
+| doctrine_bundle_hash | [string](#string) |  |  |
+| doctrine_bundle_version | [string](#string) |  |  |
 
 
 
@@ -1835,6 +1838,27 @@ A stored passkey credential for a user
 | results | [PortCheckEntry](#g8e-operator-v1-PortCheckEntry) | repeated |  |
 | error_message | [string](#string) |  |  |
 | error_type | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-ReceiptPersistenceAttestation"></a>
+
+### ReceiptPersistenceAttestation
+ActionReceipt is the signed proof of a completed or failed mutation.
+It is emitted by the Warden after execution.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| transaction_id | [string](#string) |  |  |
+| receipt_signature_digest | [string](#string) |  |  |
+| persisted_at_unix_ms | [int64](#int64) |  |  |
+| audit_record_id | [string](#string) |  |  |
+| signer_key_id | [string](#string) |  |  |
+| signature | [string](#string) |  |  |
 
 
 

@@ -223,6 +223,34 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	return receipt, execErr
 }
 
+func (w *L5Actuator) RecordRejectedTransaction(ctx context.Context, vt *VerifiedTransaction, rejection error) (*operatorv1.ActionReceipt, error) {
+	if vt == nil || vt.Envelope == nil {
+		return nil, constants.ErrTxInvalidEnvelope
+	}
+	if rejection == nil {
+		return nil, constants.ErrTxInvalidEnvelope
+	}
+	if len(w.SigningKey) == 0 {
+		return nil, constants.ErrL5ActuatorSigningKeyMissing
+	}
+
+	receipt := w.buildInitialReceipt(vt)
+	receipt.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+	receipt.ResultSummary = fmt.Sprintf("rejected: %v", rejection)
+	receipt.ExecutedAtUnixMs = time.Now().UnixMilli()
+	if err := w.signAndLogFinalReceipt(vt, receipt); err != nil {
+		return nil, err
+	}
+	if w.ReceiptPublisher != nil {
+		if err := w.ReceiptPublisher.PublishActionReceipt(ctx, vt.Envelope, receipt); err != nil {
+			w.Logger.Warn("Failed to publish rejected ActionReceipt to gateway receipts channel",
+				string(constants.ConnectionStateError), err,
+				"message_id", vt.Envelope.Id)
+		}
+	}
+	return receipt, nil
+}
+
 // buildInitialReceipt constructs the EXECUTING-status receipt with state root and L2/L3 status.
 func (w *L5Actuator) buildInitialReceipt(vt *VerifiedTransaction) *operatorv1.ActionReceipt {
 	stateBefore := ""
@@ -456,6 +484,68 @@ func (w *L5Actuator) signAndLogFinalReceipt(vt *VerifiedTransaction, receipt *op
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
 		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
 		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
+	}
+	attestation, err := w.signReceiptPersistenceAttestation(receipt)
+	if err != nil {
+		return err
+	}
+	receipt.FinalPersistenceAttestation = attestation
+	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
+		w.Logger.Error("Failed to log final receipt persistence attestation", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
+	}
+	return nil
+}
+
+func CanonicalizeReceiptPersistenceAttestation(attestation *operatorv1.ReceiptPersistenceAttestation) ([]byte, error) {
+	if attestation == nil {
+		return nil, constants.ErrReceiptPersistenceAttestationMissing
+	}
+	var payload bytes.Buffer
+	writeCanonicalString(&payload, attestation.TransactionId)
+	writeCanonicalString(&payload, attestation.ReceiptSignatureDigest)
+	var persistedAt [8]byte
+	binary.BigEndian.PutUint64(persistedAt[:], uint64(attestation.PersistedAtUnixMs))
+	payload.Write(persistedAt[:])
+	writeCanonicalString(&payload, attestation.AuditRecordId)
+	writeCanonicalString(&payload, attestation.SignerKeyId)
+	return payload.Bytes(), nil
+}
+
+func (w *L5Actuator) signReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt) (*operatorv1.ReceiptPersistenceAttestation, error) {
+	attestation := &operatorv1.ReceiptPersistenceAttestation{
+		TransactionId:         receipt.TransactionId,
+		ReceiptSignatureDigest: signatureDigest([]string{receipt.Signature}),
+		PersistedAtUnixMs:      time.Now().UnixMilli(),
+		AuditRecordId:          receipt.TransactionId,
+		SignerKeyId:            w.KeyID,
+	}
+	payload, err := CanonicalizeReceiptPersistenceAttestation(attestation)
+	if err != nil {
+		return nil, fmt.Errorf("%w: persistence attestation: %w", constants.ErrL5ActuatorCanonicalizeReceipt, err)
+	}
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(w.SigningKey, payload))
+	return attestation, nil
+}
+
+func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
+	if receipt == nil || receipt.FinalPersistenceAttestation == nil {
+		return constants.ErrReceiptPersistenceAttestationMissing
+	}
+	attestation := receipt.FinalPersistenceAttestation
+	if attestation.ReceiptSignatureDigest != signatureDigest([]string{receipt.Signature}) {
+		return constants.ErrReceiptPersistenceSignatureMismatch
+	}
+	signature, err := hex.DecodeString(attestation.Signature)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrReceiptPersistenceAttestationInvalid, err)
+	}
+	payload, err := CanonicalizeReceiptPersistenceAttestation(attestation)
+	if err != nil {
+		return err
+	}
+	if len(publicKey) != ed25519.PublicKeySize || !ed25519.Verify(publicKey, payload, signature) {
+		return constants.ErrReceiptPersistenceAttestationInvalid
 	}
 	return nil
 }

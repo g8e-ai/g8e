@@ -102,6 +102,8 @@ func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
 	require.Equal(t, "completed", persistedReceipt.ResultSummary)
 	require.NotEmpty(t, persistedReceipt.Signature, "Persisted receipt should have signature")
 	require.NotNil(t, persistedReceipt.ActionReceipt)
+	require.NotNil(t, persistedReceipt.ActionReceipt.FinalPersistenceAttestation)
+	require.NoError(t, VerifyReceiptPersistenceAttestation(persistedReceipt.ActionReceipt, actuator.SigningKey.Public().(ed25519.PublicKey)))
 	require.Len(t, persistedReceipt.ActionReceipt.DeterministicStageEvidence, 3)
 	commitmentEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[1]
 	require.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, commitmentEvidence.Kind)

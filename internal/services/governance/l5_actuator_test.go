@@ -55,6 +55,43 @@ func newTestActuator(t *testing.T) (*L5Actuator, ed25519.PublicKey) {
 	return actuator, pubKey
 }
 
+func TestL5ActuatorRecordRejectedTransactionSignsFailedStageEvidence(t *testing.T) {
+	t.Parallel()
+	actuator, publicKey := newTestActuator(t)
+	envelope := &govtypes.GovernanceEnvelope{
+		Id:                uuid.NewString(),
+		TransactionHash:   "test-rejected-hash",
+		OperatorId:        "test-operator",
+		OperatorSessionId: "test-operator-session",
+		ActionType:        string(constants.ActionTypeExecuteBash),
+	}
+	failedStage := newDeterministicStageEvidence(
+		envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+		governanceMonotonicNow(),
+		operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+	)
+	rejected := &VerifiedTransaction{
+		Envelope:                   envelope,
+		ActionType:                 constants.ActionTypeExecuteBash,
+		DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{failedStage},
+	}
+
+	receipt, err := actuator.RecordRejectedTransaction(context.Background(), rejected, constants.ErrTxStateRootMismatch)
+	require.NoError(t, err)
+	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, receipt.Status)
+	require.Contains(t, receipt.ResultSummary, constants.ErrTxStateRootMismatch.Error())
+	require.Len(t, receipt.DeterministicStageEvidence, 1)
+	assert.Equal(t, operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED, receipt.DeterministicStageEvidence[0].Outcome)
+	assert.False(t, actuator.ExecutionHandler.(*mockExecutionHandler).executed)
+
+	canonical, err := CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	signature, err := hex.DecodeString(receipt.Signature)
+	require.NoError(t, err)
+	assert.True(t, ed25519.Verify(publicKey, canonical, signature))
+}
+
 func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	t.Parallel()
 	actuator, pubKey := newTestActuator(t)
@@ -115,11 +152,11 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ed25519.Verify(pubKey, tamperedCanonical, sigBytes))
 
-	// Verify audit store was called twice (initial EXECUTING receipt + final COMPLETED receipt)
+	// Verify audit store recorded the initial receipt, final receipt, and persistence attestation
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.DocSetCalls, 2)
+	require.Len(t, consoleAuditStore.DocSetCalls, 3)
 
-	// Verify both calls were to console_audit collection
+	// Verify all calls were to console_audit collection
 	for _, call := range consoleAuditStore.DocSetCalls {
 		require.Equal(t, marshaler.CollectionName(constants.CollectionConsoleAudit), call.Collection)
 		require.Equal(t, envelope.Id, call.ID)
@@ -131,11 +168,13 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING, initialRecord.Status)
 
-	// Verify final receipt has COMPLETED status
+	// Verify persisted final receipt has COMPLETED status and an attestation
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[2].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, finalRecord.Status)
+	require.NotNil(t, receipt.FinalPersistenceAttestation)
+	require.NoError(t, VerifyReceiptPersistenceAttestation(receipt, pubKey))
 }
 
 func TestL5ActuatorExecuteHandlerError(t *testing.T) {
@@ -180,13 +219,13 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	valid := ed25519.Verify(pubKey, canonical, sigBytes)
 	require.True(t, valid, "Receipt signature should verify even when handler fails")
 
-	// Verify console audit store was called twice
+	// Verify console audit store recorded the final persistence attestation
 	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.DocSetCalls, 2)
+	require.Len(t, consoleAuditStore.DocSetCalls, 3)
 
 	// Verify final receipt has FAILED status
 	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.DocSetCalls[1].Data, &finalRecord)
+	err = json.Unmarshal(consoleAuditStore.DocSetCalls[2].Data, &finalRecord)
 	require.NoError(t, err)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, finalRecord.Status)
 }
