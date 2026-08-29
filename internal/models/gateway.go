@@ -96,6 +96,7 @@ type HealthResponse struct {
 	Version         string                `json:"version"`
 	PID             int                   `json:"pid"`
 	GovernanceReady bool                  `json:"governance_ready"`
+	Posture         string                `json:"posture"`
 	StateMerkleRoot string                `json:"state_merkle_root,omitempty"`
 }
 

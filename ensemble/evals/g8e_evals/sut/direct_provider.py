@@ -63,8 +63,13 @@ class DirectCallEvidence(BaseModel):
     candidates_token_count: int = 0
     total_token_count: int = 0
     thinking_token_count: int = 0
-    elapsed_s: float = 0.0
+    monotonic_start: float = 0.0
+    monotonic_end: float = 0.0
     error: str | None = None
+
+    @property
+    def elapsed_s(self) -> float:
+        return self.monotonic_end - self.monotonic_start
 
 
 class DirectProviderSUT:
@@ -118,12 +123,13 @@ class DirectProviderSUT:
                 primary_llm_settings=primary_settings,
             )
         except Exception as e:
-            elapsed = time.monotonic() - start
+            end = time.monotonic()
             logger.warning("Direct provider call failed for task %s: %s", task.id, e)
             evidence = DirectCallEvidence(
                 provider=self._provider_str,
                 model=self._model,
-                elapsed_s=elapsed,
+                monotonic_start=start,
+                monotonic_end=end,
                 error=str(e),
             )
             return Response(
@@ -135,7 +141,7 @@ class DirectProviderSUT:
                 chat_evidence=_DirectEvidenceWrapper(evidence),
             )
 
-        elapsed = time.monotonic() - start
+        end = time.monotonic()
         answer_text = response.text or ""
         usage = response.usage_metadata
 
@@ -147,7 +153,8 @@ class DirectProviderSUT:
             candidates_token_count=usage.candidates_token_count,
             total_token_count=usage.total_token_count,
             thinking_token_count=usage.thinking_token_count,
-            elapsed_s=elapsed,
+            monotonic_start=start,
+            monotonic_end=end,
         )
 
         return Response(

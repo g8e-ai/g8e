@@ -22,11 +22,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from g8e_evals import cli
-from g8e_evals.arms import Arm
+from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
-from g8e_evals.schema import AttemptRecord, RunManifest, TaskDefinition
+from g8e_evals.schema import AttemptRecord, EvidenceIndex, MetricObservation, RunManifest, StageObservation, TaskDefinition
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
 
 pytestmark = pytest.mark.unit
@@ -136,6 +136,20 @@ def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
     return verifier
 
 
+def _patch_posture(monkeypatch, posture: GovernancePosture | None = GovernancePosture.L3_NOTARY) -> AsyncMock:
+    """Patch the gateway posture observation path.
+
+    Patches both ``observe_gateway_posture`` (the async call) and
+    ``AuthContext.from_env`` (which runs before it to build the gateway
+    transport context) so governed-arm tests don't require real mTLS cert
+    files on disk.
+    """
+    mock = AsyncMock(return_value=posture)
+    monkeypatch.setattr(cli, "observe_gateway_posture", mock)
+    monkeypatch.setattr(cli.AuthContext, "from_env", MagicMock(return_value=MagicMock()))
+    return mock
+
+
 @pytest.mark.asyncio
 async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     """manifest.json must exist in the report directory after a successful run."""
@@ -149,6 +163,7 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -189,6 +204,7 @@ async def test_tasks_jsonl_written_with_schema_valid_records(tmp_path, monkeypat
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -227,6 +243,7 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -249,6 +266,16 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     assert ar.task_id == "1001"
     assert ar.arm_id == Arm.DOCTRINE
     assert ar.posture.requested_posture.value == "l1_doctrine"
+    assert ar.usage_reconciliation is not None
+
+    stages = [StageObservation.model_validate_json(line) for line in (report_dirs[0] / "stages.jsonl").read_text().splitlines()]
+    metrics = [MetricObservation.model_validate_json(line) for line in (report_dirs[0] / "metrics.jsonl").read_text().splitlines()]
+    evidence = [EvidenceIndex.model_validate_json(line) for line in (report_dirs[0] / "evidence-index.jsonl").read_text().splitlines()]
+    assert stages == []
+    assert metrics[0].metric_id == "stage_usage_reconciled"
+    assert metrics[0].evidence_refs == [evidence[0].artifact_id]
+    assert len(evidence) == 1
+    assert (report_dirs[0] / evidence[0].storage_location).exists()
 
 
 @pytest.mark.asyncio
@@ -284,6 +311,7 @@ async def test_manifest_records_arm_and_posture(tmp_path, monkeypatch):
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L2_CONSENSUS)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -317,6 +345,7 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L3_NOTARY)
 
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -335,4 +364,6 @@ async def test_attempt_records_posture_observation(tmp_path, monkeypatch):
     ar = AttemptRecord.model_validate_json(lines[0])
     assert ar.posture.requested_posture.value == "l3_notary"
     assert ar.posture.observed_posture is not None
+    assert ar.posture.observed_posture == GovernancePosture.L3_NOTARY
+    assert ar.posture.observation_source == "gateway_health_endpoint"
     assert ar.posture.posture_match is True

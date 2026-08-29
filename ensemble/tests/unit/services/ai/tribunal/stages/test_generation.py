@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 from app.llm.llm_types import Role
 from app.models.agents.tribunal import (
@@ -49,6 +49,39 @@ class TestRunGenerationPass:
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
         assert contents[0].role == Role.USER
+
+    async def test_generation_pass_emits_per_call_model_telemetry(
+        self, make_mock_provider, mock_g8e_context, mock_operator_context
+    ):
+        mock_response = MagicMock()
+        mock_response.text = "ls -la"
+        mock_response.usage_metadata.prompt_token_count = 13
+        mock_response.usage_metadata.candidates_token_count = 5
+        mock_response.usage_metadata.thinking_token_count = 2
+        mock_response.candidates = [MagicMock(finish_reason="stop")]
+        mock_provider = make_mock_provider(generate_content_lite_return=mock_response)
+        event_service = MagicMock()
+        event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(event_service, mock_g8e_context)
+
+        await _run_generation_pass(
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            operator_context=mock_operator_context,
+            pass_index=0,
+            emitter=emitter,
+            pass_errors=[],
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        event = event_service.publish.await_args.args[0]
+        assert event.payload.model == "test-model"
+        assert event.payload.input_tokens == 13
+        assert event.payload.output_tokens == 5
+        assert event.payload.thinking_tokens == 2
+        assert event.payload.monotonic_end >= event.payload.monotonic_start
 
     async def test_exception_appends_to_pass_errors(
         self, make_mock_provider, mock_g8e_context, mock_operator_context

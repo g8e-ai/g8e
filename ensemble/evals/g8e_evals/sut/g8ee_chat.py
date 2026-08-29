@@ -95,6 +95,7 @@ class AgentTrailEvent(BaseModel):
     event_type: str
     payload: dict[str, Any]
     received_at: float = Field(default_factory=time.time)
+    monotonic_received_at: float = Field(default_factory=time.monotonic)
 
 
 class ChatEvaluationReceipt(BaseModel):

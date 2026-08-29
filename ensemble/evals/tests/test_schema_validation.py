@@ -39,6 +39,7 @@ from g8e_evals.schema import (
     StageObservation,
     TaskDefinition,
     TerminalStatus,
+    UsageReconciliation,
     VerificationStatus,
 )
 
@@ -46,7 +47,22 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.0.0"
+    assert SCHEMA_VERSION == "1.1.0"
+
+
+def test_usage_reconciliation_flags_mismatched_stage_totals():
+    reconciliation = UsageReconciliation(
+        reported_input_tokens=20,
+        reported_output_tokens=10,
+        observed_input_tokens=18,
+        observed_output_tokens=10,
+        observed_call_count=2,
+        expected_call_count=2,
+    )
+
+    assert reconciliation.reconciled is False
+    assert reconciliation.input_token_delta == -2
+    assert reconciliation.output_token_delta == 0
 
 
 def test_run_manifest_resolves_dataset_hash():

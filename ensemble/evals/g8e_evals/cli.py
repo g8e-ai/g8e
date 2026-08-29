@@ -29,21 +29,27 @@ from g8e.receipts import (
 from g8e_evals.arms import ALL_ARMS, ARM_DEFINITIONS, Arm, GovernancePosture, get_arm_definition
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
+from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
     ContentHash,
+    MetricObservation,
     ModelIdentity,
     PostureObservation,
     RoleToModelMapping,
     RunManifest,
     SamplingSettings,
     StackEnvironment,
+    StageObservation,
     TaskDefinition,
     TerminalStatus,
+    VerificationStatus,
 )
 from g8e_evals.sut.direct_provider import DirectProviderSUT
 from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AuthenticationError
+from g8e_evals.posture import observe_gateway_posture
+from g8e_evals.transport import AuthContext
 from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
@@ -404,6 +410,26 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     if warden_pub_path.exists():
         warden_pub = warden_pub_path.read_text()
 
+    # Observe the gateway's configured posture for governed arms. The
+    # gateway is the posture authority; the runner never infers posture
+    # from the CLI argument alone. For ungoverned arms, the observed
+    # posture is NONE because the task does not route through the gateway.
+    observed_posture: GovernancePosture | None = GovernancePosture.NONE
+    posture_source = "arm_definition"
+    if arm_def.uses_gateway:
+        gw_env = AuthContext.from_env(
+            operator_session_id=config.operator_session_id,
+            g8ee_url=config.g8ee_url,
+            operator_url=config.operator_url,
+            cli_context=config.auth_context,
+        )
+        observed_posture = await observe_gateway_posture(gw_env)
+        posture_source = "gateway_health_endpoint"
+        if observed_posture is None:
+            console.print("[bold yellow]Warning: could not observe gateway posture; recording as unobserved[/bold yellow]")
+        else:
+            console.print(f"  [dim]Observed gateway posture: {observed_posture.value}[/dim]")
+
     results = []
 
     display_model = f"{config.primary.provider}:{config.primary.model}" if config.primary.provider and config.primary.model else (config.primary.model or "openai:gpt-4")
@@ -430,6 +456,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     # 8. Execution loop
     attempt_records: list[AttemptRecord] = []
+    stage_records: list[StageObservation] = []
+    metric_records: list[MetricObservation] = []
+    evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
         if suite == "ifeval_subset" and task.metadata.instruction_id_list:
@@ -478,23 +507,59 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         results.append(res)
 
         # Build the attempt record with requested and observed posture.
+        # The observed posture comes from the gateway health endpoint for
+        # governed arms, not from the CLI argument. posture_match is None
+        # when the posture could not be independently observed.
+        if observed_posture is not None and arm_def.uses_gateway:
+            posture_match = observed_posture == arm_def.requested_posture
+        elif not arm_def.uses_gateway:
+            posture_match = True
+        else:
+            posture_match = None
+
         posture = PostureObservation(
             requested_posture=arm_def.requested_posture,
-            observed_posture=arm_def.requested_posture if arm_def.uses_gateway else GovernancePosture.NONE,
-            observation_source="arm_definition" if not arm_def.uses_gateway else "gateway_startup_config",
+            observed_posture=observed_posture,
+            observation_source=posture_source,
             observation_timestamp=ended_at,
-            posture_match=True,
+            posture_match=posture_match,
         )
 
-        if not response.answer or not terminal_event or terminal_event.endswith(("failed", "stopped", "dead.lettered")):
-            terminal_status = TerminalStatus.MODEL_FAILED
+        if "HTTP 403" in (response.unbound_reason or "") and "Governance verification failed" in (response.unbound_reason or ""):
+            terminal_status = TerminalStatus.GOVERNANCE_REJECTED
         elif "HTTP 401" in (response.unbound_reason or "") or "HTTP 403" in (response.unbound_reason or ""):
             terminal_status = TerminalStatus.INFRASTRUCTURE_FAILED
+        elif not response.answer or not terminal_event or terminal_event.endswith(("failed", "stopped", "dead.lettered")):
+            terminal_status = TerminalStatus.MODEL_FAILED
         else:
             terminal_status = TerminalStatus.COMPLETED
 
+        attempt_id = f"{run_id}:{task.id}:{arm_def.arm_id.value}:1"
+        normalized = (
+            normalize_attempt_evidence(response.chat_evidence, run_id, attempt_id)
+            if response.chat_evidence
+            else None
+        )
+        if normalized:
+            stage_records.extend(normalized.stages)
+            evidence_refs = []
+            if normalized.raw_evidence:
+                evidence_artifacts.append(normalized.raw_evidence)
+                evidence_refs.append(normalized.raw_evidence.index.artifact_id)
+            metric_records.append(MetricObservation(
+                metric_id="stage_usage_reconciled",
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=float(normalized.usage.reconciled),
+                unit="boolean",
+                verification_status=VerificationStatus.VERIFIED,
+                evidence_refs=evidence_refs,
+            ))
+
         attempt = AttemptRecord(
-            attempt_id=f"{run_id}:{task.id}:{arm_def.arm_id.value}:1",
+            attempt_id=attempt_id,
             run_id=run_id,
             task_id=task.id,
             arm_id=arm_def.arm_id,
@@ -509,6 +574,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 "transaction_id": response.transaction_id or "",
             },
             missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
+            usage_reconciliation=normalized.usage if normalized else None,
         )
         attempt_records.append(attempt)
 
@@ -534,6 +600,23 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     with open(report_dir / "attempts.jsonl", "w") as f:
         for ar in attempt_records:
             f.write(ar.model_dump_json() + "\n")
+
+    with open(report_dir / "stages.jsonl", "w") as f:
+        for stage in stage_records:
+            f.write(stage.model_dump_json() + "\n")
+
+    with open(report_dir / "metrics.jsonl", "w") as f:
+        for metric in metric_records:
+            f.write(metric.model_dump_json() + "\n")
+
+    with open(report_dir / "evidence-index.jsonl", "w") as f:
+        for artifact in evidence_artifacts:
+            f.write(artifact.index.model_dump_json() + "\n")
+
+    for artifact in evidence_artifacts:
+        artifact_path = report_dir / artifact.index.storage_location
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(artifact.content)
 
     # 10. Aggregate & Report
     agg = aggregate_results(suite, results)

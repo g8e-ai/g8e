@@ -36,7 +36,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from g8e_evals import cli
-from g8e_evals.arms import Arm
+from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
@@ -166,6 +166,14 @@ def _patch_collector(monkeypatch) -> MagicMock:
     return collector
 
 
+def _patch_posture(monkeypatch, posture: GovernancePosture | None = GovernancePosture.L1_DOCTRINE) -> AsyncMock:
+    """Patch the gateway posture observation path for governed-arm tests."""
+    mock = AsyncMock(return_value=posture)
+    monkeypatch.setattr(cli, "observe_gateway_posture", mock)
+    monkeypatch.setattr(cli.AuthContext, "from_env", MagicMock(return_value=MagicMock()))
+    return mock
+
+
 # ---------------------------------------------------------------------------
 # Preflight failures (settings 401/403) — no report directory is created.
 # ---------------------------------------------------------------------------
@@ -217,6 +225,7 @@ async def test_run_suite_chat_401_retains_diagnostic_report(tmp_path, monkeypatc
                    binding=BindingType.UNBOUND, unbound_reason="g8ee chat returned HTTP 401 Unauthorized.",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
         await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
@@ -235,6 +244,7 @@ async def test_run_suite_chat_403_retains_diagnostic_report(tmp_path, monkeypatc
                    binding=BindingType.UNBOUND, unbound_reason="g8ee chat returned HTTP 403 Forbidden.",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
         await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
@@ -253,6 +263,7 @@ async def test_run_suite_missing_terminal_event_retains_diagnostic_report(tmp_pa
                    binding=BindingType.UNBOUND, unbound_reason="idle timeout after 180s without terminal event",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
         await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
@@ -272,6 +283,7 @@ async def test_run_suite_failure_terminal_event_retains_diagnostic_report(tmp_pa
                    binding=BindingType.UNBOUND, unbound_reason="chat terminated with g8e.v1.ai.llm.chat.iteration.failed",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
         await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
@@ -291,6 +303,7 @@ async def test_run_suite_empty_answer_retains_diagnostic_report(tmp_path, monkey
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
         await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
@@ -314,12 +327,45 @@ async def test_run_suite_valid_response_writes_report_and_does_not_raise(tmp_pat
                    binding=BindingType.UNBOUND, unbound_reason="answer-only turn",
                ))
     _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch)
 
     # Must not raise.
     await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
 
     rows = _assert_report_has_results(tmp_path, expected_answer="A valid answer without commas.")
     assert rows[0]["passed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Governance rejection — HTTP 403 with governance verification failure.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_run_suite_governance_rejection_classifies_as_governance_rejected(tmp_path, monkeypatch):
+    """An HTTP 403 with 'Governance verification failed' must classify as
+    GOVERNANCE_REJECTED, not MODEL_FAILED or INFRASTRUCTURE_FAILED."""
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch, passed=False)
+    _patch_sut(monkeypatch, settings=MagicMock(llm=MagicMock(primary_model="m")),
+               answer_response=Response(
+                   answer="", model="test",
+                   chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+                   binding=BindingType.UNBOUND,
+                   unbound_reason='g8ee chat returned HTTP 403: {"error":{"code":"G8E-1806","message":"Governance verification failed: TX_QUORUM_L2_SIG_MISSING"}}',
+               ))
+    _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L2_CONSENSUS)
+
+    with pytest.raises(cli.EvaluationRunError, match="invalid evidence"):
+        await cli._run_suite("ifeval_subset", _config(), None, tmp_path, limit=1)
+
+    report_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
+    attempts_path = report_dirs[0] / "attempts.jsonl"
+    assert attempts_path.exists()
+    ar = json.loads(attempts_path.read_text().splitlines()[0])
+    assert ar["terminal_status"] == "governance_rejected"
+    assert "Governance verification failed" in ar["missingness_or_failure"]
 
 
 # ---------------------------------------------------------------------------

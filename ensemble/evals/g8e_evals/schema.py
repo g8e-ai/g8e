@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 class TerminalStatus(StrEnum):
@@ -269,6 +269,40 @@ class PostureObservation(BaseModel):
     posture_match: bool | None = None
 
 
+class UsageReconciliation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reported_input_tokens: int = 0
+    reported_output_tokens: int = 0
+    reported_thinking_tokens: int = 0
+    observed_input_tokens: int = 0
+    observed_output_tokens: int = 0
+    observed_thinking_tokens: int = 0
+    observed_call_count: int = 0
+    expected_call_count: int = 0
+
+    @property
+    def input_token_delta(self) -> int:
+        return self.observed_input_tokens - self.reported_input_tokens
+
+    @property
+    def output_token_delta(self) -> int:
+        return self.observed_output_tokens - self.reported_output_tokens
+
+    @property
+    def thinking_token_delta(self) -> int:
+        return self.observed_thinking_tokens - self.reported_thinking_tokens
+
+    @property
+    def reconciled(self) -> bool:
+        return (
+            self.observed_call_count == self.expected_call_count
+            and self.input_token_delta == 0
+            and self.output_token_delta == 0
+            and self.thinking_token_delta == 0
+        )
+
+
 class AttemptRecord(BaseModel):
     """One immutable attempt: one task instance executed by one arm.
 
@@ -307,6 +341,7 @@ class AttemptRecord(BaseModel):
     grade_refs: list[str] = Field(default_factory=list)
 
     missingness_or_failure: str | None = None
+    usage_reconciliation: UsageReconciliation | None = None
 
     parent_attempt_id: str | None = None
 
@@ -333,6 +368,9 @@ class StageObservation(BaseModel):
 
     monotonic_start: float | None = None
     monotonic_end: float | None = None
+    clock_domain: str = ""
+    timing_source: str = ""
+    cross_process_timing: bool = False
 
     input_tokens: int | None = None
     output_tokens: int | None = None
