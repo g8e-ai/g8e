@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from g8e.constants import PORTS
 from g8e.operator.v1.operator_pb2 import ActionReceipt
@@ -21,6 +21,23 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 # Forward reference for ChatEvaluationReceipt to avoid circular import
 if TYPE_CHECKING:
     from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt
+
+
+class EvidenceLike(Protocol):
+    """Structural protocol for chat evidence attached to a Response.
+
+    Both ``ChatEvaluationReceipt`` (g8ee arms) and ``_DirectEvidenceWrapper``
+    (direct arm) satisfy this protocol. The CLI and report writer consume
+    these attributes without forcing every arm into the SSE evidence schema.
+    """
+
+    @property
+    def terminal_event(self) -> str | None: ...
+
+    @property
+    def event_count(self) -> int: ...
+
+    def model_dump(self) -> dict[str, Any]: ...
 
 
 class BindingType(StrEnum):
@@ -73,7 +90,7 @@ class Response:
     model: str
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     transaction_id: str | None = None
-    chat_evidence: ChatEvaluationReceipt | None = None
+    chat_evidence: EvidenceLike | None = None
     action_receipt: ActionReceipt | None = None
     receipt_verified: bool = False
     binding: BindingType = BindingType.UNBOUND

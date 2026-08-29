@@ -186,6 +186,7 @@ async def test_direct_call_evidence_captures_token_usage():
     task = Task(id="1001", prompt="Write a sentence.")
     response = await sut.get_answer(task)
 
+    assert response.chat_evidence is not None
     dump = response.chat_evidence.model_dump()
     assert dump["prompt_token_count"] == 100
     assert dump["candidates_token_count"] == 50

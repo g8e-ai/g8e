@@ -106,7 +106,7 @@ def test_all_arms_union_equals_governed_plus_ungoverned():
 
 def test_arm_definition_is_frozen():
     defn = get_arm_definition(Arm.DIRECT)
-    with pytest.raises(AttributeError, match="frozen"):
+    with pytest.raises(AttributeError, match="cannot assign"):
         defn.uses_g8ee = True  # type: ignore[misc]
 
 
