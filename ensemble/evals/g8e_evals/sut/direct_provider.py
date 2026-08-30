@@ -25,7 +25,7 @@ import logging
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, computed_field
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider

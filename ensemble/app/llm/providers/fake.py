@@ -36,7 +36,6 @@ import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from app.constants.config import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_dataclasses import (
     Candidate,
     Content,

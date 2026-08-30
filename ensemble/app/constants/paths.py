@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import json
 import os
 from pathlib import Path
 from typing import TypedDict, cast

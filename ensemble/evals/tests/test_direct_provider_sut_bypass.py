@@ -21,7 +21,7 @@ import pytest
 
 from g8e_evals.arms import Arm
 from g8e_evals.harness import BindingType, LLMRoleConfig, SUTConfig, Task
-from g8e_evals.sut.direct_provider import DirectCallEvidence, DirectProviderSUT
+from g8e_evals.sut.direct_provider import DirectProviderSUT
 
 pytestmark = pytest.mark.unit
 

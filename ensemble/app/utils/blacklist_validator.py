@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 from app.models.base import BaseModel, ConfigDict

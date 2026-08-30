@@ -37,7 +37,6 @@ from app.constants import (
     CommandErrorType,
     ExecutionStatus,
     FileOperation,
-    G8EE_COMPONENT,
     HeartbeatType,
     HistoryActor,
     OperatorHistoryEventType,

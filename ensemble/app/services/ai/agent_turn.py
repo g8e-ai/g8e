@@ -18,7 +18,6 @@ the TurnResult alongside streamed chunks.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.models.base import BaseModel, ConfigDict, Field
 from collections.abc import AsyncGenerator

@@ -122,7 +122,7 @@ class LLMProvider(ABC):
         if not self._is_cached_singleton:
             await self._close_resources()
 
-    async def _close_resources(self):
+    async def _close_resources(self):  # noqa: B027
         """Internal method to actually close resources. Override in subclasses."""
 
     async def force_close(self):

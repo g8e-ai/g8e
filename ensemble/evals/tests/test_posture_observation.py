@@ -15,12 +15,12 @@ governed arms.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
 
-from g8e_evals.arms import Arm, GovernancePosture
+from g8e_evals.arms import GovernancePosture
 from g8e_evals.posture import observe_gateway_posture
 from g8e_evals.schema import PostureObservation
 

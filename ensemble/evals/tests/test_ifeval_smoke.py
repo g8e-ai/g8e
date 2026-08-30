@@ -6,7 +6,6 @@
 # released under the Apache License, Version 2.0.
 
 import hashlib
-import os
 from pathlib import Path
 
 import pytest

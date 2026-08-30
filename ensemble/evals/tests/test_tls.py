@@ -11,9 +11,7 @@ These guard against the silent ``verify=False`` regression that defeats the
 harness's receipt-binding guarantee.
 """
 
-import os
 import inspect
-from pathlib import Path
 
 import pytest
 

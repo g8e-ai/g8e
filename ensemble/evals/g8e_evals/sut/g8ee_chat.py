@@ -40,7 +40,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Awaitable, Callable
 
 import httpx
@@ -53,10 +53,8 @@ from app.models.internal_api import (
     ResourceCreationRequest,
     SettingsGetRequest,
 )
-from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings
 from app.constants.api_paths import API_PATHS, GatewayAPIPaths
-from g8e_evals.arms import Arm
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError

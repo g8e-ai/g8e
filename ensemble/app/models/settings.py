@@ -32,7 +32,7 @@ from app.constants import (
     LogLevel,
 )
 from app.constants.env_vars import EnvVar
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel, PrivateAttr, field_validator
 from g8e.models.settings import (

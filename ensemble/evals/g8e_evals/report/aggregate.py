@@ -5,7 +5,6 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from g8e_evals.arms import Arm
 from g8e_evals.harness import Aggregate, BindingType, RowResult
 
 # The current Go ConsensusService loops over enrolled signing members but

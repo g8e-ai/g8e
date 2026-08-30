@@ -13,7 +13,6 @@ resolution, and the logical key structure of attempt records.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -26,21 +25,15 @@ from g8e_evals.schema import (
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
-    GraderClass,
     MetricObservation,
     ModelIdentity,
     PostureObservation,
-    PrivacyClassification,
-    RoleToModelMapping,
     RunManifest,
-    SamplingSettings,
-    StackEnvironment,
     StageKind,
     StageObservation,
     TaskDefinition,
     TerminalStatus,
     UsageReconciliation,
-    VerificationStatus,
 )
 
 pytestmark = pytest.mark.unit

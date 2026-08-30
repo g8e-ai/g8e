@@ -22,7 +22,7 @@ from app.constants import (
     HistoryActor,
 )
 from app.constants.message_sender import MessageSender
-from app.errors import ResourceNotFoundError, DatabaseError, ErrorCode
+from app.errors import ResourceNotFoundError
 from app.models.cache import FieldFilter
 from app.models.investigations import (
     ConversationHistoryMessage,

@@ -14,8 +14,7 @@ import platform
 import sys
 import uuid
 from pathlib import Path
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 import click
 from rich.console import Console
@@ -27,7 +26,7 @@ from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
-from g8e_evals.arms import ALL_ARMS, ARM_DEFINITIONS, Arm, GovernancePosture, get_arm_definition
+from g8e_evals.arms import ALL_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
@@ -41,7 +40,6 @@ from g8e_evals.schema import (
     PostureObservation,
     RoleToModelMapping,
     RunManifest,
-    SamplingSettings,
     StackEnvironment,
     StageObservation,
     TaskDefinition,

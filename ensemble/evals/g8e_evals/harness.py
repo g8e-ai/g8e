@@ -21,7 +21,7 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
 if TYPE_CHECKING:
-    from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt
+    pass
 
 
 class EvidenceLike(Protocol):

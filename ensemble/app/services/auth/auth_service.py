@@ -26,7 +26,7 @@ from app.constants import (
 )
 from app.errors import AuthenticationError
 from app.models.auth import AuthenticatedUser
-from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.http_context import G8eHttpContext
 
 if TYPE_CHECKING:
     from app.models.settings import G8eeAppSettings

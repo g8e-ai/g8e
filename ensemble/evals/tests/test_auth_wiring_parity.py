@@ -34,7 +34,6 @@ from g8e.constants import PORTS
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.transport import (
     SESSION_COOKIE_NAME,
-    SOURCE_COMPONENT_CLIENT,
     AuthContext,
 )
 from app.models.http_context import BoundOperator

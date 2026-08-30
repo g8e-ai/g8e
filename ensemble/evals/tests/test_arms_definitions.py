@@ -22,7 +22,6 @@ from g8e_evals.arms import (
     GOVERNED_ARMS,
     UNGVERNED_ARMS,
     Arm,
-    ArmDefinition,
     GovernancePosture,
     get_arm_definition,
 )

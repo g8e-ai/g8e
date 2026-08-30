@@ -30,7 +30,6 @@ from __future__ import annotations
 import os
 import ssl
 from dataclasses import dataclass, field
-from typing import Optional
 
 import httpx
 

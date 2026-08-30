@@ -241,7 +241,6 @@ select = [
         "ASYNC",   # Asyncio checks (many false positives or low impact in tests)
         "RUF012",  # Mutable class attribute (common in pytest classes)
         "B017",    # Blind exception assert
-        "RUF100",  # Unused noqa (cleaning these up is low priority)
         "G201",    # logger.exception vs logger.error(..., exc_info=True)
         "ARG",     # Unused arguments (often required by interfaces)
         "E402",    # Module level import not at top
@@ -249,17 +248,14 @@ select = [
         "PLW2901", # Loop variable overwritten
         "DTZ",     # Datetime checks
         "PERF401", # List comprehension
-        "B007",    # Loop control variable not used
         "G004",    # Logging statement uses f-string
         "SIM",     # Simplify checks (SIM102, SIM108, SIM113, etc.)
         "F821",    # Undefined name (common in complex type hints/circular imports)
         "N8",      # Naming conventions (N801, N802, N806, N813, etc.)
         "RUF002",  # Ambiguous docstring characters
         "SLF001",  # Private member access (ubiquitous in proto files and internal state)
-        "F401",    # Unused import (common in __init__.py for exports)
         "UP007",   # Union to pipe (modern Python style, but Union is ubiquitous)
         "PERF403", # Dict comprehension
-        "B027",    # Empty method in ABC without abstract decorator
     ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -282,6 +278,24 @@ select = [
         "F821",    # Undefined name (common in type hints or dynamic mocks)
         "DTZ",     # Datetime without tz
         "RUF059",  # Unused unpacked variable
+    ]
+"**/__init__.py" = [
+        "F401",    # Re-exports: imports are part of the public API surface
+    ]
+"app/constants/config.py" = [
+        "F401",    # Re-export module: enums re-exported via app.constants.__init__
+    ]
+"app/constants/platform.py" = [
+        "F401",    # Re-export module: AuthMethod re-exported via app.constants.__init__
+    ]
+"app/constants/generated_status.py" = [
+        "F401",    # Generated re-export module: protocol enums re-exported via app.constants
+    ]
+"app/constants/generated_paths.py" = [
+        "F401",    # Generated re-export module: path constants re-exported via app.constants
+    ]
+"app/models/events.py" = [
+        "F401",    # Re-export module: event payload types re-exported from g8e.models.events
     ]
 
 [tool.ruff.lint.isort]

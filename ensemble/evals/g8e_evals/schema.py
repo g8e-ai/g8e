@@ -19,7 +19,7 @@ bundles whose records do not match the declared version.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import StrEnum
 from typing import Any
 

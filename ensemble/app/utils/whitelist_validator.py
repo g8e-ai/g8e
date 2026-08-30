@@ -316,7 +316,7 @@ class CommandWhitelistValidator:
                         continue
 
                 if not pattern_matched:
-                    for pattern_name, pattern in _COMMON_SAFE_PATTERNS.items():
+                    for pattern in _COMMON_SAFE_PATTERNS.values():
                         try:
                             if re.match(pattern, arg):
                                 pattern_matched = True

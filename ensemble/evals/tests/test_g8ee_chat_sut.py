@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from g8e_evals.harness import BindingType, Task, Response
+from g8e_evals.harness import BindingType, Task
 from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AgentTrailEvent, _extract_Gateway_transaction_id
 
 pytestmark = pytest.mark.unit

@@ -23,13 +23,11 @@ keeps Information Isolation (GDD §3) intact.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
     ErrorCode,
-    EventType,
     G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
