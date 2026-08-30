@@ -82,6 +82,9 @@ func resolveClientOperatorContext(client apiClient, context *auth.ClientAuthCont
 		if operator.OperatorSessionID == "" {
 			continue
 		}
+		if operator.Status == constants.OperatorStatusTerminated {
+			continue
+		}
 		if context.OperatorID == "" || operator.ID == context.OperatorID {
 			matches = append(matches, operator)
 		}

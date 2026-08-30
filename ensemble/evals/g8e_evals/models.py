@@ -48,6 +48,7 @@ class TaskMetadata(BaseModel):
     category: str = ""
     difficulty: str = ""
     tags: list[str] = Field(default_factory=list)
+    expected_action_class: str = ""
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

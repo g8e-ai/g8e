@@ -85,12 +85,12 @@ async def test_collector_resolves_receipt_by_authoritative_investigation_correla
 
     collected = await ReceiptCollector(
         "https://gateway:8443", auth=auth
-    ).collect_receipt_for_investigation("investigation-001")
+    ).collect_receipt_for_investigation("investigation-001", "FILE_EDIT")
 
     assert collected is not None
     assert collected.transaction_id == receipt.transaction_id
     client.get.assert_awaited_with(
         "https://gateway:8443/api/v1/audit/receipts",
-        params={"investigation_id": "investigation-001"},
+        params={"investigation_id": "investigation-001", "action_type": "FILE_EDIT"},
         headers={},
     )

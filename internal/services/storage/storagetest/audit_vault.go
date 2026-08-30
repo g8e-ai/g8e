@@ -900,15 +900,17 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	var r models.ActionReceiptRecord
 	var executedAtMs int64
 	var timestampStr string
+	var investigationID sql.NullString
 	var sessionID sql.NullString
 	var receiptJSON sql.NullString
 	err := avs.db.QueryRowWithRetry(query, transactionID).Scan(
-		&r.TransactionID, &r.TransactionHash, &r.InvestigationID, &r.OperatorID, &sessionID,
+		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
 		&r.RequestorUserID, &r.ActingAppID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
 		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
 	)
+	r.InvestigationID = investigationID.String
 	r.OperatorSessionID = sessionID.String
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -925,6 +927,38 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 	}
 
 	return &r, nil
+}
+
+func (avs *TestSQLAuditStore) GetActionReceiptByInvestigationID(
+	investigationID string,
+	actionType constants.ActionType,
+) (*models.ActionReceiptRecord, error) {
+	if avs == nil || avs.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	rows, err := sqliteutil.MaterializeRows(
+		avs.db,
+		"SELECT transaction_id FROM receipts WHERE investigation_id = ? AND action_type = ? ORDER BY timestamp DESC LIMIT 2",
+		[]interface{}{investigationID, actionType},
+		func(row *sql.Rows) (string, error) {
+			var transactionID string
+			if err := row.Scan(&transactionID); err != nil {
+				return "", err
+			}
+			return transactionID, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: investigation correlation: %w", constants.ErrAuditStoreGetReceiptFailed, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if len(rows) > 1 {
+		return nil, constants.ErrAuditStoreReceiptCorrelationDuplicate
+	}
+	return avs.GetActionReceipt(rows[0])
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
@@ -957,22 +991,24 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 	args = append(args, limit, offset)
 
 	type receiptRow struct {
-		record       models.ActionReceiptRecord
-		executedAtMs int64
-		timestampStr string
-		sessionID    sql.NullString
-		receiptJSON  sql.NullString
+		record          models.ActionReceiptRecord
+		executedAtMs    int64
+		timestampStr    string
+		investigationID sql.NullString
+		sessionID       sql.NullString
+		receiptJSON     sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(avs.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.InvestigationID, &row.record.OperatorID, &row.sessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
+		row.record.InvestigationID = row.investigationID.String
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
@@ -1017,22 +1053,24 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 	`
 
 	type receiptRow struct {
-		record       models.ActionReceiptRecord
-		executedAtMs int64
-		timestampStr string
-		sessionID    sql.NullString
-		receiptJSON  sql.NullString
+		record          models.ActionReceiptRecord
+		executedAtMs    int64
+		timestampStr    string
+		investigationID sql.NullString
+		sessionID       sql.NullString
+		receiptJSON     sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(avs.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.InvestigationID, &row.record.OperatorID, &row.sessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
 			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
+		row.record.InvestigationID = row.investigationID.String
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})

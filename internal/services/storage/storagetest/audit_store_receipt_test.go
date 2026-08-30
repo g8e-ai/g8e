@@ -57,6 +57,7 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	record := &models.ActionReceiptRecord{
 		TransactionID:     "tx-123",
 		TransactionHash:   "hash-abc123",
+		InvestigationID:   "investigation-123",
 		OperatorID:        "operator-1",
 		OperatorSessionID: "session-1",
 		ActionType:        constants.ActionTypeExecuteBash,
@@ -92,6 +93,7 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 
 	assert.Equal(t, "tx-123", persisted.TransactionID)
 	assert.Equal(t, "hash-abc123", persisted.TransactionHash)
+	assert.Equal(t, "investigation-123", persisted.InvestigationID)
 	assert.Equal(t, "operator-1", persisted.OperatorID)
 	assert.Equal(t, "session-1", persisted.OperatorSessionID)
 	assert.Equal(t, constants.ActionTypeExecuteBash, persisted.ActionType)
@@ -106,6 +108,22 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	assert.True(t, proto.Equal(record.ActionReceipt, persisted.ActionReceipt),
 		"GetActionReceipt must return the same canonical ActionReceipt persisted by RecordActionReceipt")
 
+	documentRecord := *record
+	documentRecord.TransactionID = "tx-document-update"
+	documentRecord.TransactionHash = "hash-document-update"
+	documentRecord.ActionType = constants.ActionTypeDocumentUpdate
+	documentRecord.ActionReceipt = proto.Clone(record.ActionReceipt).(*operatorv1.ActionReceipt)
+	documentRecord.ActionReceipt.TransactionId = documentRecord.TransactionID
+	documentRecord.ActionReceipt.TransactionHash = documentRecord.TransactionHash
+	require.NoError(t, avs.RecordActionReceipt(&documentRecord))
+
+	correlated, err := avs.GetActionReceiptByInvestigationID("investigation-123", constants.ActionTypeExecuteBash)
+	require.NoError(t, err)
+	require.NotNil(t, correlated)
+	assert.Equal(t, record.InvestigationID, correlated.InvestigationID)
+	assert.True(t, proto.Equal(record.ActionReceipt, correlated.ActionReceipt),
+		"GetActionReceiptByInvestigationID must return the canonical persisted ActionReceipt")
+
 	receipts, err := avs.ListActionReceipts("session-1", 10, 0)
 	require.NoError(t, err)
 	require.Len(t, receipts, 1)
@@ -117,6 +135,31 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	require.Len(t, receipts, 1)
 	assert.True(t, proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt),
 		"ListActionReceiptsSince must return the same canonical ActionReceipt persisted by RecordActionReceipt")
+
+	duplicate := *record
+	duplicate.TransactionID = "tx-duplicate-investigation"
+	duplicate.TransactionHash = "hash-duplicate-investigation"
+	duplicate.ActionReceipt = proto.Clone(record.ActionReceipt).(*operatorv1.ActionReceipt)
+	duplicate.ActionReceipt.TransactionId = duplicate.TransactionID
+	duplicate.ActionReceipt.TransactionHash = duplicate.TransactionHash
+	require.NoError(t, avs.RecordActionReceipt(&duplicate))
+
+	correlated, err = avs.GetActionReceiptByInvestigationID(record.InvestigationID, constants.ActionTypeExecuteBash)
+	assert.Nil(t, correlated)
+	assert.ErrorIs(t, err, constants.ErrAuditStoreReceiptCorrelationDuplicate)
+
+	_, err = avs.db.Exec("UPDATE receipts SET investigation_id = NULL WHERE transaction_id = ?", record.TransactionID)
+	require.NoError(t, err)
+	persisted, err = avs.GetActionReceipt(record.TransactionID)
+	require.NoError(t, err)
+	require.NotNil(t, persisted)
+	assert.Empty(t, persisted.InvestigationID)
+	receipts, err = avs.ListActionReceipts(record.OperatorSessionID, 10, 0)
+	require.NoError(t, err)
+	assert.Len(t, receipts, 3)
+	receipts, err = avs.ListActionReceiptsSince(record.Timestamp.Add(-time.Second), 10)
+	require.NoError(t, err)
+	assert.Len(t, receipts, 3)
 }
 
 func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {

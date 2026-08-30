@@ -107,6 +107,40 @@ func TestAuthContextCmdWithConfig_ResolvesOperatorBinding(t *testing.T) {
 	assert.Equal(t, []string{constants.APIPaths.Operators + "?user_id=user-123"}, client.getCalls)
 }
 
+func TestAuthContextCmdWithConfig_SkipsTerminatedOperatorBinding(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	creds := &auth.Credentials{UserID: "user-123", CLISessionID: "cli-session-123"}
+	require.NoError(t, auth.SaveCredentials(fileSvc, cfg, creds))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLICertFile()), []byte("cli-cert"), constants.PermFilePrivate))
+	require.NoError(t, fileSvc.WriteFile(context.Background(), mustRel(t, fileSvc, cfg.CLIKeyFile()), []byte("cli-key"), constants.PermFilePrivate))
+	response, err := json.Marshal(models.OperatorSlotResponse{Operators: []models.OperatorDocumentGo{
+		{
+			ID:                "operator-old",
+			UserID:            creds.UserID,
+			OperatorSessionID: "operator-session-old",
+			Status:            constants.OperatorStatusTerminated,
+		},
+		{
+			ID:                "operator-new",
+			UserID:            creds.UserID,
+			OperatorSessionID: "operator-session-new",
+			Status:            constants.OperatorStatusActive,
+		},
+	}})
+	require.NoError(t, err)
+	client := &mockAPIClient{getResp: response}
+	cmd := authContextCmdWithConfig(configLoaderFor(cfg), mockClientFactory(client), fileSvcFactoryFor(fileSvc))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	var got auth.ClientAuthContext
+	require.NoError(t, json.Unmarshal(output.Bytes(), &got))
+	assert.Equal(t, "operator-new", got.OperatorID)
+	assert.Equal(t, "operator-session-new", got.OperatorSessionID)
+}
+
 func TestAuthContextCmdWithConfig_RejectsIncompleteIdentity(t *testing.T) {
 	tests := []struct {
 		name  string

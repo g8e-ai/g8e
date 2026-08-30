@@ -49,9 +49,11 @@ class ReceiptCollector:
         )
 
     async def collect_receipt_for_investigation(
-        self, investigation_id: str
+        self, investigation_id: str, action_type: str
     ) -> ActionReceipt | None:
-        return await self._collect_receipt(params={"investigation_id": investigation_id})
+        return await self._collect_receipt(
+            params={"investigation_id": investigation_id, "action_type": action_type}
+        )
 
     async def _collect_receipt(
         self,

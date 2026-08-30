@@ -57,7 +57,16 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 
 	txID := r.URL.Query().Get("tx_id")
 	investigationID := r.URL.Query().Get("investigation_id")
-	if txID != "" && investigationID != "" {
+	actionType := constants.ActionType(r.URL.Query().Get("action_type"))
+	if txID != "" && (investigationID != "" || actionType != "") {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrAuditStoreReceiptLookupConflict.Error())
+		return
+	}
+	if investigationID != "" && actionType == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
+		return
+	}
+	if investigationID == "" && actionType != "" {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrAuditStoreReceiptLookupConflict.Error())
 		return
 	}
@@ -79,7 +88,7 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if investigationID != "" {
-		receipt, err := c.auditStore.GetActionReceiptByInvestigationID(investigationID)
+		receipt, err := c.auditStore.GetActionReceiptByInvestigationID(investigationID, actionType)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, constants.ErrAuditStoreReceiptCorrelationDuplicate) {

@@ -461,6 +461,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             suite_id=suite_id,
             suite_version=suite_version,
             category=t.metadata.category or "instruction_following",
+            expected_action_class=t.metadata.expected_action_class,
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
             grader_ids=["ifeval_subset_verifier"],

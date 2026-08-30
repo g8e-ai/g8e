@@ -39,6 +39,7 @@ class IFEvalLoader:
                 prompt=data["prompt"],
                 metadata=TaskMetadata(
                     benchmark="ifeval_subset",
+                    expected_action_class=data.get("expected_action_class", ""),
                     instruction_id_list=data["instruction_id_list"],
                     kwargs=data["kwargs"],
                 ),
