@@ -29,12 +29,12 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from g8e_evals.harness import BindingType, Task
-from g8e_evals.sut.g8ee_chat import G8eeChatSUT, AgentTrailEvent, _extract_Gateway_transaction_id
+from g8e_evals.sut.g8ee_chat import AgentTrailEvent, G8eeChatSUT, _extract_gateway_transaction_ids
 
 pytestmark = pytest.mark.unit
 
 
-def test_extract_Gateway_transaction_id_ignores_investigation_only_trail():
+def test_extract_gateway_transaction_ids_ignores_investigation_only_trail():
     trail = [
         AgentTrailEvent(
             id=1,
@@ -47,10 +47,10 @@ def test_extract_Gateway_transaction_id_ignores_investigation_only_trail():
             payload={"investigation_id": "inv-abc"},
         ),
     ]
-    assert _extract_Gateway_transaction_id(trail) is None
+    assert _extract_gateway_transaction_ids(trail) == []
 
 
-def test_extract_Gateway_transaction_id_picks_warden_signed_receipt():
+def test_extract_gateway_transaction_ids_preserves_distinct_warden_receipts_in_order():
     trail = [
         AgentTrailEvent(
             id=1,
@@ -63,16 +63,38 @@ def test_extract_Gateway_transaction_id_picks_warden_signed_receipt():
             payload={
                 "event": {
                     "type": "g8e.v1.ai.governance.warden.receipt.signed",
-                    "data": {"transaction_hash": "tx-real-Gateway-id"},
+                    "data": {"transaction_hash": "tx-command"},
+                },
+                "investigation_id": "inv-abc",
+            },
+        ),
+        AgentTrailEvent(
+            id=3,
+            event_type="g8e.v1.ai.governance.warden.receipt.signed",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.governance.warden.receipt.signed",
+                    "data": {"transaction_hash": "tx-file"},
+                },
+                "investigation_id": "inv-abc",
+            },
+        ),
+        AgentTrailEvent(
+            id=4,
+            event_type="g8e.v1.ai.governance.warden.receipt.signed",
+            payload={
+                "event": {
+                    "type": "g8e.v1.ai.governance.warden.receipt.signed",
+                    "data": {"transaction_hash": "tx-command"},
                 },
                 "investigation_id": "inv-abc",
             },
         ),
     ]
-    assert _extract_Gateway_transaction_id(trail) == "tx-real-Gateway-id"
+    assert _extract_gateway_transaction_ids(trail) == ["tx-command", "tx-file"]
 
 
-def test_extract_Gateway_transaction_id_ignores_investigation_id_lookalikes():
+def test_extract_gateway_transaction_ids_ignores_investigation_id_lookalikes():
     # An investigation_id used as a transaction_id on a non-Gateway event
     # must NOT be promoted to a Gateway transaction id.
     trail = [
@@ -82,7 +104,7 @@ def test_extract_Gateway_transaction_id_ignores_investigation_id_lookalikes():
             payload={"transaction_id": "inv-abc"},
         ),
     ]
-    assert _extract_Gateway_transaction_id(trail) is None
+    assert _extract_gateway_transaction_ids(trail) == []
 
 
 def test_binding_unbound_when_no_Gateway_receipt(monkeypatch):
@@ -91,7 +113,7 @@ def test_binding_unbound_when_no_Gateway_receipt(monkeypatch):
     # the live ifeval bench.
     from g8e_evals.sut import g8ee_chat
 
-    assert hasattr(g8ee_chat, "_extract_Gateway_transaction_id")
+    assert hasattr(g8ee_chat, "_extract_gateway_transaction_ids")
     assert BindingType.UNBOUND.value == "UNBOUND"
     assert BindingType.RECEIPT_BOUND.value == "RECEIPT_BOUND"
 

@@ -320,6 +320,7 @@ const EventAiConsensusVotingAuditCompleted EventType = "g8e.v1.ai.consensus.voti
 // Other new events
 const EventAiLLMChatIterationThinkingStopped EventType = "g8e.v1.ai.llm.chat.iteration.thinking.stopped"
 const EventAiReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
+const EventAppAgentActivityRecorded EventType = "g8e.v1.app.agent.activity.recorded"
 const EventAppCaseDeleted EventType = "g8e.v1.app.case.deleted"
 const EventAppInvestigationDeleted EventType = "g8e.v1.app.investigation.deleted"
 const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"

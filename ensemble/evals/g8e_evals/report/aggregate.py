@@ -26,7 +26,7 @@ def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
     bound = sum(1 for r in results if r.response.binding == BindingType.RECEIPT_BOUND)
     coverage = (bound / total) * 100.0
 
-    verified = sum(1 for r in results if r.response.receipt_verified)
+    verified = sum(1 for r in results if r.response.receipts_verified)
     # Verification % is of the bound ones, or of total?
     # Plan §8 says "receipt verification %" - let's do of total for honesty.
     verification_pct = (verified / total) * 100.0

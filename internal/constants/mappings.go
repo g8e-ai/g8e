@@ -27,6 +27,7 @@ var eventToAction = map[EventType]ActionType{
 	Event.Operator.Mcp.CallRequested:              ActionTypeMcpCall,
 	Event.Operator.A2a.CallRequested:              ActionTypeA2aCall,
 	Event.Operator.PortCheck.Requested:            ActionTypePortCheck,
+	EventAppAgentActivityRecorded:                 ActionTypeDocumentUpdate,
 	EventAppCaseCreated:                           ActionTypeDocumentUpdate,
 	EventAppCaseUpdated:                           ActionTypeDocumentUpdate,
 	EventAppCaseDeleted:                           ActionTypeDocumentDelete,

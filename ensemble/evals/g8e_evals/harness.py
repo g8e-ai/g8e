@@ -87,17 +87,27 @@ class Task:
     metadata: TaskMetadata = field(default_factory=TaskMetadata)
 
 
+@dataclass(frozen=True)
+class ReceiptEvidence:
+    action_receipt: ActionReceipt
+    verified: bool
+
+
 @dataclass
 class Response:
     answer: str
     model: str
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
-    transaction_id: str | None = None
+    transaction_ids: list[str] = field(default_factory=list)
     chat_evidence: EvidenceLike | None = None
-    action_receipt: ActionReceipt | None = None
-    receipt_verified: bool = False
+    receipts: list[ReceiptEvidence] = field(default_factory=list)
+    primary_transaction_id: str | None = None
     binding: BindingType = BindingType.UNBOUND
     unbound_reason: str | None = None
+
+    @property
+    def receipts_verified(self) -> bool:
+        return bool(self.receipts) and all(receipt.verified for receipt in self.receipts)
 
 
 @dataclass

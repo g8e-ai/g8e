@@ -27,6 +27,7 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 )
+from g8e_evals.harness import ReceiptEvidence
 from g8e_evals.schema import (
     EvidenceIndex,
     EvidenceMediaType,
@@ -403,7 +404,7 @@ def _receipt_stages(
     if receipt.HasField("final_persistence_attestation"):
         attestation = receipt.final_persistence_attestation
         stages.append(StageObservation(
-            stage_id=f"{attempt_id}:receipt:persistence:final",
+            stage_id=f"{attempt_id}:receipt:{receipt.transaction_id}:persistence:final",
             attempt_id=attempt_id,
             run_id=run_id,
             kind=StageKind.RECEIPT_PERSISTENCE,
@@ -454,8 +455,7 @@ def normalize_attempt_evidence(
     evidence: Any,
     run_id: str,
     attempt_id: str,
-    action_receipt: ActionReceipt | None = None,
-    receipt_verified: bool = False,
+    receipts: list[ReceiptEvidence] | None = None,
     grading_model_calls: list[ModelCallTelemetry] | None = None,
 ) -> NormalizedAttemptEvidence:
     wire = evidence.model_dump()
@@ -476,8 +476,15 @@ def normalize_attempt_evidence(
             stage.model_copy(update={"output_artifact_hash": stage.output_artifact_hash or raw_evidence.index.sha256})
             for stage in stages
         ]
-    if action_receipt is not None:
-        stages.extend(_receipt_stages(action_receipt, run_id, attempt_id, receipt_verified))
+    for receipt in receipts or []:
+        stages.extend(
+            _receipt_stages(
+                receipt.action_receipt,
+                run_id,
+                attempt_id,
+                receipt.verified,
+            )
+        )
     grading_stages = _grading_stages(grading_model_calls or [], run_id, attempt_id)
     stages.extend(grading_stages)
     expected_call_count += len(grading_stages)

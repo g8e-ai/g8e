@@ -620,7 +620,9 @@ class ChatPipelineService:
                 error=error,
             )
 
-            await self.agent_activity_data_service.record_activity(metadata)
+            await self.agent_activity_data_service.record_activity(
+                metadata, RequestContext.from_app_context(inputs.g8e_context)
+            )
             logger.info(
                 "Agent activity metadata recorded",
                 extra={

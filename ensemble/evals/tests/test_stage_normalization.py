@@ -20,6 +20,7 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 )
+from g8e_evals.harness import ReceiptEvidence
 from g8e_evals.schema import StageKind
 from g8e_evals.stages import normalize_attempt_evidence
 from g8e_evals.sut.direct_provider import DirectCallEvidence, _DirectEvidenceWrapper
@@ -318,8 +319,7 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         evidence,
         run_id="run",
         attempt_id="attempt",
-        action_receipt=receipt,
-        receipt_verified=True,
+        receipts=[ReceiptEvidence(action_receipt=receipt, verified=True)],
     )
 
     assert [stage.kind for stage in normalized.stages] == [
@@ -345,7 +345,7 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
     assert commitment_stage.signer_key_id == "auditor-key"
     assert l4_stage.parent_stage_id == execution_stage.stage_id
     assert commitment_stage.parent_stage_id == execution_stage.stage_id
-    assert final_persistence_stage.stage_id == "attempt:receipt:persistence:final"
+    assert final_persistence_stage.stage_id == "attempt:receipt:tx-1:persistence:final"
     assert final_persistence_stage.decision == "verified"
     assert final_persistence_stage.transaction_id == "tx-1"
     assert final_persistence_stage.receipt_signature_digest == "receipt-digest"
@@ -358,6 +358,53 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         commitment_stage.stage_id,
         final_persistence_stage.stage_id,
     ]
+
+
+def test_multiple_receipts_normalize_every_deterministic_and_persistence_stage():
+    evidence = ChatEvaluationReceipt(
+        case_id="case",
+        investigation_id="investigation",
+        terminal_event="g8e.v1.ai.llm.chat.iteration.text.completed",
+        answer_chars=5,
+        event_count=0,
+        event_counts_by_type={},
+        agent_trail=[],
+    )
+    receipts = []
+    for transaction_id, action_type, verified in [
+        ("tx-command", "EXECUTE_BASH", True),
+        ("tx-file", "FILE_EDIT", False),
+    ]:
+        receipt = ActionReceipt(
+            transaction_id=transaction_id,
+            transaction_hash=f"hash-{transaction_id}",
+        )
+        receipt.deterministic_stage_evidence.add(
+            stage_id=f"{transaction_id}:l5",
+            kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+            transaction_id=transaction_id,
+            action_type=action_type,
+        )
+        receipt.final_persistence_attestation.transaction_id = transaction_id
+        receipt.final_persistence_attestation.audit_record_id = transaction_id
+        receipts.append(ReceiptEvidence(action_receipt=receipt, verified=verified))
+
+    normalized = normalize_attempt_evidence(
+        evidence,
+        run_id="run",
+        attempt_id="attempt",
+        receipts=receipts,
+    )
+
+    receipt_stages = [stage for stage in normalized.stages if stage.transaction_id]
+    assert [(stage.transaction_id, stage.kind, stage.decision) for stage in receipt_stages] == [
+        ("tx-command", StageKind.L5_EXECUTION, "completed"),
+        ("tx-command", StageKind.RECEIPT_PERSISTENCE, "verified"),
+        ("tx-file", StageKind.L5_EXECUTION, "completed"),
+        ("tx-file", StageKind.RECEIPT_PERSISTENCE, "unverified"),
+    ]
+    assert len({stage.stage_id for stage in receipt_stages}) == 4
 
 
 @pytest.mark.parametrize(
@@ -386,7 +433,12 @@ def test_receipt_normalization_rejects_unknown_deterministic_stage_enums(kind, o
     )
 
     with pytest.raises(ValueError, match=message):
-        normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", action_receipt=receipt)
+        normalize_attempt_evidence(
+            evidence,
+            run_id="run",
+            attempt_id="attempt",
+            receipts=[ReceiptEvidence(action_receipt=receipt, verified=False)],
+        )
 
 
 def test_receipt_normalization_rejects_unknown_parent_stage():
@@ -413,7 +465,7 @@ def test_receipt_normalization_rejects_unknown_parent_stage():
             evidence,
             run_id="run",
             attempt_id="attempt",
-            action_receipt=receipt,
+            receipts=[ReceiptEvidence(action_receipt=receipt, verified=False)],
         )
 
 

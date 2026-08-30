@@ -22,14 +22,26 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.model_telemetry import ModelCallTelemetry
-from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e.operator.v1.operator_pb2 import (
+    ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+    DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+)
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.evidence import EvidenceEncryptionKey, decrypt_evidence_artifact
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails, TaskMetadata
-from g8e_evals.schema import AttemptRecord, EvidenceIndex, MetricObservation, RunManifest, StageObservation, TaskDefinition
+from g8e_evals.schema import (
+    AttemptRecord,
+    EvidenceIndex,
+    MetricObservation,
+    ReceiptObservation,
+    RunManifest,
+    StageObservation,
+    TaskDefinition,
+)
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
 
 pytestmark = pytest.mark.unit
@@ -225,10 +237,16 @@ async def test_governed_attempt_resolves_receipt_from_investigation_and_action_c
         ),
     )
     collector = _patch_collector(monkeypatch)
-    collector.collect_receipt_for_investigation.return_value = ActionReceipt(
+    correlated_receipt = ActionReceipt(
         transaction_id="tx-correlated",
         transaction_hash="hash-correlated",
     )
+    correlated_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="FILE_EDIT",
+    )
+    collector.collect_receipt_for_investigation.return_value = correlated_receipt
     _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -249,6 +267,82 @@ async def test_governed_attempt_resolves_receipt_from_investigation_and_action_c
         (report_dir / "attempts.jsonl").read_text().splitlines()[0]
     )
     assert attempt.correlation_ids["transaction_id"] == "tx-correlated"
+
+
+@pytest.mark.asyncio
+async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp_path, monkeypatch):
+    task = Task(
+        id="1001",
+        prompt="Write a sentence without commas.",
+        metadata=TaskMetadata(expected_action_class="EXECUTE_BASH"),
+    )
+    _patch_loader(monkeypatch, [task])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            transaction_ids=["tx-command", "tx-file"],
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.RECEIPT_BOUND,
+        ),
+    )
+    collector = _patch_collector(monkeypatch)
+    command_receipt = ActionReceipt(
+        transaction_id="tx-command",
+        transaction_hash="hash-command",
+    )
+    command_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="EXECUTE_BASH",
+    )
+    file_receipt = ActionReceipt(
+        transaction_id="tx-file",
+        transaction_hash="hash-file",
+    )
+    file_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="FILE_EDIT",
+    )
+    collector.collect_receipt.side_effect = [command_receipt, file_receipt]
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    assert [call.args[0] for call in collector.collect_receipt.await_args_list] == [
+        "tx-command",
+        "tx-file",
+    ]
+    collector.collect_receipt_for_investigation.assert_not_awaited()
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    receipt_lines = (report_dir / "receipts.jsonl").read_text().splitlines()
+    receipts = [ReceiptObservation.model_validate_json(line) for line in receipt_lines]
+    assert [receipt.transaction_id for receipt in receipts] == ["tx-command", "tx-file"]
+    assert [receipt.action_type for receipt in receipts] == ["EXECUTE_BASH", "FILE_EDIT"]
+    assert [receipt.primary for receipt in receipts] == [True, False]
+    attempt = AttemptRecord.model_validate_json(
+        (report_dir / "attempts.jsonl").read_text().splitlines()[0]
+    )
+    assert attempt.correlation_ids["transaction_id"] == "tx-command"
+    assert attempt.receipt_refs == [receipt.receipt_id for receipt in receipts]
+    legacy_result = json.loads((report_dir / "results.jsonl").read_text().splitlines()[0])
+    assert legacy_result["primary_transaction_id"] == "tx-command"
+    assert len(legacy_result["receipts"]) == 2
 
 
 @pytest.mark.asyncio

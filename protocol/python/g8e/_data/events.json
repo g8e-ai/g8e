@@ -1168,6 +1168,10 @@
       "_go_const": "EventAiReputationStateUpdated",
       "value": "g8e.v1.ai.reputation.state.updated"
     },
+    "AppAgentActivityRecorded": {
+      "_go_const": "EventAppAgentActivityRecorded",
+      "value": "g8e.v1.app.agent.activity.recorded"
+    },
     "AppCaseDeleted": {
       "_go_const": "EventAppCaseDeleted",
       "value": "g8e.v1.app.case.deleted"

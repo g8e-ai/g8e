@@ -23,12 +23,15 @@ from datetime import datetime, UTC
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
+from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e.receipts import action_receipt_to_dict, parse_action_receipt
 from g8e_evals.arms import Arm, GovernancePosture
+from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.8.0"
+SCHEMA_VERSION = "1.9.0"
 
 
 class TerminalStatus(StrEnum):
@@ -360,12 +363,48 @@ class AttemptRecord(BaseModel):
 
     answer_ref: str | None = None
     final_state_observation_ref: str | None = None
+    receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 
     missingness_or_failure: str | None = None
     usage_reconciliation: UsageReconciliation | None = None
 
     parent_attempt_id: str | None = None
+
+
+class ReceiptObservation(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    receipt_id: str
+    attempt_id: str
+    run_id: str
+    transaction_id: str
+    action_type: str
+    primary: bool = False
+    verified: bool = False
+    action_receipt: ActionReceipt
+
+    @field_validator("action_receipt", mode="before")
+    @classmethod
+    def _parse_action_receipt(cls, value: object) -> ActionReceipt:
+        if isinstance(value, ActionReceipt):
+            return value
+        if isinstance(value, dict):
+            return parse_action_receipt(value)
+        raise ValueError("action_receipt must be an ActionReceipt or canonical protojson object")
+
+    @model_validator(mode="after")
+    def _validate_receipt_binding(self) -> ReceiptObservation:
+        if self.action_receipt.transaction_id != self.transaction_id:
+            raise ValueError("receipt transaction ID does not match observation")
+        if receipt_action_type(self.action_receipt) != self.action_type:
+            raise ValueError("receipt action type does not match observation")
+        return self
+
+    @field_serializer("action_receipt")
+    def _serialize_action_receipt(self, receipt: ActionReceipt) -> dict[str, object]:
+        return action_receipt_to_dict(receipt)
 
 
 class StageObservation(BaseModel):

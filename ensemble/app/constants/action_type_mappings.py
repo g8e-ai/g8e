@@ -35,6 +35,7 @@ def map_event_type_to_action_type(event_type: str) -> str:
         # All case/investigation/memory create/update events map to DOCUMENT_UPDATE;
         # all delete events map to DOCUMENT_DELETE. This unifies governed document
         # mutations through one action type pair with typed protobuf payloads.
+        EventType.APP_AGENT_ACTIVITY_RECORDED: "DOCUMENT_UPDATE",
         EventType.APP_CASE_CREATED: "DOCUMENT_UPDATE",
         EventType.APP_CASE_UPDATED: "DOCUMENT_UPDATE",
         EventType.APP_CASE_DELETED: "DOCUMENT_DELETE",

@@ -76,9 +76,9 @@ async def test_direct_provider_sut_bypasses_g8ee_http(monkeypatch):
     assert response.arm == Arm.DIRECT
     assert response.binding == BindingType.UNBOUND
     assert response.answer == "A direct answer."
-    assert response.transaction_id is None
-    assert response.action_receipt is None
-    assert response.receipt_verified is False
+    assert response.transaction_ids == []
+    assert response.receipts == []
+    assert response.receipts_verified is False
 
 
 @pytest.mark.asyncio
@@ -135,8 +135,8 @@ async def test_direct_provider_sut_no_receipt_collected(monkeypatch):
     task = Task(id="1001", prompt="Write a sentence.")
     response = await sut.get_answer(task)
 
-    assert response.action_receipt is None
-    assert response.receipt_verified is False
+    assert response.receipts == []
+    assert response.receipts_verified is False
     assert response.binding == BindingType.UNBOUND
     assert "direct arm" in (response.unbound_reason or "")
 

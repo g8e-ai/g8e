@@ -15,6 +15,11 @@ from __future__ import annotations
 
 
 import pytest
+from g8e.operator.v1.operator_pb2 import (
+    ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+    DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+)
 from pydantic import ValidationError
 
 from g8e_evals.arms import Arm, GovernancePosture
@@ -28,6 +33,7 @@ from g8e_evals.schema import (
     MetricObservation,
     ModelIdentity,
     PostureObservation,
+    ReceiptObservation,
     RunManifest,
     StageKind,
     StageObservation,
@@ -40,7 +46,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.8.0"
+    assert SCHEMA_VERSION == "1.9.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -134,6 +140,35 @@ def test_attempt_record_default_posture_is_none():
     )
     assert ar.posture.requested_posture == GovernancePosture.NONE
     assert ar.posture.observed_posture is None
+
+
+def test_receipt_observation_round_trips_canonical_action_receipt():
+    receipt = ActionReceipt(
+        transaction_id="tx-1",
+        transaction_hash="hash-1",
+    )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="FILE_EDIT",
+    )
+    observation = ReceiptObservation(
+        receipt_id="attempt:receipt:tx-1",
+        attempt_id="attempt",
+        run_id="run",
+        transaction_id="tx-1",
+        action_type="FILE_EDIT",
+        primary=True,
+        verified=True,
+        action_receipt=receipt,
+    )
+
+    restored = ReceiptObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored.action_receipt.transaction_id == "tx-1"
+    assert restored.action_receipt.deterministic_stage_evidence[0].action_type == "FILE_EDIT"
+    assert restored.primary is True
+    assert restored.verified is True
 
 
 def test_stage_observation_rejects_extra_fields():

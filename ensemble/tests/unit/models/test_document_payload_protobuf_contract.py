@@ -199,6 +199,7 @@ class TestEventTypeToActionTypeContract:
     @pytest.mark.parametrize(
         "event_type,expected",
         [
+            (EventType.APP_AGENT_ACTIVITY_RECORDED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_CREATED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_UPDATED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_DELETED, "DOCUMENT_DELETE"),

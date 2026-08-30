@@ -238,7 +238,10 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
-        agent_activity_data_service = AgentActivityDataService(cache=cache_aside_service)
+        agent_activity_data_service = AgentActivityDataService(
+            cache=cache_aside_service,
+            governance_client=governance_client,
+        )
 
         reputation_data_service = ReputationDataService(
             cache=cache_aside_service,

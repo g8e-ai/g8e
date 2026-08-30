@@ -8,14 +8,19 @@
 import logging
 from uuid import uuid4
 
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_AGENT_ACTIVITY_METADATA,
     ErrorCode,
+    EventType,
     G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.cache import FieldFilter
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
+from app.models.http_context import RequestContext
+from app.models.pubsub_messages import G8eMessage
 from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
@@ -28,18 +33,21 @@ class AgentActivityDataService:
     used for data science analysis and telemetry.
     """
 
-    def __init__(self, cache: CacheAsideService):
+    def __init__(self, cache: CacheAsideService, governance_client: GovernanceClient):
         self.cache = cache
+        self.governance_client = governance_client
         self.collection = DB_COLLECTION_AGENT_ACTIVITY_METADATA
 
     async def record_activity(
         self,
         metadata: AgentActivityMetadata,
+        context: RequestContext,
     ) -> AgentActivityMetadata:
         """Record a new agent activity metadata entry.
 
         Args:
             metadata: The activity metadata to record
+            context: Authenticated request context for the governance envelope
 
         Returns:
             The recorded metadata with assigned ID
@@ -58,11 +66,27 @@ class AgentActivityDataService:
         )
 
         try:
-            await self.cache.create_document(
+            payload = DocumentUpdateRequestPayload(
                 collection=self.collection,
                 document_id=metadata.id,
-                data=metadata.model_dump(mode="json"),
+                updates=metadata.model_dump(mode="json"),
+                merge=False,
             )
+            message = G8eMessage(
+                id=metadata.id,
+                source_component=G8EE_COMPONENT,
+                event_type=EventType.APP_AGENT_ACTIVITY_RECORDED,
+                case_id=context.case_id,
+                investigation_id=context.investigation_id,
+                task_id=context.task_id,
+                web_session_id=context.web_session_id,
+                cli_session_id=context.cli_session_id,
+                user_id=context.user_id,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
+                payload=payload,
+            )
+            await self.governance_client.submit_envelope(message)
 
             logger.info("Agent activity metadata recorded: %s", metadata.id)
             return metadata

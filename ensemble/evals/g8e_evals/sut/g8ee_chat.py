@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 # Re-exported so `cli.py` (and any external caller) can keep catching
 # AuthenticationError from this module's public surface.
-__all__ = ["AgentTrailEvent", "AuthenticationError", "G8eeChatSUT", "_extract_Gateway_transaction_id"]
+__all__ = ["AgentTrailEvent", "AuthenticationError", "G8eeChatSUT", "_extract_gateway_transaction_ids"]
 
 
 # Terminal SSE event types that conclude a single chat turn.
@@ -248,19 +248,17 @@ class G8eeChatSUT:
             terminal_event=terminal_event,
         )
 
-        # A real Gateway transaction_id only exists when a Tribunal->Warden
-        # mutation produced a signed ActionReceipt. The Operator's audit vault
-        # keys receipts by the UAP envelope id (transaction_hash), NOT by the
-        # g8ee investigation_id. Scan the agent trail for a Gateway tx_id
-        # before claiming RECEIPT_BOUND.
-        Gateway_tx_id = _extract_Gateway_transaction_id(trail)
+        # Real Gateway transaction IDs exist only when governed mutations produce
+        # signed ActionReceipts. Preserve every distinct transaction hash emitted
+        # during a multi-action turn before claiming RECEIPT_BOUND.
+        gateway_transaction_ids = _extract_gateway_transaction_ids(trail)
 
         if sse_error:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
                 arm=self.config.arm,
-                transaction_id=Gateway_tx_id,
+                transaction_ids=gateway_transaction_ids,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
@@ -271,7 +269,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 arm=self.config.arm,
-                transaction_id=None,
+                transaction_ids=gateway_transaction_ids,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"{self.config.arm.value} arm (binding disabled)",
@@ -282,7 +280,7 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 arm=self.config.arm,
-                transaction_id=Gateway_tx_id,
+                transaction_ids=gateway_transaction_ids,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
@@ -294,18 +292,18 @@ class G8eeChatSUT:
                 answer=answer_text,
                 model=self.model_provider,
                 arm=self.config.arm,
-                transaction_id=Gateway_tx_id,
+                transaction_ids=gateway_transaction_ids,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
 
-        if Gateway_tx_id:
+        if gateway_transaction_ids:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
                 arm=self.config.arm,
-                transaction_id=Gateway_tx_id,
+                transaction_ids=gateway_transaction_ids,
                 chat_evidence=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
@@ -314,7 +312,7 @@ class G8eeChatSUT:
             answer=answer_text,
             model=self.model_provider,
             arm=self.config.arm,
-            transaction_id=None,
+            transaction_ids=gateway_transaction_ids,
             chat_evidence=receipt,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
@@ -567,15 +565,18 @@ def _extract_investigation_id(payload_obj: object) -> str:
     return envelope.investigation_id() if envelope is not None else ""
 
 
-def _extract_Gateway_transaction_id(trail: list[AgentTrailEvent]) -> str | None:
-    """Scan the agent trail for a Warden-signed ActionReceipt and return its transaction_hash."""
+def _extract_gateway_transaction_ids(trail: list[AgentTrailEvent]) -> list[str]:
+    """Return distinct Warden-signed transaction hashes in trail order."""
+    transaction_ids: list[str] = []
+    seen: set[str] = set()
     for evt in trail:
         if evt.event_type != "g8e.v1.ai.governance.warden.receipt.signed":
             continue
         envelope = SSEWireEnvelope.parse(evt.payload)
         if envelope is None:
             continue
-        tx_id = envelope.transaction_hash()
-        if tx_id:
-            return tx_id
-    return None
+        transaction_id = envelope.transaction_hash()
+        if transaction_id and transaction_id not in seen:
+            seen.add(transaction_id)
+            transaction_ids.append(transaction_id)
+    return transaction_ids

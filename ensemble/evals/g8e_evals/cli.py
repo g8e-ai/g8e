@@ -25,15 +25,13 @@ from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from g8e.constants import PORTS
 from g8e.receipts import (
-    action_receipt_to_dict,
-    parse_action_receipt,
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
 from g8e_evals.arms import ALL_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
-from g8e_evals.harness import RowResult, BindingType, SUTConfig, LLMRoleConfig
+from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.schema import (
     ArmManifestEntry,
@@ -42,6 +40,7 @@ from g8e_evals.schema import (
     MetricObservation,
     ModelIdentity,
     PostureObservation,
+    ReceiptObservation,
     RoleToModelMapping,
     RunManifest,
     StackEnvironment,
@@ -59,6 +58,7 @@ from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
 from g8e_evals.receipts.collector import ReceiptCollector
+from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
 from g8e_evals.report.cli_renderer import render_summary
 from g8e_evals.models import ScoreDetails
@@ -528,6 +528,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     attempt_records: list[AttemptRecord] = []
     stage_records: list[StageObservation] = []
     metric_records: list[MetricObservation] = []
+    receipt_records: list[ReceiptObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -556,28 +557,58 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             answer_chars=len(response.answer or ""),
         )
 
-        on_chain_receipt = None
         if arm_def.receipt_binding:
-            if response.transaction_id:
-                on_chain_receipt = await collector.collect_receipt(response.transaction_id)
-            elif (
-                isinstance(response.chat_evidence, ChatEvaluationReceipt)
+            collected_receipts = []
+            for transaction_id in response.transaction_ids:
+                receipt = await collector.collect_receipt(transaction_id)
+                if receipt is not None:
+                    collected_receipts.append(receipt)
+
+            correlated_primary_transaction_id = None
+            if (
+                not response.transaction_ids
+                and isinstance(response.chat_evidence, ChatEvaluationReceipt)
                 and task.metadata.expected_action_class
             ):
-                on_chain_receipt = await collector.collect_receipt_for_investigation(
+                receipt = await collector.collect_receipt_for_investigation(
                     response.chat_evidence.investigation_id,
                     task.metadata.expected_action_class,
                 )
-            if on_chain_receipt:
-                response.transaction_id = on_chain_receipt.transaction_id
-                response.action_receipt = on_chain_receipt
+                if receipt is not None:
+                    collected_receipts.append(receipt)
+                    correlated_primary_transaction_id = receipt.transaction_id
+
+            response.receipts = [
+                ReceiptEvidence(
+                    action_receipt=receipt,
+                    verified=bool(
+                        warden_pub
+                        and verify_action_receipt_signature(receipt, warden_pub)
+                        and verify_receipt_persistence_attestation(receipt, warden_pub)
+                    ),
+                )
+                for receipt in collected_receipts
+            ]
+            if correlated_primary_transaction_id:
+                response.primary_transaction_id = correlated_primary_transaction_id
+            elif task.metadata.expected_action_class:
+                matching_receipts = [
+                    receipt.action_receipt.transaction_id
+                    for receipt in response.receipts
+                    if receipt_action_type(receipt.action_receipt)
+                    == task.metadata.expected_action_class
+                ]
+                if len(matching_receipts) == 1:
+                    response.primary_transaction_id = matching_receipts[0]
+            elif response.receipts:
+                response.primary_transaction_id = response.receipts[0].action_receipt.transaction_id
+
+            if response.primary_transaction_id:
                 response.binding = BindingType.RECEIPT_BOUND
                 response.unbound_reason = None
-                if warden_pub:
-                    response.receipt_verified = (
-                        verify_action_receipt_signature(on_chain_receipt, warden_pub)
-                        and verify_receipt_persistence_attestation(on_chain_receipt, warden_pub)
-                    )
+            elif response.receipts:
+                response.binding = BindingType.UNBOUND
+                response.unbound_reason = "declared-action receipt was not uniquely identified"
 
         # Score
         if suite == "ifeval_subset":
@@ -642,13 +673,26 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             terminal_status = TerminalStatus.COMPLETED
 
         attempt_id = f"{run_id}:{task.id}:{arm_def.arm_id.value}:1"
+        attempt_receipts = [
+            ReceiptObservation(
+                receipt_id=f"{attempt_id}:receipt:{receipt.action_receipt.transaction_id}",
+                attempt_id=attempt_id,
+                run_id=run_id,
+                transaction_id=receipt.action_receipt.transaction_id,
+                action_type=receipt_action_type(receipt.action_receipt),
+                primary=receipt.action_receipt.transaction_id == response.primary_transaction_id,
+                verified=receipt.verified,
+                action_receipt=receipt.action_receipt,
+            )
+            for receipt in response.receipts
+        ]
+        receipt_records.extend(attempt_receipts)
         normalized = (
             normalize_attempt_evidence(
                 response.chat_evidence,
                 run_id,
                 attempt_id,
-                action_receipt=response.action_receipt,
-                receipt_verified=response.receipt_verified,
+                receipts=response.receipts,
                 grading_model_calls=score.model_calls,
             )
             if response.chat_evidence
@@ -685,8 +729,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             terminal_status=terminal_status,
             posture=posture,
             correlation_ids={
-                "transaction_id": response.transaction_id or "",
+                "transaction_id": response.primary_transaction_id or "",
             },
+            receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
             missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
             usage_reconciliation=normalized.usage if normalized else None,
         )
@@ -695,10 +740,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         status_color = "green" if score.passed else "red"
         receipt_status = ""
         if response.binding == BindingType.RECEIPT_BOUND:
-            if response.receipt_verified:
-                receipt_status = " [cyan](receipt verified)[/cyan]"
+            if response.receipts_verified:
+                receipt_status = f" [cyan]({len(response.receipts)} receipts verified)[/cyan]"
             else:
-                receipt_status = " [yellow](receipt unverified)[/yellow]"
+                receipt_status = f" [yellow]({len(response.receipts)} receipts not fully verified)[/yellow]"
         elif response.unbound_reason:
             receipt_status = f" [yellow]({response.unbound_reason})[/yellow]"
 
@@ -714,6 +759,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     with open(report_dir / "attempts.jsonl", "w") as f:
         for ar in attempt_records:
             f.write(ar.model_dump_json() + "\n")
+
+    with open(report_dir / "receipts.jsonl", "w") as f:
+        for receipt in receipt_records:
+            f.write(receipt.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:
         for stage in stage_records:
@@ -747,13 +796,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         if artifact.index.attempt_id
     }
 
+    receipt_records_by_attempt = {
+        attempt.attempt_id: [
+            receipt
+            for receipt in receipt_records
+            if receipt.attempt_id == attempt.attempt_id
+        ]
+        for attempt in attempt_records
+    }
+
     def row_to_dict(r: RowResult, attempt: AttemptRecord):
         evidence_index = evidence_index_by_attempt.get(attempt.attempt_id)
-        action_receipt = (
-            action_receipt_to_dict(r.response.action_receipt)
-            if r.response.action_receipt
-            else None
-        )
+        attempt_receipts = receipt_records_by_attempt[attempt.attempt_id]
 
         details_data = None
         if r.score.details:
@@ -770,11 +824,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             "prompt_length": len(prompt_bytes),
             "answer_sha256": hashlib.sha256(answer_bytes).hexdigest(),
             "answer_length": len(answer_bytes),
-            "transaction_id": r.response.transaction_id,
+            "primary_transaction_id": r.response.primary_transaction_id,
             "chat_evidence_ref": evidence_index.artifact_id if evidence_index else None,
             "chat_evidence_sha256": evidence_index.sha256 if evidence_index else None,
-            "action_receipt": action_receipt,
-            "receipt_verified": r.response.receipt_verified,
+            "receipts": [receipt.model_dump(mode="json") for receipt in attempt_receipts],
+            "receipts_verified": r.response.receipts_verified,
             "passed": r.score.passed,
             "details": details_data,
             "timestamp": r.timestamp.isoformat()
@@ -820,9 +874,9 @@ def verify_receipts(report_dir, pki_dir):
 
     warden_pub = warden_pub_path.read_text()
 
-    results_path = report_dir / "results.jsonl"
-    if not results_path.exists():
-        console.print(f"[bold red]Error:[/bold red] results.jsonl not found in {report_dir}")
+    receipts_path = report_dir / "receipts.jsonl"
+    if not receipts_path.exists():
+        console.print(f"[bold red]Error:[/bold red] receipts.jsonl not found in {report_dir}")
         return
 
     console.print(f"[bold blue]Verifying receipts in {report_dir}...[/bold blue]")
@@ -831,28 +885,27 @@ def verify_receipts(report_dir, pki_dir):
     verified = 0
     failed = 0
 
-    with open(results_path) as f:
+    with open(receipts_path) as f:
         for line in f:
-            data = json.loads(line)
-            receipt = data.get("action_receipt")
-            if not receipt:
-                continue
-
             total += 1
             try:
-                receipt_model = parse_action_receipt(receipt)
-            except Exception:
+                observation = ReceiptObservation.model_validate_json(line)
+            except ValueError:
                 failed += 1
-                console.print(f"  [red]FAILED:[/red] Could not parse receipt for task {data.get('task_id')} (TX: {data.get('transaction_id')})")
+                console.print("  [red]FAILED:[/red] Could not parse typed receipt observation")
                 continue
+            receipt = observation.action_receipt
             if (
-                verify_action_receipt_signature(receipt_model, warden_pub)
-                and verify_receipt_persistence_attestation(receipt_model, warden_pub)
+                verify_action_receipt_signature(receipt, warden_pub)
+                and verify_receipt_persistence_attestation(receipt, warden_pub)
             ):
                 verified += 1
             else:
                 failed += 1
-                console.print(f"  [red]FAILED:[/red] Receipt for task {data.get('task_id')} (TX: {data.get('transaction_id')})")
+                console.print(
+                    f"  [red]FAILED:[/red] Receipt for attempt {observation.attempt_id} "
+                    f"(TX: {observation.transaction_id})"
+                )
 
     if total == 0:
         console.print("[yellow]No bound receipts found in report.[/yellow]")
