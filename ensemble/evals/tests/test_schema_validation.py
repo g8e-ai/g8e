@@ -40,7 +40,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.7.0"
+    assert SCHEMA_VERSION == "1.8.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():

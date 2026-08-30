@@ -19,6 +19,10 @@ from datetime import datetime, UTC
 import click
 from rich.console import Console
 
+from app.constants import LLMProvider
+from app.llm.factory import get_llm_provider
+from app.models.settings import LLMSettings
+from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from g8e.constants import PORTS
 from g8e.receipts import (
     action_receipt_to_dict,
@@ -69,6 +73,22 @@ _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
 class EvaluationRunError(Exception):
     pass
 
+
+def _create_eval_judge(config: LLMRoleConfig) -> EvalJudge:
+    if not config.provider or not config.model:
+        raise EvaluationRunError("eval judge requires both provider and model")
+    settings = LLMSettings(
+        llm_lite_provider=LLMProvider(config.provider),
+        llm_lite_model=config.model,
+        lite_api_key=config.api_key,
+        lite_endpoint=config.endpoint,
+    )
+    return EvalJudge(
+        provider=get_llm_provider(settings, is_lite=True),
+        model=config.model,
+    )
+
+
 @click.group()
 def main():
     """g8e High-Fidelity AI Evaluation Harness"""
@@ -92,6 +112,8 @@ def main():
 @click.option("--assistant-model", envvar="G8E_TEST_LLM_ASSISTANT_MODEL", help="Assistant model name")
 @click.option("--lite-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_LITE_PROVIDER", help="Lite LLM provider")
 @click.option("--lite-model", envvar="G8E_TEST_LLM_LITE_MODEL", help="Lite model name")
+@click.option("--judge-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_JUDGE_PROVIDER", help="Secondary Eval Judge provider")
+@click.option("--judge-model", envvar="G8E_TEST_LLM_JUDGE_MODEL", help="Secondary Eval Judge model")
 @click.option("--verbose-text/--no-verbose-text", default=False,
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
@@ -122,10 +144,12 @@ def main():
 @click.option("--assistant-endpoint", envvar="G8E_TEST_LLM_ASSISTANT_ENDPOINT", help="Endpoint URL for the assistant provider")
 @click.option("--lite-api-key", envvar="G8E_TEST_LLM_LITE_API_KEY", help="API key for the lite provider")
 @click.option("--lite-endpoint", envvar="G8E_TEST_LLM_LITE_ENDPOINT", help="Endpoint URL for the lite provider")
+@click.option("--judge-api-key", envvar="G8E_TEST_LLM_JUDGE_API_KEY", help="API key for the Eval Judge provider")
+@click.option("--judge-endpoint", envvar="G8E_TEST_LLM_JUDGE_ENDPOINT", help="Endpoint URL for the Eval Judge provider")
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, web_search_project, web_search_app, web_search_api_key):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
@@ -162,6 +186,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         primary=LLMRoleConfig(provider=provider, model=model, api_key=primary_api_key, endpoint=primary_endpoint),
         assistant=LLMRoleConfig(provider=assistant_provider, model=assistant_model, api_key=assistant_api_key, endpoint=assistant_endpoint),
         lite=LLMRoleConfig(provider=lite_provider, model=lite_model, api_key=lite_api_key, endpoint=lite_endpoint),
+        judge=LLMRoleConfig(provider=judge_provider, model=judge_model, api_key=judge_api_key, endpoint=judge_endpoint),
         operator_url=operator_url,
         operator_session_id=operator_session_id or auth_context.operator_session_id,
         auth_context=auth_context,
@@ -245,6 +270,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     primary_identity = _model_identity("primary")
     assistant_identity = _model_identity("assistant")
     lite_identity = _model_identity("lite")
+    judge_identity = _model_identity("judge")
+
+    if bool(config.judge.provider) != bool(config.judge.model):
+        raise EvaluationRunError("eval judge requires both provider and model")
+    if (
+        judge_identity is not None
+        and config.judge.provider not in _KEYLESS_PROVIDERS
+        and not config.judge.api_key
+    ):
+        raise EvaluationRunError(
+            f"Missing API key for judge provider '{config.judge.provider}'"
+        )
 
     if arm_def.arm_id == Arm.DIRECT:
         if primary_identity is None:
@@ -285,7 +322,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         llm_settings = remote_settings.llm if remote_settings else None
 
         errors = []
-        for role_name in ["primary", "assistant", "lite"]:
+        for role_name in ["primary", "assistant", "lite", "judge"]:
             role_config = getattr(config, role_name)
             if not role_config or not role_config.provider:
                 continue
@@ -294,6 +331,12 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 continue
 
             if role_config.api_key:
+                continue
+
+            if role_name == "judge":
+                errors.append(
+                    f"Missing API key for judge provider '{role_config.provider}'"
+                )
                 continue
 
             if not llm_settings:
@@ -363,6 +406,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 console.print("  ./g8e evals bench --suite ifeval_subset --provider openai --model gpt-4o")
                 raise EvaluationRunError("provider preflight failed: no model configured")
 
+    eval_judge = _create_eval_judge(config.judge) if judge_identity is not None else None
+
     if evidence_key is None:
         raise EvaluationRunError("restricted evidence encryption key is required")
 
@@ -375,7 +420,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     prompt_bundle_content = "\n".join(t.prompt for t in tasks).encode()
     prompt_bundle_hash = hashlib.sha256(prompt_bundle_content).hexdigest()
 
-    grader_bundle_content = f"{suite}:{suite_version}".encode()
+    grader_bundle_content = (
+        f"{suite}:{suite_version}:"
+        f"{config.judge.provider or ''}:{config.judge.model or ''}"
+    ).encode()
     grader_bundle_hash = hashlib.sha256(grader_bundle_content).hexdigest()
 
     content_hashes = [
@@ -403,6 +451,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             primary=primary_identity,
             assistant=assistant_identity,
             lite=lite_identity,
+            judge=judge_identity,
         ),
         stack_environment=StackEnvironment(
             os=platform.platform(),
@@ -462,8 +511,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_action_class=t.metadata.expected_action_class,
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
-            grader_ids=["ifeval_subset_verifier"],
-            grader_versions=["1.0.0"],
+            grader_ids=["ifeval_subset_verifier"] + (["eval_judge"] if eval_judge else []),
+            grader_versions=["1.0.0"] + (["1.0.0"] if eval_judge else []),
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
         for t in tasks
@@ -536,6 +585,27 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 task.metadata.instruction_id_list,
                 task.metadata.kwargs
             )
+
+        if eval_judge is not None:
+            try:
+                judge_grade = await eval_judge.grade_turn(
+                    user_query=task.prompt,
+                    interaction_trace=response.answer,
+                    expected_behavior="Satisfy every declared benchmark instruction.",
+                    required_concepts=task.metadata.instruction_id_list,
+                )
+                score.model_calls.extend(judge_grade.model_calls)
+                score.details.benchmark_specific["eval_judge"] = {
+                    "status": "completed",
+                    "score": judge_grade.score,
+                    "passed": judge_grade.passed,
+                }
+            except EvalJudgeError as error:
+                score.model_calls.extend(error.model_calls)
+                score.details.benchmark_specific["eval_judge"] = {
+                    "status": "failed",
+                    "error_type": type(error).__name__,
+                }
 
         res = RowResult(task=task, response=response, score=score)
         results.append(res)

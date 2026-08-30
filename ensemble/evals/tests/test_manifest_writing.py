@@ -406,6 +406,79 @@ async def test_run_suite_attaches_eval_judge_calls_to_attempt_reconciliation(tmp
 
 
 @pytest.mark.asyncio
+async def test_run_suite_executes_configured_eval_judge_and_records_identity(
+    tmp_path, monkeypatch
+):
+    judge_call = ModelCallTelemetry(
+        agent_role="judge",
+        provider="FakeProvider",
+        model="fake-judge",
+        monotonic_start=10.0,
+        monotonic_end=11.0,
+        input_tokens=100,
+        output_tokens=50,
+        total_tokens=150,
+        usage_reported=True,
+        input_artifact_hash="judge-input",
+        output_artifact_hash="judge-output",
+    )
+    judge = MagicMock()
+    judge.grade_turn = AsyncMock(
+        return_value=SimpleNamespace(score=5, passed=True, model_calls=[judge_call])
+    )
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    monkeypatch.setattr(cli, "_create_eval_judge", lambda _config: judge)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="fake", model="fake-primary"),
+        judge=LLMRoleConfig(provider="fake", model="fake-judge"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    judge.grade_turn.assert_awaited_once()
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    manifest = RunManifest.model_validate_json((report_dir / "manifest.json").read_text())
+    assert manifest.role_to_model.judge is not None
+    assert manifest.role_to_model.judge.provider == "fake"
+    assert manifest.role_to_model.judge.model == "fake-judge"
+    stages = [
+        StageObservation.model_validate_json(line)
+        for line in (report_dir / "stages.jsonl").read_text().splitlines()
+    ]
+    assert [(stage.kind.value, stage.agent_role) for stage in stages] == [
+        ("grading", "judge")
+    ]
+    attempt = AttemptRecord.model_validate_json((report_dir / "attempts.jsonl").read_text())
+    assert attempt.usage_reconciliation is not None
+    assert attempt.usage_reconciliation.expected_call_count == 1
+    assert attempt.usage_reconciliation.observed_call_count == 1
+    assert attempt.usage_reconciliation.missing_provider_usage_call_count == 0
+    assert attempt.usage_reconciliation.reconciled is True
+
+
+@pytest.mark.asyncio
 async def test_direct_arm_refuses_without_primary_model_identity(tmp_path, monkeypatch):
     """The direct arm must refuse to run when the primary model identity is unavailable."""
     _patch_loader(monkeypatch, [_task()])

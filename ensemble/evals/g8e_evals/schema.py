@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.arms import Arm, GovernancePosture
 
 
-SCHEMA_VERSION = "1.7.0"
+SCHEMA_VERSION = "1.8.0"
 
 
 class TerminalStatus(StrEnum):
@@ -112,6 +112,7 @@ class RoleToModelMapping(BaseModel):
     primary: ModelIdentity | None = None
     assistant: ModelIdentity | None = None
     lite: ModelIdentity | None = None
+    judge: ModelIdentity | None = None
 
 
 class SamplingSettings(BaseModel):

@@ -59,6 +59,7 @@ class SUTConfig:
     primary: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     assistant: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     lite: LLMRoleConfig = field(default_factory=LLMRoleConfig)
+    judge: LLMRoleConfig = field(default_factory=LLMRoleConfig)
 
     web_search_project: str | None = None
     web_search_app: str | None = None

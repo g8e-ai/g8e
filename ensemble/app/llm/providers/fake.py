@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shlex
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -63,6 +64,7 @@ _FAKE_DEFAULT_CONTENT = "g8e fake provider deterministic output"
 # Tool name constants (matching OperatorToolName values from the protocol).
 _TOOL_FILE_CREATE = "file_create_on_operator"
 _TOOL_FILE_WRITE = "file_write_on_operator"
+_TOOL_RUN_COMMANDS = "run_commands_with_operator"
 
 # Regex patterns for extracting file path and content from the user message.
 _FILE_PATH_RE = re.compile(r"(?:file\s+at\s+|path\s*[:=]\s*|create.*?at\s+)([^\s,]+)", re.IGNORECASE)
@@ -134,6 +136,30 @@ class FakeProvider(LLMProvider):
         file_path = self._extract_file_path(message)
         content = self._extract_content(message)
 
+        if "through the tribunal" in msg_lower and "file" in msg_lower:
+            tool_call = ToolCall(
+                name=_TOOL_RUN_COMMANDS,
+                args={
+                    "request": f"Create the marker file at {file_path}.",
+                    "guidelines": "Use one safe non-destructive command.",
+                    "expected_output_lines": 1,
+                    "timeout_seconds": 30,
+                    "target_operators": ["all"],
+                },
+                id="fake-tool-call-1",
+            )
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[Part(tool_call=tool_call)],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                usage_metadata=self._usage_metadata(),
+            )
         if "create" in msg_lower and "file" in msg_lower:
             tool_name = _TOOL_FILE_CREATE
         elif "write" in msg_lower and "file" in msg_lower:
@@ -181,6 +207,26 @@ class FakeProvider(LLMProvider):
         """Build a list of StreamChunkFromModel for the streaming primary path."""
         msg_lower = message.lower()
 
+        if "through the tribunal" in msg_lower and "file" in msg_lower:
+            file_path = self._extract_file_path(message)
+            tool_call = ToolCall(
+                name=_TOOL_RUN_COMMANDS,
+                args={
+                    "request": f"Create the marker file at {file_path}.",
+                    "guidelines": "Use one safe non-destructive command.",
+                    "expected_output_lines": 1,
+                    "timeout_seconds": 30,
+                    "target_operators": ["all"],
+                },
+                id="fake-tool-call-1",
+            )
+            return [
+                StreamChunkFromModel(
+                    tool_calls=[tool_call],
+                    finish_reason="STOP",
+                    usage_metadata=self._usage_metadata(),
+                )
+            ]
         if "create" in msg_lower and "file" in msg_lower:
             tool_name = _TOOL_FILE_CREATE
         elif "write" in msg_lower and "file" in msg_lower:
@@ -351,7 +397,10 @@ class FakeProvider(LLMProvider):
                 "lite_llm_settings": lite_llm_settings,
             }
         )
-        text = self._build_lite_response_text(lite_llm_settings)
+        text = self._build_lite_response_text(
+            lite_llm_settings,
+            self._extract_last_user_message(contents),
+        )
         return GenerateContentResponse(
             candidates=[
                 Candidate(
@@ -362,8 +411,11 @@ class FakeProvider(LLMProvider):
             usage_metadata=self._usage_metadata(),
         )
 
-    @staticmethod
-    def _build_lite_response_text(lite_llm_settings: LiteLLMSettings) -> str:
+    def _build_lite_response_text(
+        self,
+        lite_llm_settings: LiteLLMSettings,
+        message: str,
+    ) -> str:
         """Build a deterministic lite-tier response.
 
         When a structured ``response_format`` is provided, return a JSON object
@@ -376,6 +428,21 @@ class FakeProvider(LLMProvider):
 
         rf = getattr(lite_llm_settings, "response_format", None)
         if rf is None:
+            if message.rstrip().endswith(
+                "Respond now with the exact command string and nothing else."
+            ):
+                file_path = self._extract_file_path(message)
+                return f"touch {shlex.quote(file_path)}"
+            if message.rstrip().endswith(
+                "Respond now with the JSON object and nothing else."
+            ):
+                return json.dumps(
+                    {
+                        "status": "ok",
+                        "revised_command": None,
+                        "swap_to_cluster": None,
+                    }
+                )
             return "Fake lite response."
 
         schema = getattr(rf.json_schema, "json_schema_dict", None) or {}
@@ -392,6 +459,27 @@ class FakeProvider(LLMProvider):
                     "intent_summary": "Execute the requested deterministic operator action.",
                     "request_posture": "normal",
                     "posture_confidence": "high",
+                }
+            )
+
+        if prop_names == {"command"}:
+            file_path = self._extract_file_path(message)
+            return json.dumps({"command": f"touch {shlex.quote(file_path)}"})
+
+        if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "status": "ok",
+                    "revised_command": None,
+                    "swap_to_cluster": None,
+                }
+            )
+
+        if {"score", "reasoning"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "score": 5,
+                    "reasoning": "Deterministic fake-provider evaluation passed.",
                 }
             )
 
