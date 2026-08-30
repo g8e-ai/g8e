@@ -99,9 +99,9 @@ func (d DocumentResponse) GetBool(field string) bool {
 // computed hash and the HTTP response. The envelope carries the canonical
 // EventAppDocumentUpdateRequested event type and DOCUMENT_UPDATE action type
 // so dispatch is deterministic (A.2). Identity fields (RequestorUserID,
-// ActingAppG8ee, OperatorID, OperatorSessionID) are bound into the envelope
-// and included in the transaction hash so they are cryptographically
-// tamper-evident.
+// ActingAppG8ee, OperatorID, OperatorSessionID, CLISessionID) are bound into
+// the envelope and included in the transaction hash so they are
+// cryptographically tamper-evident.
 func (c *Client) SubmitDocumentUpdate(ctx context.Context, p Persona, req DocumentUpdateRequest) (txHash string, status int, body []byte, err error) {
 	updates, err := structpb.NewStruct(req.Updates)
 	if err != nil {
@@ -126,6 +126,7 @@ func (c *Client) SubmitDocumentUpdate(ctx context.Context, p Persona, req Docume
 		req.Collection+"/"+req.DocumentID,
 		req.OperatorID,
 		req.OperatorSessionID,
+		p.CLISessionID,
 		req.RequestorUserID,
 		ActingAppG8ee,
 		req.StateRoot,
@@ -166,6 +167,7 @@ func (c *Client) SubmitDocumentDelete(ctx context.Context, p Persona, req Docume
 		req.Collection+"/"+req.DocumentID,
 		req.OperatorID,
 		req.OperatorSessionID,
+		p.CLISessionID,
 		req.RequestorUserID,
 		ActingAppG8ee,
 		req.StateRoot,
@@ -218,7 +220,7 @@ func (c *Client) GetDocument(ctx context.Context, p Persona, collection, documen
 func buildDocumentEnvelope(
 	payloadBytes []byte,
 	eventType, actionType, targetResource,
-	operatorID, operatorSessionID, requestorUserID, actingAppID,
+	operatorID, operatorSessionID, cliSessionID, requestorUserID, actingAppID,
 	stateRoot string,
 	ttl time.Duration,
 ) (*governance.GovernanceEnvelope, error) {
@@ -236,6 +238,7 @@ func buildDocumentEnvelope(
 		SourceComponent:   commonv1.Component_COMPONENT_AGENT,
 		OperatorId:        operatorID,
 		OperatorSessionId: operatorSessionID,
+		CliSessionId:      cliSessionID,
 		ActionType:        actionType,
 		TargetResource:    targetResource,
 		EventType:         eventType,

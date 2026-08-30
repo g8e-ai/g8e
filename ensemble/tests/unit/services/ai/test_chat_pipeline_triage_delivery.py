@@ -38,6 +38,7 @@ from app.llm.utils import ModelOverrideResolver
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.request_builder import BuiltContents
 from tests.fakes.factories import (
     build_enriched_context,
     build_g8e_http_context,
@@ -263,7 +264,9 @@ async def test_prepare_chat_context_passes_lite_model_to_triage():
     svc.request_builder = MagicMock()
     svc.request_builder.build_system_prompt = MagicMock(return_value="")
     svc.request_builder.format_attachment_parts = MagicMock(return_value=[])
-    svc.request_builder.build_contents_from_history = MagicMock(return_value=[])
+    svc.request_builder.build_contents_from_history = MagicMock(
+        return_value=BuiltContents(contents=[], scrubbing_observations=[])
+    )
     from app.llm.llm_types import PrimaryLLMSettings
 
     svc.request_builder.get_generation_config = MagicMock(return_value=PrimaryLLMSettings())

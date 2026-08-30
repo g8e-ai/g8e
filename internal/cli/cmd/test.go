@@ -68,7 +68,7 @@ func testUnitCmd() *cobra.Command {
 			}
 
 			testCmd := exec.Command("go", "test", testRace, "-count=1", "-timeout", "60s",
-				"./internal/...")
+				"./internal/...", "./protocol/...")
 			testCmd.Stdout = os.Stdout
 			testCmd.Stderr = os.Stderr
 

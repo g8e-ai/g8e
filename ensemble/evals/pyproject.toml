@@ -1,33 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "g8e-evals"
 version = "0.1.0"
-description = "High-fidelity AI evaluations with signed ActionReceipts"
-requires-python = ">=3.14"
+description = "Evidence-grade evaluations for direct inference, the g8ee ensemble, and g8e governance"
+requires-python = ">=3.12"
 dependencies = [
-    "httpx>=0.27.0",
+    "g8e>=2.1.0",
+    "g8ee>=0.2.6",
+    "httpx==0.28.1",
     "pynacl>=1.5.0",
-    "pydantic>=2.7.0",
+    "pydantic==2.12.5",
     "click>=8.1.0",
     "rich>=13.7.0",
     "python-dotenv>=1.0.0",
-    "protobuf>=5.26.1",
+    "protobuf==7.35.1",
     "httpx-sse>=0.4.0",
+    "cryptography==50.0.0",
 ]
 
 [project.scripts]
 g8e-evals = "g8e_evals.cli:main"
 
-[tool.setuptools]
-packages = ["g8e_evals"]
-
 [project.optional-dependencies]
 test = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
+    "pyright==1.1.411",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff==0.15.12",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["g8e_evals*"]
+
+[tool.uv.sources]
+g8e = { path = "../../protocol/python" }
+g8ee = { path = "..", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
+python_files = ["test_*.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-config", "--strict-markers"]
+markers = [
+    "unit: Tier 1 tests with no filesystem, process, network, database, or provider dependencies",
+    "integration: Tier 2 tests using local filesystem, subprocess, or in-process dependencies",
+    "e2e: Tier 3 tests requiring a live g8e stack or provider",
+]
+
+[tool.pyright]
+include = ["g8e_evals", "tests"]
+extraPaths = [".."]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"

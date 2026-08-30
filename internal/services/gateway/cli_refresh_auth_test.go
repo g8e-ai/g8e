@@ -10,8 +10,10 @@
 package gateway
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +35,7 @@ import (
 // with an active user and (optionally) a CLI session, returning the auth
 // service, the user ID, and the CLI session ID. The middleware is constructed
 // over a success-recording handler so tests can assert admission vs rejection.
-func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool) (auth *AuthService, middleware http.Handler, userID, cliSessionID string) {
+func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, certFingerprint string) (auth *AuthService, middleware http.Handler, userID, cliSessionID string) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 	auth = infra.Auth
@@ -53,7 +55,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool) (au
 			UserID:            userID,
 			OperatorSessionID: "op-refresh-auth",
 			SystemFingerprint: "sys-fp",
-			CertFingerprint:   "cert-fp",
+			CertFingerprint:   certFingerprint,
 			CertSerial:        "serial",
 			CreatedAt:         time.Now().Add(-2 * time.Hour),
 			ExpiresAt:         expiresAt,
@@ -109,7 +111,7 @@ func cliRefreshMTLSRequest(t *testing.T, path, cliSessionID, userID string) *htt
 // session ID matches the header-provided session ID, and the user is active.
 // The middleware admits the request to the refresh controller.
 func TestHandleCLIRefreshAuth_CertURISANMatchesSessionID_Admitted(t *testing.T) {
-	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-expired", true)
+	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-expired", true, "cert-fp")
 
 	req := cliRefreshMTLSRequest(t, constants.APIPaths.AuthCLIRefresh, cliSessionID, userID)
 	rr := httptest.NewRecorder()
@@ -125,7 +127,7 @@ func TestHandleCLIRefreshAuth_CertURISANMatchesSessionID_Admitted(t *testing.T) 
 // session ID is rejected with 403 ErrMTLSIdentityMismatch. This is the
 // fail-closed guard against a cert trying to refresh a different session.
 func TestHandleCLIRefreshAuth_CertURISANDoesNotMatchSessionID_Rejected(t *testing.T) {
-	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-mismatch", true)
+	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-mismatch", true, "cert-fp")
 
 	// Build a cert whose URI SAN session ID is different from the header.
 	wid := protocol.NewWorkloadIdentity()
@@ -197,7 +199,7 @@ func TestHandleCLIRefreshAuth_UserDisabled_Rejected(t *testing.T) {
 // 401 ErrCLISessionExpired. Only the refresh endpoint bypasses the expired-
 // session check; all other endpoints fail closed.
 func TestHandleCLIAuth_ExpiredSessionOnNonRefreshEndpoint_FailClosed(t *testing.T) {
-	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-nonrefresh-expired", true)
+	_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refresh-auth-nonrefresh-expired", true, "cert-fp")
 
 	// Target a non-refresh mTLS endpoint (e.g., the audit receipts list).
 	req := cliRefreshMTLSRequest(t, constants.APIPaths.AuditReceipts, cliSessionID, userID)
@@ -206,6 +208,40 @@ func TestHandleCLIAuth_ExpiredSessionOnNonRefreshEndpoint_FailClosed(t *testing.
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.Contains(t, rr.Body.String(), constants.ErrCLISessionExpired.Error())
+}
+
+func TestHandleCLIAuth_RefreshedSessionValidatesOriginalCertificateFingerprint(t *testing.T) {
+	certRaw := []byte("refreshed-session-certificate")
+	certHash := sha256.Sum256(certRaw)
+	certFingerprint := hex.EncodeToString(certHash[:])
+	tests := []struct {
+		name              string
+		storedFingerprint string
+		expectedStatus    int
+	}{
+		{name: "matching fingerprint admits original certificate", storedFingerprint: certFingerprint, expectedStatus: http.StatusOK},
+		{name: "different fingerprint rejects original certificate", storedFingerprint: "different-fingerprint", expectedStatus: http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, middleware, userID, cliSessionID := setupRefreshAuthTestInfra(t, "refreshed-session-id", false, tt.storedFingerprint)
+			wid := protocol.NewWorkloadIdentity()
+			cliURI, err := wid.CLISPIFFEURL(userID, "initial-session-id")
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuditReceipts, nil)
+			req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+			req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{
+				Raw:  certRaw,
+				URIs: []*url.URL{cliURI},
+			}}}
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			assert.Equal(t, tt.expectedStatus, rr.Code)
+		})
+	}
 }
 
 // TestHandleCLIAuth_MissingSessionOnNonRefreshEndpoint_FailClosed verifies

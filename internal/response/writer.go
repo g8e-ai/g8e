@@ -12,6 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
@@ -59,6 +62,22 @@ func (w *Writer) JSON(rw http.ResponseWriter, status int, data interface{}) {
 	rw.WriteHeader(status)
 	if err := json.NewEncoder(rw).Encode(data); err != nil {
 		w.logger.Error("Failed to encode JSON response", "error", err)
+	}
+}
+
+func (w *Writer) ProtoJSON(rw http.ResponseWriter, status int, message proto.Message) {
+	payload, err := protojson.Marshal(message)
+	if err != nil {
+		w.Error(rw, http.StatusInternalServerError, constants.ErrResponseEncodeJSON.Error())
+		return
+	}
+	rw.Header().Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
+	rw.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	rw.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
+	rw.Header().Set(constants.HeaderContentSecurityPolicy, constants.HeaderValueCSPNone)
+	rw.WriteHeader(status)
+	if _, err := rw.Write(payload); err != nil {
+		w.logger.Error("Failed to write protojson response", "error", err)
 	}
 }
 

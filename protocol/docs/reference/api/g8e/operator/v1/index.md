@@ -23,6 +23,7 @@
     - [CommitmentAttestation](#g8e-operator-v1-CommitmentAttestation)
     - [CreateDeviceLinkRequested](#g8e-operator-v1-CreateDeviceLinkRequested)
     - [DeleteDeviceLinkRequested](#g8e-operator-v1-DeleteDeviceLinkRequested)
+    - [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence)
     - [DeviceLink](#g8e-operator-v1-DeviceLink)
     - [DeviceLinkResult](#g8e-operator-v1-DeviceLinkResult)
     - [DirectCommandAuditRequested](#g8e-operator-v1-DirectCommandAuditRequested)
@@ -90,6 +91,7 @@
     - [PerformanceMetrics](#g8e-operator-v1-PerformanceMetrics)
     - [PortCheckEntry](#g8e-operator-v1-PortCheckEntry)
     - [PortCheckResult](#g8e-operator-v1-PortCheckResult)
+    - [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation)
     - [RestoreFileRequested](#g8e-operator-v1-RestoreFileRequested)
     - [RestoreFileResult](#g8e-operator-v1-RestoreFileResult)
     - [RevokeCertificateRequested](#g8e-operator-v1-RevokeCertificateRequested)
@@ -110,6 +112,8 @@
     - [UserDetails](#g8e-operator-v1-UserDetails)
     - [VersionInfo](#g8e-operator-v1-VersionInfo)
   
+    - [DeterministicStageKind](#g8e-operator-v1-DeterministicStageKind)
+    - [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome)
     - [ExecutionStatus](#g8e-operator-v1-ExecutionStatus)
     - [HeartbeatType](#g8e-operator-v1-HeartbeatType)
     - [L2Status](#g8e-operator-v1-L2Status)
@@ -149,8 +153,7 @@ Mirrors McpCallRequested for the Agent-to-Agent JSON protocol.
 <a name="g8e-operator-v1-ActionReceipt"></a>
 
 ### ActionReceipt
-ActionReceipt is the signed proof of a completed or failed mutation.
-It is emitted by the Warden after execution.
+ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 
 
 | Field | Type | Label | Description |
@@ -163,9 +166,11 @@ It is emitted by the Warden after execution.
 | state_root_after | [string](#string) |  | State root after execution |
 | executed_at_unix_ms | [int64](#int64) |  | Timestamp when execution finished |
 | signer_key_id | [string](#string) |  | ID of the Warden&#39;s signing key |
-| signature | [string](#string) |  | ED25519 signature over canonical serialization of fields 1-8 |
+| signature | [string](#string) |  | ED25519 signature over the canonical receipt fields and deterministic stage evidence hash. |
 | l2_status | [L2Status](#g8e-operator-v1-L2Status) |  | Status of L2 (Consensus) signature verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
+| deterministic_stage_evidence | [DeterministicStageEvidence](#g8e-operator-v1-DeterministicStageEvidence) | repeated |  |
+| final_persistence_attestation | [ReceiptPersistenceAttestation](#g8e-operator-v1-ReceiptPersistenceAttestation) |  |  |
 
 
 
@@ -454,15 +459,15 @@ authorized to be executed.
 | transaction_hash | [string](#string) |  |  |
 | prior_commitment_hash | [string](#string) |  | PriorCommitmentHash is the Hash of the immediately-preceding CommitmentAttestation in the ledger, or GenesisPriorHash for the first commitment. This is what makes the ledger a chain. |
 | state_root_at_commit | [string](#string) |  | StateRootAtCommit is the Gateway&#39;s state root at the moment the Auditor signed this attestation. It is checked against the envelope.StateMerkleRoot the L2 consensus signed over. |
-| l2_signature_digest | [string](#string) |  | L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest are SHA-256 of the corresponding signatures, captured so the attestation cryptographically binds all three authorities into a single commitment without duplicating their raw signatures here. |
+| l2_signature_digest | [string](#string) |  | L2SignatureDigest, WardenIntentSignatureDigest and HumanSignatureDigest bind each authority&#39;s signatures without duplicating them. The digest input removes empty signature strings, sorts the remaining UTF-8 strings by byte value, prefixes the list with its unsigned 32-bit big-endian count, and appends each string as an unsigned 32-bit big-endian byte length followed by its bytes. The digest is the lowercase hexadecimal SHA-256 of that input, or the empty string when no signatures remain. |
 | warden_intent_signature_digest | [string](#string) |  |  |
 | human_signature_digest | [string](#string) |  |  |
 | action_type | [string](#string) |  | ActionType and TargetResource are carried for ledger readability without re-fetching the original envelope. |
 | target_resource | [string](#string) |  |  |
 | committed_at_unix_ms | [int64](#int64) |  | CommittedAtUnixMs is the Auditor&#39;s local timestamp at signing. |
 | auditor_key_id | [string](#string) |  | AuditorKeyID identifies which Auditor key signed this attestation. |
-| signature | [string](#string) |  | ED25519 signature over canonical serialization of fields 1-11 |
-| hash | [string](#string) |  | SHA-256 of fields 1-11. It is what the next attestation chains to. |
+| signature | [string](#string) |  | ED25519 signature over the canonical serialization of fields 1-11. String fields are UTF-8 encoded in field-number order as an unsigned 32-bit big-endian byte length followed by the bytes. CommittedAtUnixMs is encoded as a signed 64-bit two&#39;s-complement big-endian integer without a length prefix. |
+| hash | [string](#string) |  | Lowercase hexadecimal SHA-256 of the canonical serialization signed by Signature. It is what the next attestation chains to. |
 
 
 
@@ -500,6 +505,49 @@ authorized to be executed.
 | ----- | ---- | ----- | ----------- |
 | token | [string](#string) |  |  |
 | user_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-operator-v1-DeterministicStageEvidence"></a>
+
+### DeterministicStageEvidence
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| stage_id | [string](#string) |  |  |
+| kind | [DeterministicStageKind](#g8e-operator-v1-DeterministicStageKind) |  |  |
+| monotonic_start_ns | [int64](#int64) |  |  |
+| monotonic_end_ns | [int64](#int64) |  |  |
+| clock_domain | [string](#string) |  |  |
+| timing_source | [string](#string) |  |  |
+| outcome | [DeterministicStageOutcome](#g8e-operator-v1-DeterministicStageOutcome) |  |  |
+| transaction_id | [string](#string) |  |  |
+| transaction_hash | [string](#string) |  |  |
+| action_type | [string](#string) |  |  |
+| operator_id | [string](#string) |  |  |
+| operator_session_id | [string](#string) |  |  |
+| requestor_user_id | [string](#string) |  |  |
+| acting_app_id | [string](#string) |  |  |
+| case_id | [string](#string) |  |  |
+| investigation_id | [string](#string) |  |  |
+| task_id | [string](#string) |  |  |
+| state_root_before | [string](#string) |  |  |
+| state_root_after | [string](#string) |  |  |
+| signer_key_id | [string](#string) |  |  |
+| receipt_signature_digest | [string](#string) |  |  |
+| commitment_hash | [string](#string) |  |  |
+| prior_commitment_hash | [string](#string) |  |  |
+| l2_signature_digest | [string](#string) |  |  |
+| l3_signature_digest | [string](#string) |  |  |
+| audit_record_id | [string](#string) |  |  |
+| parent_stage_id | [string](#string) |  |  |
+| doctrine_bundle_hash | [string](#string) |  |  |
+| doctrine_bundle_version | [string](#string) |  |  |
 
 
 
@@ -1796,6 +1844,26 @@ A stored passkey credential for a user
 
 
 
+<a name="g8e-operator-v1-ReceiptPersistenceAttestation"></a>
+
+### ReceiptPersistenceAttestation
+ReceiptPersistenceAttestation is the signed proof that a receipt signature was durably associated with an audit record at a specific timestamp.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| transaction_id | [string](#string) |  |  |
+| receipt_signature_digest | [string](#string) |  |  |
+| persisted_at_unix_ms | [int64](#int64) |  |  |
+| audit_record_id | [string](#string) |  |  |
+| signer_key_id | [string](#string) |  |  |
+| signature | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-operator-v1-RestoreFileRequested"></a>
 
 ### RestoreFileRequested
@@ -2128,6 +2196,39 @@ A stored passkey credential for a user
 
 
  
+
+
+<a name="g8e-operator-v1-DeterministicStageKind"></a>
+
+### DeterministicStageKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| DETERMINISTIC_STAGE_KIND_UNSPECIFIED | 0 |  |
+| DETERMINISTIC_STAGE_KIND_L1_DOCTRINE | 1 |  |
+| DETERMINISTIC_STAGE_KIND_PROTOCOL_L2 | 2 |  |
+| DETERMINISTIC_STAGE_KIND_L3_NOTARY | 3 |  |
+| DETERMINISTIC_STAGE_KIND_L4_VERIFICATION | 4 |  |
+| DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE | 5 |  |
+| DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND | 6 |  |
+| DETERMINISTIC_STAGE_KIND_L5_EXECUTION | 7 |  |
+
+
+
+<a name="g8e-operator-v1-DeterministicStageOutcome"></a>
+
+### DeterministicStageOutcome
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED | 0 |  |
+| DETERMINISTIC_STAGE_OUTCOME_VERIFIED | 1 |  |
+| DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED | 2 |  |
+| DETERMINISTIC_STAGE_OUTCOME_COMPLETED | 3 |  |
+| DETERMINISTIC_STAGE_OUTCOME_FAILED | 4 |  |
+
 
 
 <a name="g8e-operator-v1-ExecutionStatus"></a>

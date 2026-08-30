@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -146,12 +146,15 @@ The `L4Warden` operates as the primary pre-dispatch validation gate, executing t
 
 ### Execution & Receipt Phase (L5Actuator)
 
-1. The `L5Actuator` signs an executing-state `ActionReceipt` and writes it to the fail-closed `SQLAuditStore`.
-2. Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected via payload rehydration.
-3. A JIT execution capability is minted, scoping the dispatch to the verified action type and target resource.
-4. The typed payload is dispatched to its execution handler (e.g., shell executor, file edit handler), and the capability is dissolved after dispatch.
-5. The `L5Actuator` updates the receipt with the final status (`COMPLETED` or `FAILED`), the post-state root, and a fresh signature.
-6. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
+1. L4 emits signed-input-bound deterministic evidence for doctrine, consensus, notary, and final verification, including monotonic timing, identities, state roots, doctrine version, and signature digests.
+2. The `L5Actuator` signs an executing-state `ActionReceipt` whose signature binds the canonical receipt fields and the hash of its deterministic stage evidence, then writes the complete protojson receipt to the fail-closed `SQLAuditStore`.
+3. The actuator atomically appends a signed `CommitmentAttestation` to the commitment ledger and records the chain hashes in the receipt evidence.
+4. Sensitive tokens scrubbed by the Sovereign Execution Boundary are re-injected via payload rehydration.
+5. A JIT execution capability is minted, scoping the dispatch to the verified action type and target resource.
+6. The typed payload is dispatched to its execution handler (for example, shell execution or file editing), and the capability is dissolved after dispatch.
+7. The `L5Actuator` adds L5 outcome evidence, updates the receipt with the final status (`COMPLETED` or `FAILED`) and post-state root, and signs the updated receipt.
+8. After the final receipt is durably stored, the actuator attaches a signed `ReceiptPersistenceAttestation` that binds the transaction, receipt-signature digest, audit record, signer, and persistence timestamp, then persists the resulting receipt.
+9. The Operator publishes a result envelope carrying the typed result and signed receipt back to the Gateway.
 
 ---
 

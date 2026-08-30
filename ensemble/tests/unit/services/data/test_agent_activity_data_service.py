@@ -7,13 +7,15 @@
 
 """Unit tests for AgentActivityDataService."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.constants import AgentMode
 from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
+from app.models.command_request_payloads import DocumentUpdateRequestPayload
+from app.models.http_context import RequestContext
 from app.models.tool_results import TokenUsage
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 
@@ -22,14 +24,59 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 class TestAgentActivityDataService:
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return AgentActivityDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, mock_governance_client):
+        return AgentActivityDataService(mock_cache_aside_service, mock_governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
         return mock_cache_aside_service
 
-    async def test_record_activity_success(self, service, mock_cache):
+    @pytest.fixture
+    def context(self):
+        return RequestContext(web_session_id="web-session-123", user_id="user-123")
+
+    async def test_record_activity_submits_governed_document_update(
+        self, mock_cache_aside_service
+    ):
+        governance_client = AsyncMock()
+        service = AgentActivityDataService(mock_cache_aside_service, governance_client)
+        metadata = AgentActivityMetadata(
+            id="activity-123",
+            user_id="user-123",
+            investigation_id="inv-123",
+            case_id="case-123",
+        )
+        context = RequestContext(
+            web_session_id="web-session-123",
+            user_id="user-123",
+            case_id="case-123",
+            investigation_id="inv-123",
+            task_id="chat",
+            operator_id="operator-123",
+            operator_session_id="operator-session-123",
+        )
+
+        result = await service.record_activity(metadata, context)
+
+        assert result == metadata
+        governance_client.submit_envelope.assert_awaited_once()
+        message = governance_client.submit_envelope.await_args.args[0]
+        assert message.event_type == "g8e.v1.app.agent.activity.recorded"
+        assert message.case_id == context.case_id
+        assert message.investigation_id == context.investigation_id
+        assert message.task_id == context.task_id
+        assert message.web_session_id == context.web_session_id
+        assert message.user_id == context.user_id
+        assert message.operator_id == context.operator_id
+        assert message.operator_session_id == context.operator_session_id
+        assert isinstance(message.payload, DocumentUpdateRequestPayload)
+        assert message.payload.collection == service.collection
+        assert message.payload.document_id == metadata.id
+        assert message.payload.updates == metadata.model_dump(mode="json")
+        assert message.payload.merge is False
+        mock_cache_aside_service.create_document.assert_not_called()
+
+    async def test_record_activity_success(self, service, mock_governance_client, context):
         metadata = AgentActivityMetadata(
             user_id="user-123",
             investigation_id="inv-123",
@@ -41,25 +88,21 @@ class TestAgentActivityDataService:
             finish_reason="stop",
         )
 
-        mock_cache.create_document.return_value = None
-
-        result = await service.record_activity(metadata)
+        result = await service.record_activity(metadata, context)
 
         assert result is not None
         assert result.id is not None
         assert result.user_id == "user-123"
         assert result.investigation_id == "inv-123"
-        mock_cache.create_document.assert_called_once()
+        mock_governance_client.submit_envelope.assert_awaited_once()
 
-    async def test_record_activity_generates_id(self, service, mock_cache):
+    async def test_record_activity_generates_id(self, service, context):
         metadata = AgentActivityMetadata(
             user_id="user-123",
             investigation_id="inv-123",
         )
 
-        mock_cache.create_document.return_value = None
-
-        result = await service.record_activity(metadata)
+        result = await service.record_activity(metadata, context)
 
         assert result.id is not None
         assert len(result.id) > 0
@@ -151,9 +194,11 @@ class TestAgentActivityDataService:
         with pytest.raises(DatabaseError, match="Failed to query agent activity metadata"):
             await service.query_activities(user_id="user-123")
 
-    async def test_record_activity_handles_db_error(self, service, mock_cache):
+    async def test_record_activity_handles_governance_error(
+        self, service, mock_governance_client, context
+    ):
         metadata = AgentActivityMetadata(user_id="user-123")
-        mock_cache.create_document.side_effect = Exception("DB error")
+        mock_governance_client.submit_envelope.side_effect = Exception("governance error")
 
         with pytest.raises(DatabaseError, match="Failed to record agent activity metadata"):
-            await service.record_activity(metadata)
+            await service.record_activity(metadata, context)

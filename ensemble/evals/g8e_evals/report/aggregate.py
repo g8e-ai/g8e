@@ -5,8 +5,15 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-from typing import List, Dict, Any
-from g8e_evals.harness import RowResult, Aggregate, BindingType
+from g8e_evals.harness import Aggregate, BindingType, RowResult
+
+# The current Go ConsensusService loops over enrolled signing members but
+# every member calls the same deterministic L1Doctrine evaluateSafety()
+# implementation. This is not heterogeneous small-model reasoning. Reports
+# label the current L2 implementation ``deterministic_replicated_doctrine``
+# until distinct reasoners exist and their independence is evidenced.
+L2_IMPLEMENTATION_LABEL = "deterministic_replicated_doctrine"
+
 
 def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
     total = len(results)
@@ -19,10 +26,13 @@ def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
     bound = sum(1 for r in results if r.response.binding == BindingType.RECEIPT_BOUND)
     coverage = (bound / total) * 100.0
 
-    verified = sum(1 for r in results if r.response.receipt_verified)
+    verified = sum(1 for r in results if r.response.receipts_verified)
     # Verification % is of the bound ones, or of total?
     # Plan §8 says "receipt verification %" - let's do of total for honesty.
     verification_pct = (verified / total) * 100.0
+
+    arm_ids = sorted({r.arm.value for r in results if r.arm is not None})
+    l2_label = L2_IMPLEMENTATION_LABEL if any(a in ("consensus", "notary") for a in arm_ids) else ""
 
     return Aggregate(
         suite=suite,
@@ -30,5 +40,9 @@ def aggregate_results(suite: str, results: list[RowResult]) -> Aggregate:
         total_tasks=total,
         passed_tasks=passed,
         receipt_coverage_pct=coverage,
-        receipt_verification_pct=verification_pct
+        receipt_verification_pct=verification_pct,
+        metadata={
+            "arms": arm_ids,
+            "l2_implementation_label": l2_label,
+        },
     )

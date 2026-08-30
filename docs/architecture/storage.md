@@ -1,6 +1,6 @@
 # Storage Architecture
 
-Last Updated: 2026-08-25
+Last Updated: 2026-08-30
 
 ## Overview
 
@@ -16,7 +16,7 @@ See [Encryption Architecture](./encryption.md) for vault and key management, and
 
 ### Audit Store
 
-The audit store is the append-only record of operator sessions, events, file mutations, and signed action receipts. It stores event content, command output, and action receipts, encrypting sensitive fields through the vault. New events must reference an existing session. Batch insertion is atomic. Records older than the configured retention window are pruned automatically.
+The audit store is the append-only record of operator sessions, events, file mutations, and signed action receipts. It stores event content, command output, searchable receipt fields, and the complete canonical protojson `ActionReceipt`, including deterministic stage evidence and the final persistence attestation. Sensitive fields are encrypted through the vault. New events must reference an existing session. Batch insertion is atomic. Records older than the configured retention window are pruned automatically.
 
 ### Ledger
 
@@ -40,7 +40,7 @@ The suspended transaction store persists governance transactions awaiting [L3 ap
 
 ### Commitment Ledger
 
-The commitment ledger stores attestation records with chain-integrity protection. Each new attestation must chain to the latest prior record within a single atomic operation, preventing concurrent forks. It stores the raw attestation alongside structured fields extracted from it. The `commitment_ledger` table lives in `g8e.db` alongside the audit store tables. The `CommitmentLedger` service provides atomic append via `AppendCommitmentJSON` and read access via `ListCommitments`. The append path is exercised by the test suite but is not currently wired into the production transaction flow; the service is used by reporting and compliance tooling for chain verification. Commitments are treated as permanent audit records and are not pruned.
+The commitment ledger stores signed `CommitmentAttestation` records with chain-integrity protection. Each new attestation is built and appended while SQLite holds the write lock, so concurrent writers select a unique chain head and cannot fork the prior-hash chain. It stores the canonical attestation JSON alongside structured fields extracted from it. The `commitment_ledger` table lives in `g8e.db` alongside the audit store tables. The L5 actuator appends a commitment before execution, records its hash and prior hash in deterministic stage evidence, and fails closed if persistence fails. Reporting and compliance tooling independently verify the chain, signatures, structured columns, and receipt cross-links. Commitments are permanent audit records and are not pruned.
 
 ### History Handler
 
@@ -68,7 +68,7 @@ Most storage services run a background maintenance task that deletes records old
 1. **Encryption at rest**: The audit store, execution vault, token store, and ledger encrypt sensitive content through the vault.
 2. **Fail-closed encryption**: Sensitive services return errors when the vault is locked; there is no plaintext fallback.
 3. **Fail-closed replay protection**: Nonce reservation returns an error on any failure, so replay protection is never silently bypassed.
-4. **Commitment chain integrity**: The commitment ledger verifies each new record chains to the latest prior record atomically. The append path is implemented and tested but not currently exercised by the production transaction flow.
+4. **Commitment chain integrity**: The production L5 path builds and appends each signed commitment against the latest chain head under one SQLite write lock. Offline verification recomputes the chain and cross-links commitments to canonical receipts.
 5. **Session validation**: Audit events must reference an existing session.
 6. **Path confinement**: Ledger and audit file operations are confined to the `.g8e/` runtime directory.
 7. **Size limits for encrypted copies**: The ledger caps encrypted file copies to prevent memory exhaustion during encryption.
@@ -90,11 +90,13 @@ Most storage services run a background maintenance task that deletes records old
 
 Each governance transaction passes through the [five-layer interlock](./auth.md): L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator. The storage layer participates as follows:
 
-1. The L4 Warden reserves a nonce through the replay store as the first stage of L4 processing.
-2. The execution vault stores the execution result.
-3. The audit store records the signed action receipt.
+1. The L4 Warden reserves a nonce through the replay store and emits deterministic evidence for each completed or failed verification stage.
+2. L5 signs and persists the executing receipt, then atomically appends a signed commitment against the latest ledger head.
+3. The execution vault stores the execution result.
+4. L5 adds execution evidence, signs and persists the final receipt, then adds and persists a signed receipt-persistence attestation.
+5. The audit APIs return the complete canonical receipt so consumers can verify stage evidence, receipt signatures, commitment linkage, and durable persistence.
 
-Reserved nonces are released on validation failure via `ReleaseNonce`; on successful execution the reservation persists until the nonce expires. The commitment ledger table exists in `g8e.db` but the production transaction flow does not currently append attestations to it; the `AppendCommitmentJSON` path is exercised by the test suite and available for future wiring.
+Reserved nonces are released on validation failure via `ReleaseNonce`; on successful execution the reservation persists until the nonce expires.
 
 ### Approval Flow (L3)
 

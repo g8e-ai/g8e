@@ -14,9 +14,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func setupTestAuditController(t *testing.T) *AuditController {
@@ -69,6 +75,130 @@ func TestAuditControllerHandleAuditReceipts(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
+	t.Run("GET by tx_id returns canonical action receipt", func(t *testing.T) {
+		receipt := &operatorv1.ActionReceipt{
+			TransactionId:   "tx-evidence",
+			TransactionHash: "hash-evidence",
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			SignerKeyId:     "warden-key",
+			Signature:       "signature",
+			DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{
+				StageId:         "tx-evidence:l4",
+				Kind:            operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+				Outcome:         operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+				TransactionId:   "tx-evidence",
+				TransactionHash: "hash-evidence",
+			}},
+		}
+		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
+			TransactionID:   receipt.TransactionId,
+			TransactionHash: receipt.TransactionHash,
+			InvestigationID: "investigation-evidence",
+			OperatorID:      "operator-1",
+			ActionType:      constants.ActionTypeExecuteBash,
+			Status:          receipt.Status,
+			ExecutedAt:      time.Now(),
+			SignerKeyID:     receipt.SignerKeyId,
+			Signature:       receipt.Signature,
+			Timestamp:       time.Now(),
+			ActionReceipt:   receipt,
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=tx-evidence", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, constants.HeaderValueApplicationJSON, rr.Header().Get(constants.HeaderContentType))
+		assert.Equal(t, constants.HeaderValueNoSniff, rr.Header().Get(constants.HeaderXContentTypeOptions))
+		assert.Equal(t, constants.HeaderValueDeny, rr.Header().Get(constants.HeaderXFrameOptions))
+		assert.Equal(t, constants.HeaderValueCSPNone, rr.Header().Get(constants.HeaderContentSecurityPolicy))
+		parsed := &operatorv1.ActionReceipt{}
+		require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), parsed))
+		assert.Equal(t, receipt.TransactionId, parsed.TransactionId)
+		require.Len(t, parsed.DeterministicStageEvidence, 1)
+		assert.Equal(t, receipt.DeterministicStageEvidence[0], parsed.DeterministicStageEvidence[0])
+	})
+
+	t.Run("GET by investigation_id and action_type returns canonical action receipt", func(t *testing.T) {
+		documentReceipt := &operatorv1.ActionReceipt{
+			TransactionId:   "tx-document-update",
+			TransactionHash: "hash-document-update",
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			SignerKeyId:     "warden-key",
+			Signature:       "signature",
+		}
+		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
+			TransactionID:   documentReceipt.TransactionId,
+			TransactionHash: documentReceipt.TransactionHash,
+			InvestigationID: "investigation-evidence",
+			OperatorID:      "operator-1",
+			ActionType:      constants.ActionTypeDocumentUpdate,
+			Status:          documentReceipt.Status,
+			ExecutedAt:      time.Now(),
+			SignerKeyID:     documentReceipt.SignerKeyId,
+			Signature:       documentReceipt.Signature,
+			Timestamp:       time.Now(),
+			ActionReceipt:   documentReceipt,
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?investigation_id=investigation-evidence&action_type=EXECUTE_BASH", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		parsed := &operatorv1.ActionReceipt{}
+		require.NoError(t, protojson.Unmarshal(rr.Body.Bytes(), parsed))
+		assert.Equal(t, "tx-evidence", parsed.TransactionId)
+	})
+
+	t.Run("GET by investigation_id rejects duplicate correlation", func(t *testing.T) {
+		receipt := &operatorv1.ActionReceipt{
+			TransactionId:   "tx-evidence-duplicate",
+			TransactionHash: "hash-evidence-duplicate",
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			SignerKeyId:     "warden-key",
+			Signature:       "signature",
+		}
+		err := auditController.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
+			TransactionID:   receipt.TransactionId,
+			TransactionHash: receipt.TransactionHash,
+			InvestigationID: "investigation-evidence",
+			OperatorID:      "operator-1",
+			ActionType:      constants.ActionTypeExecuteBash,
+			Status:          receipt.Status,
+			ExecutedAt:      time.Now(),
+			SignerKeyID:     receipt.SignerKeyId,
+			Signature:       receipt.Signature,
+			Timestamp:       time.Now(),
+			ActionReceipt:   receipt,
+		})
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?investigation_id=investigation-evidence&action_type=EXECUTE_BASH", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrAuditStoreReceiptCorrelationDuplicate.Error())
+	})
+
+	t.Run("GET with multiple correlation fields is rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=tx-evidence&investigation_id=investigation-evidence&action_type=EXECUTE_BASH", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("GET by investigation_id without action_type is rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?investigation_id=investigation-evidence", nil)
+		rr := httptest.NewRecorder()
+		auditController.handleAuditReceipts(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
 	t.Run("GET list - success with defaults", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts", nil)
 		rr := httptest.NewRecorder()
@@ -107,7 +237,12 @@ func TestAuditControllerHandleAuditReceiptsExport(t *testing.T) {
 		rr := httptest.NewRecorder()
 		auditController.handleAuditReceiptsExport(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "application/x-ndjson", rr.Header().Get("Content-Type"))
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.True(t, json.Valid(rr.Body.Bytes()))
+
+		var response models.AuditReceiptsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &response))
+		assert.True(t, response.Success)
 	})
 
 	t.Run("GET - with since parameter RFC3339", func(t *testing.T) {

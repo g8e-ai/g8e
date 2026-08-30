@@ -13,9 +13,12 @@ assistant model before committing to the full main LLM.
 """
 
 import logging
+import time
+
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
 from app.errors import OllamaEmptyResponseError
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
@@ -29,6 +32,7 @@ from app.constants import (
 from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
+from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 
@@ -102,38 +106,106 @@ class TriageAgent:
             )
             message_xml = AgentPersona.format_xml_tag("message", request.message)
             prompt = f"{prompt_template}\n\n{conversation_tail_xml}\n\n{message_xml}"
+            response_schema = TriageResult.model_json_schema()
+            for field_name in ("error_code", "error_class", "error_message", "model_call"):
+                response_schema.get("properties", {}).pop(field_name, None)
 
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=model,
                 max_tokens=None,
                 system_instructions="",
+                response_format=types.ResponseFormat.from_pydantic_schema(
+                    response_schema, name="TriageResult"
+                ),
             )
 
             try:
+                provider.clear_input_artifact_hash()
+                contents = [types.Content(role=Role.USER, parts=[types.Part(text=prompt)])]
+                input_artifact_hash = model_boundary_hash({
+                    "model": model,
+                    "contents": contents,
+                    "settings": config,
+                })
+                monotonic_start = time.monotonic()
                 response = await provider.generate_content_lite(
                     model=model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    contents=contents,
                     lite_llm_settings=config,
+                )
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
+                monotonic_end = time.monotonic()
+                usage = response.usage_metadata
+                finish_reason = response.candidates[0].finish_reason if response.candidates else None
+                model_call = ModelCallTelemetry(
+                    agent_role="triage",
+                    provider=type(provider).__name__,
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=monotonic_end,
+                    input_tokens=usage.prompt_token_count,
+                    output_tokens=usage.candidates_token_count,
+                    thinking_tokens=usage.thinking_token_count,
+                    cache_tokens=usage.cache_token_count,
+                    total_tokens=usage.total_token_count,
+                    usage_reported=usage.usage_reported,
+                    finish_reason=finish_reason,
+                    input_artifact_hash=input_artifact_hash,
+                    output_artifact_hash=model_boundary_hash(response.text or ""),
                 )
                 if not response.text:
                     logger.warning(
                         "[TRIAGE] Empty response text from lite model, defaulting to complex"
                     )
+                    failed_call = model_call.model_copy(update={
+                        "succeeded": False,
+                        "error_type": "EmptyResponseError",
+                    })
                     return self._escalation_result(
                         "Triage unavailable: lite model returned empty text. Check model availability and connectivity, then retry.",
                         error_code="MODEL_EMPTY_RESPONSE",
-                    )
-                result = self._parse_response(response.text)
+                    ).model_copy(update={"model_call": failed_call})
+                result = self._parse_response(response.text).model_copy(update={"model_call": model_call})
             except OllamaEmptyResponseError as exc:
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
                 logger.warning(
                     "[TRIAGE] No response from lite model, defaulting to complex: %s", exc
+                )
+                failed_call = ModelCallTelemetry(
+                    agent_role="triage",
+                    provider=type(provider).__name__,
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=time.monotonic(),
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                    input_artifact_hash=input_artifact_hash,
                 )
                 return self._escalation_result(
                     f"Triage unavailable: lite model returned empty response ({exc}). Check model availability and connectivity, then retry.",
                     error_code="MODEL_EMPTY_RESPONSE",
                     error_class=exc.__class__.__name__,
                     error_message=str(exc),
+                ).model_copy(update={"model_call": failed_call})
+            except Exception as exc:
+                input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
+                logger.exception("[TRIAGE] Provider call failed, defaulting to complex")
+                failed_call = ModelCallTelemetry(
+                    agent_role="triage",
+                    provider=type(provider).__name__,
+                    model=model,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=time.monotonic(),
+                    succeeded=False,
+                    error_type=type(exc).__name__,
+                    input_artifact_hash=input_artifact_hash,
                 )
+                return self._escalation_result(
+                    f"Triage unavailable: classification failed ({exc}). Escalating to full LLM for complexity classification. Check provider configuration and retry.",
+                    error_code="CLASSIFICATION_ERROR",
+                    error_class=exc.__class__.__name__,
+                    error_message=str(exc),
+                ).model_copy(update={"model_call": failed_call})
 
             try:
                 logger.info(
@@ -148,12 +220,16 @@ class TriageAgent:
                 logger.warning(
                     "[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text
                 )
+                failed_call = model_call.model_copy(update={
+                    "succeeded": False,
+                    "error_type": type(e).__name__,
+                })
                 return self._escalation_result(
                     f"Triage unavailable: failed to parse model response ({e}). Escalating to full LLM for complexity classification.",
                     error_code="PARSE_FAILURE",
                     error_class=e.__class__.__name__,
                     error_message=str(e),
-                )
+                ).model_copy(update={"model_call": failed_call})
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")

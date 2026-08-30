@@ -35,8 +35,9 @@ ensemble/
 │   ├── e2e/                     # Tier 3 end-to-end tests
 │   ├── fakes/                   # In-memory fake service clients, providers, and test fixtures
 │   └── conftest.py              # Global pytest hooks, settings probes, and shared fixtures
-└── evals/
-    └── tests/                   # Eval-specific tests (SSE wire, CLI UX, IFEval smoke, auth parity)
+└── evals/                       # Standalone g8e-evals package with its own lockfile and configuration
+    ├── g8e_evals/               # Eval CLI, schemas, arms, evidence, SUTs, receipt verification, reports
+    └── tests/                   # Tier 1 and Tier 2 eval tests
 ```
 
 ## Running Tests
@@ -54,6 +55,10 @@ make test-external
 
 # Run linting and type checking (Ruff + Pyright) on the ensemble
 make ensemble-lint
+
+# Run standalone eval Tier 1 + Tier 2 tests and quality checks
+make evals-test
+make evals-lint
 
 # Run ensemble linting and testing in the CI pipeline
 make ci-ensemble
@@ -95,14 +100,22 @@ pytest tests/integration/ -v -m "ai_integration"
 # Run Tier 4 external web search tests
 pytest tests/integration/ -v -m "requires_web_search or requires_api"
 
-# Run eval suite tests
-pytest evals/tests/ -v
-
-# Run the complete test suite across tests/ and evals/tests/
-pytest tests/ evals/tests/ -v
-
 # Run with test coverage report
 pytest --cov=app --cov-report=term-missing
+```
+
+The eval package uses a separate locked environment. From the repository root:
+
+```bash
+# Run both standalone eval tiers
+make evals-test
+
+# Run one standalone eval tier
+make evals-test-unit
+make evals-test-integration
+
+# Run standalone eval Ruff and Pyright checks
+make evals-lint
 ```
 
 ## Test Markers and Credential Gating

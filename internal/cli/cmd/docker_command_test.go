@@ -310,6 +310,22 @@ func TestResolveDockerProfile(t *testing.T) {
 	assert.Equal(t, "custom", resolveDockerProfile(true, "custom"), "explicit profile overrides --full")
 }
 
+func TestDockerBuildArgs_IncludesSourceBuildID(t *testing.T) {
+	tests := []struct {
+		name     string
+		noCache  bool
+		expected []string
+	}{
+		{name: "cached build", expected: []string{"build", "--build-arg", "BUILD_ID=abc123"}},
+		{name: "uncached build", noCache: true, expected: []string{"build", "--build-arg", "BUILD_ID=abc123", "--no-cache"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, dockerBuildArgs("abc123", tt.noCache))
+		})
+	}
+}
+
 func TestDockerComposePath_ResolvesFromCwd(t *testing.T) {
 	tmpDir := chdirTemp(t)
 	p, err := dockerComposePath()

@@ -54,7 +54,14 @@ FIPS_GOOS := linux
 FIPS_GOARCH := amd64
 
 # Test configuration
-TEST_TIMEOUT := 180s
+# Integration tests: the gateway package alone has 996 integration tests that
+# exercise real SQLite (modernc, pure-Go) via setupTestHTTPHandler. Under `-race`
+# on a 2-vCPU CI runner, race-detector background threads compete with test
+# goroutines for CPU, producing a ~3x slowdown versus multicore local machines
+# (~95s local → ~285s CI). 180s was too tight and caused spurious "test timed
+# out" panics where the victim test had only just started (0s elapsed). 360s
+# gives ~25% headroom over the heaviest package; a genuine hang still trips this.
+TEST_TIMEOUT := 360s
 # Per-package deadlock backstop for unit tests. Kept generous because `-race`
 # slows the pure-Go SQLite (modernc) used by DB-heavy packages (e.g.
 # internal/services/gateway), and CI runs the whole module in parallel, starving
@@ -193,8 +200,12 @@ help:
 	@echo ""
 	@echo "Ensemble (g8ee):"
 	@echo "  ensemble-test   Run the ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)"
+	@echo "  evals-test      Run standalone eval Tier 1 + Tier 2 tests"
+	@echo "  evals-test-unit Run standalone eval Tier 1 tests"
+	@echo "  evals-test-integration Run standalone eval Tier 2 tests"
 	@echo "  test-external   Run the ensemble external test suite (Tier 4: real LLM/API, gated on credentials)"
 	@echo "  ensemble-lint   Run ruff + pyright on the ensemble"
+	@echo "  evals-lint      Run ruff + pyright on the standalone eval package"
 	@echo "  build-ensemble  Build the ensemble Docker image"
 	@echo ""
 	@echo "Dashboard (g8ed):"
@@ -567,11 +578,25 @@ demo-verify: build
 ENSEMBLE_PY := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
 ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
 ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
 
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
 	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+
+.PHONY: evals-test
+evals-test: evals-test-unit evals-test-integration
+
+.PHONY: evals-test-unit
+evals-test-unit:
+	@echo "Running standalone eval Tier 1 tests..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q -m unit
+
+.PHONY: evals-test-integration
+evals-test-integration:
+	@echo "Running standalone eval Tier 2 tests..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q -m integration
 
 .PHONY: test-external
 test-external:
@@ -584,6 +609,13 @@ ensemble-lint:
 	@cd ensemble && $(ENSEMBLE_RUFF) check app
 	@echo "Running pyright on ensemble..."
 	@cd ensemble && $(ENSEMBLE_PYRIGHT) app
+
+.PHONY: evals-lint
+evals-lint:
+	@echo "Running ruff on standalone evals..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test ruff check g8e_evals tests
+	@echo "Running pyright on standalone evals..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pyright --project pyproject.toml
 
 .PHONY: build-ensemble
 build-ensemble:

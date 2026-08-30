@@ -88,6 +88,57 @@ type Credentials struct {
 	CLISessionID      string `json:"cli_session_id"`
 }
 
+type ClientAuthContext struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+	OperatorID        string `json:"operator_id"`
+	ClientCert        string `json:"client_cert"`
+	ClientKey         string `json:"client_key"`
+}
+
+func LoadClientAuthContext(fileSvc fs.RuntimeFileService, cfg *config.Config) (*ClientAuthContext, error) {
+	creds, err := LoadCredentials(fileSvc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if creds == nil {
+		return nil, fmt.Errorf("%w: local CLI credentials are absent; run './g8e auth enroll user'", constants.ErrNotAuthenticated)
+	}
+	missing := make([]string, 0, 2)
+	if creds.CLISessionID == "" {
+		missing = append(missing, "cli_session_id")
+	}
+	if creds.UserID == "" {
+		missing = append(missing, "user_id")
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("%w: local CLI credentials are missing %s; run './g8e auth enroll user' or './g8e auth refresh'", constants.ErrNotAuthenticated, strings.Join(missing, ", "))
+	}
+	paths := []string{cfg.CLICertFile(), cfg.CLIKeyFile()}
+	for _, path := range paths {
+		relPath, err := fileSvc.RelFromAbs(path)
+		if err != nil {
+			return nil, fmt.Errorf("auth: resolve client identity path: %w", err)
+		}
+		exists, err := fileSvc.FileExists(context.Background(), relPath)
+		if err != nil {
+			return nil, fmt.Errorf("auth: inspect client identity path: %w", err)
+		}
+		if !exists {
+			return nil, fmt.Errorf("%w: incomplete local CLI identity; run './g8e auth enroll user'", constants.ErrNotAuthenticated)
+		}
+	}
+	return &ClientAuthContext{
+		OperatorSessionID: creds.OperatorSessionID,
+		CLISessionID:      creds.CLISessionID,
+		UserID:            creds.UserID,
+		OperatorID:        creds.OperatorID,
+		ClientCert:        cfg.CLICertFile(),
+		ClientKey:         cfg.CLIKeyFile(),
+	}, nil
+}
+
 // getLocalOSUser retrieves the current OS user information.
 func getLocalOSUser() *models.LocalOSUser {
 	currentUser, err := user.Current()

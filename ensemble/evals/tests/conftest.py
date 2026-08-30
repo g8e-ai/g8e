@@ -5,17 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Pytest configuration for evals tests.
-
-Note: g8eo binary acquisition fixtures have been removed.
-If you need the g8eo binary for evals, please acquire it manually from GitHub releases:
-https://github.com/g8e-ai/g8e/releases
-"""
-import os
-import sys
-from pathlib import Path
+"""Shared pytest configuration for the standalone eval package."""
 
 import pytest
 
-# Set up environment for tests that import from g8ee
-G8E_ROOT = Path(__file__).parent.parent.parent
+
+TIER_MARKERS = ("unit", "integration", "e2e")
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        tiers = [marker for marker in TIER_MARKERS if item.get_closest_marker(marker)]
+        if len(tiers) != 1:
+            raise pytest.UsageError(f"{item.nodeid} must declare exactly one eval test tier")

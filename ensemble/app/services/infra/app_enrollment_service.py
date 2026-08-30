@@ -78,7 +78,7 @@ from app.errors import ConfigurationError
 logger = logging.getLogger(__name__)
 
 # Renew when the cert is within this many days of expiry.
-_RENEWAL_THRESHOLD_DAYS = 7
+_RENEWAL_THRESHOLD_DAYS = 1
 # Component identity metadata.
 _COMPONENT_KIND = "ensemble"
 _COMPONENT_NAME = "g8ee"

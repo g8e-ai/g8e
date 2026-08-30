@@ -38,7 +38,7 @@ func reportReceipts(ctx context.Context, outDir string, store *storage.SQLAuditS
 				SessionID:       r.OperatorSessionID,
 				ActionType:      string(r.ActionType),
 				TargetResource:  r.TargetResource,
-				Status:          string(r.Status),
+				Status:          r.Status.String(),
 				StateRootBefore: r.StateRootBefore,
 				StateRootAfter:  r.StateRootAfter,
 				SignerKeyID:     r.SignerKeyID,

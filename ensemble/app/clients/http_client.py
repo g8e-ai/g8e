@@ -36,7 +36,6 @@ from app.constants import (
     EXECUTION_ID,
     ErrorCode,
     ErrorSeverity,
-    G8EE_COMPONENT,
 )
 from app.errors import (
     NetworkError,

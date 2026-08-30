@@ -7,17 +7,19 @@ This runbook walks a coding agent through the complete g8e user experience descr
 By the end of this run the agent will have verified that:
 
 - The g8e binary is a single statically-linked executable that publishes platform binaries over the documented HTTP discovery endpoint.
-- The unified Docker stack (`g8e docker start`) brings the gateway, operator, ensemble, and dashboard online and healthy.
+- The unified Docker stack (`g8e docker start`) brings the gateway, operator, ensemble, and dashboard online and healthy, with the ensemble and dashboard HTTP surfaces responding directly.
+- The container binary reports that FIPS 140-3 approved mode is active and identifies its validated cryptographic module at runtime.
 - Headless `g8e auth enroll user --headless` mints mTLS credentials without a browser and emits a `User ID` and `CLI Session ID`.
 - Platform workload enrollments for the operator, ensemble, and dashboard can be listed and approved from the CLI over mTLS.
-- A real LLM call through the g8ee ensemble is translated into a typed MCP `tools/call`, routed through the five-layer governance pipeline, executed by the operator, and written to the hash-chained audit vault inside the operator container as a signed receipt.
-- The receipts, audit events, and CSV evidence reports can be exported from the platform and independently re-verified.
+- A real LLM call through the g8ee ensemble is translated into a typed MCP `tools/call`, routed through the five-layer governance pipeline, executed by the operator, persisted as a complete signed receipt in the SQLite audit store, and linked to the signed SQLite commitment chain inside the operator container.
+- Governed `DOCUMENT_UPDATE` mutations pass through the same admission pipeline and preserve untouched fields during a partial merge.
+- The receipts and audit events can be exported for archival, and the CSV evidence report independently checks ledger and cross-store integrity.
 
 ## Prerequisites
 
 - Docker 24.0+ and Docker Compose v2.
 - The `g8e` binary in the repository root. If it is not present, build it with `make build` and place it at `./g8e`.
-- An Ollama endpoint reachable from the harness process. Ollama is running on (Your Ollama IP and port).
+- An Ollama endpoint reachable from the harness process, unless the deterministic fake provider is used.
 
 If no real LLM is available, set `G8E_HARNESS_LLM_PROVIDER=fake` to run the scenario deterministically. That still exercises the platform and produces receipts, but it is not a real AI call.
 
@@ -44,11 +46,23 @@ Headless enrollment deliberately skips the WebAuthn/FIDO2 passkey ceremony. Beca
 ```bash
 ./g8e version
 ./g8e --help
+./g8e mcp agent list
 ```
 
-Expected: `g8e version` prints the version, build id, and platform, and `g8e --help` prints the top-level command tree. This proves the "gateway and operator are a single static Go binary" statement from `README.md`.
+Expected: `g8e version` prints the version, build id, and platform; `g8e --help` prints the top-level command tree; and `g8e mcp agent list` prints the supported MCP agent integrations. This exercises the documented Secure MCP command surface and proves the "gateway and operator are a single static Go binary" statement from `README.md`.
 
 ### 2. Build and start the gateway
+
+Every smoke-test run starts from clean Docker volumes and an empty local CLI identity. The reset deletes the existing gateway PKI and sessions, the operator vault and audit ledger, and all ensemble and dashboard state. Export any evidence that must be retained before proceeding, then run:
+
+```bash
+docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
+./g8e docker clean
+./g8e auth logout
+docker ps -a --filter 'name=^/g8e-' --format '{{.Names}}\t{{.Status}}'
+```
+
+The first container listing records any state left by an earlier run. The final listing must produce no output. `docker clean` removes the Docker containers, volumes, and network but does not remove host-side CLI credentials; `auth logout` removes the local credentials so enrollment cannot accidentally reuse a certificate or session from the deleted gateway PKI.
 
 If the Docker image is not already built, build it first. This step is only needed once.
 
@@ -62,13 +76,14 @@ Start the default compose profile, which brings up only the gateway:
 ./g8e docker start
 ```
 
-Wait for the gateway container to be healthy:
+Wait for the gateway container to be healthy, then run the FIPS 140-3 self-check against the binary baked into the image:
 
 ```bash
 ./g8e docker status
+docker exec g8e-gateway /g8e version --fips
 ```
 
-Expected: the `g8e-gateway` row shows `Up ... (healthy)` with ports `0.0.0.0:8080->8080/tcp, 0.0.0.0:8443->8443/tcp`.
+Expected: the `g8e-gateway` row shows `Up ... (healthy)` with ports `0.0.0.0:8080->8080/tcp, 0.0.0.0:8443->8443/tcp`. The FIPS self-check reports `FIPS 140-3 mode: enabled`, prints the validated module version, and exits zero. Run this assertion against the container binary because the host binary may not have been built with `GOFIPS140=v1.0.0`.
 
 Do not use `./g8e gw status` here — see "Docker command classification" above for why it reports `STOPPED` in Docker mode.
 
@@ -116,11 +131,17 @@ This is the owner-approved platform enrollment protocol described in `docs/archi
 
 ### 6. Verify the full stack
 
+Workloads poll for enrollment approval with backoff, so approval can take up to a few minutes to propagate. Repeat `./g8e docker status` until all four services report healthy before running the remaining checks.
+
 ```bash
 ./g8e docker status
 ./g8e operator list
 ./g8e gw data operators
 docker exec g8e-operator /g8e vault status
+OPERATOR_PORTS="$(docker port g8e-operator)"
+test -z "${OPERATOR_PORTS}"
+curl -fsS http://localhost:8000/health
+curl -fsS -o /dev/null http://localhost:3000/
 ```
 
 Expected:
@@ -129,6 +150,9 @@ Expected:
 - `g8e operator list` shows an operator with a SPIFFE session ID.
 - `g8e gw data operators` shows the operator instance.
 - `docker exec g8e-operator /g8e vault status` shows the encryption vault is initialized.
+- The `docker port` assertion exits zero only when the operator publishes no ports.
+- The ensemble health endpoint returns a successful response.
+- The dashboard root returns a successful response.
 
 `vault status` is a filesystem command (see "Docker command classification" above). It reads the vault header and key from `/root/.g8e/vault/` inside the operator container. Running `./g8e vault status` on the host reads the host's `.g8e/vault/`, which is empty in Docker mode, and falsely reports "not initialized". The `docker exec` form runs the operator container's `/g8e` binary against the container's volume.
 
@@ -140,8 +164,8 @@ This step is required. The scenario in step 8 cannot produce a `FILE_EDIT` recei
 
 ```bash
 export G8E_HARNESS_LLM_PROVIDER=ollama
-export G8E_HARNESS_LLM_MODEL=gemma4:12b
-export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
+export G8E_HARNESS_LLM_MODEL="<tool-capable-model-tag>"
+export G8E_HARNESS_LLM_ENDPOINT="http://<ollama-host>:<port>"
 ```
 
 If no real LLM endpoint is reachable, use the deterministic fake provider instead. It still drives the full governance pipeline and writes a signed `FILE_EDIT` receipt, so the reports in step 10 will populate:
@@ -150,19 +174,17 @@ If no real LLM endpoint is reachable, use the deterministic fake provider instea
 export G8E_HARNESS_LLM_PROVIDER=fake
 ```
 
-If the model is not already pulled on the Ollama host, pull it from any client that can reach the host:
+Replace both placeholders with the Ollama endpoint and a model that supports tool calls. If the model is not already pulled on the Ollama host, pull it from any client that can reach the host:
 
 ```bash
-OLLAMA_HOST=http://192.168.1.2:11434 ollama pull gemma4:12b
+OLLAMA_HOST="${G8E_HARNESS_LLM_ENDPOINT}" ollama pull "${G8E_HARNESS_LLM_MODEL}"
 ```
 
 Verify the model is visible:
 
 ```bash
-curl -s http://192.168.1.2:11434/api/tags | grep '"name":"gemma4:12b"'
+curl -fsS "${G8E_HARNESS_LLM_ENDPOINT}/api/tags" | grep -F "\"name\":\"${G8E_HARNESS_LLM_MODEL}\""
 ```
-
-If this environment has a different tool-capable model, replace `gemma4:12b` with the chosen tag.
 
 Confirm the variables are set in the current shell before proceeding:
 
@@ -172,9 +194,9 @@ env | grep G8E_HARNESS
 
 Expected: all three variables (or at least `G8E_HARNESS_LLM_PROVIDER`) appear. If nothing prints, step 8 will fail to call the LLM and no receipt will be written.
 
-### 8. Run a real AI call that generates a receipt
+### 8. Run governed file and document mutations
 
-This step is the only source of `FILE_EDIT` receipts in the headless run. Steps 9 and 10 depend on it succeeding. Do not proceed to step 10 until the harness prints `ok` and a transaction hash.
+The first scenario is the only source of `FILE_EDIT` receipts in the headless run. It sends a real AI call through the ensemble and must succeed before steps 9 and 10:
 
 ```bash
 ./g8e demos scenarios run ensemble-chat-file-create \
@@ -187,7 +209,20 @@ This step is the only source of `FILE_EDIT` receipts in the headless run. Steps 
 
 This causes the g8ee ensemble to send the prompt to the real LLM. The model selects the `file_create` tool; the call is translated into a `GovernanceEnvelope`, routed through the gateway's L1 doctrine gate, executed by the operator's L5 actuator, and written as a signed `FILE_EDIT` receipt. The `file_create` tool requires L3 notary approval before execution; in headless mode the harness starts an auto-approver that subscribes to the gateway SSE stream and approves the file-edit approval request on behalf of the harness persona. The harness prints a summary table with `ok` status for the scenario, and the notes include the correlated receipt's shortened transaction hash.
 
-Required outcome: the summary table shows `ok` for the scenario and the notes include a transaction hash. If the table shows `fail` or `error`, or no transaction hash appears, stop and diagnose before continuing. The most common causes are: the `G8E_HARNESS_*` variables from step 7 are not set in this shell; the Ollama endpoint is unreachable or the model is not pulled; or the stack went down between step 6 and step 8. Re-run `g8e docker status` and `env | grep G8E_HARNESS` to confirm both are healthy.
+Run the document-update scenario against the same live stack to prove the admission and actuator paths generalize beyond file mutations:
+
+```bash
+./g8e demos scenarios run ensemble-document-update \
+  --mtls-url https://localhost:8443 \
+  --public-url http://localhost:8080 \
+  --ensemble-url http://localhost:8000 \
+  --user-id <user-id-from-step-3> \
+  --cli-session-id <cli-session-id-from-step-3>
+```
+
+This scenario creates a document with `merge=false`, applies a partial update with `merge=true`, and reads the document back to prove the updated field changed while untouched fields survived. Both mutations pass through governance as `DOCUMENT_UPDATE` actions and exercise the document-store actuator path.
+
+Required outcome: both summary tables show `ok`, and their notes include correlated transaction hashes. If either table shows `fail` or `error`, or no transaction hash appears, stop and diagnose before continuing. The most common causes for the file scenario are: the `G8E_HARNESS_*` variables from step 7 are not set in this shell; the Ollama endpoint is unreachable or the model is not pulled; or the stack went down between step 6 and step 8. Re-run `g8e docker status` and `env | grep G8E_HARNESS` to confirm both are healthy.
 
 To see the governance pipeline in detail, run with verbose output and watch the gateway logs in a second terminal:
 
@@ -213,9 +248,12 @@ After the scenario prints `ok`, capture the operator session ID from `g8e operat
 ./g8e audit events
 ./g8e audit summary
 ./g8e gw data audit list --operator-session-id <operator-session-id>
+./g8e audit export --session <operator-session-id> --out ./receipts-export.json
+grep -q '<file-transaction-hash-from-step-8>' ./receipts-export.json
+grep -q '<document-transaction-hash-from-step-8>' ./receipts-export.json
 ```
 
-Expected: the `ensemble-chat-file-create` transaction hash appears in the receipts and events tables with `EXECUTING` or `COMPLETED` status, and at least one row has action type `FILE_EDIT`. This proves the `README.md` statement that "every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger".
+Expected: the transaction hashes from both scenarios appear in the receipts and events tables with `EXECUTING` or `COMPLETED` status. At least one row has action type `FILE_EDIT`, and the document scenario produces `DOCUMENT_UPDATE` rows. The export command writes the full signed-receipt bundle, and both `grep` assertions exit zero, proving that the bundle contains the correlated scenario receipts and can be archived separately from the running platform. Together with the report checks in step 10, this verifies the three-store architecture: complete receipts in the SQLite audit store, signed attestations in the SQLite commitment chain, and governed file snapshots in the git-backed ledger.
 
 `g8e audit receipts` queries the gateway API with a default limit of 50 receipts. In environments with frequent background heartbeats or long polling, the `FILE_EDIT` receipt can be pushed past the 50-row window before this step runs. If the default query does not show the receipt, scope the query to the operator session so the `FILE_EDIT` row is reliably retrieved:
 
@@ -223,13 +261,14 @@ Expected: the `ensemble-chat-file-create` transaction hash appears in the receip
 ./g8e audit receipts --session <operator-session-id>
 ```
 
-Gate check before step 10: confirm a `FILE_EDIT` receipt exists. If `g8e audit receipts` shows only `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows, step 8 did not produce a mutation and step 10 will generate mostly empty CSVs. Do not proceed to step 10; return to step 7 and step 8.
+Gate check before step 10: confirm both mutation types exist. If `g8e audit receipts` shows only `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows, step 8 did not produce a mutation and step 10 will generate mostly empty CSVs. Do not proceed to step 10; return to step 7 and step 8.
 
 ```bash
 ./g8e audit receipts | grep FILE_EDIT
+./g8e audit receipts | grep DOCUMENT_UPDATE
 ```
 
-Expected: at least one matching line. If the grep returns nothing, step 8 failed silently or the scenario did not run. If the grep returns nothing but the scenario reported `ok`, the receipt was likely pushed past the default 50-row window; re-run with `--session <operator-session-id>` as shown above.
+Expected: both commands print at least one matching line. If either grep returns nothing, its scenario failed or did not run. If a scenario reported `ok` but its receipt is absent, the receipt was likely pushed past the default 50-row window; re-run the receipt query with `--session <operator-session-id>` as shown above.
 
 ### 10. Generate and verify a CSV evidence report
 
@@ -243,23 +282,55 @@ The CSV files are written to `reports/<timestamp>/` inside the container at `/ro
 
 ```bash
 docker cp g8e-operator:/root/reports/. ./reports/
-ls ./reports/*/verification_summary.csv
+REPORT_DIR="$(ls -dt ./reports/*/ | head -n 1)"
+cat "${REPORT_DIR}/verification_summary.csv"
+awk -F, '$1 == "commitment_chain" && $4 == "PASS" { print; found=1 } END { exit !found }' "${REPORT_DIR}/verification_summary.csv"
+awk -F, '$1 == "git_merkle_root" && $4 == "PASS" { print; found=1 } END { exit !found }' "${REPORT_DIR}/verification_summary.csv"
+awk -F, '$1 == "file_mutation_linkage" && $4 == "PASS" && $5 !~ /^0 mutations checked/ { print; found=1 } END { exit !found }' "${REPORT_DIR}/verification_summary.csv"
+awk -F, '$1 == "receipt_commitment_crosslink" && $4 == "PASS" { print; found=1 } END { exit !found }' "${REPORT_DIR}/verification_summary.csv"
+test -z "$(awk -F, '$4 == "FAIL" { print }' "${REPORT_DIR}/verification_summary.csv")"
 ```
 
-Expected: the command writes deterministic CSV files, including the audit vault, receipts, ledger, and secrets stores, then re-validates receipt signatures and the git Merkle root. This proves the LFAA ledger provides a continuous evidence trail and that the `report` command can verify it offline.
+Expected: the command writes deterministic CSV files for the audit vault, receipts, commitment ledger, Git ledger, document stores, and secrets stores. Each `awk` command prints its matching `PASS` row, the file-mutation row reports a non-zero mutation count, and the final command exits zero only when no verification row reports `FAIL`. These checks capture a non-empty Git ledger root, validate mutation-to-ledger linkage, recompute the commitment chain, verify every Auditor Ed25519 signature, compare signed attestations with their structured columns, and cross-link every commitment to its receipt.
 
-The following CSVs are populated only by `FILE_EDIT` receipts from step 8: `events.csv`, `executions.csv`, `file_diffs.csv`, `file_mutations.csv`, `commitments.csv`, and `replay_nonces.csv`. If these files contain only their header row, step 8 did not write a receipt. `receipts.csv` should contain at least one row with action type `FILE_EDIT` in addition to the `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows from steps 3 through 6. The `verification_summary.csv` `file_mutation_linkage` row should report a non-zero mutation count; if it reports "0 mutations checked", the report reflects a vault with no executed actions and step 8 must be re-run.
+The `file_diffs.csv` and `file_mutations.csv` reports are populated by the `FILE_EDIT` receipt from step 8. The `events.csv`, `executions.csv`, and `replay_nonces.csv` reports contain evidence from operator-executed governance paths. `commitments.csv` contains signed commitments for operator-local L5 executions, including the file mutation and heartbeats, and `receipts.csv` contains the matching operator-local receipts with readable protobuf status names. The gateway audit queries in step 9 contain the `DOCUMENT_UPDATE` receipts because the unified gateway executes those document-store actions in process. If the file-specific reports contain only their header row or `commitments.csv` has no `FILE_EDIT` row, the file scenario did not complete through the operator.
 
 ### 11. Verify the binary distribution endpoint
 
 ```bash
 curl -fSLO http://localhost:8080/.well-known/g8e/bin/g8e-linux-amd64
-ls -l g8e-linux-amd64
+chmod +x ./g8e-linux-amd64
+./g8e-linux-amd64 version
+test "$(./g8e-linux-amd64 version)" = "$(docker exec g8e-gateway /g8e version)"
 ```
 
-Expected: the gateway serves the static `g8e` binary over the plain HTTP discovery port. This proves the "gateway hosts and serves these binaries via `/.well-known/g8e/bin/{filename}`" statement from `README.md` and `docs/guides/getting_started.md`. Clean up the downloaded binary afterwards.
+Expected: the gateway serves a runnable static `g8e` binary over the plain HTTP discovery port. The downloaded binary prints valid build metadata, and the comparison exits zero only when its version, build ID, build time, and platform match the binary currently running in the gateway container. This proves the "gateway hosts and serves these binaries via `/.well-known/g8e/bin/{filename}`" statement from `README.md` and `docs/guides/getting_started.md`. Clean up the downloaded binary afterwards.
 
-### 12. Optional: governance posture sweep
+### 12. Optional: evaluate KSIs and export OSCAL evidence
+
+The compliance commands read the live audit, commitment, and Git ledger stores, so run them inside the operator container after the governed scenarios have populated those stores:
+
+```bash
+docker exec g8e-operator /g8e compliance ksi \
+  --class C \
+  --catalog /docs/reference/ksi-catalog.json > ./ksi-result.json
+grep -q '"class": "C"' ./ksi-result.json
+grep -q '"evidence":' ./ksi-result.json
+
+docker exec g8e-operator /g8e compliance export \
+  --format oscal \
+  --class C \
+  --catalog /docs/reference/ksi-catalog.json
+mkdir -p ./compliance
+docker cp g8e-operator:/root/.g8e/data/compliance/. ./compliance/
+test -s ./compliance/component-definition.json
+test -s ./compliance/assessment-results.json
+grep -q '"relevant-evidence"' ./compliance/assessment-results.json
+```
+
+Expected: the KSI command emits a Class C result set with evidence from the live post-run stores. The export command writes non-empty OSCAL component-definition and assessment-results artifacts, and the assessment results contain relevant-evidence anchors linking findings to platform evidence. This optional step exercises the continuous compliance evidence pipeline; individual KSIs may report `not-satisfied` when the smoke environment lacks the history or configuration required by that indicator.
+
+### 13. Optional: governance posture sweep
 
 The headless run above uses the default `doctrine` posture. To exercise the other postures, you must enroll with a passkey (browser) and, for `consensus`, provide a `consensus-bootstrap.json` file. The optional commands are:
 
@@ -271,7 +342,7 @@ The headless run above uses the default `doctrine` posture. To exercise the othe
 
 Then run a `consensus` or `notary` scenario. These require a human in the loop for L3 notary approval and are not part of the headless run.
 
-### 13. Stop and clean up
+### 14. Stop and clean up
 
 To stop the stack while preserving state:
 
@@ -291,10 +362,13 @@ To remove all state, including PKI, vault, and audit ledger:
 |---|---|
 | "g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody" | The ensemble scenario sends the prompt to a real LLM, but the actual `file_create` execution and receipt are produced by the operator inside the container and stored in the operator's local audit vault. |
 | "The gateway and operator are a single static Go binary" | `./g8e version` and the `/.well-known/g8e/bin/` endpoint. |
-| "docker compose up from the repo root brings up the whole stack" | `g8e docker start` followed by `g8e docker status` showing the gateway, operator, ensemble, and dashboard. |
-| "The operator initiates a single outbound mTLS tunnel to the gateway. It listens on no ports" | `g8e operator list` shows the operator session; `g8e docker status` shows no published operator ports. |
-| "Every mutation must clear a five-layer admission pipeline" | The scenario's `FILE_EDIT` receipt in `g8e audit receipts` and the gateway logs showing L1-L5 events. |
-| "Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger" | `g8e audit receipts`, `g8e audit events`, and `docker exec g8e-operator /g8e report all` re-validation. |
+| "FIPS mode is verifiable at runtime via `g8e version --fips`" | `docker exec g8e-gateway /g8e version --fips` verifies approved mode against the FIPS-built container binary. |
+| Continuous compliance evidence | The optional `compliance ksi` and `compliance export` commands evaluate live stores and emit OSCAL assessment results with evidence anchors. |
+| "Secure MCP" | `g8e mcp agent list` exercises the documented MCP agent-integration command surface; the ensemble file scenario drives a typed MCP `tools/call` through governance. |
+| "docker compose up from the repo root brings up the whole stack" | `g8e docker start` followed by `g8e docker status` showing the gateway, operator, ensemble, and dashboard, plus direct HTTP probes of the ensemble and dashboard. |
+| "The operator initiates a single outbound mTLS tunnel to the gateway. It listens on no ports" | `g8e operator list` shows the operator session; capturing `docker port g8e-operator` and asserting an empty result explicitly verifies that the container publishes no ports. |
+| "Every mutation must clear a five-layer admission pipeline" | The `FILE_EDIT` and `DOCUMENT_UPDATE` receipts in `g8e audit receipts` and the gateway logs show admission and execution across file and document actuator paths. |
+| Complete receipts use the SQLite audit store, signed commitments use the SQLite hash chain, and governed file snapshots use the git-backed ledger | `g8e audit receipts`, `g8e audit events`, and the `report all` receipt-signature, persistence-attestation, commitment-chain, structured-column, ledger-root, mutation-linkage, and receipt-cross-link checks. |
 | "Raw data remains on the host" | The operator's `.g8e/vault/` and `.g8e/data/` directories are inside the operator container's volume; the gateway and ensemble receive only hashes, signatures, and tokenized projections. |
 | "Vault keys are owned by the data owner and never shared with the gateway or cloud provider" | `docker exec g8e-operator /g8e vault status` shows the vault is initialized; keys are never transmitted in the scenario. |
 | "Three posture configurations: doctrine, consensus, notary" | The default `doctrine` run; optional `consensus` and `notary` steps are documented but require a passkey. |
@@ -306,7 +380,7 @@ To remove all state, including PKI, vault, and audit ledger:
 - A network command returns `404 page not found` for a route that exists in the local binary: the Docker image is stale. The Docker images bake the `g8e` binary in at build time. Run `./g8e docker build` to rebuild the images with the current binary, then `./g8e docker stop && ./g8e docker start` to restart. Verify with `docker exec g8e-gateway /g8e version` that the container binary matches the local `./g8e version`.
 - `demos scenarios run` fails with a model or endpoint error: the Ollama model is not pulled or the endpoint is unreachable. Switch to `G8E_HARNESS_LLM_PROVIDER=fake` for a smoke run, or pull the model with `ollama pull`.
 - `demos scenarios run` fails with no LLM configured: the `G8E_HARNESS_*` variables were not exported in the shell running the scenario. Re-export them (or set `G8E_HARNESS_LLM_PROVIDER=fake`) in the same shell, confirm with `env | grep G8E_HARNESS`, and re-run the scenario.
-- `docker exec g8e-operator /g8e report all` produces mostly empty CSVs (only header rows in `events.csv`, `executions.csv`, `file_mutations.csv`, `file_diffs.csv`, `commitments.csv`, `replay_nonces.csv`): step 8 did not write a `FILE_EDIT` receipt. `receipts.csv` will contain only `HEARTBEAT` and `PLATFORM_ENROLLMENT_*` rows, and `verification_summary.csv` will report "0 mutations checked" and "ledger empty (genesis)". Return to step 7, confirm the `G8E_HARNESS_*` variables are set, re-run step 8 until `g8e audit receipts | grep FILE_EDIT` returns a match, then re-run the report command inside the container. Do not run `./g8e report all` on the host; it reads the host's empty `.g8e/` directory and always produces header-only CSVs in Docker mode.
+- `docker exec g8e-operator /g8e report all` produces no `FILE_EDIT` rows in `receipts.csv`, `commitments.csv`, `file_mutations.csv`, or `file_diffs.csv`: step 8 did not complete the governed file mutation. `verification_summary.csv` reports "0 mutations checked", though heartbeat receipts and commitments can still make the other reports non-empty. Return to step 7, confirm the `G8E_HARNESS_*` variables are set, re-run step 8 until `g8e audit receipts | grep FILE_EDIT` returns a match, then re-run the report command inside the container. Do not run `./g8e report all` on the host; it reads the host's empty `.g8e/` directory and always produces header-only CSVs in Docker mode.
 - `pending-platform-enrollments` is empty but workloads are not healthy: the operator or ensemble may still be starting. Wait and run `g8e auth pending-platform-enrollments` again, then check `g8e docker logs -f operator`.
 - The downloaded `g8e-linux-amd64` cannot execute on the current architecture: use the filename matching the workstation's OS and architecture (`g8e-darwin-arm64`, `g8e-windows-amd64.exe`, etc.).
 

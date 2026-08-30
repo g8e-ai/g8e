@@ -33,6 +33,7 @@ def make_gen_config(
     """Build an AIRequestBuilder PrimaryLLMSettings for tests."""
     fn_handler = MagicMock()
     fn_handler._tool_declarations = {}
+    fn_handler.get_tools.return_value = []
     builder = AIRequestBuilder(tool_executor=fn_handler)
     if settings is None:
         settings = G8eeUserSettings(
@@ -284,7 +285,6 @@ def make_event_service():
     ):
         """Capture investigation event calls and create proper SessionEvent."""
         from app.models.http_context import RequestContext
-        
 
         ctx = RequestContext(
             web_session_id=web_session_id,

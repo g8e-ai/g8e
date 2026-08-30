@@ -13,11 +13,9 @@ authority for shell command generation.
 """
 
 import logging
-from typing import Any
 
 from app.errors import ConfigurationError
-from app.models.settings import G8eeUserSettings
-from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.http_context import RequestContext
 from app.models.agent import OperatorContext
 from app.constants import (
     CommandGenerationOutcome,
@@ -33,7 +31,6 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.factory import get_llm_provider
-from app.models.whitelist import WhitelistedCommand
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -51,13 +48,8 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.tribunal_commands import TribunalGenerationRequest
-from app.services.protocols import (
-    AIResponseAnalyzerProtocol,
-    EventServiceProtocol,
-)
 from app.utils.ids import generate_tribunal_correlation_id
 from app.models.tool_results import CommandRiskAnalysis
-from app.services.data.reputation_data_service import ReputationDataService
 from app.utils.safety import validate_command_safety
 
 from app.services.ai.tribunal.emitter import TribunalEmitter
@@ -142,6 +134,9 @@ async def _build_and_emit_result(
             final_command=final_command or "",
             outcome=outcome,
             vote_score=vote_score or 0.0,
+            model_calls=[warden_risk_analysis.model_call]
+            if warden_risk_analysis and warden_risk_analysis.model_call
+            else [],
         ),
     )
     return result

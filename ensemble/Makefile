@@ -19,9 +19,9 @@ TEST_DIR := tests
 # =============================================================================
 # TOOLS
 # =============================================================================
-PYTHON := $(shell if [ -f .venv/bin/python ]; then echo .venv/bin/python; else echo python3; fi)
-RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo .venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
-PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo .venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
+PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
+RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
+PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 
 # =============================================================================
 # HELP
@@ -97,20 +97,10 @@ setup:
 # =============================================================================
 # PROTO
 # =============================================================================
-G8E_PROTO_DIR ?= ../protocol/proto
-
 .PHONY: proto
 proto:
-	@echo "Generating Python protobuf stubs from g8e protocol definitions..."
-	@mkdir -p /tmp/proto_flat app/proto
-	@cp $(G8E_PROTO_DIR)/g8e/common/v1/common.proto /tmp/proto_flat/common.proto
-	@cp $(G8E_PROTO_DIR)/g8e/operator/v1/operator.proto /tmp/proto_flat/operator.proto
-	@cp $(G8E_PROTO_DIR)/g8e/pubsub/v1/pubsub.proto /tmp/proto_flat/pubsub.proto
-	@sed -i 's|import "g8e/common/v1/common.proto"|import "common.proto"|' /tmp/proto_flat/operator.proto
-	@$(PYTHON) -m grpc_tools.protoc --proto_path=/tmp/proto_flat --python_out=app/proto common.proto operator.proto pubsub.proto
-	@sed -i 's/^import common_pb2 as common__pb2/from app.proto import common_pb2 as common__pb2/' app/proto/operator_pb2.py
-	@touch app/proto/__init__.py
-	@echo "Protobuf stubs generated in app/proto/"
+	@echo "Verifying canonical Python protobuf stubs..."
+	@cd ../protocol && $(PYTHON) python/scripts/generate_protos.py --check
 
 # =============================================================================
 # VENDOR

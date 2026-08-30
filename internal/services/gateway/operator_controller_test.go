@@ -557,3 +557,209 @@ func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 		assert.Equal(t, constants.OperatorStatusActive, resp.Operator.Status)
 	})
 }
+
+// TestOperatorController_HandleValidateOperatorSession covers the
+// Gateway-authoritative session-validation endpoint exposed at
+// POST /api/v1/operators/validate. This endpoint is consumed by g8ee's
+// InternalHttpClient to validate bearer-token operator sessions through the
+// Gateway rather than a local projection.
+func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
+
+	infra := setupTestInfrastructure(t, false)
+	controller := newOperatorController(OperatorControllerDeps{
+		Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder,
+	})
+
+	// Seed an active user, operator, and CLI session so the happy path can
+	// return a typed OperatorSessionValidationResponse.
+	userID := "validate-user"
+	operatorSessionID := "validate-operator-session"
+	cliSessionID := "validate-cli-session"
+	operatorID := "validate-operator"
+
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
+		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+
+	cliSession := models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		IsActive:          true,
+		ExpiresAt:         time.Now().Add(time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(time.Hour),
+		IdleExpiresAt:     time.Now().Add(time.Hour),
+	}
+	cliBytes, err := json.Marshal(cliSession)
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+
+	t.Run("Wrong method returns 405", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsValidate, nil)
+		w := httptest.NewRecorder()
+		controller.handleValidateOperatorSession(w, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("Malformed JSON body returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsValidate, strings.NewReader("{invalid"))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		controller.handleValidateOperatorSession(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("Missing operator_session_id returns 401", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"cli_session_id": cliSessionID,
+			"user_id":        userID,
+		})
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsValidate, strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		controller.handleValidateOperatorSession(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("Nonexistent operator session is rejected with 401", func(t *testing.T) {
+		body, _ := json.Marshal(models.OperatorSessionValidationRequest{
+			OperatorSessionID: "nonexistent-session",
+			CLISessionID:      cliSessionID,
+			UserID:            userID,
+		})
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsValidate, strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		controller.handleValidateOperatorSession(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("Valid binding returns 200 with typed response", func(t *testing.T) {
+		body, _ := json.Marshal(models.OperatorSessionValidationRequest{
+			OperatorSessionID: operatorSessionID,
+			CLISessionID:      cliSessionID,
+			UserID:            userID,
+		})
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsValidate, strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		controller.handleValidateOperatorSession(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+		var resp models.OperatorSessionValidationResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		assert.True(t, resp.Valid)
+		assert.Equal(t, operatorID, resp.OperatorID)
+		assert.Equal(t, userID, resp.UserID)
+	})
+}
+
+// TestOperatorController_ValidateOperatorSession_AppMTLSReach confirms that an
+// app workload mTLS certificate (the identity g8ee presents to the Gateway) is
+// admitted by the unified auth middleware for POST /api/v1/operators/validate.
+// The validate endpoint is not privileged and not RouteAuthNone, so it
+// defaults to RouteAuthMTLS. An app cert with a valid AppPolicy must reach the
+// handler rather than being blocked by the middleware.
+//
+// The test seeds a valid operator+CLI binding so the handler returns 200. A
+// middleware-level rejection would produce 401/403, not 200 — so a 200 proves
+// the app cert was admitted and the request reached the controller.
+func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
+
+	infra := setupTestInfrastructure(t, false)
+
+	// Register an AppPolicy for the g8ee ensemble app identity so the
+	// middleware's handleAppAuth path admits the request.
+	appID := protocol.EnsembleAppID
+	policy := &models.AppPolicy{
+		AppID:     appID,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	policyBytes, err := json.Marshal(policy)
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes))
+
+	// Seed a valid operator+CLI binding so the handler can return 200.
+	userID := "appmtls-user"
+	operatorSessionID := "appmtls-operator-session"
+	cliSessionID := "appmtls-cli-session"
+	operatorID := "appmtls-operator"
+
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID: operatorID, UserID: userID, OperatorSessionID: operatorSessionID,
+		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+
+	cliSession := models.CLISession{
+		ID:                cliSessionID,
+		UserID:            userID,
+		OperatorSessionID: operatorSessionID,
+		IsActive:          true,
+		ExpiresAt:         time.Now().Add(time.Hour),
+		AbsoluteExpiresAt: time.Now().Add(time.Hour),
+		IdleExpiresAt:     time.Now().Add(time.Hour),
+	}
+	cliBytes, err := json.Marshal(cliSession)
+	require.NoError(t, err)
+	require.NoError(t, infra.Stores.DocStore.DocSet(
+		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+
+	controller := newOperatorController(OperatorControllerDeps{
+		Cfg: infra.Cfg, Logger: infra.Logger, Reg: infra.Reg, Auth: infra.Auth, Responder: infra.Responder,
+	})
+
+	// Wire the handler through the auth middleware so the mTLS identity
+	// extraction and app-policy enforcement run before the controller.
+	handler := infra.Auth.Middleware(http.HandlerFunc(controller.handleValidateOperatorSession))
+
+	wid := protocol.NewWorkloadIdentity()
+	appURI, err := wid.AppSPIFFEURL("g8ee")
+	require.NoError(t, err)
+
+	body, _ := json.Marshal(models.OperatorSessionValidationRequest{
+		OperatorSessionID: operatorSessionID,
+		CLISessionID:      cliSessionID,
+		UserID:            userID,
+	})
+	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.OperatorsValidate, strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{
+			{URIs: []*url.URL{appURI}},
+		},
+	}
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	// 200 proves the app mTLS cert was admitted by the middleware and the
+	// request reached the controller, which validated the binding
+	// successfully. A middleware-level rejection would produce 401/403.
+	require.Equal(t, http.StatusOK, w.Code,
+		"app mTLS must reach the handler and return 200; got: %s", w.Body.String())
+	var resp models.OperatorSessionValidationResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.True(t, resp.Valid)
+	assert.Equal(t, operatorID, resp.OperatorID)
+	assert.Equal(t, userID, resp.UserID)
+}

@@ -20,6 +20,7 @@ from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,
     DB_COLLECTION_REPUTATION_STATE,
     G8EE_COMPONENT,
+    EventType,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.reputation import (
@@ -130,6 +131,7 @@ class TestReputationStateCrud:
         await service.upsert_state(_make_state(), context=context)
         service._governance_client.update_governed_doc.assert_called_once()
         kwargs = service._governance_client.update_governed_doc.call_args.kwargs
+        assert kwargs["event_type"] == EventType.OPERATOR_REPUTATION_STATE_UPDATED
         assert kwargs["merge"] is False
 
     async def test_upsert_state_updates_when_present(self, service, mock_cache):

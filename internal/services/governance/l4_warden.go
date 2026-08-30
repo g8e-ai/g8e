@@ -26,19 +26,58 @@ import (
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
-	Envelope       *govtypes.GovernanceEnvelope
-	ActionType     constants.ActionType
-	Payload        []byte
-	DecodedPayload proto.Message
-	StateRoot      string
-	Nonce          string
-	ExpiresAt      time.Time
-	L2Valid        bool // Whether L2 signature was valid (may be false in Doctrine posture)
-	L3Valid        bool // Whether L3 proof was valid (may be false in Doctrine/Consensus posture)
-	Posture        GovernancePosture
+	Envelope                   *govtypes.GovernanceEnvelope
+	ActionType                 constants.ActionType
+	Payload                    []byte
+	DecodedPayload             proto.Message
+	StateRoot                  string
+	Nonce                      string
+	ExpiresAt                  time.Time
+	L2Valid                    bool // Whether L2 signature was valid (may be false in Doctrine posture)
+	L3Valid                    bool // Whether L3 proof was valid (may be false in Doctrine/Consensus posture)
+	Posture                    GovernancePosture
+	DeterministicStageEvidence []*operatorv1.DeterministicStageEvidence
 }
 
 // L4Warden performs all pre-dispatch verification checks.
+var governanceMonotonicEpoch = time.Now()
+
+func governanceMonotonicNow() int64 {
+	return time.Since(governanceMonotonicEpoch).Nanoseconds()
+}
+
+func deterministicStageID(envelope *govtypes.GovernanceEnvelope, kind operatorv1.DeterministicStageKind) string {
+	return fmt.Sprintf("%s:%s", envelope.Id, kind.String())
+}
+
+func newDeterministicStageEvidence(
+	envelope *govtypes.GovernanceEnvelope,
+	kind operatorv1.DeterministicStageKind,
+	start int64,
+	outcome operatorv1.DeterministicStageOutcome,
+) *operatorv1.DeterministicStageEvidence {
+	return &operatorv1.DeterministicStageEvidence{
+		StageId:           deterministicStageID(envelope, kind),
+		Kind:              kind,
+		MonotonicStartNs:  start,
+		MonotonicEndNs:    governanceMonotonicNow(),
+		ClockDomain:       "g8e-operator-process",
+		TimingSource:      "go_monotonic",
+		Outcome:           outcome,
+		TransactionId:     envelope.Id,
+		TransactionHash:   envelope.TransactionHash,
+		ActionType:        envelope.ActionType,
+		OperatorId:        envelope.OperatorId,
+		OperatorSessionId: envelope.OperatorSessionId,
+		RequestorUserId:   envelope.RequestorUserId,
+		ActingAppId:       envelope.ActingAppId,
+		CaseId:            envelope.CaseId,
+		InvestigationId:   envelope.InvestigationId,
+		TaskId:            envelope.TaskId,
+		StateRootBefore:   envelope.StateMerkleRoot,
+	}
+}
+
 type L4Warden struct {
 	logger               *slog.Logger
 	replayStore          ReplayStore
@@ -113,11 +152,32 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 	if envelope == nil {
 		return nil, constants.ErrTxInvalidEnvelope
 	}
+	verificationStart := governanceMonotonicNow()
+	rejected := &VerifiedTransaction{
+		Envelope:   envelope,
+		ActionType: constants.ActionType(envelope.ActionType),
+	}
+	var stages []*operatorv1.DeterministicStageEvidence
+	reject := func(rejection error) (*VerifiedTransaction, error) {
+		l4Stage := newDeterministicStageEvidence(
+			envelope,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+			verificationStart,
+			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+		)
+		l4Stage.L2SignatureDigest = l2SignatureDigest(envelope)
+		l4Stage.L3SignatureDigest = humanSignatureDigest(envelope)
+		for _, stage := range stages {
+			stage.ParentStageId = l4Stage.StageId
+		}
+		rejected.DeterministicStageEvidence = append(stages, l4Stage)
+		return rejected, rejection
+	}
 
 	// 0. Early trackInFlight check to save expensive DB/cryptography operations.
 	// The critical section must extend through nonce reservation to prevent race conditions.
 	if err := tv.trackInFlight(envelope.Nonce); err != nil {
-		return nil, err
+		return reject(err)
 	}
 
 	// 1. Early nonce reservation for durable replay protection.
@@ -125,11 +185,11 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 	// The nonce is reserved early and finalized after successful execution.
 	if tv.replayStore == nil {
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, constants.ErrTxReplayStoreMissing
+		return reject(constants.ErrTxReplayStoreMissing)
 	}
 	if envelope.ExpiresAt == nil {
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, constants.ErrTxExpiresAtMissing
+		return reject(constants.ErrTxExpiresAtMissing)
 	}
 	expiresAt := envelope.ExpiresAt.AsTime()
 	if tv.clock.Now().After(expiresAt) {
@@ -138,12 +198,12 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"expires_at", expiresAt,
 			"now", tv.clock.Now())
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, constants.ErrTxTransactionExpired
+		return reject(constants.ErrTxTransactionExpired)
 	}
 	if envelope.Nonce == "" {
 		tv.logger.Error("Transaction rejected: NONCE_MISSING")
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, constants.ErrTxNonceMissing
+		return reject(constants.ErrTxNonceMissing)
 	}
 	replayed, err := tv.replayStore.ReserveNonce(envelope.Nonce, expiresAt)
 	if err != nil {
@@ -151,18 +211,19 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"nonce", envelope.Nonce,
 			string(constants.ConnectionStateError), err)
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, fmt.Errorf("l4 warden: reserve nonce: %w", err)
+		return reject(fmt.Errorf("l4 warden: reserve nonce: %w", err))
 	}
 	if replayed {
 		tv.logger.Error("Transaction rejected: REPLAY_DETECTED", "nonce", envelope.Nonce)
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, constants.ErrTxTransactionReplay
+		return reject(constants.ErrTxTransactionReplay)
 	}
 
 	// Nonce is now durably reserved in SQLite, safe to release in-flight lock
 	tv.releaseInFlight(envelope.Nonce)
 
 	// 2. Stateless Validation
+	doctrineStart := governanceMonotonicNow()
 	decodedPayload, computedHash, err := tv.verifyStateless(envelope)
 	if err != nil {
 		tv.logger.Error("Transaction rejected: STATELESS_VALIDATION_FAILED",
@@ -171,8 +232,28 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on stateless validation failure
 		tv.releaseNonceReservation(envelope.Nonce)
-		return nil, err
+		l1Stage := newDeterministicStageEvidence(
+			envelope,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+			doctrineStart,
+			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+		)
+		if tv.doctrine != nil {
+			l1Stage.DoctrineBundleHash = tv.doctrine.DoctrineBundleHash()
+			l1Stage.DoctrineBundleVersion = tv.doctrine.DoctrineBundleVersion()
+		}
+		stages = append(stages, l1Stage)
+		return reject(err)
 	}
+	l1Stage := newDeterministicStageEvidence(
+		envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+		doctrineStart,
+		operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+	)
+	l1Stage.DoctrineBundleHash = tv.doctrine.DoctrineBundleHash()
+	l1Stage.DoctrineBundleVersion = tv.doctrine.DoctrineBundleVersion()
+	stages = []*operatorv1.DeterministicStageEvidence{l1Stage}
 
 	// 3. Stateful Validation (excluding nonce, which is already reserved)
 	err = tv.verifyStateful(ctx, envelope)
@@ -183,7 +264,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on stateful validation failure
 		tv.releaseNonceReservation(envelope.Nonce)
-		return nil, err
+		return reject(err)
 	}
 
 	// 4. Posture Validation (L2/L3)
@@ -197,9 +278,12 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			"tx_id", envelope.Id,
 			string(constants.ConnectionStateError), err)
 		tv.releaseNonceReservation(envelope.Nonce)
-		return nil, err
+		return reject(err)
 	}
-	l2Valid, l3Valid, err := tv.verifyPosture(ctx, envelope, computedHash, posture)
+	rejected.Posture = posture
+	l2Valid, l3Valid, postureStages, err := tv.verifyPosture(ctx, envelope, computedHash, posture)
+	rejected.L2Valid = l2Valid
+	rejected.L3Valid = l3Valid
 	if err != nil {
 		tv.logger.Error("Transaction rejected: POSTURE_VALIDATION_FAILED",
 			"nonce", envelope.Nonce,
@@ -208,21 +292,36 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.Gover
 			string(constants.ConnectionStateError), err)
 		// Release nonce reservation on posture validation failure
 		tv.releaseNonceReservation(envelope.Nonce)
-		return nil, err
+		stages = append(stages, postureStages...)
+		return reject(err)
 	}
 
 	// 5. Return verified transaction (nonce remains reserved, will be finalized after execution)
+	stages = append(stages, postureStages...)
+	l4Stage := newDeterministicStageEvidence(
+		envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+		verificationStart,
+		operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+	)
+	l4Stage.L2SignatureDigest = l2SignatureDigest(envelope)
+	l4Stage.L3SignatureDigest = humanSignatureDigest(envelope)
+	for _, stage := range stages {
+		stage.ParentStageId = l4Stage.StageId
+	}
+	stages = append(stages, l4Stage)
 	return &VerifiedTransaction{
-		Envelope:       envelope,
-		ActionType:     constants.ActionType(envelope.ActionType),
-		Payload:        envelope.Payload,
-		DecodedPayload: decodedPayload,
-		StateRoot:      envelope.StateMerkleRoot,
-		Nonce:          envelope.Nonce,
-		ExpiresAt:      expiresAt,
-		L2Valid:        l2Valid,
-		L3Valid:        l3Valid,
-		Posture:        posture,
+		Envelope:                   envelope,
+		ActionType:                 constants.ActionType(envelope.ActionType),
+		Payload:                    envelope.Payload,
+		DecodedPayload:             decodedPayload,
+		StateRoot:                  envelope.StateMerkleRoot,
+		Nonce:                      envelope.Nonce,
+		ExpiresAt:                  expiresAt,
+		L2Valid:                    l2Valid,
+		L3Valid:                    l3Valid,
+		Posture:                    posture,
+		DeterministicStageEvidence: stages,
 	}, nil
 }
 
@@ -372,18 +471,56 @@ func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.Gover
 // human's approval bond is spent only on transactions that have already
 // cleared L2 consensus. A human should never be asked to authorize
 // content the machines have not yet vetted.
-func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, bool, error) {
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, bool, []*operatorv1.DeterministicStageEvidence, error) {
+	l2Start := governanceMonotonicNow()
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash, posture)
 	if err != nil {
-		return false, false, err
+		l2Stage := newDeterministicStageEvidence(
+			envelope,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+			l2Start,
+			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+		)
+		l2Stage.L2SignatureDigest = l2SignatureDigest(envelope)
+		return false, false, []*operatorv1.DeterministicStageEvidence{l2Stage}, err
 	}
+	l2Outcome := operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+	if l2Valid {
+		l2Outcome = operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+	}
+	l2Stage := newDeterministicStageEvidence(
+		envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+		l2Start,
+		l2Outcome,
+	)
+	l2Stage.L2SignatureDigest = l2SignatureDigest(envelope)
 
+	l3Start := governanceMonotonicNow()
 	l3Valid, err := tv.verifyL3Posture(ctx, envelope, posture)
 	if err != nil {
-		return l2Valid, false, err
+		l3Stage := newDeterministicStageEvidence(
+			envelope,
+			operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+			l3Start,
+			operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+		)
+		l3Stage.L3SignatureDigest = humanSignatureDigest(envelope)
+		return l2Valid, false, []*operatorv1.DeterministicStageEvidence{l2Stage, l3Stage}, err
 	}
+	l3Outcome := operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+	if l3Valid {
+		l3Outcome = operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+	}
+	l3Stage := newDeterministicStageEvidence(
+		envelope,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+		l3Start,
+		l3Outcome,
+	)
+	l3Stage.L3SignatureDigest = humanSignatureDigest(envelope)
 
-	return l2Valid, l3Valid, nil
+	return l2Valid, l3Valid, []*operatorv1.DeterministicStageEvidence{l2Stage, l3Stage}, nil
 }
 
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, posture GovernancePosture) (bool, error) {

@@ -117,12 +117,16 @@ func TestMapActionTypeToEventType(t *testing.T) {
 
 	t.Run("eventToAction maps all app-level document create/update events to ActionTypeDocumentUpdate", func(t *testing.T) {
 		updateEvents := []EventType{
+			EventAppAgentActivityRecorded,
 			EventAppCaseCreated,
 			EventAppCaseUpdated,
 			EventAppMemoryCreated,
 			EventAppMemoryUpdated,
 			EventAppInvestigationCreated,
 			EventAppInvestigationUpdated,
+			EventOperatorReputationCommitmentCreated,
+			EventOperatorReputationStakeResolutionCreated,
+			EventOperatorReputationStateUpdated,
 		}
 		for _, e := range updateEvents {
 			e := e

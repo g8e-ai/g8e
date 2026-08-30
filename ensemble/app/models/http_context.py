@@ -220,6 +220,17 @@ class G8eHttpContext(G8eBaseModel):
                     f"CLI session ID mismatch: context={self.cli_session_id}, auth={user.cli_session_id}"
                 )
 
+        if self.operator_session_id and self.operator_session_id != user.operator_session_id:
+            from app.errors import AuthenticationError
+
+            raise AuthenticationError("Operator session ID mismatch")
+        if self.operator_id and self.operator_id != user.operator_id:
+            from app.errors import AuthenticationError
+
+            raise AuthenticationError(
+                f"Operator ID mismatch: context={self.operator_id}, auth={user.operator_id}"
+            )
+
         # 4. Operator session check for bound operators
         if self.bound_operators and user.operator_session_id:
             for op in self.bound_operators:
@@ -228,6 +239,12 @@ class G8eHttpContext(G8eBaseModel):
 
                     raise AuthenticationError(
                         f"Operator session ID mismatch for operator {op.operator_id}"
+                    )
+                if user.operator_id and op.operator_id != user.operator_id:
+                    from app.errors import AuthenticationError
+
+                    raise AuthenticationError(
+                        f"Operator ID mismatch: context={op.operator_id}, auth={user.operator_id}"
                     )
 
     @classmethod

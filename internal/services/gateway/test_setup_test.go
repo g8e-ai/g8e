@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/response"
@@ -23,7 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 // TestInfrastructure holds common test setup components shared across gateway tests.
@@ -65,7 +66,11 @@ func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
 // newTestKeystore creates an initialized keystore using an in-memory keyring.
 func newTestKeystore(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.Logger) *keystore.Keystore {
 	tb.Helper()
-	keyring := keystoretest.NewMemoryKeyring()
+	return newTestKeystoreWithKeyring(tb, fileSvc, logger, keystoretest.NewMemoryKeyring())
+}
+
+func newTestKeystoreWithKeyring(tb testing.TB, fileSvc fs.RuntimeFileService, logger *slog.Logger, keyring keystore.Keyring) *keystore.Keystore {
+	tb.Helper()
 	ks, err := keystore.NewWithKeyringAndFS(logger, keyring, fileSvc)
 	require.NoError(tb, err)
 	require.NoError(tb, ks.Initialize())

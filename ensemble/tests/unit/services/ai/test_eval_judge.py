@@ -90,7 +90,7 @@ class TestEvalGradeModel:
     def test_serialization_roundtrip(self):
         g = EvalGrade(score=5, reasoning="Excellent", passed=True)
         data = g.model_dump()
-        assert data == {"score": 5, "reasoning": "Excellent", "passed": True}
+        assert data == {"score": 5, "reasoning": "Excellent", "passed": True, "model_calls": []}
         assert EvalGrade(**data) == g
 
     def test_score_below_range_rejected(self):
@@ -221,6 +221,11 @@ class TestGradeTurnHappyPath:
         assert result.score == 4
         assert result.passed is True
         assert result.reasoning == "Good response with proper tool usage"
+        assert len(result.model_calls) == 1
+        assert result.model_calls[0].agent_role == "judge"
+        assert result.model_calls[0].succeeded is True
+        assert result.model_calls[0].input_artifact_hash
+        assert result.model_calls[0].output_artifact_hash
 
     async def test_low_score_fails(self, judge, mock_provider):
         mock_provider.generate_content_lite.return_value = _build_response(
@@ -358,6 +363,11 @@ class TestGradeTurnRetry:
         result = await judge.grade_turn(**GRADE_KWARGS)
         assert result.score == 4
         assert mock_provider.generate_content_lite.call_count == 2
+        assert len(result.model_calls) == 2
+        assert result.model_calls[0].succeeded is False
+        assert result.model_calls[0].retry_count == 0
+        assert result.model_calls[1].succeeded is True
+        assert result.model_calls[1].retry_count == 1
         mock_sleep.assert_called_once()
 
     @patch("app.services.ai.eval_judge.asyncio.sleep", new_callable=AsyncMock)
@@ -375,9 +385,11 @@ class TestGradeTurnRetry:
     @patch("app.services.ai.eval_judge.asyncio.sleep", new_callable=AsyncMock)
     async def test_all_retries_exhausted_raises(self, mock_sleep, judge, mock_provider):
         mock_provider.generate_content_lite.side_effect = Exception("429 Rate Limited")
-        with pytest.raises(EvalJudgeError, match="after 3 attempt"):
+        with pytest.raises(EvalJudgeError, match="after 3 attempt") as exc_info:
             await judge.grade_turn(**GRADE_KWARGS)
         assert mock_provider.generate_content_lite.call_count == _MAX_RETRIES
+        assert len(exc_info.value.model_calls) == _MAX_RETRIES
+        assert all(not call.succeeded for call in exc_info.value.model_calls)
 
     @patch("app.services.ai.eval_judge.asyncio.sleep", new_callable=AsyncMock)
     async def test_backoff_delays_double(self, mock_sleep, judge, mock_provider):

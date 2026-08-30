@@ -38,6 +38,7 @@ from app.llm.llm_types import (
     ResponseFormat,
     ResponseJsonSchema,
 )
+from app.llm.model_evidence import model_boundary_hash
 from app.llm.providers.gemini import (
     _content_to_genai,
     _usage_from_sdk,
@@ -120,12 +121,15 @@ class TestUsageFromSdk:
         mock_um.candidates_token_count = 20
         mock_um.total_token_count = 30
         mock_um.thoughts_token_count = 5
+        mock_um.cached_content_token_count = 7
 
         usage = _usage_from_sdk(mock_um)
         assert usage.prompt_token_count == 10
         assert usage.candidates_token_count == 20
         assert usage.total_token_count == 30
         assert usage.thinking_token_count == 5
+        assert usage.cache_token_count == 7
+        assert usage.usage_reported is True
 
     def test_usage_missing_fields(self):
         mock_um = MagicMock(spec=[])
@@ -514,6 +518,13 @@ class TestGeminiProvider:
                 "model", [Content(role=Role.USER, parts=[Part(text="hi")])], settings
             )
             mock_retry.assert_called_once()
+            model, contents, config = mock_retry.call_args.args
+            payload = {
+                "model": model,
+                "contents": contents,
+                "config": config.model_dump(mode="json", exclude_none=True, by_alias=True),
+            }
+            assert provider.input_artifact_hash == model_boundary_hash(payload)
 
     @patch("google.genai.Client")
     async def test_generate_content_assistant(self, mock_client):

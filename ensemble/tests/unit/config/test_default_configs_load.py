@@ -46,7 +46,7 @@ class TestDefaultBlacklistConfigLoads:
 
         bv_module._validator = None
         validator = get_blacklist_validator(blacklist_path=None)
-        assert validator is not None
+        assert validator.get_forbidden_commands()
         register_blacklist_validator(validator)
 
 

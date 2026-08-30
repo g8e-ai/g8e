@@ -36,6 +36,17 @@ class TestBatchExecutionSettingsBounds:
             BatchExecutionSettings(max_concurrency=10000)
 
 
+class TestLLMSettingsProviderValidation:
+    @pytest.mark.parametrize(
+        "field",
+        ["llm_primary_provider", "llm_assistant_provider", "llm_lite_provider"],
+    )
+    def test_accepts_null_optional_provider_from_wire(self, field):
+        settings = LLMSettings.model_validate({field: None})
+
+        assert getattr(settings, field.removeprefix("llm_")) is None
+
+
 class TestLLMSettingsResolvedAssistantModel:
     def test_returns_model_when_set(self):
         llm = LLMSettings(assistant_model="gemma3:4b")

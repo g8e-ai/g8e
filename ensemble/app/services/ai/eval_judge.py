@@ -23,12 +23,15 @@ import asyncio
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from app.models.base import BaseModel, Field, field_validator
 
-from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettings
+from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider as LLMProviderBase
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
 from app.errors import OllamaEmptyResponseError
@@ -98,6 +101,10 @@ class EvalJudgeError(Exception):
     (LLM unreachable, invalid response after retries, etc.).
     """
 
+    def __init__(self, message: str, model_calls: list[ModelCallTelemetry] | None = None):
+        super().__init__(message)
+        self.model_calls = model_calls or []
+
 
 class EvalGrade(BaseModel):
     """Result of an evaluation grade."""
@@ -105,6 +112,7 @@ class EvalGrade(BaseModel):
     score: int = Field(..., ge=1, le=5, description="Score from 1 to 5")
     reasoning: str = Field(..., description="Detailed explanation for the score")
     passed: bool = Field(..., description="Whether the score meets the passing threshold")
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
 
     @field_validator("reasoning", mode="before")
     @classmethod
@@ -208,11 +216,12 @@ class EvalJudge:
 
         contents = [Content(role=Role.USER, parts=[Part.from_text(prompt)])]
         last_error: Exception | None = None
+        model_calls: list[ModelCallTelemetry] = []
         delay = _INITIAL_RETRY_DELAY_SECONDS
 
         for attempt in range(_MAX_RETRIES):
             try:
-                return await self._call_and_parse(contents, settings)
+                return await self._call_and_parse(contents, settings, attempt, model_calls)
             except EvalJudgeError:
                 raise
             except Exception as exc:
@@ -231,44 +240,120 @@ class EvalJudge:
 
         logger.error("EvalJudge failed after %d attempt(s)", _MAX_RETRIES, exc_info=True)
         raise EvalJudgeError(
-            f"Judge could not produce a valid grade after {_MAX_RETRIES} attempt(s): {last_error}"
+            f"Judge could not produce a valid grade after {_MAX_RETRIES} attempt(s): {last_error}",
+            model_calls=model_calls,
         ) from last_error
 
     async def _call_and_parse(
         self,
         contents: list[Content],
         settings: LiteLLMSettings,
+        retry_count: int,
+        model_calls: list[ModelCallTelemetry],
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
         if not self._model:
-            raise EvalJudgeError("Model is not set")
+            raise EvalJudgeError("Model is not set", model_calls=model_calls)
+        self._provider.clear_input_artifact_hash()
+        input_artifact_hash = model_boundary_hash({
+            "model": self._model,
+            "contents": contents,
+            "settings": settings,
+        })
+        monotonic_start = time.monotonic()
         try:
             response = await self._provider.generate_content_lite(
                 model=self._model,
                 contents=contents,
                 lite_llm_settings=settings,
             )
-            if response.text is None:
-                raise EvalJudgeError("Judge LLM returned an empty response")
-        except OllamaEmptyResponseError as exc:
-            raise EvalJudgeError(f"Judge LLM returned an empty response: {exc}") from exc
+            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
+        except Exception as exc:
+            input_artifact_hash = recorded_model_boundary_hash(self._provider, input_artifact_hash)
+            model_calls.append(self._model_call_telemetry(
+                response=None,
+                response_text="",
+                monotonic_start=monotonic_start,
+                retry_count=retry_count,
+                input_artifact_hash=input_artifact_hash,
+                error=exc,
+            ))
+            raise
 
+        response_text = ""
         try:
-            data = _extract_json(response.text)
+            response_text = response.text or ""
+            if not response_text:
+                raise EvalJudgeError("Judge LLM returned an empty response")
+            data = _extract_json(response_text)
+            score = data.get("score")
+            reasoning = data.get("reasoning")
+            if score is None or reasoning is None:
+                raise EvalJudgeError(f"Judge response missing required fields: {data}")
+            if not isinstance(score, int) or score < 1 or score > 5:
+                raise EvalJudgeError(f"Judge returned out-of-range score: {score}")
+            telemetry = self._model_call_telemetry(
+                response=response,
+                response_text=response_text,
+                monotonic_start=monotonic_start,
+                retry_count=retry_count,
+                input_artifact_hash=input_artifact_hash,
+            )
+            model_calls.append(telemetry)
+            return EvalGrade(
+                score=score,
+                reasoning=reasoning,
+                passed=score >= PASSING_THRESHOLD,
+                model_calls=model_calls,
+            )
+        except OllamaEmptyResponseError as exc:
+            error = EvalJudgeError(f"Judge LLM returned an empty response: {exc}")
         except json.JSONDecodeError as exc:
-            raise EvalJudgeError(f"Judge LLM returned invalid JSON: {response.text[:200]}") from exc
+            error = EvalJudgeError(f"Judge LLM returned invalid JSON: {response_text[:200]}")
+            error.__cause__ = exc
+        except EvalJudgeError as exc:
+            error = exc
+        except Exception as exc:
+            error = EvalJudgeError(str(exc))
+            error.__cause__ = exc
+        model_calls.append(self._model_call_telemetry(
+            response=response,
+            response_text=response_text,
+            monotonic_start=monotonic_start,
+            retry_count=retry_count,
+            input_artifact_hash=input_artifact_hash,
+            error=error,
+        ))
+        error.model_calls = list(model_calls)
+        raise error
 
-        score = data.get("score")
-        reasoning = data.get("reasoning")
-
-        if score is None or reasoning is None:
-            raise EvalJudgeError(f"Judge response missing required fields: {data}")
-
-        if not isinstance(score, int) or score < 1 or score > 5:
-            raise EvalJudgeError(f"Judge returned out-of-range score: {score}")
-
-        return EvalGrade(
-            score=score,
-            reasoning=reasoning,
-            passed=score >= PASSING_THRESHOLD,
+    def _model_call_telemetry(
+        self,
+        response: GenerateContentResponse | None,
+        response_text: str,
+        monotonic_start: float,
+        retry_count: int,
+        input_artifact_hash: str,
+        error: Exception | None = None,
+    ) -> ModelCallTelemetry:
+        usage = response.usage_metadata if response else UsageMetadata()
+        finish_reason = response.candidates[0].finish_reason if response and response.candidates else None
+        return ModelCallTelemetry(
+            agent_role="judge",
+            provider=type(self._provider).__name__,
+            model=self._model or "",
+            monotonic_start=monotonic_start,
+            monotonic_end=time.monotonic(),
+            input_tokens=usage.prompt_token_count,
+            output_tokens=usage.candidates_token_count,
+            thinking_tokens=usage.thinking_token_count,
+            cache_tokens=usage.cache_token_count,
+            total_tokens=usage.total_token_count,
+            usage_reported=usage.usage_reported,
+            finish_reason=finish_reason,
+            retry_count=retry_count,
+            succeeded=error is None,
+            error_type=type(error).__name__ if error else None,
+            input_artifact_hash=input_artifact_hash,
+            output_artifact_hash=model_boundary_hash(response_text),
         )

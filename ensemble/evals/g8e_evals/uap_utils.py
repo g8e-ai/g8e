@@ -5,23 +5,26 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-import hashlib
 import base64
 import binascii
-from datetime import datetime, timezone, timedelta, UTC
-from typing import Optional, Dict, Any
-from google.protobuf import json_format
-from google.protobuf.timestamp_pb2 import Timestamp
-import nacl.signing
+import hashlib
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from g8e_evals.proto import common_pb2
+import nacl.signing
+from google.protobuf import json_format
+
+from g8e.common.v1 import common_pb2
 
 def format_rfc3339_nano(dt: datetime) -> str:
     """Format datetime as RFC3339Nano (compatible with Go's time.RFC3339Nano)."""
     # Go's RFC3339Nano is 2006-01-02T15:04:05.999999999Z07:00
-    # Python's isoformat is close, but we need to ensure 'Z' for UTC and nano precision if possible.
-    s = dt.astimezone(UTC).isoformat(timespec="nanoseconds")
-    return s.replace("+00:00", "Z")
+    # Python datetimes provide microsecond precision; trailing zeros are trimmed to Go's format.
+    utc = dt.astimezone(UTC)
+    formatted = utc.strftime("%Y-%m-%dT%H:%M:%S")
+    if utc.microsecond:
+        formatted += f".{utc.microsecond:06d}".rstrip("0")
+    return f"{formatted}Z"
 
 def canonicalize_value(v: Any) -> str:
     if v is None:
@@ -135,7 +138,7 @@ def build_envelope(
 
     if l2_private_key and l2_key_id:
         sig = sign_l2(tx_hash, l2_private_key)
-        env.governance.l2.tribunal_id = l2_key_id
+        env.governance.l2.consensus_set_id = l2_key_id
         vote = env.governance.l2.votes.add()
         vote.signer_key_id = l2_key_id
         vote.consensus_signature = sig

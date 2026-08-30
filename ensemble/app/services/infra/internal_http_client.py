@@ -18,6 +18,7 @@ from app.constants import (
     UNKNOWN_ERROR_MESSAGE,
 )
 from app.errors import NetworkError
+from app.models.auth import OperatorSessionValidationRequest, OperatorSessionValidationResponse
 from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.internal_api import (
@@ -100,6 +101,28 @@ class InternalHttpClient:
             )
             self._cached_cert_path = current_cert_path
             self._cached_key_path = current_key_path
+
+    async def validate_operator_session(
+        self,
+        operator_session_id: str,
+        cli_session_id: str,
+        user_id: str,
+    ) -> OperatorSessionValidationResponse | None:
+        self._ensure_mtls()
+        response = await self._http.post(
+            GatewayAPIPaths.OPERATORS_VALIDATE,
+            json_data=OperatorSessionValidationRequest(
+                operator_session_id=operator_session_id,
+                cli_session_id=cli_session_id,
+                user_id=user_id,
+            ),
+        )
+        if not response.is_success:
+            return None
+        result = OperatorSessionValidationResponse.model_validate(response.json())
+        if not result.valid or result.user_id != user_id:
+            return None
+        return result
 
     async def push_sse_event(
         self,

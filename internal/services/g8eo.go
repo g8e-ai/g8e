@@ -9,6 +9,7 @@ package services
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -286,6 +287,13 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
+	if err := governance.ExportActuatorPublicKey(vs.fileSvc, actuatorPriv.Public().(ed25519.PublicKey), actuatorKeyID, vs.logger); err != nil {
+		return fmt.Errorf("g8eo: export actuator public key: %w", err)
+	}
+	auditorPriv, auditorKeyID, err := vs.secretManager.GetAuditorKey()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+	}
 
 	// Load trusted L2 signers from filesystem
 	trustedSignersDir := paths.Infra.TrustedSignersDir
@@ -317,6 +325,8 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Scrubbing:          scrubbingService,
 		ActuatorSigningKey: actuatorPriv,
 		ActuatorKeyID:      actuatorKeyID,
+		AuditorSigningKey:  auditorPriv,
+		AuditorKeyID:       auditorKeyID,
 	}
 
 	outboundDeps, err := pubsub.NewOutboundModeDeps(pubsub.OutboundModeDeps{

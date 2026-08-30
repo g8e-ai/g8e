@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## v2.1.x
+
+| Version | Date | Description | Notes |
+|---------|------|-------------|-------|
+| 2.1.0 | 2026-08-30 | Evidence-grade evaluation and receipt provenance: adds five causal experiment arms, immutable run manifests, normalized stage telemetry, encrypted restricted evidence, signed deterministic governance-stage evidence and persistence attestations, canonical cross-language receipt verification, authoritative CLI/operator session binding, and reliability fixes across the ensemble, dashboard, commitment ledger, and reporting pipeline. | [v2.1.0](docs/release_notes/v2.1.x/v2.1.0.md) |
+
 ## v2.0.x
 
 | Version | Date | Description | Notes |

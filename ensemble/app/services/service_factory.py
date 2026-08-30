@@ -40,6 +40,7 @@ from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import APIKeyService
 from app.services.auth.auth_service import AuthService
 from app.services.auth.certificate_service import CertificateService
+from app.services.auth.certificate_data_service import CertificateDataService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_auth_service import OperatorAuthService
 from app.services.operator.session_auth_listener import SessionAuthListener
@@ -237,14 +238,20 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
-        agent_activity_data_service = AgentActivityDataService(cache=cache_aside_service)
+        agent_activity_data_service = AgentActivityDataService(
+            cache=cache_aside_service,
+            governance_client=governance_client,
+        )
 
         reputation_data_service = ReputationDataService(
             cache=cache_aside_service,
             governance_client=governance_client,
         )
 
-        stake_resolution_data_service = StakeResolutionDataService(cache=cache_aside_service)
+        stake_resolution_data_service = StakeResolutionDataService(
+            cache=cache_aside_service,
+            governance_client=governance_client,
+        )
 
         # Create lifecycle service after data service is available
         operator_lifecycle_service = OperatorLifecycleService(
@@ -304,7 +311,9 @@ class ServiceFactory:
 
         operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
 
-        certificate_service = CertificateService(data_service=data_services.operator_data_service)
+        certificate_service = CertificateService(
+            data_service=CertificateDataService(cache_aside_service)
+        )
 
         operator_auth_service = OperatorAuthService(
             api_key_service=api_key_service,
@@ -315,10 +324,7 @@ class ServiceFactory:
             cache_aside=cache_aside_service,
         )
 
-        auth_service = AuthService(
-            operator_session_service=operator_session_service,
-            operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
-        )
+        auth_service = AuthService(internal_http_client=core_services.internal_http_client)
 
         session_auth_listener = SessionAuthListener(
             pubsub_client=pubsub_client,

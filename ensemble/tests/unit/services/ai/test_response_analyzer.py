@@ -68,6 +68,11 @@ async def test_analyze_command_risk_success(analyzer, fake_provider, mock_settin
         )
 
     assert result.risk_level == RiskLevel.LOW
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "warden_command_risk"
+    assert result.model_call.succeeded is True
+    assert result.model_call.input_artifact_hash
+    assert result.model_call.output_artifact_hash
 
 
 @pytest.mark.asyncio
@@ -140,6 +145,9 @@ async def test_analyze_command_risk_fallback_on_empty_response(
         )
 
     assert result.risk_level == RiskLevel.HIGH
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type
 
 
 @pytest.mark.asyncio
@@ -223,6 +231,9 @@ async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
     assert result.error_category == ErrorAnalysisCategory.DEPENDENCY
     assert result.can_auto_fix is True
     assert result.suggested_fix == "npm install lodash"
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "warden_error"
+    assert result.model_call.succeeded is True
 
 
 @pytest.mark.asyncio
@@ -299,6 +310,9 @@ async def test_analyze_file_operation_risk_success(analyzer, fake_provider, mock
     assert result.risk_level == RiskLevel.MEDIUM
     assert result.is_system_file is False
     assert result.safe_to_proceed is True
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "warden_file_risk"
+    assert result.model_call.succeeded is True
 
 
 @pytest.mark.asyncio

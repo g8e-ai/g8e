@@ -41,7 +41,7 @@ class TestBuildContentsFromHistory:
     """Tests for build_contents_from_history logic."""
 
     def test_empty_history_returns_empty_list(self, builder):
-        assert builder.build_contents_from_history([]) == []
+        assert builder.build_contents_from_history([]).contents == []
 
     def test_converts_user_chat_message(self, builder):
         history = [
@@ -52,7 +52,7 @@ class TestBuildContentsFromHistory:
                 prev_hash="0" * 64,
             )
         ]
-        contents = builder.build_contents_from_history(history, sentinel_mode=False)
+        contents = builder.build_contents_from_history(history, sentinel_mode=False).contents
         assert len(contents) == 1
         assert contents[0].role == types.Role.USER
         assert len(contents[0].parts) == 1
@@ -67,7 +67,7 @@ class TestBuildContentsFromHistory:
                 prev_hash="0" * 64,
             )
         ]
-        contents = builder.build_contents_from_history(history, sentinel_mode=False)
+        contents = builder.build_contents_from_history(history, sentinel_mode=False).contents
         assert len(contents) == 1
         text = contents[0].parts[0].text
         assert "data.csv, logs.txt" in text
@@ -81,7 +81,7 @@ class TestBuildContentsFromHistory:
                 prev_hash="0" * 64,
             )
         ]
-        contents = builder.build_contents_from_history(history, sentinel_mode=False)
+        contents = builder.build_contents_from_history(history, sentinel_mode=False).contents
         assert len(contents) == 1
         assert contents[0].role == types.Role.USER
         assert "[SYSTEM OUTPUT]" in contents[0].parts[0].text
@@ -95,27 +95,53 @@ class TestBuildContentsFromHistory:
                 prev_hash="0" * 64,
             )
         ]
-        contents = builder.build_contents_from_history(history)
+        contents = builder.build_contents_from_history(history).contents
         assert len(contents) == 1
         assert contents[0].role == types.Role.MODEL
         assert contents[0].parts[0].text == "I can help with that"
 
     def test_scrubs_user_messages_when_sentinel_mode_true(self, builder):
-        with patch("app.services.ai.request_builder.scrub_user_message") as mock_scrub:
-            mock_scrub.side_effect = lambda x: f"scrubbed({x})"
-            history = [
-                ConversationHistoryMessage(
-                    sender=MessageSender.USER_CHAT, content="sensitive info", prev_hash="0" * 64
-                ),
-                ConversationHistoryMessage(
-                    sender=MessageSender.USER_TERMINAL,
-                    content="more sensitive info",
-                    prev_hash="1" * 64,
-                ),
-            ]
-            contents = builder.build_contents_from_history(history, sentinel_mode=True)
-            assert contents[0].parts[0].text == "scrubbed(sensitive info)"
-            assert contents[1].parts[0].text == "[SYSTEM OUTPUT]\nscrubbed(more sensitive info)"
+        history = [
+            ConversationHistoryMessage(
+                sender=MessageSender.USER_CHAT,
+                content="contact admin@example.com",
+                prev_hash="0" * 64,
+            ),
+            ConversationHistoryMessage(
+                sender=MessageSender.USER_TERMINAL,
+                content="call 415-555-1212",
+                prev_hash="1" * 64,
+            ),
+        ]
+
+        result = builder.build_contents_from_history(history, sentinel_mode=True)
+
+        assert result.contents[0].parts[0].text == "contact [EMAIL]"
+        assert result.contents[1].parts[0].text == "[SYSTEM OUTPUT]\ncall [PHONE]"
+
+    def test_records_authoritative_scrubbing_observation(self, builder):
+        history = [
+            ConversationHistoryMessage(
+                sender=MessageSender.USER_CHAT,
+                content="contact admin@example.com",
+                prev_hash="0" * 64,
+            )
+        ]
+
+        result = builder.build_contents_from_history(history, sentinel_mode=True)
+
+        assert result.contents[0].parts[0].text == "contact [EMAIL]"
+        assert len(result.scrubbing_observations) == 1
+        observation = result.scrubbing_observations[0]
+        assert observation.source == MessageSender.USER_CHAT
+        assert observation.enabled is True
+        assert observation.was_modified is True
+        assert observation.scrub_count == 1
+        assert observation.scrub_types == ["email"]
+        assert observation.monotonic_end >= observation.monotonic_start
+        assert len(observation.input_artifact_hash) == 64
+        assert len(observation.output_artifact_hash) == 64
+        assert "admin@example.com" not in observation.model_dump_json()
 
     def test_skips_empty_or_whitespace_messages(self, builder):
         history = [
@@ -129,7 +155,7 @@ class TestBuildContentsFromHistory:
                 sender=MessageSender.USER_CHAT, content="\n", prev_hash="2" * 64
             ),
         ]
-        assert builder.build_contents_from_history(history) == []
+        assert builder.build_contents_from_history(history).contents == []
 
     def test_appends_attachments_to_last_user_message(self, builder):
         history = [
@@ -147,7 +173,7 @@ class TestBuildContentsFromHistory:
             types.Part.from_text(text="att1"),
             types.Part.from_text(text="att2"),
         ]
-        contents = builder.build_contents_from_history(history, attachments=att_parts)
+        contents = builder.build_contents_from_history(history, attachments=att_parts).contents
 
         assert len(contents) == 3
         # Last message (USER) should have original text part + 2 attachment parts
@@ -168,7 +194,7 @@ class TestBuildContentsFromHistory:
             ),
         ]
         att_parts = [types.Part.from_text(text="att")]
-        contents = builder.build_contents_from_history(history, attachments=att_parts)
+        contents = builder.build_contents_from_history(history, attachments=att_parts).contents
 
         assert len(contents) == 2
         assert len(contents[0].parts) == 2  # USER message got the attachment
@@ -184,7 +210,7 @@ class TestBuildContentsFromHistory:
                 sender=MessageSender.AI_TRIAGE, content="triage note", prev_hash="1" * 64
             ),
         ]
-        assert builder.build_contents_from_history(history) == []
+        assert builder.build_contents_from_history(history).contents == []
 
     def test_attachments_not_appended_if_no_user_message(self, builder):
         history = [
@@ -193,7 +219,7 @@ class TestBuildContentsFromHistory:
             ),
         ]
         att_parts = [types.Part.from_text(text="att")]
-        contents = builder.build_contents_from_history(history, attachments=att_parts)
+        contents = builder.build_contents_from_history(history, attachments=att_parts).contents
 
         assert len(contents) == 1
         assert len(contents[0].parts) == 1

@@ -112,6 +112,8 @@ class UsageMetadata:
     candidates_token_count: int = 0
     total_token_count: int = 0
     thinking_token_count: int = 0
+    cache_token_count: int = 0
+    usage_reported: bool = False
 
 
 @dataclass

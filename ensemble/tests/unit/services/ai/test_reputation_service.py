@@ -640,7 +640,7 @@ class TestResolveStakes:
     def stake_data(self) -> AsyncMock:
         m = AsyncMock()
         m.get.return_value = None
-        m.create.side_effect = lambda r: r  # echo back
+        m.create.side_effect = lambda r, _context: r  # echo back
         return m
 
     @pytest.fixture

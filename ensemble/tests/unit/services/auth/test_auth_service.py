@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi import Request
 
 from app.constants import (
+    AUTHORIZATION,
+    CLI_SESSION_ID,
     AuthMethod,
     OperatorStatus,
     X_PROXY_CLI_SESSION_ID,
@@ -19,27 +21,19 @@ from app.constants import (
     X_PROXY_WEB_SESSION_ID,
 )
 from app.errors import AuthenticationError
-from app.models.auth import AuthenticatedUser
+from app.models.auth import AuthenticatedUser, OperatorSessionValidationResponse
 from app.models.http_context import BoundOperator, G8eHttpContext, RequestContext
 from app.services.auth.auth_service import AuthService
 
 
 @pytest.fixture
-def mock_session_service():
+def mock_internal_http_client():
     return AsyncMock()
 
 
 @pytest.fixture
-def mock_data_service():
-    return AsyncMock()
-
-
-@pytest.fixture
-def auth_service(mock_session_service, mock_data_service):
-    return AuthService(
-        operator_session_service=mock_session_service,
-        operator_data_service=mock_data_service,
-    )
+def auth_service(mock_internal_http_client):
+    return AuthService(internal_http_client=mock_internal_http_client)
 
 
 class TestAuthServiceProxyAuthentication:
@@ -98,6 +92,61 @@ class TestAuthServiceProxyAuthentication:
             await auth_service.authenticate_request(request, settings)
 
 
+class TestAuthServiceOperatorSessionAuthentication:
+    @pytest.mark.asyncio
+    async def test_missing_local_projection_uses_authoritative_gateway_binding(
+        self, auth_service, mock_internal_http_client
+    ):
+        request = MagicMock(spec=Request)
+        request.headers = {
+            AUTHORIZATION: "Bearer operator-session-123",
+            CLI_SESSION_ID: "cli-session-789",
+        }
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+        )
+        mock_internal_http_client.validate_operator_session.return_value = (
+            OperatorSessionValidationResponse(
+                valid=True,
+                operator_id="operator-456",
+                user_id="user-123",
+            )
+        )
+
+        user = await auth_service.authenticate_request(request, MagicMock())
+
+        assert user.user_id == "user-123"
+        assert user.operator_id == "operator-456"
+        assert user.operator_session_id == "operator-session-123"
+        assert user.cli_session_id == "cli-session-789"
+        mock_internal_http_client.validate_operator_session.assert_awaited_once_with(
+            "operator-session-123", "cli-session-789", "user-123"
+        )
+
+    @pytest.mark.asyncio
+    async def test_mismatched_authoritative_binding_is_rejected(
+        self, auth_service, mock_internal_http_client
+    ):
+        request = MagicMock(spec=Request)
+        request.headers = {
+            AUTHORIZATION: "Bearer operator-session-123",
+            CLI_SESSION_ID: "cli-session-789",
+        }
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+        )
+        mock_internal_http_client.validate_operator_session.return_value = None
+
+        with pytest.raises(AuthenticationError):
+            await auth_service.authenticate_request(request, MagicMock())
+
+
 class TestAuthServiceGetValidatedContext:
     @pytest.mark.asyncio
     async def test_get_validated_context_returns_body_context_with_bound_operators(
@@ -132,6 +181,61 @@ class TestAuthServiceGetValidatedContext:
         assert len(validated.bound_operators) == 1
         assert validated.bound_operators[0].operator_id == "op-1"
         assert validated.has_bound_operator() is True
+
+    @pytest.mark.asyncio
+    async def test_get_validated_context_rejects_operator_id_outside_authoritative_binding(
+        self, auth_service
+    ):
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+            bound_operators=[
+                BoundOperator(
+                    operator_id="operator-other",
+                    operator_session_id="operator-session-123",
+                    status=OperatorStatus.BOUND,
+                )
+            ],
+        )
+        user = AuthenticatedUser(
+            uid="user-123",
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            operator_id="operator-456",
+            operator_session_id="operator-session-123",
+            auth_method=AuthMethod.OPERATOR_SESSION,
+        )
+
+        with pytest.raises(AuthenticationError):
+            await auth_service.get_validated_context(request, user)
+
+    @pytest.mark.asyncio
+    async def test_get_validated_context_rejects_routing_operator_outside_authoritative_binding(
+        self, auth_service
+    ):
+        request = MagicMock(spec=Request)
+        request.state = MagicMock()
+        request.state.g8e_context = G8eHttpContext(
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            source_component="CLIENT",
+            operator_id="operator-other",
+            operator_session_id="operator-session-123",
+        )
+        user = AuthenticatedUser(
+            uid="user-123",
+            user_id="user-123",
+            cli_session_id="cli-session-789",
+            operator_id="operator-456",
+            operator_session_id="operator-session-123",
+            auth_method=AuthMethod.OPERATOR_SESSION,
+        )
+
+        with pytest.raises(AuthenticationError):
+            await auth_service.get_validated_context(request, user)
 
     @pytest.mark.asyncio
     async def test_get_validated_context_fallback_derives_from_authenticated_user(

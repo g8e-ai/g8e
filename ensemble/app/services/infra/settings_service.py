@@ -382,7 +382,7 @@ class SettingsService:
             user_settings.llm.lite_provider = overrides.llm_lite_provider
 
         # Provider-specific keys/endpoints
-        for role, key, endpoint, prov in [
+        for _role, key, endpoint, prov in [
             (
                 "primary",
                 overrides.llm_primary_api_key,

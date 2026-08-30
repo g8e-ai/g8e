@@ -108,6 +108,9 @@ func parseRefreshResponse(t *testing.T, rr *httptest.ResponseRecorder) models.CL
 func TestCLIRefreshController_Refresh_Success(t *testing.T) {
 	c, user := setupTestCLIRefreshController(t)
 	oldSessionID := "refresh-ctrl-old-1"
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		"op-ctrl-1", user.ID, "org-1", "op-id-1", "mTLS",
+	))
 	persistCLISessionForController(t, c, user.ID, oldSessionID, "op-ctrl-1")
 
 	req := refreshRequestWithContext(t, user.ID, oldSessionID)
@@ -195,6 +198,47 @@ func TestCLIRefreshController_Refresh_OldSessionMissing_NoOperatorSession_Return
 
 	assert.Equal(t, http.StatusConflict, rr.Code)
 	assert.Contains(t, rr.Body.String(), "re-enroll")
+}
+
+// TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive verifies
+// that when the old CLI session's operator session ID no longer matches the user's
+// active operator session (e.g., the old operator was terminated and a new one
+// enrolled), the controller falls back to the active operator session instead of
+// inheriting the stale binding. This prevents a CLI session binding mismatch on
+// subsequent gateway validation.
+func TestCLIRefreshController_Refresh_StaleOperatorSession_FallsBackToActive(t *testing.T) {
+	c, user := setupTestCLIRefreshController(t)
+
+	// Persist a new active operator session for the user.
+	require.NoError(t, c.operatorSessionSvc.PersistOperatorSession(
+		"op-refresh-active", user.ID, "org-1", "op-id-active", "mTLS",
+	))
+
+	// Old CLI session references a stale operator session that is no longer active.
+	oldSessionID := "refresh-ctrl-stale-op"
+	persistCLISessionForController(t, c, user.ID, oldSessionID, "op-refresh-stale")
+
+	req := refreshRequestWithContext(t, user.ID, oldSessionID)
+	rr := httptest.NewRecorder()
+	c.handleRefresh(rr, req)
+
+	resp := parseRefreshResponse(t, rr)
+	assert.NotEmpty(t, resp.CLISessionID)
+	assert.Equal(t, user.ID, resp.UserID)
+
+	// New session must be bound to the active operator session, not the stale one.
+	newDoc, err := c.cliSessionSvc.db.DocGet(
+		marshaler.CollectionName(constants.CollectionCLISessions), resp.CLISessionID)
+	require.NoError(t, err)
+	require.NotNil(t, newDoc)
+	var newSession models.CLISession
+	dataBytes, err := json.Marshal(newDoc.Data)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(dataBytes, &newSession))
+	assert.True(t, newSession.IsActive)
+	assert.Equal(t, user.ID, newSession.UserID)
+	assert.Equal(t, "op-refresh-active", newSession.OperatorSessionID,
+		"new session must bind to the active operator session, not the stale one")
 }
 
 // ---------------------------------------------------------------------------

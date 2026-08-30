@@ -16,7 +16,7 @@ Covers:
 - Resilience to malformed JSON or empty model responses
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,6 +28,7 @@ from app.constants import (
     TriageRequestPosture,
 )
 from app.models.agents.triage import TriageRequest
+from app.llm.providers.fake import FakeProvider
 from app.models.attachments import AttachmentMetadata
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
@@ -121,6 +122,35 @@ async def test_triage_returns_simple_classification_from_llm(fake_provider, mock
     assert result.complexity == TriageComplexityClassification.SIMPLE
     assert result.intent == TriageIntentClassification.INFORMATION
     assert result.complexity_confidence == TriageConfidence.HIGH
+    assert result.model_call is not None
+    assert result.model_call.agent_role == "triage"
+    assert result.model_call.model == "lite-model"
+    assert len(result.model_call.input_artifact_hash) == 64
+    assert len(result.model_call.output_artifact_hash) == 64
+
+
+async def test_triage_configures_structured_output_for_fake_provider(mock_settings):
+    provider = FakeProvider()
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="Create a file",
+        agent_mode=AgentMode.G8E_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=provider):
+        result = await agent.triage(request)
+
+    settings = provider.call_log[0]["lite_llm_settings"]
+    assert settings.response_format is not None
+    assert result.error_code is None
+    assert result.intent == TriageIntentClassification.ACTION
+    assert result.model_call is not None
+    assert result.model_call.usage_reported is True
+    assert result.model_call.input_tokens == 100
+    assert result.model_call.output_tokens == 50
 
 
 async def test_triage_returns_complex_classification_from_llm(fake_provider, mock_settings):
@@ -200,6 +230,9 @@ async def test_triage_defaults_to_complex_on_malformed_json(fake_provider, mock_
 
     assert result.complexity == TriageComplexityClassification.COMPLEX
     assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type
 
 
 async def test_triage_defaults_to_complex_on_empty_model_response(fake_provider, mock_settings):
@@ -219,6 +252,30 @@ async def test_triage_defaults_to_complex_on_empty_model_response(fake_provider,
 
     assert result.complexity == TriageComplexityClassification.COMPLEX
     assert result.complexity_confidence == TriageConfidence.LOW
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "EmptyResponseError"
+
+
+async def test_triage_defaults_to_complex_on_provider_exception(fake_provider, mock_settings):
+    fake_provider.generate_content_lite = AsyncMock(side_effect=RuntimeError("provider down"))
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="hello",
+        agent_mode=AgentMode.G8E_NOT_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.model_call is not None
+    assert result.model_call.succeeded is False
+    assert result.model_call.error_type == "RuntimeError"
+    assert result.model_call.monotonic_end >= result.model_call.monotonic_start
+    assert result.model_call.input_artifact_hash
 
 
 async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_settings):

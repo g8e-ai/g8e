@@ -9,7 +9,7 @@
 import { ErrorResponse } from '../models/response_models.js';
 import rateLimit from 'express-rate-limit';
 import { logger } from '../utils/logger.js';
-import { redactWebSessionId } from '../utils/security.js';
+import { redactWebSessionId, redactApiKey } from '../utils/security.js';
 import { BEARER_PREFIX } from '../constants/auth.js';
 import {
     GlobalPublicRateLimit,
@@ -253,7 +253,7 @@ export function createRateLimiters({ config = {} } = {}) {
             logger.warn('[RATE-LIMIT] Operator auth rate limit exceeded', {
                 ip: req.ip,
                 keyType: apiKeyPrefix ? 'api_key' : 'ip',
-                apiKeyPrefix: apiKeyPrefix ? apiKeyPrefix.substring(0, 12) + '...' : null,
+                apiKeyPrefix: apiKeyPrefix ? redactApiKey(apiKeyPrefix) : null,
                 path: req.path,
                 userAgent: req.headers['user-agent']
             });

@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-08-26
-Version: v2.0.2
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ## Overview
 
@@ -276,4 +276,4 @@ If mTLS connections fail with certificate errors:
 
 The gateway signs action receipts with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats with its key ID, enabling offline verification by external harnesses.
 
-Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. They can implement Ed25519 signature verification using standard cryptographic libraries with the exported public key.
+Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. The Python protocol package provides `parse_action_receipt`, `canonicalize_action_receipt`, `verify_action_receipt_signature`, and `verify_receipt_persistence_attestation` in `g8e.receipts`; these helpers verify canonical receipt signatures and the final durable-persistence attestation against the caller-supplied trusted Ed25519 public key. Standard cryptographic libraries can implement the same protocol in other languages.

@@ -27,7 +27,7 @@ from app.constants import (
     EventType,
     G8EE_COMPONENT,
 )
-from app.constants.generated_status import CommandErrorType, ComponentName
+from app.constants.generated_status import CommandErrorType
 from app.errors import ValidationError
 from app.models.agent import ExecutorCommandArgs
 from app.models.base import G8eBaseModel
@@ -527,7 +527,7 @@ class TestExecuteCommandTargetSystems:
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
         args = ExecutorCommandArgs(
-            command="rm /tmp/test", request="cleanup", target_operators=["all"]
+            command="top", request="inspect processes", target_operators=["all"]
         )
 
         request_settings = G8eeUserSettings(
@@ -540,7 +540,7 @@ class TestExecuteCommandTargetSystems:
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
-        assert result.command_executed == "rm /tmp/test"
+        assert result.command_executed == "top"
 
     async def test_auto_approve_disabled_with_list_still_requires_approval(self):
         """auto_approved_commands without enable_auto_approve is inert."""

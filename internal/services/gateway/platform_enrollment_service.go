@@ -977,6 +977,7 @@ func decodePlatformEnrollmentRequest(doc *models.Document) (*models.PlatformEnro
 	if err := json.Unmarshal(dataBytes, &req); err != nil {
 		return nil, fmt.Errorf("unmarshal platform enrollment request: %w", err)
 	}
+	req.CreatedAt = doc.CreatedAt
 	return &req, nil
 }
 

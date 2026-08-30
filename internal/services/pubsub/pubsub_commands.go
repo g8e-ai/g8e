@@ -111,6 +111,8 @@ type CommandServiceConfig struct {
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
+	AuditorSigningKey  ed25519.PrivateKey
+	AuditorKeyID       string
 }
 
 // GatewayCommandServiceConfig embeds CommandServiceConfig and adds
@@ -263,6 +265,8 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, co
 		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,
 		KeyID:             c.ActuatorKeyID,
+		AuditorSigningKey: c.AuditorSigningKey,
+		AuditorKeyID:      c.AuditorKeyID,
 	}
 
 	// Wire the ReceiptPublisher so the actuator publishes signed
@@ -577,10 +581,9 @@ func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
 // through the Actuator, returning the signed ActionReceipt or a verification
 // error.
 //
-// The receipt is returned even on execution failure (status=FAILED) so callers
-// receive cryptographic evidence of the attempt. A nil receipt is only
-// returned when verification fails before execution begins, in which case the
-// returned error wraps the corresponding governance.ErrXxx sentinel.
+// The signed receipt is returned on execution and verification failure so callers
+// receive cryptographic evidence of the attempt. The accompanying verification
+// error continues to wrap the corresponding governance.ErrXxx sentinel.
 func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	if len(payload) == 0 {
 		return nil, constants.ErrPubSubEmptyPayload
@@ -599,8 +602,15 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	}
 	verified, err := rs.l4warden.VerifyEnvelope(ctx, envelope)
 	if err != nil {
-		rs.logBlockedTransaction(envelope, err)
-		return nil, err
+		if rs.actuator == nil {
+			rs.logBlockedTransaction(envelope, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
+		}
+		receipt, recordErr := rs.actuator.RecordRejectedTransaction(ctx, verified, err)
+		if recordErr != nil {
+			return nil, fmt.Errorf("%w: rejection receipt: %w", err, recordErr)
+		}
+		return receipt, err
 	}
 
 	if rs.actuator == nil {
@@ -638,8 +648,15 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 			rs.logger.Error("Transaction verification failed - command rejected",
 				string(constants.ConnectionStateError), err,
 				"message_id", env.Id)
-			// Log blocked transaction to audit store
-			rs.logBlockedTransaction(env, err)
+			if rs.actuator == nil {
+				rs.logBlockedTransaction(env, err)
+				return
+			}
+			if _, recordErr := rs.actuator.RecordRejectedTransaction(rs.ctx, verified, err); recordErr != nil {
+				rs.logger.Error("Failed to record signed rejected transaction",
+					string(constants.ConnectionStateError), recordErr,
+					"message_id", env.Id)
+			}
 			return
 		}
 		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
