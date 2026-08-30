@@ -824,6 +824,10 @@
       "_go_const": "EventOperatorReputationSlashTier3",
       "value": "g8e.v1.operator.reputation.slash.tier3"
     },
+    "OperatorReputationStakeResolutionCreated": {
+      "_go_const": "EventOperatorReputationStakeResolutionCreated",
+      "value": "g8e.v1.operator.reputation.stake.resolution.created"
+    },
     "OperatorReputationStateUpdated": {
       "_go_const": "EventOperatorReputationStateUpdated",
       "value": "g8e.v1.operator.reputation.state.updated"

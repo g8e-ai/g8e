@@ -124,6 +124,9 @@ func TestMapActionTypeToEventType(t *testing.T) {
 			EventAppMemoryUpdated,
 			EventAppInvestigationCreated,
 			EventAppInvestigationUpdated,
+			EventOperatorReputationCommitmentCreated,
+			EventOperatorReputationStakeResolutionCreated,
+			EventOperatorReputationStateUpdated,
 		}
 		for _, e := range updateEvents {
 			e := e

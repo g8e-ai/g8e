@@ -55,6 +55,7 @@ func TestOtherNewEventConstants(t *testing.T) {
 	}{
 		{EventAiLLMChatIterationThinkingStopped, "g8e.v1.ai.llm.chat.iteration.thinking.stopped"},
 		{EventAiReputationStateUpdated, "g8e.v1.ai.reputation.state.updated"},
+		{EventOperatorReputationStakeResolutionCreated, "g8e.v1.operator.reputation.stake.resolution.created"},
 		{EventAppAgentActivityRecorded, "g8e.v1.app.agent.activity.recorded"},
 		{EventAppCaseDeleted, "g8e.v1.app.case.deleted"},
 		{EventAppInvestigationDeleted, "g8e.v1.app.investigation.deleted"},

@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import logging
 
+from app.clients.governance_client import GovernanceClient
 from app.constants import (
     DB_COLLECTION_STAKE_RESOLUTIONS,
     ErrorCode,
+    EventType,
     G8EE_COMPONENT,
 )
 from app.errors import DatabaseError, ValidationError
 from app.models.cache import FieldFilter
+from app.models.http_context import RequestContext
 from app.models.reputation import StakeResolution
 from app.services.protocols import DocumentServiceProtocol
 
@@ -52,8 +55,13 @@ class StakeResolutionDataService:
     cache: DocumentServiceProtocol
     collection: str
 
-    def __init__(self, cache: DocumentServiceProtocol) -> None:
+    def __init__(
+        self,
+        cache: DocumentServiceProtocol,
+        governance_client: GovernanceClient,
+    ) -> None:
         self.cache = cache
+        self.governance_client = governance_client
         self.collection = DB_COLLECTION_STAKE_RESOLUTIONS
 
     async def get(self, tribunal_command_id: str, agent_id: str) -> StakeResolution | None:
@@ -77,7 +85,11 @@ class StakeResolutionDataService:
                 component=G8EE_COMPONENT,
             ) from exc
 
-    async def create(self, resolution: StakeResolution) -> StakeResolution:
+    async def create(
+        self,
+        resolution: StakeResolution,
+        context: RequestContext,
+    ) -> StakeResolution:
         """Append a new `stake_resolution` row.
 
         Returns the existing row unchanged when one is already present for
@@ -100,10 +112,19 @@ class StakeResolutionDataService:
             return StakeResolution.model_validate(existing)
 
         try:
-            await self.cache.create_document(
+            await self.governance_client.update_governed_doc(
                 collection=self.collection,
                 document_id=resolution.id,
-                data=resolution.model_dump(mode="json"),
+                updates=resolution.model_dump(mode="json"),
+                event_type=EventType.OPERATOR_REPUTATION_STAKE_RESOLUTION_CREATED,
+                case_id=context.case_id,
+                investigation_id=context.investigation_id,
+                task_id=context.task_id,
+                web_session_id=context.web_session_id,
+                user_id=context.user_id,
+                operator_id=context.operator_id,
+                operator_session_id=context.operator_session_id,
+                merge=False,
             )
             logger.info(
                 "Stake resolution recorded",

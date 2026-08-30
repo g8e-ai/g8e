@@ -248,7 +248,10 @@ class ServiceFactory:
             governance_client=governance_client,
         )
 
-        stake_resolution_data_service = StakeResolutionDataService(cache=cache_aside_service)
+        stake_resolution_data_service = StakeResolutionDataService(
+            cache=cache_aside_service,
+            governance_client=governance_client,
+        )
 
         # Create lifecycle service after data service is available
         operator_lifecycle_service = OperatorLifecycleService(

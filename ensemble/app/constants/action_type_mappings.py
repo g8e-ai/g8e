@@ -45,6 +45,8 @@ def map_event_type_to_action_type(event_type: str) -> str:
         EventType.APP_INVESTIGATION_UPDATED: "DOCUMENT_UPDATE",
         EventType.APP_INVESTIGATION_DELETED: "DOCUMENT_DELETE",
         EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED: "DOCUMENT_UPDATE",
+        EventType.OPERATOR_REPUTATION_STAKE_RESOLUTION_CREATED: "DOCUMENT_UPDATE",
+        EventType.OPERATOR_REPUTATION_STATE_UPDATED: "DOCUMENT_UPDATE",
     }
     return mapping.get(event_type, event_type)
 

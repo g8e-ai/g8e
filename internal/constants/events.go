@@ -187,6 +187,7 @@ const EventOperatorReputationCommitmentCreated EventType = "g8e.v1.operator.repu
 const EventOperatorReputationCommitmentVerified EventType = "g8e.v1.operator.reputation.commitment.verified"
 const EventOperatorReputationCommitmentFailed EventType = "g8e.v1.operator.reputation.commitment.failed"
 const EventOperatorReputationStateUpdated EventType = "g8e.v1.operator.reputation.state.updated"
+const EventOperatorReputationStakeResolutionCreated EventType = "g8e.v1.operator.reputation.stake.resolution.created"
 const EventReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
 const EventOperatorReputationSlashTier1 EventType = "g8e.v1.operator.reputation.slash.tier1"
 const EventOperatorReputationSlashTier2 EventType = "g8e.v1.operator.reputation.slash.tier2"
