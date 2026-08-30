@@ -6,11 +6,13 @@
 # released under the Apache License, Version 2.0.
 
 import json
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
 
+from g8e_evals.benchmarks.ifeval.provenance import load_provenance, validate_dataset
 from g8e_evals.harness import Task
 from g8e_evals.models import TaskMetadata
+
 
 class IFEvalLoader:
     def __init__(self, gold_set_path: Path):
@@ -25,17 +27,20 @@ class IFEvalLoader:
         if not self.gold_set_path.exists():
             raise FileNotFoundError(f"IFEval gold set not found at {self.gold_set_path}")
 
-        with open(self.gold_set_path) as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                data = json.loads(line)
-                yield Task(
-                    id=str(data.get("key")),
-                    prompt=data.get("prompt"),
-                    metadata=TaskMetadata(
-                        benchmark="ifeval",
-                        instruction_id_list=data.get("instruction_id_list", []),
-                        kwargs=data.get("kwargs", [])
-                    )
-                )
+        provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
+        validate_dataset(self.gold_set_path, provenance)
+        rows = [json.loads(line) for line in self.gold_set_path.read_text().splitlines() if line.strip()]
+        if [row["key"] for row in rows] != provenance.selected_keys:
+            raise ValueError("IFEval subset keys do not match provenance")
+
+        for data in rows:
+            yield Task(
+                id=str(data["key"]),
+                prompt=data["prompt"],
+                metadata=TaskMetadata(
+                    benchmark="ifeval_subset",
+                    expected_action_class=data.get("expected_action_class", ""),
+                    instruction_id_list=data["instruction_id_list"],
+                    kwargs=data["kwargs"],
+                ),
+            )

@@ -15,6 +15,7 @@ from app.constants import (
     AuditorReason,
     RiskLevel,
 )
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.tool_results import CommandRiskAnalysis
 
 
@@ -423,6 +424,20 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     candidate: str | None = None
     success: bool = False
     error: str | None = None
+    provider: str = ""
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    cache_tokens: int = 0
+    usage_reported: bool = False
+    finish_reason: str | None = None
+    monotonic_start: float | None = None
+    monotonic_end: float | None = None
+    input_artifact_hash: str = ""
+    output_artifact_hash: str = ""
+    succeeded: bool = True
+    error_type: str | None = None
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )
@@ -444,6 +459,7 @@ class TribunalAuditorCompletedPayload(G8eBaseModel):
     revision: str | None = None
     reason: AuditorReason
     error: str | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     swap_to_cluster: str | None = Field(
         default=None,
         description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)",
@@ -542,6 +558,7 @@ class TribunalWardenBlockedPayload(G8eBaseModel):
     risk_level: RiskLevel
     error: str
     is_conflict: bool = False
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )
@@ -559,6 +576,7 @@ class TribunalAuditorFailedPayload(G8eBaseModel):
     reason: AuditorReason
     error: str | None = None
     candidate_command: str
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
 
 
 class TribunalVotingCompletedPayload(G8eBaseModel):
@@ -629,6 +647,7 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
     final_command: str
     outcome: CommandGenerationOutcome
     vote_score: float
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     correlation_id: str | None = Field(
         default=None, description="Correlation ID for the Tribunal session"
     )

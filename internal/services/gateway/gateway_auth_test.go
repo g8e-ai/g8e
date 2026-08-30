@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/marshaler"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -74,7 +75,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
@@ -96,7 +97,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session with old timestamp using the test hook
 	operatorSessionID := "expired-session"
@@ -133,7 +134,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session linked to the inactive user
 	operatorSessionID := "session-with-inactive-user"
@@ -147,10 +148,80 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-789", opBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-789", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
+}
+
+func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
+	_, stores := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "authoritative-user"
+	operatorSessionID := "authoritative-operator-session"
+	cliSessionID := "authoritative-cli-session"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
+		ID: "authoritative-operator", UserID: userID, OperatorSessionID: operatorSessionID,
+		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "authoritative-operator", opBytes))
+
+	tests := []struct {
+		name        string
+		session     models.CLISession
+		claimedUser string
+		wantError   bool
+	}{
+		{name: "active exact binding is accepted", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID},
+		{name: "expired CLI session is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(-time.Hour)}, claimedUser: userID, wantError: true},
+		{name: "mismatched Operator binding is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: "different-session", IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: userID, wantError: true},
+		{name: "mismatched user is rejected", session: models.CLISession{ID: cliSessionID, UserID: userID, OperatorSessionID: operatorSessionID, IsActive: true, ExpiresAt: time.Now().Add(time.Hour)}, claimedUser: "different-user", wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sessionBytes, err := json.Marshal(tt.session)
+			require.NoError(t, err)
+			require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, sessionBytes))
+			_, err = auth.ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, tt.claimedUser)
+			if tt.wantError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestAuthService_ValidateOperatorSession_RejectsDuplicateRecords(t *testing.T) {
+	_, stores := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(stores.DocStore, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+
+	userID := "duplicate-user"
+	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
+	require.NoError(t, err)
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	for _, operatorID := range []string{"duplicate-operator-one", "duplicate-operator-two"} {
+		opBytes, err := json.Marshal(&models.OperatorDocumentGo{ID: operatorID, UserID: userID, OperatorSessionID: "duplicate-session", Status: constants.OperatorStatusActive})
+		require.NoError(t, err)
+		require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	}
+
+	_, err = auth.ValidateOperatorSession("duplicate-session")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), constants.ErrGatewayOperatorSessionDuplicate.Error())
 }
 
 func TestAuthError_Error(t *testing.T) {
@@ -668,7 +739,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a valid web session for the inactive user
 	webSessionID := "web-session-inactive-user"
@@ -714,7 +785,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a valid web session
 	webSessionID := "valid-web-session"
@@ -876,7 +947,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-123"
@@ -891,7 +962,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
 	// Test ValidateOperatorSession directly (the core validation logic)
 	op, err := auth.ValidateOperatorSession(operatorSessionID)
@@ -934,7 +1005,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-terminated", opBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-terminated", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
@@ -951,7 +1022,7 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
@@ -1029,7 +1100,7 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Verify user is inactive
 	user, err := userSvc.GetByID(userID)
@@ -1232,7 +1303,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-auth-test"
@@ -1248,7 +1319,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-auth-test", opBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-auth-test", opBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1314,7 +1385,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-auth-test"
@@ -1485,7 +1556,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			Status: constants.UserStatusActive,
 		}
 		userBytes, _ := json.Marshal(userDoc)
-		require.NoError(t, stores.DocStore.DocSet("users", userID, userBytes))
+		require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)

@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 2.0.0  
-**Last Updated:** 2026-08-25  
-**Platform:** g8e v2.0.0  
+**Document Version:** 2.1.0
+**Last Updated:** 2026-08-30
+**Platform:** g8e v2.1.0
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -41,7 +41,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **CC1.7** | Logical access for support personnel | No standing privileges, JIT provisioning via CSR enrollment | `internal/services/gateway/pki_controller.go` |
 | **CC1.8** | Management of access security | Certificate revocation with database-backed denylist and CRL | `internal/services/gateway/pki_controller.go` |
 | **CC1.9** | Data transfer security | mTLS for all platform communication, outbound-only operator connections | `docs/architecture/auth.md` |
-| **CC1.10** | Security monitoring | Audit store with immutable git-backed ledger, signed ActionReceipts | `internal/services/storage/audit_store.go`, `internal/services/storage/ledger.go` |
+| **CC1.10** | Security monitoring | Complete signed receipts in the SQLite audit store, signed SQLite commitment chain, and git-backed file-mutation snapshots | `internal/services/storage/audit_store.go`, `internal/services/storage/commitment_ledger.go`, `internal/services/storage/ledger.go` |
 | **CC1.11** | Data disposal | Configurable retention policies (default 90 days), automated pruning | `internal/services/storage/audit_store.go` |
 | **CC1.12** | Security incident response | Coordinated disclosure policy via `security@lateraluslabs.com` | `.github/SECURITY.md` |
 
@@ -597,7 +597,10 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Fail-closed verification pipeline** with 5-layer interlock
 - **Cryptographic proof chains** with Ed25519 signatures
 - **Local-first data sovereignty** with git-backed ledger
-- **Comprehensive audit trail** with signed receipts
+- **Comprehensive audit trail** with complete canonical signed receipts whose signatures bind deterministic governance-stage evidence
+- **Durable-persistence proof** with a final Ed25519 attestation binding each receipt signature to its audit record and persistence timestamp
+- **Signed commitment chain** with insertion-ordered atomic append and verification of signatures, structured columns, receipt cross-links, and file-mutation linkage
+- **Cross-language offline verification** through protocol-owned Go/Python canonicalization vectors and Python receipt and persistence-attestation helpers
 - **mTLS everywhere** with SPIFFE workload identity
 - **Hardware-bound human authentication** via WebAuthn/FIDO2
 - **PII/secret scrubbing** before cloud transmission
@@ -617,8 +620,8 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Gitleaks secret scanning** in CI/CD preventing credential leakage in source code
 - **Go-licenses license compliance** auditing transitive dependencies for license compatibility
 - **Cross-OS CI matrix** (Ubuntu, macOS, Windows) ensuring platform parity
-- **Python protocol test suite** (173 tests) validating constant accessors, enum generation, and model serialization
-- **Python protocol conformance suite** (420 tests) enforcing parity between Go constants, Python runtime values, and canonical JSON SSOT files
+- **Python protocol test suite** validating constant accessors, generated protobuf messages, enum generation, model serialization, canonical receipt signatures, and persistence attestations
+- **Python protocol conformance suite** enforcing parity between Go constants, Python runtime values, canonical JSON SSOT files, and shared cryptographic vectors
 - **Interactive gateway onboarding wizard** (`g8e gw start --interactive`) guiding users through network, security, agent, and review configuration steps
 - **Anduril Lattice gRPC adapter** with OAuth2 client credentials authentication, gRPC retry with status code classification, and heartbeat interval validation
 - **MCP tool interception verification** (`--verify` flag) ensuring agent tool-disabling configurations are correctly applied before agent launch
@@ -682,7 +685,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **No Cloud SaaS:** Platform is designed for local deployment; cloud SaaS version not available
 - **No RBAC:** Role-based access control is in development
 - **No External Audits:** Third-party security assessments are planned but not yet completed
-- **Receipt signature verification:** The Gateway signs ActionReceipts with its Actuator Ed25519 private key, but no attested channel exists for distributing the public key to Engine instances. Consumers must obtain the public key out-of-band from the gateway PKI directory. An attested bootstrap flow is planned for a future release
+- **Receipt verification key distribution:** Go and Python consumers can canonically verify ActionReceipt signatures and final persistence attestations, but no attested channel distributes the Actuator public key to external consumers. Consumers must establish trust out of band when obtaining the exported key from the gateway or operator PKI directory. An attested bootstrap flow is planned for a future release
 
 ---
 
@@ -708,7 +711,10 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | Component | Location | Compliance Relevance |
 |-----------|----------|---------------------|
 | **PKI Controller** | `internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
-| **Audit Store** | `internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
+| **Audit Store** | `internal/services/storage/audit_store.go` | Searchable receipt columns, complete canonical receipt persistence and export, audit logging, encryption, retention |
+| **Commitment Ledger** | `internal/services/storage/commitment_ledger.go` | Atomic insertion-ordered signed hash chain and durable receipt linkage |
+| **Receipt Protocol** | `protocol/action_receipt.go`, `protocol/python/g8e/receipts.py`, `protocol/vectors/` | Cross-language canonical receipt and persistence-attestation verification |
+| **Reporting Verification** | `internal/services/reporting/verification.go` | Receipt signatures, persistence attestations, commitment signatures and columns, cross-links, mutation linkage, and Git Merkle roots |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
 | **L2 Consensus** | `internal/services/consensus/service.go` | L2 deliberation and Ed25519 consensus signing |
@@ -735,11 +741,14 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | Test Suite | Location | Coverage |
 |------------|----------|----------|
 | **PKI Tests** | `internal/services/gateway/pki_controller_test.go` | Certificate issuance, revocation |
-| **Audit Store Tests** | `internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
+| **Audit Store Tests** | `internal/services/storage/storagetest/audit_store_test.go` | Complete canonical receipt round trips, list/export records, audit logging, and encryption |
+| **Receipt Canonicalization Tests** | `protocol/action_receipt_canonicalization_test.go`, `protocol/python/tests/test_receipts.py`, `protocol/vectors/` | Shared Go/Python receipt, stage-evidence, signature, and persistence-attestation vectors |
+| **Persistence Attestation Tests** | `internal/services/governance/l5_actuator_test.go`, `internal/services/governance/l5_actuator_integration_test.go` | Fail-closed final receipt persistence and signed durable association |
+| **Commitment Concurrency Tests** | `internal/services/storage/commitment_ledger_concurrency_integration_test.go` | Concurrent ledger instances serialize chain-head selection and append |
 | **Sovereignty Tests** | `internal/services/scrubbing/boundary_test.go` | PII scrubbing, rehydration |
 | **Governance Tests** | `internal/services/governance/*_test.go` | L1-L5 verification |
 | **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
-| **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
+| **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment ordering, signatures and structured columns, receipt signatures and persistence attestations, receipt cross-links, mutation linkage, and Git Merkle roots |
 | **Logging Tests** | `internal/services/logging/*_test.go` | LogService, handler, formatting, and stream file tests |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
 | **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (92.7% coverage) |
@@ -793,6 +802,7 @@ For specific compliance questions or audit support, contact:
 | 1.7.7 | 2026-08-18 | Lateralus Labs | Added headless CLI enrollment (`--headless`), mTLS recovery approval (`g8e auth approve-recovery` and `POST /api/v1/auth/cli/recovery/approve-cli`), and updated project license to Business Source License 1.1 (BSL 1.1) with 2030-08-18 Change Date |
 | 1.7.8 | 2026-08-19 | Lateralus Labs | Added platform logging consolidation (`internal/services/logging`, `g8e.log`, `OpenForAppend`/`OpenForRead`), `PSUBSCRIBE` glob-pattern subscriptions on gateway pubsub with fail-closed topic ACLs, typed MCP native tool request/result structs, and `docs/architecture/overview.md` |
 | 2.0.0 | 2026-08-25 | Lateralus Labs | Updated platform version to v2.0.0; documented polyglot monorepo reunification shipping Go platform, in-tree Python ensemble (`ensemble/`), Node.js dashboard (`dashboard/`), unified Docker compose orchestration, and updated test suite metrics |
+| 2.1.0 | 2026-08-30 | Lateralus Labs | Added deterministic stage-evidence receipt binding, signed durable-persistence attestations, atomic signed commitment chaining, full canonical receipt persistence and export, cross-language offline verification, and expanded code and test evidence |
 
 ---
 

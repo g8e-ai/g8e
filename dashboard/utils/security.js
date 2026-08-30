@@ -44,6 +44,7 @@ import {
     COOKIE_SAME_SITE,
     SESSION_ID_LOG_PREFIX_LENGTH,
 } from '../constants/session.js';
+import { API_KEY_LOG_PREFIX_LENGTH } from '../constants/auth.js';
 
 export const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 
@@ -158,5 +159,20 @@ export function redactWebSessionId(webSessionId) {
         return webSessionId;
     }
     return webSessionId.substring(0, SESSION_ID_LOG_PREFIX_LENGTH) + '...';
+}
+
+/**
+ * Redact sensitive API key for logging (show only first API_KEY_LOG_PREFIX_LENGTH characters)
+ * @param {string} apiKey - API key to redact
+ * @returns {string} - Redacted API key
+ */
+export function redactApiKey(apiKey) {
+    if (!apiKey || typeof apiKey !== 'string') {
+        return '[invalid]';
+    }
+    if (apiKey.length <= API_KEY_LOG_PREFIX_LENGTH) {
+        return apiKey;
+    }
+    return apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...';
 }
 

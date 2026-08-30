@@ -136,8 +136,8 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 	slotResp := models.OperatorSlotResponse{
 		Success: true,
 		Operators: []models.OperatorDocumentGo{
-			{ID: "op-001", CloudSubtype: "aws", Status: "active"},
-			{ID: "op-002", CloudSubtype: "gcp", Status: "standby"},
+			{ID: "op-001", OperatorSessionID: "session-001", OperatorType: "system", CloudSubtype: "aws", Status: "active"},
+			{ID: "op-002", OperatorSessionID: "session-002", OperatorType: "cloud", CloudSubtype: "gcp", Status: "standby"},
 		},
 	}
 	respJSON, _ := json.Marshal(slotResp)
@@ -156,6 +156,10 @@ func TestOperatorListCmdWithConfig_ValidResponsePrintsOperatorTable(t *testing.T
 	assert.Contains(t, output, "Operators (2 total)")
 	assert.Contains(t, output, "op-001")
 	assert.Contains(t, output, "op-002")
+	assert.Contains(t, output, "session-001")
+	assert.Contains(t, output, "session-002")
+	assert.Contains(t, output, "system")
+	assert.Contains(t, output, "cloud")
 	assert.Contains(t, output, "aws")
 	assert.Contains(t, output, "gcp")
 	assert.Equal(t, []string{constants.APIPaths.Operators + "?user_id=user-001"}, client.getCalls)

@@ -325,17 +325,30 @@ class TestLoadIdentityMissingCert:
 class TestLoadIdentityNearExpiry:
     """load_identity raises ConfigurationError when the cert is near expiry."""
 
+    def test_accepts_new_gateway_certificate(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
+
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=6)
+        cert_pem, key_pem = _self_signed_cert(not_after)
+        _write_existing_identity(pki_dir, cert_pem, key_pem)
+
+        identity = AppEnrollmentService().load_identity()
+
+        assert identity.cert_path == str(pki_dir / "issued" / "apps" / "g8ee.crt")
+
     def test_raises_when_cert_near_expiry(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         pki_dir = _isolate_pki_dir(monkeypatch, tmp_path)
 
-        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(days=3)
+        not_after = _dt.datetime.now(_dt.UTC) + _dt.timedelta(hours=12)
         cert_pem, key_pem = _self_signed_cert(not_after)
         _write_existing_identity(pki_dir, cert_pem, key_pem)
 
         service = AppEnrollmentService()
-        with pytest.raises(ConfigurationError, match="within 7 days of expiry"):
+        with pytest.raises(ConfigurationError, match="within 1 days of expiry"):
             service.load_identity()
 
 

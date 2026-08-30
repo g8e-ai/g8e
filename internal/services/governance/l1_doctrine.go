@@ -8,12 +8,17 @@
 package governance
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -31,14 +36,76 @@ import (
 // It checks the (g8e.common.v1).forbidden_patterns extension on string fields.
 // It also performs MITRE-based threat detection on command payloads.
 type L1Doctrine struct {
-	inputThreatDetectors []ThreatDetector
+	inputThreatDetectors  []ThreatDetector
+	doctrineBundleHash    string
+	doctrineBundleVersion string
 }
+
+const builtInDoctrineVersion = "g8e-l1-doctrine-v1"
 
 // NewL1Doctrine creates a new protobuf-based doctrine validator.
 func NewL1Doctrine() *L1Doctrine {
 	d := &L1Doctrine{}
 	d.initializeInputThreatDetectors()
+	d.setDoctrineBundleIdentity(nil, nil)
 	return d
+}
+
+func (v *L1Doctrine) DoctrineBundleHash() string {
+	return v.doctrineBundleHash
+}
+
+func (v *L1Doctrine) DoctrineBundleVersion() string {
+	return v.doctrineBundleVersion
+}
+
+func appendDoctrineIdentityValue(payload []byte, value string) []byte {
+	payload = binary.BigEndian.AppendUint64(payload, uint64(len(value)))
+	return append(payload, value...)
+}
+
+func (v *L1Doctrine) setDoctrineBundleIdentity(fileMaterials [][]byte, fileVersions []string) {
+	payload := appendDoctrineIdentityValue(nil, builtInDoctrineVersion)
+	for _, detector := range v.inputThreatDetectors {
+		inputDetector, ok := detector.(*InputThreatDetector)
+		if !ok {
+			payload = appendDoctrineIdentityValue(payload, detector.Name())
+			continue
+		}
+		values := []string{
+			inputDetector.name,
+			inputDetector.pattern.String(),
+			string(inputDetector.category),
+			string(inputDetector.severity),
+			strconv.FormatFloat(inputDetector.confidence, 'g', -1, 64),
+			inputDetector.mitreAttack,
+			inputDetector.mitreTactic,
+			inputDetector.recommendation,
+			strconv.FormatBool(inputDetector.blockRecommended),
+			inputDetector.source,
+		}
+		for _, value := range values {
+			payload = appendDoctrineIdentityValue(payload, value)
+		}
+		for _, values := range [][]string{inputDetector.ksiIDs, inputDetector.controlIDs, inputDetector.overlayIDs} {
+			canonicalValues := append([]string(nil), values...)
+			sort.Strings(canonicalValues)
+			payload = binary.BigEndian.AppendUint64(payload, uint64(len(canonicalValues)))
+			for _, value := range canonicalValues {
+				payload = appendDoctrineIdentityValue(payload, value)
+			}
+		}
+	}
+	for _, material := range fileMaterials {
+		payload = binary.BigEndian.AppendUint64(payload, uint64(len(material)))
+		payload = append(payload, material...)
+	}
+	digest := sha256.Sum256(payload)
+	v.doctrineBundleHash = hex.EncodeToString(digest[:])
+	v.doctrineBundleVersion = builtInDoctrineVersion
+	if len(fileVersions) > 0 {
+		v.doctrineBundleVersion += "+" + strings.Join(fileVersions, "+")
+	}
 }
 
 // doctrineFile represents the JSON schema of a doctrine file.
@@ -83,6 +150,8 @@ func NewL1DoctrineFromDir(doctrineDir string) (*L1Doctrine, error) {
 	}
 
 	var loadedCount int
+	var fileMaterials [][]byte
+	var fileVersions []string
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
@@ -98,6 +167,8 @@ func NewL1DoctrineFromDir(doctrineDir string) (*L1Doctrine, error) {
 		if err := json.Unmarshal(data, &df); err != nil {
 			return nil, fmt.Errorf("governance: parse doctrine file %s: %w", entry.Name(), err)
 		}
+		fileMaterials = append(fileMaterials, []byte(entry.Name()), data)
+		fileVersions = append(fileVersions, df.Source+"@"+df.Version)
 
 		for _, de := range df.Doctrines {
 			if !de.Enabled {
@@ -137,6 +208,7 @@ func NewL1DoctrineFromDir(doctrineDir string) (*L1Doctrine, error) {
 		}
 	}
 
+	d.setDoctrineBundleIdentity(fileMaterials, fileVersions)
 	slog.Info("governance: doctrine files loaded",
 		"dir", doctrineDir, "detectors_loaded", loadedCount)
 

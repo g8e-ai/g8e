@@ -15,7 +15,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func TestNewWriter(t *testing.T) {
@@ -97,6 +102,46 @@ func TestJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProtoJSONWritesCanonicalPayloadAndSecurityHeaders(t *testing.T) {
+	writer := NewWriter(slog.Default())
+	recorder := httptest.NewRecorder()
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId: "tx-protojson",
+		Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+	}
+
+	writer.ProtoJSON(recorder, http.StatusCreated, receipt)
+
+	assert.Equal(t, http.StatusCreated, recorder.Code)
+	assert.Equal(t, constants.HeaderValueApplicationJSON, recorder.Header().Get(constants.HeaderContentType))
+	assert.Equal(t, constants.HeaderValueNoSniff, recorder.Header().Get(constants.HeaderXContentTypeOptions))
+	assert.Equal(t, constants.HeaderValueDeny, recorder.Header().Get(constants.HeaderXFrameOptions))
+	assert.Equal(t, constants.HeaderValueCSPNone, recorder.Header().Get(constants.HeaderContentSecurityPolicy))
+	parsed := &operatorv1.ActionReceipt{}
+	require.NoError(t, protojson.Unmarshal(recorder.Body.Bytes(), parsed))
+	assert.Equal(t, receipt.TransactionId, parsed.TransactionId)
+	assert.Equal(t, receipt.Status, parsed.Status)
+}
+
+func TestProtoJSONMarshalFailureReturnsSecuredJSONError(t *testing.T) {
+	writer := NewWriter(slog.Default())
+	recorder := httptest.NewRecorder()
+	receipt := &operatorv1.ActionReceipt{TransactionId: string([]byte{0xff})}
+
+	writer.ProtoJSON(recorder, http.StatusOK, receipt)
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Equal(t, constants.HeaderValueApplicationJSON, recorder.Header().Get(constants.HeaderContentType))
+	assert.Equal(t, constants.HeaderValueNoSniff, recorder.Header().Get(constants.HeaderXContentTypeOptions))
+	assert.Equal(t, constants.HeaderValueDeny, recorder.Header().Get(constants.HeaderXFrameOptions))
+	assert.Equal(t, constants.HeaderValueCSPNone, recorder.Header().Get(constants.HeaderContentSecurityPolicy))
+	var response struct {
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, constants.ErrResponseEncodeJSON.Error(), response.Error)
 }
 
 func TestError(t *testing.T) {

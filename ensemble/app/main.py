@@ -73,7 +73,7 @@ from .constants import (
     G8EE_APP_LICENSE_URL,
     G8EE_APP_TITLE,
 )
-from .constants.generated_paths import PathConstants, PortConstants
+from .constants.generated_paths import PortConstants
 from .constants.env_vars import EnvVar
 from .models.state import G8eeAppState
 from .models.settings import TLSConfig

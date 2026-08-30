@@ -116,7 +116,11 @@ async def test_initialize_alternate_path(temp_pki_dir, ca_cert, mock_data_servic
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
 
-    service = CertificateService(pki_dir=temp_pki_dir, data_service=mock_data_service)
+    service = CertificateService(
+        pki_dir=os.path.join(temp_pki_dir, "missing"),
+        ca_cert_path=cert_path,
+        data_service=mock_data_service,
+    )
     await service.initialize()
 
     assert service.initialized is True

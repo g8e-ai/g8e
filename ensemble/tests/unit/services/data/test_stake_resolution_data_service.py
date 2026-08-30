@@ -21,11 +21,13 @@ Pins the load-bearing properties:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS
+from app.constants import DB_COLLECTION_STAKE_RESOLUTIONS, G8EE_COMPONENT
 from app.errors import DatabaseError, ValidationError
+from app.models.http_context import RequestContext
 from app.models.reputation import SlashTier, StakeResolution
 from app.services.data.stake_resolution_data_service import (
     StakeResolutionDataService,
@@ -33,6 +35,26 @@ from app.services.data.stake_resolution_data_service import (
 )
 
 pytestmark = [pytest.mark.unit]
+
+
+@pytest.fixture
+def governance_client():
+    client = MagicMock()
+    client.update_governed_doc = AsyncMock(return_value={"status": "accepted"})
+    return client
+
+
+def _context() -> RequestContext:
+    return RequestContext(
+        cli_session_id="cli-session",
+        user_id="test-user",
+        source_component=G8EE_COMPONENT,
+        operator_id="test-operator-id",
+        operator_session_id="test-operator-session-id",
+        case_id="case-1",
+        investigation_id="inv-1",
+        task_id="task-1",
+    )
 
 
 def _make_resolution(
@@ -73,56 +95,71 @@ class TestCreate:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return StakeResolutionDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, governance_client):
+        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
         return mock_cache_aside_service
 
-    async def test_create_writes_with_composite_id(self, service, mock_cache):
+    async def test_create_writes_with_composite_id(
+        self, service, mock_cache, governance_client
+    ):
         mock_cache.get_document_with_cache.return_value = None
         r = _make_resolution()
-        await service.create(r)
-        mock_cache.create_document.assert_called_once()
-        kwargs = mock_cache.create_document.call_args.kwargs
+        await service.create(r, _context())
+        mock_cache.create_document.assert_not_called()
+        governance_client.update_governed_doc.assert_awaited_once()
+        kwargs = governance_client.update_governed_doc.await_args.kwargs
         assert kwargs["collection"] == DB_COLLECTION_STAKE_RESOLUTIONS
         assert kwargs["document_id"] == "tc-1:axiom"
+        assert kwargs["event_type"] == "g8e.v1.operator.reputation.stake.resolution.created"
+        assert kwargs["merge"] is False
+        assert kwargs["case_id"] == "case-1"
+        assert kwargs["investigation_id"] == "inv-1"
+        assert kwargs["task_id"] == "task-1"
         # Persisted payload must include the slash_tier integer when present.
-        assert "slash_tier" not in kwargs["data"]
+        assert "slash_tier" not in kwargs["updates"]
 
-    async def test_create_with_slash_tier_persists_int(self, service, mock_cache):
+    async def test_create_with_slash_tier_persists_int(
+        self, service, mock_cache, governance_client
+    ):
         mock_cache.get_document_with_cache.return_value = None
         r = _make_resolution(slash_tier=SlashTier.TIER_2)
-        await service.create(r)
-        kwargs = mock_cache.create_document.call_args.kwargs
-        assert kwargs["data"]["slash_tier"] == 2
+        await service.create(r, _context())
+        kwargs = governance_client.update_governed_doc.await_args.kwargs
+        assert kwargs["updates"]["slash_tier"] == 2
 
-    async def test_create_idempotent_returns_existing_no_second_write(self, service, mock_cache):
+    async def test_create_idempotent_returns_existing_no_second_write(
+        self, service, mock_cache, governance_client
+    ):
         existing = _make_resolution(slash_tier=SlashTier.TIER_3)
         mock_cache.get_document_with_cache.return_value = existing.model_dump(mode="json")
 
-        result = await service.create(_make_resolution())
+        result = await service.create(_make_resolution(), _context())
 
         # Existing row returned, no second write attempted.
         mock_cache.create_document.assert_not_called()
+        governance_client.update_governed_doc.assert_not_awaited()
         assert isinstance(result, StakeResolution)
         assert result.id == existing.id
         assert result.slash_tier == SlashTier.TIER_3
 
-    async def test_create_wraps_unexpected_failure_as_database_error(self, service, mock_cache):
+    async def test_create_wraps_unexpected_failure_as_database_error(
+        self, service, mock_cache, governance_client
+    ):
         mock_cache.get_document_with_cache.return_value = None
-        mock_cache.create_document.side_effect = RuntimeError("boom")
+        governance_client.update_governed_doc.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
-            await service.create(_make_resolution())
+            await service.create(_make_resolution(), _context())
 
 
 class TestGet:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return StakeResolutionDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, governance_client):
+        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
@@ -157,8 +194,8 @@ class TestListForTribunalCommand:
     pytestmark = [pytest.mark.asyncio(loop_scope="session")]
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service):
-        return StakeResolutionDataService(mock_cache_aside_service)
+    def service(self, mock_cache_aside_service, governance_client):
+        return StakeResolutionDataService(mock_cache_aside_service, governance_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):

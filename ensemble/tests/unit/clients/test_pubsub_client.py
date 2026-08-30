@@ -294,7 +294,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
     def _make_binary_frame(
         event_type: int, channel: str, data: bytes, pattern: str = ""
     ) -> MagicMock:
-        from app.proto.pubsub_pb2 import PubSubEvent
+        from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent
 
         event = PubSubEvent(type=event_type, channel=channel, data=data, pattern=pattern)
         msg = MagicMock()
@@ -397,7 +397,7 @@ class TestWsReaderPerMessageErrorHandling:
 
     @staticmethod
     def _binary_frame(event_type: int, channel: str = "", data: bytes = b"") -> MagicMock:
-        from app.proto.pubsub_pb2 import PubSubEvent
+        from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent
 
         event = PubSubEvent(type=event_type, channel=channel, data=data)
         msg = MagicMock()
@@ -576,7 +576,7 @@ class TestPubSubClientCoverage:
 
     async def test_ws_reader_unknown_event_type(self, connected_client, task_tracker):
         """Test logging of unknown wire event types."""
-        from app.proto.pubsub_pb2 import PubSubEvent
+        from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent
 
         event = PubSubEvent(type="unknown_type")  # Unknown type string
         frame = MagicMock()
@@ -798,7 +798,7 @@ class TestPublishCommandCommandIntent:
         # ...payload is base64-encoded protobuf bytes...
         assert "payload" in decoded
         proto_bytes = base64.b64decode(decoded["payload"])
-        from app.proto import operator_pb2
+        from g8e.operator.v1 import operator_pb2
 
         cmd = operator_pb2.CommandRequested()
         cmd.ParseFromString(proto_bytes)

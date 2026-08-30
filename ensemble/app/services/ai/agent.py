@@ -24,6 +24,7 @@ All other concerns live in dedicated modules:
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
@@ -37,10 +38,12 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
+    ModelCallTelemetry,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
@@ -142,6 +145,8 @@ class g8eEnsemble:
             backoff_seconds,
         )
 
+        triage_call = inputs.triage_result.model_call if inputs.triage_result else None
+        model_calls = [triage_call] if triage_call else []
         while attempt <= max_attempts:
             try:
                 # Emit RETRY chunk before retrying (not on first attempt)
@@ -156,6 +161,8 @@ class g8eEnsemble:
                     inputs=inputs,
                     llm_provider=llm_provider,
                     event_service=event_service,
+                    model_calls=model_calls,
+                    retry_count=attempt - 1,
                 ):
                     # Mark streaming as started as soon as we receive any chunk
                     # This prevents retries after streaming has begun
@@ -173,7 +180,7 @@ class g8eEnsemble:
                         logger.error("[AGENT] Fatal error after streaming started: %s", e)
                     yield StreamChunkFromModel(
                         type=StreamChunkFromModelType.ERROR,
-                        data=StreamChunkData(error=str(e)),
+                        data=StreamChunkData(error=str(e), model_calls=model_calls),
                     )
                     return
 
@@ -253,6 +260,8 @@ class g8eEnsemble:
         inputs: AgentInputs,
         llm_provider: LLMProvider,
         event_service: EventService,
+        model_calls: list[ModelCallTelemetry] | None = None,
+        retry_count: int = 0,
     ) -> AsyncGenerator[StreamChunkFromModel]:
         """
         ReAct function-calling loop.
@@ -279,9 +288,14 @@ class g8eEnsemble:
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
 
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_tokens = 0
+        triage_call = inputs.triage_result.model_call if inputs.triage_result else None
+        if model_calls is None:
+            model_calls = [triage_call] if triage_call else []
+        total_input_tokens = sum(call.input_tokens for call in model_calls)
+        total_output_tokens = sum(call.output_tokens for call in model_calls)
+        total_thinking_tokens = sum(call.thinking_tokens for call in model_calls)
+        total_cache_tokens = sum(call.cache_tokens for call in model_calls)
+        total_tokens = sum(call.total_tokens for call in model_calls)
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
         tool_response_sizes: list[int] = []
@@ -335,23 +349,66 @@ class g8eEnsemble:
                     investigation_id,
                 )
 
-                stream_response = llm_provider.generate_content_stream_primary(
-                    model=model_name,
-                    contents=contents,
-                    primary_llm_settings=generation_config,
-                )
+                llm_provider.clear_input_artifact_hash()
+                input_artifact_hash = model_boundary_hash({
+                    "model": model_name,
+                    "contents": contents,
+                    "settings": generation_config,
+                })
+                monotonic_start = time.monotonic()
+                try:
+                    stream_response = llm_provider.generate_content_stream_primary(
+                        model=model_name,
+                        contents=contents,
+                        primary_llm_settings=generation_config,
+                    )
 
-                gated_result_out: list[GatedTurnResult] = []
-                async for chunk in process_turn_with_gate(
-                    stream_response, model_name, gated_result_out
-                ):
-                    yield chunk
+                    gated_result_out: list[GatedTurnResult] = []
+                    async for chunk in process_turn_with_gate(
+                        stream_response, model_name, gated_result_out
+                    ):
+                        yield chunk
 
-                gated = gated_result_out[0]
+                    gated = gated_result_out[0]
+                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
+                except Exception as exc:
+                    input_artifact_hash = recorded_model_boundary_hash(llm_provider, input_artifact_hash)
+                    model_calls.append(ModelCallTelemetry(
+                        agent_role=inputs.agent_mode.value,
+                        provider=type(llm_provider).__name__,
+                        model=model_name,
+                        monotonic_start=monotonic_start,
+                        monotonic_end=time.monotonic(),
+                        retry_count=retry_count,
+                        succeeded=False,
+                        error_type=type(exc).__name__,
+                        input_artifact_hash=input_artifact_hash,
+                    ))
+                    raise
                 turn_result = gated.turn_result
+                monotonic_end = time.monotonic()
+                model_calls.append(ModelCallTelemetry(
+                    agent_role=inputs.agent_mode.value,
+                    provider=type(llm_provider).__name__,
+                    model=model_name,
+                    monotonic_start=monotonic_start,
+                    monotonic_end=monotonic_end,
+                    input_tokens=turn_result.input_tokens,
+                    output_tokens=turn_result.output_tokens,
+                    thinking_tokens=turn_result.thinking_tokens,
+                    cache_tokens=turn_result.cache_tokens,
+                    total_tokens=turn_result.total_tokens,
+                    usage_reported=turn_result.usage_reported,
+                    finish_reason=turn_result.finish_reason,
+                    retry_count=retry_count,
+                    input_artifact_hash=input_artifact_hash,
+                    output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                ))
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
+                total_thinking_tokens += turn_result.thinking_tokens
+                total_cache_tokens += turn_result.cache_tokens
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
@@ -433,8 +490,11 @@ class g8eEnsemble:
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
                 total_tokens=total_tokens,
+                thinking_tokens=total_thinking_tokens,
+                cache_tokens=total_cache_tokens,
+                usage_reported=all(call.usage_reported for call in model_calls),
             )
-            if (total_input_tokens or total_output_tokens or total_tokens)
+            if model_calls
             else None
         )
 
@@ -450,6 +510,7 @@ class g8eEnsemble:
             data=StreamChunkData(
                 finish_reason=final_finish_reason or DEFAULT_FINISH_REASON,
                 token_usage=token_usage,
+                model_calls=model_calls,
                 tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
             ),
         )

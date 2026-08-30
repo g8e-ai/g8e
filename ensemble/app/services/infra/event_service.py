@@ -10,7 +10,9 @@ from __future__ import annotations
 import logging
 
 from app.constants import EventType, G8EE_COMPONENT
+from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
+from app.models.http_context import G8eHttpContext, RequestContext
 from app.services.protocols import EventServiceProtocol, G8eClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,19 @@ class EventService(EventServiceProtocol):
             user_id=getattr(g8e_context, "user_id", "") or "",
             investigation_id=getattr(g8e_context, "investigation_id", None),
             case_id=getattr(g8e_context, "case_id", None),
+        )
+        await self.publish(event)
+
+    async def publish_reputation_event(
+        self,
+        event_type: EventType,
+        payload: G8eBaseModel,
+        g8e_context: G8eHttpContext,
+    ) -> None:
+        event = SessionEvent.from_context(
+            context=RequestContext.from_app_context(g8e_context),
+            event_type=event_type,
+            payload=payload,
         )
         await self.publish(event)
 

@@ -3,4 +3,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 reports/
-gold_sets/
+gold_sets/*
+!gold_sets/ifeval_subset/
+gold_sets/ifeval_subset/*
+!gold_sets/ifeval_subset/input_data.jsonl
+!gold_sets/ifeval_subset/provenance.json

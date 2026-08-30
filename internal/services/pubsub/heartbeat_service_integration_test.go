@@ -12,16 +12,18 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestHeartbeatService_SendAutomatic_PersistsReceiptAgainstRealAuditStore
@@ -72,11 +74,13 @@ func TestHeartbeatService_SendAutomatic_PersistsReceiptAgainstRealAuditStore(t *
 	}
 	actuatorPrivKey := ed25519.NewKeyFromSeed(make([]byte, 32))
 	actuator := &governance.L5Actuator{
-		Logger:           logger,
-		SQLAuditStore:    auditStore,
-		ExecutionHandler: mockHandler,
-		SigningKey:       actuatorPrivKey,
-		KeyID:            "test-actuator-key",
+		Logger:            logger,
+		SQLAuditStore:     auditStore,
+		ExecutionHandler:  mockHandler,
+		SigningKey:        actuatorPrivKey,
+		KeyID:             "test-actuator-key",
+		AuditorSigningKey: privKey,
+		AuditorKeyID:      hex.EncodeToString(privKey.Public().(ed25519.PublicKey)),
 	}
 
 	svc := NewHeartbeatService(cfg, logger, nil)

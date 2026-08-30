@@ -22,22 +22,33 @@ Separation of Concerns:
 - g8eEnsemble: Core streaming loop (uses all above)
 """
 
+import hashlib
 import logging
+import time
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from app.models.settings import G8eeUserSettings
+from g8e.models.events import ScrubbingTelemetry
+
 import app.llm.llm_types as types
-from app.llm.llm_types import PrimaryLLMSettings
 from app.constants import ATTACHMENT_FILENAMES_PREFIX_TEMPLATE, AgentMode
-from app.errors import ConfigurationError
 from app.constants.message_sender import MessageSender
+from app.errors import ConfigurationError
+from app.llm.llm_types import PrimaryLLMSettings
 from app.models.attachments import ProcessedAttachment
 from app.models.investigations import ConversationHistoryMessage, UserChatMetadata
-from app.security import scrub_user_message
+from app.models.settings import G8eeUserSettings
+from app.security import get_sentinel_scrubber
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.ai.grounding.attachment_provider import AttachmentGroundingProvider
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class BuiltContents:
+    contents: list[types.Content]
+    scrubbing_observations: list[ScrubbingTelemetry]
 
 
 @runtime_checkable
@@ -47,6 +58,10 @@ class ToolExecutorProtocol(Protocol):
     ) -> list[types.ToolGroup]: ...
     @property
     def g8e_web_search_available(self) -> bool: ...
+
+
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 class AIRequestBuilder:
@@ -66,12 +81,44 @@ class AIRequestBuilder:
         self._attachment_provider = AttachmentGroundingProvider()
         logger.info("AIRequestBuilder initialized")
 
+    def _prepare_user_text(
+        self,
+        text: str,
+        source: str,
+        should_scrub: bool,
+    ) -> tuple[str, ScrubbingTelemetry]:
+        monotonic_start = time.monotonic()
+        if should_scrub:
+            scrubber = get_sentinel_scrubber()
+            result = scrubber.scrub(text)
+            output = result.scrubbed_text
+            enabled = scrubber.is_enabled()
+            scrub_count = result.scrub_count
+            scrub_types = result.scrub_types
+        else:
+            output = text
+            enabled = False
+            scrub_count = 0
+            scrub_types = []
+        monotonic_end = time.monotonic()
+        return output, ScrubbingTelemetry(
+            source=source,
+            enabled=enabled,
+            was_modified=output != text,
+            scrub_count=scrub_count,
+            scrub_types=scrub_types,
+            monotonic_start=monotonic_start,
+            monotonic_end=monotonic_end,
+            input_artifact_hash=_text_hash(text),
+            output_artifact_hash=_text_hash(output),
+        )
+
     def build_contents_from_history(
         self,
         conversation_history: list[ConversationHistoryMessage],
         attachments: list[types.Part] | None = None,
         sentinel_mode: bool = True,
-    ) -> list[types.Content]:
+    ) -> BuiltContents:
         """
         Build a contents array from database conversation history for stateless generate_content.
 
@@ -88,9 +135,10 @@ class AIRequestBuilder:
             sentinel_mode: Controls AI data access - True (scrubbed/redacted) or False (full data)
 
         Returns:
-            List of types.Content objects ready for generate_content_stream()
+            Built contents and authoritative scrubbing observations.
         """
         contents: list[types.Content] = []
+        scrubbing_observations: list[ScrubbingTelemetry] = []
         should_scrub = sentinel_mode is True
 
         if conversation_history:
@@ -104,7 +152,10 @@ class AIRequestBuilder:
                     continue
 
                 if sender == MessageSender.USER_CHAT:
-                    text_for_ai = scrub_user_message(content_text) if should_scrub else content_text
+                    text_for_ai, observation = self._prepare_user_text(
+                        content_text, sender, should_scrub
+                    )
+                    scrubbing_observations.append(observation)
                     filenames = (
                         msg.metadata.attachment_filenames
                         if isinstance(msg.metadata, UserChatMetadata)
@@ -125,9 +176,10 @@ class AIRequestBuilder:
                         )
                     )
                 elif sender == MessageSender.USER_TERMINAL:
-                    terminal_text_for_ai = (
-                        scrub_user_message(content_text) if should_scrub else content_text
+                    terminal_text_for_ai, observation = self._prepare_user_text(
+                        content_text, sender, should_scrub
                     )
+                    scrubbing_observations.append(observation)
                     contents.append(
                         types.Content(
                             role=types.Role.USER,
@@ -163,7 +215,10 @@ class AIRequestBuilder:
                     )
                     break
 
-        return contents
+        return BuiltContents(
+            contents=contents,
+            scrubbing_observations=scrubbing_observations,
+        )
 
     def get_generation_config(
         self,

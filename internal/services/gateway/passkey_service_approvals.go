@@ -100,7 +100,7 @@ func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.
 // @Produce		json
 // @Param		txHash	path		string						true	"Transaction hash"
 // @Param		body	body		models.WebAuthnAssertionResponse	true	"WebAuthn assertion response"
-// @Success		200		{object}	json.RawMessage						"ActionReceipt"
+// @Success		200		{object}	operatorv1.ActionReceipt				"Canonical protojson ActionReceipt"
 // @Failure		403		{string}	string						"Forbidden — verification failed"
 // @Failure		404		{string}	string						"Transaction not found or expired"
 // @Router			/api/v1/approvals/{txHash}/verify [post]

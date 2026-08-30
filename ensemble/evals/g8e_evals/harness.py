@@ -5,21 +5,43 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Literal, Union
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any, Protocol
 
-from g8e.generated_paths import PathConstants, PortConstants
-from g8e_evals.models import ActionReceipt, ScoreDetails, TaskMetadata
+from app.models.model_telemetry import ModelCallTelemetry
+from g8e.constants import PORTS
+from g8e.operator.v1.operator_pb2 import ActionReceipt
+from g8e_evals.arms import Arm, ArmDefinition, get_arm_definition
+from g8e_evals.auth_bridge import CLIAuthContext
+from g8e_evals.models import ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt
+    pass
 
 
-class BindingType(str, Enum):
+class EvidenceLike(Protocol):
+    """Structural protocol for chat evidence attached to a Response.
+
+    Both ``ChatEvaluationReceipt`` (g8ee arms) and ``_DirectEvidenceWrapper``
+    (direct arm) satisfy this protocol. The CLI and report writer consume
+    these attributes without forcing every arm into the SSE evidence schema.
+    """
+
+    @property
+    def terminal_event(self) -> str | None: ...
+
+    @property
+    def event_count(self) -> int: ...
+
+    def model_dump(self) -> dict[str, Any]: ...
+
+
+class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
 
@@ -33,21 +55,30 @@ class LLMRoleConfig:
 
 @dataclass
 class SUTConfig:
+    g8ee_url: str
     primary: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     assistant: LLMRoleConfig = field(default_factory=LLMRoleConfig)
     lite: LLMRoleConfig = field(default_factory=LLMRoleConfig)
+    judge: LLMRoleConfig = field(default_factory=LLMRoleConfig)
 
     web_search_project: str | None = None
     web_search_app: str | None = None
     web_search_api_key: str | None = None
 
-    operator_url: str = f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
+    operator_url: str = f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}"
     operator_session_id: str | None = None
+    auth_context: CLIAuthContext | None = None
     state_root: str = "test-state-root-v1"
 
     l2_private_key: str | None = None
     l2_key_id: str | None = None
-    mode: Literal["receipt", "baseline"] = "receipt"
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
+    headless: bool = False
+
+    @property
+    def arm_definition(self) -> ArmDefinition:
+        """Return the static arm definition for this config's arm."""
+        return get_arm_definition(self.arm)
 
 @dataclass
 class Task:
@@ -56,17 +87,28 @@ class Task:
     metadata: TaskMetadata = field(default_factory=TaskMetadata)
 
 
+@dataclass(frozen=True)
+class ReceiptEvidence:
+    action_receipt: ActionReceipt
+    verified: bool
+
+
 @dataclass
 class Response:
     answer: str
     model: str
-    transaction_id: str | None = None
-    # receipt can be either ChatEvaluationReceipt (from chat SUT) or ActionReceipt (from Gateway)
-    receipt: Union[ChatEvaluationReceipt, ActionReceipt] | None = None
-    receipt_signature: str | None = None
-    receipt_verified: bool = False
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
+    transaction_ids: list[str] = field(default_factory=list)
+    governed_action_types: list[str] = field(default_factory=list)
+    chat_evidence: EvidenceLike | None = None
+    receipts: list[ReceiptEvidence] = field(default_factory=list)
+    primary_transaction_id: str | None = None
     binding: BindingType = BindingType.UNBOUND
     unbound_reason: str | None = None
+
+    @property
+    def receipts_verified(self) -> bool:
+        return bool(self.receipts) and all(receipt.verified for receipt in self.receipts)
 
 
 @dataclass
@@ -74,6 +116,7 @@ class Score:
     task_id: str
     passed: bool
     details: ScoreDetails = field(default_factory=ScoreDetails)
+    model_calls: list[ModelCallTelemetry] = field(default_factory=list)
 
 
 @dataclass
@@ -81,6 +124,7 @@ class RowResult:
     task: Task
     response: Response
     score: Score
+    arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 

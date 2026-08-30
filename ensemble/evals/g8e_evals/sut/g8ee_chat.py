@@ -40,7 +40,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Awaitable, Callable
 
 import httpx
@@ -48,16 +48,16 @@ from pydantic import BaseModel, Field
 from httpx_sse import aconnect_sse
 
 from app.models.internal_api import (
+    ApprovalRespondedResponse,
     ChatMessageRequest,
     ChatStartedResponse,
+    OperatorApprovalResponse,
     ResourceCreationRequest,
     SettingsGetRequest,
 )
-from app.models.http_context import RequestContext
 from app.models.settings import G8eeUserSettings
-from app.constants.api_paths import API_PATHS, GatewayAPIPaths
+from app.constants.api_paths import API_PATHS, GatewayAPIPaths, InternalAPIPaths
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
-from g8e_evals.models import ActionReceipt
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
 
@@ -66,13 +66,18 @@ logger = logging.getLogger(__name__)
 
 # Re-exported so `cli.py` (and any external caller) can keep catching
 # AuthenticationError from this module's public surface.
-__all__ = ["AgentTrailEvent", "AuthenticationError", "G8eeChatSUT", "_extract_Gateway_transaction_id"]
+__all__ = [
+    "AgentTrailEvent",
+    "AuthenticationError",
+    "G8eeChatSUT",
+    "_extract_gateway_transaction_ids",
+    "_extract_governed_action_types",
+]
 
 
 # Terminal SSE event types that conclude a single chat turn.
 _TERMINAL_EVENTS = {
     "g8e.v1.ai.llm.chat.iteration.text.completed",
-    "g8e.v1.ai.llm.chat.iteration.completed",
     "g8e.v1.ai.llm.chat.iteration.failed",
     "g8e.v1.ai.llm.chat.iteration.stopped",
     "g8e.v1.ai.llm.chat.message.processing.failed",
@@ -81,6 +86,15 @@ _TERMINAL_EVENTS = {
 }
 
 # Failure terminal events that mean we did NOT get a valid answer.
+_HEADLESS_APPROVAL_EVENTS = {
+    "g8e.v1.operator.command.approval.requested",
+    "g8e.v1.operator.file.edit.approval.requested",
+}
+_GOVERNED_APPROVAL_ACTION_TYPES = {
+    "g8e.v1.operator.command.approval.requested": "EXECUTE_BASH",
+    "g8e.v1.operator.file.edit.approval.requested": "FILE_EDIT",
+}
+
 _FAILURE_TERMINAL_EVENTS = {
     "g8e.v1.ai.llm.chat.iteration.failed",
     "g8e.v1.ai.llm.chat.iteration.stopped",
@@ -95,6 +109,7 @@ class AgentTrailEvent(BaseModel):
     event_type: str
     payload: dict[str, Any]
     received_at: float = Field(default_factory=time.time)
+    monotonic_received_at: float = Field(default_factory=time.monotonic)
 
 
 class ChatEvaluationReceipt(BaseModel):
@@ -129,7 +144,9 @@ class G8eeChatSUT:
         # with the Go CLI. See evals/tests/test_auth_wiring_parity.py for the contract test.
         self.env = AuthContext.from_env(
             operator_session_id=config.operator_session_id,
+            g8ee_url=config.g8ee_url,
             operator_url=config.operator_url,
+            cli_context=config.auth_context,
         )
 
         # Used by the report header / CLI banner.
@@ -151,8 +168,14 @@ class G8eeChatSUT:
                 )
                 if resp.status_code == 200:
                     return G8eeUserSettings.model_validate(resp.json())
+                if resp.status_code in (401, 403):
+                    raise AuthenticationError(
+                        f"g8ee settings returned HTTP {resp.status_code}"
+                    )
                 logger.warning("Failed to fetch settings from g8ee: HTTP %s", resp.status_code)
                 return None
+            except AuthenticationError:
+                raise
             except Exception as e:
                 logger.warning("Error fetching settings from g8ee: %s", e)
                 return None
@@ -188,6 +211,7 @@ class G8eeChatSUT:
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=f"g8ee chat POST failed: {e}",
                 )
@@ -197,11 +221,12 @@ class G8eeChatSUT:
                 if resp.status_code == 401:
                     reason = (
                         "g8ee chat returned HTTP 401 Unauthorized. Your session may have expired. "
-                        "Run `./g8e login` to re-authenticate."
+                        "Run `./g8e auth refresh` to re-authenticate."
                     )
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=reason,
                 )
@@ -212,6 +237,7 @@ class G8eeChatSUT:
                 return Response(
                     answer="",
                     model=self.model_provider,
+                    arm=self.config.arm,
                     binding=BindingType.UNBOUND,
                     unbound_reason=f"g8ee chat returned invalid body: {e}",
                 )
@@ -232,39 +258,44 @@ class G8eeChatSUT:
             terminal_event=terminal_event,
         )
 
-        # A real Gateway transaction_id only exists when a Tribunal->Warden
-        # mutation produced a signed ActionReceipt. The Operator's audit vault
-        # keys receipts by the UAP envelope id (transaction_hash), NOT by the
-        # g8ee investigation_id. Scan the agent trail for a Gateway tx_id
-        # before claiming RECEIPT_BOUND.
-        Gateway_tx_id = _extract_Gateway_transaction_id(trail)
+        # Real Gateway transaction IDs exist only when governed mutations produce
+        # signed ActionReceipts. Preserve every distinct transaction hash emitted
+        # during a multi-action turn before claiming RECEIPT_BOUND.
+        gateway_transaction_ids = _extract_gateway_transaction_ids(trail)
+        governed_action_types = _extract_governed_action_types(trail)
 
         if sse_error:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                arm=self.config.arm,
+                transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
             )
 
-        if self.config.mode == "baseline":
+        if not self.config.arm_definition.receipt_binding:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=None,
-                receipt=receipt,
+                arm=self.config.arm,
+                transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
-                unbound_reason="baseline mode (binding disabled)",
+                unbound_reason=f"{self.config.arm.value} arm (binding disabled)",
             )
 
         if terminal_event in _FAILURE_TERMINAL_EVENTS:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                arm=self.config.arm,
+                transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
             )
@@ -274,26 +305,32 @@ class G8eeChatSUT:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                arm=self.config.arm,
+                transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
+                chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
             )
 
-        if Gateway_tx_id:
+        if gateway_transaction_ids:
             return Response(
                 answer=answer_text,
                 model=self.model_provider,
-                transaction_id=Gateway_tx_id,
-                receipt=receipt,
+                arm=self.config.arm,
+                transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
+                chat_evidence=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
 
         return Response(
             answer=answer_text,
             model=self.model_provider,
-            transaction_id=None,
-            receipt=receipt,
+            arm=self.config.arm,
+            transaction_ids=gateway_transaction_ids,
+            governed_action_types=governed_action_types,
+            chat_evidence=receipt,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
         )
@@ -328,6 +365,38 @@ class G8eeChatSUT:
             web_search_app=self.config.web_search_app,
             web_search_api_key=self.config.web_search_api_key,
         )
+
+    async def _approve_command(
+        self,
+        client: httpx.AsyncClient,
+        envelope: SSEWireEnvelope,
+        investigation_id: str,
+    ) -> None:
+        approval_id = envelope.field_in_data("approval_id")
+        if not isinstance(approval_id, str) or not approval_id:
+            raise ValueError("headless command approval event has no approval_id")
+        case_id = envelope.field_in_data("case_id")
+        task_id = envelope.field_in_data("task_id")
+        request = OperatorApprovalResponse(
+            context=self.env.to_request_context(
+                case_id=case_id if isinstance(case_id, str) else None,
+                investigation_id=investigation_id,
+                task_id=task_id if isinstance(task_id, str) else None,
+            ),
+            approval_id=approval_id,
+            approved=True,
+            reason="Approved by the headless evaluation runner",
+        )
+        response = await client.post(
+            f"{self.env.g8ee_url}{InternalAPIPaths.G8EE_OPERATOR_APPROVAL_RESPOND}",
+            headers=self._g8ee_headers(),
+            content=request.model_dump_json(),
+        )
+        response.raise_for_status()
+        result = ApprovalRespondedResponse.model_validate(response.json())
+        if not result.success:
+            raise ValueError(f"headless command approval failed for {approval_id}")
+        logger.info("[HEADLESS] Approved command request %s", approval_id)
 
     async def _current_cursor(self, client: httpx.AsyncClient) -> int:
         """Return the highest SSE event id currently in the operator buffer for our session."""
@@ -401,9 +470,18 @@ class G8eeChatSUT:
                             payload_obj = {"_raw": event.data}
 
                         row_id = int(event.id) if event.id else 0
-                        event_type = event.event or "unknown"
+                        sse_event_name = event.event or "unknown"
 
                         envelope = SSEWireEnvelope.parse(payload_obj)
+
+                        # The Gateway SSE stream wraps every g8e event in a
+                        # generic SSE "message" frame. The canonical g8e
+                        # event type lives inside the payload at
+                        # envelope.event.type, not in the SSE event field.
+                        if envelope is not None and envelope.event is not None:
+                            event_type = envelope.event.type or sse_event_name
+                        else:
+                            event_type = sse_event_name
 
                         # Filter on the current investigation when available
                         if investigation_id and envelope is not None:
@@ -411,17 +489,33 @@ class G8eeChatSUT:
                             if evt_inv and evt_inv != investigation_id:
                                 continue
 
+                        if (
+                            self.config.headless
+                            and event_type in _HEADLESS_APPROVAL_EVENTS
+                            and envelope is not None
+                        ):
+                            await self._approve_command(client, envelope, investigation_id)
+
                         trail.append(AgentTrailEvent(
                             id=row_id,
                             event_type=event_type,
                             payload=payload_obj,
                         ))
 
-                        # Accumulate response text.
+                        # Accumulate response text from streaming chunks.
                         if event_type == "g8e.v1.ai.llm.chat.iteration.text.chunk.received" and envelope is not None:
                             chunk = envelope.text_chunk()
                             if chunk:
                                 text_buf.append(chunk)
+
+                        # The text.completed terminal event carries the full
+                        # response content. If we missed earlier chunks (e.g.
+                        # SSE subscription started mid-stream), use the complete
+                        # payload as the authoritative answer text.
+                        if event_type == "g8e.v1.ai.llm.chat.iteration.text.completed" and envelope is not None:
+                            complete_text = envelope.text_chunk()
+                            if complete_text:
+                                text_buf = [complete_text]
 
                         if self.on_event is not None:
                             try:
@@ -483,20 +577,34 @@ def _extract_text_chunk(payload_obj: dict[str, Any]) -> str:
     return envelope.text_chunk() if envelope is not None else ""
 
 
-def _extract_investigation_id(payload_obj: dict[str, Any]) -> str:
+def _extract_investigation_id(payload_obj: object) -> str:
     envelope = SSEWireEnvelope.parse(payload_obj)
     return envelope.investigation_id() if envelope is not None else ""
 
 
-def _extract_Gateway_transaction_id(trail: list[AgentTrailEvent]) -> str | None:
-    """Scan the agent trail for a Warden-signed ActionReceipt and return its transaction_hash."""
+def _extract_gateway_transaction_ids(trail: list[AgentTrailEvent]) -> list[str]:
+    """Return distinct Warden-signed transaction hashes in trail order."""
+    transaction_ids: list[str] = []
+    seen: set[str] = set()
     for evt in trail:
         if evt.event_type != "g8e.v1.ai.governance.warden.receipt.signed":
             continue
         envelope = SSEWireEnvelope.parse(evt.payload)
         if envelope is None:
             continue
-        tx_id = envelope.transaction_hash()
-        if tx_id:
-            return tx_id
-    return None
+        transaction_id = envelope.transaction_hash()
+        if transaction_id and transaction_id not in seen:
+            seen.add(transaction_id)
+            transaction_ids.append(transaction_id)
+    return transaction_ids
+
+
+def _extract_governed_action_types(trail: list[AgentTrailEvent]) -> list[str]:
+    action_types: list[str] = []
+    seen: set[str] = set()
+    for event in trail:
+        action_type = _GOVERNED_APPROVAL_ACTION_TYPES.get(event.event_type)
+        if action_type and action_type not in seen:
+            seen.add(action_type)
+            action_types.append(action_type)
+    return action_types

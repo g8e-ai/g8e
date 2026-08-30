@@ -17,15 +17,19 @@ If the publisher renames `event`, `event.type`, `event.data`, or moves
 these tests fail loudly - preventing silent bench drift.
 """
 
+import importlib
 import os
 from unittest.mock import patch
-import importlib
+
+import pytest
 
 from g8e_evals.sut.g8ee_chat import (
     _extract_investigation_id,
     _extract_text_chunk,
 )
 from g8e_evals.sut.wire import SSEWireEnvelope
+
+pytestmark = pytest.mark.unit
 
 
 SESSION_WIRE_FIXTURE = {
@@ -121,13 +125,10 @@ def test_strict_mode_forbids_extra_fields():
         from g8e_evals.sut import wire
         importlib.reload(wire)
 
-        try:
-            # This should fail in strict mode because of 'future_field'
-            payload = {**SESSION_WIRE_FIXTURE, "future_field": 1}
+        # This should fail in strict mode because of 'future_field'
+        payload = {**SESSION_WIRE_FIXTURE, "future_field": 1}
+        with pytest.raises(wire.ValidationError):
             wire.SSEWireEnvelope.parse(payload)
-            assert False, "Should have raised ValidationError"
-        except wire.ValidationError:
-            pass
-        finally:
-            # Clean up: reload again without the env var
-            importlib.reload(wire)
+
+    # Clean up: reload again without the env var
+    importlib.reload(wire)

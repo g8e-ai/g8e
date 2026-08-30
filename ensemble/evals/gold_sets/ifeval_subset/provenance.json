@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "benchmark": "ifeval_subset",
+  "source": {
+    "url": "https://raw.githubusercontent.com/google-research/google-research/041338718b4e8151372fd63677104c65b73a0a4e/instruction_following_eval/data/input_data.jsonl",
+    "revision": "041338718b4e8151372fd63677104c65b73a0a4e",
+    "license_spdx": "Apache-2.0",
+    "license_url": "https://raw.githubusercontent.com/google-research/google-research/041338718b4e8151372fd63677104c65b73a0a4e/LICENSE",
+    "sha256": "67ffeee0fcb87c317c5b08a2de85557b4a7e96ada6178aa645b4954fe4b53d49"
+  },
+  "selected_keys": [
+    1001,
+    1019,
+    1051,
+    1072,
+    1075
+  ],
+  "transformation": {
+    "description": "Select the five declared task keys from the pinned upstream JSONL and write their original lines in selected_keys order without rewriting JSON.",
+    "code_path": "g8e_evals/benchmarks/ifeval/import_subset.py",
+    "code_sha256": "10f284e4518af2b78926f2494bd35d277fa309d5874b486db0e6807444f58605",
+    "fixture_path": "tests/fixtures/ifeval_subset_source.jsonl",
+    "fixture_sha256": "8548ce4db2654bd59a98de8e171fcd79d5b5fca22e2cf967e95aae13c39bad56"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 5,
+    "sha256": "5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37"
+  }
+}

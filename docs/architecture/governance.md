@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ## Overview
 
@@ -21,7 +21,7 @@ Each transaction passes through five layers in order. Every layer fails closed: 
 - **L2 Consensus**: Multi-agent consensus signature verification. Each consensus member independently evaluates the payload against L1 Doctrine and signs an Ed25519 vote over the transaction hash and the member's decision. A transaction must collect enough affirmative votes from distinct members to meet quorum. See [Consensus](./consensus.md) for enrollment, deliberation, and vote verification.
 - **L3 Notary**: Human-in-the-loop authorization. In gateway mode the proof is a WebAuthn passkey assertion; in outbound operator mode the proof is an Ed25519 signature over the transaction hash from an approved suspended transaction. CLI callers additionally bind the proof to an mTLS certificate fingerprint. There is no auto-approved bypass; the Warden re-derives whether L3 is required from the action type and posture and demands a real proof. See [Authentication & Authorization](./auth.md) for the notary modes and the out-of-band approval flow.
 - **L4 Warden**: Pre-dispatch verification. Reserves the nonce in durable storage, checks expiry, recomputes and compares the transaction hash, validates the state Merkle root, decodes and validates the payload against L1 Doctrine, and applies posture-gated L2 and L3 verification. See [Gateway Architecture](./gateway.md) for the admission checks that run before the Warden.
-- **L5 Actuator**: Isolated tool dispatch and signed receipt production. Mints a just-in-time, single-action capability scoped to the transaction, executes the action, dissolves the capability, and signs a canonical receipt with the operator's Ed25519 key. See [Operator Architecture](./operator.md) for the execution boundary and local audit vault.
+- **L5 Actuator**: Fail-closed receipt persistence, atomic commitment append, isolated tool dispatch, and final persistence attestation. It signs a canonical pre-execution receipt whose signature binds deterministic stage evidence, persists the complete protojson receipt, appends a signed commitment against the locked chain head, executes with a just-in-time capability, and signs and attests the final durable receipt. See [Operator Architecture](./operator.md) for the execution boundary and local audit vault.
 
 ---
 
@@ -98,11 +98,13 @@ The **L4 Warden** runs the five-stage verification sequence: in-flight tracking 
 
 ### 6. Actuator Executes (L5)
 
-The **L5 Actuator** signs an initial receipt with an `EXECUTING` status and logs it before starting work; if signing or logging fails, execution does not proceed. It rehydrates any sovereignty-scrubbed payload, mints a just-in-time capability scoped to the transaction, dispatches the action, and dissolves the capability immediately after execution. Execution handlers scrub sensitive host data from results before returning them. A final receipt captures the results, state root transitions, and L2 and L3 status, signed with the operator's Ed25519 key.
+The **L5 Actuator** receives L4 deterministic evidence bound to the transaction, identities, state, doctrine bundle, L2/L3 signature digests, timing, and parent stages. It signs an `EXECUTING` receipt whose signature includes the deterministic evidence hash and persists the complete protojson receipt before any side effect. Under the SQLite write lock, it builds and appends a signed `CommitmentAttestation` against the current chain head and records the commitment and prior-commitment hashes in receipt evidence. Any signing, persistence, or commitment failure stops execution.
+
+The actuator then rehydrates the sovereignty-scrubbed payload, mints a just-in-time capability scoped to the transaction, dispatches the action, and dissolves the capability immediately afterward. It adds L5 outcome evidence, state transitions, and L2/L3 status; signs and persists the final `COMPLETED` or `FAILED` receipt; then attaches a signed `ReceiptPersistenceAttestation` binding the final receipt-signature digest, audit record ID, signer key, and durable timestamp. Failure to persist the final receipt or attestation is returned as an execution failure rather than silently accepting incomplete evidence.
 
 ### 7. Audit Vault Records
 
-The operator anchors the transaction to the **Local Audit Vault** on the sovereign host. Audit data stays on the host; raw data never leaves. Each entry is signed and chained, and even failed transactions are logged for complete transparency. See [Operator Architecture](./operator.md) for the audit store and git ledger.
+The operator writes the complete `ActionReceipt` to the SQLite audit store and the signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger. Governed file mutations additionally create snapshots in the git-backed ledger. Audit data stays on the host; raw data never leaves. Even failed transactions remain observable through their typed receipt and stage evidence. See [Operator Architecture](./operator.md) for the audit store and git ledger.
 
 ### 8. Receipt Returns to the Principal
 
@@ -122,7 +124,7 @@ Raw data and audit logs stay on the sovereign host. Operators initiate outbound-
 
 ### Cryptographic Integrity
 
-L2 consensus votes are Ed25519 signatures from enrolled members, produced over the transaction hash and the member's decision, and verified against the trusted signer store and the configured consensus policy. Every receipt is signed by the L5 Actuator using Ed25519 over a canonical representation of the receipt. Audit entries are stored in encrypted databases, and file mutations are optionally encrypted before storage. mTLS protects the HTTPS port with application-layer enforcement for non-public routes, and transport-to-envelope identity binding prevents impersonation by matching certificate SPIFFE URI SANs to envelope identity claims. See [Encryption](./encryption.md) for the key hierarchy and cryptographic primitives.
+L2 consensus votes are Ed25519 signatures from enrolled members, produced over the transaction hash and the member's decision, and verified against the trusted signer store and the configured consensus policy. Every receipt is signed by the L5 Actuator using Ed25519 over its canonical fields and deterministic stage evidence hash. The final persistence attestation independently signs the receipt-signature digest, audit record, signer, and durable timestamp. Signed commitments form an insertion-ordered hash chain and bind receipt evidence to the prior chain head. Audit entries are stored in encrypted databases, and file mutations are optionally encrypted before storage. mTLS protects the HTTPS port with application-layer enforcement for non-public routes, and transport-to-envelope identity binding prevents impersonation by matching certificate SPIFFE URI SANs to envelope identity claims. See [Encryption](./encryption.md) for the key hierarchy and cryptographic primitives.
 
 ### Defense in Depth
 

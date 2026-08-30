@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import logging
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, NoReturn
 
 from app.errors import OllamaEmptyResponseError
@@ -36,6 +37,7 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, Part, Role, ResponseFormat
+from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -48,6 +50,7 @@ from app.models.agents.tribunal import (
 )
 from app.utils.agent_persona_loader import AgentPersona
 from app.models.model_configs import get_model_config
+from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 
 if TYPE_CHECKING:
@@ -80,12 +83,20 @@ class AuditorInput(G8eBaseModel):
     clusters: list[AuditorClusterInfo]
 
 
+@dataclass(frozen=True)
+class AuditorLLMCallResult:
+    raw_text: str
+    telemetry: ModelCallTelemetry
+    error: Exception | None = None
+
+
 async def fail_auditor(
     emitter: TribunalEmitter,
     request: str,
     reason: AuditorReason,
     error_msg: str,
     candidate_command: str,
+    model_calls: list[ModelCallTelemetry] | None = None,
 ) -> NoReturn:
     """Emit an auditor failure event and raise TribunalAuditorFailedError."""
     await emitter.emit(
@@ -95,6 +106,7 @@ async def fail_auditor(
             reason=reason,
             error=error_msg,
             candidate_command=candidate_command,
+            model_calls=model_calls or [],
         ),
     )
     raise TribunalAuditorFailedError(
@@ -204,7 +216,7 @@ async def call_auditor_llm(
     prompt: str,
     auditor_persona: AgentPersona,
     attempt: int = 0,
-) -> str:
+) -> AuditorLLMCallResult:
     """Execute the LLM call for the Auditor."""
     model_config = get_model_config(model)
 
@@ -228,15 +240,51 @@ async def call_auditor_llm(
     if attempt > 0:
         current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
 
-    response = await provider.generate_content_lite(
-        model=model,
-        contents=[Content(role=Role.USER, parts=[Part.from_text(current_prompt)])],
-        lite_llm_settings=settings,
-    )
+    contents = [Content(role=Role.USER, parts=[Part.from_text(current_prompt)])]
+    provider.clear_input_artifact_hash()
+    input_artifact_hash = model_boundary_hash({
+        "model": model,
+        "contents": contents,
+        "settings": settings,
+    })
+    monotonic_start = time.monotonic()
+    try:
+        response = await provider.generate_content_lite(
+            model=model,
+            contents=contents,
+            lite_llm_settings=settings,
+        )
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
+    except Exception as exc:
+        input_artifact_hash = recorded_model_boundary_hash(provider, input_artifact_hash)
+        return AuditorLLMCallResult(
+            raw_text="",
+            telemetry=ModelCallTelemetry(
+                agent_role="auditor",
+                provider=type(provider).__name__,
+                model=model,
+                monotonic_start=monotonic_start,
+                monotonic_end=time.monotonic(),
+                retry_count=attempt,
+                succeeded=False,
+                error_type=type(exc).__name__,
+                input_artifact_hash=input_artifact_hash,
+            ),
+            error=exc,
+        )
+    monotonic_end = time.monotonic()
 
     raw_text = (response.text or "").strip()
+    usage = response.usage_metadata
+    input_tokens = getattr(usage, "prompt_token_count", 0)
+    output_tokens = getattr(usage, "candidates_token_count", 0)
+    thinking_tokens = getattr(usage, "thinking_token_count", 0)
+    cache_tokens = getattr(usage, "cache_token_count", 0)
+    total_tokens = getattr(usage, "total_token_count", 0)
+    finish_reason = response.candidates[0].finish_reason if response.candidates else None
+    error = None
     if not raw_text:
-        raise OllamaEmptyResponseError(
+        error = OllamaEmptyResponseError(
             "Provider returned empty response",
             model=model,
             channel="lite",
@@ -249,7 +297,29 @@ async def call_auditor_llm(
             tool_calls_count=0,
             ctx_overflow_suspected=False,
         )
-    return raw_text
+    return AuditorLLMCallResult(
+        raw_text=raw_text,
+        telemetry=ModelCallTelemetry(
+            agent_role="auditor",
+            provider=type(provider).__name__,
+            model=model,
+            monotonic_start=monotonic_start,
+            monotonic_end=monotonic_end,
+            input_tokens=input_tokens if isinstance(input_tokens, int) else 0,
+            output_tokens=output_tokens if isinstance(output_tokens, int) else 0,
+            thinking_tokens=thinking_tokens if isinstance(thinking_tokens, int) else 0,
+            cache_tokens=cache_tokens if isinstance(cache_tokens, int) else 0,
+            total_tokens=total_tokens if isinstance(total_tokens, int) else 0,
+            usage_reported=usage.usage_reported,
+            finish_reason=finish_reason if isinstance(finish_reason, str) else None,
+            retry_count=attempt,
+            succeeded=error is None,
+            error_type=type(error).__name__ if error else None,
+            input_artifact_hash=input_artifact_hash,
+            output_artifact_hash=model_boundary_hash(response.text or ""),
+        ),
+        error=error,
+    )
 
 
 async def run_auditor(
@@ -327,9 +397,13 @@ async def run_auditor(
 
     for attempt in range(max_attempts):
         try:
-            raw_text = await call_auditor_llm(provider, model, prompt, auditor_persona, attempt)
+            call_result = await call_auditor_llm(
+                provider, model, prompt, auditor_persona, attempt
+            )
+            if call_result.error:
+                raise call_result.error
             status, revised_raw, swap_to_cluster = parse_auditor_response(
-                raw_text, mode, list(cluster_to_cmd.keys())
+                call_result.raw_text, mode, list(cluster_to_cmd.keys())
             )
 
             if status == ConsensusAuditStatus.OK:

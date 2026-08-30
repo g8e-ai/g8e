@@ -9,21 +9,10 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-from fastapi import Request
 
-from app.constants import (
-    AUTHORIZATION,
-    X_PROXY_ORGANIZATION_ID,
-    X_PROXY_USER_EMAIL,
-    X_PROXY_USER_ID,
-    AuthMethod,
-)
-from app.errors import AuthenticationError
-from app.models.auth import AuthenticatedUser
-from app.models.settings import G8eeAppSettings
 
 if TYPE_CHECKING:
-    from app.services.operator.operator_session_service import OperatorSessionService
+    pass
 
 logger = logging.getLogger(__name__)
 

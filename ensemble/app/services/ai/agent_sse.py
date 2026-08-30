@@ -345,6 +345,7 @@ async def deliver_via_sse(
             elif chunk.type == StreamChunkFromModelType.COMPLETE:
                 state.token_usage = chunk.data.token_usage
                 token_usage = chunk.data.token_usage
+                state.model_calls = chunk.data.model_calls
                 state.finish_reason = chunk.data.finish_reason
                 if chunk.data.tool_response_sizes:
                     state.tool_response_sizes = chunk.data.tool_response_sizes
@@ -398,6 +399,8 @@ async def deliver_via_sse(
                     if grounding_metadata
                     else {},
                     token_usage=token_usage.model_dump(mode="json") if token_usage else {},
+                    model_calls=[call.model_dump(mode="json") for call in state.model_calls],
+                    scrubbing_observations=inputs.scrubbing_observations,
                     agent_mode=agent_mode,
                 ),
             )

@@ -25,6 +25,7 @@ var APIPaths = struct {
 	// Operator routes
 	Operators         string `json:"operators"`
 	OperatorsByID     string `json:"operators_by_id"`
+	OperatorsValidate string `json:"operators_validate"`
 	OperatorsBind     string `json:"operators_bind"`
 	OperatorsUnbind   string `json:"operators_unbind"`
 	OperatorsTarget   string `json:"operators_target"`
@@ -166,6 +167,7 @@ var APIPaths = struct {
 	// Operator routes
 	Operators:         "/api/v1/operators",
 	OperatorsByID:     "/api/v1/operators/",
+	OperatorsValidate: "/api/v1/operators/validate",
 	OperatorsBind:     "/api/v1/operators/bind",
 	OperatorsUnbind:   "/api/v1/operators/unbind",
 	OperatorsTarget:   "/api/v1/operators/target",

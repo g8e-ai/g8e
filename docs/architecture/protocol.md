@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-08-27
-Version: v2.0.4
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,7 +59,7 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.4
+go get github.com/g8e-ai/g8e/v2@v2.1.0
 ```
 
 To fetch the latest release:
@@ -78,9 +78,10 @@ Import paths use `github.com/g8e-ai/g8e/v2/protocol/...`. Consumers configure th
 
 The Go protocol package provides the canonical wire structures and helpers for platform interaction.
 
-- **Generated Protobuf Types**: Contains compiled Go structs and gRPC client stubs generated from protobuf schemas in `protocol/proto/g8e/...`.
-- **Governance Types**: Provides structures for the canonical transaction envelope, governance metadata, consensus votes, and threat pattern options.
+- **Generated Protobuf Types**: Contains compiled Go structs and gRPC client stubs generated from protobuf schemas in `protocol/proto/g8e/...`, plus generated Python modules and type stubs under `protocol/python/g8e/`.
+- **Governance Types**: Provides structures for the canonical transaction envelope, governance metadata, consensus votes, deterministic governance-stage evidence, persistence attestations, and threat pattern options.
 - **Operator Services**: Defines gRPC service interfaces for command execution, file modifications, filesystem inspection, and governance verification.
+- **Receipt Verification**: Defines canonical receipt and persistence-attestation serialization and Ed25519 verification in Go and in `g8e.receipts`, backed by shared cross-language vectors.
 - **Pub/Sub Messages**: Defines pub/sub message and event transport structures for event distribution across nodes.
 
 ### Go Workload Identity Helpers
@@ -123,12 +124,12 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.0.4
+pip install g8e==2.1.0
 ```
 
 ### Python Package Overview
 
-The Python package installs as `g8e` and provides type-checked models and runtime constants for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, and cross-language parity.
+The Python package installs as `g8e` and provides generated protobuf modules and type stubs, type-checked models, runtime constants, and canonical `ActionReceipt` parsing and Ed25519 verification helpers for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, receipt and persistence-attestation verification, and cross-language parity.
 
 ### Python Constants & Enums
 
@@ -204,7 +205,7 @@ Compile schemas from the repository root using the Buf-based `proto` target:
 make proto
 ```
 
-`make proto` installs the Buf CLI if it is not present and then runs `buf generate protocol/proto` to produce Go structs, gRPC stubs, and Markdown API reference documentation in `protocol/docs/reference/api`.
+`make proto` installs the Buf CLI if it is not present and then runs `buf generate protocol/proto` to produce Go structs, gRPC stubs, and Markdown API reference documentation in `protocol/docs/reference/api`. From `protocol/`, `make python-proto` regenerates the Python protobuf modules and `.pyi` type stubs, while `make proto-check` verifies that committed Python outputs match the schemas.
 
 ---
 

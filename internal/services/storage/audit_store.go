@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
@@ -25,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/timesvc"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // AuditStoreConfig holds configuration for the SQL audit store
@@ -100,13 +103,14 @@ type FileMutationLog struct {
 
 // SQLAuditStore provides pure SQL audit data storage
 type SQLAuditStore struct {
-	db              *sqliteutil.DB
-	config          *AuditStoreConfig
-	logger          *slog.Logger
-	fileSvc         fs.RuntimeFileService
-	encryptionVault *vault.Vault
-	pruner          *sqliteutil.Pruner
-	closeOnce       sync.Once
+	db               *sqliteutil.DB
+	config           *AuditStoreConfig
+	logger           *slog.Logger
+	fileSvc          fs.RuntimeFileService
+	encryptionVault  *vault.Vault
+	pruner           *sqliteutil.Pruner
+	commitmentLedger *CommitmentLedger
+	closeOnce        sync.Once
 
 	muWrites sync.WaitGroup
 }
@@ -144,6 +148,13 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger, fileSvc fs.
 		"encryption_enabled", encryptionEnabled)
 
 	return ass, nil
+}
+
+func (ass *SQLAuditStore) CommitmentLedger() *CommitmentLedger {
+	if ass == nil {
+		return nil
+	}
+	return ass.commitmentLedger
 }
 
 // bootstrap initializes the audit store (directory structure, database)
@@ -213,15 +224,20 @@ func (ass *SQLAuditStore) initDatabase() error {
 		db.Close()
 		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
+	if err := migrateCommitmentColumns(db, ass.logger); err != nil {
+		db.Close()
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
+	}
 
 	ass.db = db
+	ass.commitmentLedger = NewCommitmentLedger(db, ass.logger)
 
 	ass.logger.Info("Database schema initialized")
 	return nil
 }
 
-// migrateReceiptsColumns adds requestor_user_id and acting_app_id columns to
-// the receipts table for databases created before these columns existed. The
+// migrateReceiptsColumns adds identity and canonical receipt columns to the
+// receipts table for databases created before these columns existed. The
 // CREATE TABLE IF NOT EXISTS schema includes them for fresh databases, but
 // existing databases need an ALTER TABLE. SQLite does not support ADD COLUMN
 // IF NOT EXISTS, so we check pragma table_info first.
@@ -244,7 +260,7 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		existing[name] = true
 	}
 
-	for _, col := range []string{"requestor_user_id", "acting_app_id"} {
+	for _, col := range []string{"requestor_user_id", "acting_app_id", "investigation_id", "receipt_json"} {
 		if existing[col] {
 			continue
 		}
@@ -253,6 +269,40 @@ func migrateReceiptsColumns(db *sqliteutil.DB, logger *slog.Logger) error {
 		}
 		logger.Info("Audit store migration: added column", "column", col)
 	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_receipts_investigation_id ON receipts(investigation_id)"); err != nil {
+		return fmt.Errorf("audit_store: migrate receipts: create investigation index: %w", err)
+	}
+	return nil
+}
+
+func migrateCommitmentColumns(db *sqliteutil.DB, logger *slog.Logger) error {
+	cols, err := db.QueryWithRetry("PRAGMA table_info(commitment_ledger)")
+	if err != nil {
+		return fmt.Errorf("audit_store: migrate commitments: pragma: %w", err)
+	}
+	defer cols.Close()
+
+	existing := make(map[string]bool)
+	for cols.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := cols.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("audit_store: migrate commitments: scan: %w", err)
+		}
+		existing[name] = true
+	}
+	if existing["warden_intent_signature_digest"] {
+		return nil
+	}
+	if !existing["actuator_intent_signature_digest"] {
+		return fmt.Errorf("audit_store: migrate commitments: %w", constants.ErrMissingRequiredField)
+	}
+	if _, err := db.Exec("ALTER TABLE commitment_ledger RENAME COLUMN actuator_intent_signature_digest TO warden_intent_signature_digest"); err != nil {
+		return fmt.Errorf("audit_store: migrate commitments: rename intent digest: %w", err)
+	}
+	logger.Info("Audit store migration: renamed commitment intent digest column")
 	return nil
 }
 
@@ -298,6 +348,7 @@ CREATE TABLE IF NOT EXISTS file_mutation_log (
 CREATE TABLE IF NOT EXISTS receipts (
 	transaction_id TEXT PRIMARY KEY,
 	transaction_hash TEXT NOT NULL,
+	investigation_id TEXT,
 	operator_id TEXT NOT NULL,
 	operator_session_id TEXT,
 	requestor_user_id TEXT,
@@ -311,6 +362,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 	executed_at_ms INTEGER NOT NULL,
 	signer_key_id TEXT NOT NULL,
 	signature TEXT NOT NULL,
+	receipt_json TEXT,
 	timestamp TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%f','now')),
 	FOREIGN KEY(operator_session_id) REFERENCES sessions(id)
 );
@@ -322,7 +374,7 @@ CREATE TABLE IF NOT EXISTS commitment_ledger (
 	prior_commitment_hash TEXT NOT NULL,
 	state_root_at_commit TEXT,
 	l2_signature_digest TEXT,
-	actuator_intent_signature_digest TEXT,
+	warden_intent_signature_digest TEXT,
 	human_signature_digest TEXT,
 	action_type TEXT,
 	target_resource TEXT,
@@ -623,26 +675,38 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		)
 	}
 
+	receiptJSON := []byte(nil)
+	if record.ActionReceipt != nil {
+		var err error
+		receiptJSON, err = protojson.Marshal(record.ActionReceipt)
+		if err != nil {
+			return fmt.Errorf("%w: marshal canonical receipt: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
+		}
+	}
+
 	query := `
 	INSERT INTO receipts (
-		transaction_id, transaction_hash, operator_id, operator_session_id,
+		transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		signer_key_id, signature, receipt_json, timestamp
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_id) DO UPDATE SET
+		investigation_id = excluded.investigation_id,
 		status = excluded.status,
 		result_summary = excluded.result_summary,
 		state_root_after = excluded.state_root_after,
 		executed_at_ms = excluded.executed_at_ms,
 		signature = excluded.signature,
+		receipt_json = excluded.receipt_json,
 		timestamp = excluded.timestamp
 	`
 
 	_, err := ass.db.ExecWithRetry(query,
 		record.TransactionID,
 		record.TransactionHash,
+		record.InvestigationID,
 		record.OperatorID,
 		sessionID,
 		record.RequestorUserID,
@@ -656,6 +720,7 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		record.ExecutedAt.UnixMilli(),
 		record.SignerKeyID,
 		record.Signature,
+		receiptJSON,
 		timesvc.FormatTimestamp(record.Timestamp),
 	)
 	if err != nil {
@@ -667,6 +732,17 @@ func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord
 		"status", record.Status)
 
 	return nil
+}
+
+func parseStoredActionReceipt(receiptJSON sql.NullString) (*operatorv1.ActionReceipt, error) {
+	if !receiptJSON.Valid || receiptJSON.String == "" {
+		return nil, nil
+	}
+	receipt := &operatorv1.ActionReceipt{}
+	if err := protojson.Unmarshal([]byte(receiptJSON.String), receipt); err != nil {
+		return nil, err
+	}
+	return receipt, nil
 }
 
 // DocSet implements governance.TransactionAuditStore for outbound mode. The
@@ -700,11 +776,11 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	WHERE transaction_id = ?
 	`
@@ -712,14 +788,17 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 	var r models.ActionReceiptRecord
 	var executedAtMs int64
 	var timestampStr string
+	var investigationID sql.NullString
 	var sessionID sql.NullString
+	var receiptJSON sql.NullString
 	err := ass.db.QueryRowWithRetry(query, transactionID).Scan(
-		&r.TransactionID, &r.TransactionHash, &r.OperatorID, &sessionID,
+		&r.TransactionID, &r.TransactionHash, &investigationID, &r.OperatorID, &sessionID,
 		&r.RequestorUserID, &r.ActingAppID,
 		&r.ActionType, &r.TargetResource, &r.Status, &r.ResultSummary,
 		&r.StateRootBefore, &r.StateRootAfter, &executedAtMs,
-		&r.SignerKeyID, &r.Signature, &timestampStr,
+		&r.SignerKeyID, &r.Signature, &receiptJSON, &timestampStr,
 	)
+	r.InvestigationID = investigationID.String
 	r.OperatorSessionID = sessionID.String
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -730,8 +809,44 @@ func (ass *SQLAuditStore) GetActionReceipt(transactionID string) (*models.Action
 
 	r.ExecutedAt = time.UnixMilli(executedAtMs)
 	r.Timestamp, _ = timesvc.ParseTimestamp(timestampStr)
+	r.ActionReceipt, err = parseStoredActionReceipt(receiptJSON)
+	if err != nil {
+		return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreGetReceiptFailed, err)
+	}
 
 	return &r, nil
+}
+
+func (ass *SQLAuditStore) GetActionReceiptByInvestigationID(
+	investigationID string,
+	actionType constants.ActionType,
+) (*models.ActionReceiptRecord, error) {
+	if ass == nil || ass.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	rows, err := sqliteutil.MaterializeRows(
+		ass.db,
+		"SELECT transaction_id FROM receipts WHERE investigation_id = ? AND action_type = ? ORDER BY timestamp DESC LIMIT 2",
+		[]interface{}{investigationID, actionType},
+		func(row *sql.Rows) (string, error) {
+			var transactionID string
+			if err := row.Scan(&transactionID); err != nil {
+				return "", err
+			}
+			return transactionID, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: investigation correlation: %w", constants.ErrAuditStoreGetReceiptFailed, err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if len(rows) > 1 {
+		return nil, constants.ErrAuditStoreReceiptCorrelationDuplicate
+	}
+	return ass.GetActionReceipt(rows[0])
 }
 
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
@@ -746,11 +861,11 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 
 	var query strings.Builder
 	query.WriteString(`
-	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	`)
 
@@ -764,21 +879,24 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 	args = append(args, limit, offset)
 
 	type receiptRow struct {
-		record       models.ActionReceiptRecord
-		executedAtMs int64
-		timestampStr string
-		sessionID    sql.NullString
+		record          models.ActionReceiptRecord
+		executedAtMs    int64
+		timestampStr    string
+		investigationID sql.NullString
+		sessionID       sql.NullString
+		receiptJSON     sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
-			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
+		row.record.InvestigationID = row.investigationID.String
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
@@ -790,6 +908,10 @@ func (ass *SQLAuditStore) ListActionReceipts(operatorSessionID string, limit, of
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
 		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
+		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
+		if err != nil {
+			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsFailed, err)
+		}
 		results = append(results, &row.record)
 	}
 
@@ -807,11 +929,11 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 	}
 
 	query := `
-	SELECT transaction_id, transaction_hash, operator_id, operator_session_id,
+	SELECT transaction_id, transaction_hash, investigation_id, operator_id, operator_session_id,
 		requestor_user_id, acting_app_id,
 		action_type, target_resource, status, result_summary,
 		state_root_before, state_root_after, executed_at_ms,
-		signer_key_id, signature, timestamp
+		signer_key_id, signature, receipt_json, timestamp
 	FROM receipts
 	WHERE timestamp > ?
 	ORDER BY timestamp ASC
@@ -819,21 +941,24 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 	`
 
 	type receiptRow struct {
-		record       models.ActionReceiptRecord
-		executedAtMs int64
-		timestampStr string
-		sessionID    sql.NullString
+		record          models.ActionReceiptRecord
+		executedAtMs    int64
+		timestampStr    string
+		investigationID sql.NullString
+		sessionID       sql.NullString
+		receiptJSON     sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{timesvc.FormatTimestamp(since), limit}, func(r *sql.Rows) (receiptRow, error) {
 		var row receiptRow
 		err := r.Scan(
-			&row.record.TransactionID, &row.record.TransactionHash, &row.record.OperatorID, &row.sessionID,
+			&row.record.TransactionID, &row.record.TransactionHash, &row.investigationID, &row.record.OperatorID, &row.sessionID,
 			&row.record.RequestorUserID, &row.record.ActingAppID,
 			&row.record.ActionType, &row.record.TargetResource, &row.record.Status, &row.record.ResultSummary,
 			&row.record.StateRootBefore, &row.record.StateRootAfter, &row.executedAtMs,
-			&row.record.SignerKeyID, &row.record.Signature, &row.timestampStr,
+			&row.record.SignerKeyID, &row.record.Signature, &row.receiptJSON, &row.timestampStr,
 		)
+		row.record.InvestigationID = row.investigationID.String
 		row.record.OperatorSessionID = row.sessionID.String
 		return row, err
 	})
@@ -845,6 +970,10 @@ func (ass *SQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([
 	for _, row := range rows {
 		row.record.ExecutedAt = time.UnixMilli(row.executedAtMs)
 		row.record.Timestamp, _ = timesvc.ParseTimestamp(row.timestampStr)
+		row.record.ActionReceipt, err = parseStoredActionReceipt(row.receiptJSON)
+		if err != nil {
+			return nil, fmt.Errorf("%w: unmarshal canonical receipt: %w", constants.ErrAuditStoreQueryReceiptsSinceFailed, err)
+		}
 		results = append(results, &row.record)
 	}
 

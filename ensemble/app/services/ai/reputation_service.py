@@ -726,7 +726,7 @@ class ReputationService:
                 half_life=self.half_life,
                 created_at=now,
             )
-            await self.stake_resolution_data_service.create(resolution)
+            await self.stake_resolution_data_service.create(resolution, context)
             resolutions.append(resolution)
 
             logger.info(

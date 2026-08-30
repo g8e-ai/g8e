@@ -1,0 +1,18 @@
+{
+  "name": "completed_with_non_default_l2_l3",
+  "receipt": {
+    "transaction_id": "tx-golden-001",
+    "transaction_hash": "sha256:8d969eef6ecad3c29a3a629280e686cff8ca6a85acebf4c7f2c5c8d5e6f7a8b9",
+    "status": "EXECUTION_STATUS_COMPLETED",
+    "result_summary": "completed <safely> & exactly",
+    "state_root_before": "sha256:before",
+    "state_root_after": "sha256:after",
+    "executed_at_unix_ms": "1777777777123",
+    "signer_key_id": "warden-golden-key",
+    "signature": "01d60a4fc5d5b2f33ab0208b14efde29fb37f8e8dc5db0a99b4962c3b28676c432b887b9ce3d1d94a31a345c3d5773dd37dd1e2da5a6cb9e89e2d00a029ef603",
+    "l2_status": "L2_STATUS_REQUIRED_VALID",
+    "l3_status": "L3_STATUS_REQUIRED_FAILED"
+  },
+  "canonical_utf8": "{\"transaction_id\":\"tx-golden-001\",\"transaction_hash\":\"sha256:8d969eef6ecad3c29a3a629280e686cff8ca6a85acebf4c7f2c5c8d5e6f7a8b9\",\"status\":2,\"result_summary\":\"completed \\u003csafely\\u003e \\u0026 exactly\",\"state_root_before\":\"sha256:before\",\"state_root_after\":\"sha256:after\",\"executed_at_unix_ms\":1777777777123,\"signer_key_id\":\"warden-golden-key\",\"l2_status\":2,\"l3_status\":3}",
+  "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8"
+}

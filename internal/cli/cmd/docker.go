@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -405,7 +406,7 @@ func dockerStopCmd() *cobra.Command {
 				return err
 			}
 			cmd.Println("Stopping Docker Compose stack...")
-			if err := runDockerCompose([]string{"down"}, profile); err != nil {
+			if err := runDockerCompose([]string{"down"}, resolveDockerProfile(true, profile)); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
 			cmd.Println("\nDocker Compose stack stopped successfully.")
@@ -436,6 +437,22 @@ func dockerStatusCmd() *cobra.Command {
 	return cmd
 }
 
+func resolveDockerBuildID(ctx context.Context) (string, error) {
+	output, err := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve Docker build ID: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func dockerBuildArgs(buildID string, noCache bool) []string {
+	args := []string{"build", "--build-arg", "BUILD_ID=" + buildID}
+	if noCache {
+		args = append(args, "--no-cache")
+	}
+	return args
+}
+
 func dockerBuildCmd() *cobra.Command {
 	var noCache bool
 	var profile string
@@ -448,12 +465,12 @@ func dockerBuildCmd() *cobra.Command {
 			if err := checkDockerComposeFileExists(); err != nil {
 				return err
 			}
-			buildArgs := []string{"build"}
-			if noCache {
-				buildArgs = append(buildArgs, "--no-cache")
+			buildID, err := resolveDockerBuildID(cmd.Context())
+			if err != nil {
+				return err
 			}
 			cmd.Println("Building Docker images...")
-			if err := runDockerCompose(buildArgs, profile); err != nil {
+			if err := runDockerCompose(dockerBuildArgs(buildID, noCache), resolveDockerProfile(true, profile)); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 			cmd.Println("\nDocker images built successfully.")

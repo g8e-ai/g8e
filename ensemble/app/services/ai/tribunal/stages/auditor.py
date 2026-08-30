@@ -43,6 +43,7 @@ from app.services.ai.auditor_service import (
     fail_auditor,
 )
 from app.models.http_context import RequestContext
+from app.models.model_telemetry import ModelCallTelemetry
 from app.services.data.reputation_data_service import ReputationDataService
 from app.services.ai.tribunal.emitter import TribunalEmitter
 
@@ -151,12 +152,18 @@ class TribunalAuditor:
         final_command = target_cmd
         auditor_revision = None
         auditor_reason = AuditorReason.AUDITOR_ERROR
+        model_calls: list[ModelCallTelemetry] = []
 
         for attempt in range(max_attempts):
             try:
-                raw_text = await call_auditor_llm(provider, model, prompt, auditor_persona, attempt)
+                call_result = await call_auditor_llm(
+                    provider, model, prompt, auditor_persona, attempt
+                )
+                model_calls.append(call_result.telemetry)
+                if call_result.error:
+                    raise call_result.error
                 status, revised_raw, swap_to_cluster_id = parse_auditor_response(
-                    raw_text, mode, list(cluster_to_cmd.keys())
+                    call_result.raw_text, mode, list(cluster_to_cmd.keys())
                 )
 
                 if status == ConsensusAuditStatus.OK:
@@ -167,7 +174,11 @@ class TribunalAuditor:
                     )
                     await self.emitter.emit(
                         EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
-                        TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
+                        TribunalAuditorCompletedPayload(
+                            passed=True,
+                            reason=AuditorReason.OK,
+                            model_calls=model_calls,
+                        ),
                         correlation_id=correlation_id,
                     )
                     auditor_passed, final_command, auditor_revision, auditor_reason = (
@@ -197,6 +208,7 @@ class TribunalAuditor:
                             reason,
                             f"Swap target technical safety failure: {safety_result.error_message}",
                             target_cmd,
+                            model_calls=model_calls,
                         )
 
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
@@ -211,6 +223,7 @@ class TribunalAuditor:
                             reason=AuditorReason.SWAPPED_TO_DISSENTER,
                             swap_to_cluster=swap_to_cluster_id,
                             swap_to_member=swap_to_member,
+                            model_calls=model_calls,
                         ),
                         correlation_id=correlation_id,
                     )
@@ -231,6 +244,7 @@ class TribunalAuditor:
                             AuditorReason.NO_VALID_REVISION,
                             "Empty revision",
                             target_cmd,
+                            model_calls=model_calls,
                         )
 
                     safety_result = validate_command_safety(
@@ -248,6 +262,7 @@ class TribunalAuditor:
                             reason,
                             f"Revision technical safety failure: {safety_result.error_message}",
                             target_cmd,
+                            model_calls=model_calls,
                         )
 
                     reason = (
@@ -263,7 +278,10 @@ class TribunalAuditor:
                     await self.emitter.emit(
                         EventType.AI_CONSENSUS_VOTING_AUDIT_COMPLETED,
                         TribunalAuditorCompletedPayload(
-                            passed=False, revision=revised, reason=reason
+                            passed=False,
+                            revision=revised,
+                            reason=reason,
+                            model_calls=model_calls,
                         ),
                         correlation_id=correlation_id,
                     )
@@ -285,6 +303,7 @@ class TribunalAuditor:
                             AuditorReason.EMPTY_RESPONSE,
                             str(exc),
                             target_cmd,
+                            model_calls=model_calls,
                         )
                     else:
                         await fail_auditor(
@@ -293,6 +312,7 @@ class TribunalAuditor:
                             AuditorReason.NO_VALID_REVISION,
                             f"Failed to parse auditor response: {exc!s}",
                             target_cmd,
+                            model_calls=model_calls,
                         )
                 continue
             except TribunalAuditorFailedError:
@@ -300,7 +320,12 @@ class TribunalAuditor:
             except Exception as exc:
                 logger.error("[TRIBUNAL-AUDITOR] Unexpected error: %s", exc, exc_info=True)
                 await fail_auditor(
-                    self.emitter, request, AuditorReason.AUDITOR_ERROR, str(exc), target_cmd
+                    self.emitter,
+                    request,
+                    AuditorReason.AUDITOR_ERROR,
+                    str(exc),
+                    target_cmd,
+                    model_calls=model_calls,
                 )
 
         outcome = (

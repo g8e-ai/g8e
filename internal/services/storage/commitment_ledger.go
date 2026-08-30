@@ -8,10 +8,12 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
@@ -19,20 +21,21 @@ import (
 
 // CommitmentRow represents a single row from the commitment_ledger table.
 type CommitmentRow struct {
-	Seq                           int64
-	TransactionID                 string
-	TransactionHash               string
-	PriorCommitmentHash           string
-	Hash                          string
-	StateRootAtCommit             string
-	L2SignatureDigest             string
-	ActuatorIntentSignatureDigest string
-	HumanSignatureDigest          string
-	ActionType                    string
-	TargetResource                string
-	CommittedAt                   time.Time
-	AuditorKeyID                  string
-	Signature                     string
+	Seq                         int64
+	TransactionID               string
+	TransactionHash             string
+	PriorCommitmentHash         string
+	Hash                        string
+	StateRootAtCommit           string
+	L2SignatureDigest           string
+	WardenIntentSignatureDigest string
+	HumanSignatureDigest        string
+	ActionType                  string
+	TargetResource              string
+	CommittedAt                 time.Time
+	AuditorKeyID                string
+	Signature                   string
+	AttestationJSON             []byte
 }
 
 // CommitmentLedger is the SQLite-backed storage for commitment attestations.
@@ -42,6 +45,7 @@ type CommitmentRow struct {
 type CommitmentLedger struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
+	mu     sync.Mutex
 }
 
 // NewCommitmentLedger creates a new commitment ledger backed by the given SQLite database.
@@ -61,11 +65,11 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 
 	query := `
 	SELECT id, transaction_id, transaction_hash, prior_commitment_hash, hash,
-		state_root_at_commit, l2_signature_digest, actuator_intent_signature_digest,
+		state_root_at_commit, l2_signature_digest, warden_intent_signature_digest,
 		human_signature_digest, action_type, target_resource,
-		committed_at_unix_ms, auditor_key_id, signature
+		committed_at_unix_ms, auditor_key_id, signature, attestation_json
 	FROM commitment_ledger
-	ORDER BY committed_at_unix_ms ASC
+	ORDER BY id ASC
 	`
 
 	type commitRow struct {
@@ -78,6 +82,7 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 		targetResource sql.NullString
 		auditorKeyID   sql.NullString
 		signature      sql.NullString
+		attestation    []byte
 		committedAtMs  int64
 	}
 
@@ -88,7 +93,7 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 			&row.row.PriorCommitmentHash, &row.row.Hash,
 			&row.stateRoot, &row.l2Digest, &row.actuatorDigest, &row.humanDigest,
 			&row.actionType, &row.targetResource, &row.committedAtMs,
-			&row.auditorKeyID, &row.signature,
+			&row.auditorKeyID, &row.signature, &row.attestation,
 		)
 		return row, err
 	})
@@ -106,7 +111,7 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 			row.row.L2SignatureDigest = row.l2Digest.String
 		}
 		if row.actuatorDigest.Valid {
-			row.row.ActuatorIntentSignatureDigest = row.actuatorDigest.String
+			row.row.WardenIntentSignatureDigest = row.actuatorDigest.String
 		}
 		if row.humanDigest.Valid {
 			row.row.HumanSignatureDigest = row.humanDigest.String
@@ -123,108 +128,92 @@ func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
 		if row.signature.Valid {
 			row.row.Signature = row.signature.String
 		}
+		row.row.AttestationJSON = row.attestation
 		results = append(results, &row.row)
 	}
 
 	return results, nil
 }
 
-// AppendCommitmentJSON atomically appends a new commitment (as JSON) to the ledger.
-// This operation is transactional to ensure two concurrent attestations cannot
-// both chain to the same prior_hash. The JSON must contain a "prior_commitment_hash" field.
+type commitmentFields struct {
+	TransactionID               string `json:"transaction_id"`
+	TransactionHash             string `json:"transaction_hash"`
+	StateRootAtCommit           string `json:"state_root_at_commit"`
+	L2SignatureDigest           string `json:"l2_signature_digest"`
+	WardenIntentSignatureDigest string `json:"warden_intent_signature_digest"`
+	HumanSignatureDigest        string `json:"human_signature_digest"`
+	ActionType                  string `json:"action_type"`
+	TargetResource              string `json:"target_resource"`
+	CommittedAtUnixMs           int64  `json:"committed_at_unix_ms"`
+	AuditorKeyID                string `json:"auditor_key_id"`
+	Signature                   string `json:"signature"`
+}
+
+// AppendCommitment builds and appends an attestation while holding SQLite's write lock so every ledger instance selects a unique chain head.
+func (cl *CommitmentLedger) AppendCommitment(build func(string) ([]byte, string, error)) error {
+	if cl == nil || cl.db == nil {
+		return fmt.Errorf("commitment ledger not initialized")
+	}
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		var priorHash string
+		err := conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&priorHash)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("commitment ledger: select head: %w", err)
+		}
+		attestationJSON, hash, err := build(priorHash)
+		if err != nil {
+			return fmt.Errorf("commitment ledger: build: %w", err)
+		}
+		return cl.appendCommitmentJSON(conn, attestationJSON, priorHash, hash)
+	})
+}
+
+// AppendCommitmentJSON appends a prebuilt attestation after verifying its prior hash under SQLite's write lock.
 func (cl *CommitmentLedger) AppendCommitmentJSON(attestationJSON []byte, priorHash, hash string) error {
 	if cl == nil || cl.db == nil {
 		return fmt.Errorf("commitment ledger not initialized")
 	}
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	return cl.db.ExecInImmediateTxWithRetry(context.Background(), func(conn *sql.Conn) error {
+		return cl.appendCommitmentJSON(conn, attestationJSON, priorHash, hash)
+	})
+}
+
+func (cl *CommitmentLedger) appendCommitmentJSON(conn *sql.Conn, attestationJSON []byte, priorHash, hash string) error {
 	if len(attestationJSON) == 0 {
 		return fmt.Errorf("attestation JSON is empty")
 	}
-
-	// Parse JSON to extract required fields for the structured columns
-	var fields struct {
-		TransactionID                 string `json:"transaction_id"`
-		TransactionHash               string `json:"transaction_hash"`
-		StateRootAtCommit             string `json:"state_root_at_commit"`
-		L2SignatureDigest             string `json:"l2_signature_digest"`
-		ActuatorIntentSignatureDigest string `json:"actuator_intent_signature_digest"`
-		HumanSignatureDigest          string `json:"human_signature_digest"`
-		ActionType                    string `json:"action_type"`
-		TargetResource                string `json:"target_resource"`
-		CommittedAtUnixMs             int64  `json:"committed_at_unix_ms"`
-		AuditorKeyID                  string `json:"auditor_key_id"`
-		Signature                     string `json:"signature"`
-	}
-
+	var fields commitmentFields
 	if err := json.Unmarshal(attestationJSON, &fields); err != nil {
 		return fmt.Errorf("failed to unmarshal attestation JSON: %w", err)
 	}
-
-	return cl.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
-		// Verify the prior_hash matches the current latest commitment (if any)
-		var currentPriorHash string
-		checkQuery := `
-		SELECT hash
-		FROM commitment_ledger
-		ORDER BY committed_at_unix_ms DESC
-		LIMIT 1
-		`
-		err := tx.QueryRow(checkQuery).Scan(&currentPriorHash)
-		if err != nil && err != sql.ErrNoRows {
-			return fmt.Errorf("failed to query current prior hash: %w", err)
-		}
-
-		// If ledger is not empty, verify chain integrity
-		if err != sql.ErrNoRows && currentPriorHash != priorHash {
-			return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
-		}
-
-		// Insert the new commitment
-		insertQuery := `
+	var currentPriorHash string
+	err := conn.QueryRowContext(context.Background(), `SELECT hash FROM commitment_ledger ORDER BY id DESC LIMIT 1`).Scan(&currentPriorHash)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to query current prior hash: %w", err)
+	}
+	if err != sql.ErrNoRows && currentPriorHash != priorHash {
+		return fmt.Errorf("prior_commitment_hash mismatch: expected %s, got %s", currentPriorHash, priorHash)
+	}
+	_, err = conn.ExecContext(context.Background(), `
 		INSERT INTO commitment_ledger (
-			transaction_id,
-			transaction_hash,
-			prior_commitment_hash,
-			state_root_at_commit,
-			l2_signature_digest,
-			actuator_intent_signature_digest,
-			human_signature_digest,
-			action_type,
-			target_resource,
-			committed_at_unix_ms,
-			auditor_key_id,
-			signature,
-			hash,
-			attestation_json
+			transaction_id, transaction_hash, prior_commitment_hash, state_root_at_commit,
+			l2_signature_digest, warden_intent_signature_digest, human_signature_digest,
+			action_type, target_resource, committed_at_unix_ms, auditor_key_id, signature,
+			hash, attestation_json
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`
-
-		_, err = tx.Exec(insertQuery,
-			fields.TransactionID,
-			fields.TransactionHash,
-			priorHash,
-			fields.StateRootAtCommit,
-			fields.L2SignatureDigest,
-			fields.ActuatorIntentSignatureDigest,
-			fields.HumanSignatureDigest,
-			fields.ActionType,
-			fields.TargetResource,
-			fields.CommittedAtUnixMs,
-			fields.AuditorKeyID,
-			fields.Signature,
-			hash,
-			attestationJSON,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert commitment: %w", err)
-		}
-
-		if cl.logger != nil {
-			cl.logger.Info("Commitment appended to ledger",
-				"transaction_id", fields.TransactionID,
-				"commitment_hash", hash,
-				"prior_commitment_hash", priorHash)
-		}
-
-		return nil
-	})
+	`, fields.TransactionID, fields.TransactionHash, priorHash, fields.StateRootAtCommit,
+		fields.L2SignatureDigest, fields.WardenIntentSignatureDigest, fields.HumanSignatureDigest,
+		fields.ActionType, fields.TargetResource, fields.CommittedAtUnixMs, fields.AuditorKeyID,
+		fields.Signature, hash, attestationJSON)
+	if err != nil {
+		return fmt.Errorf("failed to insert commitment: %w", err)
+	}
+	if cl.logger != nil {
+		cl.logger.Info("Commitment appended to ledger", "transaction_id", fields.TransactionID, "commitment_hash", hash, "prior_commitment_hash", priorHash)
+	}
+	return nil
 }

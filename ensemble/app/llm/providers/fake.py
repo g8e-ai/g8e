@@ -36,7 +36,6 @@ import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from app.constants.config import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_dataclasses import (
     Candidate,
     Content,
@@ -44,6 +43,7 @@ from app.llm.llm_dataclasses import (
     Part,
     StreamChunkFromModel,
     ToolCall,
+    ToolResponse,
     UsageMetadata,
 )
 from app.llm.llm_types import (
@@ -64,6 +64,7 @@ _FAKE_DEFAULT_CONTENT = "g8e fake provider deterministic output"
 # Tool name constants (matching OperatorToolName values from the protocol).
 _TOOL_FILE_CREATE = "file_create_on_operator"
 _TOOL_FILE_WRITE = "file_write_on_operator"
+_TOOL_RUN_COMMANDS = "run_commands_with_operator"
 
 # Regex patterns for extracting file path and content from the user message.
 _FILE_PATH_RE = re.compile(r"(?:file\s+at\s+|path\s*[:=]\s*|create.*?at\s+)([^\s,]+)", re.IGNORECASE)
@@ -93,6 +94,15 @@ class FakeProvider(LLMProvider):
         """Fake provider validation - always valid (no external dependencies)."""
         return []
 
+    @staticmethod
+    def _usage_metadata() -> UsageMetadata:
+        return UsageMetadata(
+            prompt_token_count=100,
+            candidates_token_count=50,
+            total_token_count=150,
+            usage_reported=True,
+        )
+
     def _extract_last_user_message(self, contents: list[Content]) -> str:
         """Extract the text of the last user message from the contents list."""
         for content in reversed(contents):
@@ -101,6 +111,14 @@ class FakeProvider(LLMProvider):
                 if parts:
                     return " ".join(parts)
         return ""
+
+    @staticmethod
+    def _last_tool_response(contents: list[Content]) -> ToolResponse | None:
+        for content in reversed(contents):
+            for part in reversed(content.parts):
+                if part.tool_response is not None:
+                    return part.tool_response
+        return None
 
     def _extract_file_path(self, message: str) -> str:
         """Extract a file path from the user message, falling back to default."""
@@ -116,12 +134,40 @@ class FakeProvider(LLMProvider):
             return match.group(1).strip().rstrip(".,:;")
         return _FAKE_DEFAULT_CONTENT
 
+    @staticmethod
+    def _build_tribunal_tool_call() -> ToolCall:
+        return ToolCall(
+            name=_TOOL_RUN_COMMANDS,
+            args={
+                "request": "Run a system uptime diagnostic.",
+                "guidelines": "Use the read-only uptime command.",
+                "expected_output_lines": 1,
+                "timeout_seconds": 30,
+                "target_operators": ["all"],
+            },
+            id="fake-tool-call-1",
+        )
+
     def _build_tool_call_response(self, message: str) -> GenerateContentResponse:
         """Build a GenerateContentResponse with the appropriate tool call."""
         msg_lower = message.lower()
         file_path = self._extract_file_path(message)
         content = self._extract_content(message)
 
+        if "through the tribunal" in msg_lower:
+            tool_call = self._build_tribunal_tool_call()
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[Part(tool_call=tool_call)],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                usage_metadata=self._usage_metadata(),
+            )
         if "create" in msg_lower and "file" in msg_lower:
             tool_name = _TOOL_FILE_CREATE
         elif "write" in msg_lower and "file" in msg_lower:
@@ -137,7 +183,8 @@ class FakeProvider(LLMProvider):
                         ),
                         finish_reason="STOP",
                     )
-                ]
+                ],
+                usage_metadata=self._usage_metadata(),
             )
 
         tool_call = ToolCall(
@@ -161,17 +208,22 @@ class FakeProvider(LLMProvider):
                     finish_reason="STOP",
                 )
             ],
-            usage_metadata=UsageMetadata(
-                prompt_token_count=100,
-                candidates_token_count=50,
-                total_token_count=150,
-            ),
+            usage_metadata=self._usage_metadata(),
         )
 
     def _build_stream_chunks(self, message: str) -> list[StreamChunkFromModel]:
         """Build a list of StreamChunkFromModel for the streaming primary path."""
         msg_lower = message.lower()
 
+        if "through the tribunal" in msg_lower:
+            tool_call = self._build_tribunal_tool_call()
+            return [
+                StreamChunkFromModel(
+                    tool_calls=[tool_call],
+                    finish_reason="STOP",
+                    usage_metadata=self._usage_metadata(),
+                )
+            ]
         if "create" in msg_lower and "file" in msg_lower:
             tool_name = _TOOL_FILE_CREATE
         elif "write" in msg_lower and "file" in msg_lower:
@@ -181,6 +233,7 @@ class FakeProvider(LLMProvider):
                 StreamChunkFromModel(
                     text="No tool call needed for this request.",
                     finish_reason="STOP",
+                    usage_metadata=self._usage_metadata(),
                 )
             ]
 
@@ -202,11 +255,7 @@ class FakeProvider(LLMProvider):
             StreamChunkFromModel(
                 tool_calls=[tool_call],
                 finish_reason="STOP",
-                usage_metadata=UsageMetadata(
-                    prompt_token_count=100,
-                    candidates_token_count=50,
-                    total_token_count=150,
-                ),
+                usage_metadata=self._usage_metadata(),
             ),
         ]
 
@@ -224,6 +273,42 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
+        tool_response = self._last_tool_response(contents)
+        if (
+            tool_response is not None
+            and tool_response.name == _TOOL_RUN_COMMANDS
+            and tool_response.response.get("success") is True
+        ):
+            message = self._extract_last_user_message(contents)
+            yield StreamChunkFromModel(
+                tool_calls=[
+                    ToolCall(
+                        name=_TOOL_FILE_CREATE,
+                        args={
+                            "file_path": self._extract_file_path(message),
+                            "content": _FAKE_DEFAULT_CONTENT,
+                            "justification": "Create the requested marker after Tribunal verification",
+                            "target_operators": ["all"],
+                        },
+                        id="fake-tool-call-2",
+                    )
+                ],
+                finish_reason="STOP",
+                usage_metadata=self._usage_metadata(),
+            )
+            return
+        if tool_response is not None:
+            result_text = (
+                "Tool execution completed successfully."
+                if tool_response.response.get("success") is not False
+                else "Tool execution failed."
+            )
+            yield StreamChunkFromModel(
+                text=result_text,
+                finish_reason="STOP",
+                usage_metadata=self._usage_metadata(),
+            )
+            return
         message = self._extract_last_user_message(contents)
         logger.info("[FAKE-PROVIDER] stream_primary: message=%s", message[:100])
         for chunk in self._build_stream_chunks(message):
@@ -243,6 +328,56 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
+        tool_response = self._last_tool_response(contents)
+        if (
+            tool_response is not None
+            and tool_response.name == _TOOL_RUN_COMMANDS
+            and tool_response.response.get("success") is True
+        ):
+            message = self._extract_last_user_message(contents)
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[
+                                Part(
+                                    tool_call=ToolCall(
+                                        name=_TOOL_FILE_CREATE,
+                                        args={
+                                            "file_path": self._extract_file_path(message),
+                                            "content": _FAKE_DEFAULT_CONTENT,
+                                            "justification": "Create the requested marker after Tribunal verification",
+                                            "target_operators": ["all"],
+                                        },
+                                        id="fake-tool-call-2",
+                                    )
+                                )
+                            ],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                usage_metadata=self._usage_metadata(),
+            )
+        if tool_response is not None:
+            result_text = (
+                "Tool execution completed successfully."
+                if tool_response.response.get("success") is not False
+                else "Tool execution failed."
+            )
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[Part(text=result_text)],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                usage_metadata=self._usage_metadata(),
+            )
         message = self._extract_last_user_message(contents)
         logger.info("[FAKE-PROVIDER] primary: message=%s", message[:100])
         return self._build_tool_call_response(message)
@@ -261,7 +396,11 @@ class FakeProvider(LLMProvider):
                 "assistant_llm_settings": assistant_llm_settings,
             }
         )
-        yield StreamChunkFromModel(text="Fake assistant response.", finish_reason="STOP")
+        yield StreamChunkFromModel(
+            text="Fake assistant response.",
+            finish_reason="STOP",
+            usage_metadata=self._usage_metadata(),
+        )
 
     async def generate_content_assistant(
         self,
@@ -283,7 +422,8 @@ class FakeProvider(LLMProvider):
                     content=Content(role="model", parts=[Part(text="Fake assistant response.")]),
                     finish_reason="STOP",
                 )
-            ]
+            ],
+            usage_metadata=self._usage_metadata(),
         )
 
     async def generate_content_stream_lite(
@@ -300,7 +440,11 @@ class FakeProvider(LLMProvider):
                 "lite_llm_settings": lite_llm_settings,
             }
         )
-        yield StreamChunkFromModel(text="Fake lite response.", finish_reason="STOP")
+        yield StreamChunkFromModel(
+            text="Fake lite response.",
+            finish_reason="STOP",
+            usage_metadata=self._usage_metadata(),
+        )
 
     async def generate_content_lite(
         self,
@@ -316,18 +460,25 @@ class FakeProvider(LLMProvider):
                 "lite_llm_settings": lite_llm_settings,
             }
         )
-        text = self._build_lite_response_text(lite_llm_settings)
+        text = self._build_lite_response_text(
+            lite_llm_settings,
+            self._extract_last_user_message(contents),
+        )
         return GenerateContentResponse(
             candidates=[
                 Candidate(
                     content=Content(role="model", parts=[Part(text=text)]),
                     finish_reason="STOP",
                 )
-            ]
+            ],
+            usage_metadata=self._usage_metadata(),
         )
 
-    @staticmethod
-    def _build_lite_response_text(lite_llm_settings: LiteLLMSettings) -> str:
+    def _build_lite_response_text(
+        self,
+        lite_llm_settings: LiteLLMSettings,
+        message: str,
+    ) -> str:
         """Build a deterministic lite-tier response.
 
         When a structured ``response_format`` is provided, return a JSON object
@@ -340,11 +491,61 @@ class FakeProvider(LLMProvider):
 
         rf = getattr(lite_llm_settings, "response_format", None)
         if rf is None:
+            if message.rstrip().endswith(
+                "Respond now with the exact command string and nothing else."
+            ):
+                return "cat /proc/uptime"
+            if message.rstrip().endswith(
+                "Respond now with the JSON object and nothing else."
+            ):
+                return json.dumps(
+                    {
+                        "status": "ok",
+                        "revised_command": None,
+                        "swap_to_cluster": None,
+                    }
+                )
             return "Fake lite response."
 
         schema = getattr(rf.json_schema, "json_schema_dict", None) or {}
         properties = schema.get("properties", {}) if isinstance(schema, dict) else {}
         prop_names = set(properties.keys()) if isinstance(properties, dict) else set()
+
+        if {"complexity", "intent", "intent_summary"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "complexity": "complex",
+                    "complexity_confidence": "high",
+                    "intent": "action",
+                    "intent_confidence": "high",
+                    "intent_summary": "Execute the requested deterministic operator action.",
+                    "request_posture": "normal",
+                    "posture_confidence": "high",
+                }
+            )
+
+        if prop_names == {"command"}:
+            return json.dumps({"command": "cat /proc/uptime"})
+
+        if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "status": "ok",
+                    "revised_command": None,
+                    "swap_to_cluster": None,
+                }
+            )
+
+        if {"score", "reasoning"}.issubset(prop_names):
+            return json.dumps(
+                {
+                    "score": 5,
+                    "reasoning": "Deterministic fake-provider evaluation passed.",
+                }
+            )
+
+        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}):
+            return json.dumps({"risk_level": "LOW"})
 
         # FileOperationRiskAnalysis: risk_level, is_system_file, safe_to_proceed,
         # blocking_issues, approval_prompt

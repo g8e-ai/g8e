@@ -13,10 +13,14 @@ import { DocsTreeResponse, DocsFileResponse, ErrorResponse } from '../../models/
  * @param {Object} options
  * @param {Object} options.config - Platform configuration object
  * @param {Object} options.authMiddleware - Auth middleware object
+ * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createDocsRouter({ config, authMiddleware }) {
+export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
     const { optionalAuth } = authMiddleware;
+    const { apiRateLimiter } = rateLimiters;
     const router = express.Router();
+
+    router.use(apiRateLimiter);
 
     const docsDir = config.docs_dir || DEFAULT_DOCS_DIR;
     const readmePath = config.readme_path || null;
@@ -82,9 +86,15 @@ export function createDocsRouter({ config, authMiddleware }) {
             }
         }
 
+        const docsRoot = path.resolve(docsDir);
         const resolved = path.resolve(docsDir, filePath);
-        if (!resolved.startsWith(path.resolve(docsDir) + path.sep) && resolved !== path.resolve(docsDir)) {
+        const relative = path.relative(docsRoot, resolved);
+        if (relative.startsWith('..')) {
             logger.warn('[DOCS] Path traversal attempt blocked', { filePath, userId: req.userId });
+            return res.status(403).json(new ErrorResponse({ error: 'Access denied' }).forClient());
+        }
+        if (path.isAbsolute(relative)) {
+            logger.warn('[DOCS] Cross-drive path blocked', { filePath, userId: req.userId });
             return res.status(403).json(new ErrorResponse({ error: 'Access denied' }).forClient());
         }
 

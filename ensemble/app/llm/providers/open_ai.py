@@ -79,6 +79,23 @@ def _contents_to_messages(
     return messages
 
 
+def _token_count(value) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _usage_from_sdk(response_usage) -> UsageMetadata:
+    if not response_usage:
+        return UsageMetadata()
+    details = getattr(response_usage, "prompt_tokens_details", None)
+    return UsageMetadata(
+        prompt_token_count=_token_count(getattr(response_usage, "prompt_tokens", 0)),
+        candidates_token_count=_token_count(getattr(response_usage, "completion_tokens", 0)),
+        total_token_count=_token_count(getattr(response_usage, "total_tokens", 0)),
+        cache_token_count=_token_count(getattr(details, "cached_tokens", 0)),
+        usage_reported=True,
+    )
+
+
 def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
     if not tools:
         return None
@@ -174,6 +191,8 @@ class OpenAIProvider(LLMProvider):
             "max_tokens": max_tokens,
             "stream": stream,
         }
+        if stream:
+            kwargs["stream_options"] = {"include_usage": True}
         if top_p is not None:
             kwargs["top_p"] = top_p
         if stop:
@@ -243,6 +262,7 @@ class OpenAIProvider(LLMProvider):
                 stream=False,
                 thinking_config=primary_llm_settings.thinking_config,
             )
+            self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
@@ -268,13 +288,7 @@ class OpenAIProvider(LLMProvider):
                         )
                     yield StreamChunkFromModel(tool_calls=calls)
 
-            usage = None
-            if response.usage:
-                usage = UsageMetadata(
-                    prompt_token_count=response.usage.prompt_tokens or 0,
-                    candidates_token_count=response.usage.completion_tokens or 0,
-                    total_token_count=response.usage.total_tokens or 0,
-                )
+            usage = _usage_from_sdk(response.usage)
             yield StreamChunkFromModel(finish_reason=finish_reason or "stop", usage_metadata=usage)
         else:
             kwargs = self._build_openai_kwargs(
@@ -287,11 +301,15 @@ class OpenAIProvider(LLMProvider):
                 stream=True,
                 thinking_config=primary_llm_settings.thinking_config,
             )
+            self._record_model_boundary(kwargs)
             stream = await self._client.chat.completions.create(**kwargs)
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
                 finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+                usage = _usage_from_sdk(getattr(chunk, "usage", None))
+                if usage.usage_reported:
+                    yield StreamChunkFromModel(usage_metadata=usage)
 
                 if delta:
                     # Check for reasoning content (OpenAI)
@@ -331,6 +349,7 @@ class OpenAIProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
         try:
+            self._record_model_boundary(kwargs)
             response = await self._client.chat.completions.create(**kwargs)
         except Exception as e:
             translate_capability_error(
@@ -369,13 +388,7 @@ class OpenAIProvider(LLMProvider):
                         )
                     )
 
-        usage = None
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=response.usage.prompt_tokens or 0,
-                candidates_token_count=response.usage.completion_tokens or 0,
-                total_token_count=response.usage.total_tokens or 0,
-            )
+        usage = _usage_from_sdk(response.usage)
 
         return GenerateContentResponse(
             candidates=[
@@ -437,6 +450,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
@@ -498,6 +512,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=False,
         )
+        self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
@@ -506,13 +521,7 @@ class OpenAIProvider(LLMProvider):
         if choice and choice.message and choice.message.content:
             parts.append(Part(text=choice.message.content))
 
-        usage = None
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=response.usage.prompt_tokens or 0,
-                candidates_token_count=response.usage.completion_tokens or 0,
-                total_token_count=response.usage.total_tokens or 0,
-            )
+        usage = _usage_from_sdk(response.usage)
 
         return GenerateContentResponse(
             candidates=[
@@ -574,6 +583,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        self._record_model_boundary(kwargs)
         stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
@@ -633,6 +643,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=False,
         )
+        self._record_model_boundary(kwargs)
         response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
@@ -641,13 +652,7 @@ class OpenAIProvider(LLMProvider):
         if choice and choice.message and choice.message.content:
             parts.append(Part(text=choice.message.content))
 
-        usage = None
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=response.usage.prompt_tokens or 0,
-                candidates_token_count=response.usage.completion_tokens or 0,
-                total_token_count=response.usage.total_tokens or 0,
-            )
+        usage = _usage_from_sdk(response.usage)
 
         return GenerateContentResponse(
             candidates=[

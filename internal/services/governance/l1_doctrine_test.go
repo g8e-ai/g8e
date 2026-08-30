@@ -8,6 +8,7 @@
 package governance
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1304,6 +1305,16 @@ func FuzzAnalyzeMCPArguments(f *testing.F) {
 			}
 		}
 	})
+}
+
+func TestNewL1Doctrine_BundleIdentityIsStableAndNonEmpty(t *testing.T) {
+	t.Parallel()
+	first := NewL1Doctrine()
+	second := NewL1Doctrine()
+
+	assert.Len(t, first.DoctrineBundleHash(), sha256.Size*2)
+	assert.Equal(t, first.DoctrineBundleHash(), second.DoctrineBundleHash())
+	assert.Equal(t, builtInDoctrineVersion, first.DoctrineBundleVersion())
 }
 
 func TestNewL1DoctrineFromDir_EmptyDir_FallsBack(t *testing.T) {

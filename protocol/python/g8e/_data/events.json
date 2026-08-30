@@ -824,6 +824,10 @@
       "_go_const": "EventOperatorReputationSlashTier3",
       "value": "g8e.v1.operator.reputation.slash.tier3"
     },
+    "OperatorReputationStakeResolutionCreated": {
+      "_go_const": "EventOperatorReputationStakeResolutionCreated",
+      "value": "g8e.v1.operator.reputation.stake.resolution.created"
+    },
     "OperatorReputationStateUpdated": {
       "_go_const": "EventOperatorReputationStateUpdated",
       "value": "g8e.v1.operator.reputation.state.updated"
@@ -1167,6 +1171,10 @@
     "AiReputationStateUpdated": {
       "_go_const": "EventAiReputationStateUpdated",
       "value": "g8e.v1.ai.reputation.state.updated"
+    },
+    "AppAgentActivityRecorded": {
+      "_go_const": "EventAppAgentActivityRecorded",
+      "value": "g8e.v1.app.agent.activity.recorded"
     },
     "AppCaseDeleted": {
       "_go_const": "EventAppCaseDeleted",

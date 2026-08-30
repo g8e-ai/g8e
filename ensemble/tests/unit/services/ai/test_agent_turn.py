@@ -91,6 +91,8 @@ class TestHandleUsageChunk:
                 prompt_token_count=10,
                 candidates_token_count=20,
                 total_token_count=30,
+                cache_token_count=6,
+                usage_reported=True,
             )
         )
 
@@ -99,6 +101,8 @@ class TestHandleUsageChunk:
         assert state.input_tokens == 10
         assert state.output_tokens == 20
         assert state.total_tokens == 30
+        assert state.cache_tokens == 6
+        assert state.usage_reported is True
 
     def test_handles_none_values_in_usage(self):
         """Test handle_usage_chunk handles None values gracefully."""
@@ -150,6 +154,7 @@ class TestHandleUsageChunk:
         assert state.input_tokens == 0
         assert state.output_tokens == 0
         assert state.total_tokens == 0
+        assert state.usage_reported is False
 
 
 class TestHandleFinishReasonChunk:

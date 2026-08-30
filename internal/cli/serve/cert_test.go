@@ -479,7 +479,9 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		block, _ := pem.Decode(pemData)
 		require.NotNil(t, block)
 		assert.Equal(t, "PUBLIC KEY", block.Type)
-		assert.Equal(t, []byte(pubKey), block.Bytes)
+		parsedKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+		require.NoError(t, err)
+		assert.Equal(t, pubKey, parsedKey)
 
 		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
 		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)

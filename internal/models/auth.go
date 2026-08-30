@@ -163,6 +163,18 @@ type OperatorSlotResponse struct {
 	Operators []OperatorDocumentGo `json:"operators"`
 }
 
+type OperatorSessionValidationRequest struct {
+	OperatorSessionID string `json:"operator_session_id"`
+	CLISessionID      string `json:"cli_session_id"`
+	UserID            string `json:"user_id"`
+}
+
+type OperatorSessionValidationResponse struct {
+	Valid      bool   `json:"valid"`
+	OperatorID string `json:"operator_id"`
+	UserID     string `json:"user_id"`
+}
+
 type OperatorResponse struct {
 	Success  bool                `json:"success"`
 	Operator *OperatorDocumentGo `json:"operator,omitempty"`

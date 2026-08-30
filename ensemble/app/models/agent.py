@@ -28,6 +28,8 @@ from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
+from app.models.events import ScrubbingTelemetry
+from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
 from app.models.command_request_payloads import TargetedOperatorBase
@@ -199,6 +201,7 @@ class AgentInputs(G8eBaseModel):
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
+    scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     context_sizes: dict[str, int] = Field(default_factory=dict)
 
     @property
@@ -225,6 +228,7 @@ class AgentStreamState(G8eBaseModel):
 
     response_text: str = ""
     token_usage: TokenUsage | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     finish_reason: str | None = None
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
@@ -259,6 +263,7 @@ class StreamChunkData(G8eBaseModel):
     response_length: int | None = None
     grounding_used: bool | None = None
     token_usage: TokenUsage | None = None
+    model_calls: list[ModelCallTelemetry] = Field(default_factory=list)
     error: str | None = None
     error_type: str | None = None
     success: bool | None = None
@@ -288,6 +293,9 @@ class TurnResult(G8eBaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
+    thinking_tokens: int = 0
+    cache_tokens: int = 0
+    usage_reported: bool = False
 
 
 class ToolCallResponse(G8eBaseModel):

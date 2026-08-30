@@ -4,7 +4,7 @@
 import { now } from '../../models/base.js';
 import { OperatorAuthResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
-import { redactWebSessionId } from '../../utils/security.js';
+import { redactWebSessionId, redactApiKey } from '../../utils/security.js';
 import {
     ApiKeyError,
     DeviceLinkError,
@@ -165,7 +165,7 @@ export class OperatorAuthService {
         const keyValidation = await this.apiKeyService.validateKey(api_key);
         if (!keyValidation.success || !keyValidation.data) {
             logger.error('[OPERATOR-AUTH] API key validation failed', {
-                api_key_prefix: api_key.substring(0, 10) + '...',
+                api_key_prefix: redactApiKey(api_key),
                 error: keyValidation.error,
             });
             return {
@@ -181,7 +181,7 @@ export class OperatorAuthService {
 
         if (!operator_id) {
             logger.error('[OPERATOR-AUTH] Download-only API key used for Operator auth', {
-                api_key_prefix: api_key.substring(0, 10) + '...',
+                api_key_prefix: redactApiKey(api_key),
                 user_id,
                 client_name: keyData.client_name,
             });
@@ -221,7 +221,7 @@ export class OperatorAuthService {
         if (!user) {
             logger.error('[OPERATOR-AUTH] User not found', {
                 user_id,
-                api_key_prefix: api_key.substring(0, 10) + '...',
+                api_key_prefix: redactApiKey(api_key),
             });
             return {
                 success: false,
@@ -236,7 +236,7 @@ export class OperatorAuthService {
             logger.error('[OPERATOR-AUTH] Operator not found', {
                 operator_id,
                 user_id,
-                api_key_prefix: api_key.substring(0, 10) + '...',
+                api_key_prefix: redactApiKey(api_key),
             });
             return {
                 success: false,
@@ -251,7 +251,7 @@ export class OperatorAuthService {
                 operator_id,
                 operator_user_id: operator.user_id,
                 authenticated_user_id: user_id,
-                api_key_prefix: api_key.substring(0, 10) + '...',
+                api_key_prefix: redactApiKey(api_key),
             });
             return {
                 success: false,

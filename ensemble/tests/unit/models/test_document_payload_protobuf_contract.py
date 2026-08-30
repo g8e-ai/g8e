@@ -30,7 +30,7 @@ from app.models.command_request_payloads import (
     DocumentUpdateRequestPayload,
     G8eCommandPayload,
 )
-from app.proto import operator_pb2
+from g8e.operator.v1 import operator_pb2
 from app.clients.governance_client import PAYLOAD_TYPE_MAPPING
 from typing import get_args
 
@@ -199,6 +199,7 @@ class TestEventTypeToActionTypeContract:
     @pytest.mark.parametrize(
         "event_type,expected",
         [
+            (EventType.APP_AGENT_ACTIVITY_RECORDED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_CREATED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_UPDATED, "DOCUMENT_UPDATE"),
             (EventType.APP_CASE_DELETED, "DOCUMENT_DELETE"),
@@ -207,6 +208,9 @@ class TestEventTypeToActionTypeContract:
             (EventType.APP_INVESTIGATION_CREATED, "DOCUMENT_UPDATE"),
             (EventType.APP_INVESTIGATION_UPDATED, "DOCUMENT_UPDATE"),
             (EventType.APP_INVESTIGATION_DELETED, "DOCUMENT_DELETE"),
+            (EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED, "DOCUMENT_UPDATE"),
+            (EventType.OPERATOR_REPUTATION_STAKE_RESOLUTION_CREATED, "DOCUMENT_UPDATE"),
+            (EventType.OPERATOR_REPUTATION_STATE_UPDATED, "DOCUMENT_UPDATE"),
         ],
     )
     def test_app_document_events_map_to_document_actions(self, event_type, expected):

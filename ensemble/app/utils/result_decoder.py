@@ -33,7 +33,7 @@ from app.models.pubsub_messages import (
     G8eoResultPayloadAdapter,
     G8eoHeartbeatPayload,
 )
-from app.proto import common_pb2
+from g8e.common.v1 import common_pb2
 from google.protobuf.json_format import MessageToDict, ParseDict
 
 

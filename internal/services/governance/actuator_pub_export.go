@@ -3,6 +3,7 @@ package governance
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -23,9 +24,13 @@ func ExportActuatorPublicKey(fileSvc fs.RuntimeFileService, pubKey ed25519.Publi
 	}
 
 	pemRelPath := filepath.Join(constants.PkiDirname, constants.ActuatorPubPEMFilename)
+	publicKeyDER, err := x509.MarshalPKIXPublicKey(pubKey)
+	if err != nil {
+		return fmt.Errorf("%w: marshal actuator public key: %w", constants.ErrCertSaveFailed, err)
+	}
 	pemData := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
-		Bytes: pubKey,
+		Bytes: publicKeyDER,
 	})
 	if err := fileSvc.WriteFile(context.Background(), pemRelPath, pemData, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)

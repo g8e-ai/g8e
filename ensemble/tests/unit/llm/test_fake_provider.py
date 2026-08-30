@@ -63,6 +63,49 @@ class TestFakeProviderFileCreate:
         assert tool_calls[0].args["file_path"] == "/tmp/test.txt"
         assert tool_calls[0].args["content"] == "test content"
 
+    @pytest.mark.asyncio
+    async def test_stream_primary_returns_final_text_after_tool_response(self, provider, settings):
+        contents = _user_content(
+            "Create a new file at /tmp/test.txt with the content: test content"
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution completed successfully."
+        assert chunks[0].tool_calls == []
+        assert chunks[0].usage_metadata.usage_reported is True
+        assert chunks[0].usage_metadata.total_token_count > 0
+
+    @pytest.mark.asyncio
+    async def test_generate_primary_returns_final_text_after_tool_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Create a new file at /tmp/test.txt with the content: test content"
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        response = await provider.generate_content_primary("fake-model", contents, settings)
+
+        assert response.text == "Tool execution completed successfully."
+        assert response.tool_calls == []
+
 
 class TestFakeProviderFileWrite:
     """Verify the fake provider generates file_write tool calls."""
@@ -157,7 +200,7 @@ class TestFakeProviderFactoryWiring:
 
     def test_factory_returns_fake_provider(self):
         from app.constants import LLMProvider
-        from app.llm.factory import get_llm_provider, clear_provider_cache
+        from app.llm.factory import get_llm_provider
         from app.models.settings import LLMSettings
 
         settings = LLMSettings(
@@ -186,6 +229,30 @@ class TestFakeProviderLiteStructuredResponse:
         )
         text = response.candidates[0].content.parts[0].text
         assert text == "Fake lite response."
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_command_risk_analysis_json(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.tool_results import CommandRiskAnalysis
+
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(
+                {
+                    "type": "object",
+                    "properties": {
+                        "risk_level": {"type": "string", "enum": ["HIGH", "LOW", "MEDIUM"]}
+                    },
+                    "required": ["risk_level"],
+                }
+            )
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("analyze command risk"), settings
+        )
+
+        result = CommandRiskAnalysis.model_validate_json(response.text)
+        assert result.risk_level.value == "LOW"
+        assert response.usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
     async def test_lite_returns_file_risk_analysis_json(self, provider):
@@ -256,3 +323,191 @@ class TestFakeProviderLiteStructuredResponse:
         assert parsed["category"] == "a"
         assert parsed["count"] == 0
         assert parsed["enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_schema_valid_triage_with_reported_usage(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.agents.triage import TriageResult
+
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(TriageResult.model_json_schema())
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("classify request"), settings
+        )
+
+        TriageResult.model_validate_json(response.text)
+        assert response.usage_metadata.usage_reported is True
+        assert response.usage_metadata.total_token_count > 0
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_safe_command_for_tribunal_prompt(self, provider):
+        response = await provider.generate_content_lite(
+            "fake-model",
+            _user_content(
+                "<request>\nCreate the marker file at /tmp/g8e-role-complete.txt.\n"
+                "</request>\nRespond now with the exact command string and nothing else."
+            ),
+            LiteLLMSettings(),
+        )
+
+        assert response.text == "cat /proc/uptime"
+        assert response.usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_approval_for_tribunal_auditor_prompt(self, provider):
+        from app.services.ai.auditor_service import TribunalAuditorResponse
+
+        response = await provider.generate_content_lite(
+            "fake-model",
+            _user_content(
+                "<request>\naudit the unanimous command\n</request>\n"
+                "<auditor_context>unanimous</auditor_context>\n"
+                "Respond now with the JSON object and nothing else."
+            ),
+            LiteLLMSettings(),
+        )
+
+        result = TribunalAuditorResponse.model_validate_json(response.text)
+        assert result.status.value == "ok"
+        assert response.usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_lite_returns_passing_eval_judge_grade(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(
+                {
+                    "type": "object",
+                    "properties": {
+                        "score": {"type": "integer", "minimum": 1, "maximum": 5},
+                        "reasoning": {"type": "string"},
+                    },
+                    "required": ["score", "reasoning"],
+                }
+            )
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("grade this attempt"), settings
+        )
+
+        import json
+
+        result = json.loads(response.text)
+        assert result == {
+            "score": 5,
+            "reasoning": "Deterministic fake-provider evaluation passed.",
+        }
+        assert response.usage_metadata.usage_reported is True
+
+
+class TestFakeProviderTribunalToolCall:
+    @pytest.mark.asyncio
+    async def test_stream_primary_routes_explicit_tribunal_request_to_command_tool(
+        self, provider, settings
+    ):
+        message = (
+            "Create the marker file at /tmp/g8e-role-complete.txt through the Tribunal "
+            "and answer without commas."
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", _user_content(message), settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert len(chunks[0].tool_calls) == 1
+        tool_call = chunks[0].tool_calls[0]
+        assert tool_call.name == "run_commands_with_operator"
+        assert tool_call.args == {
+            "request": "Run a system uptime diagnostic.",
+            "guidelines": "Use the read-only uptime command.",
+            "expected_output_lines": 1,
+            "timeout_seconds": 30,
+            "target_operators": ["all"],
+        }
+        assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_creates_marker_after_tribunal_response(
+        self, provider, settings
+    ):
+        message = (
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents = _user_content(message)
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("run_commands_with_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert len(chunks[0].tool_calls) == 1
+        tool_call = chunks[0].tool_calls[0]
+        assert tool_call.name == "file_create_on_operator"
+        assert tool_call.args["file_path"] == "/tmp/g8e-role-complete.txt"
+        assert tool_call.args["content"] == "g8e fake provider deterministic output"
+        assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_terminates_after_marker_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution completed successfully."
+        assert chunks[0].tool_calls == []
+        assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_does_not_create_marker_after_failed_tribunal_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("run_commands_with_operator", {"success": False})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution failed."
+        assert chunks[0].tool_calls == []

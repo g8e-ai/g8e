@@ -357,12 +357,13 @@ From `protocol/constants/ports.json`:
 
 ### Python Test Suite
 
-The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` with 144 test functions (173 collected test cases) across 5 files:
+The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` covering constants, generated protobufs, models, canonical receipt verification, and package versioning:
 
 - `test_constants.py`: Constant dict loading, value integrity, and namespace conventions
 - `test_constants_loader.py`: Fail-closed protocol JSON loader integrity, empty/whitespace env var fallback, and source-tree fallback elimination
 - `test_enums.py`: Enum generation, name conversion helpers, dynamic attribute access, and extra enum generation
 - `test_models.py`: Model instantiation, validation rules, serialization round-trips, and `G8eBaseModel` behavior
+- `test_receipts.py`: Generated protobuf parsing, canonical receipt and stage-evidence vectors, Ed25519 receipt signatures, and persistence-attestation verification
 - `test_version.py`: Version string consistency with `pyproject.toml` and semver format
 
 Run locally:
@@ -376,11 +377,13 @@ CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
 
 ### Protocol Conformance Suite
 
-The conformance suite in `protocol/conformance/` contains 92 test functions across 3 files that enforce parity between Go constants, Python runtime values, and canonical JSON in `protocol/constants/`:
+The conformance suite in `protocol/conformance/` enforces parity between Go constants, Python runtime values, canonical JSON in `protocol/constants/`, and shared cryptographic vectors:
 
 - `test_constants.py`: JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
 - `test_models.py`: Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
 - `test_hash_parity.py`: Cross-language transaction hash parity using shared test vectors (`hash_vectors.json`), verifying Python `compute_transaction_hash` matches Go `GenerateMessageID` for standard, nested intent, unicode, empty payload, empty intent, optional omitted, and timestamp normalization cases
+- `protocol/action_receipt_canonicalization_test.go` and `protocol/python/tests/test_receipts.py`: Go/Python parity for `action_receipt_canonicalization.json`, `action_receipt_stage_evidence_canonicalization.json`, and `receipt_persistence_attestation_canonicalization.json`
+- `protocol/python/scripts/generate_protos.py --check`: CI synchronization check for generated Python `_pb2.py` modules and `.pyi` stubs
 
 Run locally:
 ```bash

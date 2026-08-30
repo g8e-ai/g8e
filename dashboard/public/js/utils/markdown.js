@@ -345,9 +345,13 @@ class MarkdownRenderer {
                 
                 mermaid.initialize({ startOnLoad: false, ...themeConfig });
                 
+                if (!this._DOMPurify) {
+                    throw new Error('DOMPurify is required for Mermaid rendering');
+                }
                 const id = `mermaid-${crypto.randomUUID()}`;
                 const { svg } = await mermaid.render(id, content);
-                element.innerHTML = svg;
+                const sanitizedSvg = this._DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
+                element.innerHTML = sanitizedSvg;
                 element.classList.remove('mermaid');
                 element.classList.add('mermaid-rendered');
             } catch (err) {

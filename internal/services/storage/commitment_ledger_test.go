@@ -36,7 +36,7 @@ func setupTestCommitmentLedger(t *testing.T) (*CommitmentLedger, *sqliteutil.DB)
 			prior_commitment_hash TEXT NOT NULL,
 			state_root_at_commit TEXT,
 			l2_signature_digest TEXT,
-			actuator_intent_signature_digest TEXT,
+			warden_intent_signature_digest TEXT,
 			human_signature_digest TEXT,
 			action_type TEXT,
 			target_resource TEXT,
@@ -148,7 +148,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_ValidJSON(t *testing.T) {
 		"transaction_hash": "thash123",
 		"state_root_at_commit": "sr123",
 		"l2_signature_digest": "l2sig123",
-		"actuator_intent_signature_digest": "act123",
+		"warden_intent_signature_digest": "act123",
 		"human_signature_digest": "hsig123",
 		"action_type": "write",
 		"target_resource": "/etc/nginx.conf",
@@ -178,7 +178,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_ChainIntegrity(t *testing.T) {
 		"transaction_hash": "thash001",
 		"state_root_at_commit": "sr001",
 		"l2_signature_digest": "l2sig001",
-		"actuator_intent_signature_digest": "act001",
+		"warden_intent_signature_digest": "act001",
 		"human_signature_digest": "hsig001",
 		"action_type": "write",
 		"target_resource": "/file1",
@@ -196,7 +196,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_ChainIntegrity(t *testing.T) {
 		"transaction_hash": "thash002",
 		"state_root_at_commit": "sr002",
 		"l2_signature_digest": "l2sig002",
-		"actuator_intent_signature_digest": "act002",
+		"warden_intent_signature_digest": "act002",
 		"human_signature_digest": "hsig002",
 		"action_type": "write",
 		"target_resource": "/file2",
@@ -214,7 +214,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_ChainIntegrity(t *testing.T) {
 		"transaction_hash": "thash003",
 		"state_root_at_commit": "sr003",
 		"l2_signature_digest": "l2sig003",
-		"actuator_intent_signature_digest": "act003",
+		"warden_intent_signature_digest": "act003",
 		"human_signature_digest": "hsig003",
 		"action_type": "write",
 		"target_resource": "/file3",
@@ -240,7 +240,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_WithLogger(t *testing.T) {
 		"transaction_hash": "thash123",
 		"state_root_at_commit": "sr123",
 		"l2_signature_digest": "l2sig123",
-		"actuator_intent_signature_digest": "act123",
+		"warden_intent_signature_digest": "act123",
 		"human_signature_digest": "hsig123",
 		"action_type": "write",
 		"target_resource": "/etc/nginx.conf",
@@ -264,7 +264,7 @@ func TestCommitmentLedger_AppendCommitmentJSON_WithoutLogger(t *testing.T) {
 		"transaction_hash": "thash123",
 		"state_root_at_commit": "sr123",
 		"l2_signature_digest": "l2sig123",
-		"actuator_intent_signature_digest": "act123",
+		"warden_intent_signature_digest": "act123",
 		"human_signature_digest": "hsig123",
 		"action_type": "write",
 		"target_resource": "/etc/nginx.conf",
@@ -287,7 +287,7 @@ func TestCommitmentLedger_JSONUnmarshal_AllFields(t *testing.T) {
 		"transaction_hash": "thash-abc",
 		"state_root_at_commit": "sroot-xyz",
 		"l2_signature_digest": "l2sig-def",
-		"actuator_intent_signature_digest": "actsig-ghi",
+		"warden_intent_signature_digest": "actsig-ghi",
 		"human_signature_digest": "hsig-jkl",
 		"action_type": "write",
 		"target_resource": "/etc/hosts",
@@ -297,17 +297,17 @@ func TestCommitmentLedger_JSONUnmarshal_AllFields(t *testing.T) {
 	}`)
 
 	var fields struct {
-		TransactionID                 string `json:"transaction_id"`
-		TransactionHash               string `json:"transaction_hash"`
-		StateRootAtCommit             string `json:"state_root_at_commit"`
-		L2SignatureDigest             string `json:"l2_signature_digest"`
-		ActuatorIntentSignatureDigest string `json:"actuator_intent_signature_digest"`
-		HumanSignatureDigest          string `json:"human_signature_digest"`
-		ActionType                    string `json:"action_type"`
-		TargetResource                string `json:"target_resource"`
-		CommittedAtUnixMs             int64  `json:"committed_at_unix_ms"`
-		AuditorKeyID                  string `json:"auditor_key_id"`
-		Signature                     string `json:"signature"`
+		TransactionID               string `json:"transaction_id"`
+		TransactionHash             string `json:"transaction_hash"`
+		StateRootAtCommit           string `json:"state_root_at_commit"`
+		L2SignatureDigest           string `json:"l2_signature_digest"`
+		WardenIntentSignatureDigest string `json:"warden_intent_signature_digest"`
+		HumanSignatureDigest        string `json:"human_signature_digest"`
+		ActionType                  string `json:"action_type"`
+		TargetResource              string `json:"target_resource"`
+		CommittedAtUnixMs           int64  `json:"committed_at_unix_ms"`
+		AuditorKeyID                string `json:"auditor_key_id"`
+		Signature                   string `json:"signature"`
 	}
 
 	err := json.Unmarshal(attestationJSON, &fields)
@@ -317,7 +317,7 @@ func TestCommitmentLedger_JSONUnmarshal_AllFields(t *testing.T) {
 	assert.Equal(t, "thash-abc", fields.TransactionHash)
 	assert.Equal(t, "sroot-xyz", fields.StateRootAtCommit)
 	assert.Equal(t, "l2sig-def", fields.L2SignatureDigest)
-	assert.Equal(t, "actsig-ghi", fields.ActuatorIntentSignatureDigest)
+	assert.Equal(t, "actsig-ghi", fields.WardenIntentSignatureDigest)
 	assert.Equal(t, "hsig-jkl", fields.HumanSignatureDigest)
 	assert.Equal(t, "write", fields.ActionType)
 	assert.Equal(t, "/etc/hosts", fields.TargetResource)
@@ -336,17 +336,17 @@ func TestCommitmentLedger_JSONUnmarshal_PartialFields(t *testing.T) {
 	}`)
 
 	var fields struct {
-		TransactionID                 string `json:"transaction_id"`
-		TransactionHash               string `json:"transaction_hash"`
-		StateRootAtCommit             string `json:"state_root_at_commit"`
-		L2SignatureDigest             string `json:"l2_signature_digest"`
-		ActuatorIntentSignatureDigest string `json:"actuator_intent_signature_digest"`
-		HumanSignatureDigest          string `json:"human_signature_digest"`
-		ActionType                    string `json:"action_type"`
-		TargetResource                string `json:"target_resource"`
-		CommittedAtUnixMs             int64  `json:"committed_at_unix_ms"`
-		AuditorKeyID                  string `json:"auditor_key_id"`
-		Signature                     string `json:"signature"`
+		TransactionID               string `json:"transaction_id"`
+		TransactionHash             string `json:"transaction_hash"`
+		StateRootAtCommit           string `json:"state_root_at_commit"`
+		L2SignatureDigest           string `json:"l2_signature_digest"`
+		WardenIntentSignatureDigest string `json:"warden_intent_signature_digest"`
+		HumanSignatureDigest        string `json:"human_signature_digest"`
+		ActionType                  string `json:"action_type"`
+		TargetResource              string `json:"target_resource"`
+		CommittedAtUnixMs           int64  `json:"committed_at_unix_ms"`
+		AuditorKeyID                string `json:"auditor_key_id"`
+		Signature                   string `json:"signature"`
 	}
 
 	err := json.Unmarshal(partialJSON, &fields)
@@ -447,7 +447,7 @@ func TestCommitmentLedger_ConcurrentAppendSafety(t *testing.T) {
 			"transaction_hash": "thash-%d",
 			"state_root_at_commit": "sr-%d",
 			"l2_signature_digest": "l2sig-%d",
-			"actuator_intent_signature_digest": "act-%d",
+			"warden_intent_signature_digest": "act-%d",
 			"human_signature_digest": "hsig-%d",
 			"action_type": "write",
 			"target_resource": "/file-%d",
@@ -475,7 +475,7 @@ func TestCommitmentLedger_MultipleCommitments(t *testing.T) {
 			"transaction_hash": "thash-%d",
 			"state_root_at_commit": "sr-%d",
 			"l2_signature_digest": "l2sig-%d",
-			"actuator_intent_signature_digest": "act-%d",
+			"warden_intent_signature_digest": "act-%d",
 			"human_signature_digest": "hsig-%d",
 			"action_type": "write",
 			"target_resource": "/file-%d",

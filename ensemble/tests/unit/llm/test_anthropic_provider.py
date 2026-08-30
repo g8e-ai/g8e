@@ -42,6 +42,7 @@ from app.llm.llm_types import (
     ToolResponse,
     Type,
 )
+from app.llm.model_evidence import model_boundary_hash
 
 pytestmark = [pytest.mark.unit]
 
@@ -266,10 +267,13 @@ class TestBuildUsage:
         mock_usage = MagicMock()
         mock_usage.input_tokens = 100
         mock_usage.output_tokens = 50
+        mock_usage.cache_read_input_tokens = 25
         result = _build_usage(mock_usage)
         assert result.prompt_token_count == 100
         assert result.candidates_token_count == 50
         assert result.total_token_count == 150
+        assert result.cache_token_count == 25
+        assert result.usage_reported is True
 
     def test_build_usage_none(self):
         from app.llm.providers.anthropic import _build_usage
@@ -278,6 +282,8 @@ class TestBuildUsage:
         assert result.prompt_token_count == 0
         assert result.candidates_token_count == 0
         assert result.total_token_count == 0
+        assert result.cache_token_count == 0
+        assert result.usage_reported is False
 
 
 class TestBuildResponse:
@@ -564,6 +570,7 @@ class TestPublicMethodsDelegateCorrectly:
         assert "top_p" not in call_kwargs
         assert call_kwargs["top_k"] == 50
         assert call_kwargs["system"] == "test"
+        assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
         assert result.candidates[0].content.parts[0].text == "ok"
 
     @pytest.mark.asyncio

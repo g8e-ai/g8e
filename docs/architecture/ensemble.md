@@ -5,8 +5,8 @@ parent: Architecture
 
 # Ensemble (g8ee)
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ## What g8ee Is
 
@@ -20,7 +20,8 @@ g8ee sits in the AI client tier of the platform. It is a consumer of the gateway
 
 - It authenticates to the gateway with an app workload identity (mTLS, enrolled via the owner-approved platform enrollment protocol on the gateway's plain-HTTP discovery surface).
 - It submits governed mutations by building `GovernanceEnvelope` transactions itself (transaction hash, nonce, L3 proof) and posting them directly to `POST /api/v1/governance/envelopes` via its `GovernanceClient` (`ensemble/app/clients/governance_client.py`). The gateway then routes the envelope through the five-layer governance pipeline. The ensemble does not use the MCP endpoint; MCP is the surface for external MCP clients (Claude Code, Codex, Goose, Gemini CLI). Because the gateway's `PrivilegedRouteRegistry` blocks app certificates from the governance endpoint with `ErrPrivilegedEndpointAccess` ("external apps cannot access privileged endpoints"), the ensemble presents the operator's mTLS cert (whose SPIFFE URI carries the operator session ID) on the governance transport, not its own app cert. See [Connection Model](#connection-model) for how the operator cert is made available to the ensemble.
-- It publishes user-facing events (progress, questions, results) to the gateway through `POST /api/v1/sse/push`, which the gateway streams to browser and CLI clients.
+- It publishes user-facing events (progress, questions, results) and typed reputation updates to the gateway through `POST /api/v1/sse/push`, which the gateway streams to browser and CLI clients.
+- Each model provider records monotonic timing, token usage when supplied by the provider, retry and finish metadata, and canonical hashes of the model-boundary input and output. The standalone eval package normalizes this telemetry with governance receipt evidence without storing secrets in analytical records.
 - It never touches a target host directly. All host mutations flow through the governed operator, which re-verifies every proof locally before execution.
 
 See [AI Agents and the g8e Governance Boundary](./agents.md) for the client surface contract and [SSE Streaming](./sse.md) for the event bridge g8ee publishes through.
@@ -48,7 +49,7 @@ The ensemble ships with its own Dockerfile (`ensemble/Dockerfile`), rooted at th
 - `make ensemble-lint` — runs ruff and pyright on the ensemble.
 - `make build-ensemble` — builds the ensemble Docker image.
 
-The ensemble test suite is co-located under `ensemble/tests/` and `ensemble/evals/`. It is not moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 4-tier test model as Tier 1 (unit, in-component), Tier 2 (in-process integration), Tier 3 (Docker E2E against the unified compose), and Tier 4 (external, real LLM/API). See [Ensemble Tests](../ensemble/tests.md) and the [Unified Docker Stack guide](../guides/unified_stack.md) for bringing up the whole platform.
+The application test suite lives under `ensemble/tests/`. The evidence-grade evaluation harness is a separate Python package under `ensemble/evals/` with its own `pyproject.toml`, lockfile, CLI, and CI job. `make evals-test` runs its Tier 1 and Tier 2 tests, and `make evals-lint` runs Ruff and Pyright. Neither suite is moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 4-tier test model as Tier 1 (unit, in-component), Tier 2 (in-process integration), Tier 3 (Docker E2E against the unified compose), and Tier 4 (external, real LLM/API). See [Ensemble Tests](../ensemble/tests.md), [Evals](../ensemble/evals.md), and the [Unified Docker Stack guide](../guides/unified_stack.md).
 
 ## License
 

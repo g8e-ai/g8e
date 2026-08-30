@@ -140,6 +140,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dataController.handleDataSettings)
 	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsValidate, h.operatorController.handleValidateOperatorSession)
 	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
 	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
 	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)

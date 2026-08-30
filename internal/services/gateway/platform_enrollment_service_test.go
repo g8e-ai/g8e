@@ -1056,6 +1056,7 @@ func TestPlatformEnrollmentService_ListPendingReturnsOwnerVisibleMetadata(t *tes
 	assert.Equal(t, "dashboard-1", pending.InstanceID)
 	assert.Equal(t, "dashboard.local", pending.Hostname)
 	assert.NotEmpty(t, pending.Fingerprints.App)
+	assert.False(t, pending.CreatedAt.IsZero())
 }
 
 // TestPlatformEnrollmentService_ListPendingExcludesTerminal proves that

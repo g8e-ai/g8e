@@ -416,7 +416,7 @@ class ChatPipelineService:
             attachment_parts = self.request_builder.format_attachment_parts(processed)
 
         investigation_sentinel_mode = investigation.sentinel_mode if investigation else True
-        contents = self.request_builder.build_contents_from_history(
+        built_contents = self.request_builder.build_contents_from_history(
             conversation_history=conversation_history,
             attachments=attachment_parts if attachment_parts else [],
             sentinel_mode=investigation_sentinel_mode,
@@ -438,8 +438,9 @@ class ChatPipelineService:
             max_tokens=max_tokens,
             conversation_history=conversation_history,
             system_instructions=system_instructions,
-            contents=contents,
+            contents=built_contents.contents,
             generation_config=generation_config,
+            scrubbing_observations=built_contents.scrubbing_observations,
             user_memories=user_memories,
             case_memories=case_memories,
             triage_result=triage_result,
@@ -619,7 +620,9 @@ class ChatPipelineService:
                 error=error,
             )
 
-            await self.agent_activity_data_service.record_activity(metadata)
+            await self.agent_activity_data_service.record_activity(
+                metadata, RequestContext.from_app_context(inputs.g8e_context)
+            )
             logger.info(
                 "Agent activity metadata recorded",
                 extra={

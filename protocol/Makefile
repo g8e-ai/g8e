@@ -11,6 +11,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 GO := go
+PYTHON := python3
 
 .PHONY: help
 help:
@@ -21,6 +22,8 @@ help:
 	@echo "  fmt           Format code"
 	@echo "  vet           Run go vet"
 	@echo "  lint          Run golangci-lint"
+	@echo "  python-proto  Generate Python protobuf modules"
+	@echo "  proto-check   Verify generated Python protobuf modules"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  openapi       Generate OpenAPI spec from protobuf"
@@ -45,6 +48,14 @@ lint:
 		echo "golangci-lint not found"; \
 		exit 1; \
 	fi
+
+.PHONY: python-proto
+python-proto:
+	@$(PYTHON) python/scripts/generate_protos.py
+
+.PHONY: proto-check
+proto-check:
+	@$(PYTHON) python/scripts/generate_protos.py --check
 
 .PHONY: openapi
 openapi:

@@ -223,6 +223,8 @@ const (
 	SecretsFileBootstrapDigest          = "bootstrap_digest.json"
 	SecretsFileActuatorSigningKey       = "actuator_signing_key"
 	SecretsFileActuatorKeyID            = "actuator_key_id"
+	SecretsFileAuditorSigningKey        = "auditor_signing_key"
+	SecretsFileAuditorKeyID             = "auditor_key_id"
 	SecretsFileAuditorHMACKey           = "auditor_hmac_key"
 	SecretsFileNotarySigningKey         = "notary_signing_key"
 	SecretsFileOperatorPrivateKey       = "operator_private_key"
@@ -408,14 +410,15 @@ const (
 
 // Test-specific constants for isolated test environments.
 const (
-	TestEmptyMachineIDFilename  = "empty-machine-id"
-	TestFileTxtFilename         = "test.txt"
-	TestNonexistentTxtFilename  = "nonexistent.txt"
-	TestResultsDirname          = "test-results"
-	TestVaultDirname            = "test-vault"
-	TestSecretManagerDBFilename = "secret_manager_test.db"
-	TestCertFilename            = "test-cert.pem"
-	TestKeyFilename             = "test-key.pem"
+	TestEmptyMachineIDFilename     = "empty-machine-id"
+	TestFileTxtFilename            = "test.txt"
+	TestNonexistentTxtFilename     = "nonexistent.txt"
+	TestResultsDirname             = "test-results"
+	TestVaultDirname               = "test-vault"
+	TestSecretManagerDBFilename    = "secret_manager_test.db"
+	TestCommitmentLedgerDBFilename = "commitment_ledger_test.db"
+	TestCertFilename               = "test-cert.pem"
+	TestKeyFilename                = "test-key.pem"
 
 	// Cert test filenames for internal/cli/serve/cert_test.go
 	TestCertCrtFilename         = "test.crt"

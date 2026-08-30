@@ -11,7 +11,11 @@ package tests
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"testing"
@@ -53,12 +57,17 @@ func TestCLIRefresh_ExpiredSessionRecoverable(t *testing.T) {
 	//    document with an ExpiresAt in the past. This simulates the TTL
 	//    elapsing without waiting for the real 7-day TTL.
 	cliSessionID := identity.CLISessionID
+	certBlock, _ := pem.Decode([]byte(identity.CLICertificate))
+	require.NotNil(t, certBlock)
+	cliCert, err := x509.ParseCertificate(certBlock.Bytes)
+	require.NoError(t, err)
+	certHash := sha256.Sum256(cliCert.Raw)
 	expiredSession := models.CLISession{
 		ID:                cliSessionID,
 		UserID:            identity.UserID,
 		OperatorSessionID: identity.OperatorSessionID,
 		SystemFingerprint: "sys-fp-int",
-		CertFingerprint:   "cert-fp-int",
+		CertFingerprint:   hex.EncodeToString(certHash[:]),
 		CertSerial:        "serial-int",
 		CreatedAt:         time.Now().Add(-2 * time.Hour),
 		ExpiresAt:         time.Now().Add(-1 * time.Hour), // expired
@@ -142,6 +151,6 @@ func TestCLIRefresh_ExpiredSessionRecoverable(t *testing.T) {
 	require.NoError(t, err)
 	_, _ = io.ReadAll(postRefreshResp.Body)
 	postRefreshResp.Body.Close()
-	assert.NotEqual(t, http.StatusUnauthorized, postRefreshResp.StatusCode,
-		"new session must be accepted on downstream endpoints (no longer expired)")
+	assert.Equal(t, http.StatusOK, postRefreshResp.StatusCode,
+		"new session must authenticate with the original certificate on downstream endpoints")
 }

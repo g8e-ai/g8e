@@ -51,7 +51,7 @@ func TestSubmitDocumentUpdate_BuildsCanonicalEnvelope(t *testing.T) {
 		StateRoot: "root-abc-123",
 	}
 
-	txHash, status, _, err := client.SubmitDocumentUpdate(context.Background(), Persona{ID: "test"}, req)
+	txHash, status, _, err := client.SubmitDocumentUpdate(context.Background(), Persona{ID: "test", CLISessionID: "cli-session-test-001"}, req)
 	require.NoError(t, err)
 	assert.NotEmpty(t, txHash, "transaction hash must be computed")
 	assert.Equal(t, http.StatusAccepted, status)
@@ -64,6 +64,7 @@ func TestSubmitDocumentUpdate_BuildsCanonicalEnvelope(t *testing.T) {
 	assertJSONField(t, env, "eventType", string(constants.EventAppDocumentUpdateRequested))
 	assertJSONField(t, env, "operatorId", req.OperatorID)
 	assertJSONField(t, env, "operatorSessionId", req.OperatorSessionID)
+	assertJSONField(t, env, "cliSessionId", "cli-session-test-001")
 	assertJSONField(t, env, "requestorUserId", req.RequestorUserID)
 	assertJSONField(t, env, "actingAppId", ActingAppG8ee)
 	assertJSONField(t, env, "stateMerkleRoot", req.StateRoot)
@@ -126,7 +127,7 @@ func TestSubmitDocumentDelete_BuildsCanonicalEnvelope(t *testing.T) {
 		StateRoot:         "root-def-456",
 	}
 
-	txHash, status, _, err := client.SubmitDocumentDelete(context.Background(), Persona{ID: "test"}, req)
+	txHash, status, _, err := client.SubmitDocumentDelete(context.Background(), Persona{ID: "test", CLISessionID: "cli-session-test-002"}, req)
 	require.NoError(t, err)
 	assert.NotEmpty(t, txHash, "transaction hash must be computed")
 	assert.Equal(t, http.StatusAccepted, status)
@@ -138,6 +139,7 @@ func TestSubmitDocumentDelete_BuildsCanonicalEnvelope(t *testing.T) {
 	assertJSONField(t, env, "eventType", string(constants.EventAppDocumentDeleteRequested))
 	assertJSONField(t, env, "operatorId", req.OperatorID)
 	assertJSONField(t, env, "operatorSessionId", req.OperatorSessionID)
+	assertJSONField(t, env, "cliSessionId", "cli-session-test-002")
 	assertJSONField(t, env, "requestorUserId", req.RequestorUserID)
 	assertJSONField(t, env, "actingAppId", ActingAppG8ee)
 	assertJSONField(t, env, "stateMerkleRoot", req.StateRoot)

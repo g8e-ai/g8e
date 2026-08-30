@@ -64,6 +64,12 @@ Internal `SessionEvent` and `BackgroundEvent` objects are converted into protoco
 | `SessionEvent` | `user_id`, and exactly one of `web_session_id` or `cli_session_id` | Single targeted client session | AI chat token streaming, thinking progress, tool executions, approval challenges, clarification questions |
 | `BackgroundEvent` | `user_id` | All active sessions owned by the user | Unbound operator heartbeat updates, background task completions, stale operator status transitions |
 
+### Reputation Updates
+
+Post-execution reputation resolution uses the same authenticated session-event route as interactive ensemble events. `EventService.publish_reputation_event()` converts the originating `RequestContext` into a typed `SessionEvent`, preserving its user, web or CLI session, case, investigation, and task correlation before posting to `POST /api/v1/sse/push` over the enrolled g8ee app mTLS channel.
+
+Each affected agent publishes `g8e.v1.operator.reputation.state.updated` with a typed `StakeResolutionPayload`. A non-zero slash additionally publishes `g8e.v1.operator.reputation.slash.tier1`, `.tier2`, or `.tier3` with the same payload and request context. The event is not serialized through an ad hoc reputation-specific transport, so the Gateway applies the same ownership and single-session delivery checks as other `SessionEvent` messages.
+
 ## Core Infrastructure
 
 The SSE subsystem in `g8ee` is built on two primary infrastructure layers: `EventService` and `InternalHttpClient`.

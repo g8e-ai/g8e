@@ -30,20 +30,22 @@ from __future__ import annotations
 import os
 import ssl
 from dataclasses import dataclass, field
-from typing import Optional
 
 import httpx
 
-from g8e.constants import ComponentName
-from g8e.headers import (
-    AUTHORIZATION,
-    CONTENT_TYPE,
-    CLI_SESSION_ID,
+from g8e.constants import (
+    CLI_SESSION_ID_HEADER,
+    HTTP_AUTHORIZATION_HEADER,
+    HTTP_CONTENT_TYPE_HEADER,
+    PORTS,
+    ComponentName,
 )
-from g8e.generated_paths import PathConstants, PortConstants
+from g8e.enums import OperatorStatus
+from app.constants import G8EE_COMPONENT
 from app.models.http_context import RequestContext, BoundOperator
 
-from g8e_evals.tls import resolve_trust_bundle
+from g8e_evals.auth_bridge import CLIAuthContext
+from g8e_evals.tls import RuntimeIdentity, resolve_trust_bundle
 
 
 class AuthenticationError(Exception):
@@ -61,7 +63,7 @@ SOURCE_COMPONENT_CLIENT = "client"
 class AuthContext:
     """Resolved transport + auth context for talking to g8ee + Operator.
 
-    Built once per bench run from the environment exported by the Go CLI.
+    Built once per bench run from the typed context exported by the Go CLI.
     """
 
     g8ee_url: str
@@ -79,7 +81,7 @@ class AuthContext:
     bound_operators: list[BoundOperator] = field(default_factory=list)
     task_id: str = ""
     web_session_id: str = ""
-    source_component: ComponentName = ComponentName.CLIENT
+    source_component: str = ComponentName.CLIENT.value
     system_fingerprint: str = ""
     operator_id: str = ""
     # Filled in by from_env() so callers can introspect what was loaded.
@@ -90,30 +92,42 @@ class AuthContext:
         cls,
         *,
         operator_session_id: str | None = None,
+        g8ee_url: str | None = None,
         operator_url: str | None = None,
+        runtime_identity: RuntimeIdentity = RuntimeIdentity.APP,
+        cli_context: CLIAuthContext | None = None,
     ) -> AuthContext:
-        """Resolve the canonical auth context from the process environment.
+        """Resolve the canonical auth context from CLI identity and process configuration.
 
         Raises :class:`RuntimeError` if a required value is missing or if
         the mTLS client certificate files do not exist on disk.
         """
-        sid = (operator_session_id or os.environ.get("G8E_OPERATOR_SESSION_ID") or "").strip()
-        cli_sid = (os.environ.get("G8E_CLI_SESSION_ID") or "").strip()
+        sid = (
+            operator_session_id
+            or (cli_context.operator_session_id if cli_context else "")
+            or os.environ.get("G8E_OPERATOR_SESSION_ID")
+            or ""
+        ).strip()
+        cli_sid = (
+            (cli_context.cli_session_id if cli_context else "")
+            or os.environ.get("G8E_CLI_SESSION_ID")
+            or ""
+        ).strip()
         web_sid = (os.environ.get("G8E_WEB_SESSION_ID") or "").strip()
-        uid = (os.environ.get("G8E_USER_ID") or "").strip()
+        uid = ((cli_context.user_id if cli_context else "") or os.environ.get("G8E_USER_ID") or "").strip()
         oid = (os.environ.get("G8E_ORGANIZATION_ID") or "").strip()
         fingerprint = (os.environ.get("G8E_SYSTEM_FINGERPRINT") or "").strip()
 
-        source = ComponentName.CLIENT
+        source = ComponentName.CLIENT.value
         raw_source = os.environ.get("G8E_SOURCE_COMPONENT")
+        valid_sources = {component.value for component in ComponentName} | {G8EE_COMPONENT}
         if raw_source:
-            try:
-                source = ComponentName(raw_source)
-            except ValueError:
+            if raw_source not in valid_sources:
                 raise ValueError(
                     f"Invalid G8E_SOURCE_COMPONENT='{raw_source}'. "
-                    f"Must be one of: {[c.value for c in ComponentName]}"
-                ) from None
+                    f"Must be one of: {sorted(valid_sources)}"
+                )
+            source = raw_source
 
         missing: list[str] = []
         if not sid:
@@ -125,30 +139,41 @@ class AuthContext:
         if missing:
             raise AuthenticationError(
                 "evals transport requires an authenticated session. "
-                "Run `./g8e login` (or start the platform so the bootstrap "
-                "superuser is auto-provisioned), then re-run. Missing: "
+                "Run `./g8e auth enroll user` or `./g8e auth refresh`, then re-run. Missing: "
                 + ", ".join(missing)
             )
 
-        client_cert = os.environ.get("G8E_CLI_CERT") or ""
-        client_key = os.environ.get("G8E_CLI_KEY") or ""
+        client_cert = (cli_context.client_cert if cli_context else "") or os.environ.get("G8E_CLI_CERT") or ""
+        client_key = (cli_context.client_key if cli_context else "") or os.environ.get("G8E_CLI_KEY") or ""
         if not (client_cert and client_key and os.path.isfile(client_cert) and os.path.isfile(client_key)):
             raise AuthenticationError(
-                "evals transport requires an mTLS client certificate "
-                "(G8E_CLI_CERT / G8E_CLI_KEY). Run `./g8e login` to mint one."
+                "evals transport requires a valid mTLS client certificate. "
+                "Run `./g8e auth enroll user` to create one."
             )
 
-        trust_bundle = resolve_trust_bundle()
+        trust_bundle = resolve_trust_bundle(runtime_identity)
 
-        g8ee_url = (os.environ.get("G8E_G8EE_URL") or f"https://localhost:{PortConstants.G8E_PORT_G8EE_HTTPS}").rstrip("/")
+        operator_https_port = PORTS["ports"]["OperatorHttps"]["value"]
+        app_url = (g8ee_url or os.environ.get("G8E_G8EE_URL") or "").rstrip("/")
         op_url = (
             operator_url
             or os.environ.get("G8E_OPERATOR_URL")
-            or f"https://localhost:{PortConstants.PORT_OPERATOR_HTTPS}"
+            or f"https://localhost:{operator_https_port}"
         ).rstrip("/")
+        bound_operators = (
+            [
+                BoundOperator(
+                    operator_id=cli_context.operator_id,
+                    operator_session_id=sid,
+                    status=OperatorStatus.BOUND,
+                )
+            ]
+            if cli_context and cli_context.operator_id
+            else []
+        )
 
         return cls(
-            g8ee_url=g8ee_url,
+            g8ee_url=app_url,
             operator_url=op_url,
             trust_bundle=trust_bundle,
             client_cert=client_cert,
@@ -158,8 +183,10 @@ class AuthContext:
             web_session_id=web_sid,
             user_id=uid,
             organization_id=oid,
+            bound_operators=bound_operators,
             source_component=source,
             system_fingerprint=fingerprint,
+            operator_id=cli_context.operator_id if cli_context else "",
         )
 
     # ---- Header / cookie construction ---------------------------------
@@ -170,14 +197,14 @@ class AuthContext:
         Mirrors the Go CLI auth headers.
         """
         headers: dict[str, str] = {
-            CONTENT_TYPE: "application/json",
+            HTTP_CONTENT_TYPE_HEADER: "application/json",
         }
         if self.operator_session_id:
             # Gateway uses Authorization: Bearer <token>.
-            headers[AUTHORIZATION] = f"Bearer {self.operator_session_id}"
+            headers[HTTP_AUTHORIZATION_HEADER] = f"Bearer {self.operator_session_id}"
 
         if self.cli_session_id:
-            headers[CLI_SESSION_ID] = self.cli_session_id
+            headers[CLI_SESSION_ID_HEADER] = self.cli_session_id
 
         return headers
 
@@ -187,7 +214,7 @@ class AuthContext:
         case_id: str | None = None,
         investigation_id: str | None = None,
         task_id: str | None = None,
-        source_component: ComponentName | None = None,
+        source_component: str | ComponentName | None = None,
         web_session_id: str | None = None,
         operator_id: str | None = None,
         operator_session_id: str | None = None,

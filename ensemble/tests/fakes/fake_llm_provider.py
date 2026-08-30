@@ -31,6 +31,7 @@ class FakeLLMProvider(LLMProvider):
     """
 
     def __init__(self):
+        super().__init__()
         self.responses: list[GenerateContentResponse] = []
         self.stream_chunks: list[list[StreamChunkFromModel]] = []
         self.call_log: list[dict[str, Any]] = []

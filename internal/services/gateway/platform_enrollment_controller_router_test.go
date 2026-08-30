@@ -605,13 +605,7 @@ func TestPlatformEnrollmentRouter_FullApproveFlowThroughHTTPS(t *testing.T) {
 	assert.Equal(t, createResp.RequestID, decResp.RequestID)
 	assert.Equal(t, models.PlatformEnrollmentStateApproved, decResp.State)
 
-	// The request is no longer pending (it is now approved, which is not
-	// terminal, but ListPending only returns non-terminal requests... wait,
-	// approved is not terminal. Let me check what ListPending returns.)
-	// Actually, ListPending returns requests in pending and approved states
-	// (non-terminal). So the request should still appear in the pending list
-	// as "approved" until it is completed or expired. Verify the state
-	// changed in the list.
+	// Approved requests no longer await an owner decision and are excluded from the pending list.
 	pendingReq2 := httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPlatformEnrollmentPending, nil)
 	pendingReq2.AddCookie(createWebSessionCookie(t, env, env.ownerID))
 	pendingRR2 := httptest.NewRecorder()
@@ -620,9 +614,7 @@ func TestPlatformEnrollmentRouter_FullApproveFlowThroughHTTPS(t *testing.T) {
 
 	var pendingResp2 models.PlatformEnrollmentPendingResponse
 	require.NoError(t, json.Unmarshal(pendingRR2.Body.Bytes(), &pendingResp2))
-	require.Len(t, pendingResp2.Requests, 1, "approved request is still non-terminal and visible")
-	assert.Equal(t, models.PlatformEnrollmentStateApproved, pendingResp2.Requests[0].State,
-		"the request state must reflect the approval")
+	assert.Empty(t, pendingResp2.Requests)
 }
 
 // TestPlatformEnrollmentRouter_StatusNoStoreHeader proves that the status

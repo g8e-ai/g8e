@@ -56,7 +56,6 @@ reports/
 Thumbs.db
 
 # Protocol generated files (will be synced)
-app/proto/
 evals/g8e_evals/proto/
 
 # Logs

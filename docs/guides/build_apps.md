@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-08-27
-Version: v2.0.4
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ---
 
@@ -82,7 +82,7 @@ Applications constructing `GovernanceEnvelope` transactions or parsing `ActionRe
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.4
+go get github.com/g8e-ai/g8e/v2@v2.1.0
 ```
 
 The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
@@ -94,7 +94,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 Install from PyPI:
 
 ```bash
-pip install g8e==2.0.4
+pip install g8e==2.1.0
 ```
 
 The package provides runtime loaders for JSON protocol constants, dynamic enum generation from those constants, and Pydantic v2 models for protocol data structures including request contexts, platform settings, SSE event wire models, and `GovernanceEnvelope` with deterministic transaction hash generation.
@@ -212,7 +212,23 @@ The Gateway validates the envelope through the five-layer governance pipeline (L
 
 ### Step 7: Consume Receipt
 
-The Gateway returns a signed ActionReceipt. Verify the receipt and consume the result.
+The Gateway returns a canonical protojson `ActionReceipt` containing deterministic governance-stage evidence and a final durable-persistence attestation. Parse and verify both signatures before consuming the result:
+
+```python
+import json
+from pathlib import Path
+
+from g8e.receipts import parse_action_receipt, verify_action_receipt_signature, verify_receipt_persistence_attestation
+
+receipt = parse_action_receipt(json.loads(Path("receipt.json").read_text()))
+public_key = Path(".g8e/pki/warden_pub.pem").read_text()
+if not verify_action_receipt_signature(receipt, public_key):
+    raise ValueError("invalid action receipt signature")
+if not verify_receipt_persistence_attestation(receipt, public_key):
+    raise ValueError("invalid receipt persistence attestation")
+```
+
+The application obtains the actuator public key through a trusted out-of-band channel; signature verification does not establish trust in the supplied key.
 
 ---
 

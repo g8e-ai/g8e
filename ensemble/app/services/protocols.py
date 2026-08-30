@@ -139,6 +139,15 @@ class EventServiceProtocol(Protocol):
         """Publish a command-related event."""
         raise NotImplementedError
 
+    async def publish_reputation_event(
+        self,
+        event_type: EventType,
+        payload: G8eBaseModel,
+        g8e_context: G8eHttpContext,
+    ) -> None:
+        """Publish a reputation-related event."""
+        raise NotImplementedError
+
     async def publish_investigation_event(
         self,
         investigation_id: str,

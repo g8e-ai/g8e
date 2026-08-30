@@ -96,6 +96,7 @@ type HealthResponse struct {
 	Version         string                `json:"version"`
 	PID             int                   `json:"pid"`
 	GovernanceReady bool                  `json:"governance_ready"`
+	Posture         string                `json:"posture"`
 	StateMerkleRoot string                `json:"state_merkle_root,omitempty"`
 }
 
@@ -143,6 +144,7 @@ type PubSubPublishResponse struct {
 type ActionReceiptRecord struct {
 	TransactionID     string                     `json:"transaction_id"`
 	TransactionHash   string                     `json:"transaction_hash"`
+	InvestigationID   string                     `json:"investigation_id"`
 	OperatorID        string                     `json:"operator_id"`
 	OperatorSessionID string                     `json:"operator_session_id"`
 	RequestorUserID   string                     `json:"requestor_user_id"`
@@ -159,6 +161,7 @@ type ActionReceiptRecord struct {
 	L2Valid           bool                       `json:"l2_valid"`
 	L3Valid           bool                       `json:"l3_valid"`
 	Timestamp         time.Time                  `json:"timestamp"`
+	ActionReceipt     *operatorv1.ActionReceipt  `json:"action_receipt,omitempty"`
 }
 
 // BlobMetaResponse is the typed response for GET /blob/{namespace}/{id}/meta.

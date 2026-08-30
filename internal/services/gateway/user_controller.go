@@ -53,7 +53,8 @@ func newUserController(deps UserControllerDeps) *UserController {
 // @Success		201		{object}	models.UserCreateResponse
 // @Failure		405		{string}	string	"Method Not Allowed"
 // @Failure		409		{string}	string	"Conflict — user creation failed"
-// @Router			/api/v1/users [get,post]
+// @Router			/api/v1/users [get]
+// @Router			/api/v1/users [post]
 func (c *UserController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:

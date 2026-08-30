@@ -108,7 +108,7 @@ The plaintext HTTP surface handles initial bootstrap, certificate lifecycle onbo
 The HTTPS surface requires mutual TLS (mTLS) with SPIFFE identity verification and serves all operational APIs:
 
 - **Governance Submission** — `POST /api/v1/governance/envelopes` for direct envelope submission and verification.
-- **Operator Session Management** — `/api/v1/operators/bind`, `/api/v1/operators/unbind`, and `/api/v1/operators/session/*` for managing active operator bindings.
+- **Operator Session Management and Validation** — `/api/v1/operators/bind`, `/api/v1/operators/unbind`, and `/api/v1/operators/session/*` manage active bindings; `POST /api/v1/operators/validate` validates the exact active operator-session, CLI-session, and user tuple for enrolled applications over mTLS.
 - **Document Store Operations** — `/api/v1/data/*` and `/api/v1/data/items` for querying and mutating platform documents.
 - **Key-Value Cache Operations** — `/api/v1/kv/*` for fast ephemeral session state and coordination keys.
 - **Blob Storage Operations** — `/api/v1/blobs/*` for encrypted artifact and attachment storage.
@@ -159,7 +159,7 @@ Every mutation passes through five sequential, fail-closed governance layers:
 2. **L2 Consensus (Tribunal Multi-Signature)** — The five-member Tribunal evaluates intent independently under information isolation. Members stake reputation and produce Ed25519 signatures over `<transaction_hash>|<decision>`.
 3. **L3 Notary (Human Authorization)** — Hardware-bound human approval via WebAuthn passkey assertion or mTLS CLI signed proof. Benign diagnostic read-only actions pass via explicit auto-approval policy.
 4. **L4 Warden (Pre-Dispatch Gate)** — Operator-side verification re-computes the transaction hash, verifies nonce reservation, validates state Merkle root alignment, and checks L2/L3 signatures against the trusted signer store.
-5. **L5 Actuator (Sovereign Execution)** — Isolated execution boundary mints a scoped Just-In-Time capability, rehydrates scrubbed sensitive tokens, executes the operation, dissolves the capability, and writes an immutable signed `ActionReceipt` to the audit store.
+5. **L5 Actuator (Sovereign Execution)** — The actuator signs and persists a complete pre-execution `ActionReceipt`, atomically appends a signed `CommitmentAttestation` against the current chain head, and records commitment linkage in deterministic stage evidence. It then rehydrates scrubbed sensitive tokens, mints a scoped Just-In-Time capability, executes the operation, dissolves the capability, signs and persists the final receipt, and attaches a signed `ReceiptPersistenceAttestation` proving durable association with its audit record.
 
 ## Action Types and Mappings
 

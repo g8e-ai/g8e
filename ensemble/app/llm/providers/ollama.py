@@ -303,6 +303,7 @@ class OllamaProvider(LLMProvider):
             stream=True,
         )
         try:
+            self._record_model_boundary(chat_kwargs)
             stream = await self._client.chat(**chat_kwargs)
         except Exception as e:
             translate_capability_error(
@@ -369,9 +370,10 @@ class OllamaProvider(LLMProvider):
                         prompt_token_count=chunk.prompt_eval_count,
                         candidates_token_count=chunk.eval_count,
                         total_token_count=chunk.prompt_eval_count + chunk.eval_count,
+                        usage_reported=True,
                     )
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
                 )
 
     async def generate_content_primary(
@@ -400,6 +402,7 @@ class OllamaProvider(LLMProvider):
             stream=False,
         )
         try:
+            self._record_model_boundary(chat_kwargs)
             response = await self._client.chat(**chat_kwargs)
         except Exception as e:
             translate_capability_error(
@@ -446,6 +449,7 @@ class OllamaProvider(LLMProvider):
                 prompt_token_count=response.prompt_eval_count,
                 candidates_token_count=response.eval_count,
                 total_token_count=response.prompt_eval_count + response.eval_count,
+                usage_reported=True,
             )
 
         return GenerateContentResponse(
@@ -455,7 +459,7 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage,
+            usage_metadata=usage or UsageMetadata(),
         )
 
     async def generate_content_stream_assistant(
@@ -487,6 +491,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         stream = await self._client.chat(**chat_kwargs)
 
         async for chunk in stream:
@@ -504,9 +509,10 @@ class OllamaProvider(LLMProvider):
                         prompt_token_count=chunk.prompt_eval_count,
                         candidates_token_count=chunk.eval_count,
                         total_token_count=chunk.prompt_eval_count + chunk.eval_count,
+                        usage_reported=True,
                     )
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
                 )
 
     async def generate_content_assistant(
@@ -538,6 +544,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
 
         _raise_on_empty_content(
@@ -561,6 +568,7 @@ class OllamaProvider(LLMProvider):
                 prompt_token_count=response.prompt_eval_count,
                 candidates_token_count=response.eval_count,
                 total_token_count=response.prompt_eval_count + response.eval_count,
+                usage_reported=True,
             )
 
         return GenerateContentResponse(
@@ -570,7 +578,7 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage,
+            usage_metadata=usage or UsageMetadata(),
         )
 
     async def generate_content_stream_lite(
@@ -602,6 +610,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         stream = await self._client.chat(**chat_kwargs)
 
         async for chunk in stream:
@@ -619,9 +628,10 @@ class OllamaProvider(LLMProvider):
                         prompt_token_count=chunk.prompt_eval_count,
                         candidates_token_count=chunk.eval_count,
                         total_token_count=chunk.prompt_eval_count + chunk.eval_count,
+                        usage_reported=True,
                     )
                 yield StreamChunkFromModel(
-                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage
+                    finish_reason=chunk.done_reason or "stop", usage_metadata=usage or UsageMetadata()
                 )
 
     async def generate_content_lite(
@@ -653,6 +663,7 @@ class OllamaProvider(LLMProvider):
             else None,
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
+        self._record_model_boundary(chat_kwargs)
         response = await self._client.chat(**chat_kwargs)
 
         _raise_on_empty_content(
@@ -676,6 +687,7 @@ class OllamaProvider(LLMProvider):
                 prompt_token_count=response.prompt_eval_count,
                 candidates_token_count=response.eval_count,
                 total_token_count=response.prompt_eval_count + response.eval_count,
+                usage_reported=True,
             )
 
         return GenerateContentResponse(
@@ -685,5 +697,5 @@ class OllamaProvider(LLMProvider):
                     finish_reason=response.done_reason or "stop",
                 )
             ],
-            usage_metadata=usage,
+            usage_metadata=usage or UsageMetadata(),
         )

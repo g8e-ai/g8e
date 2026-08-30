@@ -32,7 +32,7 @@ from app.constants import (
     LogLevel,
 )
 from app.constants.env_vars import EnvVar
-from app.constants.generated_paths import PathConstants, PortConstants
+from app.constants.generated_paths import PortConstants
 from app.constants.paths import PATHS
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel, PrivateAttr, field_validator
 from g8e.models.settings import (
@@ -306,9 +306,9 @@ class LLMSettings(_ProtocolLLMSettings):
 
     model_config = ConfigDict(coerce_numbers_from_str=True)
 
-    primary_provider: LLMProvider = Field(default=None, alias="llm_primary_provider")
-    assistant_provider: LLMProvider = Field(default=None, alias="llm_assistant_provider")
-    lite_provider: LLMProvider = Field(default=None, alias="llm_lite_provider")
+    primary_provider: LLMProvider | None = Field(default=None, alias="llm_primary_provider")
+    assistant_provider: LLMProvider | None = Field(default=None, alias="llm_assistant_provider")
+    lite_provider: LLMProvider | None = Field(default=None, alias="llm_lite_provider")
 
     openai_model: str | None = Field(default=None)
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)

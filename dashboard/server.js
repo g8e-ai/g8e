@@ -20,6 +20,7 @@
  */
 
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -103,7 +104,14 @@ export function createApp({ gatewayOrigin }) {
     // SPA fallback: unknown GET routes that accept HTML serve index.html so
     // client-side routing works. path-to-regexp v8 (Express 5) requires a named
     // wildcard — the bare '*' form throws PathError at route registration.
-    app.get('*splat', (req, res, next) => {
+    // Rate-limited to prevent DoS via repeated file system access.
+    const spaFallbackRateLimiter = rateLimit({
+        windowMs: 60 * 1000,
+        max: 100,
+        standardHeaders: true,
+        message: 'Too many requests, please try again later.',
+    });
+    app.get('*splat', spaFallbackRateLimiter, (req, res, next) => {
         if (req.headers.accept?.includes('text/html')) {
             return res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
                 if (err) next(err);

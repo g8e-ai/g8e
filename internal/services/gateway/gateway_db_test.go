@@ -17,11 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
-	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
+	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
 
 // docField extracts a typed field value from a Document's Data map.
@@ -244,14 +246,15 @@ func TestSchemaIdempotent(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 
 	logger := testutil.NewTestLogger()
-	ks1 := newTestKeystore(t, fileSvc, logger)
+	keyring := keystoretest.NewMemoryKeyring()
+	ks1 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
 	db1, stores1, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks1, fileSvc)
 	require.NoError(t, err)
 	require.NoError(t, stores1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	ks2 := newTestKeystore(t, fileSvc, logger)
+	ks2 := newTestKeystoreWithKeyring(t, fileSvc, logger, keyring)
 	db2, stores2, err := OpenCanonicalDBService(dir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks2, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })

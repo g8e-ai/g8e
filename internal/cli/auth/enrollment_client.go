@@ -278,8 +278,15 @@ func (c *EnrollmentClient) Rotate(ctx context.Context, fileSvc fs.RuntimeFileSer
 	req := models.CLIRotationRequest{CLICSRPEM: cliCSR}
 	publicURL := c.cfg.OperatorPublicURL()
 
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
 	var resp models.CLIRotationResponse
-	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRotate, req, &resp); err != nil {
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRotate, req, &resp, headers); err != nil {
 		return EnrollmentArtifacts{}, err
 	}
 	if !resp.Success {
@@ -319,8 +326,16 @@ func (c *EnrollmentClient) Refresh(ctx context.Context, fileSvc fs.RuntimeFileSe
 	}
 
 	publicURL := c.cfg.OperatorPublicURL()
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	headers := map[string]string{}
+	if creds != nil && creds.CLISessionID != "" {
+		headers[constants.HeaderCLISessionID] = creds.CLISessionID
+	}
+
 	var resp models.CLIRefreshResponse
-	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRefresh, models.CLIRefreshRequest{}, &resp); err != nil {
+	if err := postJSON(ctx, mtlsClient, publicURL+constants.APIPaths.AuthCLIRefresh, models.CLIRefreshRequest{}, &resp, headers); err != nil {
 		return CLISessionRefresh{}, err
 	}
 	if !resp.Success {
@@ -361,6 +376,12 @@ func (c *EnrollmentClient) ProbeCLISession(ctx context.Context, fileSvc fs.Runti
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, publicURL+constants.APIPaths.ApprovalsCLIList, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
+	}
+
+	store := NewCredentialStore(fileSvc, c.cfg)
+	creds, _ := store.LoadCredentials(ctx)
+	if creds != nil && creds.CLISessionID != "" {
+		httpReq.Header.Set(constants.HeaderCLISessionID, creds.CLISessionID)
 	}
 
 	resp, err := mtlsClient.Do(httpReq)
@@ -463,7 +484,7 @@ func (c *EnrollmentClient) DiscoverGatewayCA(ctx context.Context) ([]byte, strin
 // §4.2 centralized response validation rules: HTTP status, JSON parsing,
 // and (via the caller's validateLocalCLI) required fields and cert/key
 // matching.
-func postJSON(ctx context.Context, httpClient *http.Client, url string, reqBody any, respBody any) error {
+func postJSON(ctx context.Context, httpClient *http.Client, url string, reqBody any, respBody any, headers ...map[string]string) error {
 	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
@@ -473,6 +494,11 @@ func postJSON(ctx context.Context, httpClient *http.Client, url string, reqBody 
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
+	for _, h := range headers {
+		for k, v := range h {
+			httpReq.Header.Set(k, v)
+		}
+	}
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {

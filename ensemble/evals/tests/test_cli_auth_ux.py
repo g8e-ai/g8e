@@ -13,10 +13,9 @@ These cover the well-known footguns observed in the field:
    silently 401 downstream because the Gateway has no session matching
    that id. The CLI now rejects this with a hard ``UsageError``.
 
-2. Receipt mode without a session id used to error with a stale message
-   suggesting ``./g8e login --email superadmin@g8e.local``. The sandbox
-   default now is zero-arg ``./g8e login``; the error string must reflect
-   that.
+2. Missing canonical CLI identity state points to the supported enrollment
+   and session-refresh commands without claiming credential files are parsed
+   by Python.
 
 3. The dead ``--operator-id`` flag has been removed; passing it must fail
    with click's standard "no such option" error rather than silently being
@@ -29,7 +28,13 @@ import os
 import pytest
 from click.testing import CliRunner
 
+from g8e_evals import cli
+from g8e_evals.auth_bridge import AuthBridgeError, CLIAuthContext
 from g8e_evals.cli import main
+from g8e_evals.receipts.collector import ReceiptCollector
+from g8e_evals.tls import RuntimeIdentity
+
+pytestmark = pytest.mark.unit
 
 
 def _invoke(runner: CliRunner, args: list[str], env: dict[str, str] | None = None):
@@ -63,8 +68,10 @@ def test_session_id_equal_to_operator_id_is_hard_error():
         runner,
         [
             "run",
-            "--suite", "ifeval",
-            "--mode", "receipt",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
             "--operator-session-id", bad,
         ],
         env={"G8E_OPERATOR_ID": bad},
@@ -72,23 +79,153 @@ def test_session_id_equal_to_operator_id_is_hard_error():
 
     assert result.exit_code == 2, result.output
     assert "operator_id UUID, not a session id" in result.output
-    assert "./g8e login" in result.output
+    assert "./g8e auth context" in result.output
+    assert "./g8e login" not in result.output
 
 
-def test_receipt_mode_without_session_points_at_zero_arg_login():
-    """Sandbox UX: the missing-session error must suggest ``./g8e login``
-    (no flags), matching the new zero-arg sandbox onboarding.
-    """
+def test_missing_cli_identity_points_at_enrollment_and_refresh(monkeypatch: pytest.MonkeyPatch):
+    calls: list[tuple[str, str]] = []
+
+    def load_auth_context(g8e_cli: str, project_root: str):
+        calls.append((g8e_cli, project_root))
+        raise AuthBridgeError("not authenticated")
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", load_auth_context)
     runner = CliRunner()
+
     result = _invoke(
         runner,
-        ["run", "--suite", "ifeval", "--mode", "receipt"],
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+        ],
     )
+
     assert result.exit_code == 2, result.output
-    assert "operator-session-id is required" in result.output
-    assert "./g8e login" in result.output
-    # The legacy --email flag must not be advertised as required for sandbox.
-    assert "--email superadmin@g8e.local" not in result.output
+    assert calls == [("./g8e", "/runtime/project")]
+    assert "./g8e auth enroll user" in result.output
+    assert "./g8e auth refresh" in result.output
+    assert "./g8e login" not in result.output
+
+
+def test_receipt_collector_uses_typed_cli_context(monkeypatch: pytest.MonkeyPatch):
+    cli_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+    auth = object()
+    calls = []
+
+    def from_env(**kwargs):
+        calls.append(kwargs)
+        return auth
+
+    monkeypatch.setattr("g8e_evals.receipts.collector.AuthContext.from_env", from_env)
+
+    collector = ReceiptCollector("https://gateway:8443", cli_context=cli_context)
+
+    assert collector.auth is auth
+    assert calls == [{
+        "operator_url": "https://gateway:8443",
+        "runtime_identity": RuntimeIdentity.GATEWAY,
+        "cli_context": cli_context,
+    }]
+
+
+def test_run_help_describes_canonical_authentication_bridge():
+    result = _invoke(CliRunner(), ["run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "canonical CLI identity" in result.output
+    assert "--g8e-cli" in result.output
+    assert "--auth-project-root" in result.output
+    assert "--g8ee-url" in result.output
+    assert "--evidence-key-file" in result.output
+    assert "./g8e login" not in result.output
+
+
+def test_run_returns_nonzero_when_live_evidence_is_invalid(monkeypatch: pytest.MonkeyPatch):
+    auth_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+
+    async def fail_run(*args, **kwargs):
+        raise cli.EvaluationRunError(
+            "run produced invalid evidence; diagnostic report retained at /reports/failed"
+        )
+
+    monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
+    monkeypatch.setattr(cli, "load_evidence_encryption_key", lambda *_: object())
+    monkeypatch.setattr(cli, "_run_suite", fail_run)
+
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+            "--evidence-key-file", "/runtime/evidence-key.json",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "invalid evidence" in result.output
+    assert "diagnostic report retained" in result.output
+
+
+def test_run_requires_explicit_evidence_encryption_key(monkeypatch: pytest.MonkeyPatch):
+    auth_context = CLIAuthContext(
+        operator_session_id="operator-session-typed",
+        cli_session_id="cli-session-typed",
+        user_id="user-typed",
+        operator_id="operator-typed",
+        client_cert="/runtime/cli.crt",
+        client_key="/runtime/cli.key",
+    )
+    monkeypatch.setattr(cli, "load_cli_auth_context", lambda *_: auth_context)
+
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--g8ee-url", "http://g8ee:8000",
+            "--auth-project-root", "/runtime/project",
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert "--evidence-key-file or G8E_EVIDENCE_KEY_FILE is required" in result.output
+
+
+def test_run_requires_explicit_g8ee_endpoint():
+    result = _invoke(
+        CliRunner(),
+        [
+            "run",
+            "--suite", "ifeval_subset",
+            "--arm", "doctrine",
+            "--auth-project-root", "/runtime/project",
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert "Missing option '--g8ee-url'" in result.output
 
 
 def test_dead_operator_id_flag_is_removed():
@@ -101,8 +238,8 @@ def test_dead_operator_id_flag_is_removed():
         runner,
         [
             "run",
-            "--suite", "ifeval",
-            "--mode", "baseline",
+            "--suite", "ifeval_subset",
+            "--arm", "ensemble_ungoverned",
             "--operator-id", "ignored",
         ],
     )

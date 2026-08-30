@@ -1,7 +1,7 @@
 {
-    "enabled": false,
+    "enabled": true,
     "version": "1.0.0",
-    "description": "Command blacklist for Operator execution - DISABLED BY DEFAULT. Enable via config when ready for per-operator assignment.",
+    "description": "Default hard block-list for Operator command execution.",
     "forbidden_commands": [
         {"value": "nc", "reason": "Netcat networking utility - not permitted by default"},
         {"value": "netcat", "reason": "Netcat networking utility - not permitted by default"},

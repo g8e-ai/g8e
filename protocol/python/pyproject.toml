@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g8e"
-version = "2.0.4"
+version = "2.1.0"
 description = "g8e Protocol Constants and Models"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,10 +34,12 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0.0",
     "protobuf>=4.0.0",
+    "PyNaCl>=1.5.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "grpcio-tools==1.83.0",
     "pytest>=8.0",
 ]
 
@@ -50,7 +52,7 @@ where = ["."]
 include = ["g8e*"]
 
 [tool.setuptools.package-data]
-g8e = ["*.json", "**/*.json", "py.typed"]
+g8e = ["*.json", "**/*.json", "**/*.pyi", "py.typed"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

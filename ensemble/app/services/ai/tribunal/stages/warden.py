@@ -81,6 +81,7 @@ async def _run_warden_stage(
     if not risk_analysis:
         return None
 
+    model_calls = [risk_analysis.model_call] if risk_analysis.model_call else []
     logger.info("[LLM-RISK-FILTER] Risk analysis complete: level=%s", risk_analysis.risk_level)
 
     if risk_analysis.risk_level != RiskLevel.HIGH:
@@ -108,6 +109,7 @@ async def _run_warden_stage(
                 risk_level=risk_analysis.risk_level,
                 error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
                 is_conflict=True,
+                model_calls=model_calls,
             ),
         )
         raise TribunalWardenBlockedError(
@@ -136,6 +138,8 @@ async def _run_warden_stage(
         settings=settings,
     )
 
+    if error_analysis and error_analysis.model_call:
+        model_calls.append(error_analysis.model_call)
     feedback_msg = (
         error_analysis.user_message
         if error_analysis and error_analysis.user_message
@@ -154,6 +158,7 @@ async def _run_warden_stage(
             risk_level=risk_analysis.risk_level,
             error=f"WARDEN BLOCK: {feedback_msg}",
             is_conflict=False,
+            model_calls=model_calls,
         ),
     )
     raise TribunalWardenBlockedError(

@@ -15,9 +15,8 @@ tool call dispatch, and sequential turn-level execution loop.
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
 
-from app.models.base import BaseModel, ConfigDict, Field, ValidationError
+from app.models.base import BaseModel, ConfigDict, ValidationError
 
 from app.constants import (
     CommandErrorType,

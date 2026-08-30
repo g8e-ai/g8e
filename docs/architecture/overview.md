@@ -5,8 +5,8 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-08-27
-Version: v2.0.3
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ## What g8e Is
 
@@ -121,7 +121,7 @@ The audit store, execution vault, ledger, and encrypted key-value adapter all en
 
 The storage layer is the persistence foundation for the governance pipeline. It records every operator session, command execution, file change, governance transaction, and audit attestation so the platform can replay history, verify state, and prove what happened.
 
-In gateway mode the canonical SQLite database `g8e.db` hosts the audit log, action receipts, key-value store, document store, blob store, replay nonces, and SSE event buffer. The ledger, execution vault, and suspended transaction store use their own files. In outbound/operator mode the replay store, execution vault, and suspended transaction store run as standalone SQLite databases; the audit store and ledger remain local to the operator.
+In gateway mode the canonical SQLite database `g8e.db` hosts the audit log, searchable receipt columns and complete canonical receipt JSON, the signed commitment ledger, key-value store, document store, blob store, replay nonces, and SSE event buffer. The git-backed file-mutation ledger, execution vault, and suspended transaction store use their own files. In outbound/operator mode the replay store, execution vault, and suspended transaction store run as standalone SQLite databases; the audit store, commitment ledger, and git-backed ledger remain local to the operator.
 
 Specialized services include the audit store (append-only record of sessions, events, file mutations, and signed receipts), the ledger (git-backed version control for file modifications, with the HEAD commit exposed as a verifiable state snapshot), the execution vault (encrypted, compressed command results and file diffs), the replay store (nonce-based replay protection), the suspended transaction store (envelopes awaiting L3 approval), and the commitment ledger (chain-integrity-protected attestations). The target host remains the source of truth for command history and file mutations: this is the Local-First Audit Architecture (LFAA). See [Storage Architecture](./storage.md) for the full service inventory and runtime file I/O model.
 

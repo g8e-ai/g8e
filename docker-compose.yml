@@ -147,6 +147,7 @@ services:
       - G8E_OPERATOR_URL=https://g8e.local:8443
       - G8E_OPERATOR_PUBSUB_URL=wss://g8e.local:8443
       - G8E_RUNTIME_DIR=/root/.g8e
+      - G8E_SECRETS_DIR=/operator-state/secrets
       - G8E_GOVERNANCE_OPERATOR_CERT=/operator-state/pki/operator.crt
       - G8E_GOVERNANCE_OPERATOR_KEY=/operator-state/pki/operator.key
     healthcheck:

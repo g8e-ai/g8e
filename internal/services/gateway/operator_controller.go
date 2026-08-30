@@ -52,6 +52,48 @@ func (c *OperatorController) readBody(r *http.Request) ([]byte, error) {
 	return readRequestBody(r, c.cfg.Gateway.MaxPayloadBytes)
 }
 
+// @Summary		Validate operator session binding
+// @Description	Validates the exact active operator-session, CLI-session, and user binding. The Gateway is authoritative; callers authenticate with an enrolled application mTLS certificate.
+// @Tags			operators
+// @Accept			json
+// @Produce		json
+// @Param			binding	body		models.OperatorSessionValidationRequest	true	"Operator, CLI, and user session binding"
+// @Success		200		{object}	models.OperatorSessionValidationResponse
+// @Failure		400		{string}	string	"Bad Request — malformed JSON"
+// @Failure		401		{string}	string	"Unauthorized — binding is missing, inactive, expired, or mismatched"
+// @Failure		403		{string}	string	"Forbidden — application mTLS identity is not authorized"
+// @Failure		405		{string}	string	"Method Not Allowed"
+// @Failure		500		{string}	string	"Internal Server Error"
+// @Router			/api/v1/operators/validate [post]
+func (c *OperatorController) handleValidateOperatorSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
+		return
+	}
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	var req models.OperatorSessionValidationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
+		return
+	}
+	op, err := c.auth.ValidateOperatorCLISessionBinding(req.OperatorSessionID, req.CLISessionID, req.UserID)
+	if err != nil {
+		var authErr *AuthError
+		if errors.As(err, &authErr) {
+			c.responder.Error(w, authErr.Status, authErr.Message)
+			return
+		}
+		c.logger.Error("gateway: validate operator CLI session binding", string(constants.ConnectionStateError), err)
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+		return
+	}
+	c.responder.JSON(w, http.StatusOK, models.OperatorSessionValidationResponse{Valid: true, OperatorID: op.ID, UserID: op.UserID})
+}
+
 // GET /api/v1/operators
 func (c *OperatorController) handleListOperators(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

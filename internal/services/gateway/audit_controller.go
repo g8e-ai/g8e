@@ -9,6 +9,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -48,6 +49,23 @@ func newAuditController(d AuditControllerDeps) *AuditController {
 	}
 }
 
+// @Summary		Get or list audit receipts
+// @Description	Returns one canonical protojson ActionReceipt when tx_id is set or when investigation_id and action_type uniquely correlate a receipt. Without those selectors, returns searchable receipt records with the complete receipt nested under action_receipt.
+// @Tags			audit
+// @Produce		json
+// @Param			tx_id			query		string	false	"Transaction ID for a single canonical ActionReceipt"
+// @Param			investigation_id	query		string	false	"Investigation ID for a unique correlation lookup"
+// @Param			action_type		query		string	false	"Action type required with investigation_id"
+// @Param			operator_session_id	query	string	false	"Operator session filter for list results"
+// @Param			limit			query		int		false	"Maximum list results"
+// @Param			offset			query		int		false	"List offset"
+// @Success		200				{object}	models.AuditReceiptsResponse	"List wrapper; unique selectors instead return a bare operatorv1.ActionReceipt"
+// @Failure		400				{string}	string	"Bad Request — conflicting or incomplete selectors"
+// @Failure		404				{string}	string	"Receipt not found"
+// @Failure		405				{string}	string	"Method Not Allowed"
+// @Failure		409				{string}	string	"Conflict — correlation matched multiple receipts"
+// @Failure		500				{string}	string	"Internal Server Error"
+// @Router			/api/v1/audit/receipts [get]
 func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -55,6 +73,20 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 	}
 
 	txID := r.URL.Query().Get("tx_id")
+	investigationID := r.URL.Query().Get("investigation_id")
+	actionType := constants.ActionType(r.URL.Query().Get("action_type"))
+	if txID != "" && (investigationID != "" || actionType != "") {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrAuditStoreReceiptLookupConflict.Error())
+		return
+	}
+	if investigationID != "" && actionType == "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
+		return
+	}
+	if investigationID == "" && actionType != "" {
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrAuditStoreReceiptLookupConflict.Error())
+		return
+	}
 	if txID != "" {
 		receipt, err := c.auditStore.GetActionReceipt(txID)
 		if err != nil {
@@ -65,7 +97,32 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
-		c.responder.JSON(w, http.StatusOK, receipt)
+		if receipt.ActionReceipt == nil {
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrMissingRequiredField.Error())
+			return
+		}
+		c.responder.ProtoJSON(w, http.StatusOK, receipt.ActionReceipt)
+		return
+	}
+	if investigationID != "" {
+		receipt, err := c.auditStore.GetActionReceiptByInvestigationID(investigationID, actionType)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, constants.ErrAuditStoreReceiptCorrelationDuplicate) {
+				status = http.StatusConflict
+			}
+			c.responder.Error(w, status, fmt.Errorf("audit_controller: handleAuditReceipts: %w", err).Error())
+			return
+		}
+		if receipt == nil {
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
+			return
+		}
+		if receipt.ActionReceipt == nil {
+			c.responder.Error(w, http.StatusInternalServerError, constants.ErrMissingRequiredField.Error())
+			return
+		}
+		c.responder.ProtoJSON(w, http.StatusOK, receipt.ActionReceipt)
 		return
 	}
 
@@ -98,6 +155,17 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// @Summary		Export audit receipts
+// @Description	Returns an AuditReceiptsResponse list wrapper. Every searchable record embeds the complete canonical protojson receipt under action_receipt.
+// @Tags			audit
+// @Produce		json
+// @Param			since			query		string	false	"Inclusive receipt timestamp in RFC3339 format"
+// @Param			operator_session_id	query	string	false	"Operator session filter"
+// @Param			limit			query		int		false	"Maximum results"
+// @Success		200				{object}	models.AuditReceiptsResponse
+// @Failure		405				{string}	string	"Method Not Allowed"
+// @Failure		500				{string}	string	"Internal Server Error"
+// @Router			/api/v1/audit/receipts/export [get]
 func (c *AuditController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -123,21 +191,23 @@ func (c *AuditController) handleAuditReceiptsExport(w http.ResponseWriter, r *ht
 		}
 	}
 
-	receipts, err := c.auditStore.ListActionReceiptsSince(since, limit)
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+	var receipts []*models.ActionReceiptRecord
+	var err error
+	if operatorSessionID != "" {
+		receipts, err = c.auditStore.ListActionReceipts(operatorSessionID, limit, 0)
+	} else {
+		receipts, err = c.auditStore.ListActionReceiptsSince(since, limit)
+	}
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("audit_controller: handleAuditReceiptsExport: %w", err).Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.WriteHeader(http.StatusOK)
-	encoder := json.NewEncoder(w)
-	for _, r := range receipts {
-		if err := encoder.Encode(r); err != nil {
-			c.logger.Error("Failed to encode audit receipt for export", "transaction_id", r.TransactionID, string(constants.ConnectionStateError), err)
-			break
-		}
-	}
+	c.responder.JSON(w, http.StatusOK, models.AuditReceiptsResponse{
+		Success:  true,
+		Receipts: receipts,
+	})
 }
 
 func (c *AuditController) handleAuditEvents(w http.ResponseWriter, r *http.Request) {

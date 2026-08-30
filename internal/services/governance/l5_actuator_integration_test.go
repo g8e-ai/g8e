@@ -12,10 +12,12 @@ package governance
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
+	"errors"
 	"log/slog"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	govtypes "github.com/g8e-ai/g8e/v2/internal/governance"
@@ -23,52 +25,50 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
-func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
+func newCommitmentTestActuator(t *testing.T) (*L5Actuator, *storage.SQLAuditStore) {
+	t.Helper()
 	actuator, _ := newTestActuator(t)
-
-	// Create a real AuditVault with test database
-	tempDir := testutil.TempDir(t)
-
-	// Construct fileSvc for .g8e/ file I/O
-	fileSvc, err := fs.NewRuntimeFileService(tempDir, slog.Default())
+	_, auditorPriv, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	actuator.AuditorSigningKey = auditorPriv
+	actuator.AuditorKeyID = hex.EncodeToString(auditorPriv.Public().(ed25519.PublicKey))
+	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), slog.Default())
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
-
-	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+	vaultDir := fileSvc.Resolve(constants.VaultDirname)
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), constants.VaultDirname, constants.PermDirPrivate))
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)
 	require.NoError(t, vHeader.Save(vaultDir))
 	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: slog.Default()})
 	require.NoError(t, err)
 	require.NoError(t, testVault.Unlock(privKey))
-	defer testVault.Close()
-
-	auditConfig := &storage.AuditStoreConfig{
-		DBPath:          "test.db",
+	t.Cleanup(func() { require.NoError(t, testVault.Close()) })
+	auditStore, err := storage.NewSQLAuditStore(&storage.AuditStoreConfig{
+		DBPath:          constants.TestCommitmentLedgerDBFilename,
 		MaxDBSizeMB:     100,
 		RetentionDays:   1,
 		EncryptionVault: testVault,
-	}
-
-	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default(), fileSvc)
+	}, slog.Default(), fileSvc)
 	require.NoError(t, err)
-	defer auditStore.Close()
-
+	t.Cleanup(func() { require.NoError(t, auditStore.Close()) })
 	actuator.SQLAuditStore = auditStore
+	require.NoError(t, auditStore.CreateSession("test-operator-session", "operator", "Test Session", "test-user"))
+	return actuator, auditStore
+}
 
-	// Create the Operator session first (required for fail-closed audit)
-	err = auditStore.CreateSession("test-operator-session", "operator", "Test Session", "test-user")
-	require.NoError(t, err)
+func TestL5ActuatorExecutePersistsReceiptAndCommitment(t *testing.T) {
+	actuator, auditStore := newCommitmentTestActuator(t)
 
 	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
@@ -85,6 +85,7 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	}
 
 	// Execute
+	startedAt := time.Now().Add(-time.Second)
 	receipt, err := actuator.Execute(context.Background(), vt, nil)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
@@ -100,4 +101,65 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, persistedReceipt.Status)
 	require.Equal(t, "completed", persistedReceipt.ResultSummary)
 	require.NotEmpty(t, persistedReceipt.Signature, "Persisted receipt should have signature")
+	require.NotNil(t, persistedReceipt.ActionReceipt)
+	require.NotNil(t, persistedReceipt.ActionReceipt.FinalPersistenceAttestation)
+	require.NoError(t, VerifyReceiptPersistenceAttestation(persistedReceipt.ActionReceipt, actuator.SigningKey.Public().(ed25519.PublicKey)))
+	require.Len(t, persistedReceipt.ActionReceipt.DeterministicStageEvidence, 3)
+	receiptPersistenceEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[0]
+	commitmentEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[1]
+	executionEvidence := persistedReceipt.ActionReceipt.DeterministicStageEvidence[2]
+	require.Equal(t, operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, commitmentEvidence.Kind)
+	require.Equal(t, executionEvidence.StageId, receiptPersistenceEvidence.ParentStageId)
+	require.Equal(t, executionEvidence.StageId, commitmentEvidence.ParentStageId)
+	require.NotEmpty(t, commitmentEvidence.CommitmentHash)
+	require.Equal(t, actuator.AuditorKeyID, commitmentEvidence.SignerKeyId)
+
+	commitments, err := auditStore.CommitmentLedger().ListCommitments()
+	require.NoError(t, err)
+	require.Len(t, commitments, 1)
+	require.Equal(t, envelope.Id, commitments[0].TransactionID)
+	require.Equal(t, envelope.TransactionHash, commitments[0].TransactionHash)
+	require.Equal(t, commitments[0].PriorCommitmentHash, commitmentEvidence.PriorCommitmentHash)
+	require.Equal(t, commitments[0].Hash, commitmentEvidence.CommitmentHash)
+	require.Equal(t, actuator.AuditorKeyID, commitments[0].AuditorKeyID)
+	require.NotEmpty(t, commitments[0].WardenIntentSignatureDigest)
+	require.NotEmpty(t, commitments[0].Signature)
+
+	listedReceipts, err := auditStore.ListActionReceipts(envelope.OperatorSessionId, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, listedReceipts, 1)
+	require.True(t, proto.Equal(receipt, listedReceipts[0].ActionReceipt),
+		"ListActionReceipts must return the same canonical ActionReceipt persisted by L5")
+
+	exportedReceipts, err := auditStore.ListActionReceiptsSince(startedAt, 10)
+	require.NoError(t, err)
+	require.Len(t, exportedReceipts, 1)
+	require.True(t, proto.Equal(receipt, exportedReceipts[0].ActionReceipt),
+		"ListActionReceiptsSince must return the same canonical ActionReceipt persisted by L5")
+}
+
+func TestL5ActuatorExecuteCommitmentFailureStopsBeforeHandler(t *testing.T) {
+	actuator, auditStore := newCommitmentTestActuator(t)
+	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
+	actuator.AuditorKeyID = strings.Repeat("0", ed25519.PublicKeySize*2)
+	vt := &VerifiedTransaction{
+		Envelope: &govtypes.GovernanceEnvelope{
+			Id:                uuid.NewString(),
+			TransactionHash:   "test-hash-commitment-failure",
+			OperatorId:        "test-operator",
+			OperatorSessionId: "test-operator-session",
+			ActionType:        string(constants.ActionTypeExecuteBash),
+			TargetResource:    "localhost",
+		},
+		ActionType: constants.ActionTypeExecuteBash,
+	}
+
+	receipt, err := actuator.Execute(context.Background(), vt, nil)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrL5ActuatorCommitmentPersist))
+	assert.Nil(t, receipt)
+	assert.False(t, handler.executed)
+	commitments, listErr := auditStore.CommitmentLedger().ListCommitments()
+	require.NoError(t, listErr)
+	assert.Empty(t, commitments)
 }

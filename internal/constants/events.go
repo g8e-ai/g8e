@@ -187,6 +187,7 @@ const EventOperatorReputationCommitmentCreated EventType = "g8e.v1.operator.repu
 const EventOperatorReputationCommitmentVerified EventType = "g8e.v1.operator.reputation.commitment.verified"
 const EventOperatorReputationCommitmentFailed EventType = "g8e.v1.operator.reputation.commitment.failed"
 const EventOperatorReputationStateUpdated EventType = "g8e.v1.operator.reputation.state.updated"
+const EventOperatorReputationStakeResolutionCreated EventType = "g8e.v1.operator.reputation.stake.resolution.created"
 const EventReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
 const EventOperatorReputationSlashTier1 EventType = "g8e.v1.operator.reputation.slash.tier1"
 const EventOperatorReputationSlashTier2 EventType = "g8e.v1.operator.reputation.slash.tier2"
@@ -320,6 +321,7 @@ const EventAiConsensusVotingAuditCompleted EventType = "g8e.v1.ai.consensus.voti
 // Other new events
 const EventAiLLMChatIterationThinkingStopped EventType = "g8e.v1.ai.llm.chat.iteration.thinking.stopped"
 const EventAiReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
+const EventAppAgentActivityRecorded EventType = "g8e.v1.app.agent.activity.recorded"
 const EventAppCaseDeleted EventType = "g8e.v1.app.case.deleted"
 const EventAppInvestigationDeleted EventType = "g8e.v1.app.investigation.deleted"
 const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"

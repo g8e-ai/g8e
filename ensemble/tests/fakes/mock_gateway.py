@@ -59,7 +59,7 @@ from aiohttp import web
 
 from app.constants import GatewayAPIPaths, PubSubAction, PubSubWireEventType
 from app.models.settings import GatewaySettings, TLSConfig
-from app.proto.pubsub_pb2 import PubSubEvent, PubSubMessage
+from g8e.pubsub.v1.pubsub_pb2 import PubSubEvent, PubSubMessage
 
 logger = logging.getLogger(__name__)
 

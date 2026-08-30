@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 This page covers common setup failures, runtime friction, and operational caveats for contributors working on g8e from a fresh checkout. The platform runs host-native. For architecture-level context, see [Authentication & Authorization](../architecture/auth.md), [Encryption Architecture](../architecture/encryption.md), [Gateway Architecture](../architecture/gateway.md), [Governance](../architecture/governance.md), and [Network Architecture](../architecture/network.md).
 
@@ -447,7 +447,7 @@ If installed via dpkg, download and install the latest release from the Cloudfla
 
 The Gateway signs `ActionReceipt`s with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats.
 
-No mechanism exists for distributing the Gateway's public key to Engine instances via an attested channel. Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. The g8e Python package does not currently expose a receipt verification utility. Consumers can implement Ed25519 verification using `nacl.signing.VerifyKey` with the exported public key.
+No mechanism exists for distributing the Gateway's public key to Engine instances via an attested channel. Consumers must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. The g8e Python package exposes `parse_action_receipt`, `action_receipt_to_dict`, `canonicalize_action_receipt`, `verify_action_receipt_signature`, and `verify_receipt_persistence_attestation` in `g8e.receipts`; callers provide the trusted Ed25519 public key obtained through that out-of-band channel.
 
 See [Encryption Architecture](../architecture/encryption.md) for receipt signature details.
 

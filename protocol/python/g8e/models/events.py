@@ -6,6 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 from typing import Any
+
+from pydantic import Field
+
 from .base import G8eBaseModel, UTCDatetime
 from g8e.enums import EventType
 
@@ -92,6 +95,17 @@ class ChatResponseChunkPayload(G8eBaseModel):
     content: str
     timestamp: str | None = None
 
+class ScrubbingTelemetry(G8eBaseModel):
+    source: str
+    enabled: bool
+    was_modified: bool
+    scrub_count: int
+    scrub_types: list[str] = Field(default_factory=list)
+    monotonic_start: float
+    monotonic_end: float
+    input_artifact_hash: str
+    output_artifact_hash: str
+
 class ChatResponseCompletePayload(G8eBaseModel):
     content: str
     finish_reason: str
@@ -99,6 +113,8 @@ class ChatResponseCompletePayload(G8eBaseModel):
     grounding_metadata: dict[str, Any]
     token_usage: dict[str, Any]
     agent_mode: str
+    model_calls: list[dict[str, Any]] = Field(default_factory=list)
+    scrubbing_observations: list[ScrubbingTelemetry] = Field(default_factory=list)
     timestamp: str | None = None
 
 class ChatRetryPayload(G8eBaseModel):

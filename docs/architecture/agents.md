@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ## Overview
 
@@ -70,7 +70,7 @@ The L4 Warden runs on the operator as the final pre-dispatch gate. It recomputes
 
 ### L5 Actuator
 
-The L5 Actuator is the singular execution boundary. It signs an `EXECUTING` receipt, rehydrates scrubbed sensitive data at the execution site using local vault keys, mints a just-in-time capability bound to the transaction hash, dispatches the action, dissolves the capability, and signs a final `COMPLETED` or `FAILED` receipt. See [Operator Architecture](./operator.md) for the execution boundary and [Encryption](./encryption.md) for PII scrubbing and rehydration.
+The L5 Actuator is the singular execution boundary. It persists a signed `EXECUTING` receipt containing L4 deterministic evidence, atomically appends a signed commitment against the current chain head, and records the chain linkage before execution. It then rehydrates scrubbed sensitive data at the execution site using local vault keys, mints a just-in-time capability bound to the transaction hash, dispatches the action, dissolves the capability, signs and persists the final `COMPLETED` or `FAILED` receipt, and attaches a signed durable-persistence attestation. See [Operator Architecture](./operator.md) for the execution boundary and [Encryption](./encryption.md) for PII scrubbing and rehydration.
 
 ---
 
@@ -83,9 +83,9 @@ The practical flow for an AI client is:
 3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
 4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
 5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
-6. The bound operator pulls the envelope, the L4 Warden re-verifies L1-L4, and the L5 Actuator executes the action.
-7. The operator writes the signed receipt to the local audit vault and publishes it back to the gateway.
-8. The gateway returns the receipt to the AI client through the original MCP/A2A response or SSE channel.
+6. The bound operator pulls the envelope, and the L4 Warden re-verifies L1-L4 and emits deterministic stage evidence.
+7. The L5 Actuator persists the signed pre-execution receipt, appends the signed commitment, executes the action, persists the signed final receipt, and adds its persistence attestation.
+8. The operator publishes the complete receipt back to the gateway, which returns it through the original MCP/A2A response or SSE channel.
 
 Only the operator bound to the envelope receives the work. The gateway binds the envelope to the authenticated operator session and publishes to that operator's unique command channel. No broadcast occurs.
 
@@ -99,7 +99,7 @@ Doctrine files are JSON-defined pattern sets that specify what the platform will
 
 ## Local-First Audit and the SSE Event Bridge
 
-Every action, command, output, error, and receipt is written to a tamper-evident, hash-chained ledger on the operator. This ledger is the source of truth for what happened on a given host. The gateway sees transaction hashes and state roots, not raw operational data.
+Every complete receipt is written to the operator's SQLite audit store, every admitted execution appends a signed attestation to the SQLite commitment hash chain, and governed file changes create snapshots in the git-backed ledger. These linked stores are the source of truth for what happened on a given host. The gateway sees transaction hashes and state roots, not raw operational data.
 
 Agentic ensembles can also push telemetry and user-facing events to the gateway through the SSE push endpoint. These events are stored, indexed, and streamed to authorized CLI sessions and browser console sessions. This lets an external ensemble surface progress, questions, and results to the human without exposing raw host data. See [SSE Streaming](./sse.md) for the push, poll, and stream semantics.
 
