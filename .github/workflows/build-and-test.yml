@@ -337,6 +337,15 @@ jobs:
         working-directory: ensemble/evals
         run: uv run --locked --extra test pytest -q -m unit
 
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Build g8e binary
+        run: CGO_ENABLED=0 go build -trimpath -tags netgo,osusergo -o g8e ./cmd/g8e
+
       - name: Run Tier 2 tests
         working-directory: ensemble/evals
         run: uv run --locked --extra test pytest -q -m integration
