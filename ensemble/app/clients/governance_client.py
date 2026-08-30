@@ -17,6 +17,7 @@ See: .local.dev/docs/plans/engine_gateway_secure_link.md
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -324,6 +325,7 @@ class GovernanceClient:
 
         self._operator_session_id = operator_session_id
         self._session: aiohttp.ClientSession | None = None
+        self._submission_lock = asyncio.Lock()
 
         self._pki_dir = Path(pki_dir) if pki_dir else Path(PATHS["infra"]["pki_dir"])
         self._actuator_key_id: str | None = None
@@ -526,91 +528,95 @@ class GovernanceClient:
                     update={"operator_session_id": self._operator_session_id}
                 )
 
-        # Retry loop: re-fetch the state root on TX_STATE_MISMATCH. The state
-        # root may change between fetch and submit when concurrent envelopes
-        # are in flight (e.g. case creation + investigation creation + chat
-        # message append all submitting in quick succession).
-        current_root = state_merkle_root
-        for attempt in range(self._STATE_ROOT_MAX_RETRIES + 1):
-            if not current_root:
-                current_root = await self.fetch_state_root()
+        async with self._submission_lock:
+            # Retry loop: re-fetch the state root on TX_STATE_MISMATCH. The state
+            # root may change between fetch and submit when concurrent envelopes
+            # are in flight (e.g. case creation + investigation creation + chat
+            # message append all submitting in quick succession).
+            current_root = state_merkle_root
+            for attempt in range(self._STATE_ROOT_MAX_RETRIES + 1):
+                if not current_root:
+                    current_root = await self.fetch_state_root()
 
-            envelope_json = build_governance_envelope_json(
-                message,
-                agent_ids=agent_ids,
-                state_merkle_root=current_root,
-                client_cert_path=self._client_cert_path,
-            )
+                envelope_json = build_governance_envelope_json(
+                    message,
+                    agent_ids=agent_ids,
+                    state_merkle_root=current_root,
+                    client_cert_path=self._client_cert_path,
+                )
 
-            session = await self._get_http_session()
-            url = f"{self._base_url}{GatewayAPIPaths.GOVERNANCE_ENVELOPES}"
+                session = await self._get_http_session()
+                url = f"{self._base_url}{GatewayAPIPaths.GOVERNANCE_ENVELOPES}"
 
-            try:
-                async with session.post(url, data=envelope_json) as resp:
-                    text = await resp.text()
+                try:
+                    async with session.post(url, data=envelope_json) as resp:
+                        text = await resp.text()
 
-                    if resp.status == 403:
-                        # Governance verification failed (L1/L2/L3 gates).
-                        # TX_STATE_MISMATCH is returned as a 403 with the
-                        # error string in the body. Retry by re-fetching the
-                        # state root.
-                        if "TX_STATE_MISMATCH" in text and attempt < self._STATE_ROOT_MAX_RETRIES:
-                            logger.warning(
-                                "[GOVERNANCE-CLIENT] TX_STATE_MISMATCH on attempt %d/%d, re-fetching state root",
-                                attempt + 1,
-                                self._STATE_ROOT_MAX_RETRIES + 1,
+                        if resp.status == 403:
+                            # Governance verification failed (L1/L2/L3 gates).
+                            # TX_STATE_MISMATCH is returned as a 403 with the
+                            # error string in the body. Retry by re-fetching the
+                            # state root.
+                            if (
+                                "TX_STATE_MISMATCH" in text
+                                and attempt < self._STATE_ROOT_MAX_RETRIES
+                            ):
+                                logger.warning(
+                                    "[GOVERNANCE-CLIENT] TX_STATE_MISMATCH on attempt %d/%d, re-fetching state root",
+                                    attempt + 1,
+                                    self._STATE_ROOT_MAX_RETRIES + 1,
+                                )
+                                current_root = ""  # force re-fetch on next iteration
+                                continue
+                            raise G8eError(
+                                f"Governance verification failed: {text}",
+                                code=ErrorCode.GOVERNANCE_REJECTED,
+                                category=ErrorCategory.PERMISSION,
+                                component="g8ee",
                             )
-                            current_root = ""  # force re-fetch on next iteration
-                            continue
-                        raise G8eError(
-                            f"Governance verification failed: {text}",
-                            code=ErrorCode.GOVERNANCE_REJECTED,
-                            category=ErrorCategory.PERMISSION,
-                            component="g8ee",
-                        )
-                    if resp.status == 400:
-                        # Malformed envelope
-                        raise G8eError(
-                            f"Invalid envelope: {text}",
-                            code=ErrorCode.INVALID_INPUT,
-                            category=ErrorCategory.VALIDATION,
-                            component="g8ee",
-                        )
-                    if resp.status == 503:
-                        # Gateway not ready
-                        raise NetworkError(
-                            f"Gateway not ready: {text}",
-                            component="g8ee",
-                        )
-                    if resp.status >= 400:
-                        raise NetworkError(
-                            f"Gateway HTTP {resp.status}: {text}",
-                            component="g8ee",
-                        )
+                        if resp.status == 400:
+                            # Malformed envelope
+                            raise G8eError(
+                                f"Invalid envelope: {text}",
+                                code=ErrorCode.INVALID_INPUT,
+                                category=ErrorCategory.VALIDATION,
+                                component="g8ee",
+                            )
+                        if resp.status == 503:
+                            # Gateway not ready
+                            raise NetworkError(
+                                f"Gateway not ready: {text}",
+                                component="g8ee",
+                            )
+                        if resp.status >= 400:
+                            raise NetworkError(
+                                f"Gateway HTTP {resp.status}: {text}",
+                                component="g8ee",
+                            )
 
-                    # Success - parse the receipt
-                    receipt = json.loads(text)
-                    logger.info(
-                        "[GOVERNANCE-CLIENT] Envelope submitted successfully, status=%s",
-                        receipt.get("status", "unknown"),
-                    )
-                    return receipt
+                        # Success - parse the receipt
+                        receipt = json.loads(text)
+                        logger.info(
+                            "[GOVERNANCE-CLIENT] Envelope submitted successfully, status=%s",
+                            receipt.get("status", "unknown"),
+                        )
+                        return receipt
 
-            except aiohttp.ClientError as e:
-                raise NetworkError(
-                    f"Gateway request failed: {e}",
-                    component="g8ee",
-                    cause=e,
-                ) from e
+                except aiohttp.ClientError as e:
+                    raise NetworkError(
+                        f"Gateway request failed: {e}",
+                        component="g8ee",
+                        cause=e,
+                    ) from e
 
-        # Exhausted retries — the final attempt's 403 is raised inside the loop.
-        # This line is unreachable but satisfies the type checker.
-        raise G8eError(
-            "Governance verification failed: TX_STATE_MISMATCH after retries",
-            code=ErrorCode.GOVERNANCE_REJECTED,
-            category=ErrorCategory.PERMISSION,
-            component="g8ee",
-        )
+            # Exhausted retries — the final attempt's 403 is raised inside the loop.
+            # This line is unreachable but satisfies the type checker.
+            raise G8eError(
+                "Governance verification failed: TX_STATE_MISMATCH after retries",
+                code=ErrorCode.GOVERNANCE_REJECTED,
+                category=ErrorCategory.PERMISSION,
+                component="g8ee",
+            )
 
     def _load_actuator_public_key(self) -> bool:
         """Load the actuator public key from the PKI directory.
