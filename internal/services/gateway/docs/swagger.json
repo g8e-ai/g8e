@@ -794,8 +794,8 @@
             }
         },
         "/api/v1/users": {
-            "post": {
-                "description": "Creates a new user with a generated ID. Zero-PII: users are created with only\na generated ID and passkey credentials.",
+            "get": {
+                "description": "GET lists all users; POST creates a new user with a generated ID.\nZero-PII: users are created with only a generated ID and passkey credentials.",
                 "consumes": [
                     "application/json"
                 ],
@@ -805,8 +805,59 @@
                 "tags": [
                     "users"
                 ],
-                "summary": "Create user",
+                "summary": "List or create users",
                 "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.User"
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.UserCreateResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — user creation failed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "GET lists all users; POST creates a new user with a generated ID.\nZero-PII: users are created with only a generated ID and passkey credentials.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "List or create users",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.User"
+                            }
+                        }
+                    },
                     "201": {
                         "description": "Created",
                         "schema": {
@@ -1090,6 +1141,9 @@
                 },
                 "pid": {
                     "type": "integer"
+                },
+                "posture": {
+                    "type": "string"
                 },
                 "state_merkle_root": {
                     "type": "string"

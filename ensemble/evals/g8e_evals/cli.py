@@ -510,9 +510,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         if arm_def.receipt_binding:
             if response.transaction_id:
                 on_chain_receipt = await collector.collect_receipt(response.transaction_id)
-            elif isinstance(response.chat_evidence, ChatEvaluationReceipt):
+            elif (
+                isinstance(response.chat_evidence, ChatEvaluationReceipt)
+                and task.metadata.expected_action_class
+            ):
                 on_chain_receipt = await collector.collect_receipt_for_investigation(
-                    response.chat_evidence.investigation_id
+                    response.chat_evidence.investigation_id,
+                    task.metadata.expected_action_class,
                 )
             if on_chain_receipt:
                 response.transaction_id = on_chain_receipt.transaction_id

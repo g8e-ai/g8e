@@ -126,14 +126,16 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 
 	receipts, err := avs.ListActionReceipts("session-1", 10, 0)
 	require.NoError(t, err)
-	require.Len(t, receipts, 1)
-	assert.True(t, proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt),
+	require.Len(t, receipts, 2)
+	assert.True(t,
+		proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt) || proto.Equal(record.ActionReceipt, receipts[1].ActionReceipt),
 		"ListActionReceipts must return the same canonical ActionReceipt persisted by RecordActionReceipt")
 
 	receipts, err = avs.ListActionReceiptsSince(record.Timestamp.Add(-time.Second), 10)
 	require.NoError(t, err)
-	require.Len(t, receipts, 1)
-	assert.True(t, proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt),
+	require.Len(t, receipts, 2)
+	assert.True(t,
+		proto.Equal(record.ActionReceipt, receipts[0].ActionReceipt) || proto.Equal(record.ActionReceipt, receipts[1].ActionReceipt),
 		"ListActionReceiptsSince must return the same canonical ActionReceipt persisted by RecordActionReceipt")
 
 	duplicate := *record

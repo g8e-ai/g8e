@@ -51,6 +51,8 @@ definitions:
         $ref: '#/definitions/constants.GatewayMode'
       pid:
         type: integer
+      posture:
+        type: string
       state_merkle_root:
         type: string
       status:
@@ -1192,15 +1194,21 @@ paths:
       tags:
       - telemetry
   /api/v1/users:
-    post:
+    get:
       consumes:
       - application/json
       description: |-
-        Creates a new user with a generated ID. Zero-PII: users are created with only
-        a generated ID and passkey credentials.
+        GET lists all users; POST creates a new user with a generated ID.
+        Zero-PII: users are created with only a generated ID and passkey credentials.
       produces:
       - application/json
       responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
         "201":
           description: Created
           schema:
@@ -1213,7 +1221,37 @@ paths:
           description: Conflict — user creation failed
           schema:
             type: string
-      summary: Create user
+      summary: List or create users
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: |-
+        GET lists all users; POST creates a new user with a generated ID.
+        Zero-PII: users are created with only a generated ID and passkey credentials.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.UserCreateResponse'
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "409":
+          description: Conflict — user creation failed
+          schema:
+            type: string
+      summary: List or create users
       tags:
       - users
   /api/v1/users/me:

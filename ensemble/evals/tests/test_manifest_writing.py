@@ -29,7 +29,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.evidence import EvidenceEncryptionKey, decrypt_evidence_artifact
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
-from g8e_evals.models import ScoreDetails
+from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.schema import AttemptRecord, EvidenceIndex, MetricObservation, RunManifest, StageObservation, TaskDefinition
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
 
@@ -205,8 +205,13 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_governed_attempt_resolves_receipt_from_investigation_correlation(tmp_path, monkeypatch):
-    _patch_loader(monkeypatch, [_task()])
+async def test_governed_attempt_resolves_receipt_from_investigation_and_action_correlation(tmp_path, monkeypatch):
+    task = Task(
+        id="1001",
+        prompt="Write a sentence without commas.",
+        metadata=TaskMetadata(expected_action_class="FILE_EDIT"),
+    )
+    _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
     _patch_verifier(monkeypatch)
     _patch_sut(
@@ -239,7 +244,7 @@ async def test_governed_attempt_resolves_receipt_from_investigation_correlation(
         "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
     )
 
-    collector.collect_receipt_for_investigation.assert_awaited_once_with("inv-1")
+    collector.collect_receipt_for_investigation.assert_awaited_once_with("inv-1", "FILE_EDIT")
     report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
     attempt = AttemptRecord.model_validate_json(
         (report_dir / "attempts.jsonl").read_text().splitlines()[0]
