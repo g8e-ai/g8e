@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.9.0"
+SCHEMA_VERSION = "1.10.0"
 
 
 class TerminalStatus(StrEnum):
@@ -499,7 +499,7 @@ class MetricObservation(BaseModel):
     arm_id: Arm
     task_id: str
 
-    value: float
+    value: float | None
     unit: str = ""
     eligible: bool = True
     denominator_contribution: int = 1

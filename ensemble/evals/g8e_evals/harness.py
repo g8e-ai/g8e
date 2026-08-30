@@ -99,6 +99,7 @@ class Response:
     model: str
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     transaction_ids: list[str] = field(default_factory=list)
+    governed_action_types: list[str] = field(default_factory=list)
     chat_evidence: EvidenceLike | None = None
     receipts: list[ReceiptEvidence] = field(default_factory=list)
     primary_transaction_id: str | None = None

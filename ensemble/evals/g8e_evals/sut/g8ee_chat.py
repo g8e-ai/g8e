@@ -66,7 +66,13 @@ logger = logging.getLogger(__name__)
 
 # Re-exported so `cli.py` (and any external caller) can keep catching
 # AuthenticationError from this module's public surface.
-__all__ = ["AgentTrailEvent", "AuthenticationError", "G8eeChatSUT", "_extract_gateway_transaction_ids"]
+__all__ = [
+    "AgentTrailEvent",
+    "AuthenticationError",
+    "G8eeChatSUT",
+    "_extract_gateway_transaction_ids",
+    "_extract_governed_action_types",
+]
 
 
 # Terminal SSE event types that conclude a single chat turn.
@@ -83,6 +89,10 @@ _TERMINAL_EVENTS = {
 _HEADLESS_APPROVAL_EVENTS = {
     "g8e.v1.operator.command.approval.requested",
     "g8e.v1.operator.file.edit.approval.requested",
+}
+_GOVERNED_APPROVAL_ACTION_TYPES = {
+    "g8e.v1.operator.command.approval.requested": "EXECUTE_BASH",
+    "g8e.v1.operator.file.edit.approval.requested": "FILE_EDIT",
 }
 
 _FAILURE_TERMINAL_EVENTS = {
@@ -252,6 +262,7 @@ class G8eeChatSUT:
         # signed ActionReceipts. Preserve every distinct transaction hash emitted
         # during a multi-action turn before claiming RECEIPT_BOUND.
         gateway_transaction_ids = _extract_gateway_transaction_ids(trail)
+        governed_action_types = _extract_governed_action_types(trail)
 
         if sse_error:
             return Response(
@@ -259,6 +270,7 @@ class G8eeChatSUT:
                 model=self.model_provider,
                 arm=self.config.arm,
                 transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=sse_error,
@@ -270,6 +282,7 @@ class G8eeChatSUT:
                 model=self.model_provider,
                 arm=self.config.arm,
                 transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"{self.config.arm.value} arm (binding disabled)",
@@ -281,6 +294,7 @@ class G8eeChatSUT:
                 model=self.model_provider,
                 arm=self.config.arm,
                 transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"chat terminated with {terminal_event}",
@@ -293,6 +307,7 @@ class G8eeChatSUT:
                 model=self.model_provider,
                 arm=self.config.arm,
                 transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
                 chat_evidence=receipt,
                 binding=BindingType.UNBOUND,
                 unbound_reason=f"idle timeout after {self.idle_timeout_s}s without terminal event",
@@ -304,6 +319,7 @@ class G8eeChatSUT:
                 model=self.model_provider,
                 arm=self.config.arm,
                 transaction_ids=gateway_transaction_ids,
+                governed_action_types=governed_action_types,
                 chat_evidence=receipt,
                 binding=BindingType.RECEIPT_BOUND,
             )
@@ -313,6 +329,7 @@ class G8eeChatSUT:
             model=self.model_provider,
             arm=self.config.arm,
             transaction_ids=gateway_transaction_ids,
+            governed_action_types=governed_action_types,
             chat_evidence=receipt,
             binding=BindingType.UNBOUND,
             unbound_reason="answer-only turn (no Warden-signed ActionReceipt emitted)",
@@ -580,3 +597,14 @@ def _extract_gateway_transaction_ids(trail: list[AgentTrailEvent]) -> list[str]:
             seen.add(transaction_id)
             transaction_ids.append(transaction_id)
     return transaction_ids
+
+
+def _extract_governed_action_types(trail: list[AgentTrailEvent]) -> list[str]:
+    action_types: list[str] = []
+    seen: set[str] = set()
+    for event in trail:
+        action_type = _GOVERNED_APPROVAL_ACTION_TYPES.get(event.event_type)
+        if action_type and action_type not in seen:
+            seen.add(action_type)
+            action_types.append(action_type)
+    return action_types

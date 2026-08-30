@@ -29,7 +29,12 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from g8e_evals.harness import BindingType, Task
-from g8e_evals.sut.g8ee_chat import AgentTrailEvent, G8eeChatSUT, _extract_gateway_transaction_ids
+from g8e_evals.sut.g8ee_chat import (
+    AgentTrailEvent,
+    G8eeChatSUT,
+    _extract_gateway_transaction_ids,
+    _extract_governed_action_types,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -92,6 +97,28 @@ def test_extract_gateway_transaction_ids_preserves_distinct_warden_receipts_in_o
         ),
     ]
     assert _extract_gateway_transaction_ids(trail) == ["tx-command", "tx-file"]
+
+
+def test_extract_governed_action_types_preserves_distinct_approval_classes_in_order():
+    trail = [
+        AgentTrailEvent(
+            id=1,
+            event_type="g8e.v1.operator.command.approval.requested",
+            payload={},
+        ),
+        AgentTrailEvent(
+            id=2,
+            event_type="g8e.v1.operator.file.edit.approval.requested",
+            payload={},
+        ),
+        AgentTrailEvent(
+            id=3,
+            event_type="g8e.v1.operator.file.edit.approval.requested",
+            payload={},
+        ),
+    ]
+
+    assert _extract_governed_action_types(trail) == ["EXECUTE_BASH", "FILE_EDIT"]
 
 
 def test_extract_gateway_transaction_ids_ignores_investigation_id_lookalikes():
@@ -265,6 +292,74 @@ async def test_get_answer_surfaces_sse_error(monkeypatch):
     assert response.binding == BindingType.UNBOUND
     assert response.unbound_reason == "sse_auth_failed: 401"
     assert response.answer == "partial text"
+
+
+@pytest.mark.asyncio
+async def test_get_answer_preserves_observed_action_types_without_receipt_events(monkeypatch):
+    config = MagicMock()
+    config.operator_session_id = "session-123"
+    config.operator_url = "http://operator"
+    config.primary.provider = "test"
+    config.primary.model = "model"
+    config.arm_definition.receipt_binding = True
+
+    mock_env = MagicMock()
+    mock_env.g8ee_url = "http://g8ee"
+    mock_env.operator_url = "http://operator"
+    mock_env.auth_headers.return_value = {"Authorization": "Bearer token"}
+    mock_env.to_request_context.return_value = MagicMock()
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.AuthContext.from_env", lambda **kw: mock_env)
+
+    sut = G8eeChatSUT(config=config)
+    sut.model_provider = "test-model"
+    monkeypatch.setattr(sut, "_current_cursor", AsyncMock(return_value=10))
+    monkeypatch.setattr(
+        sut,
+        "_build_chat_request",
+        MagicMock(return_value=MagicMock(model_dump_json=lambda: "{}")),
+    )
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {
+        "case_id": "case-123",
+        "investigation_id": "inv-123",
+        "success": True,
+    }
+    client = AsyncMock(spec=httpx.AsyncClient)
+    client.post.return_value = response
+
+    class MockClientCM:
+        async def __aenter__(self):
+            return client
+
+        async def __aexit__(self, *args):
+            pass
+
+    monkeypatch.setattr(sut, "_client", MockClientCM)
+    trail = [
+        AgentTrailEvent(
+            id=11,
+            event_type="g8e.v1.operator.file.edit.approval.requested",
+            payload={},
+        )
+    ]
+    monkeypatch.setattr(
+        sut,
+        "_drain_events",
+        AsyncMock(
+            return_value=(
+                "completed",
+                trail,
+                "g8e.v1.ai.llm.chat.iteration.text.completed",
+                None,
+            )
+        ),
+    )
+
+    result = await sut.get_answer(Task(id="task-123", prompt="hello"))
+
+    assert result.transaction_ids == []
+    assert result.governed_action_types == ["FILE_EDIT"]
 
 
 @pytest.mark.asyncio

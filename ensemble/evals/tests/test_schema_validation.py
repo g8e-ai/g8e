@@ -46,7 +46,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.9.0"
+    assert SCHEMA_VERSION == "1.10.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -193,6 +193,21 @@ def test_metric_obsation_rejects_extra_fields():
             value=1.0,
             extra_field="bad",  # type: ignore[call-arg]
         )
+
+
+def test_failed_metric_observation_has_no_fabricated_value():
+    metric = MetricObservation(
+        metric_id="eval_judge",
+        attempt_id="a1",
+        run_id="r1",
+        arm_id=Arm.DIRECT,
+        task_id="t1",
+        value=None,
+        eligible=False,
+        denominator_contribution=0,
+    )
+
+    assert metric.value is None
 
 
 def test_evidence_index_rejects_extra_fields():

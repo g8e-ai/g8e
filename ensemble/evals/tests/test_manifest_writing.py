@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.model_telemetry import ModelCallTelemetry
+from app.services.ai.eval_judge import EvalJudgeError
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
     DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
@@ -213,6 +214,8 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     assert manifest.dataset_hash is not None
     assert manifest.prompt_bundle_hash is not None
     assert manifest.grader_bundle_hash is not None
+    summary = json.loads((report_dirs[0] / "summary.json").read_text())
+    assert summary["metadata"]["arms"] == ["doctrine"]
 
 
 @pytest.mark.asyncio
@@ -346,6 +349,82 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
 
 
 @pytest.mark.asyncio
+async def test_governed_attempt_correlates_declared_and_observed_action_receipts(
+    tmp_path, monkeypatch
+):
+    task = Task(
+        id="1001",
+        prompt="Write a sentence without commas.",
+        metadata=TaskMetadata(expected_action_class="EXECUTE_BASH"),
+    )
+    _patch_loader(monkeypatch, [task])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            governed_action_types=["FILE_EDIT"],
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+        ),
+    )
+    collector = _patch_collector(monkeypatch)
+    command_receipt = ActionReceipt(
+        transaction_id="tx-command",
+        transaction_hash="hash-command",
+    )
+    command_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="EXECUTE_BASH",
+    )
+    file_receipt = ActionReceipt(
+        transaction_id="tx-file",
+        transaction_hash="hash-file",
+    )
+    file_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+        action_type="FILE_EDIT",
+    )
+    collector.collect_receipt_for_investigation.side_effect = [
+        command_receipt,
+        file_receipt,
+    ]
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    assert [
+        call.args
+        for call in collector.collect_receipt_for_investigation.await_args_list
+    ] == [
+        ("inv-1", "EXECUTE_BASH"),
+        ("inv-1", "FILE_EDIT"),
+    ]
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    receipts = [
+        ReceiptObservation.model_validate_json(line)
+        for line in (report_dir / "receipts.jsonl").read_text().splitlines()
+    ]
+    assert [receipt.transaction_id for receipt in receipts] == ["tx-command", "tx-file"]
+    assert [receipt.primary for receipt in receipts] == [True, False]
+
+
+@pytest.mark.asyncio
 async def test_tasks_jsonl_written_with_schema_valid_records(tmp_path, monkeypatch):
     """tasks.jsonl must contain schema-valid TaskDefinition records."""
     _patch_loader(monkeypatch, [_task()])
@@ -426,8 +505,17 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     metrics = [MetricObservation.model_validate_json(line) for line in (report_dirs[0] / "metrics.jsonl").read_text().splitlines()]
     evidence = [EvidenceIndex.model_validate_json(line) for line in (report_dirs[0] / "evidence-index.jsonl").read_text().splitlines()]
     assert stages == []
-    assert metrics[0].metric_id == "stage_usage_reconciled"
+    assert [metric.metric_id for metric in metrics] == [
+        "stage_usage_reconciled",
+        "ifeval_subset_verifier",
+    ]
     assert metrics[0].evidence_refs == [evidence[0].artifact_id]
+    assert metrics[1].value == 1.0
+    assert metrics[1].unit == "boolean"
+    assert metrics[1].grader_class.value == "deterministic"
+    assert metrics[1].verification_status.value == "verified"
+    assert metrics[1].evidence_refs == [evidence[0].artifact_id]
+    assert ar.grade_refs == ["ifeval_subset_verifier"]
     assert len(evidence) == 1
     assert evidence[0].encryption is not None
     assert evidence[0].access_control is not None
@@ -569,6 +657,94 @@ async def test_run_suite_executes_configured_eval_judge_and_records_identity(
     assert attempt.usage_reconciliation.expected_call_count == 1
     assert attempt.usage_reconciliation.observed_call_count == 1
     assert attempt.usage_reconciliation.missing_provider_usage_call_count == 0
+    assert attempt.usage_reconciliation.reconciled is True
+    metrics = [
+        MetricObservation.model_validate_json(line)
+        for line in (report_dir / "metrics.jsonl").read_text().splitlines()
+    ]
+    assert [metric.metric_id for metric in metrics] == [
+        "stage_usage_reconciled",
+        "ifeval_subset_verifier",
+        "eval_judge",
+    ]
+    assert metrics[2].value == 5.0
+    assert metrics[2].unit == "score_1_to_5"
+    assert metrics[2].eligible is True
+    assert metrics[2].denominator_contribution == 1
+    assert metrics[2].verification_status.value == "verified"
+    assert metrics[2].grader_class.value == "llm_judge"
+    assert attempt.grade_refs == ["ifeval_subset_verifier", "eval_judge"]
+
+
+@pytest.mark.asyncio
+async def test_run_suite_records_failed_eval_judge_without_fabricating_grade(
+    tmp_path, monkeypatch
+):
+    judge_call = ModelCallTelemetry(
+        agent_role="judge",
+        provider="FakeProvider",
+        model="fake-judge",
+        monotonic_start=10.0,
+        monotonic_end=11.0,
+        input_tokens=100,
+        output_tokens=50,
+        total_tokens=150,
+        usage_reported=True,
+        input_artifact_hash="judge-input",
+        output_artifact_hash="judge-output",
+    )
+    judge = MagicMock()
+    judge.grade_turn = AsyncMock(
+        side_effect=EvalJudgeError("invalid judge response", model_calls=[judge_call])
+    )
+    _patch_loader(monkeypatch, [_task()])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+    _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+    monkeypatch.setattr(cli, "_create_eval_judge", lambda _config: judge)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="fake", model="fake-primary"),
+        judge=LLMRoleConfig(provider="fake", model="fake-judge"),
+        operator_url="https://gateway:8443",
+        operator_session_id="op-session",
+        auth_context=_auth_context(),
+        arm=Arm.DOCTRINE,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    attempt = AttemptRecord.model_validate_json((report_dir / "attempts.jsonl").read_text())
+    metrics = [
+        MetricObservation.model_validate_json(line)
+        for line in (report_dir / "metrics.jsonl").read_text().splitlines()
+    ]
+    judge_metric = metrics[2]
+    assert judge_metric.metric_id == "eval_judge"
+    assert judge_metric.value is None
+    assert judge_metric.eligible is False
+    assert judge_metric.denominator_contribution == 0
+    assert judge_metric.verification_status.value == "failed"
+    assert judge_metric.grader_class.value == "llm_judge"
+    assert attempt.grade_refs == ["ifeval_subset_verifier", "eval_judge"]
+    assert attempt.usage_reconciliation is not None
+    assert attempt.usage_reconciliation.expected_call_count == 1
+    assert attempt.usage_reconciliation.observed_call_count == 1
     assert attempt.usage_reconciliation.reconciled is True
 
 

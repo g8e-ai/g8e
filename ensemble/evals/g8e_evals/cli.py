@@ -37,6 +37,7 @@ from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
     ContentHash,
+    GraderClass,
     MetricObservation,
     ModelIdentity,
     PostureObservation,
@@ -68,6 +69,8 @@ logger = logging.getLogger(__name__)
 
 _PROVIDER_CHOICES = ["openai", "anthropic", "gemini", "ollama", "llamacpp", "fake"]
 _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
+_IFEVAL_GRADER_ID = "ifeval_subset_verifier"
+_EVAL_JUDGE_GRADER_ID = "eval_judge"
 
 
 class EvaluationRunError(Exception):
@@ -514,7 +517,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_action_class=t.metadata.expected_action_class,
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
-            grader_ids=["ifeval_subset_verifier"] + (["eval_judge"] if eval_judge else []),
+            grader_ids=[_IFEVAL_GRADER_ID] + ([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
             grader_versions=["1.0.0"] + (["1.0.0"] if eval_judge else []),
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -559,24 +562,35 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
         if arm_def.receipt_binding:
             collected_receipts = []
+            collected_transaction_ids: set[str] = set()
             for transaction_id in response.transaction_ids:
                 receipt = await collector.collect_receipt(transaction_id)
-                if receipt is not None:
+                if receipt is not None and receipt.transaction_id not in collected_transaction_ids:
                     collected_receipts.append(receipt)
+                    collected_transaction_ids.add(receipt.transaction_id)
 
-            correlated_primary_transaction_id = None
-            if (
-                not response.transaction_ids
-                and isinstance(response.chat_evidence, ChatEvaluationReceipt)
-                and task.metadata.expected_action_class
-            ):
-                receipt = await collector.collect_receipt_for_investigation(
-                    response.chat_evidence.investigation_id,
+            correlated_action_types = [
+                action_type
+                for action_type in [
                     task.metadata.expected_action_class,
-                )
-                if receipt is not None:
-                    collected_receipts.append(receipt)
-                    correlated_primary_transaction_id = receipt.transaction_id
+                    *response.governed_action_types,
+                ]
+                if action_type
+            ]
+            if isinstance(response.chat_evidence, ChatEvaluationReceipt):
+                for action_type in dict.fromkeys(correlated_action_types):
+                    if any(
+                        receipt_action_type(receipt) == action_type
+                        for receipt in collected_receipts
+                    ):
+                        continue
+                    receipt = await collector.collect_receipt_for_investigation(
+                        response.chat_evidence.investigation_id,
+                        action_type,
+                    )
+                    if receipt is not None and receipt.transaction_id not in collected_transaction_ids:
+                        collected_receipts.append(receipt)
+                        collected_transaction_ids.add(receipt.transaction_id)
 
             response.receipts = [
                 ReceiptEvidence(
@@ -589,9 +603,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 )
                 for receipt in collected_receipts
             ]
-            if correlated_primary_transaction_id:
-                response.primary_transaction_id = correlated_primary_transaction_id
-            elif task.metadata.expected_action_class:
+            if task.metadata.expected_action_class:
                 matching_receipts = [
                     receipt.action_receipt.transaction_id
                     for receipt in response.receipts
@@ -620,6 +632,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 task.metadata.kwargs
             )
 
+        judge_metric_value: float | None = None
+        judge_metric_status = VerificationStatus.NOT_APPLICABLE
         if eval_judge is not None:
             try:
                 judge_grade = await eval_judge.grade_turn(
@@ -629,6 +643,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     required_concepts=task.metadata.instruction_id_list,
                 )
                 score.model_calls.extend(judge_grade.model_calls)
+                judge_metric_value = float(judge_grade.score)
+                judge_metric_status = VerificationStatus.VERIFIED
                 score.details.benchmark_specific["eval_judge"] = {
                     "status": "completed",
                     "score": judge_grade.score,
@@ -636,12 +652,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 }
             except EvalJudgeError as error:
                 score.model_calls.extend(error.model_calls)
+                judge_metric_status = VerificationStatus.FAILED
                 score.details.benchmark_specific["eval_judge"] = {
                     "status": "failed",
                     "error_type": type(error).__name__,
                 }
 
-        res = RowResult(task=task, response=response, score=score)
+        res = RowResult(task=task, response=response, score=score, arm=arm_def.arm_id)
         results.append(res)
 
         # Build the attempt record with requested and observed posture.
@@ -698,9 +715,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             if response.chat_evidence
             else None
         )
+        evidence_refs: list[str] = []
         if normalized:
             stage_records.extend(normalized.stages)
-            evidence_refs = []
             if normalized.raw_evidence:
                 evidence_artifacts.append(normalized.raw_evidence)
                 evidence_refs.append(normalized.raw_evidence.index.artifact_id)
@@ -715,6 +732,37 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 verification_status=VerificationStatus.VERIFIED,
                 evidence_refs=evidence_refs,
             ))
+
+        grade_metrics = [
+            MetricObservation(
+                metric_id=_IFEVAL_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=float(score.passed),
+                unit="boolean",
+                verification_status=VerificationStatus.VERIFIED,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=evidence_refs,
+            )
+        ]
+        if eval_judge is not None:
+            grade_metrics.append(MetricObservation(
+                metric_id=_EVAL_JUDGE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=judge_metric_value,
+                unit="score_1_to_5",
+                eligible=judge_metric_status == VerificationStatus.VERIFIED,
+                denominator_contribution=int(judge_metric_status == VerificationStatus.VERIFIED),
+                verification_status=judge_metric_status,
+                grader_class=GraderClass.LLM_JUDGE,
+                evidence_refs=evidence_refs,
+            ))
+        metric_records.extend(grade_metrics)
 
         attempt = AttemptRecord(
             attempt_id=attempt_id,
@@ -732,6 +780,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 "transaction_id": response.primary_transaction_id or "",
             },
             receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
+            grade_refs=[metric.metric_id for metric in grade_metrics],
             missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
             usage_reconciliation=normalized.usage if normalized else None,
         )
