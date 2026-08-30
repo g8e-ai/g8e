@@ -20,6 +20,8 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
     const { apiRateLimiter } = rateLimiters;
     const router = express.Router();
 
+    router.use(apiRateLimiter);
+
     const docsDir = config.docs_dir || DEFAULT_DOCS_DIR;
     const readmePath = config.readme_path || null;
 
@@ -49,8 +51,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         return nodes;
     }
 
-    // lgtm[js/missing-rate-limiting]: apiRateLimiter (express-rate-limit) is applied as middleware below.
-    router.get(DocsPaths.TREE, apiRateLimiter, (req, res, next) => {
+    router.get(DocsPaths.TREE, (req, res, next) => {
         try {
             if (!fs.existsSync(docsDir)) {
                 return res.status(503).json(new ErrorResponse({ error: 'Docs directory not available' }).forClient());
@@ -66,8 +67,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         }
     });
 
-    // lgtm[js/missing-rate-limiting]: apiRateLimiter (express-rate-limit) is applied as middleware below.
-    router.get(DocsPaths.FILE, apiRateLimiter, optionalAuth, (req, res, next) => {
+    router.get(DocsPaths.FILE, optionalAuth, (req, res, next) => {
         const filePath = req.query.path;
         if (!filePath) {
             return res.status(400).json(new ErrorResponse({ error: 'Missing path parameter' }).forClient());
