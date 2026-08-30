@@ -1144,11 +1144,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: ActionReceipt
+          description: Canonical protojson ActionReceipt
           schema:
-            items:
-              type: integer
-            type: array
+            $ref: '#/definitions/operatorv1.ActionReceipt'
         "403":
           description: Forbidden — verification failed
           schema:

@@ -225,12 +225,9 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "ActionReceipt",
+                        "description": "Canonical protojson ActionReceipt",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            }
+                            "$ref": "#/definitions/operatorv1.ActionReceipt"
                         }
                     },
                     "403": {

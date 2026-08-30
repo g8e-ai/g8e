@@ -43,6 +43,9 @@ type swaggerContract struct {
 		} `json:"models.ActionReceiptRecord"`
 	} `json:"definitions"`
 	Paths struct {
+		ApprovalVerify struct {
+			Post swaggerOperation `json:"post"`
+		} `json:"/api/v1/approvals/{txHash}/verify"`
 		AuditReceipts struct {
 			Get swaggerOperation `json:"get"`
 		} `json:"/api/v1/audit/receipts"`
@@ -67,6 +70,7 @@ func TestSwaggerContract_DocumentsCanonicalReceiptsAndOperatorValidation(t *test
 		operation swaggerOperation
 		wantRef   string
 	}{
+		{name: "approval canonical receipt", operation: contract.Paths.ApprovalVerify.Post, wantRef: "#/definitions/operatorv1.ActionReceipt"},
 		{name: "audit receipt list wrapper", operation: contract.Paths.AuditReceipts.Get, wantRef: "#/definitions/models.AuditReceiptsResponse"},
 		{name: "audit receipt export wrapper", operation: contract.Paths.AuditReceiptsExport.Get, wantRef: "#/definitions/models.AuditReceiptsResponse"},
 		{name: "governance canonical receipt", operation: contract.Paths.GovernanceEnvelopes.Post, wantRef: "#/definitions/operatorv1.ActionReceipt"},
