@@ -100,6 +100,7 @@ func (v *L1Doctrine) setDoctrineBundleIdentity(fileMaterials [][]byte, fileVersi
 		payload = binary.BigEndian.AppendUint64(payload, uint64(len(material)))
 		payload = append(payload, material...)
 	}
+	// lgtm[go/weak-sensitive-data-hashing]: payload is a doctrine configuration integrity digest, not a password.
 	digest := sha256.Sum256(payload)
 	v.doctrineBundleHash = hex.EncodeToString(digest[:])
 	v.doctrineBundleVersion = builtInDoctrineVersion

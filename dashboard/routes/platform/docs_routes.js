@@ -49,6 +49,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         return nodes;
     }
 
+    // lgtm[js/missing-rate-limiting]: apiRateLimiter (express-rate-limit) is applied as middleware below.
     router.get(DocsPaths.TREE, apiRateLimiter, (req, res, next) => {
         try {
             if (!fs.existsSync(docsDir)) {
@@ -65,6 +66,7 @@ export function createDocsRouter({ config, authMiddleware, rateLimiters }) {
         }
     });
 
+    // lgtm[js/missing-rate-limiting]: apiRateLimiter (express-rate-limit) is applied as middleware below.
     router.get(DocsPaths.FILE, apiRateLimiter, optionalAuth, (req, res, next) => {
         const filePath = req.query.path;
         if (!filePath) {
