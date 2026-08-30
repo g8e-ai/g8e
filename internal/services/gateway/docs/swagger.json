@@ -248,6 +248,146 @@
                 }
             }
         },
+        "/api/v1/audit/receipts": {
+            "get": {
+                "description": "Returns one canonical protojson ActionReceipt when tx_id is set or when investigation_id and action_type uniquely correlate a receipt. Without those selectors, returns searchable receipt records with the complete receipt nested under action_receipt.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "Get or list audit receipts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID for a single canonical ActionReceipt",
+                        "name": "tx_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Investigation ID for a unique correlation lookup",
+                        "name": "investigation_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action type required with investigation_id",
+                        "name": "action_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Operator session filter for list results",
+                        "name": "operator_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum list results",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "List offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List wrapper; unique selectors instead return a bare operatorv1.ActionReceipt",
+                        "schema": {
+                            "$ref": "#/definitions/models.AuditReceiptsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request — conflicting or incomplete selectors",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Receipt not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — correlation matched multiple receipts",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/audit/receipts/export": {
+            "get": {
+                "description": "Returns an AuditReceiptsResponse list wrapper. Every searchable record embeds the complete canonical protojson receipt under action_receipt.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "audit"
+                ],
+                "summary": "Export audit receipts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Inclusive receipt timestamp in RFC3339 format",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Operator session filter",
+                        "name": "operator_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum results",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.AuditReceiptsResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/logout": {
             "post": {
                 "description": "Clears the web session cookie and deletes the session from the database.",
@@ -513,12 +653,9 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "ActionReceipt",
+                        "description": "Canonical protojson ActionReceipt",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "integer"
-                            }
+                            "$ref": "#/definitions/operatorv1.ActionReceipt"
                         }
                     },
                     "400": {
@@ -541,6 +678,70 @@
                     },
                     "503": {
                         "description": "Service Unavailable — processor not configured",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/operators/validate": {
+            "post": {
+                "description": "Validates the exact active operator-session, CLI-session, and user binding. The Gateway is authoritative; callers authenticate with an enrolled application mTLS certificate.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "operators"
+                ],
+                "summary": "Validate operator session binding",
+                "parameters": [
+                    {
+                        "description": "Operator, CLI, and user session binding",
+                        "name": "binding",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.OperatorSessionValidationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.OperatorSessionValidationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request — malformed JSON",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — binding is missing, inactive, expired, or mismatched",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — application mTLS identity is not authorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "string"
                         }
@@ -1065,6 +1266,69 @@
         }
     },
     "definitions": {
+        "constants.ActionType": {
+            "type": "string",
+            "enum": [
+                "A2A_CALL",
+                "CANCEL",
+                "DOCUMENT_DELETE",
+                "DOCUMENT_UPDATE",
+                "EVAL_ANSWER",
+                "EXECUTE_BASH",
+                "FETCH_FILE_DIFF",
+                "FETCH_FILE_HISTORY",
+                "FETCH_HISTORY",
+                "FETCH_LOGS",
+                "FILE_EDIT",
+                "FS_GREP",
+                "FS_LIST",
+                "FS_READ",
+                "HEARTBEAT",
+                "MCP_CALL",
+                "MCP_PROMPT_GET",
+                "MCP_PROMPT_LIST",
+                "MCP_RESOURCE_LIST",
+                "MCP_RESOURCE_READ",
+                "PLATFORM_ENROLLMENT_CREATE",
+                "PLATFORM_ENROLLMENT_DECIDE",
+                "PLATFORM_ENROLLMENT_ISSUE",
+                "PLATFORM_ENROLLMENT_PERSIST_POLICY",
+                "PLATFORM_ENROLLMENT_CREATE_SESSION",
+                "PORT_CHECK",
+                "RESTORE_FILE",
+                "SHUTDOWN"
+            ],
+            "x-enum-varnames": [
+                "ActionTypeA2aCall",
+                "ActionTypeCancel",
+                "ActionTypeDocumentDelete",
+                "ActionTypeDocumentUpdate",
+                "ActionTypeEvalAnswer",
+                "ActionTypeExecuteBash",
+                "ActionTypeFetchFileDiff",
+                "ActionTypeFetchFileHistory",
+                "ActionTypeFetchHistory",
+                "ActionTypeFetchLogs",
+                "ActionTypeFileEdit",
+                "ActionTypeFsGrep",
+                "ActionTypeFsList",
+                "ActionTypeFsRead",
+                "ActionTypeHeartbeat",
+                "ActionTypeMcpCall",
+                "ActionTypeMcpPromptGet",
+                "ActionTypeMcpPromptList",
+                "ActionTypeMcpResourceList",
+                "ActionTypeMcpResourceRead",
+                "ActionTypePlatformEnrollmentCreate",
+                "ActionTypePlatformEnrollmentDecide",
+                "ActionTypePlatformEnrollmentIssue",
+                "ActionTypePlatformEnrollmentPersistPolicy",
+                "ActionTypePlatformEnrollmentCreateSession",
+                "ActionTypePortCheck",
+                "ActionTypeRestoreFile",
+                "ActionTypeShutdown"
+            ]
+        },
         "constants.GatewayMode": {
             "type": "string",
             "enum": [
@@ -1110,6 +1374,85 @@
                 },
                 "trust_bundle": {
                     "type": "string"
+                }
+            }
+        },
+        "models.ActionReceiptRecord": {
+            "type": "object",
+            "properties": {
+                "acting_app_id": {
+                    "type": "string"
+                },
+                "action_receipt": {
+                    "$ref": "#/definitions/operatorv1.ActionReceipt"
+                },
+                "action_type": {
+                    "$ref": "#/definitions/constants.ActionType"
+                },
+                "executed_at": {
+                    "type": "string"
+                },
+                "investigation_id": {
+                    "type": "string"
+                },
+                "l2_valid": {
+                    "type": "boolean"
+                },
+                "l3_valid": {
+                    "type": "boolean"
+                },
+                "operator_id": {
+                    "type": "string"
+                },
+                "operator_session_id": {
+                    "type": "string"
+                },
+                "requestor_user_id": {
+                    "type": "string"
+                },
+                "result_summary": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "signer_key_id": {
+                    "type": "string"
+                },
+                "state_root_after": {
+                    "type": "string"
+                },
+                "state_root_before": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/operatorv1.ExecutionStatus"
+                },
+                "target_resource": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "transaction_hash": {
+                    "type": "string"
+                },
+                "transaction_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AuditReceiptsResponse": {
+            "type": "object",
+            "properties": {
+                "receipts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ActionReceiptRecord"
+                    }
+                },
+                "success": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1173,6 +1516,34 @@
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "models.OperatorSessionValidationRequest": {
+            "type": "object",
+            "properties": {
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "operator_session_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.OperatorSessionValidationResponse": {
+            "type": "object",
+            "properties": {
+                "operator_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "valid": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1544,6 +1915,307 @@
                     "type": "string"
                 },
                 "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.ActionReceipt": {
+            "type": "object",
+            "properties": {
+                "deterministic_stage_evidence": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/operatorv1.DeterministicStageEvidence"
+                    }
+                },
+                "executed_at_unix_ms": {
+                    "description": "Timestamp when execution finished",
+                    "type": "integer"
+                },
+                "final_persistence_attestation": {
+                    "$ref": "#/definitions/operatorv1.ReceiptPersistenceAttestation"
+                },
+                "l2_status": {
+                    "description": "Status of L2 (Consensus) signature verification.\nDistinguishes between \"not required\" vs \"required but failed\" for compliance.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.L2Status"
+                        }
+                    ]
+                },
+                "l3_status": {
+                    "description": "Status of L3 (Notary/Human) proof verification.\nDistinguishes between \"not required\" vs \"required but failed\" for compliance.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.L3Status"
+                        }
+                    ]
+                },
+                "result_summary": {
+                    "description": "Concise summary of the result (e.g. \"exit code 0\", \"file written\")",
+                    "type": "string"
+                },
+                "signature": {
+                    "description": "ED25519 signature over the canonical receipt fields and deterministic stage evidence hash.",
+                    "type": "string"
+                },
+                "signer_key_id": {
+                    "description": "ID of the Warden's signing key",
+                    "type": "string"
+                },
+                "state_root_after": {
+                    "description": "State root after execution",
+                    "type": "string"
+                },
+                "state_root_before": {
+                    "description": "State root before execution",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Final execution status",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/operatorv1.ExecutionStatus"
+                        }
+                    ]
+                },
+                "transaction_hash": {
+                    "description": "Original GovernanceEnvelope hash",
+                    "type": "string"
+                },
+                "transaction_id": {
+                    "description": "Original GovernanceEnvelope ID",
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.DeterministicStageEvidence": {
+            "type": "object",
+            "properties": {
+                "acting_app_id": {
+                    "type": "string"
+                },
+                "action_type": {
+                    "type": "string"
+                },
+                "audit_record_id": {
+                    "type": "string"
+                },
+                "case_id": {
+                    "type": "string"
+                },
+                "clock_domain": {
+                    "type": "string"
+                },
+                "commitment_hash": {
+                    "type": "string"
+                },
+                "doctrine_bundle_hash": {
+                    "type": "string"
+                },
+                "doctrine_bundle_version": {
+                    "type": "string"
+                },
+                "investigation_id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/operatorv1.DeterministicStageKind"
+                },
+                "l2_signature_digest": {
+                    "type": "string"
+                },
+                "l3_signature_digest": {
+                    "type": "string"
+                },
+                "monotonic_end_ns": {
+                    "type": "integer"
+                },
+                "monotonic_start_ns": {
+                    "type": "integer"
+                },
+                "operator_id": {
+                    "type": "string"
+                },
+                "operator_session_id": {
+                    "type": "string"
+                },
+                "outcome": {
+                    "$ref": "#/definitions/operatorv1.DeterministicStageOutcome"
+                },
+                "parent_stage_id": {
+                    "type": "string"
+                },
+                "prior_commitment_hash": {
+                    "type": "string"
+                },
+                "receipt_signature_digest": {
+                    "type": "string"
+                },
+                "requestor_user_id": {
+                    "type": "string"
+                },
+                "signer_key_id": {
+                    "type": "string"
+                },
+                "stage_id": {
+                    "type": "string"
+                },
+                "state_root_after": {
+                    "type": "string"
+                },
+                "state_root_before": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                },
+                "timing_source": {
+                    "type": "string"
+                },
+                "transaction_hash": {
+                    "type": "string"
+                },
+                "transaction_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "operatorv1.DeterministicStageKind": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "x-enum-varnames": [
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_UNSPECIFIED",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND",
+                "DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION"
+            ]
+        },
+        "operatorv1.DeterministicStageOutcome": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4
+            ],
+            "x-enum-varnames": [
+                "DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED",
+                "DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED",
+                "DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED",
+                "DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED",
+                "DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED"
+            ]
+        },
+        "operatorv1.ExecutionStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "x-enum-varnames": [
+                "ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED",
+                "ExecutionStatus_EXECUTION_STATUS_EXECUTING",
+                "ExecutionStatus_EXECUTION_STATUS_COMPLETED",
+                "ExecutionStatus_EXECUTION_STATUS_FAILED",
+                "ExecutionStatus_EXECUTION_STATUS_CANCELLED",
+                "ExecutionStatus_EXECUTION_STATUS_TIMEOUT"
+            ]
+        },
+        "operatorv1.L2Status": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-comments": {
+                "L2Status_L2_STATUS_NOT_REQUIRED": "L2 signature not required by posture (doctrine)",
+                "L2Status_L2_STATUS_REQUIRED_FAILED": "L2 signature required but missing or invalid",
+                "L2Status_L2_STATUS_REQUIRED_VALID": "L2 signature required and valid"
+            },
+            "x-enum-descriptions": [
+                "",
+                "L2 signature not required by posture (doctrine)",
+                "L2 signature required and valid",
+                "L2 signature required but missing or invalid"
+            ],
+            "x-enum-varnames": [
+                "L2Status_L2_STATUS_UNSPECIFIED",
+                "L2Status_L2_STATUS_NOT_REQUIRED",
+                "L2Status_L2_STATUS_REQUIRED_VALID",
+                "L2Status_L2_STATUS_REQUIRED_FAILED"
+            ]
+        },
+        "operatorv1.L3Status": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-comments": {
+                "L3Status_L3_STATUS_NOT_REQUIRED": "L3 proof not required by posture (doctrine/consensus)",
+                "L3Status_L3_STATUS_REQUIRED_FAILED": "L3 proof required but missing or invalid",
+                "L3Status_L3_STATUS_REQUIRED_VALID": "L3 proof required and valid"
+            },
+            "x-enum-descriptions": [
+                "",
+                "L3 proof not required by posture (doctrine/consensus)",
+                "L3 proof required and valid",
+                "L3 proof required but missing or invalid"
+            ],
+            "x-enum-varnames": [
+                "L3Status_L3_STATUS_UNSPECIFIED",
+                "L3Status_L3_STATUS_NOT_REQUIRED",
+                "L3Status_L3_STATUS_REQUIRED_VALID",
+                "L3Status_L3_STATUS_REQUIRED_FAILED"
+            ]
+        },
+        "operatorv1.ReceiptPersistenceAttestation": {
+            "type": "object",
+            "properties": {
+                "audit_record_id": {
+                    "type": "string"
+                },
+                "persisted_at_unix_ms": {
+                    "type": "integer"
+                },
+                "receipt_signature_digest": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "signer_key_id": {
+                    "type": "string"
+                },
+                "transaction_id": {
                     "type": "string"
                 }
             }

@@ -519,8 +519,7 @@ message DeterministicStageEvidence {
   string doctrine_bundle_version = 29;
 }
 
-// ActionReceipt is the signed proof of a completed or failed mutation.
-// It is emitted by the Warden after execution.
+// ReceiptPersistenceAttestation is the signed proof that a receipt signature was durably associated with an audit record at a specific timestamp.
 message ReceiptPersistenceAttestation {
   string transaction_id = 1;
   string receipt_signature_digest = 2;
@@ -530,6 +529,7 @@ message ReceiptPersistenceAttestation {
   string signature = 6;
 }
 
+// ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 message ActionReceipt {
   // Original GovernanceEnvelope ID
   string transaction_id = 1;

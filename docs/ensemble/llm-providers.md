@@ -67,6 +67,12 @@ The LLM subsystem provides end-to-end typing for structured extraction and opera
 - **JSON Schema Generation** — `schema_from_model` (`app.llm.llm_schema`) converts Pydantic `G8eBaseModel` classes into canonical JSON schemas for structured extraction.
 - **Response Format Enforcement** — `ResponseFormat` with `ResponseJsonSchema` enforces structured output formatting for Warden risk assessments (`FileOperationRiskAnalysis`, `CommandRiskAnalysis`, `ErrorAnalysisResult`), Triage classifications (`TriageResult`), and evaluation scoring (`JudgeEvaluation`).
 
+## Provider Evidence Contract
+
+Every Anthropic, Gemini, Ollama, OpenAI-compatible, and fake-provider model call exposes normalized evidence at the provider boundary. A record identifies the configured provider and exact model, captures monotonic start and end times in one clock domain, records retry count and terminal finish state, and hashes the canonical model-boundary input and output. Token usage is split into the provider values available for that call, including input, output, reasoning, cached, and total counts where supported.
+
+Adapters do not infer or fabricate unavailable usage. A provider that omits a count leaves it unavailable, and downstream reconciliation reports the missing field separately from measured usage. Retries preserve their attempt metadata rather than collapsing failed calls into a synthetic successful duration. Raw prompts and outputs are restricted evidence; analytical telemetry carries hashes and references instead of secret-bearing content.
+
 ## Related
 
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy

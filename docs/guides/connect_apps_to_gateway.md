@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-08-27
-Version: v2.0.4
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 ---
 
@@ -373,7 +373,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.4
+go get github.com/g8e-ai/g8e/v2@v2.1.0
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -381,7 +381,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.0.4
+pip install g8e==2.1.0
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -715,6 +715,34 @@ curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:
   --key .g8e/cli.key \
   -o audit-export.json
 ```
+
+### Response Contracts and Verification
+
+`GET /api/v1/audit/receipts?tx_id=<transaction-id>` returns a bare canonical protojson `ActionReceipt`. Supplying `investigation_id` together with `action_type` performs a unique correlation lookup and also returns the bare receipt; multiple matches return HTTP 409. Requests without either unique selector and all `/receipts/export` requests return `AuditReceiptsResponse`, whose `receipts` array contains searchable columns and the complete canonical receipt under each record's `action_receipt` field.
+
+Consumers verify both signatures before trusting an exported receipt. The Python protocol package accepts the Gateway or Operator actuator public key as raw bytes, hexadecimal, or SPKI PEM:
+
+```python
+import json
+from pathlib import Path
+
+from g8e.receipts import (
+    parse_action_receipt,
+    verify_action_receipt_signature,
+    verify_receipt_persistence_attestation,
+)
+
+record = json.loads(Path("audit-export.json").read_text())["receipts"][0]
+receipt = parse_action_receipt(record["action_receipt"])
+public_key = Path(".g8e/pki/warden_pub.pem").read_text()
+
+if not verify_action_receipt_signature(receipt, public_key):
+    raise ValueError("invalid action receipt signature")
+if not verify_receipt_persistence_attestation(receipt, public_key):
+    raise ValueError("invalid receipt persistence attestation")
+```
+
+The caller establishes trust in the supplied public key out of band; the verification helpers do not provide an attested key-distribution channel.
 
 ### CLI Audit Query
 

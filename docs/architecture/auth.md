@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -144,10 +144,29 @@ CLI sessions have a TTL of 7 days, aligned with the CLI certificate TTL (7 days)
 
 1. CLI calls `POST /api/v1/auth/cli/refresh` (mTLS-protected, `RouteAuthMTLS`) using its existing certificate. The request body is empty — the cert is the proof of identity.
 2. The unified auth middleware (`handleMTLSAuth` → `handleCLIAuth`) detects the expired or missing session and routes to `handleCLIRefreshAuth`, which extracts the user ID from the cert URI SAN (never from the request body or the expired session record), validates the cert URI SAN session ID matches the header-provided session ID, and verifies the user is still active.
-3. The gateway deactivates the old session (if it still exists and is active) and issues a new CLI session bound to the same user and cert, inheriting the operator binding and cert fingerprint from the old session. When the old session is missing (for example after a gateway volume reset that wiped CLI sessions but left operator sessions intact), the gateway looks up the user's active operator session to inherit its binding. If no active operator session exists, the refresh returns 409 and the caller must re-enroll with `auth enroll user` to establish a fresh operator binding.
+3. The gateway deactivates the old session (if it still exists and is active) and issues a new CLI session bound to the same user and certificate. It inherits the old operator binding only when that exact operator session remains active; otherwise it resolves the user's current active operator session. If no active operator session exists, the refresh returns 409 and the caller must re-enroll with `auth enroll user` to establish a fresh operator binding.
 4. The CLI persists the new session ID atomically and prints the new session ID.
 
 This is the recovery path for an expired CLI session with a still-valid cert. When the certificate itself has expired, an expired cert cannot authenticate via mTLS, so it can never reach this endpoint — the caller must use the recovery flow (`auth enroll user --headless`) instead, which issues a new certificate. The `g8e auth refresh` CLI subcommand wraps this endpoint.
+
+**Canonical Authentication Context:**
+
+`g8e auth context` exports the currently authenticated CLI and operator binding as typed JSON for automation clients:
+
+```json
+{
+  "operator_session_id": "<operator-session-id>",
+  "cli_session_id": "<cli-session-id>",
+  "user_id": "<user-id>",
+  "operator_id": "<operator-id>",
+  "client_cert": "<path-to-cli-certificate>",
+  "client_key": "<path-to-cli-private-key>"
+}
+```
+
+The certificate and key values are filesystem paths, not embedded credentials. If the local CLI record has no operator binding, the command resolves the user's active operator through the Gateway. It fails closed when identity fields are incomplete or when multiple active operators prevent a unique binding.
+
+Before g8ee accepts this context, it sends the exact `operator_session_id`, `cli_session_id`, and `user_id` tuple to `POST /api/v1/operators/validate` over its enrolled application mTLS channel. The Gateway verifies that both sessions are active and belong to the same user and operator. Local g8ee `operator_sessions` data is a projection and is never the authentication authority; missing, stale, mismatched, or duplicate active records are rejected.
 
 **Logout Ownership Policy:**
 

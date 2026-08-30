@@ -1,10 +1,10 @@
 # g8e
 
-Python protocol library for the g8e zero-trust execution platform. Provides protocol constants, dynamic enums, and Pydantic models for building g8e-compatible clients and services.
+Python protocol library for the g8e zero-trust execution platform. Provides generated protobuf messages and type stubs, protocol constants, dynamic enums, Pydantic models, and canonical receipt verification for building g8e-compatible clients and services.
 
 ## Installation
 
-Requires Python 3.10 or later. Dependencies are `pydantic>=2.0.0` and `protobuf>=4.0.0`.
+Requires Python 3.10 or later. Runtime dependencies are `pydantic>=2.0.0`, `protobuf>=4.0.0`, and `PyNaCl>=1.5.0`.
 
 ```bash
 pip install g8e
@@ -54,6 +54,22 @@ The `g8e.models` package provides Pydantic v2 models for protocol data structure
 - **`g8e/models/settings.py`**: `G8eeUserSettings`, `PlatformSettings`, and nested settings models for LLM providers, search, eval judge, command validation, and batch execution.
 - **`g8e/models/governance.py`**: `GovernanceEnvelope`, `GovernanceMetadata`, `GovernanceL1`, `GovernanceL2`, `GovernanceL2Vote`, `GovernanceL3`, `GovernanceL3Proof`, and `compute_transaction_hash()`. The `GovernanceEnvelope` model mirrors the canonical wire format for all mutations. `compute_transaction_hash()` produces a deterministic SHA-256 over pipe-delimited canonical fields.
 
+### Generated Protobuf Messages
+
+The `g8e.common.v1`, `g8e.operator.v1`, and `g8e.pubsub.v1` packages contain generated `_pb2.py` runtime modules and matching `_pb2.pyi` type stubs. They expose the same canonical messages as the Go protocol, including `ActionReceipt`, `DeterministicStageEvidence`, `ReceiptPersistenceAttestation`, and `CommitmentAttestation`. The generated files are committed and checked against their `.proto` sources in CI.
+
+### Receipt Verification
+
+The `g8e.receipts` module provides strict protojson parsing and canonical cross-language verification:
+
+- `parse_action_receipt()` parses a mapping into the generated `ActionReceipt` and rejects unknown fields.
+- `action_receipt_to_dict()` serializes with canonical protobuf field and enum names.
+- `canonicalize_action_receipt()` reproduces the exact bytes signed by the Go actuator, including the deterministic stage evidence hash.
+- `verify_action_receipt_signature()` verifies the Ed25519 receipt signature using a raw, hexadecimal, or SPKI PEM public key.
+- `canonicalize_receipt_persistence_attestation()` and `verify_receipt_persistence_attestation()` verify the final signed durable-persistence binding.
+
+The verification helpers establish signature validity against the public key supplied by the caller. They do not establish an attested trust path for that key; consumers obtain the actuator public key through a trusted out-of-band channel.
+
 ### Examples
 
 Working examples are in `protocol/python/examples/`. Run `constants_example.py` for constants and headers usage, or `models_example.py` for model instantiation, serialization, and validation.
@@ -62,7 +78,9 @@ Working examples are in `protocol/python/examples/`. Run `constants_example.py` 
 
 - **`g8e/constants.py`**: Runtime loader for JSON protocol constants from `protocol/constants/`. Exports dict constants, `ComponentName` enum, HTTP header string constants, and accessor functions (`collection()`, `channel()`, `intent()`, `prompt()`, `kv_key()`, `kv_session_type()`).
 - **`g8e/enums.py`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS`, `EVENTS`, and other constant categories (channels, intents, prompts, collections, kv_keys).
+- **`g8e/common/v1/`, `g8e/operator/v1/`, `g8e/pubsub/v1/`**: Generated protobuf runtime modules and PEP 561-compatible `.pyi` stubs.
 - **`g8e/models/`**: Pydantic v2 models for protocol data structures, SSE events, internal API requests, user settings, and governance envelopes.
+- **`g8e/receipts.py`**: Canonical receipt parsing, serialization, Ed25519 signature verification, and persistence-attestation verification.
 
 ## Protocol Versioning
 

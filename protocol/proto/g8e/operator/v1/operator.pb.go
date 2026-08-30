@@ -4007,8 +4007,7 @@ func (x *DeterministicStageEvidence) GetDoctrineBundleVersion() string {
 	return ""
 }
 
-// ActionReceipt is the signed proof of a completed or failed mutation.
-// It is emitted by the Warden after execution.
+// ReceiptPersistenceAttestation is the signed proof that a receipt signature was durably associated with an audit record at a specific timestamp.
 type ReceiptPersistenceAttestation struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	TransactionId          string                 `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
@@ -4093,6 +4092,7 @@ func (x *ReceiptPersistenceAttestation) GetSignature() string {
 	return ""
 }
 
+// ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 type ActionReceipt struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Original GovernanceEnvelope ID

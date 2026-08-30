@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -195,9 +195,9 @@ The Gateway translates the request into a `GovernanceEnvelope` and runs L1-L3 (D
 1. Re-runs L1 (Technical Bedrock) validation on the decoded payload
 2. Re-verifies L2 (Consensus) signatures against its locally trusted signer store
 3. Re-verifies the L3 (Notary) proof if the posture requires it
-4. Enforces L4 (Warden) integrity, freshness, state-binding, and quorum checks
-5. Executes through the L5 (Actuator) boundary
-6. Emits a signed ActionReceipt anchored to the local audit vault
+4. Enforces L4 (Warden) integrity, freshness, state-binding, and quorum checks and records deterministic evidence for each stage
+5. Persists a signed pre-execution `ActionReceipt` and atomically appends its signed `CommitmentAttestation` to the current chain head
+6. Executes through the L5 (Actuator) boundary, persists the signed outcome receipt, and attaches a signed durable-persistence attestation
 
 ### 5. Review Audit Trail
 
@@ -209,12 +209,7 @@ Query the audit vault to verify governance enforcement:
 - `g8e audit export --out receipts.json` - Export the full receipts bundle for archival
 - `g8e audit summary` - Aggregate summary by event type and receipt status
 
-Each receipt includes:
-- Transaction hash
-- L2/L3 verification status
-- Signed ActionReceipt
-- State root before/after
-- Operator session ID
+Each list or export record includes searchable transaction, investigation, identity, action, status, state-root, signing, and timestamp columns plus the complete canonical `ActionReceipt`. The receipt contains L2/L3 status, deterministic stage evidence, the signature bound to that evidence hash, commitment and prior-commitment hashes, and the final `ReceiptPersistenceAttestation`. A lookup by transaction ID returns the bare canonical protojson receipt; list and export operations return the typed wrapper.
 
 ### 5b. Export FedRAMP 20x Compliance Evidence
 

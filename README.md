@@ -46,7 +46,7 @@ The operator holds no permanent administrative credentials. Permissions are mint
 
 ### Unified Context and Control Plane
 
-The platform integrates the control plane and the data plane into a single system. The hash-chained ledger that governs execution also serves as the context substrate. Every admitted action writes a signed receipt to a host-local, git-backed, hash-chained ledger before the side effect is executed. Agents derive context from this chain and verify it against live host state through governed tools. Context delivery and action governance are performed as a single operation on the same object. An agent whose actions are gated by cryptographic proof and whose beliefs are derived from a verifiable ledger has no trusted storage to poison. See [Storage Architecture](docs/architecture/storage.md).
+The platform integrates the control plane and the data plane into a single system. Every admitted action persists its complete signed `ActionReceipt` in the host-local SQLite audit store before execution, appends a signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger, and records governed file mutation snapshots in the git-backed ledger. Agents derive context from these linked stores and verify it against live host state through governed tools. Context delivery and action governance are performed as a single verifiable operation. An agent whose actions are gated by cryptographic proof and whose beliefs are derived from linked evidence has no trusted storage to poison. See [Storage Architecture](docs/architecture/storage.md).
 
 ### Proof of Human Presence
 
@@ -124,7 +124,7 @@ Every mutation must clear a five-layer admission pipeline at the host before exe
 
 ### Context Plane
 
-Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger called the [Local-First Audit Architecture (LFAA)](docs/architecture/storage.md). This occurs before the side effect is executed. The ledger provides a cryptographically provable chain of intent, interpretation, and outcome. Agents derive context from this chain and verify it against live host state through [governed tools](protocol/docs/mcp.md).
+Every admitted action writes a complete signed `ActionReceipt` to the host-local SQLite audit store before execution and appends a signed `CommitmentAttestation` to the SQLite hash-chained commitment ledger. Governed file mutations additionally write snapshots to the git-backed ledger. These linked stores form the [Local-First Audit Architecture (LFAA)](docs/architecture/storage.md), providing cryptographically verifiable intent, interpretation, ordering, and outcome. Agents derive context from this evidence and verify it against live host state through [governed tools](protocol/docs/mcp.md).
 
 ```mermaid
 sequenceDiagram
@@ -225,7 +225,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.0.4
+go get github.com/g8e-ai/g8e/v2@v2.1.0
 ```
 
 **Python package** (requires Python 3.10+):

@@ -153,7 +153,7 @@ Mirrors McpCallRequested for the Agent-to-Agent JSON protocol.
 <a name="g8e-operator-v1-ActionReceipt"></a>
 
 ### ActionReceipt
-
+ActionReceipt is the signed proof of an executing, completed, or failed mutation. L5 emits and persists it before execution, then updates and attests it after execution.
 
 
 | Field | Type | Label | Description |
@@ -1847,8 +1847,7 @@ A stored passkey credential for a user
 <a name="g8e-operator-v1-ReceiptPersistenceAttestation"></a>
 
 ### ReceiptPersistenceAttestation
-ActionReceipt is the signed proof of a completed or failed mutation.
-It is emitted by the Warden after execution.
+ReceiptPersistenceAttestation is the signed proof that a receipt signature was durably associated with an audit record at a specific timestamp.
 
 
 | Field | Type | Label | Description |

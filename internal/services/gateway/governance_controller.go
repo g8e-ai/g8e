@@ -213,7 +213,7 @@ func injectEnvelopePosture(body []byte, posture string) ([]byte, error) {
 // @Accept			json
 // @Produce		json
 // @Param			envelope	body		[]byte		true	"GovernanceEnvelope (protojson)"
-// @Success		200			{object}	json.RawMessage	"ActionReceipt"
+// @Success		200			{object}	operatorv1.ActionReceipt	"Canonical protojson ActionReceipt"
 // @Failure		400			{string}	string			"Bad Request — malformed envelope"
 // @Failure		403			{string}	string			"Forbidden — governance verification failed"
 // @Failure		405			{string}	string			"Method Not Allowed"

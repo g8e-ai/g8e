@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-30
+Version: v2.1.0
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -278,10 +278,11 @@ Runs on the Operator substrate (in-process for gateway-host operations, remote f
 - **Signer Trust**: Verifies L2 Consensus / L3 Notary signatures against trusted keys in the signer store.
 
 ### L5 Actuator (Execution and Receipt) - Operator (PEP)
-Runs on the Operator substrate. Performs isolated boundary tool dispatch (via MCP/A2A) and signed receipt production:
-- **Execution**: Dispatches the verified payload to the downstream execution handler (such as an MCP server).
-- **Audit**: Persists a `console_audit` record and a signed `ActionReceipt`.
-- **Receipt**: Generates a deterministic, signed receipt containing the result and state transitions.
+Runs on the Operator substrate and fails closed across evidence, persistence, commitment, and dispatch:
+- **Pre-execution evidence**: Signs and persists the complete protojson `ActionReceipt` with deterministic L4 stage evidence before any side effect.
+- **Commitment**: Builds and appends a signed `CommitmentAttestation` against the current SQLite chain head under the write lock, then records both chain hashes in receipt evidence.
+- **Execution**: Dispatches the verified payload through a scoped capability to the downstream execution handler (such as an MCP server).
+- **Final evidence**: Adds L5 outcome evidence and state transitions, signs and persists the final receipt, and attaches a signed `ReceiptPersistenceAttestation` proving its durable audit-record association.
 
 ---
 

@@ -49,6 +49,23 @@ func newAuditController(d AuditControllerDeps) *AuditController {
 	}
 }
 
+// @Summary		Get or list audit receipts
+// @Description	Returns one canonical protojson ActionReceipt when tx_id is set or when investigation_id and action_type uniquely correlate a receipt. Without those selectors, returns searchable receipt records with the complete receipt nested under action_receipt.
+// @Tags			audit
+// @Produce		json
+// @Param			tx_id			query		string	false	"Transaction ID for a single canonical ActionReceipt"
+// @Param			investigation_id	query		string	false	"Investigation ID for a unique correlation lookup"
+// @Param			action_type		query		string	false	"Action type required with investigation_id"
+// @Param			operator_session_id	query	string	false	"Operator session filter for list results"
+// @Param			limit			query		int		false	"Maximum list results"
+// @Param			offset			query		int		false	"List offset"
+// @Success		200				{object}	models.AuditReceiptsResponse	"List wrapper; unique selectors instead return a bare operatorv1.ActionReceipt"
+// @Failure		400				{string}	string	"Bad Request — conflicting or incomplete selectors"
+// @Failure		404				{string}	string	"Receipt not found"
+// @Failure		405				{string}	string	"Method Not Allowed"
+// @Failure		409				{string}	string	"Conflict — correlation matched multiple receipts"
+// @Failure		500				{string}	string	"Internal Server Error"
+// @Router			/api/v1/audit/receipts [get]
 func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -138,6 +155,17 @@ func (c *AuditController) handleAuditReceipts(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// @Summary		Export audit receipts
+// @Description	Returns an AuditReceiptsResponse list wrapper. Every searchable record embeds the complete canonical protojson receipt under action_receipt.
+// @Tags			audit
+// @Produce		json
+// @Param			since			query		string	false	"Inclusive receipt timestamp in RFC3339 format"
+// @Param			operator_session_id	query	string	false	"Operator session filter"
+// @Param			limit			query		int		false	"Maximum results"
+// @Success		200				{object}	models.AuditReceiptsResponse
+// @Failure		405				{string}	string	"Method Not Allowed"
+// @Failure		500				{string}	string	"Internal Server Error"
+// @Router			/api/v1/audit/receipts/export [get]
 func (c *AuditController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())

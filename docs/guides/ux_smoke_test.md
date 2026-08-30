@@ -11,7 +11,7 @@ By the end of this run the agent will have verified that:
 - The container binary reports that FIPS 140-3 approved mode is active and identifies its validated cryptographic module at runtime.
 - Headless `g8e auth enroll user --headless` mints mTLS credentials without a browser and emits a `User ID` and `CLI Session ID`.
 - Platform workload enrollments for the operator, ensemble, and dashboard can be listed and approved from the CLI over mTLS.
-- A real LLM call through the g8ee ensemble is translated into a typed MCP `tools/call`, routed through the five-layer governance pipeline, executed by the operator, and written to the hash-chained audit vault inside the operator container as a signed receipt.
+- A real LLM call through the g8ee ensemble is translated into a typed MCP `tools/call`, routed through the five-layer governance pipeline, executed by the operator, persisted as a complete signed receipt in the SQLite audit store, and linked to the signed SQLite commitment chain inside the operator container.
 - Governed `DOCUMENT_UPDATE` mutations pass through the same admission pipeline and preserve untouched fields during a partial merge.
 - The receipts and audit events can be exported for archival, and the CSV evidence report independently checks ledger and cross-store integrity.
 
@@ -253,7 +253,7 @@ grep -q '<file-transaction-hash-from-step-8>' ./receipts-export.json
 grep -q '<document-transaction-hash-from-step-8>' ./receipts-export.json
 ```
 
-Expected: the transaction hashes from both scenarios appear in the receipts and events tables with `EXECUTING` or `COMPLETED` status. At least one row has action type `FILE_EDIT`, and the document scenario produces `DOCUMENT_UPDATE` rows. The export command writes the full signed-receipt bundle, and both `grep` assertions exit zero, proving that the bundle contains the correlated scenario receipts and can be archived separately from the running platform. This proves the `README.md` statement that "every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger" across distinct mutation types.
+Expected: the transaction hashes from both scenarios appear in the receipts and events tables with `EXECUTING` or `COMPLETED` status. At least one row has action type `FILE_EDIT`, and the document scenario produces `DOCUMENT_UPDATE` rows. The export command writes the full signed-receipt bundle, and both `grep` assertions exit zero, proving that the bundle contains the correlated scenario receipts and can be archived separately from the running platform. Together with the report checks in step 10, this verifies the three-store architecture: complete receipts in the SQLite audit store, signed attestations in the SQLite commitment chain, and governed file snapshots in the git-backed ledger.
 
 `g8e audit receipts` queries the gateway API with a default limit of 50 receipts. In environments with frequent background heartbeats or long polling, the `FILE_EDIT` receipt can be pushed past the 50-row window before this step runs. If the default query does not show the receipt, scope the query to the operator session so the `FILE_EDIT` row is reliably retrieved:
 
@@ -368,7 +368,7 @@ To remove all state, including PKI, vault, and audit ledger:
 | "docker compose up from the repo root brings up the whole stack" | `g8e docker start` followed by `g8e docker status` showing the gateway, operator, ensemble, and dashboard, plus direct HTTP probes of the ensemble and dashboard. |
 | "The operator initiates a single outbound mTLS tunnel to the gateway. It listens on no ports" | `g8e operator list` shows the operator session; capturing `docker port g8e-operator` and asserting an empty result explicitly verifies that the container publishes no ports. |
 | "Every mutation must clear a five-layer admission pipeline" | The `FILE_EDIT` and `DOCUMENT_UPDATE` receipts in `g8e audit receipts` and the gateway logs show admission and execution across file and document actuator paths. |
-| "Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger" | `g8e audit receipts`, `g8e audit events`, and the `report all` commitment-chain, ledger-root, mutation-linkage, and receipt-cross-link checks. |
+| Complete receipts use the SQLite audit store, signed commitments use the SQLite hash chain, and governed file snapshots use the git-backed ledger | `g8e audit receipts`, `g8e audit events`, and the `report all` receipt-signature, persistence-attestation, commitment-chain, structured-column, ledger-root, mutation-linkage, and receipt-cross-link checks. |
 | "Raw data remains on the host" | The operator's `.g8e/vault/` and `.g8e/data/` directories are inside the operator container's volume; the gateway and ensemble receive only hashes, signatures, and tokenized projections. |
 | "Vault keys are owned by the data owner and never shared with the gateway or cloud provider" | `docker exec g8e-operator /g8e vault status` shows the vault is initialized; keys are never transmitted in the scenario. |
 | "Three posture configurations: doctrine, consensus, notary" | The default `doctrine` run; optional `consensus` and `notary` steps are documented but require a passkey. |
