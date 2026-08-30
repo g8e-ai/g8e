@@ -67,6 +67,42 @@ async def test_collector_preserves_signature_valid_final_persistence_attestation
 
 
 @pytest.mark.asyncio
+async def test_collector_waits_for_final_persistence_attestation():
+    incomplete = ActionReceipt(
+        transaction_id="tx-persistence-race",
+        transaction_hash="hash-persistence-race",
+    )
+    complete = ActionReceipt()
+    complete.CopyFrom(incomplete)
+    complete.final_persistence_attestation.transaction_id = incomplete.transaction_id
+    complete.final_persistence_attestation.receipt_signature_digest = "receipt-digest"
+    complete.final_persistence_attestation.persisted_at_unix_ms = 1
+    complete.final_persistence_attestation.audit_record_id = incomplete.transaction_id
+    complete.final_persistence_attestation.signer_key_id = "warden-key"
+    complete.final_persistence_attestation.signature = "attestation-signature"
+    incomplete_response = MagicMock(status_code=200)
+    incomplete_response.json.return_value = action_receipt_to_dict(incomplete)
+    complete_response = MagicMock(status_code=200)
+    complete_response.json.return_value = action_receipt_to_dict(complete)
+    client = MagicMock()
+    client.get = AsyncMock(side_effect=[incomplete_response, complete_response])
+    client_context = MagicMock()
+    client_context.__aenter__ = AsyncMock(return_value=client)
+    client_context.__aexit__ = AsyncMock(return_value=None)
+    auth = MagicMock()
+    auth.auth_headers.return_value = {}
+    auth.make_async_client.return_value = client_context
+
+    collected = await ReceiptCollector(
+        "https://gateway:8443", timeout_seconds=2, auth=auth
+    ).collect_receipt(incomplete.transaction_id)
+
+    assert collected is not None
+    assert collected.HasField("final_persistence_attestation")
+    assert client.get.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_collector_resolves_receipt_by_authoritative_investigation_correlation():
     receipt = ActionReceipt(
         transaction_id="tx-investigation-001",

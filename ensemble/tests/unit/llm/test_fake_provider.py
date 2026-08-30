@@ -231,6 +231,30 @@ class TestFakeProviderLiteStructuredResponse:
         assert text == "Fake lite response."
 
     @pytest.mark.asyncio
+    async def test_lite_returns_command_risk_analysis_json(self, provider):
+        from app.llm.llm_dataclasses import ResponseFormat
+        from app.models.tool_results import CommandRiskAnalysis
+
+        settings = LiteLLMSettings(
+            response_format=ResponseFormat.from_pydantic_schema(
+                {
+                    "type": "object",
+                    "properties": {
+                        "risk_level": {"type": "string", "enum": ["HIGH", "LOW", "MEDIUM"]}
+                    },
+                    "required": ["risk_level"],
+                }
+            )
+        )
+        response = await provider.generate_content_lite(
+            "fake-model", _user_content("analyze command risk"), settings
+        )
+
+        result = CommandRiskAnalysis.model_validate_json(response.text)
+        assert result.risk_level.value == "LOW"
+        assert response.usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
     async def test_lite_returns_file_risk_analysis_json(self, provider):
         from app.llm.llm_dataclasses import ResponseFormat
         from app.models.tool_results import FileOperationRiskAnalysis
@@ -327,7 +351,7 @@ class TestFakeProviderLiteStructuredResponse:
             LiteLLMSettings(),
         )
 
-        assert response.text == "touch /tmp/g8e-role-complete.txt"
+        assert response.text == "cat /proc/uptime"
         assert response.usage_metadata.usage_reported is True
 
     @pytest.mark.asyncio
@@ -399,10 +423,91 @@ class TestFakeProviderTribunalToolCall:
         tool_call = chunks[0].tool_calls[0]
         assert tool_call.name == "run_commands_with_operator"
         assert tool_call.args == {
-            "request": "Create the marker file at /tmp/g8e-role-complete.txt.",
-            "guidelines": "Use one safe non-destructive command.",
+            "request": "Run a system uptime diagnostic.",
+            "guidelines": "Use the read-only uptime command.",
             "expected_output_lines": 1,
             "timeout_seconds": 30,
             "target_operators": ["all"],
         }
         assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_creates_marker_after_tribunal_response(
+        self, provider, settings
+    ):
+        message = (
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents = _user_content(message)
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("run_commands_with_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert len(chunks[0].tool_calls) == 1
+        tool_call = chunks[0].tool_calls[0]
+        assert tool_call.name == "file_create_on_operator"
+        assert tool_call.args["file_path"] == "/tmp/g8e-role-complete.txt"
+        assert tool_call.args["content"] == "g8e fake provider deterministic output"
+        assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_terminates_after_marker_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("file_create_on_operator", {"success": True})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution completed successfully."
+        assert chunks[0].tool_calls == []
+        assert chunks[0].usage_metadata.usage_reported is True
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_does_not_create_marker_after_failed_tribunal_response(
+        self, provider, settings
+    ):
+        contents = _user_content(
+            "Run a diagnostic through the Tribunal then create the marker file at "
+            "/tmp/g8e-role-complete.txt."
+        )
+        contents.append(
+            Content(
+                role="user",
+                parts=[Part.from_tool_response("run_commands_with_operator", {"success": False})],
+            )
+        )
+
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            "fake-model", contents, settings
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert chunks[0].text == "Tool execution failed."
+        assert chunks[0].tool_calls == []

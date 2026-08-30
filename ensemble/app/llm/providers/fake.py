@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import logging
 import re
-import shlex
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -44,6 +43,7 @@ from app.llm.llm_dataclasses import (
     Part,
     StreamChunkFromModel,
     ToolCall,
+    ToolResponse,
     UsageMetadata,
 )
 from app.llm.llm_types import (
@@ -113,8 +113,12 @@ class FakeProvider(LLMProvider):
         return ""
 
     @staticmethod
-    def _has_tool_response(contents: list[Content]) -> bool:
-        return any(part.tool_response is not None for content in contents for part in content.parts)
+    def _last_tool_response(contents: list[Content]) -> ToolResponse | None:
+        for content in reversed(contents):
+            for part in reversed(content.parts):
+                if part.tool_response is not None:
+                    return part.tool_response
+        return None
 
     def _extract_file_path(self, message: str) -> str:
         """Extract a file path from the user message, falling back to default."""
@@ -130,24 +134,28 @@ class FakeProvider(LLMProvider):
             return match.group(1).strip().rstrip(".,:;")
         return _FAKE_DEFAULT_CONTENT
 
+    @staticmethod
+    def _build_tribunal_tool_call() -> ToolCall:
+        return ToolCall(
+            name=_TOOL_RUN_COMMANDS,
+            args={
+                "request": "Run a system uptime diagnostic.",
+                "guidelines": "Use the read-only uptime command.",
+                "expected_output_lines": 1,
+                "timeout_seconds": 30,
+                "target_operators": ["all"],
+            },
+            id="fake-tool-call-1",
+        )
+
     def _build_tool_call_response(self, message: str) -> GenerateContentResponse:
         """Build a GenerateContentResponse with the appropriate tool call."""
         msg_lower = message.lower()
         file_path = self._extract_file_path(message)
         content = self._extract_content(message)
 
-        if "through the tribunal" in msg_lower and "file" in msg_lower:
-            tool_call = ToolCall(
-                name=_TOOL_RUN_COMMANDS,
-                args={
-                    "request": f"Create the marker file at {file_path}.",
-                    "guidelines": "Use one safe non-destructive command.",
-                    "expected_output_lines": 1,
-                    "timeout_seconds": 30,
-                    "target_operators": ["all"],
-                },
-                id="fake-tool-call-1",
-            )
+        if "through the tribunal" in msg_lower:
+            tool_call = self._build_tribunal_tool_call()
             return GenerateContentResponse(
                 candidates=[
                     Candidate(
@@ -207,19 +215,8 @@ class FakeProvider(LLMProvider):
         """Build a list of StreamChunkFromModel for the streaming primary path."""
         msg_lower = message.lower()
 
-        if "through the tribunal" in msg_lower and "file" in msg_lower:
-            file_path = self._extract_file_path(message)
-            tool_call = ToolCall(
-                name=_TOOL_RUN_COMMANDS,
-                args={
-                    "request": f"Create the marker file at {file_path}.",
-                    "guidelines": "Use one safe non-destructive command.",
-                    "expected_output_lines": 1,
-                    "timeout_seconds": 30,
-                    "target_operators": ["all"],
-                },
-                id="fake-tool-call-1",
-            )
+        if "through the tribunal" in msg_lower:
+            tool_call = self._build_tribunal_tool_call()
             return [
                 StreamChunkFromModel(
                     tool_calls=[tool_call],
@@ -276,9 +273,38 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
-        if self._has_tool_response(contents):
+        tool_response = self._last_tool_response(contents)
+        if (
+            tool_response is not None
+            and tool_response.name == _TOOL_RUN_COMMANDS
+            and tool_response.response.get("success") is True
+        ):
+            message = self._extract_last_user_message(contents)
             yield StreamChunkFromModel(
-                text="Tool execution completed successfully.",
+                tool_calls=[
+                    ToolCall(
+                        name=_TOOL_FILE_CREATE,
+                        args={
+                            "file_path": self._extract_file_path(message),
+                            "content": _FAKE_DEFAULT_CONTENT,
+                            "justification": "Create the requested marker after Tribunal verification",
+                            "target_operators": ["all"],
+                        },
+                        id="fake-tool-call-2",
+                    )
+                ],
+                finish_reason="STOP",
+                usage_metadata=self._usage_metadata(),
+            )
+            return
+        if tool_response is not None:
+            result_text = (
+                "Tool execution completed successfully."
+                if tool_response.response.get("success") is not False
+                else "Tool execution failed."
+            )
+            yield StreamChunkFromModel(
+                text=result_text,
                 finish_reason="STOP",
                 usage_metadata=self._usage_metadata(),
             )
@@ -302,13 +328,50 @@ class FakeProvider(LLMProvider):
                 "primary_llm_settings": primary_llm_settings,
             }
         )
-        if self._has_tool_response(contents):
+        tool_response = self._last_tool_response(contents)
+        if (
+            tool_response is not None
+            and tool_response.name == _TOOL_RUN_COMMANDS
+            and tool_response.response.get("success") is True
+        ):
+            message = self._extract_last_user_message(contents)
             return GenerateContentResponse(
                 candidates=[
                     Candidate(
                         content=Content(
                             role="model",
-                            parts=[Part(text="Tool execution completed successfully.")],
+                            parts=[
+                                Part(
+                                    tool_call=ToolCall(
+                                        name=_TOOL_FILE_CREATE,
+                                        args={
+                                            "file_path": self._extract_file_path(message),
+                                            "content": _FAKE_DEFAULT_CONTENT,
+                                            "justification": "Create the requested marker after Tribunal verification",
+                                            "target_operators": ["all"],
+                                        },
+                                        id="fake-tool-call-2",
+                                    )
+                                )
+                            ],
+                        ),
+                        finish_reason="STOP",
+                    )
+                ],
+                usage_metadata=self._usage_metadata(),
+            )
+        if tool_response is not None:
+            result_text = (
+                "Tool execution completed successfully."
+                if tool_response.response.get("success") is not False
+                else "Tool execution failed."
+            )
+            return GenerateContentResponse(
+                candidates=[
+                    Candidate(
+                        content=Content(
+                            role="model",
+                            parts=[Part(text=result_text)],
                         ),
                         finish_reason="STOP",
                     )
@@ -431,8 +494,7 @@ class FakeProvider(LLMProvider):
             if message.rstrip().endswith(
                 "Respond now with the exact command string and nothing else."
             ):
-                file_path = self._extract_file_path(message)
-                return f"touch {shlex.quote(file_path)}"
+                return "cat /proc/uptime"
             if message.rstrip().endswith(
                 "Respond now with the JSON object and nothing else."
             ):
@@ -463,8 +525,7 @@ class FakeProvider(LLMProvider):
             )
 
         if prop_names == {"command"}:
-            file_path = self._extract_file_path(message)
-            return json.dumps({"command": f"touch {shlex.quote(file_path)}"})
+            return json.dumps({"command": "cat /proc/uptime"})
 
         if {"status", "revised_command", "swap_to_cluster"}.issubset(prop_names):
             return json.dumps(
@@ -482,6 +543,9 @@ class FakeProvider(LLMProvider):
                     "reasoning": "Deterministic fake-provider evaluation passed.",
                 }
             )
+
+        if prop_names in ({"risk_level"}, {"risk_level", "model_call"}):
+            return json.dumps({"risk_level": "LOW"})
 
         # FileOperationRiskAnalysis: risk_level, is_system_file, safe_to_proceed,
         # blocking_issues, approval_prompt

@@ -207,6 +207,7 @@ class TestEventTypeToActionTypeContract:
             (EventType.APP_INVESTIGATION_CREATED, "DOCUMENT_UPDATE"),
             (EventType.APP_INVESTIGATION_UPDATED, "DOCUMENT_UPDATE"),
             (EventType.APP_INVESTIGATION_DELETED, "DOCUMENT_DELETE"),
+            (EventType.OPERATOR_REPUTATION_COMMITMENT_CREATED, "DOCUMENT_UPDATE"),
         ],
     )
     def test_app_document_events_map_to_document_actions(self, event_type, expected):

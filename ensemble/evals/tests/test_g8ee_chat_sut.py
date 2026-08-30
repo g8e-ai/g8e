@@ -331,3 +331,86 @@ async def test_drain_events_extracts_event_type_from_envelope_not_sse_name(monke
     # The text.completed terminal event carries the full response content.
     assert answer == "Hello world"
     assert len(trail) == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "approval_event_type",
+    [
+        "g8e.v1.operator.command.approval.requested",
+        "g8e.v1.operator.file.edit.approval.requested",
+    ],
+)
+async def test_drain_events_headless_approves_correlated_governed_request(
+    monkeypatch, approval_event_type
+):
+    config = MagicMock()
+    config.operator_session_id = "session-123"
+    config.operator_url = "http://operator"
+    config.primary.provider = "test"
+    config.primary.model = "model"
+    config.headless = True
+
+    mock_env = MagicMock()
+    mock_env.operator_url = "http://operator"
+    mock_env.auth_headers.return_value = {"Authorization": "Bearer token"}
+    mock_env.cli_session_id = "cli-123"
+    monkeypatch.setattr("g8e_evals.sut.g8ee_chat.AuthContext.from_env", lambda **kw: mock_env)
+
+    sut = G8eeChatSUT(config=config, idle_timeout_s=5)
+    approve = AsyncMock()
+    monkeypatch.setattr(sut, "_approve_command", approve)
+    approval_payload = json.dumps(
+        {
+            "cli_session_id": "cli-123",
+            "event": {
+                "type": approval_event_type,
+                "data": {"approval_id": "approval-1", "investigation_id": "inv-123"},
+            },
+        }
+    )
+    completed_payload = json.dumps(
+        {
+            "cli_session_id": "cli-123",
+            "event": {
+                "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+                "data": {"content": "done", "investigation_id": "inv-123"},
+            },
+        }
+    )
+
+    class MockEventSource:
+        async def _events(self):
+            for event_id, payload in enumerate([approval_payload, completed_payload], start=1):
+                event = MagicMock(event="message", data=payload, id=str(event_id))
+                yield event
+
+        def aiter_sse(self):
+            return self._events()
+
+    class MockContextManager:
+        async def __aenter__(self):
+            return MockEventSource()
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    monkeypatch.setattr(
+        "g8e_evals.sut.g8ee_chat.aconnect_sse", lambda *a, **kw: MockContextManager()
+    )
+    client = AsyncMock(spec=httpx.AsyncClient)
+
+    answer, trail, terminal, error = await sut._drain_events(
+        client, since_id=0, investigation_id="inv-123"
+    )
+
+    assert error is None
+    assert answer == "done"
+    assert terminal == "g8e.v1.ai.llm.chat.iteration.text.completed"
+    assert len(trail) == 2
+    approve.assert_awaited_once()
+    approval_call = approve.await_args
+    assert approval_call is not None
+    assert approval_call.args[0] is client
+    assert approval_call.args[1].event.type == approval_event_type
+    assert approval_call.args[2] == "inv-123"

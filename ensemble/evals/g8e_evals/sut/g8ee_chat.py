@@ -48,13 +48,15 @@ from pydantic import BaseModel, Field
 from httpx_sse import aconnect_sse
 
 from app.models.internal_api import (
+    ApprovalRespondedResponse,
     ChatMessageRequest,
     ChatStartedResponse,
+    OperatorApprovalResponse,
     ResourceCreationRequest,
     SettingsGetRequest,
 )
 from app.models.settings import G8eeUserSettings
-from app.constants.api_paths import API_PATHS, GatewayAPIPaths
+from app.constants.api_paths import API_PATHS, GatewayAPIPaths, InternalAPIPaths
 from g8e_evals.harness import BindingType, Response, SUTConfig, Task
 from g8e_evals.sut.wire import SSEWireEnvelope
 from g8e_evals.transport import AuthContext, AuthenticationError
@@ -78,6 +80,11 @@ _TERMINAL_EVENTS = {
 }
 
 # Failure terminal events that mean we did NOT get a valid answer.
+_HEADLESS_APPROVAL_EVENTS = {
+    "g8e.v1.operator.command.approval.requested",
+    "g8e.v1.operator.file.edit.approval.requested",
+}
+
 _FAILURE_TERMINAL_EVENTS = {
     "g8e.v1.ai.llm.chat.iteration.failed",
     "g8e.v1.ai.llm.chat.iteration.stopped",
@@ -344,6 +351,38 @@ class G8eeChatSUT:
             web_search_api_key=self.config.web_search_api_key,
         )
 
+    async def _approve_command(
+        self,
+        client: httpx.AsyncClient,
+        envelope: SSEWireEnvelope,
+        investigation_id: str,
+    ) -> None:
+        approval_id = envelope.field_in_data("approval_id")
+        if not isinstance(approval_id, str) or not approval_id:
+            raise ValueError("headless command approval event has no approval_id")
+        case_id = envelope.field_in_data("case_id")
+        task_id = envelope.field_in_data("task_id")
+        request = OperatorApprovalResponse(
+            context=self.env.to_request_context(
+                case_id=case_id if isinstance(case_id, str) else None,
+                investigation_id=investigation_id,
+                task_id=task_id if isinstance(task_id, str) else None,
+            ),
+            approval_id=approval_id,
+            approved=True,
+            reason="Approved by the headless evaluation runner",
+        )
+        response = await client.post(
+            f"{self.env.g8ee_url}{InternalAPIPaths.G8EE_OPERATOR_APPROVAL_RESPOND}",
+            headers=self._g8ee_headers(),
+            content=request.model_dump_json(),
+        )
+        response.raise_for_status()
+        result = ApprovalRespondedResponse.model_validate(response.json())
+        if not result.success:
+            raise ValueError(f"headless command approval failed for {approval_id}")
+        logger.info("[HEADLESS] Approved command request %s", approval_id)
+
     async def _current_cursor(self, client: httpx.AsyncClient) -> int:
         """Return the highest SSE event id currently in the operator buffer for our session."""
         path = GatewayAPIPaths.SSE_EVENTS
@@ -434,6 +473,13 @@ class G8eeChatSUT:
                             evt_inv = envelope.investigation_id()
                             if evt_inv and evt_inv != investigation_id:
                                 continue
+
+                        if (
+                            self.config.headless
+                            and event_type in _HEADLESS_APPROVAL_EVENTS
+                            and envelope is not None
+                        ):
+                            await self._approve_command(client, envelope, investigation_id)
 
                         trail.append(AgentTrailEvent(
                             id=row_id,

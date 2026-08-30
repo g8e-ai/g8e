@@ -114,6 +114,8 @@ def main():
 @click.option("--lite-model", envvar="G8E_TEST_LLM_LITE_MODEL", help="Lite model name")
 @click.option("--judge-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_JUDGE_PROVIDER", help="Secondary Eval Judge provider")
 @click.option("--judge-model", envvar="G8E_TEST_LLM_JUDGE_MODEL", help="Secondary Eval Judge model")
+@click.option("--headless/--no-headless", default=False,
+              help="Approve correlated command requests from the authenticated SSE stream")
 @click.option("--verbose-text/--no-verbose-text", default=False,
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
@@ -149,7 +151,7 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key):
     """Run a benchmark suite"""
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
@@ -194,6 +196,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         l2_private_key=l2_key,
         l2_key_id=l2_key_id,
         arm=selected_arm,
+        headless=headless,
     )
 
     try:

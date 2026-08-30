@@ -73,6 +73,7 @@ class SUTConfig:
     l2_private_key: str | None = None
     l2_key_id: str | None = None
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
+    headless: bool = False
 
     @property
     def arm_definition(self) -> ArmDefinition:
