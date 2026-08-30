@@ -73,8 +73,11 @@ class ReceiptCollector:
                     if resp.status_code == 200:
                         receipt = parse_action_receipt(resp.json())
                         if (
-                            expected_transaction_id is None
-                            or receipt.transaction_id == expected_transaction_id
+                            (
+                                expected_transaction_id is None
+                                or receipt.transaction_id == expected_transaction_id
+                            )
+                            and receipt.HasField("final_persistence_attestation")
                         ):
                             return receipt
                 except Exception:

@@ -107,6 +107,14 @@ async def test_collector_resolves_receipt_by_authoritative_investigation_correla
     receipt = ActionReceipt(
         transaction_id="tx-investigation-001",
         transaction_hash="hash-investigation-001",
+        final_persistence_attestation=ReceiptPersistenceAttestation(
+            transaction_id="tx-investigation-001",
+            receipt_signature_digest="receipt-digest",
+            persisted_at_unix_ms=1,
+            audit_record_id="tx-investigation-001",
+            signer_key_id="warden-key",
+            signature="attestation-signature",
+        ),
     )
     response = MagicMock(status_code=200)
     response.json.return_value = action_receipt_to_dict(receipt)
