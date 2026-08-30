@@ -54,7 +54,14 @@ FIPS_GOOS := linux
 FIPS_GOARCH := amd64
 
 # Test configuration
-TEST_TIMEOUT := 180s
+# Integration tests: the gateway package alone has 996 integration tests that
+# exercise real SQLite (modernc, pure-Go) via setupTestHTTPHandler. Under `-race`
+# on a 2-vCPU CI runner, race-detector background threads compete with test
+# goroutines for CPU, producing a ~3x slowdown versus multicore local machines
+# (~95s local → ~285s CI). 180s was too tight and caused spurious "test timed
+# out" panics where the victim test had only just started (0s elapsed). 360s
+# gives ~25% headroom over the heaviest package; a genuine hang still trips this.
+TEST_TIMEOUT := 360s
 # Per-package deadlock backstop for unit tests. Kept generous because `-race`
 # slows the pure-Go SQLite (modernc) used by DB-heavy packages (e.g.
 # internal/services/gateway), and CI runs the whole module in parallel, starving
