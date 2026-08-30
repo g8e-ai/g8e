@@ -106,11 +106,17 @@ class TriageAgent:
             )
             message_xml = AgentPersona.format_xml_tag("message", request.message)
             prompt = f"{prompt_template}\n\n{conversation_tail_xml}\n\n{message_xml}"
+            response_schema = TriageResult.model_json_schema()
+            for field_name in ("error_code", "error_class", "error_message", "model_call"):
+                response_schema.get("properties", {}).pop(field_name, None)
 
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=model,
                 max_tokens=None,
                 system_instructions="",
+                response_format=types.ResponseFormat.from_pydantic_schema(
+                    response_schema, name="TriageResult"
+                ),
             )
 
             try:

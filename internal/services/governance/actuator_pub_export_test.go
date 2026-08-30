@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -48,7 +49,9 @@ func TestActuatorPublicKeyExport(t *testing.T) {
 		require.NotNil(t, block, "failed to decode PEM block")
 		require.Empty(t, rest, "unexpected trailing data after PEM block")
 		require.Equal(t, "PUBLIC KEY", block.Type)
-		require.Equal(t, []byte(pubKey), block.Bytes)
+		parsedKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+		require.NoError(t, err)
+		require.Equal(t, pubKey, parsedKey)
 
 		jsonRel := filepath.Join(constants.PkiDirname, constants.ActuatorPubJSONFilename)
 		jsonData, err := fileSvc.ReadFile(context.Background(), jsonRel)

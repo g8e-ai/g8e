@@ -28,6 +28,7 @@ from app.constants import (
     TriageRequestPosture,
 )
 from app.models.agents.triage import TriageRequest
+from app.llm.providers.fake import FakeProvider
 from app.models.attachments import AttachmentMetadata
 from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
@@ -126,6 +127,30 @@ async def test_triage_returns_simple_classification_from_llm(fake_provider, mock
     assert result.model_call.model == "lite-model"
     assert len(result.model_call.input_artifact_hash) == 64
     assert len(result.model_call.output_artifact_hash) == 64
+
+
+async def test_triage_configures_structured_output_for_fake_provider(mock_settings):
+    provider = FakeProvider()
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="Create a file",
+        agent_mode=AgentMode.G8E_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+
+    with patch("app.services.ai.triage.get_llm_provider", return_value=provider):
+        result = await agent.triage(request)
+
+    settings = provider.call_log[0]["lite_llm_settings"]
+    assert settings.response_format is not None
+    assert result.error_code is None
+    assert result.intent == TriageIntentClassification.ACTION
+    assert result.model_call is not None
+    assert result.model_call.usage_reported is True
+    assert result.model_call.input_tokens == 100
+    assert result.model_call.output_tokens == 50
 
 
 async def test_triage_returns_complex_classification_from_llm(fake_provider, mock_settings):
