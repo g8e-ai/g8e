@@ -1,7 +1,7 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 This page covers common setup failures, runtime friction, and operational caveats for contributors working on g8e from a fresh checkout. The platform runs host-native. For architecture-level context, see [Authentication & Authorization](../architecture/auth.md), [Encryption Architecture](../architecture/encryption.md), [Gateway Architecture](../architecture/gateway.md), [Governance](../architecture/governance.md), and [Network Architecture](../architecture/network.md).
 

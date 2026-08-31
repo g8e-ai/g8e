@@ -40,7 +40,7 @@ The `GovernanceEnvelope` is the single canonical container for all mutations in 
 | `system_fingerprint` | `str \| None` | Optional system fingerprint |
 | `tenant_id` | `str \| None` | Optional tenant identifier |
 | `binding_persona` | `str \| None` | Optional persona identifier |
-| `posture` | `str \| None` | Governance posture at envelope construction (`doctrine`, `consensus`, `notary`) |
+| `posture` | `str \| None` | Governance posture at envelope construction (`doctrine`, `consensus`, `ratify`, `notary`) |
 
 ### GovernanceMetadata and Proofs
 
@@ -149,16 +149,16 @@ Identity validators on both Gateway and Operator verify SPIFFE URI SANs during t
 
 ## Five-Layer Governance Lifecycle
 
-Every mutation passes through five sequential, fail-closed governance layers:
+Every mutation passes through five sequential governance layers. Universal checks and proofs required by the active posture fail closed; optional L2 and L3 results remain audit evidence:
 
 ```
 [Agent Intent] ──> L1 Doctrine ──> L2 Consensus ──> L3 Notary ──> L4 Warden ──> L5 Actuator ──> [Host Execution & Receipt]
 ```
 
 1. **L1 Doctrine (Technical Bedrock)** — Deterministic hard gates scan payloads against forbidden pattern registries (`doctrine_registry.json`), blacklist rules, and MITRE ATT&CK heuristics before any consensus or human involvement.
-2. **L2 Consensus (Tribunal Multi-Signature)** — The five-member Tribunal evaluates intent independently under information isolation. Members stake reputation and produce Ed25519 signatures over `<transaction_hash>|<decision>`.
-3. **L3 Notary (Human Authorization)** — Hardware-bound human approval via WebAuthn passkey assertion or mTLS CLI signed proof. Benign diagnostic read-only actions pass via explicit auto-approval policy.
-4. **L4 Warden (Pre-Dispatch Gate)** — Operator-side verification re-computes the transaction hash, verifies nonce reservation, validates state Merkle root alignment, and checks L2/L3 signatures against the trusted signer store.
+2. **L2 Consensus** — Enrolled members evaluate the transaction and produce Ed25519 signatures over `<transaction_hash>|<decision>`. L2 quorum is required under consensus and notary postures and audited under doctrine and ratify.
+3. **L3 Notary (Human Authorization)** — Hardware-bound human approval uses a WebAuthn passkey assertion or mTLS CLI signed proof. L3 is required for mutations under ratify and notary postures and audited under doctrine and consensus; read-only actions do not require L3.
+4. **L4 Warden (Pre-Dispatch Gate)** — Operator-side verification re-computes the transaction hash, verifies nonce reservation, validates state Merkle root alignment, and checks posture-required L2/L3 signatures against trusted verification state.
 5. **L5 Actuator (Sovereign Execution)** — The actuator signs and persists a complete pre-execution `ActionReceipt`, atomically appends a signed `CommitmentAttestation` against the current chain head, and records commitment linkage in deterministic stage evidence. It then rehydrates scrubbed sensitive tokens, mints a scoped Just-In-Time capability, executes the operation, dissolves the capability, signs and persists the final receipt, and attaches a signed `ReceiptPersistenceAttestation` proving durable association with its audit record.
 
 ## Action Types and Mappings

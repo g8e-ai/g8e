@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -49,7 +49,7 @@ The L4 Warden runs on the Operator substrate as the final verification gate befo
 1. **Integrity**: Validates that the transaction ID, transaction hash, and computed hash of the canonical fields all match.
 2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local replay protection store.
 3. **State Binding**: Validates that the state Merkle root matches the current authoritative state root (gateway state root in outbound mode, local ledger root in standalone mode).
-4. **Quorum**: Verifies that L2 consensus votes reach the required quorum and that any required L3 proof is valid for the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
+4. **Quorum**: Verifies that L2 consensus votes reach the required quorum and that any required L3 proof is valid for the current **Governance Posture** (`doctrine`, `consensus`, `ratify`, or `notary`).
 
 ### L5: Actuator (Execution Boundary) - Operator (PEP)
 The L5 Actuator runs on the Operator substrate as the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:

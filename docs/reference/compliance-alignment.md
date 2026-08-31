@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 2.1.0
-**Last Updated:** 2026-08-30
-**Platform:** g8e v2.1.0
+**Document Version:** 2.1.2
+**Last Updated:** 2026-08-31
+**Platform:** g8e v2.1.2
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -803,6 +803,7 @@ For specific compliance questions or audit support, contact:
 | 1.7.8 | 2026-08-19 | Lateralus Labs | Added platform logging consolidation (`internal/services/logging`, `g8e.log`, `OpenForAppend`/`OpenForRead`), `PSUBSCRIBE` glob-pattern subscriptions on gateway pubsub with fail-closed topic ACLs, typed MCP native tool request/result structs, and `docs/architecture/overview.md` |
 | 2.0.0 | 2026-08-25 | Lateralus Labs | Updated platform version to v2.0.0; documented polyglot monorepo reunification shipping Go platform, in-tree Python ensemble (`ensemble/`), Node.js dashboard (`dashboard/`), unified Docker compose orchestration, and updated test suite metrics |
 | 2.1.0 | 2026-08-30 | Lateralus Labs | Added deterministic stage-evidence receipt binding, signed durable-persistence attestations, atomic signed commitment chaining, full canonical receipt persistence and export, cross-language offline verification, and expanded code and test evidence |
+| 2.1.2 | 2026-08-31 | Lateralus Labs | Added ratify posture with L1/L3 enforcement and audited L2, clarified posture-required fail-closed verification, and reconciled posture-dependent passkey and consensus requirements |
 
 ---
 

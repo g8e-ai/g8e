@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-08-25
-Version: v1.7.8
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 

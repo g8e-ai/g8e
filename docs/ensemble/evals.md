@@ -28,6 +28,8 @@ Attempt records normalize the full execution into typed stages, including model 
 
 Governed arms collect canonical `ActionReceipt` protobuf messages and verify the receipt signature and final persistence attestation with protocol-owned helpers. Receipt stage evidence carries transaction and identity bindings, state roots, doctrine metadata, signature digests, commitment hashes, audit record IDs, and parent-child relationships. Unknown, duplicated, cyclic, incomplete, or unverifiable evidence fails the attempt closed as invalid evidence.
 
+The runner grades authoritative receipt evidence with versioned deterministic graders. Receipt-integrity grading requires exactly one verified primary receipt matching the expected action class and its verified final-persistence stage. Protocol-chain grading verifies stage identity and transaction bindings, ordering, posture-specific L2/L3 statuses, parent relationships, execution status, and state roots. Policy-outcome grading compares the signed L4 allow/block result and rejection layer with typed task expectations. Final-state grading evaluates typed `state_root_changed` or `state_root_unchanged` assertions against verified action receipts and writes one linked observation per assertion. A rubric mismatch produces a verified zero score, while missing or internally inconsistent evidence fails verification.
+
 Raw prompts and model outputs are restricted evidence. The runner requires an owner-only key file and writes these artifacts as AES-256-GCM envelopes with authenticated index metadata, plaintext and ciphertext hashes, byte lengths, key IDs, and named-key-holder access policy. Analytical records reference immutable evidence indexes rather than embedding raw content.
 
 ## Benchmark Support
@@ -59,7 +61,7 @@ Provider, model, endpoint, API-key, judge, output, task-limit, and headless appr
 
 ## Evidence Bundle Contract
 
-The persisted record schema version is `1.10.0`. Every typed record rejects unknown fields and carries stable run, task, attempt, receipt, stage, metric, or evidence identifiers used to link the bundle without relying on file order. Readers must reject unsupported schema versions, missing references, duplicate identities, invalid parent-stage graphs, hash mismatches, and incomplete evidence rather than partially accepting a report.
+The persisted record schema version is `1.12.0`. Every typed record rejects unknown fields and carries stable run, task, attempt, receipt, final-state observation, stage, metric, or evidence identifiers used to link the bundle without relying on file order. Task definitions use typed final-state assertions, allow/block outcomes, and rejection layers; validation rejects duplicate assertion IDs and inconsistent policy expectations. Readers must reject unsupported schema versions, missing references, duplicate identities, invalid parent-stage graphs, hash mismatches, and incomplete evidence rather than partially accepting a report.
 
 A report directory contains:
 
@@ -67,6 +69,7 @@ A report directory contains:
 - `tasks.jsonl` — immutable benchmark task definitions and provenance.
 - `attempts.jsonl` — terminal attempt outcomes and record linkage.
 - `receipts.jsonl` — typed receipt observations containing canonical `ActionReceipt` messages.
+- `final-state-observations.jsonl` — receipt-bound state-root observations linked to typed task assertions.
 - `stages.jsonl` — normalized model, governance, persistence, commitment, and grading stages.
 - `metrics.jsonl` — typed measurements linked to attempts and stages.
 - `evidence-index.jsonl` — authenticated metadata, hashes, locations, classifications, and access policy for encrypted restricted evidence.
