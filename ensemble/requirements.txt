@@ -48,5 +48,5 @@ pyright==1.1.409
 ruff==0.15.12
 
 # Documentation
-mkdocs>=1.6.0
+mkdocs>=1.6.1
 sentence-transformers>=2.2.0
