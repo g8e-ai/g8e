@@ -2150,13 +2150,13 @@
                 3
             ],
             "x-enum-comments": {
-                "L2Status_L2_STATUS_NOT_REQUIRED": "L2 signature not required by posture (doctrine)",
+                "L2Status_L2_STATUS_NOT_REQUIRED": "L2 signature not required by posture (doctrine/ratify)",
                 "L2Status_L2_STATUS_REQUIRED_FAILED": "L2 signature required but missing or invalid",
                 "L2Status_L2_STATUS_REQUIRED_VALID": "L2 signature required and valid"
             },
             "x-enum-descriptions": [
                 "",
-                "L2 signature not required by posture (doctrine)",
+                "L2 signature not required by posture (doctrine/ratify)",
                 "L2 signature required and valid",
                 "L2 signature required but missing or invalid"
             ],
