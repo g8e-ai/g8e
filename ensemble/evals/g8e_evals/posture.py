@@ -29,12 +29,12 @@ from g8e_evals.transport import AuthContext
 
 logger = logging.getLogger(__name__)
 
-# The gateway reports posture using the short names from
-# ``config.GatewayPosture`` (doctrine, consensus, notary). The eval
-# ``GovernancePosture`` enum uses the prefixed names (l1_doctrine,
-# l2_consensus, l3_notary) to make the enforcement layer explicit in
-# analytical records. This map translates the wire form to the
-# analytical form.
+# The gateway supports the short posture names doctrine, consensus, ratify,
+# and notary. The canonical eval design defines governed arms only for
+# doctrine, consensus, and notary; ratify is intentionally unmapped so a run
+# against that unexpected effective posture fails closed. The eval
+# ``GovernancePosture`` enum uses prefixed names to make each arm's enforced
+# layer explicit in analytical records.
 _GATEWAY_POSTURE_MAP: dict[str, GovernancePosture] = {
     "doctrine": GovernancePosture.L1_DOCTRINE,
     "consensus": GovernancePosture.L2_CONSENSUS,

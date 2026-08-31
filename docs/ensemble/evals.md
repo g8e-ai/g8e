@@ -2,7 +2,7 @@
 
 ## Overview
 
-g8ee includes a standalone evidence-grade evaluation package at `ensemble/evals/`. It compares raw provider inference, ensemble orchestration, and the three governed postures while preserving the configuration, model identity, stage telemetry, receipts, and immutable inputs needed to reproduce and audit a run.
+g8ee includes a standalone evidence-grade evaluation package at `ensemble/evals/`. It compares raw provider inference, ensemble orchestration, and the canonical doctrine, consensus, and notary experiment arms while preserving the configuration, model identity, stage telemetry, receipts, and immutable inputs needed to reproduce and audit a run. Ratify is a supported gateway posture but does not have a standalone arm in this five-arm experiment design.
 
 The package is separate from the g8ee application package and has its own locked environment, CLI, type checking, linting, tests, and CI job. Python 3.12 or later is required.
 

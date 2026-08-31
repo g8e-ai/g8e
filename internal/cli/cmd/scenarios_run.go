@@ -69,7 +69,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessCLISessionID, "cli-session-id", "", "host CLI session id for X-CLI-Session-ID submit header")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
-	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
+	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "scenario suite: doctrine|consensus|notary|all (ratify has no dedicated suite)")
 
 	return cmd
 }

@@ -46,7 +46,7 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	assert.Contains(t, out, "The g8e Gateway is online as a stateless relay.")
 	assert.Contains(t, out, "Passkey Enrollment: Optional")
 	assert.Contains(t, out, "No passkey required for doctrine posture (L3 audited, not enforced).")
-	assert.Contains(t, out, "Enroll a passkey if you plan to restart in notary mode (L3 enforced).")
+	assert.Contains(t, out, "Enroll a passkey if you plan to restart in ratify or notary mode (L3 enforced).")
 
 	// Next Steps with GUI section
 	assert.Contains(t, out, "Next Steps:")
@@ -111,18 +111,18 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	assert.NotContains(t, out, "Manage & Monitor")
 }
 
-func TestPrintNextSteps_NotaryPosture(t *testing.T) {
+func TestPrintNextSteps_RatifyPosture(t *testing.T) {
 	cmd, buf := newOutputCmd()
-	posture := &governance.NotaryPosture{}
+	posture := &governance.RatifyPosture{}
 	externalIP := "172.16.0.1"
 
 	printNextSteps(cmd, posture, externalIP, "")
 
 	out := buf.String()
 
-	// Notary requires L3 proof — passkey is required
+	// Ratify requires L3 proof — passkey is required
 	assert.Contains(t, out, "Passkey Enrollment: Required")
-	assert.Contains(t, out, "Proof of human presence required for notary posture (L3 enforced).")
+	assert.Contains(t, out, "Proof of human presence required for ratify posture (L3 enforced).")
 	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
 	assert.Contains(t, out, "2. Enroll your passkey (in this terminal)")
 	assert.Contains(t, out, "3. Operators:")
@@ -136,16 +136,42 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	assert.NotContains(t, out, "Manage & Monitor")
 }
 
+func TestPrintNextSteps_NotaryPosture(t *testing.T) {
+	cmd, buf := newOutputCmd()
+	posture := &governance.NotaryPosture{}
+	externalIP := "172.16.0.2"
+
+	printNextSteps(cmd, posture, externalIP, "")
+
+	out := buf.String()
+
+	// Notary requires L3 proof — passkey is required
+	assert.Contains(t, out, "Passkey Enrollment: Required")
+	assert.Contains(t, out, "Proof of human presence required for notary posture (L3 enforced).")
+	assert.Contains(t, out, "1. Enroll your CLI identity and register a passkey")
+	assert.Contains(t, out, "2. Enroll your passkey (in this terminal)")
+	assert.Contains(t, out, "3. Operators:")
+
+	// External IP interpolated correctly
+	assert.Contains(t, out, "auth enroll user -e 172.16.0.2")
+
+	// No posture-specific text from the old posture-specific output
+	assert.NotContains(t, out, "Configure L2 Consensus")
+	assert.NotContains(t, out, "Connect AI agents")
+	assert.NotContains(t, out, "Manage & Monitor")
+}
+
 func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
-	// All three postures produce the same step numbering (1, 2, 3), but the
-	// passkey wording differs: notary says "Enroll your passkey", doctrine and
-	// consensus say "Enroll a passkey (optional, ...)".
+	// All four postures produce the same step numbering (1, 2, 3), but the
+	// passkey wording differs: ratify and notary say "Enroll your passkey",
+	// while doctrine and consensus say "Enroll a passkey (optional, ...)".
 	postures := []struct {
 		name    string
 		posture governance.GovernancePosture
 	}{
 		{"doctrine", &governance.DoctrinePosture{}},
 		{"consensus", &governance.ConsensusPosture{}},
+		{"ratify", &governance.RatifyPosture{}},
 		{"notary", &governance.NotaryPosture{}},
 	}
 
@@ -225,6 +251,7 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 	}{
 		{"doctrine", &governance.DoctrinePosture{}},
 		{"consensus", &governance.ConsensusPosture{}},
+		{"ratify", &governance.RatifyPosture{}},
 		{"notary", &governance.NotaryPosture{}},
 	}
 
@@ -287,6 +314,7 @@ func TestPrintNextSteps_OutputNotEmpty(t *testing.T) {
 	postures := []governance.GovernancePosture{
 		&governance.DoctrinePosture{},
 		&governance.ConsensusPosture{},
+		&governance.RatifyPosture{},
 		&governance.NotaryPosture{},
 	}
 
