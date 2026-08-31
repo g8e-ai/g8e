@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.13.0"
+SCHEMA_VERSION = "1.14.0"
 
 
 class TerminalStatus(StrEnum):
@@ -264,6 +264,15 @@ class FinalStateObservation(BaseModel):
     state_root_after: str | None = None
     source_receipt_id: str | None = None
     verification_status: VerificationStatus = VerificationStatus.PENDING
+
+
+class ModelBoundaryPrivacyAttestation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scanner_version: str = Field(min_length=1)
+    input_artifact_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    raw_sensitive_occurrences: int = Field(ge=0)
+    raw_sensitive_types: list[str] = Field(default_factory=list)
 
 
 class CanaryScrubbingAssertion(BaseModel):
@@ -516,6 +525,7 @@ class StageObservation(BaseModel):
 
     input_artifact_hash: str | None = None
     output_artifact_hash: str | None = None
+    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
 
     decision: str | None = None
     confidence: float | None = None

@@ -20,7 +20,7 @@ The platform ships as a polyglot monorepo. The gateway and operator are a single
 Two first-party components ship alongside the Go binary and complete the platform:
 
 - **Ensemble (g8ee)**: The first g8e-compatible agentic ensemble. A Python 3.12 / FastAPI service that connects to the gateway over mTLS, submits governed intents through the MCP surface, and streams progress and results back through the SSE event bridge. See [Ensemble (g8ee)](./ensemble.md).
-- **Dashboard (g8ed)**: The operator dashboard. A Node.js 22 / Express web application that provides the operator-facing UI for driving ensembles, managing operators, inspecting audit trails, and configuring the platform. See [Dashboard (g8ed)](./dashboard.md).
+- **Dashboard (g8ed)**: The first-party browser interface. A framework-free JavaScript SPA served by a minimal Node.js 22 / Express 5 static host; the browser authenticates and calls the gateway directly, while the container independently enrolls a prepared mTLS app identity. See [Dashboard (g8ed)](./dashboard.md) and the [Dashboard documentation](../dashboard/index.md).
 
 `docker compose up` from the repo root brings up the whole stack end to end: gateway, operator, ensemble, and dashboard. See the [Unified Docker Stack guide](../guides/unified_stack.md).
 
@@ -167,7 +167,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
 | [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
-| [Dashboard (g8ed)](./dashboard.md) | Operator dashboard: role, connection model, build and test. |
+| [Dashboard (g8ed)](./dashboard.md) | Browser dashboard: static-host boundary, browser and container identities, gateway-direct requests, SSE, build, and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |
 | [Consensus](./consensus.md) | L2 consensus policy, declarative bootstrap, member key management, deliberation, L4 vote verification. |
 | [Authentication & Authorization](./auth.md) | CLI enrollment state machine, recovery and rotation, headless enrollment, WebAuthn notary, session binding. |

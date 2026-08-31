@@ -34,6 +34,7 @@ from g8e_evals.schema import (
     FinalStateAssertion,
     FinalStateObservation,
     MetricObservation,
+    ModelBoundaryPrivacyAttestation,
     ModelIdentity,
     PolicyOutcome,
     PostureObservation,
@@ -53,7 +54,16 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.13.0"
+    assert SCHEMA_VERSION == "1.14.0"
+
+
+def test_model_boundary_privacy_attestation_rejects_unbound_payload_hash():
+    with pytest.raises(ValidationError):
+        ModelBoundaryPrivacyAttestation(
+            scanner_version="sentinel-regex@1.0.0",
+            input_artifact_hash="not-a-sha256",
+            raw_sensitive_occurrences=0,
+        )
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():

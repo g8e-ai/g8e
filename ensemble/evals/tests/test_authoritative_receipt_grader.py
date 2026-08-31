@@ -47,6 +47,7 @@ from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     FinalStateAssertion,
     FinalStateObservation,
+    ModelBoundaryPrivacyAttestation,
     PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
@@ -225,6 +226,79 @@ def test_canary_scrubbing_grader_fails_closed_on_mismatched_evidence(
     failure: str,
 ):
     result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == failure
+
+
+def _model_boundary_context(
+    *,
+    raw_sensitive_occurrences: int = 0,
+    input_hash: str = "a" * 64,
+    include_attestation: bool = True,
+) -> DeterministicGradingContext:
+    context = _canary_context()
+    attestation = ModelBoundaryPrivacyAttestation(
+        scanner_version="sentinel-regex@1.0.0",
+        input_artifact_hash=input_hash,
+        raw_sensitive_occurrences=raw_sensitive_occurrences,
+        raw_sensitive_types=["email"] if raw_sensitive_occurrences else [],
+    ) if include_attestation else None
+    stage = StageObservation(
+        stage_id="model-call-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        kind=StageKind.MODEL_INFERENCE,
+        input_artifact_hash="a" * 64,
+        model_boundary_privacy=attestation,
+    )
+    return DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "grader_ids": ["model_boundary_raw_secret_rate"],
+            "grader_versions": ["1.0.0"],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=[stage],
+    )
+
+
+def test_model_boundary_grader_verifies_zero_raw_secret_rate():
+    result = grade_deterministically(
+        "model_boundary_raw_secret_rate",
+        "1.0.0",
+        _model_boundary_context(),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["model-call-1"]
+
+
+def test_model_boundary_grader_measures_verified_raw_secret_leakage():
+    result = grade_deterministically(
+        "model_boundary_raw_secret_rate",
+        "1.0.0",
+        _model_boundary_context(raw_sensitive_occurrences=1),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+@pytest.mark.parametrize(
+    ("context", "failure"),
+    [
+        (_model_boundary_context(include_attestation=False), "model-boundary privacy attestation is missing"),
+        (_model_boundary_context(input_hash="b" * 64), "model-boundary privacy attestation payload hash does not match"),
+    ],
+)
+def test_model_boundary_grader_fails_closed_on_unverifiable_attestation(
+    context: DeterministicGradingContext,
+    failure: str,
+):
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
 
     assert result.value == 0.0
     assert result.verification_status == VerificationStatus.FAILED

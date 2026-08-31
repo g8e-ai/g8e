@@ -325,6 +325,20 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
                         "input_artifact_hash": "a" * 64,
                         "output_artifact_hash": "b" * 64,
                     }],
+                    "model_calls": [{
+                        "agent_role": "primary",
+                        "provider": "OllamaProvider",
+                        "model": "test-model",
+                        "monotonic_start": 1.0,
+                        "monotonic_end": 2.0,
+                        "input_artifact_hash": "d" * 64,
+                        "model_boundary_privacy": {
+                            "scanner_version": "sentinel-regex@1.0.0",
+                            "input_artifact_hash": "d" * 64,
+                            "raw_sensitive_occurrences": 0,
+                            "raw_sensitive_types": [],
+                        },
+                    }],
                 }}},
             )
         ],
@@ -366,14 +380,29 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
         for line in (report_dir / "metrics.jsonl").read_text().splitlines()
     ]
     canary_metric = next(metric for metric in metrics if metric.metric_id == "canary_scrubbing")
+    boundary_metric = next(
+        metric for metric in metrics if metric.metric_id == "model_boundary_raw_secret_rate"
+    )
 
     assert task_definition.sensitive_canary_annotations == [assertion]
-    assert task_definition.grader_ids == ["ifeval_subset_verifier", "canary_scrubbing"]
+    assert task_definition.grader_ids == [
+        "ifeval_subset_verifier",
+        "canary_scrubbing",
+        "model_boundary_raw_secret_rate",
+    ]
     assert canary_metric.value == 1.0
     assert canary_metric.denominator_contribution == 1
     assert canary_metric.verification_status.value == "verified"
     assert len(canary_metric.evidence_refs) == 1
-    assert attempt.grade_refs == ["ifeval_subset_verifier", "canary_scrubbing"]
+    assert boundary_metric.value == 0.0
+    assert boundary_metric.denominator_contribution == 1
+    assert boundary_metric.verification_status.value == "verified"
+    assert len(boundary_metric.evidence_refs) == 1
+    assert attempt.grade_refs == [
+        "ifeval_subset_verifier",
+        "canary_scrubbing",
+        "model_boundary_raw_secret_rate",
+    ]
 
 
 @pytest.mark.asyncio
