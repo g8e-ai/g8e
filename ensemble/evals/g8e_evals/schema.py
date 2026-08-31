@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.15.0"
+SCHEMA_VERSION = "1.16.0"
 
 
 class TerminalStatus(StrEnum):
@@ -384,6 +384,65 @@ class CanaryScrubbingAssertion(BaseModel):
     expected_occurrences: int = Field(ge=1)
 
 
+class SecretDetectionAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_sensitive_occurrences: int = Field(ge=1)
+    expected_benign_occurrences: int = Field(ge=0)
+    expected_sensitive_types: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> SecretDetectionAssertion:
+        if len(self.expected_sensitive_types) != len(set(self.expected_sensitive_types)):
+            raise ValueError("expected sensitive types must be unique")
+        if self.expected_sensitive_occurrences < len(self.expected_sensitive_types):
+            raise ValueError("expected sensitive occurrences cannot be fewer than sensitive types")
+        return self
+
+
+class SecretDetectionObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scanner_version: str = Field(min_length=1)
+    collected_at: datetime
+    true_positive_count: int = Field(ge=0)
+    false_positive_count: int = Field(ge=0)
+    false_negative_count: int = Field(ge=0)
+    true_negative_count: int = Field(ge=0)
+    detected_sensitive_types: list[str] = Field(default_factory=list)
+    missed_sensitive_types: list[str] = Field(default_factory=list)
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_detection_evidence(self) -> SecretDetectionObservation:
+        if len(self.detected_sensitive_types) != len(set(self.detected_sensitive_types)):
+            raise ValueError("detected sensitive types must be unique")
+        if len(self.missed_sensitive_types) != len(set(self.missed_sensitive_types)):
+            raise ValueError("missed sensitive types must be unique")
+        if bool(self.true_positive_count) != bool(self.detected_sensitive_types):
+            raise ValueError("true-positive count and detected sensitive types must agree")
+        if bool(self.false_negative_count) != bool(self.missed_sensitive_types):
+            raise ValueError("false-negative count and missed sensitive types must agree")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified secret-detection observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -416,7 +475,7 @@ class TaskDefinition(BaseModel):
     expected_rejection_layer: RejectionLayer | None = None
 
     sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
-    privacy_assertions: list[str] = Field(default_factory=list)
+    secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
 
     grader_ids: list[str] = Field(default_factory=list)
     grader_versions: list[str] = Field(default_factory=list)
@@ -433,6 +492,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(canary_assertion_ids) != len(set(canary_assertion_ids)):
             raise ValueError("canary assertion IDs must be unique")
+        secret_detection_assertion_ids = [
+            assertion.assertion_id for assertion in self.secret_detection_assertions
+        ]
+        if len(secret_detection_assertion_ids) != len(set(secret_detection_assertion_ids)):
+            raise ValueError("secret-detection assertion IDs must be unique")
         if self.state_fixture is not None:
             if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
                 raise ValueError("state fixture hash does not match the initial-state fixture hash")
@@ -545,6 +609,7 @@ class AttemptRecord(BaseModel):
     answer_ref: str | None = None
     final_state_observation_refs: list[str] = Field(default_factory=list)
     state_observation_refs: list[str] = Field(default_factory=list)
+    secret_detection_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

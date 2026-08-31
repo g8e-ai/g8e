@@ -45,6 +45,7 @@ class IFEvalLoader:
                     expected_allow_block_outcome=data.get("expected_allow_block_outcome"),
                     expected_rejection_layer=data.get("expected_rejection_layer"),
                     sensitive_canary_annotations=data.get("sensitive_canary_annotations", []),
+                    secret_detection_assertions=data.get("secret_detection_assertions", []),
                     instruction_id_list=data["instruction_id_list"],
                     kwargs=data["kwargs"],
                 ),

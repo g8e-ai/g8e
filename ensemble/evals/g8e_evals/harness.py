@@ -21,7 +21,12 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 
 # Forward reference for ChatEvaluationReceipt to avoid circular import
 if TYPE_CHECKING:
-    from g8e_evals.schema import AttemptRecord, StateObservation, TaskDefinition
+    from g8e_evals.schema import (
+        AttemptRecord,
+        SecretDetectionObservation,
+        StateObservation,
+        TaskDefinition,
+    )
 
 
 class EvidenceLike(Protocol):
@@ -47,6 +52,14 @@ class StateObserver(Protocol):
         task: TaskDefinition,
         attempt: AttemptRecord,
     ) -> list[StateObservation]: ...
+
+
+class SecretDetectionObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[SecretDetectionObservation]: ...
 
 
 class BindingType(StrEnum):
@@ -83,6 +96,7 @@ class SUTConfig:
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     headless: bool = False
     state_observer: StateObserver | None = None
+    secret_detection_observer: SecretDetectionObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

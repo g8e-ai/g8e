@@ -55,6 +55,7 @@ from g8e_evals.schema import (
     ReceiptObservation,
     RoleToModelMapping,
     RunManifest,
+    SecretDetectionObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -87,6 +88,8 @@ _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
 _PROTOCOL_CHAIN_GRADER_ID = "protocol_chain"
 _CANARY_SCRUBBING_GRADER_ID = "canary_scrubbing"
 _MODEL_BOUNDARY_RAW_SECRET_GRADER_ID = "model_boundary_raw_secret_rate"
+_SECRET_DETECTION_PRECISION_GRADER_ID = "secret_detection_precision"
+_SECRET_DETECTION_RECALL_GRADER_ID = "secret_detection_recall"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
 _FINAL_STATE_METRIC_ID = "final_state_accuracy"
 _INDEPENDENT_STATE_GRADER_ID = "independent_state"
@@ -455,6 +458,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_SECRET_DETECTION_PRECISION_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_SECRET_DETECTION_RECALL_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_INDEPENDENT_STATE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_POLICY_OUTCOME_GRADER_ID}@{_GRADER_VERSION}:"
@@ -566,6 +571,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
             expected_rejection_layer=t.metadata.expected_rejection_layer,
             sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
+            secret_detection_assertions=t.metadata.secret_detection_assertions,
             grader_ids=[
                 _IFEVAL_GRADER_ID,
                 *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
@@ -573,6 +579,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
                 *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
                 *([_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
+                *([_SECRET_DETECTION_PRECISION_GRADER_ID] if t.metadata.secret_detection_assertions else []),
+                *([_SECRET_DETECTION_RECALL_GRADER_ID] if t.metadata.secret_detection_assertions else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
                 *([_INDEPENDENT_STATE_GRADER_ID] if t.metadata.state_fixture else []),
                 *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
@@ -584,6 +592,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
+                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.state_fixture else []),
                 *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
@@ -604,6 +614,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     receipt_records: list[ReceiptObservation] = []
     final_state_records: list[FinalStateObservation] = []
     state_records: list[StateObservation] = []
+    secret_detection_records: list[SecretDetectionObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -884,6 +895,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         attempt.state_observation_refs = [
             observation.observation_id for observation in state_observations
         ]
+        secret_detection_observations = (
+            await config.secret_detection_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.secret_detection_assertions and config.secret_detection_observer is not None
+            else []
+        )
+        secret_detection_records.extend(secret_detection_observations)
+        attempt.secret_detection_observation_refs = [
+            observation.observation_id for observation in secret_detection_observations
+        ]
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -1012,6 +1032,41 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=model_boundary_grade.evidence_refs,
             ))
+        if task.metadata.secret_detection_assertions:
+            for grader_id in (
+                _SECRET_DETECTION_PRECISION_GRADER_ID,
+                _SECRET_DETECTION_RECALL_GRADER_ID,
+            ):
+                secret_detection_grade = grade_deterministically(
+                    grader_id,
+                    _GRADER_VERSION,
+                    DeterministicGradingContext(
+                        task=task_defs_by_id[task.id],
+                        attempt=attempt,
+                        receipts=attempt_receipts,
+                        stages=attempt_stages,
+                        secret_detection_observations=secret_detection_observations,
+                    ),
+                )
+                grade_metrics.append(MetricObservation(
+                    metric_id=grader_id,
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    arm_id=arm_def.arm_id,
+                    task_id=task.id,
+                    value=secret_detection_grade.value,
+                    unit="proportion",
+                    eligible=(
+                        secret_detection_grade.verification_status
+                        == VerificationStatus.VERIFIED
+                    ),
+                    denominator_contribution=(
+                        secret_detection_grade.denominator_contribution
+                    ),
+                    verification_status=secret_detection_grade.verification_status,
+                    grader_class=GraderClass.DETERMINISTIC,
+                    evidence_refs=secret_detection_grade.evidence_refs,
+                ))
         if task.metadata.expected_final_state_assertions:
             final_state_grade = grade_deterministically(
                 _FINAL_STATE_GRADER_ID,
@@ -1123,6 +1178,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "state-observations.jsonl", "w") as f:
         for observation in state_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "secret-detection-observations.jsonl", "w") as f:
+        for observation in secret_detection_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

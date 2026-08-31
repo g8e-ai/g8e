@@ -56,6 +56,8 @@ from g8e_evals.schema import (
     PolicyOutcome,
     ReceiptObservation,
     RunManifest,
+    SecretDetectionAssertion,
+    SecretDetectionObservation,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -410,6 +412,113 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
         "ifeval_subset_verifier",
         "canary_scrubbing",
         "model_boundary_raw_secret_rate",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_secret_detection_task_emits_typed_observations_and_precision_recall_metrics(
+    tmp_path,
+    monkeypatch,
+):
+    assertion = SecretDetectionAssertion(
+        assertion_id="scanner-fixture-1",
+        source="user_chat",
+        input_artifact_sha256="a" * 64,
+        expected_sensitive_occurrences=3,
+        expected_benign_occurrences=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    task = Task(
+        id="1001",
+        prompt="Write a sentence without commas.",
+        metadata=TaskMetadata(secret_detection_assertions=[assertion]),
+    )
+    _patch_loader(monkeypatch, [task])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+
+    async def observe_secret_detection(task_definition, attempt):
+        task_assertion = task_definition.secret_detection_assertions[0]
+        return [SecretDetectionObservation(
+            observation_id=f"{attempt.attempt_id}:privacy:{task_assertion.assertion_id}",
+            attempt_id=attempt.attempt_id,
+            run_id=attempt.run_id,
+            task_id=attempt.task_id,
+            assertion_id=task_assertion.assertion_id,
+            source=task_assertion.source,
+            input_artifact_sha256=task_assertion.input_artifact_sha256,
+            scanner_version="sentinel-regex@1.0.0",
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            true_positive_count=2,
+            false_positive_count=1,
+            false_negative_count=1,
+            true_negative_count=1,
+            detected_sensitive_types=["email"],
+            missed_sensitive_types=["api_key"],
+            source_evidence_refs=["restricted-scanner-evidence"],
+            source_evidence_sha256="b" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )]
+
+    secret_detection_observer = MagicMock()
+    secret_detection_observer.observe = AsyncMock(side_effect=observe_secret_detection)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        arm=Arm.ENSEMBLE_UNGOVERNED,
+        secret_detection_observer=secret_detection_observer,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
+    task_definition = TaskDefinition.model_validate_json(
+        (report_dir / "tasks.jsonl").read_text().splitlines()[0]
+    )
+    attempt = AttemptRecord.model_validate_json(
+        (report_dir / "attempts.jsonl").read_text().splitlines()[0]
+    )
+    observations = [
+        SecretDetectionObservation.model_validate_json(line)
+        for line in (report_dir / "secret-detection-observations.jsonl").read_text().splitlines()
+    ]
+    metrics = {
+        metric.metric_id: metric
+        for metric in (
+            MetricObservation.model_validate_json(line)
+            for line in (report_dir / "metrics.jsonl").read_text().splitlines()
+        )
+    }
+
+    assert task_definition.secret_detection_assertions == [assertion]
+    assert task_definition.grader_ids == [
+        "ifeval_subset_verifier",
+        "secret_detection_precision",
+        "secret_detection_recall",
+    ]
+    assert attempt.secret_detection_observation_refs == [observations[0].observation_id]
+    assert metrics["secret_detection_precision"].value == pytest.approx(2 / 3)
+    assert metrics["secret_detection_precision"].denominator_contribution == 3
+    assert metrics["secret_detection_recall"].value == pytest.approx(2 / 3)
+    assert metrics["secret_detection_recall"].denominator_contribution == 3
+    assert attempt.grade_refs == [
+        "ifeval_subset_verifier",
+        "secret_detection_precision",
+        "secret_detection_recall",
     ]
 
 

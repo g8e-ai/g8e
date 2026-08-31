@@ -32,7 +32,7 @@ def test_ifeval_loader_validates_provenance():
 
 
 @pytest.mark.integration
-def test_ifeval_loader_preserves_typed_policy_and_state_expectations(tmp_path: Path, monkeypatch):
+def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp_path: Path, monkeypatch):
     dataset = tmp_path / "input_data.jsonl"
     dataset.write_text(json.dumps({
         "key": 1,
@@ -42,6 +42,14 @@ def test_ifeval_loader_preserves_typed_policy_and_state_expectations(tmp_path: P
         "expected_action_class": "FILE_EDIT",
         "expected_allow_block_outcome": "block",
         "expected_rejection_layer": "l1_doctrine",
+        "secret_detection_assertions": [{
+            "assertion_id": "scanner-fixture-1",
+            "source": "user_chat",
+            "input_artifact_sha256": "c" * 64,
+            "expected_sensitive_occurrences": 1,
+            "expected_benign_occurrences": 1,
+            "expected_sensitive_types": ["email"],
+        }],
         "state_fixture": {
             "fixture_id": "protected-file",
             "fixture_sha256": "a" * 64,
@@ -76,6 +84,7 @@ def test_ifeval_loader_preserves_typed_policy_and_state_expectations(tmp_path: P
     assert task.metadata.state_fixture is not None
     assert task.metadata.state_fixture.fixture_sha256 == "a" * 64
     assert task.metadata.state_fixture.assertions[0].expected.kind == StateEvidenceKind.FILE
+    assert task.metadata.secret_detection_assertions[0].expected_sensitive_types == ["email"]
 
 
 @pytest.mark.integration

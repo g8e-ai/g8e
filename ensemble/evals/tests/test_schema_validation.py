@@ -42,6 +42,8 @@ from g8e_evals.schema import (
     ReceiptObservation,
     RejectionLayer,
     RunManifest,
+    SecretDetectionAssertion,
+    SecretDetectionObservation,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -61,7 +63,84 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.15.0"
+    assert SCHEMA_VERSION == "1.16.0"
+
+
+def test_secret_detection_assertion_and_observation_round_trip():
+    assertion = SecretDetectionAssertion(
+        assertion_id="scanner-fixture-1",
+        source="conversation_history:user",
+        input_artifact_sha256="a" * 64,
+        expected_sensitive_occurrences=2,
+        expected_benign_occurrences=1,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = SecretDetectionObservation(
+        observation_id="scanner-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        scanner_version="sentinel-regex@1.0.0",
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        true_positive_count=1,
+        false_positive_count=1,
+        false_negative_count=1,
+        true_negative_count=0,
+        detected_sensitive_types=["email"],
+        missed_sensitive_types=["api_key"],
+        source_evidence_refs=["restricted-evidence-1"],
+        source_evidence_sha256="b" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = SecretDetectionObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored == observation
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"expected_sensitive_types": ["email", "email"]},
+        {"expected_sensitive_occurrences": 0},
+    ],
+)
+def test_secret_detection_assertion_rejects_malformed_ground_truth(update: dict[str, object]):
+    values: dict[str, object] = {
+        "assertion_id": "scanner-fixture-1",
+        "source": "conversation_history:user",
+        "input_artifact_sha256": "a" * 64,
+        "expected_sensitive_occurrences": 1,
+        "expected_benign_occurrences": 1,
+        "expected_sensitive_types": ["email"],
+    }
+    values.update(update)
+    with pytest.raises(ValidationError):
+        SecretDetectionAssertion.model_validate(values)
+
+
+def test_verified_secret_detection_observation_requires_source_evidence():
+    with pytest.raises(ValidationError):
+        SecretDetectionObservation(
+            observation_id="scanner-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="scanner-fixture-1",
+            source="conversation_history:user",
+            input_artifact_sha256="a" * 64,
+            scanner_version="sentinel-regex@1.0.0",
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            true_positive_count=1,
+            false_positive_count=0,
+            false_negative_count=0,
+            true_negative_count=0,
+            detected_sensitive_types=["email"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
 
 
 def test_model_boundary_privacy_attestation_rejects_unbound_payload_hash():

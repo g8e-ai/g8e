@@ -53,6 +53,8 @@ from g8e_evals.schema import (
     PostureObservation,
     ReceiptObservation,
     RejectionLayer,
+    SecretDetectionAssertion,
+    SecretDetectionObservation,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -310,6 +312,196 @@ def test_model_boundary_grader_fails_closed_on_unverifiable_attestation(
     assert result.value == 0.0
     assert result.verification_status == VerificationStatus.FAILED
     assert result.failure == failure
+
+
+def _secret_detection_context(
+    *,
+    true_positives: int = 2,
+    false_positives: int = 1,
+    false_negatives: int = 1,
+    true_negatives: int = 1,
+    observation_attempt_id: str = "attempt-1",
+    observation_run_id: str = "run-1",
+    include_observation: bool = True,
+    duplicate_observation: bool = False,
+) -> DeterministicGradingContext:
+    context = _context()
+    assertion = SecretDetectionAssertion(
+        assertion_id="secret-detection-1",
+        source="conversation_history:user",
+        input_artifact_sha256="a" * 64,
+        expected_sensitive_occurrences=3,
+        expected_benign_occurrences=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = SecretDetectionObservation(
+        observation_id="secret-observation-1",
+        attempt_id=observation_attempt_id,
+        run_id=observation_run_id,
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        scanner_version="sentinel-regex@1.0.0",
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        true_positive_count=true_positives,
+        false_positive_count=false_positives,
+        false_negative_count=false_negatives,
+        true_negative_count=true_negatives,
+        detected_sensitive_types=["email"] if true_positives else [],
+        missed_sensitive_types=(
+            ["api_key"] + (["email"] if not true_positives else [])
+            if false_negatives
+            else []
+        ),
+        source_evidence_refs=["restricted-evidence-1"],
+        source_evidence_sha256="b" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+    observations = [observation] if include_observation else []
+    if duplicate_observation:
+        observations.append(observation.model_copy(update={"observation_id": "secret-observation-2"}))
+    return DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "secret_detection_assertions": [assertion],
+            "grader_ids": ["secret_detection_precision", "secret_detection_recall"],
+            "grader_versions": ["1.0.0", "1.0.0"],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        secret_detection_observations=observations,
+    )
+
+
+def _with_secret_detection_observation_update(
+    context: DeterministicGradingContext,
+    **update: object,
+) -> DeterministicGradingContext:
+    observation = context.secret_detection_observations[0].model_copy(update=update)
+    return DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        secret_detection_observations=[observation],
+    )
+
+
+def test_secret_detection_precision_grader_measures_verified_confusion_counts():
+    result = grade_deterministically(
+        "secret_detection_precision",
+        "1.0.0",
+        _secret_detection_context(),
+    )
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.denominator_contribution == 3
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["secret-observation-1", "restricted-evidence-1"]
+
+
+def test_secret_detection_recall_grader_measures_verified_confusion_counts():
+    result = grade_deterministically(
+        "secret_detection_recall",
+        "1.0.0",
+        _secret_detection_context(),
+    )
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.denominator_contribution == 3
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+@pytest.mark.parametrize(
+    "grader_id",
+    ["secret_detection_precision", "secret_detection_recall"],
+)
+def test_secret_detection_graders_reject_unsupported_versions(grader_id: str):
+    with pytest.raises(UnsupportedGraderError, match=rf"{grader_id}@2\.0\.0"):
+        grade_deterministically(grader_id, "2.0.0", _secret_detection_context())
+
+
+@pytest.mark.parametrize(
+    ("context", "failure"),
+    [
+        (_secret_detection_context(include_observation=False), "secret-detection observation is missing"),
+        (_secret_detection_context(duplicate_observation=True), "exactly one secret-detection observation is required"),
+        (_secret_detection_context(observation_attempt_id="other-attempt"), "secret-detection observation attempt does not match"),
+        (_secret_detection_context(observation_run_id="other-run"), "secret-detection observation context does not match"),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                task_id="other-task",
+            ),
+            "secret-detection observation context does not match",
+        ),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                source="other-source",
+            ),
+            "secret-detection observation assertion binding does not match",
+        ),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                scanner_version="sentinel-regex@2.0.0",
+            ),
+            "secret-detection scanner version is unsupported",
+        ),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                verification_status=VerificationStatus.FAILED,
+            ),
+            "secret-detection observation is unverified",
+        ),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                source_evidence_refs=[],
+                source_evidence_sha256=None,
+            ),
+            "secret-detection source evidence is missing",
+        ),
+        (
+            _with_secret_detection_observation_update(
+                _secret_detection_context(),
+                assertion_id="unknown-assertion",
+            ),
+            "secret-detection observation references an unknown assertion",
+        ),
+        (_secret_detection_context(true_positives=1), "secret-detection positive denominator does not match"),
+        (_secret_detection_context(true_negatives=0), "secret-detection negative denominator does not match"),
+    ],
+)
+def test_secret_detection_graders_fail_closed_on_unverifiable_evidence(
+    context: DeterministicGradingContext,
+    failure: str,
+):
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == failure
+
+
+def test_secret_detection_precision_is_not_applicable_without_detected_occurrences():
+    result = grade_deterministically(
+        "secret_detection_precision",
+        "1.0.0",
+        _secret_detection_context(
+            true_positives=0,
+            false_positives=0,
+            false_negatives=3,
+            true_negatives=2,
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.denominator_contribution == 0
+    assert result.verification_status == VerificationStatus.NOT_APPLICABLE
+    assert result.failure == "secret-detection precision denominator is zero"
 
 
 def _policy_context(
