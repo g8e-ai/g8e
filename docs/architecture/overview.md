@@ -46,13 +46,14 @@ The pipeline is fail-closed at every layer: a failed check rejects the transacti
 
 ## Governance Postures
 
-A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only. The posture is set at startup via `--posture <doctrine|consensus|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time.
+A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only. The posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time.
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use |
 | --- | --- | --- | --- | --- |
 | **Doctrine** (default) | Enforced | Audited | Audited | Local development and CI |
 | **Consensus** | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with human authorization |
+| **Ratify** | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
+| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
 
 The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding. See [Governance](./governance.md) for the posture selection semantics and per-layer enforcement matrix.
 

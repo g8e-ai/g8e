@@ -193,7 +193,7 @@ The central Policy Execution Point (PEP) that validates the entire transaction p
 - **Freshness & Replay**: Verifies `expires_at` and durably reserves the `nonce` in the replay store with early durable reservation to prevent concurrent double-processing.
 - **Stateless Validation**: Validates the action type, decodes the typed payload, validates L1 Doctrine compliance, and enforces `id == transaction_hash`.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
-- **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with ConsensusPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, or notary).
+- **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with ConsensusPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, ratify, or notary).
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
@@ -369,12 +369,13 @@ Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibil
 
 ### Gateway Postures
 
-The g8e Gateway runs with three posture options:
+The g8e Gateway runs with four posture options:
 
 | Mode | Flag | Purpose |
 |---|---|---|
 | **Doctrine** | `--posture doctrine` | L1 enforced, L2/L3 audited (default) |
 | **Consensus** | `--posture consensus` | L1/L2 enforced, L3 audited |
+| **Ratify** | `--posture ratify` | L1/L3 enforced, L2 audited |
 | **Notary** | `--posture notary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration
@@ -403,7 +404,7 @@ The g8e platform uses CLI flags for production configuration. All paths are comp
 
 CLI flags:
 
-- `--posture <mode>`: Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default: doctrine)
+- `--posture <mode>`: Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced) (default: doctrine)
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)

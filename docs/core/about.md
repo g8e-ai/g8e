@@ -34,13 +34,14 @@ g8e functions as a secure perimeter for tool-calling standards. It treats MCP an
 
 ## Posture Configurations
 
-The gateway supports three posture configurations that control which verification layers are enforced versus audited:
+The gateway supports four posture configurations that control which verification layers are enforced versus audited:
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use |
 | --- | --- | --- | --- | --- |
 | `doctrine` (default) | Enforced | Audited | Audited | Local development and CI |
 | `consensus` | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| `notary` | Enforced | Enforced | Enforced (mutations only) | Production with human authorization |
+| `ratify` | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
+| `notary` | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
 
 L4 Warden and L5 Actuator are always active in all configurations. The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding. See [Governance](../architecture/governance.md) for posture configuration.
 

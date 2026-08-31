@@ -24,6 +24,7 @@ The g8e binary uses a single cobra command tree. Gateway and Operator modes are 
 A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
 - `--posture consensus`, Enforces L1/L2; audits L3. Requires `--consensus-id` and `--consensus-url` to connect to an enrolled Consensus service for L2 deliberation.
+- `--posture ratify`, Enforces L1/L3; audits L2.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
 
 Additional Gateway mode flags for consensus posture:

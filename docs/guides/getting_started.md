@@ -282,6 +282,7 @@ The gateway starts in Doctrine mode (L1 enforced, L2/L3 audited). To specify a s
 ```bash
 ./g8e gw start --posture doctrine    # default
 ./g8e gw start --posture consensus   # L1/L2 enforced, L3 audited
+./g8e gw start --posture ratify      # L1/L3 enforced, L2 audited
 ./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
@@ -602,6 +603,7 @@ After the gateway is running and the CLI is authenticated:
 |---|---|---|---|---|
 | Doctrine (default) | Enforced | Audited | Audited | `--posture doctrine` |
 | Consensus | Enforced | Enforced | Audited | `--posture consensus` |
+| Ratify | Enforced | Audited | Enforced | `--posture ratify` |
 | Notary | Enforced | Enforced | Enforced | `--posture notary` |
 
 ---

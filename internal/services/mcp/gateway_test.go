@@ -210,6 +210,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		withEnvProc(proc),
 		withSuspendedStore(store),
 	)
+	g.posture = constants.PostureNotary
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))

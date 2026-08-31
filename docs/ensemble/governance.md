@@ -68,13 +68,14 @@ The L5 Actuator is the singular execution boundary authorized to interact with t
 
 ## Governance Postures
 
-Platform governance enforcement is configured at startup via the `--posture <doctrine|consensus|notary>` flag. Postures define which verification layers operate as blocking fail-closed gates versus audited proofs.
+Platform governance enforcement is configured at startup via the `--posture <doctrine|consensus|ratify|notary>` flag. Postures define which verification layers operate as blocking fail-closed gates versus audited proofs.
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use Case |
 | --- | --- | --- | --- | --- |
 | **`doctrine`** | Enforced | Audited | Audited | Local development, test environments, and automated CI pipelines |
 | **`consensus`** | Enforced | Enforced | Audited | Multi-agent automated operations requiring distributed consensus |
-| **`notary`** | Enforced | Enforced | Enforced (mutations) | Production environments requiring human oversight for host mutations |
+| **`ratify`** | Enforced | Audited | Enforced (mutations) | Human-authorized operations without L2 consensus |
+| **`notary`** | Enforced | Enforced | Enforced (mutations) | Production environments requiring consensus and human oversight for host mutations |
 
 Universal baseline checks—including L1 Doctrine, deterministic transaction hash verification, nonce replay defense, expiry validation, state Merkle root integrity, action type validation, and payload decoding—fail closed across all postures.
 

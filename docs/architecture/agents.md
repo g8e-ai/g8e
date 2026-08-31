@@ -56,7 +56,7 @@ L1 is the technical hard gate. It matches payloads against forbidden patterns an
 
 ### L2 Consensus
 
-L2 is multi-signature consensus over the transaction hash. The consensus service is an enrolled body of members, each with a distinct Ed25519 private key. The reference implementation shipped with g8e evaluates the transaction deterministically against the L1 Doctrine and signs an affirmative or negative vote over `<transaction_hash>|<decision>`. The L4 Warden verifies the votes against the configured policy and trusted signer store. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures.
+L2 is multi-signature consensus over the transaction hash. The consensus service is an enrolled body of members, each with a distinct Ed25519 private key. The reference implementation shipped with g8e evaluates the transaction deterministically against the L1 Doctrine and signs an affirmative or negative vote over `<transaction_hash>|<decision>`. The L4 Warden verifies the votes against the configured policy and trusted signer store. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures. L2 remains audited under the `doctrine` and `ratify` postures.
 
 The protocol is designed to support heterogeneous consensus members, but the in-platform reference implementation uses deterministic L1 doctrine evaluation. Alternative consensus implementations can be enrolled as external producers. See [Consensus](./consensus.md) for enrollment, deliberation, and member key management.
 
@@ -80,8 +80,8 @@ The practical flow for an AI client is:
 
 1. The AI client submits an intent through the MCP or A2A endpoint.
 2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
-3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
-4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
+3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes; `doctrine` and `ratify` do not require this step.
+4. Under `ratify` or `notary` posture, if L3 is missing, the gateway suspends the transaction and sends an approval challenge to the human.
 5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
 6. The bound operator pulls the envelope, and the L4 Warden re-verifies L1-L4 and emits deterministic stage evidence.
 7. The L5 Actuator persists the signed pre-execution receipt, appends the signed commitment, executes the action, persists the signed final receipt, and adds its persistence attestation.

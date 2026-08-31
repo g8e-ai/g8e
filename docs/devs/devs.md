@@ -159,7 +159,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 ## Dependency Construction Model
 
-The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
+The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, ratify, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
 
 ### ModeDeps shape
 
@@ -208,7 +208,7 @@ Two constructor functions, `NewGatewayModeDeps(...) (*GatewayModeDeps, error)` a
 
 ### Posture sub-typing (B1)
 
-Within gateway mode, posture (doctrine / consensus / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil only when `Posture == Doctrine`). The `GovernanceController`'s consensus route is registered only in consensus/notary postures; the doctrine-posture gateway has no consensus endpoint registered. This makes the previous 503-on-nil guard unreachable (the route is not registered, so the request gets 404) rather than removing the guard. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
+Within gateway mode, posture (doctrine / consensus / ratify / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil when the posture does not require L2). The `GovernanceController`'s consensus route is registered only in consensus and notary postures; doctrine and ratify gateways have no consensus endpoint registered. This makes the previous 503-on-nil guard unreachable (the route is not registered, so the request gets 404) rather than removing the guard. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
 
 ### C2 inverted construction order
 

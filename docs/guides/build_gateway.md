@@ -111,12 +111,13 @@ To start the gateway, use the CLI gateway command:
 ```bash
 ./g8e gw start --posture doctrine    # L1 enforced, L2/L3 audited (default)
 ./g8e gw start --posture consensus   # L1/L2 enforced, L3 audited
+./g8e gw start --posture ratify      # L1/L3 enforced, L2 audited
 ./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
 ### Gateway Mode Flags
 
-- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
+- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)
 - `--http-port <port>` - Plain HTTP port for bootstrap, health checks, and PKI discovery (default: 8080)
 - `--https-port <port>` - HTTPS port for mTLS API and public surface (default: 8443)
 - `--data-dir <dir>` - Data directory for SQLite database (default: .g8e/data in working directory)
@@ -220,11 +221,12 @@ Your implementation must enforce these core invariants:
 
 ### Governance Modes
 
-The gateway must support three operating modes:
+The gateway supports four governance postures:
 
-- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures audited but not required. This is the default mode.
-- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature audited but not required.
-- **Notary Mode**: Enforce L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2).
+- **Doctrine**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures are audited but not required. This is the default posture.
+- **Consensus**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 signatures are audited but not required.
+- **Ratify**: Enforces L1 and L3 (human-in-the-loop via WebAuthn/FIDO2). L2 signatures are audited but not required.
+- **Notary**: Enforces L1, L2, and L3.
 
 ### Session Types
 

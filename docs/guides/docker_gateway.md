@@ -257,6 +257,7 @@ Specify the security posture at startup using the `--posture` flag:
 
 - **`--posture doctrine`**: L1 enforced; L2/L3 audited.
 - **`--posture consensus`**: L1/L2 enforced; L3 audited.
+- **`--posture ratify`**: L1/L3 enforced; L2 audited.
 - **`--posture notary`**: L1/L2/L3 strictly enforced.
 
 ## Architecture

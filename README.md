@@ -238,12 +238,13 @@ See the [Protocol Library documentation](docs/architecture/protocol.md) for the 
 
 ### Posture Configurations
 
-The gateway supports three posture configurations:
+The gateway supports four posture configurations:
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary |
 | --- | --- | --- | --- |
 | `doctrine` | enforced | audited | audited |
 | `consensus` | enforced | enforced | audited |
+| `ratify` | enforced | audited | enforced (mutations only) |
 | `notary` | enforced | enforced | enforced (mutations only) |
 
 L4 Warden and L5 Actuator layers are always active in all configurations. See [Governance Postures](docs/guides/getting_started.md#governance-postures) for setup details.

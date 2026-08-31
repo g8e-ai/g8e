@@ -69,7 +69,7 @@ The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8
 - State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
 - Governance: `governance` (L1/L2/L3 metadata)
 - Context: `case_id`, `investigation_id`, `task_id`, `system_fingerprint`, `tenant_id`, `binding_persona`
-- Posture: `posture` (gateway governance posture at envelope construction time — doctrine, consensus, or notary; policy metadata, not included in the transaction hash)
+- Posture: `posture` (gateway governance posture at envelope construction time — doctrine, consensus, ratify, or notary; policy metadata, not included in the transaction hash)
 
 The wire format is canonical JSON (protojson) for client-facing surfaces; signing is based on the deterministic `transaction_hash` computed from normalized envelope fields.
 
@@ -89,10 +89,11 @@ The central coordinator that admits transactions, manages PKI, enforces the 5-la
 
 ## Governance Posture
 
-A configuration that determines which governance layers are required for transaction verification. The three postures are:
+A configuration that determines which governance layers are required for transaction verification. The four postures are:
 - **Doctrine**: Requires only L1 (Technical Bedrock) validation
 - **Consensus**: Requires L1 and L2 (Consensus) validation
-- **Notary**: Requires L1, L2, and L3 (Notary/Human) validation
+- **Ratify**: Requires L1 and L3 (Notary/Human) validation
+- **Notary**: Requires L1, L2, and L3 validation
 The posture is configured at startup and stamped into each GovernanceEnvelope at construction time (the `posture` field). The L4 Warden reads posture per-envelope at verification time — the warden has no posture of its own; the envelope is authoritative. Posture requirements are enforced by the L4 Warden via the GovernancePosture interface.
 
 ---
@@ -126,7 +127,7 @@ L1 is foundationally active for every command and cannot be bypassed.
 
 ## L2 Consensus (L2Consensus)
 
-The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Consensus service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the consensus policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Consensus service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the consensus policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, ratify, notary).
 
 ---
 
@@ -135,7 +136,7 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with two implementations:
 - **Gateway Notary**: The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2.
 - **Outbound Notary**: The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction.
-The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary). The mock L3 notary bypass (`G8E_L3_MOCK`) was removed in v1.6.7; the gateway always requires real WebAuthn proof for L3 notary approval.
+The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, ratify, notary). The mock L3 notary bypass (`G8E_L3_MOCK`) was removed in v1.6.7; the gateway always requires real WebAuthn proof for L3 notary approval.
 
 ---
 

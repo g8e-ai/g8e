@@ -381,12 +381,13 @@ When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transac
 
 ### Gateway Modes
 
-The Operator runs in gateway mode with three posture options:
+The Operator runs in gateway mode with four posture options:
 
 | Mode | Posture | Purpose |
 |---|---|---|
 | **Doctrine** | `PostureDoctrine` | L1 enforced, L2/L3 audited (default) |
 | **Consensus** | `PostureConsensus` | L1/L2 enforced, L3 audited |
+| **Ratify** | `PostureRatify` | L1/L3 enforced, L2 audited |
 | **Notary** | `PostureNotary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration

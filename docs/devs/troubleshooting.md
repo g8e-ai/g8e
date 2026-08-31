@@ -260,18 +260,19 @@ See [Authentication & Authorization](../architecture/auth.md) for the full appro
 
 ## Governance posture startup failures
 
-The gateway posture is set at startup via `--posture <doctrine|consensus|notary>` and cannot be changed at runtime. Each posture has different startup requirements:
+The gateway posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. Each posture has different runtime requirements:
 
 - **Doctrine** (default): No consensus prerequisites. L2 and L3 are audited but not enforced.
 - **Consensus**: Requires a consensus policy to exist in the database with quorum >= 1. The Consensus service is bootstrapped in-process.
-- **Notary**: Same as consensus, plus L3 notary must be configured for mutation actions to succeed.
+- **Ratify**: Requires L3 human authorization for mutations and has no consensus prerequisite.
+- **Notary**: Same consensus requirements as consensus, plus L3 human authorization for mutations.
 
 If the gateway fails to start in `consensus` or `notary` posture, check:
 
 - The consensus ID is non-empty.
 - The consensus policy exists in the database and is enabled.
 - Quorum is >= 1 (valid for single-member ensembles).
-- For `notary` posture, the L3 notary is available. Without it, mutations fail closed.
+- For `ratify` or `notary` posture, the L3 notary is available. Without it, mutations fail closed.
 
 For declarative consensus seeding, use the `--consensus-bootstrap` flag with a JSON config file containing `consensus_id`, `member_app_ids`, `quorum`, and optional `seed_hex`. This is idempotent: if the consensus already exists, the bootstrap is skipped.
 
@@ -285,7 +286,7 @@ The governance envelope submission endpoint (`POST /api/v1/governance/envelopes`
 
 ### Outbound mode mutations fail closed
 
-The default posture for outbound (operator) mode is `doctrine`. When the operator is started in `notary` posture, mutations require L3 human authorization. The outbound L3 notary (`governance.NewOutboundL3Notary` in `internal/services/governance/l3_notary.go`) is not nil in outbound mode: it suspends mutation transactions and requires CLI-based approval via the suspended transaction store. If operators reject all mutations with L3-related errors under `notary` posture, either complete the CLI approval flow or switch the operator to `doctrine` or `consensus` posture.
+The default posture for outbound (operator) mode is `doctrine`. When the operator receives `ratify` or `notary` posture, mutations require L3 human authorization. The outbound L3 notary (`governance.NewOutboundL3Notary` in `internal/services/governance/l3_notary.go`) is not nil in outbound mode: it suspends mutation transactions and requires CLI-based approval via the suspended transaction store. If operators reject all mutations with L3-related errors under `ratify` or `notary` posture, complete the CLI approval flow or use a posture that does not enforce L3.
 
 The following action types are classified as mutations and require L3 proof under notary posture: `A2A_CALL`, `CANCEL`, `DOCUMENT_DELETE`, `DOCUMENT_UPDATE`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `PLATFORM_ENROLLMENT_CREATE_SESSION`, `PLATFORM_ENROLLMENT_DECIDE`, `PLATFORM_ENROLLMENT_ISSUE`, `PLATFORM_ENROLLMENT_PERSIST_POLICY`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof even under notary posture.
 

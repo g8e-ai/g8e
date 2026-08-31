@@ -9,7 +9,7 @@ Version: v2.1.0
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
-1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central persistence layer, pub/sub broker, root CA, and governance envelope entry point. The Gateway is governed by a multi-signature Consensus (K-of-N Ed25519 votes), not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally for operations targeting the gateway host itself.
+1.  **Governance Gateway** (Policy Decision Point / PDP): The binary run in Gateway mode (`--posture doctrine`, `--posture consensus`, `--posture ratify`, or `--posture notary`). The Gateway owns the policy decision layers (L1 Doctrine, L2 Consensus, L3 Notary) and serves as the platform's central persistence layer, pub/sub broker, root CA, and governance envelope entry point. The Gateway is governed by a multi-signature Consensus (K-of-N Ed25519 votes), not Byzantine consensus. An in-process Operator substrate (PEP) runs L4 Warden and L5 Actuator locally for operations targeting the gateway host itself.
 2.  **Governed Operator** (Policy Execution Point / PEP): The same binary run in Standard Mode (`operator start`). It runs on target hosts as the sovereign execution boundary and MCP server, handling L4 Warden (pre-dispatch verification) and L5 Actuator (execution and signed receipt production) for operations on its own host.
 
 ---
@@ -36,7 +36,7 @@ The g8e Protocol platform is implemented as a single static binary that operates
 
 The g8e platform is built on the g8e Protocol. Conforming gateway and Operator implementations make that protocol live.
 
-- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway owns layers L1-L3 (Doctrine, Consensus, Notary) as policy decisions. An in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host itself.
+- **Governance Gateway** (PDP): The binary run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, `--posture ratify`, or `--posture notary`). It acts as the platform's backbone: protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority. The Gateway owns layers L1-L3 (Doctrine, Consensus, Notary) as policy decisions. An in-process Operator substrate (PEP) handles L4-L5 (Warden, Actuator) locally for operations targeting the gateway host itself.
 - **Governed Operator** (PEP): The binary run in **Standard Mode** (`operator start`). It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Operators automatically serve as MCP servers, exposing tool capabilities through the gateway's unified MCP endpoint. Each remote Governed Operator handles L4-L5 (Warden, Actuator) locally for operations on its own host, re-verifying L1-L3 proofs from the Gateway before execution.
 
 The same five layers run on every conforming host. The gateway applies L1–L3, then either its own in-process Operator or a remote Governed Operator applies L4–L5. Each remote operator re-verifies L1–L3 proofs from the gateway before execution.
@@ -47,12 +47,13 @@ For a detailed view of the Gateway service stack and its relationship to the Ope
 
 ## Operating Modes: Gateway Mode (PDP)
 
-By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, the g8e binary file transforms into the platform's central backbone.
+By passing `--posture doctrine`, `--posture consensus`, `--posture ratify`, or `--posture notary`, the g8e binary file transforms into the platform's central backbone.
 
 - **Role**: Reference hub for the bundled deployment.
 - **Governance Posture**:
     - **Doctrine** (`--posture doctrine`): L1 Doctrine enforced, L2 Consensus / L3 Notary audited.
     - **Consensus** (`--posture consensus`): L1 Doctrine / L2 Consensus enforced, L3 Notary audited.
+    - **Ratify** (`--posture ratify`): L1 Doctrine / L3 Notary enforced, L2 Consensus audited.
     - **Notary** (`--posture notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
 - **Capabilities**:
     - **Gateway API**: The only customer-facing mutation entry point.

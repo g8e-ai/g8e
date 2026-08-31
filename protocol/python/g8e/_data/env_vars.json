@@ -4,12 +4,12 @@
     "ConsensusID": {
       "_go_const": "EnvVar.ConsensusID",
       "value": "G8E_CONSENSUS_ID",
-      "description": "Consensus ID for governance posture (doctrine, consensus, notary)"
+      "description": "Consensus ID for L2-enforcing governance postures (consensus and notary)"
     },
     "ConsensusURL": {
       "_go_const": "EnvVar.ConsensusURL",
       "value": "G8E_CONSENSUS_URL",
-      "description": "Consensus URL for governance posture (doctrine, consensus, notary)"
+      "description": "Consensus URL for L2-enforcing governance postures (consensus and notary)"
     },
     "VaultDir": {
       "_go_const": "",

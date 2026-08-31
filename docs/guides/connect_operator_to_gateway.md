@@ -39,6 +39,7 @@ This launches the onboarding wizard to configure gateway settings before the fir
 Available posture modes via `--posture`:
 - **doctrine** (default): L1 enforced, L2/L3 audited
 - **consensus**: L1/L2 enforced, L3 audited
+- **ratify**: L1/L3 enforced, L2 audited
 - **notary**: L1/L2/L3 strictly enforced
 
 ### Remote Deployment

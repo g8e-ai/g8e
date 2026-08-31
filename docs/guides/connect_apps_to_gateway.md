@@ -767,7 +767,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 1. **Initialize PKI**: Generate root CA and intermediate CAs with SPIFFE URI SAN support
 2. **Configure Persistence**: Set up document store and persistence backends
 3. **Configure Ports**: Bind the two logical surfaces (HTTP and HTTPS) to appropriate ports with correct TLS settings
-4. **Start Gateway**: Launch in desired mode (doctrine, consensus, or notary)
+4. **Start Gateway**: Launch in the desired posture (doctrine, consensus, ratify, or notary)
 5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients
 6. **Monitor Health**: Implement health checks for gateway process and connected operators
 

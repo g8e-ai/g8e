@@ -25,6 +25,34 @@ import (
 // Load
 // ---------------------------------------------------------------------------
 
+func TestGatewayPosture_Requirements(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		posture    GatewayPosture
+		requiresL2 bool
+		requiresL3 bool
+		valid      bool
+	}{
+		{name: "doctrine audits L2 and L3", posture: PostureDoctrine, valid: true},
+		{name: "consensus enforces L2", posture: PostureConsensus, requiresL2: true, valid: true},
+		{name: "ratify enforces L3", posture: PostureRatify, requiresL3: true, valid: true},
+		{name: "notary enforces L2 and L3", posture: PostureNotary, requiresL2: true, requiresL3: true, valid: true},
+		{name: "unknown posture is invalid", posture: GatewayPosture("unknown")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, valid := tc.posture.Requirements()
+			assert.Equal(t, tc.valid, valid)
+			assert.Equal(t, tc.requiresL2, tc.posture.RequiresL2())
+			assert.Equal(t, tc.requiresL3, tc.posture.RequiresL3())
+		})
+	}
+}
+
 func TestLoad_Defaults(t *testing.T) {
 	wantWorkDir, err := os.Getwd()
 	require.NoError(t, err)

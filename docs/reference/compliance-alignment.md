@@ -320,7 +320,7 @@ PCI DSS v4.0.1 (published June 11, 2024) is the current active version. PCI DSS 
 | Requirement | g8e Implementation | Evidence |
 |-------------|-------------------|----------|
 | **1.2.1** | Business need justification | Outbound-only operator connections |
-| **1.2.3** | Secure configuration | Configurable governance postures (doctrine, consensus, notary); outbound mode defaults to notary |
+| **1.2.3** | Secure configuration | Configurable governance postures (doctrine, consensus, ratify, notary); outbound mode defaults to notary |
 | **1.3** | Secure data flows | mTLS for all platform communication |
 | **2.1** | Change control processes | Git-based version control |
 | **2.2** | Configuration standards | Documented in architecture docs |

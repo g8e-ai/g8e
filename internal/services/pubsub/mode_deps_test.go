@@ -141,7 +141,7 @@ func TestNewGatewayModeDeps_Success(t *testing.T) {
 	}{
 		{name: "doctrine posture (consensus nil)", posture: config.PostureDoctrine},
 		{name: "consensus posture (consensus non-nil)", posture: config.PostureConsensus, requiresConsensus: true},
-		{name: "ratify posture (consensus nil)", posture: config.GatewayPosture("ratify")},
+		{name: "ratify posture (consensus nil)", posture: config.PostureRatify},
 		{name: "notary posture (consensus non-nil)", posture: config.PostureNotary, requiresConsensus: true},
 	}
 
