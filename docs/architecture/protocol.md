@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Protocol Library
 
 Last Updated: 2026-08-30
-Version: v2.1.0
+Version: v2.1.1
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,7 +59,7 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.0
+go get github.com/g8e-ai/g8e/v2@v2.1.1
 ```
 
 To fetch the latest release:
@@ -124,7 +124,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.0
+pip install g8e==2.1.1
 ```
 
 ### Python Package Overview

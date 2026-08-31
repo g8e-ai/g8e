@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 2.1.1 | 2026-08-30 | Maintenance patch: bumps WebAuthn (v0.17.4 to v0.18.0), gRPC (v1.83.1 to v1.83.2), and `golang.org/x/net` (v0.57.0 to v0.58.0), regenerates the gateway Swagger specification with typed WebAuthn extension inputs, and refreshes ensemble Python dependency pins. No wire protocol, on-disk format, CLI surface, or governance behavior changes. | [v2.1.1](docs/release_notes/v2.1.x/v2.1.1.md) |
 | 2.1.0 | 2026-08-30 | Evidence-grade evaluation and receipt provenance: adds five causal experiment arms, immutable run manifests, normalized stage telemetry, encrypted restricted evidence, signed deterministic governance-stage evidence and persistence attestations, canonical cross-language receipt verification, authoritative CLI/operator session binding, and reliability fixes across the ensemble, dashboard, commitment ledger, and reporting pipeline. | [v2.1.0](docs/release_notes/v2.1.x/v2.1.0.md) |
 
 ## v2.0.x
