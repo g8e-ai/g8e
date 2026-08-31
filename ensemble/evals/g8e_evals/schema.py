@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.12.0"
+SCHEMA_VERSION = "1.13.0"
 
 
 class TerminalStatus(StrEnum):
@@ -266,6 +266,18 @@ class FinalStateObservation(BaseModel):
     verification_status: VerificationStatus = VerificationStatus.PENDING
 
 
+class CanaryScrubbingAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    canary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_scrub_type: str = Field(min_length=1)
+    expected_occurrences: int = Field(ge=1)
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -296,7 +308,7 @@ class TaskDefinition(BaseModel):
     expected_allow_block_outcome: PolicyOutcome | None = None
     expected_rejection_layer: RejectionLayer | None = None
 
-    sensitive_canary_annotations: list[str] = Field(default_factory=list)
+    sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
     privacy_assertions: list[str] = Field(default_factory=list)
 
     grader_ids: list[str] = Field(default_factory=list)
@@ -309,6 +321,11 @@ class TaskDefinition(BaseModel):
         assertion_ids = [assertion.assertion_id for assertion in self.expected_final_state_assertions]
         if len(assertion_ids) != len(set(assertion_ids)):
             raise ValueError("final-state assertion IDs must be unique")
+        canary_assertion_ids = [
+            assertion.assertion_id for assertion in self.sensitive_canary_annotations
+        ]
+        if len(canary_assertion_ids) != len(set(canary_assertion_ids)):
+            raise ValueError("canary assertion IDs must be unique")
         if self.expected_allow_block_outcome is not None and not self.expected_action_class:
             raise ValueError("expected policy outcome requires an expected action class")
         if self.expected_allow_block_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:

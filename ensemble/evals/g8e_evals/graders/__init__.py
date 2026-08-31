@@ -114,6 +114,69 @@ class ReceiptIntegrityGrader:
         )
 
 
+class CanaryScrubbingGrader:
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.sensitive_canary_annotations
+        if not assertions:
+            return self._failed("canary scrubbing assertions are missing")
+
+        evidence_refs: list[str] = []
+        expected_counts: dict[str, int] = {}
+        expected_types: dict[str, set[str]] = {}
+        matched_stages: dict[str, StageObservation] = {}
+        for assertion in assertions:
+            matching_stages = [
+                stage
+                for stage in context.stages
+                if stage.kind == StageKind.SCRUBBING
+                and stage.source == assertion.source
+                and stage.input_artifact_hash == assertion.input_artifact_sha256
+            ]
+            if len(matching_stages) != 1:
+                return self._failed("exactly one matching scrubbing stage is required", evidence_refs)
+            stage = matching_stages[0]
+            if stage.attempt_id != context.attempt.attempt_id:
+                return self._failed("scrubbing stage attempt does not match", [stage.stage_id])
+            if stage.run_id != context.attempt.run_id:
+                return self._failed("scrubbing stage run does not match", [stage.stage_id])
+            if stage.decision != "modified":
+                return self._failed("matching scrubbing stage was not modified", [stage.stage_id])
+            if stage.output_artifact_hash != assertion.expected_output_artifact_sha256:
+                return self._failed("scrubbed output hash does not match", [stage.stage_id])
+
+            matched_stages[stage.stage_id] = stage
+            expected_counts[stage.stage_id] = (
+                expected_counts.get(stage.stage_id, 0) + assertion.expected_occurrences
+            )
+            expected_types.setdefault(stage.stage_id, set()).add(assertion.expected_scrub_type)
+            if stage.stage_id not in evidence_refs:
+                evidence_refs.append(stage.stage_id)
+
+        for stage_id, stage in matched_stages.items():
+            if stage.scrub_count != expected_counts[stage_id]:
+                return self._failed("scrub count does not match", [stage_id])
+            if (
+                len(stage.scrub_types) != len(set(stage.scrub_types))
+                or set(stage.scrub_types) != expected_types[stage_id]
+            ):
+                return self._failed("scrub types do not match", [stage_id])
+
+        return DeterministicGrade(
+            value=1.0,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=evidence_refs,
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+        )
+
+
 class ProtocolChainGrader:
     _kind_order = (
         DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
@@ -301,6 +364,17 @@ class ProtocolChainGrader:
             failed_prerequisites and failed_prerequisites[0] is not stages[-2]
         ):
             return "rejected protocol chain has ambiguous prerequisite outcomes"
+        expected_outcomes = {
+            DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: self._status_outcomes.get(receipt.l2_status),
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY: self._status_outcomes.get(receipt.l3_status),
+        }
+        completed_prerequisites = stages[:-2] if failed_prerequisites else stages[:-1]
+        if any(
+            stage.outcome != expected_outcomes.get(stage.kind)
+            for stage in completed_prerequisites
+        ):
+            return "rejected protocol chain has invalid prerequisite outcomes"
         if any(stage.parent_stage_id != l4.stage_id for stage in stages[:-1]) or l4.parent_stage_id:
             return "deterministic stage parent relationship is invalid"
         return None
@@ -553,6 +627,7 @@ class FinalStateAssertionGrader:
 
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
+    ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
     ("final_state_assertions", "1.0.0"): FinalStateAssertionGrader(),
     ("policy_outcome", "1.0.0"): PolicyOutcomeGrader(),
     ("protocol_chain", "1.0.0"): ProtocolChainGrader(),

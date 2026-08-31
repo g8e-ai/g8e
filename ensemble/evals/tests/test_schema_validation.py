@@ -27,6 +27,7 @@ from g8e_evals.schema import (
     SCHEMA_VERSION,
     AttemptRecord,
     ArmManifestEntry,
+    CanaryScrubbingAssertion,
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
@@ -52,7 +53,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.12.0"
+    assert SCHEMA_VERSION == "1.13.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -145,6 +146,44 @@ def test_final_state_assertion_and_observation_round_trip():
     assert restored.state_root_before == "root-before"
     assert restored.state_root_after == "root-after"
     assert restored.source_receipt_id == "receipt-1"
+
+
+def test_canary_scrubbing_assertion_round_trips_without_raw_canary():
+    assertion = CanaryScrubbingAssertion(
+        assertion_id="email-canary",
+        canary_sha256="a" * 64,
+        source="conversation_history:user",
+        input_artifact_sha256="b" * 64,
+        expected_output_artifact_sha256="c" * 64,
+        expected_scrub_type="email",
+        expected_occurrences=1,
+    )
+
+    restored = CanaryScrubbingAssertion.model_validate_json(assertion.model_dump_json())
+
+    assert restored == assertion
+    assert "raw_canary" not in assertion.model_dump()
+
+
+def test_task_definition_rejects_duplicate_canary_assertion_ids():
+    assertion = CanaryScrubbingAssertion(
+        assertion_id="duplicate",
+        canary_sha256="a" * 64,
+        source="conversation_history:user",
+        input_artifact_sha256="b" * 64,
+        expected_output_artifact_sha256="c" * 64,
+        expected_scrub_type="email",
+        expected_occurrences=1,
+    )
+
+    with pytest.raises(ValidationError, match="canary assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            sensitive_canary_annotations=[assertion, assertion],
+        )
 
 
 def test_task_definition_rejects_duplicate_final_state_assertion_ids():

@@ -84,6 +84,7 @@ _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
 _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
 _PROTOCOL_CHAIN_GRADER_ID = "protocol_chain"
+_CANARY_SCRUBBING_GRADER_ID = "canary_scrubbing"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
 _FINAL_STATE_METRIC_ID = "final_state_accuracy"
 _POLICY_OUTCOME_GRADER_ID = "policy_outcome"
@@ -447,6 +448,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{suite}:{suite_version}:"
         f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_POLICY_OUTCOME_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
@@ -551,11 +554,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_final_state_assertions=t.metadata.expected_final_state_assertions,
             expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
             expected_rejection_layer=t.metadata.expected_rejection_layer,
+            sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
             grader_ids=[
                 _IFEVAL_GRADER_ID,
                 *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
                 *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
                 *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
+                *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
                 *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
             ],
@@ -564,6 +569,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_GRADER_VERSION] if eval_judge else []),
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
+                *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
             ],
@@ -916,6 +922,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 verification_status=protocol_grade.verification_status,
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=protocol_grade.evidence_refs,
+            ))
+        if task.metadata.sensitive_canary_annotations:
+            canary_grade = grade_deterministically(
+                _CANARY_SCRUBBING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_CANARY_SCRUBBING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=canary_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.sensitive_canary_annotations),
+                verification_status=canary_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=canary_grade.evidence_refs,
             ))
         if task.metadata.expected_final_state_assertions:
             final_state_grade = grade_deterministically(
