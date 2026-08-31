@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app.llm.llm_dataclasses import Content, Part, Role, Schema, ToolDeclaration, ToolGroup, Type
 from app.llm.llm_types import PrimaryLLMSettings
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_hash, model_boundary_privacy_attestation
 
 pytestmark = [pytest.mark.unit]
 
@@ -105,3 +105,16 @@ def test_model_boundary_hash_returns_only_digest_not_plaintext():
     assert len(digest) == 64
     assert digest != plaintext
     assert plaintext not in digest
+
+
+def test_model_boundary_privacy_attestation_counts_sensitive_values_without_retaining_them():
+    canary = "canary@example.com"
+    payload = {"messages": [{"role": "user", "content": f"Contact {canary}"}]}
+
+    attestation = model_boundary_privacy_attestation(payload)
+
+    assert attestation.scanner_version == "sentinel-regex@1.0.0"
+    assert attestation.input_artifact_hash == model_boundary_hash(payload)
+    assert attestation.raw_sensitive_occurrences == 1
+    assert attestation.raw_sensitive_types == ["email"]
+    assert canary not in attestation.model_dump_json()

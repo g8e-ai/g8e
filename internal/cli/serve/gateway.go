@@ -163,12 +163,12 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		}
 	}
 
-	// L2 posture advisory check for consensus/notary:
+	// L2 posture advisory check:
 	// The gateway starts regardless of consensus configuration — L2 enforcement
 	// happens at transaction time via L4Warden. If no consensus is configured yet,
 	// log a warning so the operator knows L2-gated transactions will be rejected
 	// until a consensus policy is enrolled.
-	if cfg.Posture == config.PostureConsensus || cfg.Posture == config.PostureNotary {
+	if cfg.Posture.RequiresL2() {
 		if cfg.ConsensusID == "" {
 			logger.Warn("L2 posture requires consensus but no --consensus-id set; L2-gated transactions will be rejected until a consensus is configured",
 				"posture", cfg.Posture)

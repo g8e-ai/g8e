@@ -171,6 +171,10 @@ class TestOllamaProviderGeneration:
             "truncates real-world prompts and starves thinking models of output budget"
         )
         assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
+        assert provider.model_boundary_privacy is not None
+        assert provider.model_boundary_privacy.input_artifact_hash == provider.input_artifact_hash
+        assert provider.model_boundary_privacy.raw_sensitive_occurrences == 0
+        assert provider.model_boundary_privacy.raw_sensitive_types == []
         unsanitized_kwargs = {
             **call_kwargs,
             "messages": [*call_kwargs["messages"][:-1], {"role": "user", "content": "canary@example.com"}],

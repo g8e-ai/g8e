@@ -365,7 +365,7 @@ const (
 
 // MCPApprovalPausedPrefix is the leading text of the directive returned to the
 // calling agent when an MCP tool call is paused awaiting human passkey
-// authorization under notary posture. The full message is built by
+// authorization under ratify or notary posture. The full message is built by
 // mcp.approvalPausedMessage; tests assert the response content starts with
 // this prefix rather than matching the entire dynamic string.
 const MCPApprovalPausedPrefix = "Execution paused"

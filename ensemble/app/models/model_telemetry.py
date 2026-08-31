@@ -5,7 +5,16 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
+from pydantic import Field
+
 from app.models.base import G8eBaseModel
+
+
+class ModelBoundaryPrivacyAttestation(G8eBaseModel):
+    scanner_version: str
+    input_artifact_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    raw_sensitive_occurrences: int = Field(ge=0)
+    raw_sensitive_types: list[str] = Field(default_factory=list)
 
 
 class ModelCallTelemetry(G8eBaseModel):
@@ -26,3 +35,4 @@ class ModelCallTelemetry(G8eBaseModel):
     error_type: str | None = None
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
+    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None

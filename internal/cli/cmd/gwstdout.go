@@ -11,11 +11,10 @@ import (
 )
 
 // printNextSteps outputs guidance after the gateway starts. The passkey
-// enrollment guidance is posture-aware: only the notary posture requires a
-// human-registered passkey (L3 proof is enforced). Doctrine and consensus
-// postures do not require a passkey at startup — the gateway is ready to use,
-// and the user can optionally enroll a passkey if they later restart in notary
-// mode.
+// enrollment guidance is posture-aware: ratify and notary require a
+// human-registered passkey because they enforce L3 proof. Doctrine and
+// consensus do not require a passkey at startup, and the user can optionally
+// enroll one before restarting in ratify or notary mode.
 func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, externalIP, hostname string) {
 	bin := getBinaryName()
 	httpPort := constants.Ports.OperatorHttp
@@ -43,13 +42,13 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	if posture != nil && posture.RequiresL3Proof() {
 		cmd.Println("Passkey Enrollment: Required")
 		cmd.Println()
-		cmd.Println("Proof of human presence required for notary posture (L3 enforced).")
+		cmd.Printf("Proof of human presence required for %s posture (L3 enforced).\n", posture.Name())
 		cmd.Println()
 	} else {
 		cmd.Println("Passkey Enrollment: Optional")
 		cmd.Println()
 		cmd.Printf("No passkey required for %s posture (L3 audited, not enforced).\n", posture.Name())
-		cmd.Println("Enroll a passkey if you plan to restart in notary mode (L3 enforced).")
+		cmd.Println("Enroll a passkey if you plan to restart in ratify or notary mode (L3 enforced).")
 		cmd.Println()
 	}
 

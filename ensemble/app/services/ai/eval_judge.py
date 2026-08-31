@@ -29,7 +29,11 @@ from typing import Any
 from app.models.base import BaseModel, Field, field_validator
 
 from app.llm.llm_types import Content, GenerateContentResponse, Part, ResponseFormat, Role, LiteLLMSettings, UsageMetadata
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.model_telemetry import ModelCallTelemetry
 from app.models.settings import EvalJudgeSettings
@@ -356,4 +360,5 @@ class EvalJudge:
             error_type=type(error).__name__ if error else None,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
+            model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
         )

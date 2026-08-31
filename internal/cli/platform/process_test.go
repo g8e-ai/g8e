@@ -949,7 +949,7 @@ func TestReadPosture(t *testing.T) {
 	}
 
 	// Test valid posture
-	validPostures := []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureNotary}
+	validPostures := []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary}
 	for _, p := range validPostures {
 		if err := pm.writePosture(p); err != nil {
 			t.Fatalf("writePosture failed: %v", err)

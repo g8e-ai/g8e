@@ -5,12 +5,12 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ## Overview
 
-g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. Instead, the agent formulates intent, and the g8e platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five fail-closed governance layers before execution.
+g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. Instead, the agent formulates intent, and the g8e platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five governance layers before execution. Universal checks and proofs required by the active posture fail closed.
 
 The platform treats every AI client as an untrusted principal. The agent's role is to describe what should happen and on which hosts. The gateway validates that description against doctrine, consensus, and human authorization. The governed operator on each host re-verifies every proof locally before it executes anything. This design keeps agents honest and hosts sovereign.
 
@@ -48,7 +48,7 @@ Each native tool accepts a typed request, performs read-only or governed-mutatio
 
 ## The Five-Layer Governance Pipeline
 
-Every agent-originated action passes through the same five fail-closed layers. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
+Every agent-originated action passes through the same five layers. Universal checks and posture-required proofs fail closed, while optional L2 and L3 results remain audit evidence. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
 
 ### L1 Doctrine
 
@@ -56,17 +56,17 @@ L1 is the technical hard gate. It matches payloads against forbidden patterns an
 
 ### L2 Consensus
 
-L2 is multi-signature consensus over the transaction hash. The consensus service is an enrolled body of members, each with a distinct Ed25519 private key. The reference implementation shipped with g8e evaluates the transaction deterministically against the L1 Doctrine and signs an affirmative or negative vote over `<transaction_hash>|<decision>`. The L4 Warden verifies the votes against the configured policy and trusted signer store. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures.
+L2 is multi-signature consensus over the transaction hash. The consensus service is an enrolled body of members, each with a distinct Ed25519 private key. The reference implementation shipped with g8e evaluates the transaction deterministically against the L1 Doctrine and signs an affirmative or negative vote over `<transaction_hash>|<decision>`. The L4 Warden verifies the votes against the configured policy and trusted signer store. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures. L2 remains audited under the `doctrine` and `ratify` postures.
 
 The protocol is designed to support heterogeneous consensus members, but the in-platform reference implementation uses deterministic L1 doctrine evaluation. Alternative consensus implementations can be enrolled as external producers. See [Consensus](./consensus.md) for enrollment, deliberation, and member key management.
 
 ### L3 Notary
 
-L3 enforces human-in-the-loop authorization. In gateway mode, the platform requires a WebAuthn/FIDO2 passkey assertion over the transaction hash. CLI callers additionally undergo mTLS session verification. In outbound operator mode, L3 is satisfied by a suspended-transaction approval and Ed25519 signature over the transaction hash. Mutations are blocked until a valid L3 proof is presented; read-only actions do not require L3. See [Authentication & Authorization](./auth.md) for the notary modes.
+L3 provides human-in-the-loop authorization. Under `ratify` and `notary` postures, gateway mode requires a WebAuthn/FIDO2 passkey assertion over the transaction hash for mutations, and CLI callers additionally undergo mTLS session verification. In outbound operator mode, required L3 is satisfied by a suspended-transaction approval and Ed25519 signature over the transaction hash. L3 remains audited under `doctrine` and `consensus`; read-only actions do not require L3 in any posture. See [Authentication & Authorization](./auth.md) for the notary modes.
 
 ### L4 Warden
 
-The L4 Warden runs on the operator as the final pre-dispatch gate. It recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Any mismatch or missing proof fails closed.
+The L4 Warden runs on the operator as the final pre-dispatch gate. It recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Any universal mismatch or missing posture-required proof fails closed; optional proof failures remain non-gating audit evidence.
 
 ### L5 Actuator
 
@@ -80,8 +80,8 @@ The practical flow for an AI client is:
 
 1. The AI client submits an intent through the MCP or A2A endpoint.
 2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
-3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes.
-4. If L3 is required and missing, the gateway suspends the transaction and sends an approval challenge to the human.
+3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes; `doctrine` and `ratify` do not require this step.
+4. Under `ratify` or `notary` posture, if L3 is missing, the gateway suspends the transaction and sends an approval challenge to the human.
 5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
 6. The bound operator pulls the envelope, and the L4 Warden re-verifies L1-L4 and emits deterministic stage evidence.
 7. The L5 Actuator persists the signed pre-execution receipt, appends the signed commitment, executes the action, persists the signed final receipt, and adds its persistence attestation.
@@ -124,7 +124,7 @@ Cert and key are resolved as pairs per tier. Supplying only one half of a pair (
 | **AI client → Gateway** | The client speaks canonical MCP/A2A and provides intent. The gateway constructs and governs the envelope. |
 | **L1 Doctrine** | Forbidden patterns and MITRE threats are rejected before consensus or execution. |
 | **L2 Consensus** | Multi-signature Ed25519 votes are verified against the transaction hash and trusted signer store. |
-| **L3 Notary** | Human presence or outbound approval is required for mutations. |
+| **L3 Notary** | Human presence or outbound approval is required for mutations under `ratify` and `notary`; L3 is audited under `doctrine` and `consensus`. |
 | **L4 Warden** | Hash, nonce, expiry, state root, and signatures are re-verified on the operator before execution. |
 | **L5 Actuator** | Execution is wrapped in signed receipts, PII rehydration, and just-in-time capabilities. |
 | **Operator → Host** | Only the operator mutates the host, and every action is written to the local ledger. |
@@ -134,7 +134,7 @@ Cert and key are resolved as pairs per tier. Supplying only one half of a pair (
 ## Key Design Principles
 
 - **Do not trust the AI client.** The agent provides intent; the platform verifies and executes. The client has no privileged channel.
-- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed.
+- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed when L2 is required and remains non-gating audit evidence otherwise.
 - **Do not trust the gateway.** The operator re-derives every proof locally before execution.
 - **Multi-signature consensus.** L2 requires K-of-N Ed25519 affirmative votes from distinct members. The reference implementation signs deterministic L1-doctrine evaluations.
 - **Doctrine is enforced, not suggested.** Agents can be informed of doctrine, but the L1 gate rejects forbidden actions regardless of compliance.

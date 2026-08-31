@@ -29,7 +29,7 @@ type Model struct {
 	corsOriginInput    textinput.Model
 
 	// Step 2: Posture
-	postureChoice           int // 0=doctrine, 1=consensus, 2=notary
+	postureChoice           int // 0=doctrine, 1=consensus, 2=ratify, 3=notary
 	consensusURLInput       textinput.Model
 	consensusIDInput        textinput.Model
 	consensusBootstrapInput textinput.Model
@@ -112,8 +112,10 @@ func NewModel(opts Options) Model {
 	switch opts.InitialConfig.Posture {
 	case "consensus":
 		m.postureChoice = 1
-	case "notary":
+	case "ratify":
 		m.postureChoice = 2
+	case "notary":
+		m.postureChoice = 3
 	default:
 		m.postureChoice = 0
 	}
@@ -161,6 +163,8 @@ func (m Model) result() Result {
 	case 1:
 		cfg.Posture = "consensus"
 	case 2:
+		cfg.Posture = "ratify"
+	case 3:
 		cfg.Posture = "notary"
 	default:
 		cfg.Posture = "doctrine"

@@ -35,9 +35,9 @@ This runbook runs the entire stack inside Docker containers. The `g8e` CLI comma
 
 **Rebuild Docker images after `make build`.** The Docker images bake the `g8e` binary in at build time. If you run `make build` to pick up source changes, you must also run `./g8e docker build` to update the images before `./g8e docker start`. A stale image can cause 404s on routes that exist in the new binary but not in the old one.
 
-## Note on notary posture
+## Note on L2- and L3-enforcing postures
 
-Headless enrollment deliberately skips the WebAuthn/FIDO2 passkey ceremony. Because of that, this runbook stays in the default `doctrine` posture (L1 enforced, L2 and L3 audited). Fully proving L3 `notary` or L2 `consensus` with real human-in-the-loop and multi-member Ed25519 quorum requires a second interactive passkey enrollment and is documented as an optional follow-up at the end of this runbook.
+Headless enrollment deliberately skips the WebAuthn/FIDO2 passkey ceremony. Because of that, this runbook stays in the default `doctrine` posture (L1 enforced, L2 and L3 audited). Fully proving L3 under `ratify` or `notary`, or L2 under `consensus` or `notary`, requires optional follow-up configuration: interactive passkey enrollment for L3 and a multi-member Ed25519 quorum for L2.
 
 ## The run
 
@@ -332,7 +332,7 @@ Expected: the KSI command emits a Class C result set with evidence from the live
 
 ### 13. Optional: governance posture sweep
 
-The headless run above uses the default `doctrine` posture. To exercise the other postures, you must enroll with a passkey (browser) and, for `consensus`, provide a `consensus-bootstrap.json` file. The optional commands are:
+The headless run above uses the default `doctrine` posture. To exercise `ratify` or `notary`, enroll with a passkey in a browser. To exercise `consensus` or `notary`, provide a `consensus-bootstrap.json` file. The optional commands are:
 
 ```bash
 ./g8e auth enroll user -e localhost
@@ -340,7 +340,7 @@ The headless run above uses the default `doctrine` posture. To exercise the othe
 # approve operator, ensemble, and dashboard again
 ```
 
-Then run a `consensus` or `notary` scenario. These require a human in the loop for L3 notary approval and are not part of the headless run.
+Then run a scenario under `consensus`, `ratify`, or `notary`. The `ratify` and `notary` scenarios require a human in the loop for L3 approval, while the `consensus` and `notary` scenarios require L2 consensus configuration. These optional scenarios are not part of the headless run.
 
 ### 14. Stop and clean up
 
@@ -371,7 +371,7 @@ To remove all state, including PKI, vault, and audit ledger:
 | Complete receipts use the SQLite audit store, signed commitments use the SQLite hash chain, and governed file snapshots use the git-backed ledger | `g8e audit receipts`, `g8e audit events`, and the `report all` receipt-signature, persistence-attestation, commitment-chain, structured-column, ledger-root, mutation-linkage, and receipt-cross-link checks. |
 | "Raw data remains on the host" | The operator's `.g8e/vault/` and `.g8e/data/` directories are inside the operator container's volume; the gateway and ensemble receive only hashes, signatures, and tokenized projections. |
 | "Vault keys are owned by the data owner and never shared with the gateway or cloud provider" | `docker exec g8e-operator /g8e vault status` shows the vault is initialized; keys are never transmitted in the scenario. |
-| "Three posture configurations: doctrine, consensus, notary" | The default `doctrine` run; optional `consensus` and `notary` steps are documented but require a passkey. |
+| "Four posture configurations: doctrine, consensus, ratify, notary" | The default `doctrine` run and the optional `consensus`, `ratify`, and `notary` posture sweep, with each posture's L2 and L3 prerequisites documented. |
 
 ## Troubleshooting
 

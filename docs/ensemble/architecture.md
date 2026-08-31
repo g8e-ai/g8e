@@ -4,7 +4,7 @@
 
 g8ee is the agentic ensemble component of the 3-component g8e platform:
 
-- **Governance Gateway (g8eg)** — Central Policy Decision Point (PDP). Owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. Operates under doctrine, consensus, or notary posture.
+- **Governance Gateway (g8eg)** — Central Policy Decision Point (PDP). Owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. Operates under doctrine, consensus, ratify, or notary posture.
 - **Governed Operator (g8eo)** — Host-side Policy Execution Point (PEP). Enforces protocol compliance, verifies L1/L2/L3 signatures, executes transactions via the Actuator stage, and maintains local-first audit ledgers. Runs on target hosts.
 - **g8e Agentic Ensemble (g8ee)** — First-party g8e-compliant agentic ensemble. Acts as an L2 producer, emitting typed, signed GovernanceEnvelope transactions to the Gateway for validation and execution through the five-layer verification pipeline.
 

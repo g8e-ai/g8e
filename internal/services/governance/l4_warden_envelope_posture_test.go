@@ -56,6 +56,49 @@ func TestVerifyEnvelope_ReadsPostureFromEnvelope(t *testing.T) {
 // ErrEnvelopePostureMissing. This indicates a gateway bug (the constructor
 // was called without wiring cfg.Gateway.Posture), not an operator config
 // gap. The warden fails closed per-transaction rather than inventing a posture.
+func TestVerifyEnvelope_RatifyRequiresL3WithoutL2(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		invalidL2 bool
+		removeL3  bool
+		wantErr   error
+	}{
+		{name: "valid L3 without L2 passes"},
+		{name: "valid L3 with invalid audited L2 passes", invalidL2: true},
+		{name: "missing L3 rejects mutation", removeL3: true, wantErr: constants.ErrTxL3ProofMissing},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey, "ratify")
+			if tc.invalidL2 {
+				env.Governance.L2.Votes = append(env.Governance.L2.Votes, env.Governance.L2.Votes[0])
+			} else {
+				env.Governance.L2 = nil
+			}
+			if tc.removeL3 {
+				env.Governance.L3 = nil
+			}
+
+			verified, err := verifier.VerifyEnvelope(context.Background(), env)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			if !assert.NoError(t, err) || !assert.NotNil(t, verified) {
+				return
+			}
+			assert.False(t, verified.L2Valid)
+			assert.True(t, verified.L3Valid)
+			assert.Equal(t, "ratify", verified.Posture.Name())
+		})
+	}
+}
+
 func TestVerifyEnvelope_MissingEnvelopePostureFailsClosed(t *testing.T) {
 	t.Parallel()
 
@@ -75,7 +118,7 @@ func TestVerifyEnvelope_MissingEnvelopePostureFailsClosed(t *testing.T) {
 func TestVerifyEnvelope_EnvelopePostureIsTheOnlyPosture(t *testing.T) {
 	t.Parallel()
 
-	for _, posture := range []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureNotary} {
+	for _, posture := range []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary} {
 		t.Run(posture, func(t *testing.T) {
 			t.Parallel()
 			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))

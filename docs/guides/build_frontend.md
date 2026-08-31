@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ---
 
@@ -489,7 +489,7 @@ Then run `g8e auth enroll gui enroll --origin https://your-app.example.com` to v
 
 ## In-Tree Dashboard (g8ed) Server-to-Server mTLS Enrollment
 
-The previous sections cover browser-based frontends that authenticate via WebAuthn passkeys and session cookies. The in-tree dashboard (`g8ed`, `dashboard/`) is a special case: its **browser SPA** still authenticates via WebAuthn passkeys (unchanged), but its **container** also holds its own mTLS app identity for server-to-server gateway calls, mirroring the ensemble's enrollment model. The two identity surfaces are independent — the browser never presents the container's mTLS cert, and the container never holds the browser's session cookie.
+The previous sections cover browser-based frontends that authenticate via WebAuthn passkeys and session cookies. The in-tree dashboard (`g8ed`, `dashboard/`) is a special case: its **browser SPA** still authenticates via WebAuthn passkeys (unchanged), but its **container** also holds its own mTLS app identity for prepared server-to-server gateway clients, mirroring the ensemble's enrollment model. `server.js` does not currently construct those clients. The two identity surfaces are independent — the browser never presents the container's mTLS cert, and the container never holds the browser's session cookie.
 
 ### Enrollment
 
@@ -521,4 +521,4 @@ The dashboard's runtime tree mirrors the ensemble's layout so the gateway-side c
 
 The dashboard's browser SPA authenticates via WebAuthn passkeys exactly as described in the rest of this guide — the container's mTLS enrollment does not change the browser auth model. The container's mTLS identity is consumed by future backend service wiring (governance, SSE, document store) that makes server-to-server gateway calls; `server.js` is currently a static SPA host and does not yet construct g8eg clients with the enrolled credential. The mTLS constructor params on `g8eg_http_client.js` and `g8eg_pubsub_client.js` (`clientCertPath`, `clientKeyPath`, `caCertPath`) are forward-compatible preparation for that wiring.
 
-See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture and [Ensemble (g8ee)](../architecture/ensemble.md) for the parallel ensemble enrollment implementation.
+See [Dashboard (g8ed)](../architecture/dashboard.md) for the platform-level architecture, [Dashboard Authentication](../dashboard/auth.md) for the component enrollment flow, and [Ensemble (g8ee)](../architecture/ensemble.md) for the parallel ensemble enrollment implementation.

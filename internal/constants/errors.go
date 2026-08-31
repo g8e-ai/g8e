@@ -363,7 +363,7 @@ var (
 	ErrGovernedDocStoreRequired       = errors.New("governed document store is required")
 	ErrConsensusPolicyStoreRequired   = errors.New("consensus policy store is required")
 	ErrFieldReaderRequired            = errors.New("field reader is required")
-	ErrConsensusServiceRequired       = errors.New("consensus service is required for non-doctrine posture")
+	ErrConsensusServiceRequired       = errors.New("consensus service is required for an L2-enforcing posture")
 	ErrPlatformEnrollmentDepsRequired = errors.New("platform enrollment deps are required")
 
 	// Execution vault errors

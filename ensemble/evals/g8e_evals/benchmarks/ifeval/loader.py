@@ -40,6 +40,13 @@ class IFEvalLoader:
                 metadata=TaskMetadata(
                     benchmark="ifeval_subset",
                     expected_action_class=data.get("expected_action_class", ""),
+                    state_fixture=data.get("state_fixture"),
+                    expected_final_state_assertions=data.get("expected_final_state_assertions", []),
+                    expected_allow_block_outcome=data.get("expected_allow_block_outcome"),
+                    expected_rejection_layer=data.get("expected_rejection_layer"),
+                    sensitive_canary_annotations=data.get("sensitive_canary_annotations", []),
+                    rehydration_assertions=data.get("rehydration_assertions", []),
+                    secret_detection_assertions=data.get("secret_detection_assertions", []),
                     instruction_id_list=data["instruction_id_list"],
                     kwargs=data["kwargs"],
                 ),

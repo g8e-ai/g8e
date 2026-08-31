@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-08-30
-Version: v2.1.1
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ---
 
@@ -111,12 +111,13 @@ To start the gateway, use the CLI gateway command:
 ```bash
 ./g8e gw start --posture doctrine    # L1 enforced, L2/L3 audited (default)
 ./g8e gw start --posture consensus   # L1/L2 enforced, L3 audited
+./g8e gw start --posture ratify      # L1/L3 enforced, L2 audited
 ./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
 ### Gateway Mode Flags
 
-- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
+- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)
 - `--http-port <port>` - Plain HTTP port for bootstrap, health checks, and PKI discovery (default: 8080)
 - `--https-port <port>` - HTTPS port for mTLS API and public surface (default: 8443)
 - `--data-dir <dir>` - Data directory for SQLite database (default: .g8e/data in working directory)
@@ -153,7 +154,7 @@ Custom gateway implementations need the g8e Protocol Library for protobuf schema
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.1
+go get github.com/g8e-ai/g8e/v2@v2.1.2
 ```
 
 Import the protobuf types and SPIFFE workload identity helpers from the Go module. The package provides governance envelope definitions, the Operator gRPC service, pub/sub message types, and workload identity helpers for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer).
@@ -165,7 +166,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.1
+pip install g8e==2.1.2
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
@@ -220,11 +221,12 @@ Your implementation must enforce these core invariants:
 
 ### Governance Modes
 
-The gateway must support three operating modes:
+The gateway supports four governance postures:
 
-- **Doctrine Mode**: Enforce L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures audited but not required. This is the default mode.
-- **Consensus Mode**: Enforce L1 and L2 (multi-model Byzantine consensus). L3 signature audited but not required.
-- **Notary Mode**: Enforce L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2).
+- **Doctrine**: Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures are audited but not required. This is the default posture.
+- **Consensus**: Enforces L1 and L2 (multi-model Byzantine consensus). L3 signatures are audited but not required.
+- **Ratify**: Enforces L1 and L3 (human-in-the-loop via WebAuthn/FIDO2). L2 signatures are audited but not required.
+- **Notary**: Enforces L1, L2, and L3.
 
 ### Session Types
 

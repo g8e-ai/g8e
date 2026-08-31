@@ -1,13 +1,13 @@
 # Governance
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ## Overview
 
 The g8e system governs every transaction through a five-layer verification pipeline (L1 through L5). Transactions flow from AI clients through a governance gateway to governed operators, where they undergo verification before execution on target systems. A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only.
 
-The posture is set at startup via `--posture <doctrine|consensus|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time. The posture is consulted at two points: the L4 Warden gates transaction dispatch based on L2 and L3 results, and the L5 Actuator records L2 and L3 status in the signed action receipt.
+The posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time. The posture is consulted at two points: the L4 Warden gates transaction dispatch based on L2 and L3 results, and the L5 Actuator records L2 and L3 status in the signed action receipt.
 
 The canonical transaction container is the **GovernanceEnvelope**, a typed protobuf message that binds identity, intent, state, replay-protection material, and governance proofs into a single transaction. See [Authentication & Authorization](./auth.md) for the identity and session fields, and [Protocol](./protocol.md) for the wire format.
 
@@ -15,7 +15,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a typed proto
 
 ## The Five-Layer Interlock Sequence
 
-Each transaction passes through five layers in order. Every layer fails closed: a failed check rejects the transaction and releases its nonce reservation. The Gateway acts as the Policy Decision Point for L1 through L3; the Operator substrate acts as the Policy Execution Point for L4 and L5.
+Each transaction passes through five layers in order. Universal checks and proofs required by the active posture fail closed: a failed required check rejects the transaction and releases its nonce reservation. Optional L2 and L3 results are audited without gating execution. The Gateway acts as the Policy Decision Point for L1 through L3; the Operator substrate acts as the Policy Execution Point for L4 and L5.
 
 - **L1 Doctrine**: Hard gates via forbidden pattern matching and MITRE-based threat detection. Any violation rejects the transaction. Enforced in every posture.
 - **L2 Consensus**: Multi-agent consensus signature verification. Each consensus member independently evaluates the payload against L1 Doctrine and signs an Ed25519 vote over the transaction hash and the member's decision. A transaction must collect enough affirmative votes from distinct members to meet quorum. See [Consensus](./consensus.md) for enrollment, deliberation, and vote verification.
@@ -33,7 +33,8 @@ Postures define which layers are enforced as fail-closed gates and which are aud
 |---|---|---|---|---|
 | **Doctrine** | Enforced | Audited | Audited | Local development and CI |
 | **Consensus** | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with human authorization |
+| **Ratify** | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
+| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
 
 The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding.
 
@@ -51,6 +52,12 @@ Consensus enforces everything from doctrine plus L2 consensus signature verifica
 
 At startup, the gateway logs advisory warnings if the consensus ID is empty or the policy is missing or disabled, then boots regardless. L2-gated transactions are rejected by the L4 Warden until a consensus is properly enrolled. See [Consensus](./consensus.md) for declarative bootstrap, runtime enrollment, and member key management.
 
+### Ratify
+
+**Configuration**: `--posture ratify`
+
+Ratify enforces L1 Doctrine and L3 notary proof verification for mutation action types. L2 consensus votes are verified if present and recorded in the receipt, but they are not required and do not gate execution. A mutation must include a valid L3 proof; read-only actions do not require one.
+
 ### Notary
 
 **Configuration**: `--posture notary`
@@ -61,7 +68,7 @@ In gateway mode the L3 notary is a passkey-based WebAuthn verifier. In outbound 
 
 ### Choosing a Posture
 
-The doctrine and consensus postures allow mutations to execute without human authorization or, for doctrine, without multi-party consensus. Selecting such a posture is itself an act of human intent; the `--posture` flag is the authorization and the gateway logs the chosen posture at startup. An unrecognized posture name causes startup to fail rather than silently running under a weaker posture.
+The doctrine and consensus postures allow mutations to execute without human authorization. Doctrine and ratify allow mutations without multi-party consensus, while ratify requires human authorization. Selecting such a posture is itself an act of human intent; the `--posture` flag is the authorization and the gateway logs the chosen posture at startup. An unrecognized posture name causes startup to fail rather than silently running under a weaker posture.
 
 | Mode | Default Posture | Configured Via |
 |---|---|---|
@@ -80,9 +87,9 @@ A **Principal** (a human user or AI agent) submits an intent through an MCP clie
 
 ### 2. Producer Wraps the Intent
 
-The **Producer** wraps the intent in a GovernanceEnvelope carrying the typed payload, principal identity, nonce, state root, and governance proofs. Under `consensus` and `notary` postures, the envelope must include the required L2 consensus votes before the Warden will admit it. Clients may obtain those votes through the gateway's deliberation endpoint or provide them along with the envelope. Under `doctrine` posture, L2 votes are not required.
+The **Producer** wraps the intent in a GovernanceEnvelope carrying the typed payload, principal identity, nonce, state root, and governance proofs. Under `consensus` and `notary` postures, the envelope must include the required L2 consensus votes before the Warden will admit it. Clients may obtain those votes through the gateway's deliberation endpoint or provide them along with the envelope. Under `doctrine` and `ratify` postures, L2 votes are not required.
 
-If the principal cannot produce an L3 notary proof, the gateway suspends the transaction, sends an out-of-band WebAuthn challenge URL to the client, and resumes the L4 and L5 flow after the human approves via browser. See [Gateway Architecture](./gateway.md) for the suspension and approval flow.
+Under `ratify` and `notary` postures, if the principal cannot produce an L3 notary proof, the gateway suspends the transaction, sends an out-of-band WebAuthn challenge URL to the client, and resumes the L4 and L5 flow after the human approves via browser. See [Gateway Architecture](./gateway.md) for the suspension and approval flow.
 
 ### 3. Gateway Admits the Envelope
 
@@ -116,7 +123,7 @@ The operator returns the sovereignty-scrubbed signed receipt to the gateway. In 
 
 ### Fail-Closed Design
 
-Every verification layer fails closed. A failed check rejects the transaction immediately and releases the nonce reservation. The Actuator will not execute a mutation if it fails to sign or log the initial receipt. The posture factory rejects unrecognized posture names at startup so misconfigured deployments fail rather than silently running under a weaker posture.
+Universal checks and posture-required proofs fail closed. A failed required check rejects the transaction immediately and releases the nonce reservation, while optional L2 and L3 results remain audit evidence. The Actuator will not execute a mutation if it fails to sign or log the initial receipt. The posture factory rejects unrecognized posture names at startup so misconfigured deployments fail rather than silently running under a weaker posture.
 
 ### Sovereignty
 

@@ -153,25 +153,10 @@ func (a *Adapter) checkPostureFloor() error {
 	if floor == "" {
 		floor = "consensus"
 	}
-	if postureRank(active) < postureRank(floor) {
+	if !constants.GovernancePostureMeetsFloor(active, floor) {
 		return constants.ErrLatticePostureFloorViolated
 	}
 	return nil
-}
-
-// postureRank maps posture strings to comparable ranks. Unknown postures
-// are treated as the least strict (fail-closed).
-func postureRank(p string) int {
-	switch p {
-	case "doctrine":
-		return 0
-	case "consensus":
-		return 1
-	case "notary":
-		return 2
-	default:
-		return 0
-	}
 }
 
 // reportTaskStatus sends a task status update to the Lattice TaskManager via

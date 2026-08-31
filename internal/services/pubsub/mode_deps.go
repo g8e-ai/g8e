@@ -30,8 +30,8 @@ type GovernanceCoreDeps struct {
 }
 
 // GatewayModeDeps embeds GovernanceCoreDeps and adds gateway-only fields.
-// All fields are non-nil at construction (except Consensus, nil only when
-// Posture == PostureDoctrine); the constructor rejects nils with typed errors.
+// All fields are non-nil at construction except Consensus when L2 is not
+// required; the constructor rejects nils with typed errors.
 // PlatformEnrollmentDeps and GovernedDocStore are gateway-only; the compiler
 // proves they do not exist in outbound mode.
 type GatewayModeDeps struct {
@@ -39,7 +39,7 @@ type GatewayModeDeps struct {
 	GovernedDocStore       governance.GovernedDocumentStore
 	ConsensusPolicyStore   governance.L2ConsensusPolicyStore
 	FieldReader            mcp.FieldReader
-	Consensus              *consensus.ConsensusService // nil only when Posture == PostureDoctrine
+	Consensus              *consensus.ConsensusService
 	PlatformEnrollmentDeps *PlatformEnrollmentDeps
 	Posture                config.GatewayPosture
 }
@@ -100,7 +100,7 @@ func NewGatewayModeDeps(deps GatewayModeDeps) (*GatewayModeDeps, error) {
 	if deps.PlatformEnrollmentDeps == nil {
 		return nil, fmt.Errorf("mode_deps: platform enrollment deps: %w", constants.ErrPlatformEnrollmentDepsRequired)
 	}
-	if deps.Posture != config.PostureDoctrine && deps.Consensus == nil {
+	if deps.Posture.RequiresL2() && deps.Consensus == nil {
 		return nil, fmt.Errorf("mode_deps: consensus: %w", constants.ErrConsensusServiceRequired)
 	}
 	return &deps, nil

@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 2.1.0
-**Last Updated:** 2026-08-30
-**Platform:** g8e v2.1.0
+**Document Version:** 2.1.2
+**Last Updated:** 2026-08-31
+**Platform:** g8e v2.1.2
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -320,7 +320,7 @@ PCI DSS v4.0.1 (published June 11, 2024) is the current active version. PCI DSS 
 | Requirement | g8e Implementation | Evidence |
 |-------------|-------------------|----------|
 | **1.2.1** | Business need justification | Outbound-only operator connections |
-| **1.2.3** | Secure configuration | Configurable governance postures (doctrine, consensus, notary); outbound mode defaults to notary |
+| **1.2.3** | Secure configuration | Configurable governance postures (doctrine, consensus, ratify, notary); outbound mode defaults to notary |
 | **1.3** | Secure data flows | mTLS for all platform communication |
 | **2.1** | Change control processes | Git-based version control |
 | **2.2** | Configuration standards | Documented in architecture docs |
@@ -656,7 +656,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time approval (browser Console SPA or mTLS-enrolled CLI via `g8e auth approve-recovery`) and opaque proof-of-possession token
 - **mTLS-protected CLI certificate rotation endpoint** enabling in-band certificate renewal without re-enrollment
 - **OS trust-store installation before browser launch** during `auth enroll user`, with a blocking browser-restart gate after trust-store changes
-- **Posture-aware passkey enrollment** requiring passkeys only for notary posture (optional for doctrine and consensus)
+- **Posture-aware passkey enrollment** requiring passkeys for ratify and notary postures (optional for doctrine and consensus)
 - **Audit store hard dependency** for the MCP gateway, making audit recording a construction-time requirement rather than a late-bound optional
 - **Passkey proof verification decoupling** from the L3 notary interface, separating proof verification from notary authorization logic
 - **Atomic pointer adoption** for the late-bound consensus service, replacing unsafe `**T` pointers with `atomic.Pointer` for thread-safe dependency wiring
@@ -803,6 +803,7 @@ For specific compliance questions or audit support, contact:
 | 1.7.8 | 2026-08-19 | Lateralus Labs | Added platform logging consolidation (`internal/services/logging`, `g8e.log`, `OpenForAppend`/`OpenForRead`), `PSUBSCRIBE` glob-pattern subscriptions on gateway pubsub with fail-closed topic ACLs, typed MCP native tool request/result structs, and `docs/architecture/overview.md` |
 | 2.0.0 | 2026-08-25 | Lateralus Labs | Updated platform version to v2.0.0; documented polyglot monorepo reunification shipping Go platform, in-tree Python ensemble (`ensemble/`), Node.js dashboard (`dashboard/`), unified Docker compose orchestration, and updated test suite metrics |
 | 2.1.0 | 2026-08-30 | Lateralus Labs | Added deterministic stage-evidence receipt binding, signed durable-persistence attestations, atomic signed commitment chaining, full canonical receipt persistence and export, cross-language offline verification, and expanded code and test evidence |
+| 2.1.2 | 2026-08-31 | Lateralus Labs | Added ratify posture with L1/L3 enforcement and audited L2, clarified posture-required fail-closed verification, and reconciled posture-dependent passkey and consensus requirements |
 
 ---
 

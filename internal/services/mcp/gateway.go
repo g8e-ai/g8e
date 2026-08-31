@@ -45,26 +45,26 @@ import (
 )
 
 // ApprovalRequestTTL is the lifetime of a human-approval request created when a
-// state-changing action is paused under the notary posture. It is deliberately
-// short: notary enforces *proof of human presence*, so the passkey (WebAuthn)
+// state-changing action is paused under an L3-enforcing posture. It is deliberately
+// short: L3 enforces *proof of human presence*, so the passkey (WebAuthn)
 // authorization must be completed close in time to the action it authorizes.
 // Once this window lapses the suspended transaction expires (the store filters on
 // expires_at) and a fresh approval must be requested by retrying the action.
 const ApprovalRequestTTL = 2 * time.Minute
 
 // approvalPausedMessage builds the directive returned to the calling agent when a
-// mutation is paused awaiting human passkey authorization under notary posture.
+// mutation is paused awaiting human passkey authorization under an L3-enforcing posture.
 // It is phrased as an instruction to the AI: what happened, what a human must do,
 // the short deadline, and—critically—what to do once that deadline passes (retry
 // the call to open a fresh approval request).
-func approvalPausedMessage(approvalURL string) string {
+func approvalPausedMessage(posture, approvalURL string) string {
 	return fmt.Sprintf("Execution paused: this is a state-changing action and the gateway is running in "+
-		"notary posture, which REQUIRES live human passkey (WebAuthn) authorization before it can run. "+
+		"%s posture, which REQUIRES live human passkey (WebAuthn) authorization before it can run. "+
 		"A human must approve this exact change at %s within %d minutes. "+
 		"Wait for the human to approve, then retry this identical tool call to proceed. "+
 		"This window is intentionally short so the approval proves a human was present for this specific action. "+
 		"If it lapses before approval the request is voided for security — call this tool again to open a fresh approval request.",
-		approvalURL, int(ApprovalRequestTTL.Minutes()))
+		posture, approvalURL, int(ApprovalRequestTTL.Minutes()))
 }
 
 // L2ConsensusDeliberator sends an envelope to an L2 consensus service for deliberation.
@@ -95,7 +95,7 @@ type GatewayService struct {
 	nativeToolHandler *NativeToolHandler
 	scrubbingService  *scrubbing.ScrubbingService
 	threatScanner     ThreatScanner
-	posture           string // Gateway posture: doctrine, consensus, or notary
+	posture           string // Gateway posture: doctrine, consensus, ratify, or notary
 	a2aDownstreamURL  string // construction-phase (immutable after NewGatewayService)
 	publicBaseURL     string // construction-phase (immutable after NewGatewayService)
 	maxPayloadBytes   int64
@@ -182,7 +182,7 @@ type Dependencies struct {
 	ScrubbingService *scrubbing.ScrubbingService
 	ThreatScanner    ThreatScanner
 	MaxPayloadBytes  int64
-	Posture          string // Gateway posture: doctrine, consensus, or notary
+	Posture          string // Gateway posture: doctrine, consensus, ratify, or notary
 	A2ADownstreamURL string // A2A downstream server URL
 	PublicBaseURL    string // Public base URL for approval links
 
@@ -217,13 +217,9 @@ type Dependencies struct {
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	// Validate posture parameter
-	validPostures := map[string]bool{
-		constants.PostureDoctrine:  true,
-		constants.PostureConsensus: true,
-		constants.PostureNotary:    true,
-	}
-	if deps.Posture != "" && !validPostures[deps.Posture] {
-		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
+	_, validPosture := constants.GetGovernancePostureRequirements(deps.Posture)
+	if deps.Posture != "" && !validPosture {
+		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, ratify, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
 	}
 
 	if deps.AuditStore == nil {
@@ -526,7 +522,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 				Content: []TextContent{
 					{
 						Type: "text",
-						Text: approvalPausedMessage(approvalURL),
+						Text: approvalPausedMessage(g.posture, approvalURL),
 					},
 				},
 			}, nil
@@ -913,7 +909,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 				Status:      string(constants.GatewayResponseStatusSuspended),
 				TxHash:      hash,
 				ApprovalURL: approvalURL,
-				Message:     approvalPausedMessage(approvalURL),
+				Message:     approvalPausedMessage(g.posture, approvalURL),
 			}, nil
 		}
 		return nil, err

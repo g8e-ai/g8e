@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-08-26
-Version: v2.0.2
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 This guide describes how to bring up the complete g8e platform — gateway, operator, ensemble (g8ee), and dashboard (g8ed) — as a single Docker Compose stack from the repository root, using either Docker Compose directly or the first-class `./g8e docker` CLI management commands.
 
@@ -13,7 +13,7 @@ The repository root `docker-compose.yml` defines four services on a single `g8e-
 | --- | --- | --- | --- |
 | `g8e-gateway` | repo-root `Dockerfile` (Go, FIPS) | 8080 (HTTP), 8443 (HTTPS) | Policy Decision Point: admits transactions, manages PKI, enforces L1-L3 governance, brokers pub/sub, serves the console SPA and MCP/A2A endpoints. |
 | `g8e-operator` | repo-root `Dockerfile` (Go, FIPS) | — | Policy Execution Point: outbound-only mTLS to the gateway, pulls work from its pub/sub channel, re-verifies proofs, and executes L4-L5 actions. |
-| `ensemble` | `ensemble/Dockerfile` (Python/FastAPI) | 8000 | First-party agentic ensemble (g8ee): submits governed intents through MCP, publishes SSE events, and drives the AI reasoning loop. |
+| `ensemble` | `ensemble/Dockerfile` (Python/FastAPI) | 8000 | First-party agentic ensemble (g8ee): submits `GovernanceEnvelope` transactions directly to the privileged governance endpoint with the operator transport identity, publishes SSE events, and drives the AI reasoning loop. |
 | `dashboard` | `dashboard/Dockerfile` (Node.js/Express) | 3000 | Operator dashboard (g8ed): browser UI for chat, operator management, audit, and settings. |
 
 The gateway and operator share the same Go binary (the repo-root `Dockerfile`), built with FIPS 140-3 approved mode enabled. The ensemble and dashboard each have their own Dockerfile rooted at the repository root so they can copy their source and the in-tree `protocol/python/` package.
@@ -161,7 +161,7 @@ The gateway starts with zero users and issues no platform certificates until the
 
 - **`g8e-operator`**: Stores its enrolled identity certificate and private key in the `g8e-operator-data` named volume at `/root/.g8e/pki/operator.crt` and `/root/.g8e/pki/operator.key`. It connects outbound to the gateway over mTLS (`operator start -e g8e.local`) using `spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>`.
 - **`ensemble`**: Has its own `g8e-ensemble-data` named volume mounted at `/root/.g8e` (read-write) and writes its enrolled cert, key, and trust bundle to its own runtime tree (`pki/issued/apps/g8ee.crt`, `g8ee.key`, `pki/trust/hub-bundle.pem`) after owner approval. The `AppEnrollmentService` (`ensemble/app/services/infra/app_enrollment_service.py`) manages the nine-step resumable enrollment sequence. Pending state (private key, requester token, request ID, CSR fingerprint, expiry) is persisted to `pki/pending-enrollment/g8ee.json` with 0600 permissions so the ensemble resumes the same request and key material across container restarts. Its app identity SPIFFE URI is `spiffe://g8e.local/app/g8ee`.
-- **`dashboard`**: Has its own `g8e-dashboard-data` named volume mounted at `/data` (the dashboard container runs as the non-root `g8e` user with UID 1001, so `/data` is owned by `g8e:g8e` rather than `/root/.g8e`) with `G8E_RUNTIME_DIR=/data`. It enrolls via `dashboard/services/infra/app-enrollment-service.js`, obtaining `spiffe://g8e.local/app/g8ed` and writing credentials to `pki/issued/apps/g8ed.crt`, `g8ed.key`, `pki/trust/hub-bundle.pem`. The dashboard's **container** holds an mTLS app identity for server-to-server gateway calls, while the dashboard's **browser SPA** authenticates independently via WebAuthn passkeys. See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture.
+- **`dashboard`**: Has its own `g8e-dashboard-data` named volume mounted at `/data` (the dashboard container runs as the non-root `g8e` user with UID 1001, so `/data` is owned by `g8e:g8e` rather than `/root/.g8e`) with `G8E_RUNTIME_DIR=/data`. It enrolls via `dashboard/services/infra/app-enrollment-service.js`, obtaining `spiffe://g8e.local/app/g8ed` and writing credentials to `pki/issued/apps/g8ed.crt`, `g8ed.key`, `pki/trust/hub-bundle.pem`. The dashboard's **container** holds an mTLS app identity for prepared server-to-server gateway clients, which the current static host does not construct, while the dashboard's **browser SPA** authenticates independently via WebAuthn passkeys. See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture.
 
 ### Operator Cert Sharing for Governance Envelopes
 

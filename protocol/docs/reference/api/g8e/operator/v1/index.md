@@ -2269,7 +2269,7 @@ Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; fo
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | L2_STATUS_UNSPECIFIED | 0 |  |
-| L2_STATUS_NOT_REQUIRED | 1 | L2 signature not required by posture (doctrine) |
+| L2_STATUS_NOT_REQUIRED | 1 | L2 signature not required by posture (doctrine/ratify) |
 | L2_STATUS_REQUIRED_VALID | 2 | L2 signature required and valid |
 | L2_STATUS_REQUIRED_FAILED | 3 | L2 signature required but missing or invalid |
 

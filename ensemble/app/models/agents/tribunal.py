@@ -15,7 +15,7 @@ from app.constants import (
     AuditorReason,
     RiskLevel,
 )
-from app.models.model_telemetry import ModelCallTelemetry
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
 from app.models.tool_results import CommandRiskAnalysis
 
 
@@ -436,6 +436,7 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     monotonic_end: float | None = None
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
+    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
     succeeded: bool = True
     error_type: str | None = None
     correlation_id: str | None = Field(

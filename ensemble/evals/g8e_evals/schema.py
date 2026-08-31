@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.10.0"
+SCHEMA_VERSION = "1.17.0"
 
 
 class TerminalStatus(StrEnum):
@@ -83,6 +83,40 @@ class VerificationStatus(StrEnum):
     VERIFIED = "verified"
     FAILED = "failed"
     NOT_APPLICABLE = "not_applicable"
+
+
+class StateAssertionPredicate(StrEnum):
+    STATE_ROOT_CHANGED = "state_root_changed"
+    STATE_ROOT_UNCHANGED = "state_root_unchanged"
+
+
+class StateEvidenceKind(StrEnum):
+    FILE = "file"
+    DOCUMENT = "document"
+    WORKLOAD_SIDE_EFFECT = "workload_side_effect"
+    LEDGER_CONSISTENCY = "ledger_consistency"
+
+
+class StateCollectionBoundary(StrEnum):
+    OPERATOR_WORKLOAD = "operator_workload"
+    GOVERNED_DOCUMENT_STORE = "governed_document_store"
+    GOVERNANCE_LEDGER = "governance_ledger"
+
+
+class RehydrationBoundary(StrEnum):
+    LOCAL_RUNTIME = "local_runtime"
+
+
+class PolicyOutcome(StrEnum):
+    ALLOW = "allow"
+    BLOCK = "block"
+
+
+class RejectionLayer(StrEnum):
+    L1_DOCTRINE = "l1_doctrine"
+    L2_CONSENSUS = "l2_consensus"
+    L3_NOTARY = "l3_notary"
+    L4_VERIFICATION = "l4_verification"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -225,6 +259,255 @@ class RunManifest(BaseModel):
         return None
 
 
+class FinalStateAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    predicate: StateAssertionPredicate
+    action_type: str = Field(min_length=1)
+
+
+class FinalStateObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str
+    attempt_id: str
+    run_id: str
+    task_id: str
+    assertion_id: str
+    action_type: str
+    state_root_before: str | None = None
+    state_root_after: str | None = None
+    source_receipt_id: str | None = None
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+
+class StateValue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: StateEvidenceKind
+    exists: bool | None = None
+    content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    byte_length: int | None = Field(default=None, ge=0)
+    mode: str | None = None
+    version: str | None = None
+    consistent: bool | None = None
+    entry_count: int | None = Field(default=None, ge=0)
+    head_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_kind(self) -> StateValue:
+        if self.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.consistent is None or self.exists is not None:
+                raise ValueError("ledger state requires consistency and cannot declare existence")
+        elif self.exists is None or self.consistent is not None:
+            raise ValueError("file, document, and side-effect state require existence")
+        if self.kind != StateEvidenceKind.FILE and self.mode is not None:
+            raise ValueError("file mode is valid only for file state")
+        if self.kind != StateEvidenceKind.DOCUMENT and self.version is not None:
+            raise ValueError("document version is valid only for document state")
+        if self.kind != StateEvidenceKind.LEDGER_CONSISTENCY and (
+            self.entry_count is not None or self.head_sha256 is not None
+        ):
+            raise ValueError("ledger fields are valid only for ledger state")
+        return self
+
+
+class StateAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    target: str = Field(min_length=1)
+    expected: StateValue
+
+
+class StateFixtureDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fixture_id: str = Field(min_length=1)
+    fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    assertions: list[StateAssertion] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_assertions(self) -> StateFixtureDefinition:
+        assertion_ids = [assertion.assertion_id for assertion in self.assertions]
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise ValueError("state assertion IDs must be unique")
+        return self
+
+
+class StateObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    collection_boundary: StateCollectionBoundary
+    target: str = Field(min_length=1)
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> StateObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified state observation requires source evidence")
+        return self
+
+
+class ModelBoundaryPrivacyAttestation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scanner_version: str = Field(min_length=1)
+    input_artifact_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    raw_sensitive_occurrences: int = Field(ge=0)
+    raw_sensitive_types: list[str] = Field(default_factory=list)
+
+
+class CanaryScrubbingAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    canary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_scrub_type: str = Field(min_length=1)
+    expected_occurrences: int = Field(ge=1)
+
+
+class RehydrationAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_token_count: int = Field(ge=1)
+    expected_sensitive_types: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> RehydrationAssertion:
+        if len(self.expected_sensitive_types) != len(set(self.expected_sensitive_types)):
+            raise ValueError("expected rehydration sensitive types must be unique")
+        if self.expected_token_count < len(self.expected_sensitive_types):
+            raise ValueError("expected rehydration tokens cannot be fewer than sensitive types")
+        return self
+
+
+class RehydrationObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    rehydrator_version: str = Field(min_length=1)
+    execution_boundary: RehydrationBoundary
+    collected_at: datetime
+    restored_token_count: int = Field(ge=0)
+    unresolved_token_count: int = Field(ge=0)
+    restored_sensitive_types: list[str] = Field(default_factory=list)
+    unresolved_sensitive_types: list[str] = Field(default_factory=list)
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_rehydration_evidence(self) -> RehydrationObservation:
+        if len(self.restored_sensitive_types) != len(set(self.restored_sensitive_types)):
+            raise ValueError("restored sensitive types must be unique")
+        if len(self.unresolved_sensitive_types) != len(set(self.unresolved_sensitive_types)):
+            raise ValueError("unresolved sensitive types must be unique")
+        if bool(self.restored_token_count) != bool(self.restored_sensitive_types):
+            raise ValueError("restored token count and sensitive types must agree")
+        if bool(self.unresolved_token_count) != bool(self.unresolved_sensitive_types):
+            raise ValueError("unresolved token count and sensitive types must agree")
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError("rehydration source evidence references must be unique")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified rehydration observation requires source evidence")
+        return self
+
+
+class SecretDetectionAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_sensitive_occurrences: int = Field(ge=1)
+    expected_benign_occurrences: int = Field(ge=0)
+    expected_sensitive_types: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> SecretDetectionAssertion:
+        if len(self.expected_sensitive_types) != len(set(self.expected_sensitive_types)):
+            raise ValueError("expected sensitive types must be unique")
+        if self.expected_sensitive_occurrences < len(self.expected_sensitive_types):
+            raise ValueError("expected sensitive occurrences cannot be fewer than sensitive types")
+        return self
+
+
+class SecretDetectionObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scanner_version: str = Field(min_length=1)
+    collected_at: datetime
+    true_positive_count: int = Field(ge=0)
+    false_positive_count: int = Field(ge=0)
+    false_negative_count: int = Field(ge=0)
+    true_negative_count: int = Field(ge=0)
+    detected_sensitive_types: list[str] = Field(default_factory=list)
+    missed_sensitive_types: list[str] = Field(default_factory=list)
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_detection_evidence(self) -> SecretDetectionObservation:
+        if len(self.detected_sensitive_types) != len(set(self.detected_sensitive_types)):
+            raise ValueError("detected sensitive types must be unique")
+        if len(self.missed_sensitive_types) != len(set(self.missed_sensitive_types)):
+            raise ValueError("missed sensitive types must be unique")
+        if bool(self.true_positive_count) != bool(self.detected_sensitive_types):
+            raise ValueError("true-positive count and detected sensitive types must agree")
+        if bool(self.false_negative_count) != bool(self.missed_sensitive_types):
+            raise ValueError("false-negative count and missed sensitive types must agree")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified secret-detection observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -250,18 +533,51 @@ class TaskDefinition(BaseModel):
     prompt_length: int = 0
 
     initial_state_fixture_hash: str | None = None
-    expected_final_state_assertions: list[str] = Field(default_factory=list)
+    state_fixture: StateFixtureDefinition | None = None
+    expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
 
-    expected_allow_block_outcome: str | None = None
-    expected_rejection_layer: str | None = None
+    expected_allow_block_outcome: PolicyOutcome | None = None
+    expected_rejection_layer: RejectionLayer | None = None
 
-    sensitive_canary_annotations: list[str] = Field(default_factory=list)
-    privacy_assertions: list[str] = Field(default_factory=list)
+    sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
+    rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
+    secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
 
     grader_ids: list[str] = Field(default_factory=list)
     grader_versions: list[str] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_expectations(self) -> TaskDefinition:
+        assertion_ids = [assertion.assertion_id for assertion in self.expected_final_state_assertions]
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise ValueError("final-state assertion IDs must be unique")
+        canary_assertion_ids = [
+            assertion.assertion_id for assertion in self.sensitive_canary_annotations
+        ]
+        if len(canary_assertion_ids) != len(set(canary_assertion_ids)):
+            raise ValueError("canary assertion IDs must be unique")
+        rehydration_assertion_ids = [
+            assertion.assertion_id for assertion in self.rehydration_assertions
+        ]
+        if len(rehydration_assertion_ids) != len(set(rehydration_assertion_ids)):
+            raise ValueError("rehydration assertion IDs must be unique")
+        secret_detection_assertion_ids = [
+            assertion.assertion_id for assertion in self.secret_detection_assertions
+        ]
+        if len(secret_detection_assertion_ids) != len(set(secret_detection_assertion_ids)):
+            raise ValueError("secret-detection assertion IDs must be unique")
+        if self.state_fixture is not None:
+            if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
+                raise ValueError("state fixture hash does not match the initial-state fixture hash")
+        if self.expected_allow_block_outcome is not None and not self.expected_action_class:
+            raise ValueError("expected policy outcome requires an expected action class")
+        if self.expected_allow_block_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:
+            raise ValueError("blocked policy outcome requires an expected rejection layer")
+        if self.expected_allow_block_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
+            raise ValueError("expected rejection layer requires a blocked policy outcome")
+        return self
 
 
 class PostureObservation(BaseModel):
@@ -362,7 +678,10 @@ class AttemptRecord(BaseModel):
     correlation_ids: dict[str, str] = Field(default_factory=dict)
 
     answer_ref: str | None = None
-    final_state_observation_ref: str | None = None
+    final_state_observation_refs: list[str] = Field(default_factory=list)
+    state_observation_refs: list[str] = Field(default_factory=list)
+    rehydration_observation_refs: list[str] = Field(default_factory=list)
+    secret_detection_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 
@@ -445,6 +764,7 @@ class StageObservation(BaseModel):
 
     input_artifact_hash: str | None = None
     output_artifact_hash: str | None = None
+    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
 
     decision: str | None = None
     confidence: float | None = None

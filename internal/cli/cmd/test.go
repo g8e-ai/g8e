@@ -287,7 +287,20 @@ func waitForStackHealthy(ctx context.Context) error {
 	}
 }
 
+type coverageCommandRunner func(name string, args ...string) error
+
+func realCoverageRunner(name string, args ...string) error {
+	coverageCmd := exec.Command(name, args...)
+	coverageCmd.Stdout = os.Stdout
+	coverageCmd.Stderr = os.Stderr
+	return coverageCmd.Run()
+}
+
 func testCoverageCmd() *cobra.Command {
+	return testCoverageCmdWithRunner(realCoverageRunner)
+}
+
+func testCoverageCmdWithRunner(runner coverageCommandRunner) *cobra.Command {
 	var pkg string
 	var verbose bool
 
@@ -298,55 +311,23 @@ func testCoverageCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running tests with coverage...")
 
-			testRace := ""
-			if runtime.GOOS != "windows" {
-				testRace = "-race"
-			}
+			// Build the canonical Makefile coverage command.
+			makeArgs := []string{"test-coverage"}
 
-			// Build test command
-			testArgs := []string{"test", testRace, "-timeout", "180s", "-coverprofile=coverage.out", "-covermode=atomic"}
-			if verbose {
-				testArgs = append(testArgs, "-v")
-			}
-
-			// Determine packages to test
+			// Forward package and verbosity selections as Make variables.
 			if pkg != "" {
-				fmt.Printf("Running coverage for package: %s\n", pkg)
-				testArgs = append(testArgs, pkg)
-			} else {
-				fmt.Println("Running coverage for all packages...")
-				testArgs = append(testArgs, "./internal/...")
+				makeArgs = append(makeArgs, "PKG="+pkg)
+			}
+			if verbose {
+				makeArgs = append(makeArgs, "VERBOSE=1")
 			}
 
-			testCmd := exec.Command("go", testArgs...)
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
+			// Calculate coverage with the repository's canonical exclusions.
+			if err := runner("make", makeArgs...); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrCoverageTestsFailed, err)
 			}
 
-			// Calculate coverage
-			coverageCmd := exec.Command("go", "tool", "cover", "-func=coverage.out")
-			output, err := coverageCmd.Output()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-			}
-
-			// Parse coverage percentage from last line
-			lines := strings.Split(string(output), "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "total:") {
-					parts := strings.Fields(line)
-					if len(parts) >= 3 {
-						coverageStr := strings.TrimSuffix(parts[2], "%")
-						fmt.Printf("\nTotal coverage: %s%%\n", coverageStr)
-						return nil
-					}
-				}
-			}
-
-			fmt.Println("Coverage tests completed successfully.")
+			// The Makefile target returns success only after enforcing the threshold.
 			return nil
 		},
 	}

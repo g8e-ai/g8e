@@ -16,6 +16,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
+
+
+_MODEL_BOUNDARY_SCANNER_VERSION = "sentinel-regex@1.0.0"
+
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, BaseModel):
@@ -29,17 +34,40 @@ def _json_value(value: Any) -> Any:
     raise TypeError(f"Unsupported model evidence value: {type(value).__name__}")
 
 
-def model_boundary_hash(value: Any) -> str:
-    canonical = json.dumps(
+def _canonical_model_boundary(value: Any) -> str:
+    return json.dumps(
         value,
         default=_json_value,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
-    ).encode()
-    return hashlib.sha256(canonical).hexdigest()
+    )
+
+
+def model_boundary_hash(value: Any) -> str:
+    return hashlib.sha256(_canonical_model_boundary(value).encode()).hexdigest()
+
+
+def model_boundary_privacy_attestation(value: Any) -> ModelBoundaryPrivacyAttestation:
+    from app.security.sentinel_scrubber import inspect_sensitive_text
+
+    canonical = _canonical_model_boundary(value)
+    raw_sensitive_occurrences, raw_sensitive_types = inspect_sensitive_text(canonical)
+    return ModelBoundaryPrivacyAttestation(
+        scanner_version=_MODEL_BOUNDARY_SCANNER_VERSION,
+        input_artifact_hash=hashlib.sha256(canonical.encode()).hexdigest(),
+        raw_sensitive_occurrences=raw_sensitive_occurrences,
+        raw_sensitive_types=raw_sensitive_types,
+    )
 
 
 def recorded_model_boundary_hash(provider: object, fallback: str) -> str:
     digest = getattr(provider, "input_artifact_hash", "")
     return digest if isinstance(digest, str) and digest else fallback
+
+
+def recorded_model_boundary_privacy(
+    provider: object,
+) -> ModelBoundaryPrivacyAttestation | None:
+    attestation = getattr(provider, "model_boundary_privacy", None)
+    return attestation if isinstance(attestation, ModelBoundaryPrivacyAttestation) else None

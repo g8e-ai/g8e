@@ -37,7 +37,11 @@ from app.llm.prompts import (
     build_tribunal_prompt_fields,
 )
 from app.llm.llm_types import Content, Part, Role, ResponseFormat
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -269,6 +273,7 @@ async def call_auditor_llm(
                 succeeded=False,
                 error_type=type(exc).__name__,
                 input_artifact_hash=input_artifact_hash,
+                model_boundary_privacy=recorded_model_boundary_privacy(provider),
             ),
             error=exc,
         )
@@ -317,6 +322,7 @@ async def call_auditor_llm(
             error_type=type(error).__name__ if error else None,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response.text or ""),
+            model_boundary_privacy=recorded_model_boundary_privacy(provider),
         ),
         error=error,
     )

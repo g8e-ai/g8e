@@ -190,8 +190,9 @@ func (pm *ProcessManager) readPosture() (string, error) {
 	}
 	posture := string(postureData)
 	// Validate posture is one of the allowed values
-	if posture != "" && posture != constants.PostureDoctrine && posture != constants.PostureConsensus && posture != constants.PostureNotary {
-		return "", fmt.Errorf("%w: invalid value '%s': must be %s, %s, or %s", constants.ErrInvalidPosture, posture, constants.PostureDoctrine, constants.PostureConsensus, constants.PostureNotary)
+	_, validPosture := constants.GetGovernancePostureRequirements(posture)
+	if posture != "" && !validPosture {
+		return "", fmt.Errorf("%w: invalid value '%s': must be %s, %s, %s, or %s", constants.ErrInvalidPosture, posture, constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary)
 	}
 	return posture, nil
 }

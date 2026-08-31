@@ -31,6 +31,7 @@ from g8e_evals.harness import ReceiptEvidence
 from g8e_evals.schema import (
     EvidenceIndex,
     EvidenceMediaType,
+    ModelBoundaryPrivacyAttestation,
     PrivacyClassification,
     StageKind,
     StageObservation,
@@ -111,6 +112,7 @@ def _direct_stage(wire: dict[str, Any], run_id: str, attempt_id: str) -> StageOb
         finish_reason=wire.get("finish_reason") if isinstance(wire.get("finish_reason"), str) else None,
         input_artifact_hash=str(wire.get("input_artifact_hash") or "") or None,
         output_artifact_hash=str(wire.get("output_artifact_hash") or "") or None,
+        model_boundary_privacy=wire.get("model_boundary_privacy"),
     )
 
 
@@ -186,6 +188,7 @@ def _chat_stages(
                     finish_reason=call.get("finish_reason") if isinstance(call.get("finish_reason"), str) else None,
                     input_artifact_hash=str(call.get("input_artifact_hash") or "") or None,
                     output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
+                    model_boundary_privacy=call.get("model_boundary_privacy"),
                 ))
             continue
         model_call_event_kinds = {
@@ -229,6 +232,7 @@ def _chat_stages(
                     finish_reason=call.get("finish_reason") if isinstance(call.get("finish_reason"), str) else None,
                     input_artifact_hash=str(call.get("input_artifact_hash") or "") or None,
                     output_artifact_hash=str(call.get("output_artifact_hash") or "") or None,
+                    model_boundary_privacy=call.get("model_boundary_privacy"),
                     decision="completed" if call.get("succeeded", True) else "failed",
                 ))
             continue
@@ -288,6 +292,7 @@ def _chat_stages(
                 ),
                 input_artifact_hash=str(data.get("input_artifact_hash") or "") or None,
                 output_artifact_hash=str(data.get("output_artifact_hash") or "") or None,
+                model_boundary_privacy=data.get("model_boundary_privacy"),
             )
         )
         if kind in {StageKind.MODEL_INFERENCE, StageKind.TRIBUNAL_GENERATION, StageKind.TRIBUNAL_AUDITOR, StageKind.GRADING}:
@@ -445,6 +450,9 @@ def _grading_stages(
             finish_reason=call.finish_reason,
             input_artifact_hash=call.input_artifact_hash or None,
             output_artifact_hash=call.output_artifact_hash or None,
+            model_boundary_privacy=ModelBoundaryPrivacyAttestation.model_validate(
+                call.model_boundary_privacy.model_dump()
+            ) if call.model_boundary_privacy else None,
             decision="completed" if call.succeeded else "failed",
         )
         for index, call in enumerate(model_calls, start=1)

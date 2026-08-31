@@ -367,12 +367,16 @@ class TestOpenAIProvider:
 
         response = await provider.generate_content_primary(
             model="gpt-4",
-            contents=[Content(role="user", parts=[Part(text="hi")])],
+            contents=[Content(role="user", parts=[Part(text="canary@example.com")])],
             primary_llm_settings=settings,
         )
 
         call_kwargs = provider._client.chat.completions.create.call_args.kwargs
         assert provider.input_artifact_hash == model_boundary_hash(call_kwargs)
+        assert provider.model_boundary_privacy is not None
+        assert provider.model_boundary_privacy.input_artifact_hash == provider.input_artifact_hash
+        assert provider.model_boundary_privacy.raw_sensitive_occurrences == 1
+        assert provider.model_boundary_privacy.raw_sensitive_types == ["email"]
         assert response.candidates[0].content.parts[0].text == "direct response"
         assert response.usage_metadata.total_token_count == 20
         assert response.usage_metadata.cache_token_count == 4
