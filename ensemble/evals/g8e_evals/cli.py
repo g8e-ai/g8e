@@ -28,8 +28,9 @@ from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
-from g8e_evals.arms import ALL_ARMS, Arm, GovernancePosture
+from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.graders import DeterministicGradingContext, grade_deterministically
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
@@ -71,6 +72,8 @@ _PROVIDER_CHOICES = ["openai", "anthropic", "gemini", "ollama", "llamacpp", "fak
 _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
+_RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
+_GRADER_VERSION = "1.0.0"
 
 
 class EvaluationRunError(Exception):
@@ -428,6 +431,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     grader_bundle_content = (
         f"{suite}:{suite_version}:"
+        f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{config.judge.provider or ''}:{config.judge.model or ''}"
     ).encode()
     grader_bundle_hash = hashlib.sha256(grader_bundle_content).hexdigest()
@@ -515,14 +521,24 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             suite_version=suite_version,
             category=t.metadata.category or "instruction_following",
             expected_action_class=t.metadata.expected_action_class,
+            compatible_arms=list(GOVERNED_ARMS if t.metadata.expected_action_class else ALL_ARMS),
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
-            grader_ids=[_IFEVAL_GRADER_ID] + ([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
-            grader_versions=["1.0.0"] + (["1.0.0"] if eval_judge else []),
+            grader_ids=[
+                _IFEVAL_GRADER_ID,
+                *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
+                *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
+            ],
+            grader_versions=[
+                _GRADER_VERSION,
+                *([_GRADER_VERSION] if eval_judge else []),
+                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
+            ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
         for t in tasks
     ]
+    task_defs_by_id = {task.task_id: task for task in task_defs}
     with open(report_dir / "tasks.jsonl", "w") as f:
         for td in task_defs:
             f.write(td.model_dump_json() + "\n")
@@ -716,8 +732,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             else None
         )
         evidence_refs: list[str] = []
+        attempt_stages = normalized.stages if normalized else []
         if normalized:
-            stage_records.extend(normalized.stages)
+            stage_records.extend(attempt_stages)
             if normalized.raw_evidence:
                 evidence_artifacts.append(normalized.raw_evidence)
                 evidence_refs.append(normalized.raw_evidence.index.artifact_id)
@@ -733,6 +750,25 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 evidence_refs=evidence_refs,
             ))
 
+        attempt = AttemptRecord(
+            attempt_id=attempt_id,
+            run_id=run_id,
+            task_id=task.id,
+            arm_id=arm_def.arm_id,
+            state_snapshot_hash=config.state_root,
+            replicate_id="1",
+            assignment_order=len(attempt_records),
+            started_at=started_at,
+            ended_at=ended_at,
+            terminal_status=terminal_status,
+            posture=posture,
+            correlation_ids={
+                "transaction_id": response.primary_transaction_id or "",
+            },
+            receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
+            missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
+            usage_reconciliation=normalized.usage if normalized else None,
+        )
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -762,28 +798,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.LLM_JUDGE,
                 evidence_refs=evidence_refs,
             ))
+        if task.metadata.expected_action_class:
+            receipt_grade = grade_deterministically(
+                _RECEIPT_INTEGRITY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_RECEIPT_INTEGRITY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=receipt_grade.value,
+                unit="boolean",
+                verification_status=receipt_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=receipt_grade.evidence_refs,
+            ))
         metric_records.extend(grade_metrics)
-
-        attempt = AttemptRecord(
-            attempt_id=attempt_id,
-            run_id=run_id,
-            task_id=task.id,
-            arm_id=arm_def.arm_id,
-            state_snapshot_hash=config.state_root,
-            replicate_id="1",
-            assignment_order=len(attempt_records),
-            started_at=started_at,
-            ended_at=ended_at,
-            terminal_status=terminal_status,
-            posture=posture,
-            correlation_ids={
-                "transaction_id": response.primary_transaction_id or "",
-            },
-            receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
-            grade_refs=[metric.metric_id for metric in grade_metrics],
-            missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
-            usage_reconciliation=normalized.usage if normalized else None,
-        )
+        attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
         attempt_records.append(attempt)
 
         status_color = "green" if score.passed else "red"

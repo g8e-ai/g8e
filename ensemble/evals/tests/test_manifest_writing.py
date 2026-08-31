@@ -346,6 +346,17 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     legacy_result = json.loads((report_dir / "results.jsonl").read_text().splitlines()[0])
     assert legacy_result["primary_transaction_id"] == "tx-command"
     assert len(legacy_result["receipts"]) == 2
+    task_definition = TaskDefinition.model_validate_json(
+        (report_dir / "tasks.jsonl").read_text().splitlines()[0]
+    )
+    assert task_definition.compatible_arms == [Arm.DOCTRINE, Arm.CONSENSUS, Arm.NOTARY]
+    assert task_definition.grader_ids == ["ifeval_subset_verifier", "receipt_integrity"]
+    metrics = [
+        MetricObservation.model_validate_json(line)
+        for line in (report_dir / "metrics.jsonl").read_text().splitlines()
+    ]
+    assert "receipt_integrity" in {metric.metric_id for metric in metrics}
+    assert "receipt_integrity" in attempt.grade_refs
 
 
 @pytest.mark.asyncio
