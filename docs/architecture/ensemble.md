@@ -5,8 +5,8 @@ parent: Architecture
 
 # Ensemble (g8ee)
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ## What g8ee Is
 
@@ -21,7 +21,7 @@ g8ee sits in the AI client tier of the platform. It is a consumer of the gateway
 - It authenticates to the gateway with an app workload identity (mTLS, enrolled via the owner-approved platform enrollment protocol on the gateway's plain-HTTP discovery surface).
 - It submits governed mutations by building `GovernanceEnvelope` transactions itself (transaction hash, nonce, L3 proof) and posting them directly to `POST /api/v1/governance/envelopes` via its `GovernanceClient` (`ensemble/app/clients/governance_client.py`). The gateway then routes the envelope through the five-layer governance pipeline. The ensemble does not use the MCP endpoint; MCP is the surface for external MCP clients (Claude Code, Codex, Goose, Gemini CLI). Because the gateway's `PrivilegedRouteRegistry` blocks app certificates from the governance endpoint with `ErrPrivilegedEndpointAccess` ("external apps cannot access privileged endpoints"), the ensemble presents the operator's mTLS cert (whose SPIFFE URI carries the operator session ID) on the governance transport, not its own app cert. See [Connection Model](#connection-model) for how the operator cert is made available to the ensemble.
 - It publishes user-facing events (progress, questions, results) and typed reputation updates to the gateway through `POST /api/v1/sse/push`, which the gateway streams to browser and CLI clients.
-- Each model provider records monotonic timing, token usage when supplied by the provider, retry and finish metadata, and canonical hashes of the model-boundary input and output. The standalone eval package normalizes this telemetry with governance receipt evidence without storing secrets in analytical records.
+- Each model provider records monotonic timing, token usage when supplied by the provider, retry and finish metadata, canonical hashes of the model-boundary input and output, and a hash-bound privacy attestation containing only scanner identity, sensitive-occurrence counts, and detected types. The standalone eval package normalizes this telemetry with governance receipt evidence without storing raw sensitive values in analytical records.
 - It never touches a target host directly. All host mutations flow through the governed operator, which re-verifies every proof locally before execution.
 
 See [AI Agents and the g8e Governance Boundary](./agents.md) for the client surface contract and [SSE Streaming](./sse.md) for the event bridge g8ee publishes through.
