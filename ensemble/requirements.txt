@@ -18,7 +18,7 @@ cryptography==50.0.0
 
 # Protocol Buffers (runtime parsing + build-time stub generation)
 protobuf==6.33.6
-grpcio-tools==1.80.0
+grpcio-tools==1.83.0
 
 # g8e Protocol Library
 g8e>=1.5.6
