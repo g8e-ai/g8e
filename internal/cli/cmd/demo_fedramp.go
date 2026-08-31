@@ -138,6 +138,12 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-deny", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/cloudsvc' — CR-26 audit integrity violation detected at admission")
 
+		if !demoScenarioStep(demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
+			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
+				"sh", "-c", "test -f " + constants.ContainerCloudSvcOpsLog + " && test -s " + constants.ContainerCloudSvcOpsLog}) {
+			hasErrors = true
+		}
+
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
@@ -147,7 +153,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 2 — Audit trail destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
-			fmt.Println("         The audit trail is tamper-evident and intact.")
+			fmt.Println("         Independent verification confirms the operations log is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Audit trail destruction blocked by L1 doctrine")
 		}
 
@@ -259,6 +265,12 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-evidence-block", "AUDIT VAULT DESTRUCTION BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /root/.g8e/data' — CR-26 audit integrity violation detected at admission")
 
+		if !demoScenarioStep(demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
+			[]string{"docker", "compose", "exec", "-T", "gateway",
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
+			hasErrors = true
+		}
+
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
@@ -268,7 +280,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — Audit vault destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
-			fmt.Println("         The audit vault is tamper-evident and intact.")
+			fmt.Println("         Independent verification confirms the audit vault DB is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Audit vault destruction blocked by L1 doctrine")
 		}
 

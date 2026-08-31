@@ -1184,4 +1184,9 @@ var (
 	ErrDockerStartEnrollmentFailed = errors.New("docker start: owner enrollment failed")
 	ErrDockerStartApprovalFailed   = errors.New("docker start: platform enrollment approval failed")
 	ErrDockerStartNoPendingRequest = errors.New("docker start: no pending platform enrollment request found for component")
+
+	// Demo scenario execution errors
+	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
+	ErrDemoDatalinkDisconnect    = errors.New("demo: coalition datalink disconnect failed")
+	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
 )

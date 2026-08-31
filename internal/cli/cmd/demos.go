@@ -1256,6 +1256,15 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 
 	printResultsTable(cmd, org, results)
 
+	return summarizeScenarioResults(cmd, org, results)
+}
+
+// summarizeScenarioResults prints the pass/fail/skip summary banner for a demo
+// run and returns ErrDemoScenarioFailed when any scenario result is FAIL. All
+// result rows are retained in the printed table regardless of outcome; this
+// only determines the command's exit status so automation cannot treat a failed
+// run as a gate pass.
+func summarizeScenarioResults(cmd *cobra.Command, org string, results []scenarioResult) error {
 	hasFail, hasSkip := false, false
 	for _, r := range results {
 		switch r.status {
@@ -1270,6 +1279,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	case hasFail:
 		cmd.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+		return fmt.Errorf("%w: %s", constants.ErrDemoScenarioFailed, org)
 	case hasSkip:
 		cmd.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))

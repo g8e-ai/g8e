@@ -127,16 +127,26 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoPrintln("  ── Step 2: Sever the Mission Partner datalink ───────────────────")
 		demoEmitter.Ledger(tui.LevelWarn, "Mission Partner datalink severed — entering comms-denied mode")
-		demoStepWarn(demoDir, "sever datalink",
-			"docker", "network", "disconnect", "dhs-demo_net_perimeter", "dhs-coalition-datalink",
-		)
+		if err := demoStep(demoDir, "sever datalink", false,
+			"docker", "network", "disconnect",
+			constants.DemosDHSPerimeterNetwork, constants.DemosDHSCoalitionDatalinkCtnr,
+		); err != nil {
+			fmt.Printf("  (sever datalink failed: %v)\n\n", err)
+			hasErrors = true
+		}
 
-		if !demoScenarioStep(demoDir, "Step 3: Verify gateway continues operating locally",
+		if !demoScenarioStep(demoDir, "Step 3: Verify network detachment (datalink container off perimeter)",
+			[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
+				" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr + " && exit 1 || exit 0"}) {
+			hasErrors = true
+		}
+
+		if !demoScenarioStep(demoDir, "Step 4: Verify gateway continues operating locally",
 			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 4: Govern an ingest while disconnected ──────────────────")
+		demoPrintln("  ── Step 5: Govern an ingest while disconnected ──────────────────")
 		demoPrintln("  Running dhs-ingest through the gateway (consensus) with the datalink severed:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest-disco", "doctrine check (local)")
@@ -155,23 +165,36 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest-disco", "local INGEST recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "Governance continued locally while disconnected — Git ledger + SQLite vault persisted")
 
-		if !demoScenarioStep(demoDir, "Step 5: Verify local ledger exists on operator",
+		if !demoScenarioStep(demoDir, "Step 6: Verify local ledger directory exists and is non-empty",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "ls -la " + constants.ContainerLedgerFilesDir + " 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'"}) {
+				"sh", "-c", "test -d " + constants.ContainerLedgerFilesDir + " && test -n \"$(ls -A " + constants.ContainerLedgerFilesDir + ")\""}) {
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(demoDir, "Step 6: Verify local audit vault exists on operator",
+		if !demoScenarioStep(demoDir, "Step 7: Verify local audit vault DB exists and is non-empty",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "ls -la " + constants.ContainerAuditVaultDB + " 2>/dev/null || echo 'Audit vault DB not yet populated'"}) {
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 7: Restore the Mission Partner datalink ─────────────────")
+		demoPrintln("  ── Step 8: Restore the Mission Partner datalink ─────────────────")
 		demoEmitter.Ledger(tui.LevelInfo, "Mission Partner datalink restored")
-		demoStepWarn(demoDir, "restore datalink",
-			"docker", "network", "connect", "dhs-demo_net_perimeter", "dhs-coalition-datalink",
-		)
+		restorationFailed := false
+		if err := demoStep(demoDir, "restore datalink", false,
+			"docker", "network", "connect",
+			constants.DemosDHSPerimeterNetwork, constants.DemosDHSCoalitionDatalinkCtnr,
+		); err != nil {
+			fmt.Printf("  (warning: restore datalink failed: %v)\n\n", err)
+			restorationFailed = true
+		}
+
+		if !restorationFailed {
+			if !demoScenarioStep(demoDir, "Step 9: Verify datalink is reachable again (container back on perimeter)",
+				[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
+					" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr}) {
+				restorationFailed = true
+			}
+		}
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
@@ -183,6 +206,13 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 			fmt.Println("  [PASS] Scenario 2 — Continuity of coverage verified under comms denial.")
 			fmt.Println("         Governance continued locally; Git ledger + SQLite vault persisted all decisions.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Continuity of coverage verified under comms denial")
+		}
+
+		if restorationFailed {
+			result.metrics += " // datalink restoration FAILED (reported separately)"
+			fmt.Println("  [RESTORATION FAILURE] Datalink could not be restored — continuity claim holds,")
+			fmt.Println("    but the environment requires manual reconnection before subsequent scenarios.")
+			demoEmitter.Ledger(tui.LevelWarn, "Datalink restoration failed — continuity verified but manual reconnection required")
 		}
 
 	case "3":
@@ -289,7 +319,13 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "dhs-evidence-block", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/log/g8e' — data-destruction threat detected at admission")
 
-		demoPrintln("  ── Step 2: Run dhs-purge via agent (admit) ──────────────")
+		if !demoScenarioStep(demoDir, "Step 2: Independently verify operator audit vault DB still exists and is non-empty (prohibited side-effect check)",
+			[]string{"docker", "compose", "exec", "-T", "operator",
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
+			hasErrors = true
+		}
+
+		demoPrintln("  ── Step 3: Run dhs-purge via agent (admit) ──────────────")
 		demoPrintln("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
@@ -307,7 +343,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-purge", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L1+L2 admitted governed purge — L5 actuator recording PURGE with destruction receipt")
 
-		if !demoScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the PURGE",
+		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Data Service recorded the PURGE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", constants.ContainerVerifyOpsPy, "PURGE"}) {
 			hasErrors = true
@@ -325,6 +361,7 @@ func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — Destruction governed and provable.")
 			fmt.Println("         L1 blocked the audit-wipe; L1+L2 admitted governed purge with receipt.")
+			fmt.Println("         Independent verification confirms the audit vault is intact after the blocked attempt.")
 			fmt.Println("         PURGE operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Destruction governed and provable")
 		}

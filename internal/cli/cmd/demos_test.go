@@ -440,6 +440,58 @@ func TestRunAllScenarios(t *testing.T) {
 	})
 }
 
+func TestSummarizeScenarioResults(t *testing.T) {
+	tests := []struct {
+		name      string
+		results   []scenarioResult
+		wantErr   bool
+		wantErrorIs error
+	}{
+		{
+			name:    "all pass returns nil",
+			results: []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "PASS"}},
+			wantErr: false,
+		},
+		{
+			name:      "any FAIL returns ErrDemoScenarioFailed",
+			results:   []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "FAIL"}, {number: "3", status: "PASS"}},
+			wantErr:   true,
+			wantErrorIs: constants.ErrDemoScenarioFailed,
+		},
+		{
+			name:    "skip without fail returns nil",
+			results: []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "SKIP"}},
+			wantErr: false,
+		},
+		{
+			name:      "mixed fail and skip returns ErrDemoScenarioFailed",
+			results:   []scenarioResult{{number: "1", status: "SKIP"}, {number: "2", status: "FAIL"}},
+			wantErr:   true,
+			wantErrorIs: constants.ErrDemoScenarioFailed,
+		},
+		{
+			name:    "empty results returns nil",
+			results: []scenarioResult{},
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			err := summarizeScenarioResults(cmd, "fedramp", tc.results)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.wantErrorIs != nil {
+					assert.ErrorIs(t, err, tc.wantErrorIs)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGetProjectRoot(t *testing.T) {
 	t.Run("returns current working directory when available", func(t *testing.T) {
 		// Save original working directory

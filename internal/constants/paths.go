@@ -261,6 +261,13 @@ const (
 	DemosOrgFinance          = "finance"
 	DemosOrgDHS              = "dhs"
 	DemosOrgFedRAMP          = "fedramp"
+
+	// DHS demo docker resource names. The compose project is named "dhs-demo"
+	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
+	// the project name. The coalition-datalink container is the synthetic
+	// Mission Partner link severed in Scenario 2.
+	DemosDHSPerimeterNetwork      = "dhs-demo_net_perimeter"
+	DemosDHSCoalitionDatalinkCtnr = "dhs-coalition-datalink"
 )
 
 // Container paths for Docker exec commands in demo environments.
@@ -283,6 +290,11 @@ const (
 	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
 	ContainerVerifySlewsPy = "/app/verify_slews.py"
 	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
+
+	// FedRAMP cloudsvc operations log path inside the cloudsvc container.
+	// Used for independent prohibited-side-effect verification after blocked
+	// destruction attempts.
+	ContainerCloudSvcOpsLog = "/var/cloudsvc/operations.jsonl"
 )
 
 // Local binary names for the g8e CLI executable.
