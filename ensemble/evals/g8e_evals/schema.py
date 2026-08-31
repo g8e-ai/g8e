@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.11.0"
+SCHEMA_VERSION = "1.12.0"
 
 
 class TerminalStatus(StrEnum):
@@ -88,6 +88,18 @@ class VerificationStatus(StrEnum):
 class StateAssertionPredicate(StrEnum):
     STATE_ROOT_CHANGED = "state_root_changed"
     STATE_ROOT_UNCHANGED = "state_root_unchanged"
+
+
+class PolicyOutcome(StrEnum):
+    ALLOW = "allow"
+    BLOCK = "block"
+
+
+class RejectionLayer(StrEnum):
+    L1_DOCTRINE = "l1_doctrine"
+    L2_CONSENSUS = "l2_consensus"
+    L3_NOTARY = "l3_notary"
+    L4_VERIFICATION = "l4_verification"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -281,8 +293,8 @@ class TaskDefinition(BaseModel):
     initial_state_fixture_hash: str | None = None
     expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
 
-    expected_allow_block_outcome: str | None = None
-    expected_rejection_layer: str | None = None
+    expected_allow_block_outcome: PolicyOutcome | None = None
+    expected_rejection_layer: RejectionLayer | None = None
 
     sensitive_canary_annotations: list[str] = Field(default_factory=list)
     privacy_assertions: list[str] = Field(default_factory=list)
@@ -293,10 +305,16 @@ class TaskDefinition(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validate_final_state_assertions(self) -> TaskDefinition:
+    def _validate_expectations(self) -> TaskDefinition:
         assertion_ids = [assertion.assertion_id for assertion in self.expected_final_state_assertions]
         if len(assertion_ids) != len(set(assertion_ids)):
             raise ValueError("final-state assertion IDs must be unique")
+        if self.expected_allow_block_outcome is not None and not self.expected_action_class:
+            raise ValueError("expected policy outcome requires an expected action class")
+        if self.expected_allow_block_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:
+            raise ValueError("blocked policy outcome requires an expected rejection layer")
+        if self.expected_allow_block_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
+            raise ValueError("expected rejection layer requires a blocked policy outcome")
         return self
 
 

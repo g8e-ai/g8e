@@ -34,8 +34,10 @@ from g8e_evals.schema import (
     FinalStateObservation,
     MetricObservation,
     ModelIdentity,
+    PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RejectionLayer,
     RunManifest,
     StateAssertionPredicate,
     StageKind,
@@ -50,7 +52,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.11.0"
+    assert SCHEMA_VERSION == "1.12.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -159,6 +161,29 @@ def test_task_definition_rejects_duplicate_final_state_assertion_ids():
             suite_version="1.0.0",
             prompt_hash="prompt-hash",
             expected_final_state_assertions=[assertion, assertion],
+        )
+
+
+@pytest.mark.parametrize(
+    ("expected_outcome", "expected_rejection_layer"),
+    [
+        (PolicyOutcome.ALLOW, RejectionLayer.L1_DOCTRINE),
+        (PolicyOutcome.BLOCK, None),
+    ],
+)
+def test_task_definition_rejects_inconsistent_policy_expectation(
+    expected_outcome: PolicyOutcome,
+    expected_rejection_layer: RejectionLayer | None,
+):
+    with pytest.raises(ValidationError, match="expected rejection layer"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            expected_action_class="FILE_EDIT",
+            expected_allow_block_outcome=expected_outcome,
+            expected_rejection_layer=expected_rejection_layer,
         )
 
 

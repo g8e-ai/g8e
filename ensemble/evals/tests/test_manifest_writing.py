@@ -25,8 +25,10 @@ from app.models.model_telemetry import ModelCallTelemetry
 from app.services.ai.eval_judge import EvalJudgeError
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
     DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 )
 from g8e_evals import cli
 from g8e_evals.arms import Arm, GovernancePosture
@@ -40,6 +42,7 @@ from g8e_evals.schema import (
     FinalStateAssertion,
     FinalStateObservation,
     MetricObservation,
+    PolicyOutcome,
     ReceiptObservation,
     RunManifest,
     StateAssertionPredicate,
@@ -282,6 +285,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         prompt="Write a sentence without commas.",
         metadata=TaskMetadata(
             expected_action_class="EXECUTE_BASH",
+            expected_allow_block_outcome=PolicyOutcome.ALLOW,
             expected_final_state_assertions=[
                 FinalStateAssertion(
                     assertion_id="command-state-root",
@@ -311,6 +315,11 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         transaction_hash="hash-command",
         state_root_before="root-before",
         state_root_after="root-after-command",
+    )
+    command_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+        action_type="EXECUTE_BASH",
     )
     command_receipt.deterministic_stage_evidence.add(
         kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
@@ -377,6 +386,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         "ifeval_subset_verifier",
         "receipt_integrity",
         "final_state_assertions",
+        "policy_outcome",
     ]
     observations = [
         FinalStateObservation.model_validate_json(line)
@@ -394,8 +404,10 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert "receipt_integrity" in metrics_by_id
     assert metrics_by_id["final_state_accuracy"].value == 1.0
     assert metrics_by_id["final_state_accuracy"].denominator_contribution == 1
+    assert metrics_by_id["policy_outcome"].value == 1.0
     assert "receipt_integrity" in attempt.grade_refs
     assert "final_state_accuracy" in attempt.grade_refs
+    assert "policy_outcome" in attempt.grade_refs
 
 
 @pytest.mark.asyncio

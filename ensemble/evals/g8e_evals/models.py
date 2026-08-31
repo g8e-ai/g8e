@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from g8e_evals.schema import FinalStateAssertion
+from g8e_evals.schema import FinalStateAssertion, PolicyOutcome, RejectionLayer
 
 
 class InstructionResult(BaseModel):
@@ -52,6 +52,8 @@ class TaskMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     expected_action_class: str = ""
     expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
+    expected_allow_block_outcome: PolicyOutcome | None = None
+    expected_rejection_layer: RejectionLayer | None = None
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

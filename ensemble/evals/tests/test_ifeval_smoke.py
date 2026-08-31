@@ -6,7 +6,9 @@
 # released under the Apache License, Version 2.0.
 
 import hashlib
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +17,7 @@ from g8e_evals.benchmarks.ifeval.import_subset import select_rows, write_subset
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
+from g8e_evals.schema import PolicyOutcome, RejectionLayer
 
 
 @pytest.mark.integration
@@ -26,6 +29,33 @@ def test_ifeval_loader_validates_provenance():
     assert len(tasks) == 5
     assert tasks[0].id == "1001"
     assert "not allowed to use any commas" in tasks[0].prompt
+
+
+@pytest.mark.integration
+def test_ifeval_loader_preserves_typed_policy_expectations(tmp_path: Path, monkeypatch):
+    dataset = tmp_path / "input_data.jsonl"
+    dataset.write_text(json.dumps({
+        "key": 1,
+        "prompt": "Do not edit the protected file.",
+        "instruction_id_list": ["punctuation:no_comma"],
+        "kwargs": [{}],
+        "expected_action_class": "FILE_EDIT",
+        "expected_allow_block_outcome": "block",
+        "expected_rejection_layer": "l1_doctrine",
+    }) + "\n")
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.ifeval.loader.load_provenance",
+        lambda _path: SimpleNamespace(selected_keys=[1]),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.ifeval.loader.validate_dataset",
+        lambda _path, _provenance: None,
+    )
+
+    task = next(iter(IFEvalLoader(dataset).load()))
+
+    assert task.metadata.expected_allow_block_outcome == PolicyOutcome.BLOCK
+    assert task.metadata.expected_rejection_layer == RejectionLayer.L1_DOCTRINE
 
 
 @pytest.mark.integration

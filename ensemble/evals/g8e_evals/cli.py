@@ -24,6 +24,10 @@ from app.llm.factory import get_llm_provider
 from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from g8e.constants import PORTS
+from g8e.operator.v1.operator_pb2 import (
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_OUTCOME_FAILED,
+)
 from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
@@ -46,6 +50,7 @@ from g8e_evals.schema import (
     GraderClass,
     MetricObservation,
     ModelIdentity,
+    PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
     RoleToModelMapping,
@@ -80,6 +85,7 @@ _EVAL_JUDGE_GRADER_ID = "eval_judge"
 _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
 _FINAL_STATE_METRIC_ID = "final_state_accuracy"
+_POLICY_OUTCOME_GRADER_ID = "policy_outcome"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -441,6 +447,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_POLICY_OUTCOME_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{config.judge.provider or ''}:{config.judge.model or ''}"
     ).encode()
@@ -531,23 +538,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_action_class=t.metadata.expected_action_class,
             compatible_arms=list(
                 GOVERNED_ARMS
-                if t.metadata.expected_action_class or t.metadata.expected_final_state_assertions
+                if (
+                    t.metadata.expected_action_class
+                    or t.metadata.expected_final_state_assertions
+                    or t.metadata.expected_allow_block_outcome
+                )
                 else ALL_ARMS
             ),
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
             expected_final_state_assertions=t.metadata.expected_final_state_assertions,
+            expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
+            expected_rejection_layer=t.metadata.expected_rejection_layer,
             grader_ids=[
                 _IFEVAL_GRADER_ID,
                 *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
                 *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
+                *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
             ],
             grader_versions=[
                 _GRADER_VERSION,
                 *([_GRADER_VERSION] if eval_judge else []),
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -740,6 +755,17 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             for receipt in response.receipts
         ]
         receipt_records.extend(attempt_receipts)
+        if any(
+            receipt.primary
+            and receipt.verified
+            and any(
+                stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION
+                and stage.outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED
+                for stage in receipt.action_receipt.deterministic_stage_evidence
+            )
+            for receipt in attempt_receipts
+        ):
+            terminal_status = TerminalStatus.GOVERNANCE_REJECTED
         normalized = (
             normalize_attempt_evidence(
                 response.chat_evidence,
@@ -890,6 +916,30 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=final_state_grade.evidence_refs,
             ))
+        if task.metadata.expected_allow_block_outcome:
+            policy_grade = grade_deterministically(
+                _POLICY_OUTCOME_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_POLICY_OUTCOME_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=policy_grade.value,
+                unit="boolean",
+                verification_status=policy_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=policy_grade.evidence_refs,
+            ))
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
         attempt_records.append(attempt)
@@ -1004,16 +1054,37 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
 
-    invalid_results = [
-        result
-        for result in results
-        if not result.response.answer
-        or not result.response.chat_evidence
-        or not result.response.chat_evidence.terminal_event
-        or result.response.chat_evidence.terminal_event.endswith(("failed", "stopped", "dead.lettered"))
-        or "HTTP 401" in (result.response.unbound_reason or "")
-        or "HTTP 403" in (result.response.unbound_reason or "")
-    ]
+    policy_metrics_by_attempt = {
+        metric.attempt_id: metric
+        for metric in metric_records
+        if metric.metric_id == _POLICY_OUTCOME_GRADER_ID
+    }
+    invalid_results = []
+    for result, attempt in zip(results, attempt_records, strict=True):
+        policy_metric = policy_metrics_by_attempt.get(attempt.attempt_id)
+        verified_expected_block = (
+            result.task.metadata.expected_allow_block_outcome == PolicyOutcome.BLOCK
+            and attempt.terminal_status == TerminalStatus.GOVERNANCE_REJECTED
+            and policy_metric is not None
+            and policy_metric.value == 1.0
+            and policy_metric.verification_status == VerificationStatus.VERIFIED
+        )
+        if (
+            not result.response.chat_evidence
+            or not result.response.chat_evidence.terminal_event
+            or (
+                not verified_expected_block
+                and (
+                    not result.response.answer
+                    or result.response.chat_evidence.terminal_event.endswith(
+                        ("failed", "stopped", "dead.lettered")
+                    )
+                    or "HTTP 401" in (result.response.unbound_reason or "")
+                    or "HTTP 403" in (result.response.unbound_reason or "")
+                )
+            )
+        ):
+            invalid_results.append(result)
     if invalid_results:
         failed_ids = ", ".join(str(result.task.id) for result in invalid_results)
         raise EvaluationRunError(

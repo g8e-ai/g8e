@@ -41,6 +41,8 @@ class IFEvalLoader:
                     benchmark="ifeval_subset",
                     expected_action_class=data.get("expected_action_class", ""),
                     expected_final_state_assertions=data.get("expected_final_state_assertions", []),
+                    expected_allow_block_outcome=data.get("expected_allow_block_outcome"),
+                    expected_rejection_layer=data.get("expected_rejection_layer"),
                     instruction_id_list=data["instruction_id_list"],
                     kwargs=data["kwargs"],
                 ),

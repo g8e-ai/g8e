@@ -10,8 +10,13 @@ from __future__ import annotations
 import pytest
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
     DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
+    DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+    DETERMINISTIC_STAGE_OUTCOME_FAILED,
+    DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 )
 
 from g8e_evals.arms import Arm
@@ -25,7 +30,9 @@ from g8e_evals.schema import (
     AttemptRecord,
     FinalStateAssertion,
     FinalStateObservation,
+    PolicyOutcome,
     ReceiptObservation,
+    RejectionLayer,
     StateAssertionPredicate,
     StageKind,
     StageObservation,
@@ -131,6 +138,143 @@ def test_receipt_integrity_grader_fails_closed_on_invalid_evidence(
 def test_deterministic_grader_registry_rejects_unsupported_grader_version():
     with pytest.raises(UnsupportedGraderError, match=r"receipt_integrity@2\.0\.0"):
         grade_deterministically("receipt_integrity", "2.0.0", _context())
+
+
+def _policy_context(
+    *,
+    expected_outcome: PolicyOutcome,
+    expected_rejection_layer: RejectionLayer | None = None,
+    failed_layer: RejectionLayer | None = None,
+    verified: bool = True,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type="FILE_EDIT",
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type="FILE_EDIT",
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type="FILE_EDIT",
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type="FILE_EDIT",
+    )
+    task = context.task.model_copy(update={
+        "expected_allow_block_outcome": expected_outcome,
+        "expected_rejection_layer": expected_rejection_layer,
+        "grader_ids": ["policy_outcome"],
+        "grader_versions": ["1.0.0"],
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+
+def test_policy_outcome_grader_verifies_allowed_primary_receipt():
+    result = grade_deterministically(
+        "policy_outcome",
+        "1.0.0",
+        _policy_context(expected_outcome=PolicyOutcome.ALLOW),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["receipt-1"]
+
+
+def test_policy_outcome_grader_verifies_expected_rejection_layer():
+    result = grade_deterministically(
+        "policy_outcome",
+        "1.0.0",
+        _policy_context(
+            expected_outcome=PolicyOutcome.BLOCK,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            failed_layer=RejectionLayer.L2_CONSENSUS,
+        ),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["receipt-1"]
+
+
+def test_policy_outcome_grader_returns_verified_failure_for_rejection_layer_mismatch():
+    result = grade_deterministically(
+        "policy_outcome",
+        "1.0.0",
+        _policy_context(
+            expected_outcome=PolicyOutcome.BLOCK,
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+            failed_layer=RejectionLayer.L2_CONSENSUS,
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == (
+        "rejection layer mismatch: expected l4_verification, observed l2_consensus"
+    )
+
+
+def test_policy_outcome_grader_verifies_l4_only_rejection():
+    context = _policy_context(
+        expected_outcome=PolicyOutcome.BLOCK,
+        expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[0]
+
+    result = grade_deterministically("policy_outcome", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_policy_outcome_grader_returns_verified_failure_for_policy_mismatch():
+    result = grade_deterministically(
+        "policy_outcome",
+        "1.0.0",
+        _policy_context(
+            expected_outcome=PolicyOutcome.ALLOW,
+            failed_layer=RejectionLayer.L1_DOCTRINE,
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "policy outcome mismatch: expected allow, observed block"
+
+
+def test_policy_outcome_grader_fails_closed_on_unverified_receipt():
+    result = grade_deterministically(
+        "policy_outcome",
+        "1.0.0",
+        _policy_context(expected_outcome=PolicyOutcome.ALLOW, verified=False),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
 
 
 def _state_context(
