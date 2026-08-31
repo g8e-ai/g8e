@@ -466,11 +466,8 @@ func (tv *L4Warden) verifyStateful(ctx context.Context, envelope *govtypes.Gover
 }
 
 // verifyPosture performs governance posture-aware checks for L2 and L3.
-// L2 (machine consensus) is verified first. Only if L2 passes does L3
-// (human-presence) run. This preserves the architectural invariant: the
-// human's approval bond is spent only on transactions that have already
-// cleared L2 consensus. A human should never be asked to authorize
-// content the machines have not yet vetted.
+// L2 evidence is evaluated before L3, but it gates L3 verification only when
+// the active posture requires L2 consensus.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string, posture GovernancePosture) (bool, bool, []*operatorv1.DeterministicStageEvidence, error) {
 	l2Start := governanceMonotonicNow()
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash, posture)

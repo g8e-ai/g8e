@@ -23,7 +23,8 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     StreamChunkFromModel,
 )
-from app.llm.model_evidence import model_boundary_hash
+from app.llm.model_evidence import model_boundary_privacy_attestation
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
 
 
 class LLMProvider(ABC):
@@ -34,18 +35,27 @@ class LLMProvider(ABC):
         self._input_artifact_hash: ContextVar[str] = ContextVar(
             f"{type(self).__name__}_input_artifact_hash_{id(self)}", default=""
         )
+        self._model_boundary_privacy: ContextVar[ModelBoundaryPrivacyAttestation | None] = ContextVar(
+            f"{type(self).__name__}_model_boundary_privacy_{id(self)}", default=None
+        )
 
     @property
     def input_artifact_hash(self) -> str:
         return self._input_artifact_hash.get()
 
+    @property
+    def model_boundary_privacy(self) -> ModelBoundaryPrivacyAttestation | None:
+        return self._model_boundary_privacy.get()
+
     def clear_input_artifact_hash(self) -> None:
         self._input_artifact_hash.set("")
+        self._model_boundary_privacy.set(None)
 
     def _record_model_boundary(self, payload: object) -> str:
-        digest = model_boundary_hash(payload)
-        self._input_artifact_hash.set(digest)
-        return digest
+        attestation = model_boundary_privacy_attestation(payload)
+        self._input_artifact_hash.set(attestation.input_artifact_hash)
+        self._model_boundary_privacy.set(attestation)
+        return attestation.input_artifact_hash
 
     @abstractmethod
     async def generate_content_stream_primary(

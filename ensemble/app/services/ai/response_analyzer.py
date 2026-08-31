@@ -17,10 +17,14 @@ from app.models.settings import G8eeUserSettings
 from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
-from app.models.model_telemetry import ModelCallTelemetry
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation, ModelCallTelemetry
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -246,6 +250,7 @@ class AIResponseAnalyzer:
                 monotonic_start=monotonic_start,
                 monotonic_end=monotonic_end,
                 input_artifact_hash=input_artifact_hash,
+                model_boundary_privacy=recorded_model_boundary_privacy(client),
                 response=response,
                 response_text=response_text,
                 error=exc,
@@ -263,6 +268,7 @@ class AIResponseAnalyzer:
             monotonic_start=monotonic_start,
             monotonic_end=monotonic_end,
             input_artifact_hash=input_artifact_hash,
+            model_boundary_privacy=recorded_model_boundary_privacy(client),
             response=response,
             response_text=response_text,
         )
@@ -280,6 +286,7 @@ class AIResponseAnalyzer:
         monotonic_start: float,
         monotonic_end: float,
         input_artifact_hash: str,
+        model_boundary_privacy: ModelBoundaryPrivacyAttestation | None,
         response: types.GenerateContentResponse | None,
         response_text: str,
         error: Exception | None = None,
@@ -303,6 +310,7 @@ class AIResponseAnalyzer:
             error_type=type(error).__name__ if error else None,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(response_text),
+            model_boundary_privacy=model_boundary_privacy,
         )
 
     async def analyze_command_risk(

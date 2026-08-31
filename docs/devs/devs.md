@@ -159,7 +159,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 ## Dependency Construction Model
 
-The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
+The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, ratify, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
 
 ### ModeDeps shape
 
@@ -179,8 +179,8 @@ type GovernanceCoreDeps struct {
 }
 
 // GatewayModeDeps embeds GovernanceCoreDeps and adds gateway-only fields.
-// All fields are non-nil at construction (except Consensus, nil only when
-// Posture == Doctrine); the constructor rejects nils with typed errors. There
+// All fields are non-nil at construction (except Consensus, nil when the
+// posture does not require L2); the constructor rejects nils with typed errors. There
 // is no SetConsensusService, no EnvProcAdapter, no SessionValidatorAdapter —
 // consensus and the envelope processor are wired at construction.
 // PlatformEnrollmentDeps and GovernedDocStore are gateway-only; the compiler
@@ -190,7 +190,7 @@ type GatewayModeDeps struct {
     GovernedDocStore       governance.GovernedDocumentStore
     ConsensusPolicyStore   governance.L2ConsensusPolicyStore
     FieldReader            mcp.FieldReader
-    Consensus              *consensus.ConsensusService // nil only when Posture == Doctrine
+    Consensus              *consensus.ConsensusService // nil when posture does not require L2
     PlatformEnrollmentDeps *pubsub.PlatformEnrollmentDeps
     Posture                config.GatewayPosture
 }
@@ -208,7 +208,7 @@ Two constructor functions, `NewGatewayModeDeps(...) (*GatewayModeDeps, error)` a
 
 ### Posture sub-typing (B1)
 
-Within gateway mode, posture (doctrine / consensus / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil only when `Posture == Doctrine`). The `GovernanceController`'s consensus route is registered only in consensus/notary postures; the doctrine-posture gateway has no consensus endpoint registered. This makes the previous 503-on-nil guard unreachable (the route is not registered, so the request gets 404) rather than removing the guard. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
+Within gateway mode, posture (doctrine / consensus / ratify / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil when the posture does not require L2). The `GovernanceController`'s consensus route is registered only in consensus and notary postures; doctrine and ratify gateways have no consensus endpoint registered. This makes the previous 503-on-nil guard unreachable (the route is not registered, so the request gets 404) rather than removing the guard. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
 
 ### C2 inverted construction order
 
@@ -217,10 +217,10 @@ The `mcp.GatewayService` ↔ `OperatorPubSubService` cycle that previously requi
 The gateway-mode boot path (`RunGateway`) constructs dependencies in this order:
 
 1. Open DB, construct typed stores (`gateway.OpenCanonicalDBService`).
-2. Run `ConsensusBootstrap` (moved here from after `NewGatewayModeService`; it reads from the DB the constructor opens, and the DB is now open). Produces the `*consensus.ConsensusService` (or nil for doctrine posture).
+2. Run `ConsensusBootstrap` (moved here from after `NewGatewayModeService`; it reads from the DB the constructor opens, and the DB is now open). Produces the `*consensus.ConsensusService` (or nil when the posture does not require L2).
 3. Build `OperatorPubSubService` via `NewGatewayOperatorPubSubService` using `GatewayModeDeps` (no `mcpGateway` yet — egress is nil at construction). The `PlatformEnrollmentHandler` is wired here from `GatewayModeDeps.PlatformEnrollmentDeps` (gateway-mode only), and `GovernedDocStore` is wired directly from `GatewayModeDeps`.
 4. Build `PlatformEnrollmentService` with `envProc: pubsubSvc` (concrete injection, no adapter). This moves out of `gatewayServiceBuilder.build()` because the adapter is eliminated and the concrete pubsub service must exist first.
-5. Build `mcp.GatewayService` via `mcp.NewGatewayService` with `EnvProc: pubsubSvc` and `SessionValidator: pubsubSvc` (concrete injection, no adapter). `AuditLogger` (from `stores.AuditStore`, available at step 1) and `L2ConsensusDeliberator` (the bootstrapped consensus service, available after step 2; nil only in doctrine posture) are also wired here at construction.
+5. Build `mcp.GatewayService` via `mcp.NewGatewayService` with `EnvProc: pubsubSvc` and `SessionValidator: pubsubSvc` (concrete injection, no adapter). `AuditLogger` (from `stores.AuditStore`, available at step 1) and `L2ConsensusDeliberator` (the bootstrapped consensus service, available after step 2; nil when the posture does not require L2) are also wired here at construction.
 6. Wire egress: `pubsubSvc.SetMCPGateway(mcpGateway)` — the single remaining narrow setter, backed by `atomic.Pointer`, resolved once during boot before `Start`.
 7. Build `GatewayModeService` with `GovernanceController` wired with the already-constructed consensus (no `SetConsensusService`) and `PlatformEnrollmentControllerDeps.EnrollSvc` set to the `PlatformEnrollmentService` from step 4. `initHTTPHandler` runs here at the end of the wiring phase (after the passkey orchestrator and passkey handler, which also depend on `mcpGateway`), populating the `handler`, `server`, and `publicServer` fields that `Start()` reads.
 

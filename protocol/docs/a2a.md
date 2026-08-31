@@ -4,8 +4,8 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -161,12 +161,13 @@ A2A protocol errors follow gateway error conventions. Verification errors map to
 
 ### Gateway Postures
 
-The g8e Gateway supports three governance postures (configured via CLI flags):
+The g8e Gateway supports four governance postures (configured via CLI flags):
 
 | Posture | Configuration | Purpose |
 |---|---|---|
 | **PostureDoctrine** | `doctrine` | L1 enforced, L2/L3 audited (default). |
-| **PostureConsensus** | `consensus` | L1/L2 enforced, L3 signature not required. |
+| **PostureConsensus** | `consensus` | L1/L2 enforced, L3 audited. |
+| **PostureRatify** | `ratify` | L1/L3 enforced, L2 audited. |
 | **PostureNotary** | `notary` | L1/L2/L3 strictly enforced. |
 
 ### Port Configuration

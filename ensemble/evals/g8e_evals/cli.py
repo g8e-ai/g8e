@@ -24,12 +24,21 @@ from app.llm.factory import get_llm_provider
 from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from g8e.constants import PORTS
+from g8e.operator.v1.operator_pb2 import (
+    DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+    DETERMINISTIC_STAGE_OUTCOME_FAILED,
+)
 from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
-from g8e_evals.arms import ALL_ARMS, Arm, GovernancePosture
+from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
+from g8e_evals.graders import (
+    DeterministicGradingContext,
+    grade_deterministically,
+    observe_receipt_final_state,
+)
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
@@ -37,14 +46,19 @@ from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
     ContentHash,
+    FinalStateObservation,
     GraderClass,
     MetricObservation,
     ModelIdentity,
+    PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RehydrationObservation,
     RoleToModelMapping,
     RunManifest,
+    SecretDetectionObservation,
     StackEnvironment,
+    StateObservation,
     StageObservation,
     TaskDefinition,
     TerminalStatus,
@@ -71,6 +85,19 @@ _PROVIDER_CHOICES = ["openai", "anthropic", "gemini", "ollama", "llamacpp", "fak
 _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
+_RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
+_PROTOCOL_CHAIN_GRADER_ID = "protocol_chain"
+_CANARY_SCRUBBING_GRADER_ID = "canary_scrubbing"
+_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID = "model_boundary_raw_secret_rate"
+_EXACT_LOCAL_REHYDRATION_GRADER_ID = "exact_local_rehydration"
+_SECRET_DETECTION_PRECISION_GRADER_ID = "secret_detection_precision"
+_SECRET_DETECTION_RECALL_GRADER_ID = "secret_detection_recall"
+_FINAL_STATE_GRADER_ID = "final_state_assertions"
+_FINAL_STATE_METRIC_ID = "final_state_accuracy"
+_INDEPENDENT_STATE_GRADER_ID = "independent_state"
+_INDEPENDENT_STATE_METRIC_ID = "independent_state_accuracy"
+_POLICY_OUTCOME_GRADER_ID = "policy_outcome"
+_GRADER_VERSION = "1.0.0"
 
 
 class EvaluationRunError(Exception):
@@ -428,6 +455,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     grader_bundle_content = (
         f"{suite}:{suite_version}:"
+        f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_EXACT_LOCAL_REHYDRATION_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_SECRET_DETECTION_PRECISION_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_SECRET_DETECTION_RECALL_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_INDEPENDENT_STATE_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_POLICY_OUTCOME_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{config.judge.provider or ''}:{config.judge.model or ''}"
     ).encode()
     grader_bundle_hash = hashlib.sha256(grader_bundle_content).hexdigest()
@@ -515,14 +554,61 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             suite_version=suite_version,
             category=t.metadata.category or "instruction_following",
             expected_action_class=t.metadata.expected_action_class,
+            compatible_arms=list(
+                GOVERNED_ARMS
+                if (
+                    t.metadata.expected_action_class
+                    or t.metadata.state_fixture
+                    or t.metadata.expected_final_state_assertions
+                    or t.metadata.expected_allow_block_outcome
+                )
+                else ALL_ARMS
+            ),
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
-            grader_ids=[_IFEVAL_GRADER_ID] + ([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
-            grader_versions=["1.0.0"] + (["1.0.0"] if eval_judge else []),
+            initial_state_fixture_hash=(
+                t.metadata.state_fixture.fixture_sha256 if t.metadata.state_fixture else None
+            ),
+            state_fixture=t.metadata.state_fixture,
+            expected_final_state_assertions=t.metadata.expected_final_state_assertions,
+            expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
+            expected_rejection_layer=t.metadata.expected_rejection_layer,
+            sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
+            rehydration_assertions=t.metadata.rehydration_assertions,
+            secret_detection_assertions=t.metadata.secret_detection_assertions,
+            grader_ids=[
+                _IFEVAL_GRADER_ID,
+                *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
+                *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
+                *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
+                *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
+                *([_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
+                *([_EXACT_LOCAL_REHYDRATION_GRADER_ID] if t.metadata.rehydration_assertions else []),
+                *([_SECRET_DETECTION_PRECISION_GRADER_ID] if t.metadata.secret_detection_assertions else []),
+                *([_SECRET_DETECTION_RECALL_GRADER_ID] if t.metadata.secret_detection_assertions else []),
+                *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
+                *([_INDEPENDENT_STATE_GRADER_ID] if t.metadata.state_fixture else []),
+                *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
+            ],
+            grader_versions=[
+                _GRADER_VERSION,
+                *([_GRADER_VERSION] if eval_judge else []),
+                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
+                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
+                *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
+                *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
+                *([_GRADER_VERSION] if t.metadata.rehydration_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.state_fixture else []),
+                *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
+            ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
         for t in tasks
     ]
+    task_defs_by_id = {task.task_id: task for task in task_defs}
     with open(report_dir / "tasks.jsonl", "w") as f:
         for td in task_defs:
             f.write(td.model_dump_json() + "\n")
@@ -532,6 +618,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     stage_records: list[StageObservation] = []
     metric_records: list[MetricObservation] = []
     receipt_records: list[ReceiptObservation] = []
+    final_state_records: list[FinalStateObservation] = []
+    state_records: list[StateObservation] = []
+    rehydration_records: list[RehydrationObservation] = []
+    secret_detection_records: list[SecretDetectionObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -573,6 +663,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 action_type
                 for action_type in [
                     task.metadata.expected_action_class,
+                    *(
+                        assertion.action_type
+                        for assertion in task.metadata.expected_final_state_assertions
+                    ),
+                    *(
+                        assertion.action_type
+                        for assertion in (
+                            task.metadata.state_fixture.assertions
+                            if task.metadata.state_fixture
+                            else []
+                        )
+                    ),
                     *response.governed_action_types,
                 ]
                 if action_type
@@ -704,6 +806,17 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             for receipt in response.receipts
         ]
         receipt_records.extend(attempt_receipts)
+        if any(
+            receipt.primary
+            and receipt.verified
+            and any(
+                stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION
+                and stage.outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED
+                for stage in receipt.action_receipt.deterministic_stage_evidence
+            )
+            for receipt in attempt_receipts
+        ):
+            terminal_status = TerminalStatus.GOVERNANCE_REJECTED
         normalized = (
             normalize_attempt_evidence(
                 response.chat_evidence,
@@ -716,8 +829,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             else None
         )
         evidence_refs: list[str] = []
+        attempt_stages = normalized.stages if normalized else []
         if normalized:
-            stage_records.extend(normalized.stages)
+            stage_records.extend(attempt_stages)
             if normalized.raw_evidence:
                 evidence_artifacts.append(normalized.raw_evidence)
                 evidence_refs.append(normalized.raw_evidence.index.artifact_id)
@@ -733,6 +847,79 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 evidence_refs=evidence_refs,
             ))
 
+        primary_receipt = next(
+            (receipt for receipt in attempt_receipts if receipt.primary),
+            None,
+        )
+        attempt = AttemptRecord(
+            attempt_id=attempt_id,
+            run_id=run_id,
+            task_id=task.id,
+            arm_id=arm_def.arm_id,
+            state_snapshot_hash=(
+                task.metadata.state_fixture.fixture_sha256
+                if task.metadata.state_fixture
+                else config.state_root
+            ),
+            replicate_id="1",
+            assignment_order=len(attempt_records),
+            started_at=started_at,
+            ended_at=ended_at,
+            terminal_status=terminal_status,
+            posture=posture,
+            state_root_before=(
+                primary_receipt.action_receipt.state_root_before or None
+                if primary_receipt
+                else None
+            ),
+            state_root_after=(
+                primary_receipt.action_receipt.state_root_after or None
+                if primary_receipt
+                else None
+            ),
+            correlation_ids={
+                "transaction_id": response.primary_transaction_id or "",
+            },
+            receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
+            missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
+            usage_reconciliation=normalized.usage if normalized else None,
+        )
+        final_state_observations = observe_receipt_final_state(
+            task_defs_by_id[task.id],
+            attempt,
+            attempt_receipts,
+        )
+        final_state_records.extend(final_state_observations)
+        attempt.final_state_observation_refs = [
+            observation.observation_id for observation in final_state_observations
+        ]
+        state_observations = (
+            await config.state_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.state_fixture and config.state_observer is not None
+            else []
+        )
+        state_records.extend(state_observations)
+        attempt.state_observation_refs = [
+            observation.observation_id for observation in state_observations
+        ]
+        rehydration_observations = (
+            await config.rehydration_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.rehydration_assertions and config.rehydration_observer is not None
+            else []
+        )
+        rehydration_records.extend(rehydration_observations)
+        attempt.rehydration_observation_refs = [
+            observation.observation_id for observation in rehydration_observations
+        ]
+        secret_detection_observations = (
+            await config.secret_detection_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.secret_detection_assertions and config.secret_detection_observer is not None
+            else []
+        )
+        secret_detection_records.extend(secret_detection_observations)
+        attempt.secret_detection_observation_refs = [
+            observation.observation_id for observation in secret_detection_observations
+        ]
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -762,28 +949,242 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.LLM_JUDGE,
                 evidence_refs=evidence_refs,
             ))
+        if task.metadata.expected_action_class:
+            receipt_grade = grade_deterministically(
+                _RECEIPT_INTEGRITY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_RECEIPT_INTEGRITY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=receipt_grade.value,
+                unit="boolean",
+                verification_status=receipt_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=receipt_grade.evidence_refs,
+            ))
+            protocol_grade = grade_deterministically(
+                _PROTOCOL_CHAIN_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PROTOCOL_CHAIN_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=protocol_grade.value,
+                unit="boolean",
+                verification_status=protocol_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=protocol_grade.evidence_refs,
+            ))
+        if task.metadata.sensitive_canary_annotations:
+            canary_grade = grade_deterministically(
+                _CANARY_SCRUBBING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_CANARY_SCRUBBING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=canary_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.sensitive_canary_annotations),
+                verification_status=canary_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=canary_grade.evidence_refs,
+            ))
+            model_boundary_grade = grade_deterministically(
+                _MODEL_BOUNDARY_RAW_SECRET_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=model_boundary_grade.value,
+                unit="raw_occurrences_per_injected_canary",
+                denominator_contribution=sum(
+                    assertion.expected_occurrences
+                    for assertion in task.metadata.sensitive_canary_annotations
+                ),
+                verification_status=model_boundary_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=model_boundary_grade.evidence_refs,
+            ))
+        if task.metadata.rehydration_assertions:
+            rehydration_grade = grade_deterministically(
+                _EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    rehydration_observations=rehydration_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=rehydration_grade.value,
+                unit="proportion",
+                eligible=rehydration_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=rehydration_grade.denominator_contribution,
+                verification_status=rehydration_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=rehydration_grade.evidence_refs,
+            ))
+        if task.metadata.secret_detection_assertions:
+            for grader_id in (
+                _SECRET_DETECTION_PRECISION_GRADER_ID,
+                _SECRET_DETECTION_RECALL_GRADER_ID,
+            ):
+                secret_detection_grade = grade_deterministically(
+                    grader_id,
+                    _GRADER_VERSION,
+                    DeterministicGradingContext(
+                        task=task_defs_by_id[task.id],
+                        attempt=attempt,
+                        receipts=attempt_receipts,
+                        stages=attempt_stages,
+                        secret_detection_observations=secret_detection_observations,
+                    ),
+                )
+                grade_metrics.append(MetricObservation(
+                    metric_id=grader_id,
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    arm_id=arm_def.arm_id,
+                    task_id=task.id,
+                    value=secret_detection_grade.value,
+                    unit="proportion",
+                    eligible=(
+                        secret_detection_grade.verification_status
+                        == VerificationStatus.VERIFIED
+                    ),
+                    denominator_contribution=(
+                        secret_detection_grade.denominator_contribution
+                    ),
+                    verification_status=secret_detection_grade.verification_status,
+                    grader_class=GraderClass.DETERMINISTIC,
+                    evidence_refs=secret_detection_grade.evidence_refs,
+                ))
+        if task.metadata.expected_final_state_assertions:
+            final_state_grade = grade_deterministically(
+                _FINAL_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_FINAL_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=final_state_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.expected_final_state_assertions),
+                verification_status=final_state_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=final_state_grade.evidence_refs,
+            ))
+        if task.metadata.state_fixture:
+            independent_state_grade = grade_deterministically(
+                _INDEPENDENT_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    state_observations=state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_INDEPENDENT_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=independent_state_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.state_fixture.assertions),
+                verification_status=independent_state_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=independent_state_grade.evidence_refs,
+            ))
+        if task.metadata.expected_allow_block_outcome:
+            policy_grade = grade_deterministically(
+                _POLICY_OUTCOME_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_POLICY_OUTCOME_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=policy_grade.value,
+                unit="boolean",
+                verification_status=policy_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=policy_grade.evidence_refs,
+            ))
         metric_records.extend(grade_metrics)
-
-        attempt = AttemptRecord(
-            attempt_id=attempt_id,
-            run_id=run_id,
-            task_id=task.id,
-            arm_id=arm_def.arm_id,
-            state_snapshot_hash=config.state_root,
-            replicate_id="1",
-            assignment_order=len(attempt_records),
-            started_at=started_at,
-            ended_at=ended_at,
-            terminal_status=terminal_status,
-            posture=posture,
-            correlation_ids={
-                "transaction_id": response.primary_transaction_id or "",
-            },
-            receipt_refs=[receipt.receipt_id for receipt in attempt_receipts],
-            grade_refs=[metric.metric_id for metric in grade_metrics],
-            missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
-            usage_reconciliation=normalized.usage if normalized else None,
-        )
+        attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
         attempt_records.append(attempt)
 
         status_color = "green" if score.passed else "red"
@@ -812,6 +1213,22 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     with open(report_dir / "receipts.jsonl", "w") as f:
         for receipt in receipt_records:
             f.write(receipt.model_dump_json() + "\n")
+
+    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+        for observation in final_state_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "state-observations.jsonl", "w") as f:
+        for observation in state_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "rehydration-observations.jsonl", "w") as f:
+        for observation in rehydration_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "secret-detection-observations.jsonl", "w") as f:
+        for observation in secret_detection_records:
+            f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:
         for stage in stage_records:
@@ -892,16 +1309,37 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
 
-    invalid_results = [
-        result
-        for result in results
-        if not result.response.answer
-        or not result.response.chat_evidence
-        or not result.response.chat_evidence.terminal_event
-        or result.response.chat_evidence.terminal_event.endswith(("failed", "stopped", "dead.lettered"))
-        or "HTTP 401" in (result.response.unbound_reason or "")
-        or "HTTP 403" in (result.response.unbound_reason or "")
-    ]
+    policy_metrics_by_attempt = {
+        metric.attempt_id: metric
+        for metric in metric_records
+        if metric.metric_id == _POLICY_OUTCOME_GRADER_ID
+    }
+    invalid_results = []
+    for result, attempt in zip(results, attempt_records, strict=True):
+        policy_metric = policy_metrics_by_attempt.get(attempt.attempt_id)
+        verified_expected_block = (
+            result.task.metadata.expected_allow_block_outcome == PolicyOutcome.BLOCK
+            and attempt.terminal_status == TerminalStatus.GOVERNANCE_REJECTED
+            and policy_metric is not None
+            and policy_metric.value == 1.0
+            and policy_metric.verification_status == VerificationStatus.VERIFIED
+        )
+        if (
+            not result.response.chat_evidence
+            or not result.response.chat_evidence.terminal_event
+            or (
+                not verified_expected_block
+                and (
+                    not result.response.answer
+                    or result.response.chat_evidence.terminal_event.endswith(
+                        ("failed", "stopped", "dead.lettered")
+                    )
+                    or "HTTP 401" in (result.response.unbound_reason or "")
+                    or "HTTP 403" in (result.response.unbound_reason or "")
+                )
+            )
+        ):
+            invalid_results.append(result)
     if invalid_results:
         failed_ids = ", ".join(str(result.task.id) for result in invalid_results)
         raise EvaluationRunError(

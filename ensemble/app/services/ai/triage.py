@@ -18,7 +18,11 @@ import time
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
 from app.errors import OllamaEmptyResponseError
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
@@ -152,6 +156,7 @@ class TriageAgent:
                     finish_reason=finish_reason,
                     input_artifact_hash=input_artifact_hash,
                     output_artifact_hash=model_boundary_hash(response.text or ""),
+                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 if not response.text:
                     logger.warning(
@@ -180,6 +185,7 @@ class TriageAgent:
                     succeeded=False,
                     error_type=type(exc).__name__,
                     input_artifact_hash=input_artifact_hash,
+                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 return self._escalation_result(
                     f"Triage unavailable: lite model returned empty response ({exc}). Check model availability and connectivity, then retry.",
@@ -199,6 +205,7 @@ class TriageAgent:
                     succeeded=False,
                     error_type=type(exc).__name__,
                     input_artifact_hash=input_artifact_hash,
+                    model_boundary_privacy=recorded_model_boundary_privacy(provider),
                 )
                 return self._escalation_result(
                     f"Triage unavailable: classification failed ({exc}). Escalating to full LLM for complexity classification. Check provider configuration and retry.",

@@ -74,7 +74,7 @@ type GatewayFlags struct {
 // addGatewayFlags registers all shared gateway flags on the given cobra command,
 // binding them to the provided GatewayFlags struct.
 func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
-	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
+	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), ratify (L1/L3 enforced, L2 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
 	cmd.Flags().IntVar(&f.HTTPSPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
 	cmd.Flags().StringVar(&f.DataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
@@ -383,7 +383,7 @@ Posture Persistence: The gateway posture is persisted in
 .g8e/pids/operator.posture on startup. When using 'gateway restart', the
 current posture is read from this file and preserved. If the file is missing or
 corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
-'doctrine', 'consensus', and 'notary'.`,
+'doctrine', 'consensus', 'ratify', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := configLoader("")
 			if err != nil {
@@ -709,7 +709,7 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 			if postureObj.RequiresL3Proof() {
-				cmd.Printf("\nNext step: Run '%s auth enroll user' to register a passkey (required for notary posture)\n", getBinaryName())
+				cmd.Printf("\nNext step: Run '%s auth enroll user' to register a passkey (required for %s posture)\n", getBinaryName(), postureObj.Name())
 			} else {
 				cmd.Printf("\nNext step: Run '%s auth enroll user' to authenticate (passkey optional for %s posture)\n", getBinaryName(), postureObj.Name())
 			}

@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-08-30
-Version: v2.1.1
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ---
 
@@ -39,6 +39,7 @@ This launches the onboarding wizard to configure gateway settings before the fir
 Available posture modes via `--posture`:
 - **doctrine** (default): L1 enforced, L2/L3 audited
 - **consensus**: L1/L2 enforced, L3 audited
+- **ratify**: L1/L3 enforced, L2 audited
 - **notary**: L1/L2/L3 strictly enforced
 
 ### Remote Deployment
@@ -236,7 +237,7 @@ To wrap an external MCP server with g8e governance:
 
 ### L3 Transaction Approval
 
-When the gateway is running in notary posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
+When the gateway is running in ratify or notary posture, mutation transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
 
 ```bash
 ./g8e auth approve <transaction_hash>
@@ -267,7 +268,7 @@ Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.1
+go get github.com/g8e-ai/g8e/v2@v2.1.2
 ```
 
 The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
@@ -279,7 +280,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling or Python-based services:
 
 ```bash
-pip install g8e==2.1.1
+pip install g8e==2.1.2
 ```
 
 Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

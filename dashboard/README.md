@@ -8,10 +8,13 @@ g8ed is a first-party component of the g8e platform, shipped in-tree under `dash
 
 ```bash
 npm ci
+G8E_GATEWAY_URL=https://localhost:8443 \
+G8E_GATEWAY_HTTP_URL=http://localhost:8080 \
+G8E_RUNTIME_DIR=/tmp/g8ed-runtime \
 npm run dev
 ```
 
-The server listens on `http://localhost:3000` and serves assets from `public/`. The browser makes all auth/API calls directly to the g8e Gateway at `https://localhost:8443` (override with `G8E_GATEWAY_URL`).
+The server listens on `http://localhost:3000` and serves assets from `public/`. The browser makes active auth/API calls directly to the g8e Gateway configured by `G8E_GATEWAY_URL`. The server uses `G8E_GATEWAY_HTTP_URL` and `G8E_RUNTIME_DIR` to load or enroll its independent `g8ed` app workload identity before listening.
 
 ## Prerequisites
 
@@ -29,6 +32,11 @@ docker build -f dashboard/Dockerfile -t g8e-dashboard .
 
 See the repo-root `docker-compose.yml` for the unified stack wiring (gateway + operator + ensemble + dashboard).
 
+## Documentation
+
+- [Dashboard documentation](../docs/dashboard/index.md): Detailed component architecture, authentication, gateway integration, SSE, operator surfaces, development, and tests.
+- [Platform-level architecture](../docs/architecture/dashboard.md): g8ed's role and boundaries in the complete g8e platform.
+
 ## Scripts
 
 | Script | Description |
@@ -44,9 +52,11 @@ See the repo-root `docker-compose.yml` for the unified stack wiring (gateway + o
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port |
-| `G8E_GATEWAY_URL` | `https://localhost:8443` | Gateway origin for browser API calls and SSE |
-| `GATEWAY_HEALTH_URL` | `http://g8e-gateway:8080` | Gateway health base URL (Docker entrypoint) |
-| `GATEWAY_HEALTH_PATH` | `/api/v1/health` | Gateway health path (Docker entrypoint) |
+| `G8E_GATEWAY_URL` | none | Required browser-facing HTTPS gateway origin |
+| `G8E_GATEWAY_HTTP_URL` | none | Required container-facing plain-HTTP app enrollment origin |
+| `G8E_RUNTIME_DIR` | none | Required writable root for the dashboard app identity |
+| `GATEWAY_HEALTH_URL` | `http://g8eg:8080` | Gateway health base URL used by the Docker entrypoint |
+| `GATEWAY_HEALTH_PATH` | `/api/v1/health` | Gateway health path used by the Docker entrypoint |
 
 ## License
 

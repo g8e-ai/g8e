@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-08-30
-Version: v2.1.1
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -42,7 +42,7 @@ The compose stack uses a two-phase startup model. Only the gateway starts by def
 - **`g8e-gateway`**: Policy Decision Point. Admits transactions, manages PKI, and enforces L1-L3 governance. Starts via `gw start -f` with CORS and passkey RP origins configured for the dashboard (`http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}`). Starts with zero users and issues no platform certificates until the first owner enrolls.
 - **`g8e-operator`**: Policy Execution Point. Connects to the gateway via outbound mTLS to pull work from its pub/sub channel, re-verify proofs, and execute L4-L5 actions. Uses `operator start -e g8e.local`. The gateway registers `g8e.local` and `g8eg` as network aliases on `g8e-net`, so the operator resolves the gateway by the hostname matching its certificate SANs. Gated behind the `bootstrapped` profile. On first start with no credentials, the operator submits a platform enrollment request and waits for owner approval before becoming ready.
 - **`ensemble`**: First-party agentic ensemble (g8ee) Python FastAPI service built from `ensemble/Dockerfile`. Submits governed intents through MCP and publishes SSE events. Gated behind the `bootstrapped` profile. Submits a platform enrollment request at startup via the owner-approved platform enrollment protocol and waits for owner approval before its lifespan completes. Connects to the gateway document store, pub/sub, and blob APIs over mTLS using its enrolled credentials (`pki/issued/apps/g8ee.crt`). Mounts `g8e-operator-data:/operator-state:ro` read-only to access the operator's enrolled mTLS certificate for privileged governance envelope signing.
-- **`dashboard`**: Operator dashboard (g8ed) Node.js Express service built from `dashboard/Dockerfile`. Provides the browser UI for chat, operator management, audit, and settings. Gated behind the `bootstrapped` profile. Runs as the non-root `g8e` user (UID 1001) with volume mounted at `g8e-dashboard-data:/data` and `G8E_RUNTIME_DIR=/data`. Submits a platform enrollment request at startup to obtain an mTLS app identity (`spiffe://g8e.local/app/g8ed`) for server-to-server gateway calls. The browser SPA authenticates independently to the gateway via WebAuthn passkeys.
+- **`dashboard`**: Operator dashboard (g8ed) Node.js Express service built from `dashboard/Dockerfile`. Provides the browser UI for chat, operator management, audit, and settings. Gated behind the `bootstrapped` profile. Runs as the non-root `g8e` user (UID 1001) with volume mounted at `g8e-dashboard-data:/data` and `G8E_RUNTIME_DIR=/data`. Submits a platform enrollment request at startup to obtain an mTLS app identity (`spiffe://g8e.local/app/g8ed`) for prepared server-to-server gateway clients; the current static host does not construct those clients. The browser SPA authenticates independently to the gateway via WebAuthn passkeys.
 
 ### Service Dependencies and Health Checks
 
@@ -257,6 +257,7 @@ Specify the security posture at startup using the `--posture` flag:
 
 - **`--posture doctrine`**: L1 enforced; L2/L3 audited.
 - **`--posture consensus`**: L1/L2 enforced; L3 audited.
+- **`--posture ratify`**: L1/L3 enforced; L2 audited.
 - **`--posture notary`**: L1/L2/L3 strictly enforced.
 
 ## Architecture
@@ -280,7 +281,7 @@ The build links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) and enters 
 Protocol constants are bundled from the `protocol/` directory. The Python protocol package (`g8e`) can be installed separately:
 
 ```bash
-pip install g8e==2.1.1
+pip install g8e==2.1.2
 ```
 
 Or configure `G8E_PROTOCOL_DIR=/protocol` to direct the Python package to bundled constants. See [Protocol Library](../architecture/protocol.md) for details.

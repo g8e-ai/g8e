@@ -102,10 +102,19 @@ func TestView_PostureConsensus_ConsensusFieldsShown(t *testing.T) {
 	assert.Contains(t, s, "Consensus Service URL")
 }
 
-func TestView_PostureNotary_ConsensusFieldsShown(t *testing.T) {
+func TestView_PostureRatify_ConsensusFieldsHidden(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 2
+	s := m.View()
+	assert.NotContains(t, s, "Consensus Policy ID")
+	assert.NotContains(t, s, "Consensus Service URL")
+}
+
+func TestView_PostureNotary_ConsensusFieldsShown(t *testing.T) {
+	m := NewModel(Options{})
+	m.step = StepPosture
+	m.postureChoice = 3
 	s := m.View()
 	assert.Contains(t, s, "Consensus Policy ID")
 	assert.Contains(t, s, "Consensus Service URL")
@@ -169,7 +178,7 @@ func TestView_ReviewShowsActualConfig(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepReview
 	m.publicBaseURLInput.SetValue("https://actual.example.com")
-	m.postureChoice = 2
+	m.postureChoice = 3
 	s := m.View()
 	assert.Contains(t, s, "https://actual.example.com")
 	assert.Contains(t, s, "notary")

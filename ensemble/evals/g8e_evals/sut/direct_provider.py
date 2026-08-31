@@ -29,7 +29,11 @@ from pydantic import BaseModel, computed_field
 
 from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.llm_types import (
     Content,
     GenerateContentResponse,
@@ -37,6 +41,7 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     ThinkingConfig,
 )
+from app.models.model_telemetry import ModelBoundaryPrivacyAttestation
 from app.models.settings import LLMSettings
 
 from g8e_evals.arms import Arm
@@ -70,6 +75,7 @@ class DirectCallEvidence(BaseModel):
     monotonic_end: float = 0.0
     input_artifact_hash: str = ""
     output_artifact_hash: str = ""
+    model_boundary_privacy: ModelBoundaryPrivacyAttestation | None = None
     error: str | None = None
 
     @computed_field
@@ -144,6 +150,7 @@ class DirectProviderSUT:
                 monotonic_start=start,
                 monotonic_end=end,
                 input_artifact_hash=input_artifact_hash,
+                model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
                 error=str(e),
             )
             return Response(
@@ -174,6 +181,7 @@ class DirectProviderSUT:
             monotonic_end=end,
             input_artifact_hash=input_artifact_hash,
             output_artifact_hash=model_boundary_hash(answer_text),
+            model_boundary_privacy=recorded_model_boundary_privacy(self._provider),
         )
 
         return Response(

@@ -5,46 +5,89 @@ parent: Architecture
 
 # Dashboard (g8ed)
 
-Last Updated: 2026-08-27
-Version: v2.0.3
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ## What g8ed Is
 
-g8ed is the g8e operator dashboard. It is a Node.js 22 / Express web application that provides the operator-facing UI for the g8e platform: a chat interface for driving agentic ensembles, an operator management panel for binding and monitoring governed operators, an audit view for inspecting signed receipts and governance events, and a settings console for platform configuration. g8ed is a first-party component of the g8e platform, reunited in-tree in v2.0.0, and lives at `dashboard/` in the repository root.
+g8ed is the first-party browser interface for the g8e platform. It is a vanilla JavaScript single-page application served by a minimal Node.js 22 / Express 5 host from `dashboard/`. The dashboard provides browser components for passkey authentication, ensemble chat, operator management, governance approvals, audit inspection, settings, and live platform events.
+
+The current runtime has two distinct identity surfaces:
+
+- The browser authenticates directly to the gateway over HTTPS with WebAuthn passkeys and an HttpOnly web-session cookie.
+- The dashboard container enrolls as the `g8ed` app and stores an mTLS workload identity for server-to-server gateway clients. The static host does not currently construct those clients, so this identity is forward-compatible infrastructure rather than the browser's authentication mechanism.
+
+See the [Dashboard documentation](../dashboard/index.md) for the detailed component architecture, authentication flows, gateway contract, SSE behavior, operator surfaces, development workflow, and tests.
 
 ## Role in the Platform
 
-g8ed sits in the operator-facing tier of the platform. It is a consumer of the gateway surface:
+g8ed sits in the human-facing application tier. It is a control surface, not a governance or execution authority:
 
-- It authenticates operators through WebAuthn/FIDO2 passkeys, registered during enrollment and verified by the gateway's L3 Notary layer.
-- It proxies operator management actions (bind, unbind, download, device-link) through internal routes that call the gateway over mTLS.
-- It consumes the gateway's SSE event stream to surface live ensemble progress, governance approvals, and operator heartbeats in the browser.
-- It serves the console SPA, chat view, audit view, and settings view as EJS-rendered pages with client-side JavaScript components.
+- It starts and verifies WebAuthn registration and authentication ceremonies against the gateway.
+- It sends authenticated browser requests with `credentials: 'include'`, allowing the browser to attach the gateway-issued HttpOnly session cookie.
+- It consumes gateway SSE events and dispatches typed event payloads to UI components through an in-browser event bus.
+- It renders chat, operator, approval, audit, settings, and terminal experiences from framework-free JavaScript components and HTML templates.
+- It never mutates a target host directly. Host actions remain subject to the gateway's governance pipeline and the bound operator's local verification.
 
-The dashboard does not mutate hosts or submit governed intents directly. It is a control surface for the human operator: it lets the operator approve L3 transactions, monitor ensemble activity, and manage operator bindings. All mutations flow through the gateway and governed operator.
+The dashboard does not construct `GovernanceEnvelope` transactions, hold operator private keys in the browser, or proxy the gateway's mTLS WebSocket surface. Browser-accessible operations use the gateway's HTTPS and SSE surfaces.
 
-## Connection Model
+## Runtime Boundary
 
-g8ed connects to the gateway over HTTP from the browser (CORS-enabled) and over the internal Docker network from the server-side Express process. In the unified Docker stack (repo-root `docker-compose.yml`), the dashboard container probes the gateway's health endpoint at `http://g8eg:8080/api/v1/health` (the `g8eg` network alias) before starting. The gateway is configured with `--cors-origin`, `--passkey-rp-origin`, `--passkey-rp-id`, and `--passkey-rp-name` so it accepts browser cross-origin requests and WebAuthn passkey registrations from the dashboard origin.
+`dashboard/server.js` is a static SPA host. At startup it requires the browser-facing `G8E_GATEWAY_URL`, resolves or enrolls the container's app identity, creates the Express application, and begins listening only after enrollment succeeds. The Express application:
 
-The dashboard's `GATEWAY_HEALTH_URL` and `GATEWAY_HEALTH_PATH` environment variables point at the gateway's network alias and health path. The dashboard does not require direct access to the gateway's PKI volume; it authenticates through the browser via passkeys and through the server-side internal routes via the gateway's HTTP API.
+- Publishes `G8E_GATEWAY_URL` as `window.G8E_GATEWAY_URL` from `/g8e-config.js` without a localhost fallback.
+- Sets Content Security Policy and browser security headers, including a `connect-src` restricted to the configured gateway origin.
+- Serves `dashboard/public/` and returns `index.html` for unknown HTML routes so client-side navigation can resolve.
+- Rate-limits the SPA fallback.
+- Does not mount the route modules under `dashboard/routes/`, create a gateway HTTP client, terminate TLS, authenticate browser sessions, or proxy WebSockets.
+
+The frontend `ServiceClient` resolves `ServiceName.GATEWAY` to `window.G8E_GATEWAY_URL` and resolves `ServiceName.g8ed` to the dashboard origin. Gateway authentication, user, session, and passkey requests use the gateway origin. Some retained operator, chat, audit, settings, and approval modules still target the legacy g8ed origin; because the static host mounts no API routers, those modules are migration inventory rather than an active server API. Detailed documentation distinguishes the active browser-direct surface from this retained legacy surface.
+
+## Browser Authentication
+
+The browser requests registration or authentication challenges from the gateway, converts base64url WebAuthn fields to browser credential buffers, invokes `navigator.credentials.create()` or `navigator.credentials.get()`, serializes the credential response, and sends it to the corresponding gateway verification endpoint. A successful verification establishes an HttpOnly `g8e_web_session_cookie` at the gateway origin.
+
+JavaScript cannot read the cookie. Every gateway request uses `credentials: 'include'`; the dashboard does not synthesize browser authentication headers. Session startup validates the current user and obtains the public web-session identifier from the gateway. Logout calls the gateway, disconnects SSE, clears local UI state, and navigates home.
+
+See [Dashboard Authentication](../dashboard/auth.md) and [Authentication & Authorization](./auth.md).
+
+## Container Workload Enrollment
+
+Before Express listens, `AppEnrollmentService` tries to load an installed app identity. A missing, expired, near-expiry, or otherwise unusable identity enters the owner-approved platform enrollment protocol over the gateway's plain-HTTP bootstrap surface. g8ed generates an ECDSA P-256 key and CSR, persists resumable pending state, waits for approval, signs the completion transcript, validates the response, and writes the installed identity under the dashboard runtime directory.
+
+In the unified Docker stack, `G8E_RUNTIME_DIR=/data` and the `g8e-dashboard-data` volume persists:
+
+- `pki/issued/apps/g8ed.crt`
+- `pki/issued/apps/g8ed.key`
+- `pki/trust/hub-bundle.pem`
+- `pki/pending-enrollment/g8ed.json` while enrollment is pending
+
+Enrollment fails closed: an unexpected identity-load failure or failed enrollment prevents the server from listening and exits the container non-zero. The browser never receives or uses this private key. See [Dashboard Authentication](../dashboard/auth.md) and [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md).
+
+## Event Flow
+
+After browser authentication, `G8eDashboardApp` initializes `SSEConnectionManager`. The manager owns one `EventSource`, reconnects with capped exponential backoff and jitter, resets its keepalive timeout on activity, and emits application events through `EventBus`. Infrastructure events are consumed by the manager; typed application events are forwarded to chat, approval, operator, and status components.
+
+The current `EventSource` path is built from the relative gateway SSE path. The static host does not proxy that path, so a deployment must expose the SSE endpoint at the resolved browser origin or complete the pending gateway-origin migration for this client. See [Dashboard SSE](../dashboard/sse.md) and [SSE Streaming](./sse.md).
 
 ## Build and Test
 
-The dashboard ships with its own Dockerfile (`dashboard/Dockerfile`), rooted at the g8e repo root so it can `COPY dashboard/`. The Makefile provides:
+The dashboard has no frontend compilation step. Node serves the checked-in assets in `dashboard/public/` directly. The component provides:
 
-- `make dashboard-test` — runs the dashboard vitest suite (`dashboard/test/`).
-- `make build-dashboard` — builds the dashboard Docker image.
+- `npm start` — runs `node server.js`.
+- `npm run dev` — runs the server through nodemon.
+- `npm test` — runs the Vitest suite once.
+- `npm run test:coverage` — runs Vitest with V8 coverage over `public/js/**/*.js` and `services/**/*.js`.
+- `make dashboard-test` — runs the repository-level dashboard test target.
+- `make build-dashboard` — builds the dashboard image from the repository root.
 
-The dashboard test suite is co-located under `dashboard/test/` and is not moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 3-tier test model as Tier 1 (unit, in-component) and Tier 3 (Docker E2E against the unified compose). See the [Unified Docker Stack guide](../guides/unified_stack.md) for bringing up the whole platform.
-
-## License
-
-g8ed is licensed under the Business Source License 1.1 (BSL 1.1), matching the rest of the g8e platform. It converts to Apache License 2.0 on 2030-08-18. See `dashboard/LICENSE`.
+Tests live under `dashboard/test/` and cover browser components, models, rendering, SSE reconnection, the static server, app enrollment, and prepared mTLS client wiring. See [Dashboard Development](../dashboard/development.md) and [Dashboard Tests](../dashboard/tests.md).
 
 ## Related Documentation
 
-- [Authentication & Authorization](./auth.md): The WebAuthn passkey enrollment and L3 notary flow g8ed integrates with.
-- [SSE Streaming](./sse.md): The event stream g8ed consumes for live ensemble and operator activity.
-- [Ensemble (g8ee)](./ensemble.md): The agentic ensemble whose events g8ed surfaces in the chat view.
-- [Unified Docker Stack](../guides/unified_stack.md): Bringing up the whole platform including g8ed.
+- [Dashboard documentation](../dashboard/index.md): Detailed g8ed component documentation.
+- [Authentication & Authorization](./auth.md): Gateway WebAuthn, web sessions, and workload enrollment.
+- [SSE Streaming](./sse.md): Gateway event publication, storage, polling, and streaming.
+- [Ensemble (g8ee)](./ensemble.md): The first-party ensemble whose events the dashboard renders.
+- [Build a g8e-Compatible Frontend](../guides/build_frontend.md): Public browser integration contract.
+- [Unified Docker Stack](../guides/unified_stack.md): Full-stack deployment including g8ed.

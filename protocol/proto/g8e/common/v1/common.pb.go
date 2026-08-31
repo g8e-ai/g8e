@@ -592,7 +592,7 @@ type GovernanceEnvelope struct {
 	TenantId          string `protobuf:"bytes,23,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	BindingPersona    string `protobuf:"bytes,24,opt,name=binding_persona,json=bindingPersona,proto3" json:"binding_persona,omitempty"`
 	// Gateway governance posture at envelope construction time (doctrine,
-	// consensus, notary). Set by the gateway; the operator reads it here at
+	// consensus, ratify, notary). Set by the gateway; the operator reads it here at
 	// L4 verification time instead of from out-of-band config. Not included
 	// in the transaction hash — it is policy metadata, not intent.
 	Posture       string `protobuf:"bytes,27,opt,name=posture,proto3" json:"posture,omitempty"`

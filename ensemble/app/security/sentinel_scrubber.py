@@ -392,6 +392,18 @@ SentinelScrubber._scrubbers = SentinelScrubber._initialize_scrubbers()
 _default_scrubber: SentinelScrubber | None = None
 
 
+def inspect_sensitive_text(text: str) -> tuple[int, list[str]]:
+    result = text
+    total_count = 0
+    scrub_types: list[str] = []
+    for scrubber in SentinelScrubber._scrubbers:
+        result, count = scrubber.scrub(result)
+        if count > 0:
+            total_count += count
+            scrub_types.append(scrubber.name)
+    return total_count, scrub_types
+
+
 def get_sentinel_scrubber(config: SentinelConfig | None = None) -> SentinelScrubber:
     global _default_scrubber
     if _default_scrubber is None:

@@ -13,6 +13,7 @@ resolution, and the logical key structure of attempt records.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 
 import pytest
 from g8e.operator.v1.operator_pb2 import (
@@ -27,26 +28,231 @@ from g8e_evals.schema import (
     SCHEMA_VERSION,
     AttemptRecord,
     ArmManifestEntry,
+    CanaryScrubbingAssertion,
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
+    FinalStateAssertion,
+    FinalStateObservation,
     MetricObservation,
+    ModelBoundaryPrivacyAttestation,
     ModelIdentity,
+    PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RehydrationAssertion,
+    RehydrationBoundary,
+    RehydrationObservation,
+    RejectionLayer,
     RunManifest,
+    SecretDetectionAssertion,
+    SecretDetectionObservation,
+    StateAssertion,
+    StateAssertionPredicate,
+    StateCollectionBoundary,
+    StateEvidenceKind,
+    StateFixtureDefinition,
+    StateObservation,
+    StateValue,
     StageKind,
     StageObservation,
     TaskDefinition,
     TerminalStatus,
     UsageReconciliation,
+    VerificationStatus,
 )
 
 pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.10.0"
+    assert SCHEMA_VERSION == "1.17.0"
+
+
+def test_rehydration_assertion_and_observation_round_trip():
+    assertion = RehydrationAssertion(
+        assertion_id="rehydration-fixture-1",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = RehydrationObservation(
+        observation_id="rehydration-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        output_artifact_sha256=assertion.expected_output_artifact_sha256,
+        rehydrator_version="sentinel-rehydrator@1.0.0",
+        execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        restored_token_count=2,
+        unresolved_token_count=0,
+        restored_sensitive_types=["email", "api_key"],
+        source_evidence_refs=["restricted-rehydration-evidence"],
+        source_evidence_sha256="c" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = RehydrationObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored == observation
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"expected_sensitive_types": ["email", "email"]},
+        {"expected_token_count": 0},
+    ],
+)
+def test_rehydration_assertion_rejects_malformed_ground_truth(update: dict[str, object]):
+    values: dict[str, object] = {
+        "assertion_id": "rehydration-fixture-1",
+        "source": "assistant_response",
+        "input_artifact_sha256": "a" * 64,
+        "expected_output_artifact_sha256": "b" * 64,
+        "expected_token_count": 1,
+        "expected_sensitive_types": ["email"],
+    }
+    values.update(update)
+
+    with pytest.raises(ValidationError):
+        RehydrationAssertion.model_validate(values)
+
+
+def test_verified_rehydration_observation_requires_source_evidence():
+    with pytest.raises(ValidationError):
+        RehydrationObservation(
+            observation_id="rehydration-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="rehydration-fixture-1",
+            source="assistant_response",
+            input_artifact_sha256="a" * 64,
+            output_artifact_sha256="b" * 64,
+            rehydrator_version="sentinel-rehydrator@1.0.0",
+            execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            restored_token_count=1,
+            unresolved_token_count=0,
+            restored_sensitive_types=["email"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_rehydration_observation_rejects_duplicate_source_evidence_references():
+    with pytest.raises(ValidationError, match="rehydration source evidence references must be unique"):
+        RehydrationObservation(
+            observation_id="rehydration-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="rehydration-fixture-1",
+            source="assistant_response",
+            input_artifact_sha256="a" * 64,
+            output_artifact_sha256="b" * 64,
+            rehydrator_version="sentinel-rehydrator@1.0.0",
+            execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            restored_token_count=1,
+            unresolved_token_count=0,
+            restored_sensitive_types=["email"],
+            source_evidence_refs=["restricted-evidence", "restricted-evidence"],
+            source_evidence_sha256="c" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_secret_detection_assertion_and_observation_round_trip():
+    assertion = SecretDetectionAssertion(
+        assertion_id="scanner-fixture-1",
+        source="conversation_history:user",
+        input_artifact_sha256="a" * 64,
+        expected_sensitive_occurrences=2,
+        expected_benign_occurrences=1,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = SecretDetectionObservation(
+        observation_id="scanner-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        scanner_version="sentinel-regex@1.0.0",
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        true_positive_count=1,
+        false_positive_count=1,
+        false_negative_count=1,
+        true_negative_count=0,
+        detected_sensitive_types=["email"],
+        missed_sensitive_types=["api_key"],
+        source_evidence_refs=["restricted-evidence-1"],
+        source_evidence_sha256="b" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = SecretDetectionObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored == observation
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"expected_sensitive_types": ["email", "email"]},
+        {"expected_sensitive_occurrences": 0},
+    ],
+)
+def test_secret_detection_assertion_rejects_malformed_ground_truth(update: dict[str, object]):
+    values: dict[str, object] = {
+        "assertion_id": "scanner-fixture-1",
+        "source": "conversation_history:user",
+        "input_artifact_sha256": "a" * 64,
+        "expected_sensitive_occurrences": 1,
+        "expected_benign_occurrences": 1,
+        "expected_sensitive_types": ["email"],
+    }
+    values.update(update)
+    with pytest.raises(ValidationError):
+        SecretDetectionAssertion.model_validate(values)
+
+
+def test_verified_secret_detection_observation_requires_source_evidence():
+    with pytest.raises(ValidationError):
+        SecretDetectionObservation(
+            observation_id="scanner-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="scanner-fixture-1",
+            source="conversation_history:user",
+            input_artifact_sha256="a" * 64,
+            scanner_version="sentinel-regex@1.0.0",
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            true_positive_count=1,
+            false_positive_count=0,
+            false_negative_count=0,
+            true_negative_count=0,
+            detected_sensitive_types=["email"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_model_boundary_privacy_attestation_rejects_unbound_payload_hash():
+    with pytest.raises(ValidationError):
+        ModelBoundaryPrivacyAttestation(
+            scanner_version="sentinel-regex@1.0.0",
+            input_artifact_hash="not-a-sha256",
+            raw_sensitive_occurrences=0,
+        )
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -112,6 +318,281 @@ def test_attempt_record_rejects_extra_fields():
             arm_id=Arm.DIRECT,
             extra_field="bad",  # type: ignore[call-arg]
         )
+
+
+def test_final_state_assertion_and_observation_round_trip():
+    assertion = FinalStateAssertion(
+        assertion_id="file-edit-state-root",
+        predicate=StateAssertionPredicate.STATE_ROOT_CHANGED,
+        action_type="FILE_EDIT",
+    )
+    observation = FinalStateObservation(
+        observation_id="attempt-1:final-state:file-edit-state-root",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type=assertion.action_type,
+        state_root_before="root-before",
+        state_root_after="root-after",
+        source_receipt_id="receipt-1",
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = FinalStateObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored.assertion_id == assertion.assertion_id
+    assert restored.state_root_before == "root-before"
+    assert restored.state_root_after == "root-after"
+    assert restored.source_receipt_id == "receipt-1"
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        (
+            StateEvidenceKind.FILE,
+            StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=12,
+                mode="0640",
+            ),
+        ),
+        (
+            StateEvidenceKind.DOCUMENT,
+            StateValue(
+                kind=StateEvidenceKind.DOCUMENT,
+                exists=True,
+                content_sha256="b" * 64,
+                version="7",
+            ),
+        ),
+        (
+            StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+            StateValue(
+                kind=StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+                exists=True,
+                content_sha256="c" * 64,
+                byte_length=4,
+            ),
+        ),
+        (
+            StateEvidenceKind.LEDGER_CONSISTENCY,
+            StateValue(
+                kind=StateEvidenceKind.LEDGER_CONSISTENCY,
+                consistent=True,
+                entry_count=3,
+                head_sha256="d" * 64,
+            ),
+        ),
+    ],
+)
+def test_state_fixture_and_observation_round_trip_with_typed_values(
+    kind: StateEvidenceKind,
+    expected: StateValue,
+):
+    fixture = StateFixtureDefinition(
+        fixture_id=f"fixture-{kind.value}",
+        fixture_sha256="e" * 64,
+        assertions=[StateAssertion(
+            assertion_id=f"assertion-{kind.value}",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target=f"target-{kind.value}",
+            expected=expected,
+        )],
+    )
+    observation = StateObservation(
+        observation_id=f"observation-{kind.value}",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=fixture.assertions[0].assertion_id,
+        action_type="FILE_EDIT",
+        fixture_sha256=fixture.fixture_sha256,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        target=f"target-{kind.value}",
+        observed=expected,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        source_evidence_refs=["evidence-1"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = StateObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored.observed.kind == kind
+    assert restored.fixture_sha256 == fixture.fixture_sha256
+    assert restored.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+
+
+def test_state_fixture_rejects_malformed_content_hash():
+    with pytest.raises(ValidationError):
+        StateFixtureDefinition(
+            fixture_id="fixture-1",
+            fixture_sha256="not-a-sha256",
+            assertions=[StateAssertion(
+                assertion_id="assertion-1",
+                action_type="FILE_EDIT",
+                collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+                target="target-1",
+                expected=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+            )],
+        )
+
+
+def test_verified_state_observation_requires_source_evidence_binding():
+    with pytest.raises(ValidationError, match="verified state observation requires source evidence"):
+        StateObservation(
+            observation_id="observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="assertion-1",
+            action_type="FILE_EDIT",
+            fixture_sha256="e" * 64,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="target-1",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_state_fixture_hash_mismatch():
+    fixture = StateFixtureDefinition(
+        fixture_id="fixture-1",
+        fixture_sha256="e" * 64,
+        assertions=[StateAssertion(
+            assertion_id="assertion-1",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="target-1",
+            expected=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )],
+    )
+
+    with pytest.raises(ValidationError, match="state fixture hash does not match"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            initial_state_fixture_hash="a" * 64,
+            state_fixture=fixture,
+        )
+
+
+def test_canary_scrubbing_assertion_round_trips_without_raw_canary():
+    assertion = CanaryScrubbingAssertion(
+        assertion_id="email-canary",
+        canary_sha256="a" * 64,
+        source="conversation_history:user",
+        input_artifact_sha256="b" * 64,
+        expected_output_artifact_sha256="c" * 64,
+        expected_scrub_type="email",
+        expected_occurrences=1,
+    )
+
+    restored = CanaryScrubbingAssertion.model_validate_json(assertion.model_dump_json())
+
+    assert restored == assertion
+    assert "raw_canary" not in assertion.model_dump()
+
+
+def test_task_definition_rejects_duplicate_canary_assertion_ids():
+    assertion = CanaryScrubbingAssertion(
+        assertion_id="duplicate",
+        canary_sha256="a" * 64,
+        source="conversation_history:user",
+        input_artifact_sha256="b" * 64,
+        expected_output_artifact_sha256="c" * 64,
+        expected_scrub_type="email",
+        expected_occurrences=1,
+    )
+
+    with pytest.raises(ValidationError, match="canary assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            sensitive_canary_annotations=[assertion, assertion],
+        )
+
+
+def test_task_definition_rejects_duplicate_rehydration_assertion_ids():
+    assertion = RehydrationAssertion(
+        assertion_id="duplicate",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=1,
+        expected_sensitive_types=["email"],
+    )
+
+    with pytest.raises(ValidationError, match="rehydration assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            rehydration_assertions=[assertion, assertion],
+        )
+
+
+def test_task_definition_rejects_duplicate_final_state_assertion_ids():
+    assertion = FinalStateAssertion(
+        assertion_id="duplicate",
+        predicate=StateAssertionPredicate.STATE_ROOT_CHANGED,
+        action_type="FILE_EDIT",
+    )
+
+    with pytest.raises(ValidationError, match="final-state assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            expected_final_state_assertions=[assertion, assertion],
+        )
+
+
+@pytest.mark.parametrize(
+    ("expected_outcome", "expected_rejection_layer"),
+    [
+        (PolicyOutcome.ALLOW, RejectionLayer.L1_DOCTRINE),
+        (PolicyOutcome.BLOCK, None),
+    ],
+)
+def test_task_definition_rejects_inconsistent_policy_expectation(
+    expected_outcome: PolicyOutcome,
+    expected_rejection_layer: RejectionLayer | None,
+):
+    with pytest.raises(ValidationError, match="expected rejection layer"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            expected_action_class="FILE_EDIT",
+            expected_allow_block_outcome=expected_outcome,
+            expected_rejection_layer=expected_rejection_layer,
+        )
+
+
+def test_attempt_record_links_all_final_state_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        final_state_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.final_state_observation_refs == ["observation-1", "observation-2"]
 
 
 def test_attempt_record_logical_key_fields():

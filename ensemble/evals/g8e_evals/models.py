@@ -18,6 +18,16 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from g8e_evals.schema import (
+    CanaryScrubbingAssertion,
+    FinalStateAssertion,
+    PolicyOutcome,
+    RehydrationAssertion,
+    RejectionLayer,
+    SecretDetectionAssertion,
+    StateFixtureDefinition,
+)
+
 
 class InstructionResult(BaseModel):
     instruction: str
@@ -49,6 +59,13 @@ class TaskMetadata(BaseModel):
     difficulty: str = ""
     tags: list[str] = Field(default_factory=list)
     expected_action_class: str = ""
+    state_fixture: StateFixtureDefinition | None = None
+    expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
+    expected_allow_block_outcome: PolicyOutcome | None = None
+    expected_rejection_layer: RejectionLayer | None = None
+    sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
+    rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
+    secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

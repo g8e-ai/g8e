@@ -105,7 +105,10 @@ func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, compu
 		if seen[vote.SignerKeyId] {
 			if policy.RequireDistinct {
 				tv.logger.Error("Duplicate signer in vote set with require_distinct", "key_id", vote.SignerKeyId)
-				return false, constants.ErrTxL2DuplicateSigner
+				if posture.RequiresL2Signature() {
+					return false, constants.ErrTxL2DuplicateSigner
+				}
+				return false, nil
 			}
 			continue
 		}

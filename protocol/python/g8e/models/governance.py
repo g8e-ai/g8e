@@ -125,7 +125,7 @@ class GovernanceEnvelope(G8eBaseModel):
     binding_persona: str | None = None
 
     # Gateway governance posture at envelope construction time (doctrine,
-    # consensus, notary). Set by the gateway; the operator reads it here at
+    # consensus, ratify, notary). Set by the gateway; the operator reads it here at
     # L4 verification time instead of from out-of-band config. Not included
     # in the transaction hash — it is policy metadata, not intent.
     posture: str | None = None

@@ -385,7 +385,7 @@ Platform event identifiers and binary/architecture constants:
 - Binary names: `BinaryNameWindows` (`g8e-windows-amd64.exe`), `BinaryNameLinux` (`g8e-linux-amd64`), `BinaryNameDarwin` (`g8e-darwin-amd64`)
 - Architectures: `ArchAMD64`, `ArchARM64`, `Arch386`
 - Operating systems: `OSLinux`, `OSDarwin`, `OSWindows`
-- Governance posture names: `PostureDoctrine` (`doctrine`), `PostureConsensus` (`consensus`), `PostureNotary` (`notary`)
+- Governance posture names: `PostureDoctrine` (`doctrine`), `PostureConsensus` (`consensus`), `PostureRatify` (`ratify`), `PostureNotary` (`notary`)
 - Log level names: `LogLevelInfo`, `LogLevelError`, `LogLevelDebug`, `LogLevelDefault` (alias for `LogLevelInfo`)
 
 ### Platform Enrollment (`platform_enrollment.go`)

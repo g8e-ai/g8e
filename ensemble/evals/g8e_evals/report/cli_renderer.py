@@ -27,9 +27,10 @@ def render_summary(agg: Aggregate, arm: Arm | None = None):
 
     console.print(table)
 
-    # Receipt-binding arms (doctrine, consensus, notary) expect nonzero
-    # receipt coverage. Ungoverned arms (direct, ensemble_ungoverned) do
-    # not bind receipts by design, so 0% coverage is correct for them.
+    # The canonical receipt-binding arms (doctrine, consensus, notary) expect
+    # nonzero receipt coverage. Ratify is a supported gateway posture but does
+    # not have a standalone eval arm. Ungoverned arms (direct,
+    # ensemble_ungoverned) do not bind receipts by design.
     receipt_binding_arm = arm is not None and arm.value in ("doctrine", "consensus", "notary")
 
     if agg.receipt_coverage_pct == 0 and not receipt_binding_arm:

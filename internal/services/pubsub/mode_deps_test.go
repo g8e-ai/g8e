@@ -135,17 +135,22 @@ func TestNewGatewayModeDeps_Success(t *testing.T) {
 	t.Parallel()
 
 	postures := []struct {
-		name    string
-		posture config.GatewayPosture
+		name              string
+		posture           config.GatewayPosture
+		requiresConsensus bool
 	}{
 		{name: "doctrine posture (consensus nil)", posture: config.PostureDoctrine},
-		{name: "consensus posture (consensus non-nil)", posture: config.PostureConsensus},
-		{name: "notary posture (consensus non-nil)", posture: config.PostureNotary},
+		{name: "consensus posture (consensus non-nil)", posture: config.PostureConsensus, requiresConsensus: true},
+		{name: "ratify posture (consensus nil)", posture: config.PostureRatify},
+		{name: "notary posture (consensus non-nil)", posture: config.PostureNotary, requiresConsensus: true},
 	}
 
 	for _, p := range postures {
 		t.Run(p.name, func(t *testing.T) {
 			input := validTestGatewayModeDeps(p.posture)
+			if !p.requiresConsensus {
+				input.Consensus = nil
+			}
 			deps, err := NewGatewayModeDeps(input)
 			require.NoError(t, err)
 			require.NotNil(t, deps)
@@ -154,10 +159,10 @@ func TestNewGatewayModeDeps_Success(t *testing.T) {
 			assert.Equal(t, input.ConsensusPolicyStore, deps.ConsensusPolicyStore)
 			assert.Equal(t, input.FieldReader, deps.FieldReader)
 			assert.Equal(t, input.PlatformEnrollmentDeps, deps.PlatformEnrollmentDeps)
-			if p.posture == config.PostureDoctrine {
-				assert.Nil(t, deps.Consensus)
-			} else {
+			if p.requiresConsensus {
 				assert.NotNil(t, deps.Consensus)
+			} else {
+				assert.Nil(t, deps.Consensus)
 			}
 		})
 	}

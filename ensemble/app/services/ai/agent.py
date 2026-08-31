@@ -38,7 +38,11 @@ from app.constants import (
     AITaskId,
     DEFAULT_FINISH_REASON,
 )
-from app.llm.model_evidence import model_boundary_hash, recorded_model_boundary_hash
+from app.llm.model_evidence import (
+    model_boundary_hash,
+    recorded_model_boundary_hash,
+    recorded_model_boundary_privacy,
+)
 from app.llm.provider import LLMProvider
 from app.models.agent import (
     AgentInputs,
@@ -383,6 +387,7 @@ class g8eEnsemble:
                         succeeded=False,
                         error_type=type(exc).__name__,
                         input_artifact_hash=input_artifact_hash,
+                        model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
                     ))
                     raise
                 turn_result = gated.turn_result
@@ -403,6 +408,7 @@ class g8eEnsemble:
                     retry_count=retry_count,
                     input_artifact_hash=input_artifact_hash,
                     output_artifact_hash=model_boundary_hash(turn_result.model_response_parts),
+                    model_boundary_privacy=recorded_model_boundary_privacy(llm_provider),
                 ))
 
                 total_input_tokens += turn_result.input_tokens

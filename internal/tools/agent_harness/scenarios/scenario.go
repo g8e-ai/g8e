@@ -19,7 +19,9 @@ import (
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
-// Posture is the Gateway enforcement mode a scenario needs.
+// Posture is the Gateway enforcement mode a scenario needs. The harness has
+// dedicated doctrine, consensus, and notary suites. Ratify is a supported
+// Gateway posture but does not yet have a dedicated scenario suite.
 //
 //	doctrine  - L1 enforced, L2/L3 audited           (--doctrine)
 //	consensus - L1/L2 enforced, L3 audited            (--consensus)

@@ -4,8 +4,8 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-08-16
-Version: v1.7.6
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -309,7 +309,7 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 - **Ed25519 signatures**: Consensus member agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
-- **Consensus deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Consensus service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
+- **Consensus deliberation**: Under `consensus` and `notary` postures, the gateway delegates L2 deliberation to an enrolled Consensus service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
 - **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the ConsensusPolicy
 
 ### L3 Notary (Authorization)
@@ -381,12 +381,13 @@ When L3 proof is missing (`ErrL3ProofMissing`), the gateway suspends the transac
 
 ### Gateway Modes
 
-The Operator runs in gateway mode with three posture options:
+The Operator runs in gateway mode with four posture options:
 
 | Mode | Posture | Purpose |
 |---|---|---|
 | **Doctrine** | `PostureDoctrine` | L1 enforced, L2/L3 audited (default) |
 | **Consensus** | `PostureConsensus` | L1/L2 enforced, L3 audited |
+| **Ratify** | `PostureRatify` | L1/L3 enforced, L2 audited |
 | **Notary** | `PostureNotary` | L1/L2/L3 strictly enforced |
 
 ### Port Configuration

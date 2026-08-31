@@ -232,7 +232,7 @@ func TestNewGovernancePosture_PanicsOnInvalidPosture(t *testing.T) {
 // strings are accepted without panicking.
 func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 	t.Parallel()
-	validPostures := []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureNotary}
+	validPostures := []string{constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary}
 	for _, posture := range validPostures {
 		t.Run(posture, func(t *testing.T) {
 			t.Parallel()

@@ -5,12 +5,12 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ## What g8e Is
 
-g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. The agent formulates intent, and the platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five fail-closed governance layers before any action runs. Every AI client is treated as an untrusted principal; every host is sovereign over its own audit ledger and state root.
+g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. The agent formulates intent, and the platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five governance layers before any action runs. Universal checks and proofs required by the active posture fail closed. Every AI client is treated as an untrusted principal; every host is sovereign over its own audit ledger and state root.
 
 The platform ships as a polyglot monorepo. The gateway and operator are a single static Go binary that runs in two modes:
 
@@ -20,7 +20,7 @@ The platform ships as a polyglot monorepo. The gateway and operator are a single
 Two first-party components ship alongside the Go binary and complete the platform:
 
 - **Ensemble (g8ee)**: The first g8e-compatible agentic ensemble. A Python 3.12 / FastAPI service that connects to the gateway over mTLS, submits governed intents through the MCP surface, and streams progress and results back through the SSE event bridge. See [Ensemble (g8ee)](./ensemble.md).
-- **Dashboard (g8ed)**: The operator dashboard. A Node.js 22 / Express web application that provides the operator-facing UI for driving ensembles, managing operators, inspecting audit trails, and configuring the platform. See [Dashboard (g8ed)](./dashboard.md).
+- **Dashboard (g8ed)**: The first-party browser interface. A framework-free JavaScript SPA served by a minimal Node.js 22 / Express 5 static host; the browser authenticates and calls the gateway directly, while the container independently enrolls a prepared mTLS app identity. See [Dashboard (g8ed)](./dashboard.md) and the [Dashboard documentation](../dashboard/index.md).
 
 `docker compose up` from the repo root brings up the whole stack end to end: gateway, operator, ensemble, and dashboard. See the [Unified Docker Stack guide](../guides/unified_stack.md).
 
@@ -30,29 +30,30 @@ For the full service stacks, see [Gateway Architecture](./gateway.md) and [Opera
 
 ## The Five-Layer Governance Pipeline
 
-Every agent-originated action passes through the same five fail-closed layers. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
+Every agent-originated action passes through the same five layers. Universal checks and posture-required proofs fail closed, while optional L2 and L3 results remain audit evidence. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
 
 | Layer | Owner | Responsibility |
 | --- | --- | --- |
 | **L1 Doctrine** | Gateway | Forbidden pattern matching and MITRE ATT&CK heuristics detect reverse shells, privilege escalation, and destructive disk operations. Enforced in every posture. The operator re-runs L1 validation locally before execution. |
 | **L2 Consensus** | Gateway | Multi-signature Ed25519 votes over `<transaction_hash>\|<decision>` from an enrolled body of members. The reference implementation signs deterministic L1-doctrine evaluations. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures. |
-| **L3 Notary** | Gateway | Human-in-the-loop authorization. In gateway mode the proof is a WebAuthn/FIDO2 passkey assertion over the transaction hash; CLI callers additionally bind to an mTLS session. In outbound operator mode the proof is a suspended-transaction approval and Ed25519 signature. Mutations are blocked until a valid proof is presented; read-only actions do not require L3. |
-| **L4 Warden** | Operator | Final pre-dispatch gate. Recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Any mismatch or missing proof fails closed. |
+| **L3 Notary** | Gateway | Human-in-the-loop authorization. Under `ratify` and `notary`, gateway mode requires a WebAuthn/FIDO2 passkey assertion over the transaction hash for mutations; CLI callers additionally bind to an mTLS session. In outbound operator mode, required L3 is a suspended-transaction approval and Ed25519 signature. L3 is audited under `doctrine` and `consensus`; read-only actions do not require L3. |
+| **L4 Warden** | Operator | Final pre-dispatch gate. Recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Universal mismatches and missing posture-required proofs fail closed; optional proof failures remain non-gating audit evidence. |
 | **L5 Actuator** | Operator | Singular execution boundary. Signs an `EXECUTING` receipt, rehydrates scrubbed sensitive data at the execution site using local vault keys, mints a just-in-time capability bound to the transaction hash, dispatches the action, dissolves the capability, and signs a final `COMPLETED` or `FAILED` receipt. |
 
-The pipeline is fail-closed at every layer: a failed check rejects the transaction and releases its nonce reservation. For the full interlock sequence, posture configurations, and the canonical `GovernanceEnvelope` container, see [Governance](./governance.md). For L2 enrollment, deliberation, and member key management, see [Consensus](./consensus.md). For the L3 notary modes and out-of-band approval flow, see [Authentication & Authorization](./auth.md).
+Universal checks and posture-required proofs fail closed throughout the pipeline: a failed required check rejects the transaction and releases its nonce reservation, while optional L2 and L3 results remain audit evidence. For the full interlock sequence, posture configurations, and the canonical `GovernanceEnvelope` container, see [Governance](./governance.md). For L2 enrollment, deliberation, and member key management, see [Consensus](./consensus.md). For the L3 notary modes and out-of-band approval flow, see [Authentication & Authorization](./auth.md).
 
 ---
 
 ## Governance Postures
 
-A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only. The posture is set at startup via `--posture <doctrine|consensus|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time.
+A configurable **GovernancePosture** determines which layers are enforced as fail-closed gates versus audited only. The posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. The gateway boots regardless of posture; layer enforcement happens at transaction time.
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use |
 | --- | --- | --- | --- | --- |
 | **Doctrine** (default) | Enforced | Audited | Audited | Local development and CI |
 | **Consensus** | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with human authorization |
+| **Ratify** | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
+| **Notary** | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
 
 The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding. See [Governance](./governance.md) for the posture selection semantics and per-layer enforcement matrix.
 
@@ -148,7 +149,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 ## Key Design Principles
 
 - **Do not trust the AI client.** The agent provides intent; the platform verifies and executes. The client has no privileged channel.
-- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed.
+- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed when L2 is required and remains non-gating audit evidence otherwise.
 - **Do not trust the gateway.** The operator re-derives every proof locally before execution.
 - **Multi-signature consensus.** L2 requires K-of-N Ed25519 affirmative votes from distinct members. The reference implementation signs deterministic L1-doctrine evaluations.
 - **Doctrine is enforced, not suggested.** Agents can be informed of doctrine, but the L1 gate rejects forbidden actions regardless of compliance.
@@ -166,7 +167,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 | [Gateway Architecture](./gateway.md) | Gateway service stack, operating modes, port topology, MCP/A2A endpoints, pub/sub brokering, in-process Operator substrate. |
 | [Operator Architecture](./operator.md) | Operator execution boundary, L4 Warden and L5 Actuator, native tool playbook, local audit vault. |
 | [Ensemble (g8ee)](./ensemble.md) | First-party agentic ensemble: role, connection model, in-tree protocol dependency, build and test. |
-| [Dashboard (g8ed)](./dashboard.md) | Operator dashboard: role, connection model, build and test. |
+| [Dashboard (g8ed)](./dashboard.md) | Browser dashboard: static-host boundary, browser and container identities, gateway-direct requests, SSE, build, and test. |
 | [Governance](./governance.md) | Five-layer interlock sequence, GovernanceEnvelope structure, posture configurations, transaction flow. |
 | [Consensus](./consensus.md) | L2 consensus policy, declarative bootstrap, member key management, deliberation, L4 vote verification. |
 | [Authentication & Authorization](./auth.md) | CLI enrollment state machine, recovery and rotation, headless enrollment, WebAuthn notary, session binding. |

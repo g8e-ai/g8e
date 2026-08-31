@@ -41,6 +41,35 @@ func TestTestCoverageCmd_VerboseFlagAddsVFlag(t *testing.T) {
 	assert.Equal(t, "true", flag.Value.String())
 }
 
+func TestTestCoverageCmd_DelegatesThresholdEnforcementToMakefile(t *testing.T) {
+	var capturedName string
+	var capturedArgs []string
+	runner := func(name string, args ...string) error {
+		capturedName = name
+		capturedArgs = args
+		return nil
+	}
+	cmd := testCoverageCmdWithRunner(runner)
+	require.NoError(t, cmd.Flags().Set("pkg", "./internal/services/auth"))
+	require.NoError(t, cmd.Flags().Set("verbose", "true"))
+
+	require.NoError(t, cmd.RunE(cmd, nil))
+
+	assert.Equal(t, "make", capturedName)
+	assert.Equal(t, []string{"test-coverage", "PKG=./internal/services/auth", "VERBOSE=1"}, capturedArgs)
+}
+
+func TestTestCoverageCmd_MakefileFailureWrapsCoverageError(t *testing.T) {
+	runnerErr := errors.New("coverage threshold failed")
+	cmd := testCoverageCmdWithRunner(func(string, ...string) error { return runnerErr })
+
+	err := cmd.RunE(cmd, nil)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrCoverageTestsFailed)
+	assert.ErrorIs(t, err, runnerErr)
+}
+
 // recordingE2ERunner captures the arguments passed to the runner and returns
 // a fixed (code, err) pair. Used to verify argument propagation without
 // starting platform tests.

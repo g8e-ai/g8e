@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-08-30
-Version: v2.1.1
+Last Updated: 2026-08-31
+Version: v2.1.2
 
 ---
 
@@ -24,6 +24,7 @@ The g8e binary uses a single cobra command tree. Gateway and Operator modes are 
 A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
 - `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
 - `--posture consensus`, Enforces L1/L2; audits L3. Requires `--consensus-id` and `--consensus-url` to connect to an enrolled Consensus service for L2 deliberation.
+- `--posture ratify`, Enforces L1/L3; audits L2.
 - `--posture notary`, Enforces L1/L2/L3 strictly.
 
 Additional Gateway mode flags for consensus posture:
@@ -146,7 +147,7 @@ Custom operator implementations need the g8e Protocol Library for protobuf schem
 The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.1
+go get github.com/g8e-ai/g8e/v2@v2.1.2
 ```
 
 The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
@@ -158,7 +159,7 @@ See the [Protocol Library documentation](../architecture/protocol.md) for the fu
 For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
 
 ```bash
-pip install g8e==2.1.1
+pip install g8e==2.1.2
 ```
 
 The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.

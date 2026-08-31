@@ -20,7 +20,7 @@ g8e functions as a secure perimeter for tool-calling standards. It treats MCP an
 - **Zero Standing Privileges:** The operator holds no permanent administrative credentials. Permissions are minted just-in-time from the verified intent inside the governance envelope, scoped to a single action, and dissolved on completion. A compromise of any layer cannot exfiltrate persistent credentials because none exist. See [Governance](../architecture/governance.md).
 - **Unified Context and Control Plane:** Every admitted action writes its complete signed receipt to the host-local SQLite audit store before execution, appends a signed attestation to the SQLite commitment chain, and records governed file snapshots in the git-backed ledger. Agents derive context from these linked stores and verify it against live host state through governed tools. See [Storage Architecture](../architecture/storage.md).
 - **Proof of Human Presence:** High-risk mutations require a WebAuthn/FIDO2 passkey assertion computed over the transaction hash. The approval is bound to one action, one moment, and one host: it cannot be transplanted, replayed, or harvested. See [Authentication](../architecture/auth.md).
-- **5-Layer Verification Sequence:** Mutations must sequentially pass Doctrine (L1), Consensus (L2), Notary (L3), and Warden (L4) at the Operator boundary before hitting the Actuator (L5) execution boundary. The gateway delegates L2 deliberation to an enrolled Consensus service that produces signed Ed25519 votes over the transaction hash. Every layer fails closed. See [Governance](../architecture/governance.md) and [Consensus](../architecture/consensus.md).
+- **5-Layer Verification Sequence:** Mutations sequentially traverse Doctrine (L1), Consensus (L2), Notary (L3), and Warden (L4) at the Operator boundary before reaching the Actuator (L5) execution boundary. The gateway delegates required L2 deliberation to an enrolled Consensus service that produces signed Ed25519 votes over the transaction hash. Universal checks and every proof required by the active posture fail closed; optional L2 and L3 results are audited without gating execution. See [Governance](../architecture/governance.md) and [Consensus](../architecture/consensus.md).
 - **Zero Standing Dependencies:** The reference Governed Operator is a single, statically compiled binary, making the platform air-gap capable for deployment in isolated infrastructure perimeters.
 - **Console SPA & Dashboard:** The g8e Console provides a browser-based interface for passkey enrollment, interactive L3 transaction approval, and real-time SSE audit streaming, alongside the operator dashboard for fleet and session management. See [Dashboard Architecture](../architecture/dashboard.md) and [Authentication](../architecture/auth.md).
 
@@ -34,13 +34,14 @@ g8e functions as a secure perimeter for tool-calling standards. It treats MCP an
 
 ## Posture Configurations
 
-The gateway supports three posture configurations that control which verification layers are enforced versus audited:
+The gateway supports four posture configurations that control which verification layers are enforced versus audited:
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use |
 | --- | --- | --- | --- | --- |
 | `doctrine` (default) | Enforced | Audited | Audited | Local development and CI |
 | `consensus` | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| `notary` | Enforced | Enforced | Enforced (mutations only) | Production with human authorization |
+| `ratify` | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
+| `notary` | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
 
 L4 Warden and L5 Actuator are always active in all configurations. The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding. See [Governance](../architecture/governance.md) for posture configuration.
 
