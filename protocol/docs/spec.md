@@ -178,7 +178,7 @@ L2 Consensus is a protocol concept defined by the g8e protocol (`L2Metadata`, `L
 The Consensus service is the reference implementation of L2 Consensus shipped with g8e. It is an enrolled body of agentic applications that independently evaluate each transaction's payload. Consensus service logic is defined in `../../internal/services/consensus/service.go`.
 - Each Consensus member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
 - The `L2Metadata` contains the `consensus_set_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
-- The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Consensus service's `/consensus/v1/deliberate` endpoint before dispatch.
+- The gateway never self-signs L2 votes. Under `consensus` and `notary` postures, the gateway calls the Consensus service's `/consensus/v1/deliberate` endpoint before dispatch.
 - L4 Warden verifies quorum: at least `K` affirmative distinct signatures from the ConsensusPolicy's member set, checked against the `SignerStore`.
 - For single-member consensus (degenerate case), the gateway's actuator signing key may be used as the member key. Multi-member consensus requires a separate key provisioning flow.
 

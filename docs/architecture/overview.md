@@ -10,7 +10,7 @@ Version: v2.1.0
 
 ## What g8e Is
 
-g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. The agent formulates intent, and the platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five fail-closed governance layers before any action runs. Every AI client is treated as an untrusted principal; every host is sovereign over its own audit ledger and state root.
+g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. The agent formulates intent, and the platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five governance layers before any action runs. Universal checks and proofs required by the active posture fail closed. Every AI client is treated as an untrusted principal; every host is sovereign over its own audit ledger and state root.
 
 The platform ships as a polyglot monorepo. The gateway and operator are a single static Go binary that runs in two modes:
 
@@ -30,17 +30,17 @@ For the full service stacks, see [Gateway Architecture](./gateway.md) and [Opera
 
 ## The Five-Layer Governance Pipeline
 
-Every agent-originated action passes through the same five fail-closed layers. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
+Every agent-originated action passes through the same five layers. Universal checks and posture-required proofs fail closed, while optional L2 and L3 results remain audit evidence. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
 
 | Layer | Owner | Responsibility |
 | --- | --- | --- |
 | **L1 Doctrine** | Gateway | Forbidden pattern matching and MITRE ATT&CK heuristics detect reverse shells, privilege escalation, and destructive disk operations. Enforced in every posture. The operator re-runs L1 validation locally before execution. |
 | **L2 Consensus** | Gateway | Multi-signature Ed25519 votes over `<transaction_hash>\|<decision>` from an enrolled body of members. The reference implementation signs deterministic L1-doctrine evaluations. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures. |
-| **L3 Notary** | Gateway | Human-in-the-loop authorization. In gateway mode the proof is a WebAuthn/FIDO2 passkey assertion over the transaction hash; CLI callers additionally bind to an mTLS session. In outbound operator mode the proof is a suspended-transaction approval and Ed25519 signature. Mutations are blocked until a valid proof is presented; read-only actions do not require L3. |
-| **L4 Warden** | Operator | Final pre-dispatch gate. Recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Any mismatch or missing proof fails closed. |
+| **L3 Notary** | Gateway | Human-in-the-loop authorization. Under `ratify` and `notary`, gateway mode requires a WebAuthn/FIDO2 passkey assertion over the transaction hash for mutations; CLI callers additionally bind to an mTLS session. In outbound operator mode, required L3 is a suspended-transaction approval and Ed25519 signature. L3 is audited under `doctrine` and `consensus`; read-only actions do not require L3. |
+| **L4 Warden** | Operator | Final pre-dispatch gate. Recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Universal mismatches and missing posture-required proofs fail closed; optional proof failures remain non-gating audit evidence. |
 | **L5 Actuator** | Operator | Singular execution boundary. Signs an `EXECUTING` receipt, rehydrates scrubbed sensitive data at the execution site using local vault keys, mints a just-in-time capability bound to the transaction hash, dispatches the action, dissolves the capability, and signs a final `COMPLETED` or `FAILED` receipt. |
 
-The pipeline is fail-closed at every layer: a failed check rejects the transaction and releases its nonce reservation. For the full interlock sequence, posture configurations, and the canonical `GovernanceEnvelope` container, see [Governance](./governance.md). For L2 enrollment, deliberation, and member key management, see [Consensus](./consensus.md). For the L3 notary modes and out-of-band approval flow, see [Authentication & Authorization](./auth.md).
+Universal checks and posture-required proofs fail closed throughout the pipeline: a failed required check rejects the transaction and releases its nonce reservation, while optional L2 and L3 results remain audit evidence. For the full interlock sequence, posture configurations, and the canonical `GovernanceEnvelope` container, see [Governance](./governance.md). For L2 enrollment, deliberation, and member key management, see [Consensus](./consensus.md). For the L3 notary modes and out-of-band approval flow, see [Authentication & Authorization](./auth.md).
 
 ---
 
@@ -149,7 +149,7 @@ g8e provides platform-specific bootstrap scripts for local development, gateway-
 ## Key Design Principles
 
 - **Do not trust the AI client.** The agent provides intent; the platform verifies and executes. The client has no privileged channel.
-- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed.
+- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed when L2 is required and remains non-gating audit evidence otherwise.
 - **Do not trust the gateway.** The operator re-derives every proof locally before execution.
 - **Multi-signature consensus.** L2 requires K-of-N Ed25519 affirmative votes from distinct members. The reference implementation signs deterministic L1-doctrine evaluations.
 - **Doctrine is enforced, not suggested.** Agents can be informed of doctrine, but the L1 gate rejects forbidden actions regardless of compliance.

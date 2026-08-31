@@ -237,7 +237,7 @@ To wrap an external MCP server with g8e governance:
 
 ### L3 Transaction Approval
 
-When the gateway is running in notary posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
+When the gateway is running in ratify or notary posture, mutation transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
 
 ```bash
 ./g8e auth approve <transaction_hash>

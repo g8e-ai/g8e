@@ -149,7 +149,7 @@ type L2Status int32
 
 const (
 	L2Status_L2_STATUS_UNSPECIFIED     L2Status = 0
-	L2Status_L2_STATUS_NOT_REQUIRED    L2Status = 1 // L2 signature not required by posture (doctrine)
+	L2Status_L2_STATUS_NOT_REQUIRED    L2Status = 1 // L2 signature not required by posture (doctrine/ratify)
 	L2Status_L2_STATUS_REQUIRED_VALID  L2Status = 2 // L2 signature required and valid
 	L2Status_L2_STATUS_REQUIRED_FAILED L2Status = 3 // L2 signature required but missing or invalid
 )

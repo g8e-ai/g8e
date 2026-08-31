@@ -51,7 +51,7 @@ For CLI callers, a second layer provides transport authentication: if the `L3Pro
 
 This is distinct from session-based authentication. A session token grants ongoing authority to act on behalf of a user. A passkey assertion over a transaction hash grants authority for one action, at one moment, against one state of the host. The approval expires with the transaction. There is no standing authorization to revoke because there was never standing authorization to begin with.
 
-Human signatures are rare and expensive. Each one requires a physical interaction with a hardware-backed key: a touch, a face scan, a PIN entry. This cost is intentional. It makes human authorization a non-recoverable bond. When a human signs a transaction, they are expressing genuine belief that the action should proceed. The system does not ask for this belief often, and it does not accept it cheaply. The L3 Notary is fail-closed under notary posture: the `L4Warden`'s `verifyL3Posture` rejects mutations without a valid human proof before execution is dispatched.
+Human signatures are rare and expensive. Each one requires a physical interaction with a hardware-backed key: a touch, a face scan, a PIN entry. This cost is intentional. It makes human authorization a non-recoverable bond. When a human signs a transaction, they are expressing genuine belief that the action should proceed. The system does not ask for this belief often, and it does not accept it cheaply. The L3 Notary is fail-closed under ratify and notary postures: the `L4Warden`'s `verifyL3Posture` rejects mutations without a valid human proof before execution is dispatched.
 
 ## Zero Standing Privileges
 

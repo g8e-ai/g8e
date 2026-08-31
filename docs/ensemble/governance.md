@@ -13,7 +13,7 @@ The g8e Agentic Ensemble (`g8ee`) acts as a first-party producer within this fra
 
 ## The Five-Layer Verification Pipeline
 
-Every mutation passing through the platform must satisfy the five-layer interlock sequence in strict order. Every layer fails closed: any failed validation check or missing proof immediately rejects the transaction and releases any reserved nonces.
+Every mutation passing through the platform traverses the five-layer interlock sequence in strict order. Universal checks and proofs required by the active posture fail closed: any failed required validation check or missing required proof immediately rejects the transaction and releases any reserved nonces. Optional L2 and L3 results remain audit evidence and do not gate execution.
 
 ```
 L1 Doctrine (Bedrock) → L2 Consensus → L3 Notary → L4 Warden → L5 Actuator
@@ -35,7 +35,7 @@ L2 Consensus verifies cryptographic multi-signature approval over the transactio
 - **Tribunal Evaluation** — Enrolled consensus members independently evaluate the envelope payload against doctrine and policy rules.
 - **Ed25519 Vote Signing** — Each member signs an Ed25519 vote over the canonical transaction hash and decision string: `<transaction_hash>|<decision>`.
 - **Quorum Enforcement** — The Gateway and Operator verify that affirmative votes meet the configured quorum threshold (`K-of-N`) from distinct, trusted keys enrolled in the signer store.
-- **Postures** — Enforced as a fail-closed requirement under `consensus` and `notary` postures; verified and recorded as an audited proof under `doctrine` posture.
+- **Postures** — Enforced as a fail-closed requirement under `consensus` and `notary` postures; verified and recorded as an audited proof under `doctrine` and `ratify` postures.
 
 ### L3: Notary Authorization
 
@@ -44,7 +44,7 @@ L3 Notary provides human-in-the-loop authorization and cryptographic session bin
 - **WebAuthn / FIDO2 Passkeys** — In gateway browser sessions, human operators provide hardware-bound cryptographic assertions over the transaction hash to authorize high-risk mutations.
 - **mTLS Transport Proofs** — In CLI and agent workloads, L3 notary proofs are bound to the SHA-256 certificate fingerprint (`mtls_cert_fingerprint`) of the authenticated client mTLS transport certificate.
 - **Suspended Transaction Flow** — When an L3 proof is required but absent, the Gateway suspends the transaction, issues an out-of-band approval challenge URL, and resumes processing once approved.
-- **Mutation Scoping** — Enforced for state-changing mutations under `notary` posture. Read-only actions (such as filesystem inspection or log queries) do not require L3 authorization.
+- **Mutation Scoping** — Enforced for state-changing mutations under `ratify` and `notary` postures. Read-only actions (such as filesystem inspection or log queries) do not require L3 authorization.
 
 ### L4: Warden Pre-Dispatch Gate
 

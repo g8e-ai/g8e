@@ -15,7 +15,7 @@ The canonical transaction container is the **GovernanceEnvelope**, a typed proto
 
 ## The Five-Layer Interlock Sequence
 
-Each transaction passes through five layers in order. Every layer fails closed: a failed check rejects the transaction and releases its nonce reservation. The Gateway acts as the Policy Decision Point for L1 through L3; the Operator substrate acts as the Policy Execution Point for L4 and L5.
+Each transaction passes through five layers in order. Universal checks and proofs required by the active posture fail closed: a failed required check rejects the transaction and releases its nonce reservation. Optional L2 and L3 results are audited without gating execution. The Gateway acts as the Policy Decision Point for L1 through L3; the Operator substrate acts as the Policy Execution Point for L4 and L5.
 
 - **L1 Doctrine**: Hard gates via forbidden pattern matching and MITRE-based threat detection. Any violation rejects the transaction. Enforced in every posture.
 - **L2 Consensus**: Multi-agent consensus signature verification. Each consensus member independently evaluates the payload against L1 Doctrine and signs an Ed25519 vote over the transaction hash and the member's decision. A transaction must collect enough affirmative votes from distinct members to meet quorum. See [Consensus](./consensus.md) for enrollment, deliberation, and vote verification.
@@ -123,7 +123,7 @@ The operator returns the sovereignty-scrubbed signed receipt to the gateway. In 
 
 ### Fail-Closed Design
 
-Every verification layer fails closed. A failed check rejects the transaction immediately and releases the nonce reservation. The Actuator will not execute a mutation if it fails to sign or log the initial receipt. The posture factory rejects unrecognized posture names at startup so misconfigured deployments fail rather than silently running under a weaker posture.
+Universal checks and posture-required proofs fail closed. A failed required check rejects the transaction immediately and releases the nonce reservation, while optional L2 and L3 results remain audit evidence. The Actuator will not execute a mutation if it fails to sign or log the initial receipt. The posture factory rejects unrecognized posture names at startup so misconfigured deployments fail rather than silently running under a weaker posture.
 
 ### Sovereignty
 

@@ -243,7 +243,7 @@ Operator sessions have a 1-hour TTL by default. CLI sessions have a 7-day TTL, a
 
 ## L3 approval timeouts and transaction rejection
 
-Under `notary` posture, mutation actions require L3 human authorization. The approval flow has two time windows that can cause transaction rejection:
+Under `ratify` and `notary` postures, mutation actions require L3 human authorization. The approval flow has two time windows that can cause transaction rejection:
 
 - **Request window (2 minutes)**: The passkey ceremony must be completed within 2 minutes of the transaction being suspended. If the passkey approval is not completed within this window, the request expires and the action must be retried.
 - **Dispatch window (30 minutes)**: After approval, the transaction must be dispatched within 30 minutes. Transactions not dispatched within that window must be re-approved.
@@ -254,7 +254,7 @@ Common causes of approval failures:
 - The user did not complete the passkey ceremony in time.
 - The browser was not restarted after the Root CA was installed by `auth enroll user` (`auth enroll user` now blocks until the user closes all browser windows and presses Enter, but if the user dismissed the prompt or restarted into a stale browser session, the WebAuthn ceremony will fail with a TLS error).
 - The SSE stream was not accessible due to network or authentication issues.
-- The gateway posture was changed to `notary` without a configured L3 notary.
+- The gateway posture was changed to `ratify` or `notary` without a configured L3 notary.
 
 See [Authentication & Authorization](../architecture/auth.md) for the full approval flow and [SSE Streaming](../architecture/sse.md) for SSE event delivery details.
 
@@ -288,7 +288,7 @@ The governance envelope submission endpoint (`POST /api/v1/governance/envelopes`
 
 The default posture for outbound (operator) mode is `doctrine`. When the operator receives `ratify` or `notary` posture, mutations require L3 human authorization. The outbound L3 notary (`governance.NewOutboundL3Notary` in `internal/services/governance/l3_notary.go`) is not nil in outbound mode: it suspends mutation transactions and requires CLI-based approval via the suspended transaction store. If operators reject all mutations with L3-related errors under `ratify` or `notary` posture, complete the CLI approval flow or use a posture that does not enforce L3.
 
-The following action types are classified as mutations and require L3 proof under notary posture: `A2A_CALL`, `CANCEL`, `DOCUMENT_DELETE`, `DOCUMENT_UPDATE`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `PLATFORM_ENROLLMENT_CREATE_SESSION`, `PLATFORM_ENROLLMENT_DECIDE`, `PLATFORM_ENROLLMENT_ISSUE`, `PLATFORM_ENROLLMENT_PERSIST_POLICY`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof even under notary posture.
+The following action types are classified as mutations and require L3 proof under `ratify` and `notary` postures: `A2A_CALL`, `CANCEL`, `DOCUMENT_DELETE`, `DOCUMENT_UPDATE`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `PLATFORM_ENROLLMENT_CREATE_SESSION`, `PLATFORM_ENROLLMENT_DECIDE`, `PLATFORM_ENROLLMENT_ISSUE`, `PLATFORM_ENROLLMENT_PERSIST_POLICY`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof under either posture.
 
 ## State Merkle root mismatch
 

@@ -309,7 +309,7 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 - **Ed25519 signatures**: Consensus member agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
-- **Consensus deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Consensus service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
+- **Consensus deliberation**: Under `consensus` and `notary` postures, the gateway delegates L2 deliberation to an enrolled Consensus service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
 - **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the ConsensusPolicy
 
 ### L3 Notary (Authorization)

@@ -161,12 +161,13 @@ A2A protocol errors follow gateway error conventions. Verification errors map to
 
 ### Gateway Postures
 
-The g8e Gateway supports three governance postures (configured via CLI flags):
+The g8e Gateway supports four governance postures (configured via CLI flags):
 
 | Posture | Configuration | Purpose |
 |---|---|---|
 | **PostureDoctrine** | `doctrine` | L1 enforced, L2/L3 audited (default). |
-| **PostureConsensus** | `consensus` | L1/L2 enforced, L3 signature not required. |
+| **PostureConsensus** | `consensus` | L1/L2 enforced, L3 audited. |
+| **PostureRatify** | `ratify` | L1/L3 enforced, L2 audited. |
 | **PostureNotary** | `notary` | L1/L2/L3 strictly enforced. |
 
 ### Port Configuration
