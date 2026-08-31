@@ -30,7 +30,11 @@ from g8e.receipts import (
 )
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
-from g8e_evals.graders import DeterministicGradingContext, grade_deterministically
+from g8e_evals.graders import (
+    DeterministicGradingContext,
+    grade_deterministically,
+    observe_receipt_final_state,
+)
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
 from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
@@ -38,6 +42,7 @@ from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
     ContentHash,
+    FinalStateObservation,
     GraderClass,
     MetricObservation,
     ModelIdentity,
@@ -73,6 +78,8 @@ _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
 _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
+_FINAL_STATE_GRADER_ID = "final_state_assertions"
+_FINAL_STATE_METRIC_ID = "final_state_accuracy"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -433,6 +440,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{suite}:{suite_version}:"
         f"{_IFEVAL_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{config.judge.provider or ''}:{config.judge.model or ''}"
     ).encode()
@@ -521,18 +529,25 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             suite_version=suite_version,
             category=t.metadata.category or "instruction_following",
             expected_action_class=t.metadata.expected_action_class,
-            compatible_arms=list(GOVERNED_ARMS if t.metadata.expected_action_class else ALL_ARMS),
+            compatible_arms=list(
+                GOVERNED_ARMS
+                if t.metadata.expected_action_class or t.metadata.expected_final_state_assertions
+                else ALL_ARMS
+            ),
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
+            expected_final_state_assertions=t.metadata.expected_final_state_assertions,
             grader_ids=[
                 _IFEVAL_GRADER_ID,
                 *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
                 *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
+                *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
             ],
             grader_versions=[
                 _GRADER_VERSION,
                 *([_GRADER_VERSION] if eval_judge else []),
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
+                *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -548,6 +563,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     stage_records: list[StageObservation] = []
     metric_records: list[MetricObservation] = []
     receipt_records: list[ReceiptObservation] = []
+    final_state_records: list[FinalStateObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -589,6 +605,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 action_type
                 for action_type in [
                     task.metadata.expected_action_class,
+                    *(
+                        assertion.action_type
+                        for assertion in task.metadata.expected_final_state_assertions
+                    ),
                     *response.governed_action_types,
                 ]
                 if action_type
@@ -750,6 +770,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 evidence_refs=evidence_refs,
             ))
 
+        primary_receipt = next(
+            (receipt for receipt in attempt_receipts if receipt.primary),
+            None,
+        )
         attempt = AttemptRecord(
             attempt_id=attempt_id,
             run_id=run_id,
@@ -762,6 +786,16 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             ended_at=ended_at,
             terminal_status=terminal_status,
             posture=posture,
+            state_root_before=(
+                primary_receipt.action_receipt.state_root_before or None
+                if primary_receipt
+                else None
+            ),
+            state_root_after=(
+                primary_receipt.action_receipt.state_root_after or None
+                if primary_receipt
+                else None
+            ),
             correlation_ids={
                 "transaction_id": response.primary_transaction_id or "",
             },
@@ -769,6 +803,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             missingness_or_failure=response.unbound_reason if terminal_status != TerminalStatus.COMPLETED else None,
             usage_reconciliation=normalized.usage if normalized else None,
         )
+        final_state_observations = observe_receipt_final_state(
+            task_defs_by_id[task.id],
+            attempt,
+            attempt_receipts,
+        )
+        final_state_records.extend(final_state_observations)
+        attempt.final_state_observation_refs = [
+            observation.observation_id for observation in final_state_observations
+        ]
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -807,6 +850,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     attempt=attempt,
                     receipts=attempt_receipts,
                     stages=attempt_stages,
+                    final_state_observations=final_state_observations,
                 ),
             )
             grade_metrics.append(MetricObservation(
@@ -820,6 +864,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 verification_status=receipt_grade.verification_status,
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=receipt_grade.evidence_refs,
+            ))
+        if task.metadata.expected_final_state_assertions:
+            final_state_grade = grade_deterministically(
+                _FINAL_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_FINAL_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=final_state_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.expected_final_state_assertions),
+                verification_status=final_state_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=final_state_grade.evidence_refs,
             ))
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
@@ -851,6 +920,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     with open(report_dir / "receipts.jsonl", "w") as f:
         for receipt in receipt_records:
             f.write(receipt.model_dump_json() + "\n")
+
+    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+        for observation in final_state_records:
+            f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:
         for stage in stage_records:

@@ -30,23 +30,27 @@ from g8e_evals.schema import (
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
+    FinalStateAssertion,
+    FinalStateObservation,
     MetricObservation,
     ModelIdentity,
     PostureObservation,
     ReceiptObservation,
     RunManifest,
+    StateAssertionPredicate,
     StageKind,
     StageObservation,
     TaskDefinition,
     TerminalStatus,
     UsageReconciliation,
+    VerificationStatus,
 )
 
 pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.10.0"
+    assert SCHEMA_VERSION == "1.11.0"
 
 
 def test_usage_reconciliation_flags_mismatched_stage_totals():
@@ -112,6 +116,62 @@ def test_attempt_record_rejects_extra_fields():
             arm_id=Arm.DIRECT,
             extra_field="bad",  # type: ignore[call-arg]
         )
+
+
+def test_final_state_assertion_and_observation_round_trip():
+    assertion = FinalStateAssertion(
+        assertion_id="file-edit-state-root",
+        predicate=StateAssertionPredicate.STATE_ROOT_CHANGED,
+        action_type="FILE_EDIT",
+    )
+    observation = FinalStateObservation(
+        observation_id="attempt-1:final-state:file-edit-state-root",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type=assertion.action_type,
+        state_root_before="root-before",
+        state_root_after="root-after",
+        source_receipt_id="receipt-1",
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = FinalStateObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored.assertion_id == assertion.assertion_id
+    assert restored.state_root_before == "root-before"
+    assert restored.state_root_after == "root-after"
+    assert restored.source_receipt_id == "receipt-1"
+
+
+def test_task_definition_rejects_duplicate_final_state_assertion_ids():
+    assertion = FinalStateAssertion(
+        assertion_id="duplicate",
+        predicate=StateAssertionPredicate.STATE_ROOT_CHANGED,
+        action_type="FILE_EDIT",
+    )
+
+    with pytest.raises(ValidationError, match="final-state assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            expected_final_state_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_all_final_state_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        final_state_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.final_state_observation_refs == ["observation-1", "observation-2"]
 
 
 def test_attempt_record_logical_key_fields():

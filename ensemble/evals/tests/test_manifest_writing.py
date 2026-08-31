@@ -37,9 +37,12 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.schema import (
     AttemptRecord,
     EvidenceIndex,
+    FinalStateAssertion,
+    FinalStateObservation,
     MetricObservation,
     ReceiptObservation,
     RunManifest,
+    StateAssertionPredicate,
     StageObservation,
     TaskDefinition,
 )
@@ -277,7 +280,16 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     task = Task(
         id="1001",
         prompt="Write a sentence without commas.",
-        metadata=TaskMetadata(expected_action_class="EXECUTE_BASH"),
+        metadata=TaskMetadata(
+            expected_action_class="EXECUTE_BASH",
+            expected_final_state_assertions=[
+                FinalStateAssertion(
+                    assertion_id="command-state-root",
+                    predicate=StateAssertionPredicate.STATE_ROOT_CHANGED,
+                    action_type="EXECUTE_BASH",
+                )
+            ],
+        ),
     )
     _patch_loader(monkeypatch, [task])
     _patch_provenance(monkeypatch)
@@ -297,6 +309,8 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     command_receipt = ActionReceipt(
         transaction_id="tx-command",
         transaction_hash="hash-command",
+        state_root_before="root-before",
+        state_root_after="root-after-command",
     )
     command_receipt.deterministic_stage_evidence.add(
         kind=DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
@@ -313,6 +327,12 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         action_type="FILE_EDIT",
     )
     collector.collect_receipt.side_effect = [command_receipt, file_receipt]
+    pki_dir = tmp_path / "pki"
+    pki_dir.mkdir()
+    (pki_dir / "warden_pub.pem").write_text("test-public-key")
+    monkeypatch.setenv("G8E_GATEWAY_PKI_DIR", str(pki_dir))
+    monkeypatch.setattr(cli, "verify_action_receipt_signature", lambda *_args: True)
+    monkeypatch.setattr(cli, "verify_receipt_persistence_attestation", lambda *_args: True)
     _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
@@ -332,7 +352,9 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         "tx-file",
     ]
     collector.collect_receipt_for_investigation.assert_not_awaited()
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(
+        path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-")
+    )
     receipt_lines = (report_dir / "receipts.jsonl").read_text().splitlines()
     receipts = [ReceiptObservation.model_validate_json(line) for line in receipt_lines]
     assert [receipt.transaction_id for receipt in receipts] == ["tx-command", "tx-file"]
@@ -350,13 +372,30 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         (report_dir / "tasks.jsonl").read_text().splitlines()[0]
     )
     assert task_definition.compatible_arms == [Arm.DOCTRINE, Arm.CONSENSUS, Arm.NOTARY]
-    assert task_definition.grader_ids == ["ifeval_subset_verifier", "receipt_integrity"]
+    assert task_definition.expected_final_state_assertions == task.metadata.expected_final_state_assertions
+    assert task_definition.grader_ids == [
+        "ifeval_subset_verifier",
+        "receipt_integrity",
+        "final_state_assertions",
+    ]
+    observations = [
+        FinalStateObservation.model_validate_json(line)
+        for line in (report_dir / "final-state-observations.jsonl").read_text().splitlines()
+    ]
+    assert len(observations) == 1
+    assert observations[0].state_root_before == "root-before"
+    assert observations[0].state_root_after == "root-after-command"
+    assert attempt.final_state_observation_refs == [observations[0].observation_id]
     metrics = [
         MetricObservation.model_validate_json(line)
         for line in (report_dir / "metrics.jsonl").read_text().splitlines()
     ]
-    assert "receipt_integrity" in {metric.metric_id for metric in metrics}
+    metrics_by_id = {metric.metric_id: metric for metric in metrics}
+    assert "receipt_integrity" in metrics_by_id
+    assert metrics_by_id["final_state_accuracy"].value == 1.0
+    assert metrics_by_id["final_state_accuracy"].denominator_contribution == 1
     assert "receipt_integrity" in attempt.grade_refs
+    assert "final_state_accuracy" in attempt.grade_refs
 
 
 @pytest.mark.asyncio

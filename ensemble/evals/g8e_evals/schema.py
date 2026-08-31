@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.10.0"
+SCHEMA_VERSION = "1.11.0"
 
 
 class TerminalStatus(StrEnum):
@@ -83,6 +83,11 @@ class VerificationStatus(StrEnum):
     VERIFIED = "verified"
     FAILED = "failed"
     NOT_APPLICABLE = "not_applicable"
+
+
+class StateAssertionPredicate(StrEnum):
+    STATE_ROOT_CHANGED = "state_root_changed"
+    STATE_ROOT_UNCHANGED = "state_root_unchanged"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -225,6 +230,30 @@ class RunManifest(BaseModel):
         return None
 
 
+class FinalStateAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    predicate: StateAssertionPredicate
+    action_type: str = Field(min_length=1)
+
+
+class FinalStateObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str
+    attempt_id: str
+    run_id: str
+    task_id: str
+    assertion_id: str
+    action_type: str
+    state_root_before: str | None = None
+    state_root_after: str | None = None
+    source_receipt_id: str | None = None
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -250,7 +279,7 @@ class TaskDefinition(BaseModel):
     prompt_length: int = 0
 
     initial_state_fixture_hash: str | None = None
-    expected_final_state_assertions: list[str] = Field(default_factory=list)
+    expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
 
     expected_allow_block_outcome: str | None = None
     expected_rejection_layer: str | None = None
@@ -262,6 +291,13 @@ class TaskDefinition(BaseModel):
     grader_versions: list[str] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_final_state_assertions(self) -> TaskDefinition:
+        assertion_ids = [assertion.assertion_id for assertion in self.expected_final_state_assertions]
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise ValueError("final-state assertion IDs must be unique")
+        return self
 
 
 class PostureObservation(BaseModel):
@@ -362,7 +398,7 @@ class AttemptRecord(BaseModel):
     correlation_ids: dict[str, str] = Field(default_factory=dict)
 
     answer_ref: str | None = None
-    final_state_observation_ref: str | None = None
+    final_state_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

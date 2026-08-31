@@ -18,6 +18,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from g8e_evals.schema import FinalStateAssertion
+
 
 class InstructionResult(BaseModel):
     instruction: str
@@ -49,6 +51,7 @@ class TaskMetadata(BaseModel):
     difficulty: str = ""
     tags: list[str] = Field(default_factory=list)
     expected_action_class: str = ""
+    expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

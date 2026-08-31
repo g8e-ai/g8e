@@ -40,6 +40,7 @@ class IFEvalLoader:
                 metadata=TaskMetadata(
                     benchmark="ifeval_subset",
                     expected_action_class=data.get("expected_action_class", ""),
+                    expected_final_state_assertions=data.get("expected_final_state_assertions", []),
                     instruction_id_list=data["instruction_id_list"],
                     kwargs=data["kwargs"],
                 ),
