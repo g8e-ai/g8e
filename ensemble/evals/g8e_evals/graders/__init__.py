@@ -70,7 +70,8 @@ class DeterministicGrade:
 
 
 class DeterministicGrader(Protocol):
-    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade: ...
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        pass
 
 
 class ReceiptIntegrityGrader:
