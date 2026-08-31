@@ -89,8 +89,39 @@ const (
 const (
 	PostureDoctrine  = "doctrine"
 	PostureConsensus = "consensus"
+	PostureRatify    = "ratify"
 	PostureNotary    = "notary"
 )
+
+type GovernancePostureRequirements struct {
+	RequiresL2 bool
+	RequiresL3 bool
+}
+
+func GetGovernancePostureRequirements(posture string) (GovernancePostureRequirements, bool) {
+	switch posture {
+	case PostureDoctrine:
+		return GovernancePostureRequirements{}, true
+	case PostureConsensus:
+		return GovernancePostureRequirements{RequiresL2: true}, true
+	case PostureRatify:
+		return GovernancePostureRequirements{RequiresL3: true}, true
+	case PostureNotary:
+		return GovernancePostureRequirements{RequiresL2: true, RequiresL3: true}, true
+	default:
+		return GovernancePostureRequirements{}, false
+	}
+}
+
+func GovernancePostureMeetsFloor(active, floor string) bool {
+	activeRequirements, activeValid := GetGovernancePostureRequirements(active)
+	floorRequirements, floorValid := GetGovernancePostureRequirements(floor)
+	if !activeValid || !floorValid {
+		return false
+	}
+	return (!floorRequirements.RequiresL2 || activeRequirements.RequiresL2) &&
+		(!floorRequirements.RequiresL3 || activeRequirements.RequiresL3)
+}
 
 // Log level names.
 const (

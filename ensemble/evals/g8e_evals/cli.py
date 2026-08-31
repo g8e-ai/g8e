@@ -83,6 +83,7 @@ _KEYLESS_PROVIDERS = frozenset({"ollama", "llamacpp", "fake"})
 _IFEVAL_GRADER_ID = "ifeval_subset_verifier"
 _EVAL_JUDGE_GRADER_ID = "eval_judge"
 _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
+_PROTOCOL_CHAIN_GRADER_ID = "protocol_chain"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
 _FINAL_STATE_METRIC_ID = "final_state_accuracy"
 _POLICY_OUTCOME_GRADER_ID = "policy_outcome"
@@ -554,12 +555,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 _IFEVAL_GRADER_ID,
                 *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
                 *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
+                *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
                 *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
             ],
             grader_versions=[
                 _GRADER_VERSION,
                 *([_GRADER_VERSION] if eval_judge else []),
+                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
@@ -890,6 +893,29 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 verification_status=receipt_grade.verification_status,
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=receipt_grade.evidence_refs,
+            ))
+            protocol_grade = grade_deterministically(
+                _PROTOCOL_CHAIN_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PROTOCOL_CHAIN_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=protocol_grade.value,
+                unit="boolean",
+                verification_status=protocol_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=protocol_grade.evidence_refs,
             ))
         if task.metadata.expected_final_state_assertions:
             final_state_grade = grade_deterministically(

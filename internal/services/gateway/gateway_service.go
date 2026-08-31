@@ -270,7 +270,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// --- Consensus bootstrap (C2 inverted order: before pubsub and mcpGateway) ---
 	consensusSvc := b.consensusSvc
 	l2Deliberator := b.deliberator
-	if consensusSvc == nil && (cfg.Gateway.Posture == config.PostureConsensus || cfg.Gateway.Posture == config.PostureNotary) && cfg.Gateway.ConsensusID != "" {
+	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
 		policy, err := stores.ConsensusStore.GetConsensus(cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
 			fileProvider := consensus.NewFileKeyProvider(cfg.Gateway.SecretsDir, cfg.Gateway.ConsensusID)
@@ -911,9 +911,9 @@ func (ls *GatewayModeService) IsReady() bool {
 }
 
 func (ls *GatewayModeService) IsGovernanceReady() bool {
-	// In doctrine posture, L2 is audited not enforced — governance is ready
-	// as soon as the service is running, without requiring registered L2 signers.
-	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
+	// When L2 is audited rather than enforced, governance is ready as soon as
+	// the service is running without requiring registered L2 signers.
+	if !ls.cfg.Gateway.Posture.RequiresL2() {
 		return true
 	}
 	ready, err := ls.signerStore.HasTrustedSigners()

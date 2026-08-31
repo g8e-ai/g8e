@@ -131,12 +131,13 @@ func (m Model) viewPosture() string {
 	postures := []string{
 		"Doctrine — L1 enforced, L2/L3 audited (default)",
 		"Consensus — L1+L2 enforced, L3 audited",
+		"Ratify — L1+L3 enforced, L2 audited",
 		"Notary — L1+L2+L3 strictly enforced",
 	}
 	b.WriteString(renderChoice(postures, m.postureChoice, m.focusIndex == 0))
 	b.WriteString("\n\n")
 
-	if m.postureChoice == 1 || m.postureChoice == 2 {
+	if m.postureChoice == 1 || m.postureChoice == 3 {
 		b.WriteString(m.consensusIDInput.View())
 		b.WriteString("\n\n")
 		b.WriteString(m.consensusBootstrapInput.View())

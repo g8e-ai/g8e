@@ -288,13 +288,13 @@ func TestHandleDown_PostureChoice_Increments(t *testing.T) {
 	assert.Equal(t, 1, m2.(Model).postureChoice)
 }
 
-func TestHandleDown_PostureChoice_ClampsAtTwo(t *testing.T) {
+func TestHandleDown_PostureChoice_ClampsAtThree(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.focusIndex = 0
-	m.postureChoice = 2
+	m.postureChoice = 3
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	assert.Equal(t, 2, m2.(Model).postureChoice)
+	assert.Equal(t, 3, m2.(Model).postureChoice)
 }
 
 // --- handleUp/handleDown: routing toggles ---
@@ -526,6 +526,14 @@ func TestValidatePosture_Doctrine_NoConsensusRequired(t *testing.T) {
 	m := NewModel(Options{})
 	m.step = StepPosture
 	m.postureChoice = 0
+	m.passkeyRpNameInput.SetValue("g8e")
+	assert.Empty(t, m.validatePosture())
+}
+
+func TestValidatePosture_Ratify_NoConsensusRequired(t *testing.T) {
+	m := NewModel(Options{})
+	m.step = StepPosture
+	m.postureChoice = 2
 	m.passkeyRpNameInput.SetValue("g8e")
 	assert.Empty(t, m.validatePosture())
 }

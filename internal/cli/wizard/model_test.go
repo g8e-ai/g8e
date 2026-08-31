@@ -168,11 +168,18 @@ func TestNewModel_PostureChoiceConsensusFromConfig(t *testing.T) {
 	assert.Equal(t, 1, m.postureChoice)
 }
 
+func TestNewModel_PostureChoiceRatifyFromConfig(t *testing.T) {
+	m := NewModel(Options{
+		InitialConfig: Config{Posture: "ratify"},
+	})
+	assert.Equal(t, 2, m.postureChoice)
+}
+
 func TestNewModel_PostureChoiceNotaryFromConfig(t *testing.T) {
 	m := NewModel(Options{
 		InitialConfig: Config{Posture: "notary"},
 	})
-	assert.Equal(t, 2, m.postureChoice)
+	assert.Equal(t, 3, m.postureChoice)
 }
 
 // --- NewModel: toggle initialization from config (Bug #5) ---

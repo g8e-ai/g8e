@@ -70,16 +70,6 @@ func TestIsTaskAccepted_RejectsTaskWhenSpecIsNil(t *testing.T) {
 	assert.False(t, a.isTaskAccepted(makeTask("t1", "")))
 }
 
-func TestPostureRank_ReturnsExpectedOrdering(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, 0, postureRank("doctrine"))
-	assert.Equal(t, 1, postureRank("consensus"))
-	assert.Equal(t, 2, postureRank("notary"))
-	assert.Equal(t, 0, postureRank("unknown"))
-	assert.Equal(t, 0, postureRank(""))
-}
-
 func TestCheckPostureFloor_TableDriven(t *testing.T) {
 	t.Parallel()
 
@@ -92,7 +82,11 @@ func TestCheckPostureFloor_TableDriven(t *testing.T) {
 		{"doctrine active, consensus floor -> rejected", "doctrine", "consensus", true},
 		{"consensus active, consensus floor -> accepted", "consensus", "consensus", false},
 		{"notary active, consensus floor -> accepted", "notary", "consensus", false},
+		{"ratify active, consensus floor -> rejected", "ratify", "consensus", true},
 		{"doctrine active, doctrine floor -> accepted", "doctrine", "doctrine", false},
+		{"ratify active, ratify floor -> accepted", "ratify", "ratify", false},
+		{"notary active, ratify floor -> accepted", "notary", "ratify", false},
+		{"consensus active, ratify floor -> rejected", "consensus", "ratify", true},
 		{"notary active, notary floor -> accepted", "notary", "notary", false},
 		{"consensus active, notary floor -> rejected", "consensus", "notary", true},
 		{"empty active, empty floor -> defaults to consensus floor, doctrine active -> rejected (fail-closed)", "", "", true},

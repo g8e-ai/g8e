@@ -385,6 +385,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert task_definition.grader_ids == [
         "ifeval_subset_verifier",
         "receipt_integrity",
+        "protocol_chain",
         "final_state_assertions",
         "policy_outcome",
     ]
@@ -402,10 +403,12 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     ]
     metrics_by_id = {metric.metric_id: metric for metric in metrics}
     assert "receipt_integrity" in metrics_by_id
+    assert metrics_by_id["protocol_chain"].verification_status.value == "failed"
     assert metrics_by_id["final_state_accuracy"].value == 1.0
     assert metrics_by_id["final_state_accuracy"].denominator_contribution == 1
     assert metrics_by_id["policy_outcome"].value == 1.0
     assert "receipt_integrity" in attempt.grade_refs
+    assert "protocol_chain" in attempt.grade_refs
     assert "final_state_accuracy" in attempt.grade_refs
     assert "policy_outcome" in attempt.grade_refs
 

@@ -10,16 +10,26 @@ from __future__ import annotations
 import pytest
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
+    DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
     DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+    DETERMINISTIC_STAGE_KIND_L3_NOTARY,
     DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
     DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
     DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+    DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
     DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
     DETERMINISTIC_STAGE_OUTCOME_FAILED,
+    DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+    EXECUTION_STATUS_COMPLETED,
+    EXECUTION_STATUS_FAILED,
+    L2_STATUS_NOT_REQUIRED,
+    L2_STATUS_REQUIRED_VALID,
+    L3_STATUS_NOT_REQUIRED,
+    L3_STATUS_REQUIRED_VALID,
 )
 
-from g8e_evals.arms import Arm
+from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.graders import (
     DeterministicGradingContext,
     UnsupportedGraderError,
@@ -31,6 +41,7 @@ from g8e_evals.schema import (
     FinalStateAssertion,
     FinalStateObservation,
     PolicyOutcome,
+    PostureObservation,
     ReceiptObservation,
     RejectionLayer,
     StateAssertionPredicate,
@@ -275,6 +286,167 @@ def test_policy_outcome_grader_fails_closed_on_unverified_receipt():
     assert result.value == 0.0
     assert result.verification_status == VerificationStatus.FAILED
     assert result.failure == "primary receipt signature verification failed"
+
+
+def _protocol_context(
+    posture: GovernancePosture = GovernancePosture.L1_DOCTRINE,
+) -> DeterministicGradingContext:
+    context = _context()
+    receipt = context.receipts[0].action_receipt
+    receipt.status = EXECUTION_STATUS_COMPLETED
+    receipt.l2_status = (
+        L2_STATUS_REQUIRED_VALID
+        if posture in {GovernancePosture.L2_CONSENSUS, GovernancePosture.L3_NOTARY}
+        else L2_STATUS_NOT_REQUIRED
+    )
+    receipt.l3_status = (
+        L3_STATUS_REQUIRED_VALID
+        if posture == GovernancePosture.L3_NOTARY
+        else L3_STATUS_NOT_REQUIRED
+    )
+    del receipt.deterministic_stage_evidence[:]
+    kinds_and_outcomes = [
+        (DETERMINISTIC_STAGE_KIND_L1_DOCTRINE, DETERMINISTIC_STAGE_OUTCOME_VERIFIED),
+        (
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+            if posture in {GovernancePosture.L2_CONSENSUS, GovernancePosture.L3_NOTARY}
+            else DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
+        ),
+        (
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+            if posture == GovernancePosture.L3_NOTARY
+            else DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
+        ),
+        (DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, DETERMINISTIC_STAGE_OUTCOME_VERIFIED),
+        (DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE, DETERMINISTIC_STAGE_OUTCOME_COMPLETED),
+        (DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, DETERMINISTIC_STAGE_OUTCOME_COMPLETED),
+        (DETERMINISTIC_STAGE_KIND_L5_EXECUTION, DETERMINISTIC_STAGE_OUTCOME_COMPLETED),
+    ]
+    l4_id = "tx-1:l4"
+    l5_id = "tx-1:l5"
+    for index, (kind, outcome) in enumerate(kinds_and_outcomes):
+        stage = receipt.deterministic_stage_evidence.add(
+            stage_id=l4_id if kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION else l5_id if kind == DETERMINISTIC_STAGE_KIND_L5_EXECUTION else f"tx-1:stage:{index}",
+            kind=kind,
+            outcome=outcome,
+            transaction_id="tx-1",
+            transaction_hash="hash-1",
+            action_type="FILE_EDIT",
+            operator_id="operator-1",
+        )
+        if kind in {
+            DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+        }:
+            stage.parent_stage_id = l4_id
+        elif kind in {
+            DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+            DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
+            DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
+        }:
+            stage.parent_stage_id = l5_id
+        if kind == DETERMINISTIC_STAGE_KIND_L5_EXECUTION:
+            stage.state_root_before = "root-before"
+            stage.state_root_after = "root-after"
+    task = context.task.model_copy(update={
+        "grader_ids": ["protocol_chain"],
+        "grader_versions": ["1.0.0"],
+    })
+    attempt = context.attempt.model_copy(update={
+        "posture": PostureObservation(
+            requested_posture=posture,
+            observed_posture=posture,
+            posture_match=True,
+        ),
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+
+def test_protocol_chain_grader_verifies_signed_stage_graph_for_observed_posture():
+    result = grade_deterministically(
+        "protocol_chain",
+        "1.0.0",
+        _protocol_context(GovernancePosture.L3_NOTARY),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["receipt-1"]
+
+
+@pytest.mark.parametrize(
+    ("tamper", "failure"),
+    [
+        ("order", "deterministic stage order is invalid"),
+        ("action", "deterministic stage action does not match the receipt"),
+        ("parent", "deterministic stage parent relationship is invalid"),
+        ("outcome", "L2 stage outcome does not match the signed receipt status"),
+        ("identity", "deterministic stage identity fields are inconsistent"),
+        ("missing", "verified protocol chain is missing required stages"),
+    ],
+)
+def test_protocol_chain_grader_fails_closed_on_invalid_signed_chain(
+    tamper: str,
+    failure: str,
+):
+    context = _protocol_context()
+    stages = context.receipts[0].action_receipt.deterministic_stage_evidence
+    if tamper == "order":
+        first = type(stages[0])()
+        first.CopyFrom(stages[0])
+        second = type(stages[1])()
+        second.CopyFrom(stages[1])
+        del stages[:2]
+        stages.extend([second, first])
+    elif tamper == "action":
+        stages[0].action_type = "EXECUTE_BASH"
+    elif tamper == "parent":
+        stages[0].parent_stage_id = "tx-1:l5"
+    elif tamper == "outcome":
+        stages[1].outcome = DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+    elif tamper == "identity":
+        stages[1].operator_id = "operator-2"
+    else:
+        del stages[5]
+
+    result = grade_deterministically("protocol_chain", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == failure
+
+
+def test_protocol_chain_grader_verifies_signed_rejection_prefix():
+    context = _protocol_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.status = EXECUTION_STATUS_FAILED
+    del receipt.deterministic_stage_evidence[4:]
+    receipt.deterministic_stage_evidence[-1].outcome = DETERMINISTIC_STAGE_OUTCOME_FAILED
+    receipt.deterministic_stage_evidence[-1].parent_stage_id = ""
+
+    result = grade_deterministically("protocol_chain", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_protocol_chain_grader_fails_closed_when_observed_posture_does_not_match_arm():
+    context = _protocol_context()
+    context.attempt.posture.posture_match = False
+
+    result = grade_deterministically("protocol_chain", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "observed governance posture does not match the requested posture"
 
 
 def _state_context(
