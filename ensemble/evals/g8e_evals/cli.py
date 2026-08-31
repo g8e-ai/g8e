@@ -53,6 +53,7 @@ from g8e_evals.schema import (
     PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RehydrationObservation,
     RoleToModelMapping,
     RunManifest,
     SecretDetectionObservation,
@@ -88,6 +89,7 @@ _RECEIPT_INTEGRITY_GRADER_ID = "receipt_integrity"
 _PROTOCOL_CHAIN_GRADER_ID = "protocol_chain"
 _CANARY_SCRUBBING_GRADER_ID = "canary_scrubbing"
 _MODEL_BOUNDARY_RAW_SECRET_GRADER_ID = "model_boundary_raw_secret_rate"
+_EXACT_LOCAL_REHYDRATION_GRADER_ID = "exact_local_rehydration"
 _SECRET_DETECTION_PRECISION_GRADER_ID = "secret_detection_precision"
 _SECRET_DETECTION_RECALL_GRADER_ID = "secret_detection_recall"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
@@ -458,6 +460,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_EXACT_LOCAL_REHYDRATION_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_SECRET_DETECTION_PRECISION_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_SECRET_DETECTION_RECALL_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
@@ -571,6 +574,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
             expected_rejection_layer=t.metadata.expected_rejection_layer,
             sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
+            rehydration_assertions=t.metadata.rehydration_assertions,
             secret_detection_assertions=t.metadata.secret_detection_assertions,
             grader_ids=[
                 _IFEVAL_GRADER_ID,
@@ -579,6 +583,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
                 *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
                 *([_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
+                *([_EXACT_LOCAL_REHYDRATION_GRADER_ID] if t.metadata.rehydration_assertions else []),
                 *([_SECRET_DETECTION_PRECISION_GRADER_ID] if t.metadata.secret_detection_assertions else []),
                 *([_SECRET_DETECTION_RECALL_GRADER_ID] if t.metadata.secret_detection_assertions else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
@@ -592,6 +597,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
+                *([_GRADER_VERSION] if t.metadata.rehydration_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
@@ -614,6 +620,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     receipt_records: list[ReceiptObservation] = []
     final_state_records: list[FinalStateObservation] = []
     state_records: list[StateObservation] = []
+    rehydration_records: list[RehydrationObservation] = []
     secret_detection_records: list[SecretDetectionObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
@@ -895,6 +902,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         attempt.state_observation_refs = [
             observation.observation_id for observation in state_observations
         ]
+        rehydration_observations = (
+            await config.rehydration_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.rehydration_assertions and config.rehydration_observer is not None
+            else []
+        )
+        rehydration_records.extend(rehydration_observations)
+        attempt.rehydration_observation_refs = [
+            observation.observation_id for observation in rehydration_observations
+        ]
         secret_detection_observations = (
             await config.secret_detection_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.secret_detection_assertions and config.secret_detection_observer is not None
@@ -1031,6 +1047,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 verification_status=model_boundary_grade.verification_status,
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=model_boundary_grade.evidence_refs,
+            ))
+        if task.metadata.rehydration_assertions:
+            rehydration_grade = grade_deterministically(
+                _EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    rehydration_observations=rehydration_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=rehydration_grade.value,
+                unit="proportion",
+                eligible=rehydration_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=rehydration_grade.denominator_contribution,
+                verification_status=rehydration_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=rehydration_grade.evidence_refs,
             ))
         if task.metadata.secret_detection_assertions:
             for grader_id in (
@@ -1178,6 +1220,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "state-observations.jsonl", "w") as f:
         for observation in state_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "rehydration-observations.jsonl", "w") as f:
+        for observation in rehydration_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "secret-detection-observations.jsonl", "w") as f:

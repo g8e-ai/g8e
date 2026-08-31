@@ -40,6 +40,9 @@ from g8e_evals.schema import (
     PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RehydrationAssertion,
+    RehydrationBoundary,
+    RehydrationObservation,
     RejectionLayer,
     RunManifest,
     SecretDetectionAssertion,
@@ -63,7 +66,107 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.16.0"
+    assert SCHEMA_VERSION == "1.17.0"
+
+
+def test_rehydration_assertion_and_observation_round_trip():
+    assertion = RehydrationAssertion(
+        assertion_id="rehydration-fixture-1",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = RehydrationObservation(
+        observation_id="rehydration-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        output_artifact_sha256=assertion.expected_output_artifact_sha256,
+        rehydrator_version="sentinel-rehydrator@1.0.0",
+        execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        restored_token_count=2,
+        unresolved_token_count=0,
+        restored_sensitive_types=["email", "api_key"],
+        source_evidence_refs=["restricted-rehydration-evidence"],
+        source_evidence_sha256="c" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = RehydrationObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored == observation
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"expected_sensitive_types": ["email", "email"]},
+        {"expected_token_count": 0},
+    ],
+)
+def test_rehydration_assertion_rejects_malformed_ground_truth(update: dict[str, object]):
+    values: dict[str, object] = {
+        "assertion_id": "rehydration-fixture-1",
+        "source": "assistant_response",
+        "input_artifact_sha256": "a" * 64,
+        "expected_output_artifact_sha256": "b" * 64,
+        "expected_token_count": 1,
+        "expected_sensitive_types": ["email"],
+    }
+    values.update(update)
+
+    with pytest.raises(ValidationError):
+        RehydrationAssertion.model_validate(values)
+
+
+def test_verified_rehydration_observation_requires_source_evidence():
+    with pytest.raises(ValidationError):
+        RehydrationObservation(
+            observation_id="rehydration-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="rehydration-fixture-1",
+            source="assistant_response",
+            input_artifact_sha256="a" * 64,
+            output_artifact_sha256="b" * 64,
+            rehydrator_version="sentinel-rehydrator@1.0.0",
+            execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            restored_token_count=1,
+            unresolved_token_count=0,
+            restored_sensitive_types=["email"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_rehydration_observation_rejects_duplicate_source_evidence_references():
+    with pytest.raises(ValidationError, match="rehydration source evidence references must be unique"):
+        RehydrationObservation(
+            observation_id="rehydration-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="rehydration-fixture-1",
+            source="assistant_response",
+            input_artifact_sha256="a" * 64,
+            output_artifact_sha256="b" * 64,
+            rehydrator_version="sentinel-rehydrator@1.0.0",
+            execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            restored_token_count=1,
+            unresolved_token_count=0,
+            restored_sensitive_types=["email"],
+            source_evidence_refs=["restricted-evidence", "restricted-evidence"],
+            source_evidence_sha256="c" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )
 
 
 def test_secret_detection_assertion_and_observation_round_trip():
@@ -417,6 +520,26 @@ def test_task_definition_rejects_duplicate_canary_assertion_ids():
             suite_version="1.0.0",
             prompt_hash="prompt-hash",
             sensitive_canary_annotations=[assertion, assertion],
+        )
+
+
+def test_task_definition_rejects_duplicate_rehydration_assertion_ids():
+    assertion = RehydrationAssertion(
+        assertion_id="duplicate",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=1,
+        expected_sensitive_types=["email"],
+    )
+
+    with pytest.raises(ValidationError, match="rehydration assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            rehydration_assertions=[assertion, assertion],
         )
 
 

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.16.0"
+SCHEMA_VERSION = "1.17.0"
 
 
 class TerminalStatus(StrEnum):
@@ -101,6 +101,10 @@ class StateCollectionBoundary(StrEnum):
     OPERATOR_WORKLOAD = "operator_workload"
     GOVERNED_DOCUMENT_STORE = "governed_document_store"
     GOVERNANCE_LEDGER = "governance_ledger"
+
+
+class RehydrationBoundary(StrEnum):
+    LOCAL_RUNTIME = "local_runtime"
 
 
 class PolicyOutcome(StrEnum):
@@ -384,6 +388,67 @@ class CanaryScrubbingAssertion(BaseModel):
     expected_occurrences: int = Field(ge=1)
 
 
+class RehydrationAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_token_count: int = Field(ge=1)
+    expected_sensitive_types: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> RehydrationAssertion:
+        if len(self.expected_sensitive_types) != len(set(self.expected_sensitive_types)):
+            raise ValueError("expected rehydration sensitive types must be unique")
+        if self.expected_token_count < len(self.expected_sensitive_types):
+            raise ValueError("expected rehydration tokens cannot be fewer than sensitive types")
+        return self
+
+
+class RehydrationObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    input_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    output_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    rehydrator_version: str = Field(min_length=1)
+    execution_boundary: RehydrationBoundary
+    collected_at: datetime
+    restored_token_count: int = Field(ge=0)
+    unresolved_token_count: int = Field(ge=0)
+    restored_sensitive_types: list[str] = Field(default_factory=list)
+    unresolved_sensitive_types: list[str] = Field(default_factory=list)
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_rehydration_evidence(self) -> RehydrationObservation:
+        if len(self.restored_sensitive_types) != len(set(self.restored_sensitive_types)):
+            raise ValueError("restored sensitive types must be unique")
+        if len(self.unresolved_sensitive_types) != len(set(self.unresolved_sensitive_types)):
+            raise ValueError("unresolved sensitive types must be unique")
+        if bool(self.restored_token_count) != bool(self.restored_sensitive_types):
+            raise ValueError("restored token count and sensitive types must agree")
+        if bool(self.unresolved_token_count) != bool(self.unresolved_sensitive_types):
+            raise ValueError("unresolved token count and sensitive types must agree")
+        if len(self.source_evidence_refs) != len(set(self.source_evidence_refs)):
+            raise ValueError("rehydration source evidence references must be unique")
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified rehydration observation requires source evidence")
+        return self
+
+
 class SecretDetectionAssertion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -475,6 +540,7 @@ class TaskDefinition(BaseModel):
     expected_rejection_layer: RejectionLayer | None = None
 
     sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
+    rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
 
     grader_ids: list[str] = Field(default_factory=list)
@@ -492,6 +558,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(canary_assertion_ids) != len(set(canary_assertion_ids)):
             raise ValueError("canary assertion IDs must be unique")
+        rehydration_assertion_ids = [
+            assertion.assertion_id for assertion in self.rehydration_assertions
+        ]
+        if len(rehydration_assertion_ids) != len(set(rehydration_assertion_ids)):
+            raise ValueError("rehydration assertion IDs must be unique")
         secret_detection_assertion_ids = [
             assertion.assertion_id for assertion in self.secret_detection_assertions
         ]
@@ -609,6 +680,7 @@ class AttemptRecord(BaseModel):
     answer_ref: str | None = None
     final_state_observation_refs: list[str] = Field(default_factory=list)
     state_observation_refs: list[str] = Field(default_factory=list)
+    rehydration_observation_refs: list[str] = Field(default_factory=list)
     secret_detection_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)

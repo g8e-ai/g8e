@@ -23,6 +23,7 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 if TYPE_CHECKING:
     from g8e_evals.schema import (
         AttemptRecord,
+        RehydrationObservation,
         SecretDetectionObservation,
         StateObservation,
         TaskDefinition,
@@ -52,6 +53,14 @@ class StateObserver(Protocol):
         task: TaskDefinition,
         attempt: AttemptRecord,
     ) -> list[StateObservation]: ...
+
+
+class RehydrationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[RehydrationObservation]: ...
 
 
 class SecretDetectionObserver(Protocol):
@@ -96,6 +105,7 @@ class SUTConfig:
     arm: Arm = Arm.ENSEMBLE_UNGOVERNED
     headless: bool = False
     state_observer: StateObserver | None = None
+    rehydration_observer: RehydrationObserver | None = None
     secret_detection_observer: SecretDetectionObserver | None = None
 
     @property

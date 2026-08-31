@@ -55,6 +55,9 @@ from g8e_evals.schema import (
     MetricObservation,
     PolicyOutcome,
     ReceiptObservation,
+    RehydrationAssertion,
+    RehydrationBoundary,
+    RehydrationObservation,
     RunManifest,
     SecretDetectionAssertion,
     SecretDetectionObservation,
@@ -519,6 +522,109 @@ async def test_secret_detection_task_emits_typed_observations_and_precision_reca
         "ifeval_subset_verifier",
         "secret_detection_precision",
         "secret_detection_recall",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_rehydration_task_emits_typed_observation_and_exact_local_metric(
+    tmp_path,
+    monkeypatch,
+):
+    assertion = RehydrationAssertion(
+        assertion_id="rehydration-fixture-1",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    task = Task(
+        id="1001",
+        prompt="Write a sentence without commas.",
+        metadata=TaskMetadata(rehydration_assertions=[assertion]),
+    )
+    _patch_loader(monkeypatch, [task])
+    _patch_provenance(monkeypatch)
+    _patch_verifier(monkeypatch)
+    _patch_sut(
+        monkeypatch,
+        settings=MagicMock(llm=MagicMock(primary_model="m")),
+        answer_response=Response(
+            answer="A valid answer.",
+            model="test",
+            chat_evidence=_receipt("g8e.v1.ai.llm.chat.iteration.text.completed"),
+            binding=BindingType.UNBOUND,
+            unbound_reason="answer-only turn",
+        ),
+    )
+    _patch_collector(monkeypatch)
+
+    async def observe_rehydration(task_definition, attempt):
+        task_assertion = task_definition.rehydration_assertions[0]
+        return [RehydrationObservation(
+            observation_id=f"{attempt.attempt_id}:privacy:{task_assertion.assertion_id}",
+            attempt_id=attempt.attempt_id,
+            run_id=attempt.run_id,
+            task_id=attempt.task_id,
+            assertion_id=task_assertion.assertion_id,
+            source=task_assertion.source,
+            input_artifact_sha256=task_assertion.input_artifact_sha256,
+            output_artifact_sha256=task_assertion.expected_output_artifact_sha256,
+            rehydrator_version="sentinel-rehydrator@1.0.0",
+            execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            restored_token_count=2,
+            unresolved_token_count=0,
+            restored_sensitive_types=["email", "api_key"],
+            source_evidence_refs=["restricted-rehydration-evidence"],
+            source_evidence_sha256="c" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )]
+
+    rehydration_observer = MagicMock()
+    rehydration_observer.observe = AsyncMock(side_effect=observe_rehydration)
+    config = SUTConfig(
+        g8ee_url="http://g8ee:8000",
+        primary=LLMRoleConfig(provider="ollama", model="test-model"),
+        arm=Arm.ENSEMBLE_UNGOVERNED,
+        rehydration_observer=rehydration_observer,
+    )
+
+    await cli._run_suite(
+        "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
+    )
+
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
+    task_definition = TaskDefinition.model_validate_json(
+        (report_dir / "tasks.jsonl").read_text().splitlines()[0]
+    )
+    attempt = AttemptRecord.model_validate_json(
+        (report_dir / "attempts.jsonl").read_text().splitlines()[0]
+    )
+    observations = [
+        RehydrationObservation.model_validate_json(line)
+        for line in (report_dir / "rehydration-observations.jsonl").read_text().splitlines()
+    ]
+    metrics = {
+        metric.metric_id: metric
+        for metric in (
+            MetricObservation.model_validate_json(line)
+            for line in (report_dir / "metrics.jsonl").read_text().splitlines()
+        )
+    }
+
+    assert task_definition.rehydration_assertions == [assertion]
+    assert task_definition.grader_ids == [
+        "ifeval_subset_verifier",
+        "exact_local_rehydration",
+    ]
+    assert attempt.rehydration_observation_refs == [observations[0].observation_id]
+    assert metrics["exact_local_rehydration"].value == 1.0
+    assert metrics["exact_local_rehydration"].denominator_contribution == 1
+    assert metrics["exact_local_rehydration"].verification_status == VerificationStatus.VERIFIED
+    assert attempt.grade_refs == [
+        "ifeval_subset_verifier",
+        "exact_local_rehydration",
     ]
 
 

@@ -52,6 +52,9 @@ from g8e_evals.schema import (
     PolicyOutcome,
     PostureObservation,
     ReceiptObservation,
+    RehydrationAssertion,
+    RehydrationBoundary,
+    RehydrationObservation,
     RejectionLayer,
     SecretDetectionAssertion,
     SecretDetectionObservation,
@@ -502,6 +505,222 @@ def test_secret_detection_precision_is_not_applicable_without_detected_occurrenc
     assert result.denominator_contribution == 0
     assert result.verification_status == VerificationStatus.NOT_APPLICABLE
     assert result.failure == "secret-detection precision denominator is zero"
+
+
+def _rehydration_context(
+    *,
+    restored_tokens: int = 2,
+    unresolved_tokens: int = 0,
+    output_artifact_sha256: str = "b" * 64,
+    observation_attempt_id: str = "attempt-1",
+    observation_run_id: str = "run-1",
+    include_observation: bool = True,
+    duplicate_observation: bool = False,
+) -> DeterministicGradingContext:
+    context = _context()
+    assertion = RehydrationAssertion(
+        assertion_id="rehydration-1",
+        source="assistant_response",
+        input_artifact_sha256="a" * 64,
+        expected_output_artifact_sha256="b" * 64,
+        expected_token_count=2,
+        expected_sensitive_types=["email", "api_key"],
+    )
+    observation = RehydrationObservation(
+        observation_id="rehydration-observation-1",
+        attempt_id=observation_attempt_id,
+        run_id=observation_run_id,
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        source=assertion.source,
+        input_artifact_sha256=assertion.input_artifact_sha256,
+        output_artifact_sha256=output_artifact_sha256,
+        rehydrator_version="sentinel-rehydrator@1.0.0",
+        execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        restored_token_count=restored_tokens,
+        unresolved_token_count=unresolved_tokens,
+        restored_sensitive_types=["email", "api_key"] if restored_tokens else [],
+        unresolved_sensitive_types=["api_key"] if unresolved_tokens else [],
+        source_evidence_refs=["restricted-rehydration-evidence"],
+        source_evidence_sha256="c" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+    observations = [observation] if include_observation else []
+    if duplicate_observation:
+        observations.append(observation.model_copy(update={"observation_id": "rehydration-observation-2"}))
+    return DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "rehydration_assertions": [assertion],
+            "grader_ids": ["exact_local_rehydration"],
+            "grader_versions": ["1.0.0"],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        rehydration_observations=observations,
+    )
+
+
+def _with_rehydration_observation_update(
+    context: DeterministicGradingContext,
+    **update: object,
+) -> DeterministicGradingContext:
+    observation = context.rehydration_observations[0].model_copy(update=update)
+    return DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        rehydration_observations=[observation],
+    )
+
+
+def test_exact_local_rehydration_grader_verifies_hash_and_token_restoration():
+    result = grade_deterministically("exact_local_rehydration", "1.0.0", _rehydration_context())
+
+    assert result.value == 1.0
+    assert result.denominator_contribution == 1
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == [
+        "rehydration-observation-1",
+        "restricted-rehydration-evidence",
+    ]
+
+
+def test_exact_local_rehydration_grader_counts_each_declared_assertion_in_denominator():
+    context = _rehydration_context()
+    second_assertion = context.task.rehydration_assertions[0].model_copy(
+        update={"assertion_id": "rehydration-2"}
+    )
+    second_observation = context.rehydration_observations[0].model_copy(update={
+        "observation_id": "rehydration-observation-2",
+        "assertion_id": second_assertion.assertion_id,
+    })
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "rehydration_assertions": [
+                context.task.rehydration_assertions[0],
+                second_assertion,
+            ],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        rehydration_observations=[context.rehydration_observations[0], second_observation],
+    )
+
+    result = grade_deterministically("exact_local_rehydration", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.denominator_contribution == 2
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_exact_local_rehydration_grader_reports_verified_mismatch():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _rehydration_context(
+            restored_tokens=1,
+            unresolved_tokens=1,
+            output_artifact_sha256="d" * 64,
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.denominator_contribution == 1
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "exact local rehydration assertion failed: rehydration-1"
+
+
+def test_exact_local_rehydration_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"exact_local_rehydration@2\.0\.0"):
+        grade_deterministically("exact_local_rehydration", "2.0.0", _rehydration_context())
+
+
+@pytest.mark.parametrize(
+    ("context", "failure"),
+    [
+        (_rehydration_context(include_observation=False), "rehydration observation is missing"),
+        (_rehydration_context(duplicate_observation=True), "exactly one rehydration observation is required"),
+        (_rehydration_context(observation_attempt_id="other-attempt"), "rehydration observation attempt does not match"),
+        (_rehydration_context(observation_run_id="other-run"), "rehydration observation context does not match"),
+        (
+            _with_rehydration_observation_update(_rehydration_context(), task_id="other-task"),
+            "rehydration observation context does not match",
+        ),
+        (
+            _with_rehydration_observation_update(_rehydration_context(), assertion_id="unknown-assertion"),
+            "rehydration observation references an unknown assertion",
+        ),
+        (
+            _with_rehydration_observation_update(_rehydration_context(), source="other-source"),
+            "rehydration observation assertion binding does not match",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                input_artifact_sha256="d" * 64,
+            ),
+            "rehydration observation assertion binding does not match",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                rehydrator_version="sentinel-rehydrator@2.0.0",
+            ),
+            "rehydration version is unsupported",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                execution_boundary="remote_provider",
+            ),
+            "rehydration did not execute at the local runtime boundary",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                verification_status=VerificationStatus.FAILED,
+            ),
+            "rehydration observation is unverified",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                source_evidence_refs=[],
+                source_evidence_sha256=None,
+            ),
+            "rehydration source evidence is missing",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                restored_token_count=1,
+                unresolved_token_count=0,
+            ),
+            "rehydration token denominator does not match",
+        ),
+        (
+            _with_rehydration_observation_update(
+                _rehydration_context(),
+                restored_sensitive_types=["email"],
+            ),
+            "rehydration sensitive types do not match",
+        ),
+    ],
+)
+def test_exact_local_rehydration_grader_fails_closed_on_unverifiable_evidence(
+    context: DeterministicGradingContext,
+    failure: str,
+):
+    result = grade_deterministically("exact_local_rehydration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.denominator_contribution == 0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == failure
 
 
 def _policy_context(

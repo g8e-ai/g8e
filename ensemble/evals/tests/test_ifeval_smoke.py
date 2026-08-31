@@ -42,6 +42,14 @@ def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp
         "expected_action_class": "FILE_EDIT",
         "expected_allow_block_outcome": "block",
         "expected_rejection_layer": "l1_doctrine",
+        "rehydration_assertions": [{
+            "assertion_id": "rehydration-fixture-1",
+            "source": "assistant_response",
+            "input_artifact_sha256": "d" * 64,
+            "expected_output_artifact_sha256": "e" * 64,
+            "expected_token_count": 1,
+            "expected_sensitive_types": ["email"],
+        }],
         "secret_detection_assertions": [{
             "assertion_id": "scanner-fixture-1",
             "source": "user_chat",
@@ -84,6 +92,7 @@ def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp
     assert task.metadata.state_fixture is not None
     assert task.metadata.state_fixture.fixture_sha256 == "a" * 64
     assert task.metadata.state_fixture.assertions[0].expected.kind == StateEvidenceKind.FILE
+    assert task.metadata.rehydration_assertions[0].expected_token_count == 1
     assert task.metadata.secret_detection_assertions[0].expected_sensitive_types == ["email"]
 
 
