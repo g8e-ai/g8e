@@ -2242,7 +2242,83 @@
         },
         "protocol.AuthenticationExtensions": {
             "type": "object",
-            "additionalProperties": {}
+            "properties": {
+                "appid": {
+                    "description": "AppID is the FIDO AppID Extension input. Authentication only.",
+                    "type": "string"
+                },
+                "appidExclude": {
+                    "description": "AppIDExclude is the FIDO AppID Exclusion Extension input. Registration only.",
+                    "type": "string"
+                },
+                "credBlob": {
+                    "description": "CredBlob is the blob to store with the credential. Registration only.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "credProps": {
+                    "description": "CredProps requests the Credential Properties Extension. Registration only.",
+                    "type": "boolean"
+                },
+                "credentialProtectionPolicy": {
+                    "description": "CredentialProtectionPolicy is the CTAP credProtect policy. Registration only.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.CredentialProtectionPolicy"
+                        }
+                    ]
+                },
+                "enforceCredentialProtectionPolicy": {
+                    "description": "EnforceCredentialProtectionPolicy requires the credProtect policy is honoured. Registration only.",
+                    "type": "boolean"
+                },
+                "getCredBlob": {
+                    "description": "GetCredBlob requests the blob stored with the credential. Authentication only.",
+                    "type": "boolean"
+                },
+                "hmacCreateSecret": {
+                    "description": "HMACCreateSecret requests provisioning of the CTAP hmac-secret. Registration only.",
+                    "type": "boolean"
+                },
+                "hmacGetSecret": {
+                    "description": "HMACGetSecret requests evaluation of the CTAP hmac-secret. Authentication only.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.HMACGetSecretInputs"
+                        }
+                    ]
+                },
+                "largeBlob": {
+                    "description": "LargeBlob is the Large blob storage Extension input.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.LargeBlobInputs"
+                        }
+                    ]
+                },
+                "minPinLength": {
+                    "description": "MinPinLength requests the authenticator minimum PIN length. Registration only.",
+                    "type": "boolean"
+                },
+                "prf": {
+                    "description": "PRF is the Pseudo-random function Extension input. It is a pointer because an empty dictionary is a\nmeaningful input for this extension and only this extension: a Relying Party sends \"prf\":{} at registration\nto ask whether the pseudo-random function is available for the credential being created, and the client\nanswers with the 'enabled' output. A value type combined with omitzero cannot express the difference between\nan absent member and a member present but empty, so a non-nil pointer to a zero value is what carries the\nbare availability probe.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.PRFInputs"
+                        }
+                    ]
+                },
+                "remoteClientDataJSON": {
+                    "description": "RemoteClientDataJSON is the Remote Client Data JSON Extension input. This member is set by a remote desktop\nweb client and a Relying Party should not normally set it. See [ExtensionRemoteClientDataJSON], which records\nthat this extension is not yet ratified.",
+                    "type": "string"
+                },
+                "uvm": {
+                    "description": "UVM requests the user verification methods used for the operation.",
+                    "type": "boolean"
+                }
+            }
         },
         "protocol.AuthenticatorAttachment": {
             "type": "string",
@@ -2399,6 +2475,19 @@
                 }
             }
         },
+        "protocol.CredentialProtectionPolicy": {
+            "type": "string",
+            "enum": [
+                "userVerificationOptional",
+                "userVerificationOptionalWithCredentialIDList",
+                "userVerificationRequired"
+            ],
+            "x-enum-varnames": [
+                "CredentialProtectionPolicyUserVerificationOptional",
+                "CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList",
+                "CredentialProtectionPolicyUserVerificationRequired"
+            ]
+        },
         "protocol.CredentialType": {
             "type": "string",
             "enum": [
@@ -2407,6 +2496,82 @@
             "x-enum-varnames": [
                 "PublicKeyCredentialType"
             ]
+        },
+        "protocol.HMACGetSecretInputs": {
+            "type": "object",
+            "properties": {
+                "salt1": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "salt2": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "protocol.LargeBlobInputs": {
+            "type": "object",
+            "properties": {
+                "read": {
+                    "type": "boolean"
+                },
+                "support": {
+                    "$ref": "#/definitions/protocol.LargeBlobSupport"
+                },
+                "write": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "protocol.LargeBlobSupport": {
+            "type": "string",
+            "enum": [
+                "required",
+                "preferred"
+            ],
+            "x-enum-varnames": [
+                "LargeBlobSupportRequired",
+                "LargeBlobSupportPreferred"
+            ]
+        },
+        "protocol.PRFInputs": {
+            "type": "object",
+            "properties": {
+                "eval": {
+                    "$ref": "#/definitions/protocol.PRFValues"
+                },
+                "evalByCredential": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/protocol.PRFValues"
+                    }
+                }
+            }
+        },
+        "protocol.PRFValues": {
+            "type": "object",
+            "properties": {
+                "first": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "second": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
         },
         "protocol.PublicKeyCredentialCreationOptions": {
             "type": "object",
@@ -2585,9 +2750,6 @@
                 -38,
                 -39,
                 -47,
-                -48,
-                -49,
-                -50,
                 -51,
                 -52,
                 -257,
@@ -2606,9 +2768,6 @@
                 "AlgPS384",
                 "AlgPS512",
                 "AlgES256K",
-                "AlgMLDSA44",
-                "AlgMLDSA65",
-                "AlgMLDSA87",
                 "AlgESP384",
                 "AlgESP512",
                 "AlgRS256",
