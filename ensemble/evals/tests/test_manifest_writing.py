@@ -16,6 +16,7 @@ records.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -55,8 +56,15 @@ from g8e_evals.schema import (
     PolicyOutcome,
     ReceiptObservation,
     RunManifest,
+    StateAssertion,
     StateAssertionPredicate,
+    StateCollectionBoundary,
+    StateEvidenceKind,
+    StateFixtureDefinition,
+    StateObservation,
+    StateValue,
     StageObservation,
+    VerificationStatus,
     TaskDefinition,
 )
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
@@ -368,7 +376,7 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
         "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
     )
 
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     task_definition = TaskDefinition.model_validate_json(
         (report_dir / "tasks.jsonl").read_text().splitlines()[0]
     )
@@ -458,7 +466,7 @@ async def test_governed_attempt_resolves_receipt_from_investigation_and_action_c
     )
 
     collector.collect_receipt_for_investigation.assert_awaited_once_with("inv-1", "FILE_EDIT")
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     attempt = AttemptRecord.model_validate_json(
         (report_dir / "attempts.jsonl").read_text().splitlines()[0]
     )
@@ -474,11 +482,29 @@ async def test_governed_attempt_resolves_receipt_from_investigation_and_action_c
 
 @pytest.mark.asyncio
 async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp_path, monkeypatch):
+    expected_state = StateValue(
+        kind=StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+        exists=True,
+        content_sha256="a" * 64,
+        byte_length=38,
+    )
+    state_fixture = StateFixtureDefinition(
+        fixture_id="operator-marker",
+        fixture_sha256="b" * 64,
+        assertions=[StateAssertion(
+            assertion_id="marker-created",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="operator-marker",
+            expected=expected_state,
+        )],
+    )
     task = Task(
         id="1001",
         prompt="Write a sentence without commas.",
         metadata=TaskMetadata(
             expected_action_class="EXECUTE_BASH",
+            state_fixture=state_fixture,
             expected_allow_block_outcome=PolicyOutcome.ALLOW,
             expected_final_state_assertions=[
                 FinalStateAssertion(
@@ -522,6 +548,28 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     monkeypatch.setattr(cli, "verify_action_receipt_signature", lambda *_args: True)
     monkeypatch.setattr(cli, "verify_receipt_persistence_attestation", lambda *_args: True)
     _patch_posture(monkeypatch, GovernancePosture.L1_DOCTRINE)
+
+    async def observe_state(task_definition, attempt):
+        assertion = task_definition.state_fixture.assertions[0]
+        return [StateObservation(
+            observation_id=f"{attempt.attempt_id}:state:{assertion.assertion_id}",
+            attempt_id=attempt.attempt_id,
+            run_id=attempt.run_id,
+            task_id=attempt.task_id,
+            assertion_id=assertion.assertion_id,
+            action_type=assertion.action_type,
+            fixture_sha256=task_definition.state_fixture.fixture_sha256,
+            collection_boundary=assertion.collection_boundary,
+            target=assertion.target,
+            observed=assertion.expected,
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            source_evidence_refs=["external-observer-evidence"],
+            source_evidence_sha256="c" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )]
+
+    state_observer = MagicMock()
+    state_observer.observe = AsyncMock(side_effect=observe_state)
     config = SUTConfig(
         g8ee_url="http://g8ee:8000",
         primary=LLMRoleConfig(provider="ollama", model="test-model"),
@@ -529,6 +577,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         operator_session_id="op-session",
         auth_context=_auth_context(),
         arm=Arm.DOCTRINE,
+        state_observer=state_observer,
     )
 
     await cli._run_suite(
@@ -552,6 +601,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         (report_dir / "attempts.jsonl").read_text().splitlines()[0]
     )
     assert attempt.correlation_ids["transaction_id"] == "tx-command"
+    assert attempt.state_snapshot_hash == state_fixture.fixture_sha256
     assert attempt.receipt_refs == [receipt.receipt_id for receipt in receipts]
     legacy_result = json.loads((report_dir / "results.jsonl").read_text().splitlines()[0])
     assert legacy_result["primary_transaction_id"] == "tx-command"
@@ -560,12 +610,15 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
         (report_dir / "tasks.jsonl").read_text().splitlines()[0]
     )
     assert task_definition.compatible_arms == [Arm.DOCTRINE, Arm.CONSENSUS, Arm.NOTARY]
+    assert task_definition.state_fixture == state_fixture
+    assert task_definition.initial_state_fixture_hash == state_fixture.fixture_sha256
     assert task_definition.expected_final_state_assertions == task.metadata.expected_final_state_assertions
     assert task_definition.grader_ids == [
         "ifeval_subset_verifier",
         "receipt_integrity",
         "protocol_chain",
         "final_state_assertions",
+        "independent_state",
         "policy_outcome",
     ]
     observations = [
@@ -576,6 +629,14 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert observations[0].state_root_before == "root-before"
     assert observations[0].state_root_after == "root-after-command"
     assert attempt.final_state_observation_refs == [observations[0].observation_id]
+    state_observations = [
+        StateObservation.model_validate_json(line)
+        for line in (report_dir / "state-observations.jsonl").read_text().splitlines()
+    ]
+    assert len(state_observations) == 1
+    assert state_observations[0].observed == expected_state
+    assert state_observations[0].fixture_sha256 == state_fixture.fixture_sha256
+    assert attempt.state_observation_refs == [state_observations[0].observation_id]
     metrics = [
         MetricObservation.model_validate_json(line)
         for line in (report_dir / "metrics.jsonl").read_text().splitlines()
@@ -587,6 +648,12 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert metrics_by_id["protocol_chain"].evidence_refs == [receipts[0].receipt_id]
     assert metrics_by_id["final_state_accuracy"].value == 1.0
     assert metrics_by_id["final_state_accuracy"].denominator_contribution == 1
+    assert metrics_by_id["independent_state_accuracy"].value == 1.0
+    assert metrics_by_id["independent_state_accuracy"].denominator_contribution == 1
+    assert metrics_by_id["independent_state_accuracy"].evidence_refs == [
+        state_observations[0].observation_id,
+        "external-observer-evidence",
+    ]
     assert metrics_by_id["policy_outcome"].value == 1.0
     assert "receipt_integrity" in attempt.grade_refs
     assert "protocol_chain" in attempt.grade_refs
@@ -661,7 +728,7 @@ async def test_governed_attempt_correlates_declared_and_observed_action_receipts
         ("inv-1", "EXECUTE_BASH"),
         ("inv-1", "FILE_EDIT"),
     ]
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     receipts = [
         ReceiptObservation.model_validate_json(line)
         for line in (report_dir / "receipts.jsonl").read_text().splitlines()
@@ -820,7 +887,7 @@ async def test_run_suite_attaches_eval_judge_calls_to_attempt_reconciliation(tmp
 
     await cli._run_suite("ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key())
 
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     stages = [StageObservation.model_validate_json(line) for line in (report_dir / "stages.jsonl").read_text().splitlines()]
     attempt = AttemptRecord.model_validate_json((report_dir / "attempts.jsonl").read_text())
     assert len(stages) == 1
@@ -886,7 +953,7 @@ async def test_run_suite_executes_configured_eval_judge_and_records_identity(
     )
 
     judge.grade_turn.assert_awaited_once()
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     manifest = RunManifest.model_validate_json((report_dir / "manifest.json").read_text())
     assert manifest.role_to_model.judge is not None
     assert manifest.role_to_model.judge.provider == "fake"
@@ -974,7 +1041,7 @@ async def test_run_suite_records_failed_eval_judge_without_fabricating_grade(
         "ifeval_subset", config, None, tmp_path, limit=1, evidence_key=_evidence_key()
     )
 
-    report_dir = next(path for path in tmp_path.iterdir() if path.is_dir())
+    report_dir = next(path for path in tmp_path.iterdir() if path.name.startswith("ifeval_subset-"))
     attempt = AttemptRecord.model_validate_json((report_dir / "attempts.jsonl").read_text())
     metrics = [
         MetricObservation.model_validate_json(line)

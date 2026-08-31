@@ -23,6 +23,7 @@ from g8e_evals.schema import (
     FinalStateAssertion,
     PolicyOutcome,
     RejectionLayer,
+    StateFixtureDefinition,
 )
 
 
@@ -56,6 +57,7 @@ class TaskMetadata(BaseModel):
     difficulty: str = ""
     tags: list[str] = Field(default_factory=list)
     expected_action_class: str = ""
+    state_fixture: StateFixtureDefinition | None = None
     expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
     expected_allow_block_outcome: PolicyOutcome | None = None
     expected_rejection_layer: RejectionLayer | None = None

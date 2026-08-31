@@ -56,6 +56,7 @@ from g8e_evals.schema import (
     RoleToModelMapping,
     RunManifest,
     StackEnvironment,
+    StateObservation,
     StageObservation,
     TaskDefinition,
     TerminalStatus,
@@ -88,6 +89,8 @@ _CANARY_SCRUBBING_GRADER_ID = "canary_scrubbing"
 _MODEL_BOUNDARY_RAW_SECRET_GRADER_ID = "model_boundary_raw_secret_rate"
 _FINAL_STATE_GRADER_ID = "final_state_assertions"
 _FINAL_STATE_METRIC_ID = "final_state_accuracy"
+_INDEPENDENT_STATE_GRADER_ID = "independent_state"
+_INDEPENDENT_STATE_METRIC_ID = "independent_state_accuracy"
 _POLICY_OUTCOME_GRADER_ID = "policy_outcome"
 _GRADER_VERSION = "1.0.0"
 
@@ -451,7 +454,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         f"{_RECEIPT_INTEGRITY_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_PROTOCOL_CHAIN_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_CANARY_SCRUBBING_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_FINAL_STATE_GRADER_ID}@{_GRADER_VERSION}:"
+        f"{_INDEPENDENT_STATE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_POLICY_OUTCOME_GRADER_ID}@{_GRADER_VERSION}:"
         f"{_EVAL_JUDGE_GRADER_ID}@{_GRADER_VERSION}:"
         f"{config.judge.provider or ''}:{config.judge.model or ''}"
@@ -545,6 +550,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 GOVERNED_ARMS
                 if (
                     t.metadata.expected_action_class
+                    or t.metadata.state_fixture
                     or t.metadata.expected_final_state_assertions
                     or t.metadata.expected_allow_block_outcome
                 )
@@ -552,6 +558,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             ),
             prompt_hash=hashlib.sha256(t.prompt.encode()).hexdigest(),
             prompt_length=len(t.prompt),
+            initial_state_fixture_hash=(
+                t.metadata.state_fixture.fixture_sha256 if t.metadata.state_fixture else None
+            ),
+            state_fixture=t.metadata.state_fixture,
             expected_final_state_assertions=t.metadata.expected_final_state_assertions,
             expected_allow_block_outcome=t.metadata.expected_allow_block_outcome,
             expected_rejection_layer=t.metadata.expected_rejection_layer,
@@ -564,6 +574,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
                 *([_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
                 *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
+                *([_INDEPENDENT_STATE_GRADER_ID] if t.metadata.state_fixture else []),
                 *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
             ],
             grader_versions=[
@@ -574,6 +585,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
                 *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
                 *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
+                *([_GRADER_VERSION] if t.metadata.state_fixture else []),
                 *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
@@ -591,6 +603,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     metric_records: list[MetricObservation] = []
     receipt_records: list[ReceiptObservation] = []
     final_state_records: list[FinalStateObservation] = []
+    state_records: list[StateObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -635,6 +648,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     *(
                         assertion.action_type
                         for assertion in task.metadata.expected_final_state_assertions
+                    ),
+                    *(
+                        assertion.action_type
+                        for assertion in (
+                            task.metadata.state_fixture.assertions
+                            if task.metadata.state_fixture
+                            else []
+                        )
                     ),
                     *response.governed_action_types,
                 ]
@@ -817,7 +838,11 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             run_id=run_id,
             task_id=task.id,
             arm_id=arm_def.arm_id,
-            state_snapshot_hash=config.state_root,
+            state_snapshot_hash=(
+                task.metadata.state_fixture.fixture_sha256
+                if task.metadata.state_fixture
+                else config.state_root
+            ),
             replicate_id="1",
             assignment_order=len(attempt_records),
             started_at=started_at,
@@ -849,6 +874,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         final_state_records.extend(final_state_observations)
         attempt.final_state_observation_refs = [
             observation.observation_id for observation in final_state_observations
+        ]
+        state_observations = (
+            await config.state_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.state_fixture and config.state_observer is not None
+            else []
+        )
+        state_records.extend(state_observations)
+        attempt.state_observation_refs = [
+            observation.observation_id for observation in state_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1003,6 +1037,31 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=final_state_grade.evidence_refs,
             ))
+        if task.metadata.state_fixture:
+            independent_state_grade = grade_deterministically(
+                _INDEPENDENT_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    state_observations=state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_INDEPENDENT_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=independent_state_grade.value,
+                unit="proportion",
+                denominator_contribution=len(task.metadata.state_fixture.assertions),
+                verification_status=independent_state_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=independent_state_grade.evidence_refs,
+            ))
         if task.metadata.expected_allow_block_outcome:
             policy_grade = grade_deterministically(
                 _POLICY_OUTCOME_GRADER_ID,
@@ -1060,6 +1119,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "final-state-observations.jsonl", "w") as f:
         for observation in final_state_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "state-observations.jsonl", "w") as f:
+        for observation in state_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.14.0"
+SCHEMA_VERSION = "1.15.0"
 
 
 class TerminalStatus(StrEnum):
@@ -88,6 +88,19 @@ class VerificationStatus(StrEnum):
 class StateAssertionPredicate(StrEnum):
     STATE_ROOT_CHANGED = "state_root_changed"
     STATE_ROOT_UNCHANGED = "state_root_unchanged"
+
+
+class StateEvidenceKind(StrEnum):
+    FILE = "file"
+    DOCUMENT = "document"
+    WORKLOAD_SIDE_EFFECT = "workload_side_effect"
+    LEDGER_CONSISTENCY = "ledger_consistency"
+
+
+class StateCollectionBoundary(StrEnum):
+    OPERATOR_WORKLOAD = "operator_workload"
+    GOVERNED_DOCUMENT_STORE = "governed_document_store"
+    GOVERNANCE_LEDGER = "governance_ledger"
 
 
 class PolicyOutcome(StrEnum):
@@ -266,6 +279,90 @@ class FinalStateObservation(BaseModel):
     verification_status: VerificationStatus = VerificationStatus.PENDING
 
 
+class StateValue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: StateEvidenceKind
+    exists: bool | None = None
+    content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    byte_length: int | None = Field(default=None, ge=0)
+    mode: str | None = None
+    version: str | None = None
+    consistent: bool | None = None
+    entry_count: int | None = Field(default=None, ge=0)
+    head_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_kind(self) -> StateValue:
+        if self.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.consistent is None or self.exists is not None:
+                raise ValueError("ledger state requires consistency and cannot declare existence")
+        elif self.exists is None or self.consistent is not None:
+            raise ValueError("file, document, and side-effect state require existence")
+        if self.kind != StateEvidenceKind.FILE and self.mode is not None:
+            raise ValueError("file mode is valid only for file state")
+        if self.kind != StateEvidenceKind.DOCUMENT and self.version is not None:
+            raise ValueError("document version is valid only for document state")
+        if self.kind != StateEvidenceKind.LEDGER_CONSISTENCY and (
+            self.entry_count is not None or self.head_sha256 is not None
+        ):
+            raise ValueError("ledger fields are valid only for ledger state")
+        return self
+
+
+class StateAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    target: str = Field(min_length=1)
+    expected: StateValue
+
+
+class StateFixtureDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fixture_id: str = Field(min_length=1)
+    fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    assertions: list[StateAssertion] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_assertions(self) -> StateFixtureDefinition:
+        assertion_ids = [assertion.assertion_id for assertion in self.assertions]
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise ValueError("state assertion IDs must be unique")
+        return self
+
+
+class StateObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    collection_boundary: StateCollectionBoundary
+    target: str = Field(min_length=1)
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> StateObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified state observation requires source evidence")
+        return self
+
+
 class ModelBoundaryPrivacyAttestation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -312,6 +409,7 @@ class TaskDefinition(BaseModel):
     prompt_length: int = 0
 
     initial_state_fixture_hash: str | None = None
+    state_fixture: StateFixtureDefinition | None = None
     expected_final_state_assertions: list[FinalStateAssertion] = Field(default_factory=list)
 
     expected_allow_block_outcome: PolicyOutcome | None = None
@@ -335,6 +433,9 @@ class TaskDefinition(BaseModel):
         ]
         if len(canary_assertion_ids) != len(set(canary_assertion_ids)):
             raise ValueError("canary assertion IDs must be unique")
+        if self.state_fixture is not None:
+            if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
+                raise ValueError("state fixture hash does not match the initial-state fixture hash")
         if self.expected_allow_block_outcome is not None and not self.expected_action_class:
             raise ValueError("expected policy outcome requires an expected action class")
         if self.expected_allow_block_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:
@@ -443,6 +544,7 @@ class AttemptRecord(BaseModel):
 
     answer_ref: str | None = None
     final_state_observation_refs: list[str] = Field(default_factory=list)
+    state_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

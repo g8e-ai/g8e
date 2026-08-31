@@ -13,6 +13,7 @@ resolution, and the logical key structure of attempt records.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 
 import pytest
 from g8e.operator.v1.operator_pb2 import (
@@ -41,7 +42,13 @@ from g8e_evals.schema import (
     ReceiptObservation,
     RejectionLayer,
     RunManifest,
+    StateAssertion,
     StateAssertionPredicate,
+    StateCollectionBoundary,
+    StateEvidenceKind,
+    StateFixtureDefinition,
+    StateObservation,
+    StateValue,
     StageKind,
     StageObservation,
     TaskDefinition,
@@ -54,7 +61,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.14.0"
+    assert SCHEMA_VERSION == "1.15.0"
 
 
 def test_model_boundary_privacy_attestation_rejects_unbound_payload_hash():
@@ -156,6 +163,144 @@ def test_final_state_assertion_and_observation_round_trip():
     assert restored.state_root_before == "root-before"
     assert restored.state_root_after == "root-after"
     assert restored.source_receipt_id == "receipt-1"
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        (
+            StateEvidenceKind.FILE,
+            StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=12,
+                mode="0640",
+            ),
+        ),
+        (
+            StateEvidenceKind.DOCUMENT,
+            StateValue(
+                kind=StateEvidenceKind.DOCUMENT,
+                exists=True,
+                content_sha256="b" * 64,
+                version="7",
+            ),
+        ),
+        (
+            StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+            StateValue(
+                kind=StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+                exists=True,
+                content_sha256="c" * 64,
+                byte_length=4,
+            ),
+        ),
+        (
+            StateEvidenceKind.LEDGER_CONSISTENCY,
+            StateValue(
+                kind=StateEvidenceKind.LEDGER_CONSISTENCY,
+                consistent=True,
+                entry_count=3,
+                head_sha256="d" * 64,
+            ),
+        ),
+    ],
+)
+def test_state_fixture_and_observation_round_trip_with_typed_values(
+    kind: StateEvidenceKind,
+    expected: StateValue,
+):
+    fixture = StateFixtureDefinition(
+        fixture_id=f"fixture-{kind.value}",
+        fixture_sha256="e" * 64,
+        assertions=[StateAssertion(
+            assertion_id=f"assertion-{kind.value}",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target=f"target-{kind.value}",
+            expected=expected,
+        )],
+    )
+    observation = StateObservation(
+        observation_id=f"observation-{kind.value}",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=fixture.assertions[0].assertion_id,
+        action_type="FILE_EDIT",
+        fixture_sha256=fixture.fixture_sha256,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        target=f"target-{kind.value}",
+        observed=expected,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        source_evidence_refs=["evidence-1"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored = StateObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored.observed.kind == kind
+    assert restored.fixture_sha256 == fixture.fixture_sha256
+    assert restored.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+
+
+def test_state_fixture_rejects_malformed_content_hash():
+    with pytest.raises(ValidationError):
+        StateFixtureDefinition(
+            fixture_id="fixture-1",
+            fixture_sha256="not-a-sha256",
+            assertions=[StateAssertion(
+                assertion_id="assertion-1",
+                action_type="FILE_EDIT",
+                collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+                target="target-1",
+                expected=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+            )],
+        )
+
+
+def test_verified_state_observation_requires_source_evidence_binding():
+    with pytest.raises(ValidationError, match="verified state observation requires source evidence"):
+        StateObservation(
+            observation_id="observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="assertion-1",
+            action_type="FILE_EDIT",
+            fixture_sha256="e" * 64,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="target-1",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+            collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_state_fixture_hash_mismatch():
+    fixture = StateFixtureDefinition(
+        fixture_id="fixture-1",
+        fixture_sha256="e" * 64,
+        assertions=[StateAssertion(
+            assertion_id="assertion-1",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="target-1",
+            expected=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )],
+    )
+
+    with pytest.raises(ValidationError, match="state fixture hash does not match"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            initial_state_fixture_hash="a" * 64,
+            state_fixture=fixture,
+        )
 
 
 def test_canary_scrubbing_assertion_round_trips_without_raw_canary():

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import cast
 
 import pytest
@@ -52,7 +53,13 @@ from g8e_evals.schema import (
     PostureObservation,
     ReceiptObservation,
     RejectionLayer,
+    StateAssertion,
     StateAssertionPredicate,
+    StateCollectionBoundary,
+    StateEvidenceKind,
+    StateFixtureDefinition,
+    StateObservation,
+    StateValue,
     StageKind,
     StageObservation,
     TaskDefinition,
@@ -776,6 +783,271 @@ def test_final_state_assertion_grader_verifies_receipt_state_root_relation(
     assert result.value == 1.0
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.evidence_refs == ["final-state-1", "receipt-1"]
+
+
+def _independent_state_context(
+    *,
+    observed: StateValue | None = None,
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    attempt_id: str = "attempt-1",
+    fixture_sha256: str = "e" * 64,
+    source_evidence_refs: list[str] | None = None,
+) -> DeterministicGradingContext:
+    context = _context()
+    expected = StateValue(
+        kind=StateEvidenceKind.FILE,
+        exists=True,
+        content_sha256="a" * 64,
+        byte_length=12,
+        mode="0640",
+    )
+    fixture = StateFixtureDefinition(
+        fixture_id="fixture-1",
+        fixture_sha256="e" * 64,
+        assertions=[StateAssertion(
+            assertion_id="file-content",
+            action_type="FILE_EDIT",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            target="fixture-file",
+            expected=expected,
+        )],
+    )
+    task = context.task.model_copy(update={
+        "initial_state_fixture_hash": fixture.fixture_sha256,
+        "state_fixture": fixture,
+        "grader_ids": ["independent_state"],
+        "grader_versions": ["1.0.0"],
+    })
+    observation = StateObservation(
+        observation_id="state-observation-1",
+        attempt_id=attempt_id,
+        run_id=context.attempt.run_id,
+        task_id=context.task.task_id,
+        assertion_id="file-content",
+        action_type="FILE_EDIT",
+        fixture_sha256=fixture_sha256,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        target="fixture-file",
+        observed=observed or expected,
+        collected_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+        source_evidence_refs=(
+            ["evidence-1"] if source_evidence_refs is None else source_evidence_refs
+        ),
+        source_evidence_sha256="f" * 64,
+        verification_status=verification_status,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        state_observations=[observation],
+    )
+
+
+def test_independent_state_grader_verifies_typed_observed_state():
+    result = grade_deterministically(
+        "independent_state",
+        "1.0.0",
+        _independent_state_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.evidence_refs == ["state-observation-1", "evidence-1"]
+
+
+@pytest.mark.parametrize(
+    "expected",
+    [
+        StateValue(
+            kind=StateEvidenceKind.FILE,
+            exists=True,
+            content_sha256="a" * 64,
+            byte_length=12,
+            mode="0640",
+        ),
+        StateValue(
+            kind=StateEvidenceKind.DOCUMENT,
+            exists=True,
+            content_sha256="b" * 64,
+            version="7",
+        ),
+        StateValue(
+            kind=StateEvidenceKind.WORKLOAD_SIDE_EFFECT,
+            exists=True,
+            content_sha256="c" * 64,
+            byte_length=4,
+        ),
+        StateValue(
+            kind=StateEvidenceKind.LEDGER_CONSISTENCY,
+            consistent=True,
+            entry_count=3,
+            head_sha256="d" * 64,
+        ),
+    ],
+)
+def test_independent_state_grader_supports_every_typed_state_shape(expected: StateValue):
+    context = _independent_state_context()
+    fixture = context.task.state_fixture
+    assert fixture is not None
+    assertion = fixture.assertions[0].model_copy(update={"expected": expected})
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "state_fixture": fixture.model_copy(update={"assertions": [assertion]})
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        state_observations=[
+            context.state_observations[0].model_copy(update={"observed": expected})
+        ],
+    )
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+@pytest.mark.parametrize(
+    ("attempt_id", "fixture_sha256", "observed", "verification_status", "failure"),
+    [
+        (
+            "wrong-attempt",
+            "e" * 64,
+            None,
+            VerificationStatus.VERIFIED,
+            "state observation attempt does not match: file-content",
+        ),
+        (
+            "attempt-1",
+            "d" * 64,
+            None,
+            VerificationStatus.VERIFIED,
+            "state observation fixture does not match: file-content",
+        ),
+        (
+            "attempt-1",
+            "e" * 64,
+            StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            VerificationStatus.VERIFIED,
+            "independently observed state assertion failed: file-content",
+        ),
+        (
+            "attempt-1",
+            "e" * 64,
+            None,
+            VerificationStatus.FAILED,
+            "state observation is unverified: file-content",
+        ),
+    ],
+)
+def test_independent_state_grader_fails_closed_on_mismatch_or_unverified_evidence(
+    attempt_id: str,
+    fixture_sha256: str,
+    observed: StateValue | None,
+    verification_status: VerificationStatus,
+    failure: str,
+):
+    result = grade_deterministically(
+        "independent_state",
+        "1.0.0",
+        _independent_state_context(
+            attempt_id=attempt_id,
+            fixture_sha256=fixture_sha256,
+            observed=observed,
+            verification_status=verification_status,
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.failure == failure
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"action_type": "EXECUTE_BASH"},
+        {"collection_boundary": StateCollectionBoundary.GOVERNED_DOCUMENT_STORE},
+        {"target": "wrong-target"},
+        {"observed": StateValue(kind=StateEvidenceKind.DOCUMENT, exists=True)},
+    ],
+)
+def test_independent_state_grader_rejects_assertion_binding_mismatch(
+    update: dict[str, object],
+):
+    context = _independent_state_context()
+    context.state_observations[0] = context.state_observations[0].model_copy(update=update)
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "state observation assertion binding does not match: file-content"
+
+
+def test_independent_state_grader_rejects_source_unbound_observation():
+    context = _independent_state_context()
+    context.state_observations[0] = context.state_observations[0].model_copy(
+        update={"source_evidence_refs": []}
+    )
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "state observation source evidence is missing: file-content"
+
+
+def test_independent_state_grader_fails_closed_without_observation():
+    context = _independent_state_context()
+    context.state_observations.clear()
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one state observation is required: file-content"
+
+
+def test_independent_state_grader_rejects_cross_run_observation():
+    context = _independent_state_context()
+    context.state_observations[0] = context.state_observations[0].model_copy(
+        update={"run_id": "wrong-run"}
+    )
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "state observation context does not match: file-content"
+
+
+def test_independent_state_grader_rejects_unknown_observation_assertion():
+    context = _independent_state_context()
+    context.state_observations.append(
+        context.state_observations[0].model_copy(
+            update={"observation_id": "unknown-observation", "assertion_id": "unknown"}
+        )
+    )
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "state observation references an unknown assertion: unknown"
+
+
+def test_independent_state_grader_rejects_duplicate_observations():
+    context = _independent_state_context()
+    context.state_observations.append(context.state_observations[0].model_copy())
+
+    result = grade_deterministically("independent_state", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one state observation is required: file-content"
 
 
 def test_receipt_final_state_observer_fails_closed_without_unique_verified_receipt():

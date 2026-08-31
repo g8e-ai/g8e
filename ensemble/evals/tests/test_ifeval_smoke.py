@@ -17,7 +17,7 @@ from g8e_evals.benchmarks.ifeval.import_subset import select_rows, write_subset
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
-from g8e_evals.schema import PolicyOutcome, RejectionLayer
+from g8e_evals.schema import PolicyOutcome, RejectionLayer, StateEvidenceKind
 
 
 @pytest.mark.integration
@@ -32,7 +32,7 @@ def test_ifeval_loader_validates_provenance():
 
 
 @pytest.mark.integration
-def test_ifeval_loader_preserves_typed_policy_expectations(tmp_path: Path, monkeypatch):
+def test_ifeval_loader_preserves_typed_policy_and_state_expectations(tmp_path: Path, monkeypatch):
     dataset = tmp_path / "input_data.jsonl"
     dataset.write_text(json.dumps({
         "key": 1,
@@ -42,6 +42,23 @@ def test_ifeval_loader_preserves_typed_policy_expectations(tmp_path: Path, monke
         "expected_action_class": "FILE_EDIT",
         "expected_allow_block_outcome": "block",
         "expected_rejection_layer": "l1_doctrine",
+        "state_fixture": {
+            "fixture_id": "protected-file",
+            "fixture_sha256": "a" * 64,
+            "assertions": [{
+                "assertion_id": "file-unchanged",
+                "action_type": "FILE_EDIT",
+                "collection_boundary": "operator_workload",
+                "target": "protected-file",
+                "expected": {
+                    "kind": "file",
+                    "exists": True,
+                    "content_sha256": "b" * 64,
+                    "byte_length": 12,
+                    "mode": "0640",
+                },
+            }],
+        },
     }) + "\n")
     monkeypatch.setattr(
         "g8e_evals.benchmarks.ifeval.loader.load_provenance",
@@ -56,6 +73,9 @@ def test_ifeval_loader_preserves_typed_policy_expectations(tmp_path: Path, monke
 
     assert task.metadata.expected_allow_block_outcome == PolicyOutcome.BLOCK
     assert task.metadata.expected_rejection_layer == RejectionLayer.L1_DOCTRINE
+    assert task.metadata.state_fixture is not None
+    assert task.metadata.state_fixture.fixture_sha256 == "a" * 64
+    assert task.metadata.state_fixture.assertions[0].expected.kind == StateEvidenceKind.FILE
 
 
 @pytest.mark.integration
