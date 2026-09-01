@@ -159,6 +159,8 @@ g8e demos run <org> <scenario> --tui
 g8e demos pull
 ```
 
+`g8e demos run <org>` prints every scenario result, then exits non-zero with `ErrDemoScenarioFailed` if any result is `FAIL`. Automation can gate on the exit status, but evidence capture still retains and reviews the complete result table, including skipped and failed rows.
+
 ### Owner-approved platform bootstrap
 
 Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
@@ -217,7 +219,7 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 - `g8e demos run dhs 2` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
 - `g8e demos run dhs 3` - Governed Predictive Cueing (LOE 3 & 4)
-- `g8e demos run dhs 4` - Sovereign Destruction + tamper-proof audit (LOE 2)
+- `g8e demos run dhs 4` - Sovereign Destruction + tamper-evident audit (LOE 2)
 
 **FedRAMP Sovereign Cloud Governance Demo Scenarios:**
 - `g8e demos run fedramp 1` - Governed Cloud Resource Provisioning
@@ -241,11 +243,17 @@ docker compose up -d g8e-gateway
 # 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
 docker compose --profile bootstrapped up -d
 
-# 4. Approve the operator and ensemble enrollment requests.
+# 4. Approve the workload enrollment requests.
 ./g8e auth pending-platform-enrollments
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+
+# 5. Refresh the owner CLI session after Operator enrollment.
+./g8e auth refresh
 ```
+
+The initial owner CLI session predates the Operator session. Refreshing it after workload enrollment binds the canonical CLI session to the active Operator session and prevents downstream identity validation from failing closed with a session-binding mismatch.
 
 Run ensemble scenarios via the agent harness:
 

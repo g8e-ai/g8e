@@ -537,7 +537,7 @@ docker compose down -v
 | dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
 | dhs | 2 | Resilient disconnected operations / continuity of coverage |
 | dhs | 3 | Governed predictive cueing (quorum vs veto) |
-| dhs | 4 | Sovereign destruction + tamper-proof audit |
+| dhs | 4 | Sovereign destruction + tamper-evident audit |
 | fedramp | 1 | Governed cloud resource provisioning |
 | fedramp | 2 | Unauthorized audit trail destruction blocked |
 | fedramp | 3 | Governed configuration revert |

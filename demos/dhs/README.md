@@ -11,7 +11,7 @@ g8e does **not** collect sensor data, build the fusion engine, or render the COP
 - **Sovereign control**: every byte stays under U.S. Government authority, enforced at the network/caveat boundary.
 - **U.S.-person privacy & civil-liberties protection**: PII is tokenized on ingest and rehydrated on-host only under authority.
 - **Provable auditability**: every ingest, release, inference, and destruction lands in a hash-chained Git ledger and SQLite audit vault.
-- **Resilience**: governance continues in contested, comms-denied corridors with no cloud dependency.
+- **Resilience**: local governance, actuation, and evidence persistence continue while the simulated coalition datalink is detached; this scenario does not exercise cloud-model inference.
 
 ## What is real vs. display
 
@@ -135,13 +135,13 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
 ### 2: Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-The Mission Partner datalink is severed (docker network disconnect). Governance continues locally; a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.
+The Mission Partner datalink is severed with `docker network disconnect`, and the scenario verifies through `docker network inspect` that the display container is no longer attached to the perimeter network. A governed `dhs-ingest` runs through the local gateway during the disconnected interval, after which real existence and content checks verify the operator's Git ledger directory and SQLite audit database. Datalink restoration and reattachment are verified separately; a restoration failure is reported without rewriting the measured continuity result.
 
 ### 3: Governed Predictive Cueing (LOE 3 & 4)
 **Scenario `dhs-cue`**: An authorized interdiction cue with L2 ensemble quorum (decision=true) is admitted and executed by the L5 actuator. The `datasvc` records a `CUE` operation.
 
-### 4: Sovereign Destruction + tamper-proof audit (LOE 2)
-**Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e`; L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 + L3 proofs attached, L1 is the hard gate and runs first.
+### 4: Sovereign Destruction + tamper-evident audit (LOE 2)
+**Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e`; L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. The scenario independently verifies that the operator's canonical audit database remains present and non-empty after rejection; a failed check fails the scenario.
 **Scenario `dhs-purge`**: A governed retention purge is admitted by L1 doctrine with L2 consensus quorum met, and the L5 actuator records a `PURGE` operation with a cryptographic destruction receipt written to the ledger.
 
 ## Compliance & sovereignty mapping (evaluation rubric)

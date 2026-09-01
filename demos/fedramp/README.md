@@ -10,7 +10,7 @@ g8e does **not** manage cloud resources directly. It provides the governance lay
 
 - **Sovereign control**: every cloud operation is admitted only after L1 doctrine and L2 consensus.
 - **Provable auditability**: every provision, destroy, revert, and denied attempt lands in a hash-chained Git ledger and SQLite audit vault.
-- **Tamper-evident evidence**: audit trail wipe attempts are rejected at L1 admission before reaching the actuator.
+- **Tamper-evident evidence**: audit trail wipe attempts are rejected at L1 admission before reaching the actuator, and the blocked scenarios independently verify that the protected operations log or audit database remains present and non-empty.
 
 ## What is real vs. display
 
@@ -169,13 +169,13 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 **Scenario `fedramp-provision`**: A cloud operations agent submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Cloud Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The provision is executed and a signed receipt is written to the hash-chained ledger. The `cloudsvc` records a `PROVISION` operation.
 
 ### 2: Unauthorized Audit Trail Destruction Blocked (AC, SC)
-**Scenario `fedramp-deny`**: A compromised operator tries to destroy the cloud operations ledger with `rm -rf /var/cloudsvc`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. Nothing reaches the actuator.
+**Scenario `fedramp-deny`**: A compromised operator tries to destroy the cloud operations ledger with `rm -rf /var/cloudsvc`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. The scenario then independently checks that `/var/cloudsvc/operations.jsonl` remains present and non-empty; a failed check fails the scenario.
 
 ### 3: Governed Configuration Revert (CM, AU)
 **Scenario `fedramp-revert`**: A configuration revert is submitted to roll back a resource to its prior version. L1 doctrine admits the envelope; L2 consensus quorum is met. The revert is executed and the `cloudsvc` records a `REVERT` operation with the prior state hash. The revert appears in the ledger as an evidenced, attributed action.
 
 ### 4: Gateway Audit Vault Destruction Blocked (AU)
-**Scenario `fedramp-evidence-block`**: A compromised operator tries to wipe the gateway audit vault with `rm -rf /root/.g8e/data`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs, L1 runs first. The audit vault is tamper-evident.
+**Scenario `fedramp-evidence-block`**: A compromised operator tries to wipe the gateway audit vault with `rm -rf /root/.g8e/data`. L1 doctrine rejects it at admission (the `destroy_rm_rf_system_dirs` detector fires). Even with valid L2 and L3 proofs, L1 runs first. The scenario then independently checks that the gateway's canonical `/root/.g8e/data/g8e.db` audit database remains present and non-empty; a failed check fails the scenario.
 
 ## Evidence export
 

@@ -34,6 +34,12 @@ The current repository supports three complementary evidence lanes:
 
 The current eval CLI supports only `ifeval_subset`. Its `verify-receipts` command verifies canonical receipt signatures and final persistence attestations but does not verify the complete eval bundle, commitment ledger, trust root, all record references, or all input hashes. The planned 25-scenario utility/privacy/policy/protocol matrix, generated proof card, and complete one-command bundle verifier are not currently implemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
+## Validated rehearsal
+
+The `20260831T220953Z` rehearsal exercised this runbook against a clean source baseline and retained the failed setup attempts and corrected reruns. The unified lane completed both useful-work scenarios, verified 49 of 49 exported receipt signatures and persistence attestations against the two producing actuator public keys, and passed all six store-integrity checks with no failures or skips. The fixed FedRAMP and DHS environments each passed all four scenarios under consensus posture. The separate real-local `ollama/gemma4:12b` doctrine diagnostic passed all five supported `ifeval_subset` tasks with a measured 180-second idle threshold.
+
+These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run did not perform complete-bundle verification, and its KSI and OSCAL outputs describe measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
+
 ## 1. Create an immutable campaign workspace
 
 Run from the repository root:
