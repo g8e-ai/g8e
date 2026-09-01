@@ -1202,4 +1202,5 @@ var (
 	ErrDemoDatalinkDisconnect    = errors.New("demo: coalition datalink disconnect failed")
 	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
 	ErrDemoEvidencePersistFailed = errors.New("demo: typed evidence persistence failed")
+	ErrDemoRunIDMissing          = errors.New("demo: run ID is required")
 )

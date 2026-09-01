@@ -11,7 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	"github.com/g8e-ai/g8e/v2/internal/uuid"
 )
@@ -53,7 +55,14 @@ func mcpScenarios() []Scenario {
 				// Submit a governed PA request via the native run_shell_command tool
 				// driving the paop wrapper. The doctrine engine evaluates the
 				// payload against all 11 PHI/HIPAA rules before execution.
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("submit", "PA-2026-0045", "ClaimResponse", "preauthorization"))
+				runID, err := healthcareDemoRunID()
+				if err != nil {
+					return err
+				}
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap(paOperation{
+					Action: "submit", RequestID: "PA-2026-0045", ResourceType: "ClaimResponse", Subject: "preauthorization",
+					RunID: runID, ScenarioID: "healthcare-success",
+				}))
 				if err != nil {
 					return fmt.Errorf("submit PA: %w", err)
 				}
@@ -84,30 +93,44 @@ func mcpScenarios() []Scenario {
 		{
 			Name: "healthcare-gold-card", Title: "Gold Card Auto-Approval (HB 3134 §6)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("gold-card", "PA-2026-0043", "ClaimResponse", "Dr. Priya Nair 96%"))
+				runID, err := healthcareDemoRunID()
+				if err != nil {
+					return err
+				}
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap(paOperation{
+					Action: "gold-card", RequestID: "PA-2026-0043", ResourceType: "ClaimResponse", Subject: "Dr. Priya Nair",
+					MeasuredValue: 96, ThresholdValue: 90, RunID: runID, ScenarioID: "healthcare-gold-card",
+				}))
 				if err != nil {
 					return fmt.Errorf("submit gold-card PA: %w", err)
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("gold card PA submission failed: %s", resp.Error.Message)
 				}
-				r.note("PA-2026-0043 gold-card operation recorded through governed endpoint (Dr. Priya Nair, 96%% historic approval)")
-				r.note("reporting outcome is a pre-seeded fixture and is not run-bound evidence")
+				r.note("PA-2026-0043 transitioned through the governed healthcare actuator (Dr. Priya Nair, 96%% historic approval, 90%% threshold)")
+				r.note("actuator observation is bound to run %s", runID)
 				return nil
 			},
 		},
 		{
 			Name: "healthcare-sla-breach", Title: "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", Persona: clinicalAgent, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
-				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap("sla-check", "PA-2026-0044", "ClaimResponse", "Dr. James O'Brien 10 days"))
+				runID, err := healthcareDemoRunID()
+				if err != nil {
+					return err
+				}
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "run_shell_command", paopMap(paOperation{
+					Action: "sla-check", RequestID: "PA-2026-0044", ResourceType: "ClaimResponse", Subject: "Dr. James O'Brien",
+					MeasuredValue: 10, ThresholdValue: 7, RunID: runID, ScenarioID: "healthcare-sla-breach",
+				}))
 				if err != nil {
 					return fmt.Errorf("submit SLA query: %w", err)
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("SLA breach query failed: %s", resp.Error.Message)
 				}
-				r.note("PA-2026-0044 SLA query recorded through governed endpoint (Dr. James O'Brien, 10 days elapsed)")
-				r.note("reporting outcome is a pre-seeded fixture and is not run-bound evidence")
+				r.note("PA-2026-0044 transitioned through the governed healthcare actuator (10 days elapsed, 7-day SLA)")
+				r.note("actuator observation is bound to run %s", runID)
 				return nil
 			},
 		},
@@ -235,15 +258,34 @@ func apiKeyNote(c *clientpkg.Client) string {
 }
 
 // paopArgs builds the run_shell_command arguments_json that drives the
-// healthcare PA operation via the `paop` wrapper (the bridge that lets the
-// agent's governed execution simulate PA submissions without an external
-// downstream MCP server — exactly the DHS dataop / FedRAMP cloudop pattern).
-func paopArgs(action, requestID, resourceType, detail string) string {
-	return shellCommandArgs("paop", action, requestID, resourceType, detail)
+// healthcare PA operation through the governed `paop` actuator bridge.
+type paOperation struct {
+	Action         string
+	RequestID      string
+	ResourceType   string
+	Subject        string
+	MeasuredValue  int
+	ThresholdValue int
+	RunID          string
+	ScenarioID     string
 }
 
-func paopMap(action, requestID, resourceType, detail string) clientpkg.ShellCommandArgs {
-	return shellCommandMap("paop", action, requestID, resourceType, detail)
+func paopArgs(operation paOperation) string {
+	return shellCommandArgs("paop", operation.Action, operation.RequestID, operation.ResourceType, operation.Subject,
+		fmt.Sprintf("%d", operation.MeasuredValue), fmt.Sprintf("%d", operation.ThresholdValue), operation.RunID, operation.ScenarioID)
+}
+
+func paopMap(operation paOperation) clientpkg.ShellCommandArgs {
+	return shellCommandMap("paop", operation.Action, operation.RequestID, operation.ResourceType, operation.Subject,
+		fmt.Sprintf("%d", operation.MeasuredValue), fmt.Sprintf("%d", operation.ThresholdValue), operation.RunID, operation.ScenarioID)
+}
+
+func healthcareDemoRunID() (string, error) {
+	runID := os.Getenv(string(constants.EnvVar.DemoRunID))
+	if runID == "" {
+		return "", constants.ErrDemoRunIDMissing
+	}
+	return runID, nil
 }
 
 // listDirectoryPayload is the typed A2A skill payload for the list_directory

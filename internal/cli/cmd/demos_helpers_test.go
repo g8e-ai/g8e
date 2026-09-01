@@ -193,6 +193,29 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "run", args[9])
 }
 
+func TestHarnessRun_PropagatesDemoRunID(t *testing.T) {
+	tests := []struct {
+		name   string
+		useRun bool
+	}{
+		{name: "exec mode"},
+		{name: "run mode", useRun: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := defaultHarnessConfig("agent-runtime")
+			cfg.UseRun = tt.useRun
+			cfg.RunID = "healthcare-run-123"
+
+			args := harnessRun("healthcare-gold-card", cfg)
+
+			assert.Contains(t, args, "-e")
+			assert.Contains(t, args, string(constants.EnvVar.DemoRunID)+"=healthcare-run-123")
+		})
+	}
+}
+
 func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 	cfg := defaultHarnessConfig("my-container")
 

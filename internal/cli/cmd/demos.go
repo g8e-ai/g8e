@@ -1589,6 +1589,7 @@ type harnessConfig struct {
 	CertPath  string
 	KeyPath   string
 	CAPath    string
+	RunID     string
 	UseRun    bool // true for `docker compose run --rm`, false for `exec`
 }
 
@@ -1611,10 +1612,18 @@ func defaultHarnessConfig(container string) harnessConfig {
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
-		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "demos", "scenarios", "run"}
+		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps"}
 	} else {
-		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "demos", "scenarios", "run"}
+		cmd = []string{"docker", "compose", "exec", "-T"}
 	}
+	if cfg.RunID != "" {
+		cmd = append(cmd, "-e", string(constants.EnvVar.DemoRunID)+"="+cfg.RunID)
+	}
+	cmd = append(cmd, cfg.Container)
+	if !cfg.UseRun {
+		cmd = append(cmd, "/g8e")
+	}
+	cmd = append(cmd, "demos", "scenarios", "run")
 	cmd = append(cmd,
 		"--mtls-url", cfg.MTLSURL,
 		"--public-url", cfg.PublicURL,

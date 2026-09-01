@@ -288,6 +288,7 @@ const (
 	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
 	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
 	ContainerVerifyOpsPy   = "/app/verify_ops.py"
+	ContainerVerifyPAPy    = "/app/verify_pa.py"
 	ContainerInspectRFPy   = "/app/inspect_rf.py"
 	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
 	ContainerVerifySlewsPy = "/app/verify_slews.py"

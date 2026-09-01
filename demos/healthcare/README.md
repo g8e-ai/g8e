@@ -26,15 +26,15 @@ The demo demonstrates:
 - **Governed PA operations** via native gateway tools (`run_shell_command` driving the `paop` wrapper) with real doctrine enforcement on every request
 - **11 PHI/HIPAA doctrine rules** evaluated on every request
 - **Gold card auto-approval** (HB 3134 §6) for providers with historic approval rate ≥ 90%
-- **SLA breach tracking** with day-5 alerts and day-7 breach flags for mandatory DCBS/OHA reporting
+- **SLA breach evaluation** against a seven-day threshold with run-bound OHA-reportability observations
 - **Two-layer PHI defense**: network isolation + doctrine enforcement against exfiltration
 - **Metabase compliance dashboards** pre-loaded with DCBS/OHA filing queries
 
 The three core demonstration narratives:
 
-1. **Authorized PA flow** — An AI agent on `net_internal` submits a PA request through the gateway via the native `run_shell_command` tool driving the `paop` wrapper. g8e validates the request against all 11 PHI/HIPAA doctrine rules, the gold carding narrative is carried by the tool arguments, and the compliance dashboard reflects the decision.
+1. **Authorized PA flow** — An AI agent on `net_internal` submits a PA request through the gateway via the native `run_shell_command` tool driving the `paop` wrapper. g8e validates the request against all 11 PHI/HIPAA doctrine rules before the healthcare actuator records a typed state observation bound to the canonical scenario and run.
 
-2. **SLA enforcement** — The PA-2026-0044 seed record in `init.sql` is already in `SLA_BREACHED` state with `reportable_to_oha: true`, demonstrating the alert and reporting path. PA-2026-0041 is at day 6 with a day-5 alert threshold already triggered.
+2. **Policy evaluation** — The actuator evaluates PA-2026-0043's 96 percent historical approval rate against the 90 percent gold-card threshold and PA-2026-0044's 10 elapsed days against the seven-day SLA. Independent collection verifies the resulting `AUTO_APPROVED` and reportable `SLA_BREACHED` observations for the exact run.
 
 3. **Bad actor blocked** — A container on `net_untrusted` has no route to `net_internal`. Attempts to reach the gateway directly, exfiltrate PHI, or tamper with FHIR resources are blocked at the network layer and the gateway doctrine engine.
 
@@ -64,6 +64,7 @@ The three core demonstration narratives:
 ┌───────────────────────────▼─────────────────────────────────┐
 │  net_secure  10.23.0.0/24                                   │
 │    healthcare-operator  10.23.0.20                          │
+│    healthcare-actuator  10.23.0.60  :9200                  │
 │    healthcare-reporting-db 10.23.0.70  :5433 (Postgres)     │
 │    healthcare-compliance-ui 10.23.0.80                      │
 └─────────────────────────────────────────────────────────────┘
@@ -115,6 +116,13 @@ The security enforcement plane. All inbound requests pass through the gateway's 
 **Networks:** `net_internal` (10.22.0.20), `net_secure` (10.23.0.20)
 
 The trust anchor on `net_secure`. Enrolls with the gateway over mTLS, receives an identity certificate, and provides the operator session for governed requests. The operator's certificate file at `/root/.g8e/pki/operator.crt` serves as the health check signal for dependent services. Configuration is applied via command-line flags in `compose.yml` rather than the reference `config/operator.yml` file.
+
+### Healthcare Actuator — `healthcare-actuator`
+
+**Compose service:** `healthcare-actuator`
+**Networks:** `net_secure` (10.23.0.60)
+
+The typed target boundary accepts governed PA operations only from the secure network. It evaluates gold-card approval percentages and SLA elapsed-day values against explicit thresholds, appends immutable state observations carrying the canonical scenario ID and demo run ID, and exposes exact-match observation collection for evidence verification. The reporting database remains a separate analytics fixture and is not treated as run-bound terminal evidence.
 
 ### Reporting DB — `healthcare-reporting-db`
 
@@ -208,8 +216,8 @@ Four PA requests in the processing queue, covering every state the worker must h
 |---|---|---|---|---|---|
 | PA-2026-0041 | Dr. Sarah Chen (94%) | Echo CPT 93306 | 6 | PENDING_REVIEW | Gold card pending verification; SLA deadline tomorrow |
 | PA-2026-0042 | Dr. Marcus Webb (71%) | Spirometry CPT 94010 | 2 | IN_REVIEW | Below gold card threshold; normal review |
-| PA-2026-0043 | Dr. Priya Nair (96%) | Mammography CPT 77067 | 0 | AUTO_APPROVED | Gold card threshold met; expedited, zero-day decision |
-| PA-2026-0044 | Dr. James O'Brien (58%) | Knee arthroplasty CPT 27447 | 10 | SLA_BREACHED | Alert fired day 5; breached day 7; `reportable_to_oha: true` |
+| PA-2026-0043 | Dr. Priya Nair (96%) | Mammography CPT 77067 | 0 | PENDING_REVIEW | Initial fixture; scenario 2 evaluates the 90% threshold |
+| PA-2026-0044 | Dr. James O'Brien (58%) | Knee arthroplasty CPT 27447 | 10 | IN_REVIEW | Initial fixture; scenario 3 evaluates the seven-day SLA |
 
 ### `init.sql`
 
@@ -322,7 +330,7 @@ g8e demos run healthcare 1
 The scenario runs a 4-step flow and persists the typed result under the runtime compliance evidence tree:
 1. **Gateway health check** — confirms the g8e gateway is live
 2. **PA submission** — submits a governed `run_shell_command` request driving `paop submit` through the gateway via the agent runtime
-3. **Independent state observation** — verifies that the Operator PA operation log contains the exact `PA-2026-0045` submission record
+3. **Independent state observation** — verifies that the healthcare actuator recorded the exact `PA-2026-0045` submission for the canonical scenario and run
 4. **Audit trail inspection** — records supplementary doctrine-enforcement output from the observability logs
 
 For manual exploration:
@@ -343,7 +351,7 @@ g8e demos run healthcare 2
 
 **Proves**: Providers whose historic approval rate meets or exceeds the plan threshold (90%) are auto-approved without manual review. PA-2026-0043 (Dr. Priya Nair, 96%) is the proof case.
 
-PA-2026-0043 demonstrates the gold card path: Dr. Priya Nair has a 96% historic approval rate, the exemption narrative evaluates against the 90% threshold, and the request resolves to `AUTO_APPROVED` with zero human review time. This is the path that makes HB 3134's efficiency argument — gold-carding eliminates the SLA clock entirely for qualifying providers.
+PA-2026-0043 begins as `PENDING_REVIEW`. The governed `paop gold-card` operation sends the 96 percent historical approval rate, 90 percent threshold, canonical scenario ID, and run ID to the healthcare actuator. The actuator evaluates the threshold and records `AUTO_APPROVED`; an independent collector fails closed unless every correlation, metric, and terminal-state field matches.
 
 ### Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)
 
@@ -353,7 +361,7 @@ g8e demos run healthcare 3
 
 **Proves**: The PA worker tracks days-elapsed per request and flags breaches for mandatory DCBS/OHA annual reporting. PA-2026-0044 (Dr. James O'Brien, 10 days) is the proof case.
 
-PA-2026-0044 is already in `SLA_BREACHED` state in the `init.sql` seed data, with `reportable_to_oha: true`. The SLA configuration (7-day timeout, 5-day alert) is documented in the narrative and reflected in the seed data. Navigate to the Metabase dashboard to build the denial rate and median decision time queries against `healthcare-reporting-db`.
+PA-2026-0044 begins as `IN_REVIEW`. The governed `paop sla-check` operation sends 10 elapsed days, the seven-day SLA threshold, the canonical scenario ID, and the run ID to the healthcare actuator. The actuator calculates `SLA_BREACHED` with `reportable_to_oha: true`; an independent collector fails closed unless every correlation, metric, and terminal-state field matches. The Metabase dashboard remains an analytics view over the separate reporting fixture.
 
 ### Scenario 4 — Bad Actor PHI Exfiltration Blocked
 
@@ -461,7 +469,7 @@ The gateway runs in doctrine posture, meaning:
 - L2 Consensus signatures are **not required**
 - L3 Notary proofs are audited but not required
 
-Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop` wrapper) governed by the doctrine engine, consistent with the fedramp (`cloudop`) and dhs (`dataop`) demos. No downstream MCP server is involved — the governance proof happens at the gateway layer.
+Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop` wrapper) governed by the doctrine engine, consistent with the FedRAMP (`cloudop`) and DHS (`dataop`) demos. No downstream MCP server is involved. The operator reaches the healthcare actuator on `net_secure` only after the operation clears governance, and the terminal-state collector binds its observation to the exact run and canonical scenario.
 
 ### Data Sovereignty
 
@@ -479,8 +487,10 @@ All audit data is committed locally:
 demos/healthcare/
 ├── compose.yml                          # Full environment definition
 ├── README.md                            # This file
-├── init.sql                             # PostgreSQL schema + seed data for reporting DB
+├── healthcare_actuator.py               # Typed gold-card and SLA target boundary
+├── init.sql                             # PostgreSQL schema + initial reporting fixtures
 ├── paop.sh                              # PA operation wrapper (governed run_shell_command bridge)
+├── verify_pa.py                         # Run-bound terminal-state collector
 ├── setup_metabase.py                    # One-shot Metabase configuration (run by metabase-setup service)
 ├── config/
 │   ├── gateway.yml                      # g8e gateway config reference (not used in compose.yml)

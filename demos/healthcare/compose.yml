@@ -31,6 +31,7 @@ volumes:
   gateway_state:
   operator_state:
   pa_db_data:
+  healthcare_state:
   metabase_data:
 
 services:
@@ -98,6 +99,26 @@ services:
       retries: 5
       start_period: 30s
     command: ["operator", "start", "-e", "g8e.local"]
+
+  healthcare-actuator:
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
+    container_name: healthcare-actuator
+    networks:
+      net_secure:
+        ipv4_address: 10.23.0.60
+    environment:
+      - HEALTHCARE_STATE_FILE=/var/healthcare/observations.jsonl
+    volumes:
+      - healthcare_state:/var/healthcare
+      - ./healthcare_actuator.py:/app/healthcare_actuator.py:ro
+      - ./verify_pa.py:/app/verify_pa.py:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9200/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    command: ["python", "/app/healthcare_actuator.py"]
 
   # Stores compliance metrics for mandatory DCBS/OHA annual reporting (March 1 & 31 deadlines).
   reporting-db:

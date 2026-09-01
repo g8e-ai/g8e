@@ -30,8 +30,14 @@ func newHealthcarePHIBlockedScenarioResult(startedAt time.Time, definition *comp
 		"Network isolation verified // L1 doctrine rejection verified at 0.95 confidence")
 }
 
-func newHealthcareDisplayScenarioResult(definition *compliancev1.DemoScenarioDefinition, metrics string) *compliancev1.DemoScenarioResult {
-	return newDemoScenarioResult(definition.GetDisplayNumber(), definition.GetTitle(), demoStatusPassed, metrics)
+func newHealthcareGoldCardScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+		"96% approval rate evaluated against 90% threshold // AUTO_APPROVED")
+}
+
+func newHealthcareSLABreachScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+		"10 elapsed days evaluated against 7-day SLA // SLA_BREACHED // OHA reportable")
 }
 
 func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
@@ -75,6 +81,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "fhir request", false,
 			harnessRun("healthcare-success", hcfg)...)
@@ -93,12 +100,11 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  ── Step 3: Independently verify the PA submission record ────")
 		step3Started := time.Now().UTC()
 		step3Err := demoStep(ctx, demoDir, "PA submission observation", false,
-			"docker", "compose", "exec", "-T", "operator", "grep", "-F",
-			`"action":"submit","request_id":"PA-2026-0045","resource_type":"ClaimResponse","detail":"preauthorization"`,
-			constants.ContainerHealthcarePAOperations)
+			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
+			result.RunId, "healthcare-success", "PA-2026-0045", "submit", "SUBMITTED", "0", "0")
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"healthcare-success-step-3", "independent state observation: PA submission recorded", step3Started, time.Now().UTC(),
-			step3Err == nil, true, "operator PA operation log contains the exact submission record"))
+			step3Err == nil, true, "healthcare actuator observation matches the run and scenario"))
 		if step3Err != nil {
 			fmt.Println("  (PA submission state observation failed)")
 			hasErrors = true
@@ -139,53 +145,83 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		if err != nil {
 			return nil, err
 		}
+		startedAt := time.Now().UTC()
+		result = newHealthcareGoldCardScenarioResult(startedAt, definition)
 		var hasErrors bool
-		result = newHealthcareDisplayScenarioResult(definition,
-			"Governed gold-card operation recorded // reporting state is a pre-seeded fixture, not run-bound evidence")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintf("  Scenario 2 — %s\n", definition.GetTitle())
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  DEMONSTRATES: A gold-card operation traverses the governed endpoint.")
-		demoPrintln("                The reporting database contains a pre-seeded example")
-		demoPrintln("                outcome; this run does not evaluate the threshold or")
-		demoPrintln("                produce run-bound terminal-state evidence.")
+		demoPrintln("  PROVES: The governed healthcare actuator evaluates a 96% historical")
+		demoPrintln("          approval rate against the configured 90% threshold and records")
+		demoPrintln("          the run-bound AUTO_APPROVED terminal state.")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(ctx, demoDir, "gateway health", false,
-			"curl", "-s", "http://localhost:8081/api/v1/health"); err != nil {
+		step1Started := time.Now().UTC()
+		step1Err := demoStep(ctx, demoDir, "gateway health", false,
+			"curl", "-s", "http://localhost:8081/api/v1/health")
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-gold-card-step-1", "gateway health check", step1Started, time.Now().UTC(),
+			step1Err == nil, true, "curl gateway health endpoint"))
+		if step1Err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 2: Record gold-card operation through the gateway ───")
-		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is carried")
-		demoPrintln("  through the governed endpoint via the native run_shell_command tool.")
+		demoPrintln("  ── Step 2: Evaluate gold-card policy through the gateway ────")
+		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is evaluated")
+		demoPrintln("  against the 90% threshold after the governed envelope is admitted.")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(ctx, demoDir, "gold-card PA via agent", false,
-			harnessRun("healthcare-gold-card", hcfg)...); err != nil {
+		hcfg.RunID = result.RunId
+		step2Started := time.Now().UTC()
+		step2Err := demoStep(ctx, demoDir, "gold-card PA via agent", false,
+			harnessRun("healthcare-gold-card", hcfg)...)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-gold-card-step-2", "governed gold-card threshold evaluation", step2Started, time.Now().UTC(),
+			step2Err == nil, true, "agent harness invokes the healthcare actuator after governance"))
+		if step2Err != nil {
 			fmt.Println("  (healthcare-gold-card harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-gold-card")
+			result.TransactionIds = append(result.TransactionIds, "healthcare-gold-card-tx")
 		}
 
-		demoPrintln("  ── Step 3: View g8e enforcement audit ───────────────────────")
-		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
-		demoPrintln()
-		demoStepWarn(ctx, demoDir, "audit tail",
-			"docker", "compose", "logs", "observability", "--tail", "10")
+		demoPrintln("  ── Step 3: Collect the run-bound AUTO_APPROVED state ────────")
+		step3Started := time.Now().UTC()
+		step3Err := demoStep(ctx, demoDir, "gold-card state observation", false,
+			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
+			result.RunId, "healthcare-gold-card", "PA-2026-0043", "gold-card", "AUTO_APPROVED", "96", "90")
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-gold-card-step-3", "independent state observation: gold-card auto-approved", step3Started, time.Now().UTC(),
+			step3Err == nil, true, "actuator observation matches run, scenario, request, threshold, and terminal state"))
+		if step3Err != nil {
+			fmt.Println("  (gold-card state observation failed)")
+			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-gold-card-auto-approved")
+			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-provider-approval-rate:96", "metric:healthcare-gold-card-threshold:90")
+		}
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 		} else {
-			fmt.Println("  [PASS] Scenario 2 — Governed gold-card operation recorded.")
-			fmt.Println("         Pre-seeded reporting state is display-only and is not persisted as evidence.")
+			result.VerificationStatus = "verified"
+			fmt.Println("  [PASS] Scenario 2 — Gold-card threshold evaluated and auto-approved.")
+			fmt.Println("         The typed terminal observation is bound to this scenario run.")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate healthcare-gold-card scenario result: %w", err)
 		}
 
 	case "3":
@@ -193,58 +229,83 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		if err != nil {
 			return nil, err
 		}
+		startedAt := time.Now().UTC()
+		result = newHealthcareSLABreachScenarioResult(startedAt, definition)
 		var hasErrors bool
-		result = newHealthcareDisplayScenarioResult(definition,
-			"Governed SLA query recorded // reporting state is a pre-seeded fixture, not run-bound evidence")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintf("  Scenario 3 — %s\n", definition.GetTitle())
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  DEMONSTRATES: An SLA query traverses the governed endpoint and the")
-		demoPrintln("                reporting dashboard exposes a pre-seeded breach example.")
-		demoPrintln("                This run does not calculate or transition the breach state,")
-		demoPrintln("                so the fixture is not run-bound terminal evidence.")
+		demoPrintln("  PROVES: The governed healthcare actuator evaluates 10 elapsed days")
+		demoPrintln("          against the seven-day SLA and records a run-bound")
+		demoPrintln("          SLA_BREACHED state that is reportable to OHA.")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(ctx, demoDir, "gateway health", false,
-			"curl", "-s", "http://localhost:8081/api/v1/health"); err != nil {
+		step1Started := time.Now().UTC()
+		step1Err := demoStep(ctx, demoDir, "gateway health", false,
+			"curl", "-s", "http://localhost:8081/api/v1/health")
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-sla-breach-step-1", "gateway health check", step1Started, time.Now().UTC(),
+			step1Err == nil, true, "curl gateway health endpoint"))
+		if step1Err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 2: Record SLA query through the gateway ─────────────")
-		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is carried through")
-		demoPrintln("  the governed endpoint via the native run_shell_command tool.")
+		demoPrintln("  ── Step 2: Evaluate the SLA through the gateway ─────────────")
+		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is evaluated")
+		demoPrintln("  against the seven-day SLA after the governed envelope is admitted.")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(ctx, demoDir, "SLA breach query via agent", false,
-			harnessRun("healthcare-sla-breach", hcfg)...); err != nil {
+		hcfg.RunID = result.RunId
+		step2Started := time.Now().UTC()
+		step2Err := demoStep(ctx, demoDir, "SLA breach evaluation via agent", false,
+			harnessRun("healthcare-sla-breach", hcfg)...)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-sla-breach-step-2", "governed SLA evaluation", step2Started, time.Now().UTC(),
+			step2Err == nil, true, "agent harness invokes the healthcare actuator after governance"))
+		if step2Err != nil {
 			fmt.Println("  (healthcare-sla-breach harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-sla-breach")
+			result.TransactionIds = append(result.TransactionIds, "healthcare-sla-breach-tx")
 		}
 
-		demoPrintln("  ── Step 3: Compliance dashboard ──────────────────────────────")
-		demoPrintln("  Open in browser:  http://localhost:3001")
-		demoPrintln("  Login:            admin@g8e.local / Metabase1!")
-		demoPrintln()
-		demoPrintln("  Pre-loaded DCBS/OHA queries (under Questions):")
-		demoPrintln("    · DCBS March 1 Filing - Denial Rates by Request Type")
-		demoPrintln("    · OHA March 31 Filing - Median Decision Time")
-		demoPrintln()
-		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
-		demoPrintln()
+		demoPrintln("  ── Step 3: Collect the run-bound SLA_BREACHED state ─────────")
+		step3Started := time.Now().UTC()
+		step3Err := demoStep(ctx, demoDir, "SLA breach state observation", false,
+			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
+			result.RunId, "healthcare-sla-breach", "PA-2026-0044", "sla-check", "SLA_BREACHED", "10", "7")
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"healthcare-sla-breach-step-3", "independent state observation: SLA breached and reportable", step3Started, time.Now().UTC(),
+			step3Err == nil, true, "actuator observation matches run, scenario, request, SLA threshold, and terminal state"))
+		if step3Err != nil {
+			fmt.Println("  (SLA breach state observation failed)")
+			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-sla-breach-reportable")
+			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-sla-elapsed-days:10", "metric:healthcare-sla-threshold-days:7")
+		}
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 		} else {
-			fmt.Println("  [PASS] Scenario 3 — Governed SLA query recorded.")
-			fmt.Println("         Pre-seeded reporting state is display-only and is not persisted as evidence.")
+			result.VerificationStatus = "verified"
+			fmt.Println("  [PASS] Scenario 3 — SLA breach calculated and marked reportable.")
+			fmt.Println("         The typed terminal observation is bound to this scenario run.")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate healthcare-sla-breach scenario result: %w", err)
 		}
 
 	case "4":
@@ -290,6 +351,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "phi exfiltration", false,
 			harnessRun("healthcare-phi-blocked", hcfg)...)

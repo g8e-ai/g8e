@@ -22,8 +22,8 @@ INSERT INTO pa_requests VALUES
   ('PA-2026-0041', 'STANDARD', 'PENDING_REVIEW',  6, false),
   ('PA-2026-0042', 'STANDARD', 'IN_REVIEW',       2, false),
 -- Expedited PAs: 8 total, 3 DENIED = 37.50% denial rate
-  ('PA-2026-0043', 'EXPEDITED', 'AUTO_APPROVED',  0, false),
-  ('PA-2026-0044', 'EXPEDITED', 'SLA_BREACHED',  10, true),
+  ('PA-2026-0043', 'EXPEDITED', 'PENDING_REVIEW', 0, false),
+  ('PA-2026-0044', 'EXPEDITED', 'IN_REVIEW',      10, false),
   ('PA-2026-0045', 'EXPEDITED', 'APPROVED',       1, false),
   ('PA-2026-0046', 'EXPEDITED', 'APPROVED',       2, false),
   ('PA-2026-0047', 'EXPEDITED', 'APPROVED',       3, false),

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
@@ -400,29 +401,40 @@ func TestNewHealthcarePHIBlockedScenarioResult_UsesCanonicalDefinition(t *testin
 	}
 }
 
-func TestNewHealthcareDisplayScenarioResult_DoesNotClaimEvidenceGradeBinding(t *testing.T) {
+func TestNewHealthcarePolicyScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 	tests := []struct {
 		name       string
 		scenarioID string
+		newResult  func(time.Time, *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult
 	}{
-		{name: "gold card uses pre-seeded reporting state", scenarioID: "healthcare-gold-card"},
-		{name: "SLA breach uses pre-seeded reporting state", scenarioID: "healthcare-sla-breach"},
+		{name: "gold card threshold evaluation", scenarioID: "healthcare-gold-card", newResult: newHealthcareGoldCardScenarioResult},
+		{name: "SLA breach evaluation", scenarioID: "healthcare-sla-breach", newResult: newHealthcareSLABreachScenarioResult},
 	}
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			definition, err := loadDemoScenarioDefinition(tt.scenarioID)
 			require.NoError(t, err)
 
-			result := newHealthcareDisplayScenarioResult(definition, "pre-seeded fixture is not run-bound evidence")
+			result := tt.newResult(startedAt, definition)
 
 			assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
 			assert.Equal(t, definition.GetTitle(), result.GetTitle())
-			assert.Nil(t, result.GetScenarioRef())
-			assert.Empty(t, result.GetRunId())
-			assert.Empty(t, result.GetReceiptRefs())
-			assert.Empty(t, result.GetStateObservationRefs())
-			assert.Empty(t, result.GetVerificationStatus())
+			assert.Equal(t, definition.GetScenarioId(), result.GetScenarioRef().GetId())
+			assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+			assert.Equal(t, constants.DemosOrgHealthcare, result.GetDemoId())
+			assert.Equal(t, "healthcare-demo-scope", result.GetScopeId())
+			assert.NotEmpty(t, result.GetRunId())
+			result.CompletedAt = timestamppb.New(startedAt.Add(time.Second))
+			result.StepResults = append(result.StepResults, buildDemoStepResult(
+				"policy-step", "governed policy evaluation", startedAt, startedAt.Add(time.Second), true, true, "verified"))
+			result.TransactionIds = append(result.TransactionIds, "transaction-id")
+			result.ReceiptRefs = append(result.ReceiptRefs, "receipt-ref")
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation-ref")
+			result.MetricRefs = append(result.MetricRefs, "metric-ref")
+			result.VerificationStatus = "verified"
+			require.NoError(t, compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId))
 		})
 	}
 }
