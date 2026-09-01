@@ -79,9 +79,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  ── Step 2: Submit PA request through the gateway ───────────")
 		demoPrintln("  Request path: agent-runtime → gateway (g8e.local:8443) [Governed run_shell_command]")
 		demoPrintln()
-		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
-		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "fhir request", false,
 			harnessRun("healthcare-success", hcfg)...)
@@ -175,9 +174,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is evaluated")
 		demoPrintln("  against the 90% threshold after the governed envelope is admitted.")
 		demoPrintln()
-		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
-		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "gold-card PA via agent", false,
 			harnessRun("healthcare-gold-card", hcfg)...)
@@ -259,9 +257,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is evaluated")
 		demoPrintln("  against the seven-day SLA after the governed envelope is admitted.")
 		demoPrintln()
-		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
-		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "SLA breach evaluation via agent", false,
 			harnessRun("healthcare-sla-breach", hcfg)...)
@@ -349,9 +346,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  Submit a PHI exfiltration attempt through the production-ready")
 		demoPrintln("  governed native tool endpoint (mTLS + Protocol Envelopes):")
 		demoPrintln()
-		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
-		hcfg.RunID = result.RunId
 		step2Started := time.Now().UTC()
 		step2Err := demoStep(ctx, demoDir, "phi exfiltration", false,
 			harnessRun("healthcare-phi-blocked", hcfg)...)

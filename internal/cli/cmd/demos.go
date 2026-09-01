@@ -1583,14 +1583,15 @@ func demoStepWarn(ctx context.Context, demoDir, label string, args ...string) {
 // compose exec/run command for a demos scenarios run. Centralising these in a
 // struct avoids positional-argument drift across demos.
 type harnessConfig struct {
-	Container string
-	MTLSURL   string
-	PublicURL string
-	CertPath  string
-	KeyPath   string
-	CAPath    string
-	RunID     string
-	UseRun    bool // true for `docker compose run --rm`, false for `exec`
+	Container  string
+	MTLSURL    string
+	PublicURL  string
+	CertPath   string
+	KeyPath    string
+	CAPath     string
+	RunID      string
+	ScenarioID string
+	UseRun     bool // true for `docker compose run --rm`, false for `exec`
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1606,6 +1607,16 @@ func defaultHarnessConfig(container string) harnessConfig {
 	}
 }
 
+func harnessConfigForResult(container string, result *compliancev1.DemoScenarioResult) harnessConfig {
+	return bindHarnessConfig(defaultHarnessConfig(container), result)
+}
+
+func bindHarnessConfig(cfg harnessConfig, result *compliancev1.DemoScenarioResult) harnessConfig {
+	cfg.RunID = result.GetRunId()
+	cfg.ScenarioID = result.GetScenarioRef().GetId()
+	return cfg
+}
+
 // harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
@@ -1619,6 +1630,11 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 	if cfg.RunID != "" {
 		cmd = append(cmd, "-e", string(constants.EnvVar.DemoRunID)+"="+cfg.RunID)
 	}
+	scenarioID := cfg.ScenarioID
+	if scenarioID == "" {
+		scenarioID = scenario
+	}
+	cmd = append(cmd, "-e", string(constants.EnvVar.DemoScenarioID)+"="+scenarioID)
 	cmd = append(cmd, cfg.Container)
 	if !cfg.UseRun {
 		cmd = append(cmd, "/g8e")

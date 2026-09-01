@@ -79,6 +79,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		startedAt := time.Now().UTC()
 		result = newFedRAMPScenarioResult(startedAt, definition,
 			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 1 — Governed Cloud Resource Provisioning")
@@ -192,6 +193,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
 		startedAt := time.Now().UTC()
 		result = newFedRAMPDenyScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 2 — Unauthorized Audit Trail Destruction Blocked (CR-26)")
@@ -287,6 +289,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 	case "3":
 		startedAt := time.Now().UTC()
 		result = newFedRAMPRevertScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Governed Configuration Revert (CM-7)")
@@ -385,6 +388,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 	case "4":
 		startedAt := time.Now().UTC()
 		result = newFedRAMPEvidenceBlockScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")

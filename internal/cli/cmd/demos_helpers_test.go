@@ -158,11 +158,13 @@ func TestHarnessRun_ExecMode(t *testing.T) {
 	assert.Equal(t, "compose", args[1])
 	assert.Equal(t, "exec", args[2])
 	assert.Equal(t, "-T", args[3])
-	assert.Equal(t, "agent-runtime", args[4])
-	assert.Equal(t, "/g8e", args[5])
-	assert.Equal(t, "demos", args[6])
-	assert.Equal(t, "scenarios", args[7])
-	assert.Equal(t, "run", args[8])
+	assert.Equal(t, "-e", args[4])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=mcp_basic_read", args[5])
+	assert.Equal(t, "agent-runtime", args[6])
+	assert.Equal(t, "/g8e", args[7])
+	assert.Equal(t, "demos", args[8])
+	assert.Equal(t, "scenarios", args[9])
+	assert.Equal(t, "run", args[10])
 	assert.Contains(t, args, "--mtls-url")
 	assert.Contains(t, args, "https://g8e.local:8443")
 	assert.Contains(t, args, "--public-url")
@@ -187,13 +189,15 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "--rm", args[3])
 	assert.Equal(t, "-T", args[4])
 	assert.Equal(t, "--no-deps", args[5])
-	assert.Equal(t, "agent-runtime", args[6])
-	assert.Equal(t, "demos", args[7])
-	assert.Equal(t, "scenarios", args[8])
-	assert.Equal(t, "run", args[9])
+	assert.Equal(t, "-e", args[6])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=a2a_discover", args[7])
+	assert.Equal(t, "agent-runtime", args[8])
+	assert.Equal(t, "demos", args[9])
+	assert.Equal(t, "scenarios", args[10])
+	assert.Equal(t, "run", args[11])
 }
 
-func TestHarnessRun_PropagatesDemoRunID(t *testing.T) {
+func TestHarnessRun_PropagatesDemoCorrelation(t *testing.T) {
 	tests := []struct {
 		name   string
 		useRun bool
@@ -212,8 +216,23 @@ func TestHarnessRun_PropagatesDemoRunID(t *testing.T) {
 
 			assert.Contains(t, args, "-e")
 			assert.Contains(t, args, string(constants.EnvVar.DemoRunID)+"=healthcare-run-123")
+			assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=healthcare-gold-card")
 		})
 	}
+}
+
+func TestHarnessConfigForResult_UsesCanonicalCorrelation(t *testing.T) {
+	result := &compliancev1.DemoScenarioResult{
+		RunId:       "fedramp-run-123",
+		ScenarioRef: &compliancev1.VersionedReference{Id: "fedramp-provision", Version: "1.0.0"},
+	}
+
+	cfg := harnessConfigForResult("agent-runtime", result)
+
+	assert.Equal(t, "fedramp-run-123", cfg.RunID)
+	assert.Equal(t, "fedramp-provision", cfg.ScenarioID)
+	args := harnessRun("shared-harness-scenario", cfg)
+	assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=fedramp-provision")
 }
 
 func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {

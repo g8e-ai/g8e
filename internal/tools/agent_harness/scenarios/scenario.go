@@ -16,6 +16,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
@@ -46,6 +47,8 @@ type Result struct {
 	RequiresPosture Posture              `json:"requires_posture"`
 	StartedAt       time.Time            `json:"started_at"`
 	DurationMS      int64                `json:"duration_ms"`
+	RunID           string               `json:"run_id,omitempty"`
+	ScenarioID      string               `json:"scenario_id,omitempty"`
 	Exchanges       []clientpkg.Exchange `json:"exchanges"`
 	TxHashes        []string             `json:"tx_hashes,omitempty"`
 	Notes           []string             `json:"notes,omitempty"`
@@ -102,6 +105,8 @@ func Execute(ctx context.Context, c *clientpkg.Client, sc Scenario) Result {
 		Persona:         sc.Persona.ID,
 		RequiresPosture: sc.RequiresPosture,
 		StartedAt:       time.Now(),
+		RunID:           os.Getenv(string(constants.EnvVar.DemoRunID)),
+		ScenarioID:      os.Getenv(string(constants.EnvVar.DemoScenarioID)),
 	}
 	c.Record(&r.Exchanges) // every HTTP call lands in this result
 	defer c.Record(nil)

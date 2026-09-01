@@ -79,6 +79,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		}
 		startedAt := time.Now().UTC()
 		result = newDHSSovereignIngestScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 1 — Sovereign Multi-Source Ingest (LOE 1)")
@@ -192,6 +193,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		}
 		startedAt := time.Now().UTC()
 		result = newDHSDisconnectedOperationsScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Resilient Disconnected Operations (LOE 2)")
@@ -379,6 +381,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		}
 		startedAt := time.Now().UTC()
 		result = newDHSCueScenarioResult(startedAt, definition)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 3 — Governed Predictive Cueing (LOE 3 & 4)")
@@ -489,6 +492,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		startedAt := time.Now().UTC()
 		results = newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition)
 		blockResult, purgeResult := results[0], results[1]
+		hcfg = bindHarnessConfig(hcfg, blockResult)
 		var blockHasErrors, purgeHasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -555,6 +559,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoPrintln("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
+		hcfg = bindHarnessConfig(hcfg, purgeResult)
 		step3Started := time.Now().UTC()
 		step3Err := demoStep(ctx, demoDir, "dhs-purge via agent",
 			false,

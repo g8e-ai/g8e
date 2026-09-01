@@ -79,7 +79,7 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*complia
 	demoPrintln("  gateway via mTLS, attempting to execute an unauthorized trade.")
 	demoPrintln("  L1 doctrine must block this at the gateway before execution:")
 	demoPrintln()
-	hcfg := defaultHarnessConfig("agent-runtime")
+	hcfg := harnessConfigForResult("agent-runtime", result)
 	hcfg.PublicURL = "http://g8e.local:8082"
 	step3Started := time.Now().UTC()
 	step3Err := demoStep(ctx, demoDir, "finance-unauthorized-trade via agent", false,

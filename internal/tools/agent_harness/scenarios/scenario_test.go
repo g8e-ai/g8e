@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
@@ -405,6 +406,22 @@ func TestExecute(t *testing.T) {
 
 	assert.False(t, resultFail.OK, "Execute should fail when Run returns error")
 	assert.Equal(t, "test error", resultFail.Err, "Execute should set error")
+}
+
+func TestExecute_RetainsDemoCorrelation(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.DemoRunID), "fedramp-run-123")
+	t.Setenv(string(constants.EnvVar.DemoScenarioID), "fedramp-provision")
+	scenario := Scenario{
+		Name:    "fedramp-provision-harness",
+		Title:   "FedRAMP Provision",
+		Persona: clientpkg.Persona{ID: "test-persona"},
+		Run:     func(context.Context, *clientpkg.Client, *Result) error { return nil },
+	}
+
+	result := Execute(context.Background(), &clientpkg.Client{}, scenario)
+
+	assert.Equal(t, "fedramp-run-123", result.RunID)
+	assert.Equal(t, "fedramp-provision", result.ScenarioID)
 }
 
 func TestExecuteWithRecording(t *testing.T) {

@@ -774,7 +774,7 @@ func TestHarnessRun(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cmd := harnessRun("finance-unauthorized-trade", cfg)
 		assert.Equal(t, []string{
-			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "demos", "scenarios", "run",
+			"docker", "compose", "exec", "-T", "-e", string(constants.EnvVar.DemoScenarioID) + "=finance-unauthorized-trade", "agent-runtime", "/g8e", "demos", "scenarios", "run",
 			"--mtls-url", "https://g8e.local:8443",
 			"--public-url", "http://g8e.local:8080",
 			"--cert", "/root/.g8e/pki/operator.crt",
