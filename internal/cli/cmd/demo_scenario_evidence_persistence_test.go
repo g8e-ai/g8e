@@ -156,3 +156,25 @@ func TestFedRAMPDenyHarnessVerified_InterpretsHarnessExitStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestNewFedRAMPScenarioResult_UsesCanonicalProvisionDefinition(t *testing.T) {
+	definition, err := loadFedRAMPScenarioDefinition("fedramp-provision")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newFedRAMPScenarioResult(startedAt, definition, "provision metrics")
+
+	assert.Equal(t, "fedramp-provision", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	assert.Equal(t, "provision metrics", result.GetMetricsSummary())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}

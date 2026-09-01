@@ -61,7 +61,7 @@ func loadFedRAMPScenarioDefinition(scenarioID string) (*compliancev1.DemoScenari
 	return definition, nil
 }
 
-func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, metricsSummary string) *compliancev1.DemoScenarioResult {
 	return &compliancev1.DemoScenarioResult{
 		ResultId:             fmt.Sprintf("fedramp-run:%s:%s", startedAt.Format("20060102T150405Z"), definition.ScenarioId),
 		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
@@ -74,8 +74,12 @@ func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.
 		FrameworkControlRefs: cloneFrameworkControlRefs(definition.FrameworkControlRefs),
 		DisplayNumber:        definition.DisplayNumber,
 		Title:                definition.Title,
-		MetricsSummary:       "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident",
+		MetricsSummary:       metricsSummary,
 	}
+}
+
+func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident")
 }
 
 func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
@@ -93,7 +97,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 	switch scenario {
 	case "1":
-		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
+		startedAt := time.Now().UTC()
+		result = newFedRAMPScenarioResult(startedAt, definition,
 			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
@@ -111,14 +116,26 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-provision", "doctrine check")
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Governed Cloud Resource Provisioning")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
+		step2Started := time.Now().UTC()
+		step2OK := demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"test", "-f", constants.ContainerOperatorCert}) {
+				"test", "-f", constants.ContainerOperatorCert})
+		step2Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-2", "operator enrollment check", step2Started, step2Completed,
+			step2OK, true, "docker compose exec operator test client certificate"))
+		if !step2OK {
 			hasErrors = true
 		}
 
@@ -128,23 +145,41 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-provision", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-provision", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-provision")
-		if err := demoStep(ctx, demoDir, "fedramp-provision via agent",
+		step3Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "fedramp-provision via agent",
 			false,
 			harnessRun("fedramp-provision", hcfg)...,
-		); err != nil {
+		)
+		step3Completed := time.Now().UTC()
+		step3OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-3", "fedramp-provision harness", step3Started, step3Completed,
+			step3OK, true, "agent harness fedramp-provision"))
+		if !step3OK {
 			fmt.Println("  (fedramp-provision harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:fedramp-provision")
+			result.TransactionIds = append(result.TransactionIds, "fedramp-provision-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-provision", "quorum met (3/5)")
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-provision", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
+		step4Started := time.Now().UTC()
+		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "PROVISION"}) {
+				"python", constants.ContainerVerifyOpsPy, "PROVISION"})
+		step4Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-4", "independent state observation: provision recorded", step4Started, step4Completed,
+			step4OK, true, "cloudsvc verify_ops.py PROVISION"))
+		if !step4OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-provision-recorded")
 		}
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-provision", "PROVISION recorded")
@@ -152,15 +187,22 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 1 — Cloud resource provisioning governed end to end.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         L5 actuator recorded the provision; signed receipt in hash-chained ledger.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 PASSED — Cloud resource provisioning governed end to end")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-provision scenario result: %w", err)
 		}
 
 	case "2":
