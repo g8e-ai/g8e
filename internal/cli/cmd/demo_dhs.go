@@ -41,9 +41,34 @@ func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoS
 		"L2 quorum admits cue // L5 actuator records CUE")
 }
 
-func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func dhsScenarioDefinitionIDs(scenario string) ([]string, error) {
+	switch scenario {
+	case "1":
+		return []string{"dhs-ingest"}, nil
+	case "2":
+		return []string{"dhs-disconnected-operations"}, nil
+	case "3":
+		return []string{"dhs-cue"}, nil
+	case "4":
+		return []string{"dhs-destruction-block", "dhs-destruction-purge"}, nil
+	default:
+		return nil, fmt.Errorf("%w: invalid scenario number for dhs: %q (valid: 1-4)", constants.ErrNotFound, scenario)
+	}
+}
+
+func newDHSDestructionScenarioResults(startedAt time.Time, blockDefinition, purgeDefinition *compliancev1.DemoScenarioDefinition) []*compliancev1.DemoScenarioResult {
+	return []*compliancev1.DemoScenarioResult{
+		newDemoEvidenceScenarioResult(startedAt, blockDefinition, constants.DemosOrgDHS, "dhs-demo-scope",
+			"L1 blocks audit wipe // audit vault remains intact"),
+		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, "dhs-demo-scope",
+			"L1+L2 admit governed purge // L5 actuator records PURGE"),
+	}
+}
+
+func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result *compliancev1.DemoScenarioResult
+	var results []*compliancev1.DemoScenarioResult
 	var hasErrors bool
 
 	switch scenario {
@@ -449,8 +474,22 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		}
 
 	case "4":
-		result = newDemoScenarioResult("4", "Sovereign Destruction + tamper-proof audit", demoStatusPassed,
-			"L1 blocks audit wipe // L1+L2 admit governed purge → receipt")
+		definitionIDs, err := dhsScenarioDefinitionIDs(scenario)
+		if err != nil {
+			return nil, err
+		}
+		blockDefinition, err := loadDemoScenarioDefinition(definitionIDs[0])
+		if err != nil {
+			return nil, err
+		}
+		purgeDefinition, err := loadDemoScenarioDefinition(definitionIDs[1])
+		if err != nil {
+			return nil, err
+		}
+		startedAt := time.Now().UTC()
+		results = newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition)
+		blockResult, purgeResult := results[0], results[1]
+		var blockHasErrors, purgeHasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 4 — Sovereign Destruction + Tamper-Proof Audit (LOE 2)")
@@ -470,35 +509,68 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/log/g8e' → rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-evidence-block", "doctrine check")
-		if err := demoStep(ctx, demoDir, "dhs-evidence-block via agent",
+		step1Started := time.Now().UTC()
+		step1Err := demoStep(ctx, demoDir, "dhs-evidence-block via agent",
 			false,
 			harnessRun("dhs-evidence-block", hcfg)...,
-		); err != nil {
+		)
+		step1OK := step1Err == nil
+		blockResult.StepResults = append(blockResult.StepResults, buildDemoStepResult(
+			"dhs-destruction-block-step-1", "dhs-evidence-block harness (L1 doctrine reject)", step1Started, time.Now().UTC(),
+			step1OK, true, "agent harness dhs-evidence-block"))
+		if !step1OK {
 			fmt.Println("  (dhs-evidence-block harness scenario failed)")
 			fmt.Println()
-			hasErrors = true
+			blockHasErrors = true
+		} else {
+			blockResult.ReceiptRefs = append(blockResult.ReceiptRefs, "failed-stage:dhs-evidence-block")
+			blockResult.TransactionIds = append(blockResult.TransactionIds, "dhs-evidence-block-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "dhs-evidence-block", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/log/g8e' — data-destruction threat detected at admission")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 2: Independently verify operator audit vault DB still exists and is non-empty (prohibited side-effect check)",
+		step2Started := time.Now().UTC()
+		step2OK := demoScenarioStep(ctx, demoDir, "Step 2: Independently verify operator audit vault DB still exists and is non-empty (prohibited side-effect check)",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
-			hasErrors = true
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
+		blockResult.StepResults = append(blockResult.StepResults, buildDemoStepResult(
+			"dhs-destruction-block-step-2", "independent state observation: audit vault present and non-empty", step2Started, time.Now().UTC(),
+			step2OK, true, "operator audit vault exists and is non-empty"))
+		if !step2OK {
+			blockHasErrors = true
+		} else {
+			blockResult.StateObservationRefs = append(blockResult.StateObservationRefs, "state-observation:dhs-audit-vault-intact")
+		}
+		blockResult.CompletedAt = timestamppb.New(time.Now().UTC())
+		if blockHasErrors {
+			blockResult.Status = demoStatusFailed
+			blockResult.VerificationStatus = "unverifiable"
+			blockResult.Failure = "one or more required steps failed"
+		} else {
+			blockResult.VerificationStatus = "verified"
 		}
 
 		demoPrintln("  ── Step 3: Run dhs-purge via agent (admit) ──────────────")
 		demoPrintln("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
-		if err := demoStep(ctx, demoDir, "dhs-purge via agent",
+		step3Started := time.Now().UTC()
+		step3Err := demoStep(ctx, demoDir, "dhs-purge via agent",
 			false,
 			harnessRun("dhs-purge", hcfg)...,
-		); err != nil {
+		)
+		step3OK := step3Err == nil
+		purgeResult.StepResults = append(purgeResult.StepResults, buildDemoStepResult(
+			"dhs-destruction-purge-step-1", "dhs-purge harness", step3Started, time.Now().UTC(),
+			step3OK, true, "agent harness dhs-purge"))
+		if !step3OK {
 			fmt.Println("  (dhs-purge harness scenario failed)")
 			fmt.Println()
-			hasErrors = true
+			purgeHasErrors = true
+		} else {
+			purgeResult.ReceiptRefs = append(purgeResult.ReceiptRefs, "action-receipt:dhs-purge")
+			purgeResult.TransactionIds = append(purgeResult.TransactionIds, "dhs-purge-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-purge", "doctrine admitted")
@@ -506,19 +578,32 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-purge", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L1+L2 admitted governed purge — L5 actuator recording PURGE with destruction receipt")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the PURGE",
+		step4Started := time.Now().UTC()
+		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the PURGE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "PURGE"}) {
-			hasErrors = true
+				"python", constants.ContainerVerifyOpsPy, "PURGE"})
+		purgeResult.StepResults = append(purgeResult.StepResults, buildDemoStepResult(
+			"dhs-destruction-purge-step-2", "independent state observation: purge recorded", step4Started, time.Now().UTC(),
+			step4OK, true, "datasvc verify_ops.py PURGE"))
+		if !step4OK {
+			purgeHasErrors = true
+		} else {
+			purgeResult.StateObservationRefs = append(purgeResult.StateObservationRefs, "state-observation:datasvc-purge-recorded")
+		}
+		purgeResult.CompletedAt = timestamppb.New(time.Now().UTC())
+		if purgeHasErrors {
+			purgeResult.Status = demoStatusFailed
+			purgeResult.VerificationStatus = "unverifiable"
+			purgeResult.Failure = "one or more required steps failed"
+		} else {
+			purgeResult.VerificationStatus = "verified"
 		}
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-purge", "PURGE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded PURGE — cryptographic destruction receipt in hash-chained ledger")
-
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
-		if hasErrors {
-			result.Status = demoStatusFailed
+		if blockHasErrors || purgeHasErrors {
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
@@ -528,9 +613,19 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 			fmt.Println("         PURGE operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Destruction governed and provable")
 		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(blockResult, blockDefinition, blockResult.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate dhs-destruction-block scenario result: %w", err)
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(purgeResult, purgeDefinition, purgeResult.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate dhs-destruction-purge scenario result: %w", err)
+		}
 
 	default:
-		return nil, fmt.Errorf("invalid scenario number for dhs: %q (valid: 1-4)", scenario)
+		_, err := dhsScenarioDefinitionIDs(scenario)
+		return nil, err
 	}
-	return result, nil
+	if len(results) > 0 {
+		return results, nil
+	}
+	return []*compliancev1.DemoScenarioResult{result}, nil
 }

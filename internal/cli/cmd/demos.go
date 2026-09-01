@@ -1272,11 +1272,11 @@ func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *co
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(ctx, fileSvc, org, demoDir, scenarioNum)
+		scenarioResults, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, scenarioNum)
 		if err != nil {
 			return err
 		}
-		results = append(results, result)
+		results = append(results, scenarioResults...)
 	}
 
 	if org == constants.DemosOrgFedRAMP {
@@ -1414,35 +1414,48 @@ func summarizeScenarioResults(cmd *cobra.Command, org string, results []*complia
 }
 
 func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) error {
-	result, err := runScenarioWithResult(ctx, fileSvc, org, demoDir, scenario)
+	results, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, scenario)
 	if err != nil {
 		return err
 	}
-	return demoResultFailureError(result, org)
+	for _, result := range results {
+		if err := demoResultFailureError(result, org); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func runScenarioWithResult(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
-	var result *compliancev1.DemoScenarioResult
+func runScenarioWithResults(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+	var results []*compliancev1.DemoScenarioResult
 	var err error
 	switch org {
 	case constants.DemosOrgHealthcare:
+		var result *compliancev1.DemoScenarioResult
 		result, err = runHealthcareScenario(ctx, demoDir, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgFinance:
+		var result *compliancev1.DemoScenarioResult
 		result, err = runFinanceScenario(ctx, demoDir, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgDHS:
-		result, err = runDHSScenario(ctx, demoDir, scenario)
+		results, err = runDHSScenario(ctx, demoDir, scenario)
 	case constants.DemosOrgFedRAMP:
+		var result *compliancev1.DemoScenarioResult
 		result, err = runFedRAMPScenario(ctx, demoDir, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	default:
 		err = fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return result, ctxErr
+		return results, ctxErr
 	}
-	if persistErr := persistDemoScenarioResult(ctx, fileSvc, result); persistErr != nil {
-		return result, errors.Join(err, persistErr)
+	for _, result := range results {
+		if persistErr := persistDemoScenarioResult(ctx, fileSvc, result); persistErr != nil {
+			err = errors.Join(err, persistErr)
+		}
 	}
-	return result, err
+	return results, err
 }
 
 // titleCase capitalizes the first letter of each word in s, leaving the rest lowercase.

@@ -546,8 +546,8 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 	assert.Contains(t, output, "FAIL")
 }
 
-func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResult(context.Background(), nil, "unknown-org", "/tmp", "1")
+func TestRunScenarioWithResults_UnknownOrgReturnsNotFound(t *testing.T) {
+	_, err := runScenarioWithResults(context.Background(), nil, "unknown-org", "/tmp", "1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }

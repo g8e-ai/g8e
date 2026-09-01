@@ -290,6 +290,47 @@ func TestNewDHSCueScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 	}
 }
 
+func TestNewDHSDestructionScenarioResults_UseSeparateCanonicalDefinitions(t *testing.T) {
+	blockDefinition, err := loadDemoScenarioDefinition("dhs-destruction-block")
+	require.NoError(t, err)
+	purgeDefinition, err := loadDemoScenarioDefinition("dhs-destruction-purge")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	results := newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition)
+
+	require.Len(t, results, 2)
+	assert.Equal(t, "dhs-destruction-block", results[0].GetScenarioRef().GetId())
+	assert.Equal(t, "dhs-destruction-purge", results[1].GetScenarioRef().GetId())
+	assert.Equal(t, results[0].GetRunId(), results[1].GetRunId())
+	assert.NotEqual(t, results[0].GetResultId(), results[1].GetResultId())
+	assert.Equal(t, blockDefinition.GetTitle(), results[0].GetTitle())
+	assert.Equal(t, purgeDefinition.GetTitle(), results[1].GetTitle())
+	assert.Equal(t, "blocked", blockDefinition.GetExpectedOutcome())
+	assert.Equal(t, "allowed", purgeDefinition.GetExpectedOutcome())
+}
+
+func TestDHSScenarioDefinitionIDs_SeparatesDestructionOutcomes(t *testing.T) {
+	tests := []struct {
+		name     string
+		scenario string
+		want     []string
+	}{
+		{name: "ingest maps to one definition", scenario: "1", want: []string{"dhs-ingest"}},
+		{name: "disconnected operations maps to one definition", scenario: "2", want: []string{"dhs-disconnected-operations"}},
+		{name: "cue maps to one definition", scenario: "3", want: []string{"dhs-cue"}},
+		{name: "destruction maps to block and purge definitions", scenario: "4", want: []string{"dhs-destruction-block", "dhs-destruction-purge"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ids, err := dhsScenarioDefinitionIDs(tt.scenario)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, ids)
+		})
+	}
+}
+
 func TestNewFinanceUnauthorizedTradeScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 	definition, err := loadDemoScenarioDefinition("finance-unauthorized-trade")
 	require.NoError(t, err)
