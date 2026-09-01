@@ -1209,7 +1209,7 @@ func runDemosWithTUILifecycle(ctx context.Context, program demoProgram, runScena
 	go func() {
 		err := runScenario(scenarioCtx)
 		status := tui.ScenarioSucceeded
-		if errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			status = tui.ScenarioCancelled
 		} else if err != nil {
 			status = tui.ScenarioFailed
@@ -1331,9 +1331,19 @@ type scenarioResult struct {
 	metrics string
 }
 
+func (r scenarioResult) failureError(org string) error {
+	if r.status != "FAIL" {
+		return nil
+	}
+	return fmt.Errorf("%w: %s scenario %s", constants.ErrDemoScenarioFailed, org, r.number)
+}
+
 func runScenario(ctx context.Context, org, demoDir, scenario string) error {
-	_, err := runScenarioWithResult(ctx, org, demoDir, scenario)
-	return err
+	result, err := runScenarioWithResult(ctx, org, demoDir, scenario)
+	if err != nil {
+		return err
+	}
+	return result.failureError(org)
 }
 
 func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (scenarioResult, error) {

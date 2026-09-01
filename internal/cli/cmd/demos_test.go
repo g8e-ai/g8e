@@ -441,6 +441,31 @@ func TestRunAllScenarios(t *testing.T) {
 	})
 }
 
+func TestScenarioResultFailureError(t *testing.T) {
+	tests := []struct {
+		name    string
+		result  scenarioResult
+		wantErr bool
+	}{
+		{name: "passing scenario returns nil", result: scenarioResult{number: "2", status: "PASS"}, wantErr: false},
+		{name: "skipped scenario returns nil", result: scenarioResult{number: "2", status: "SKIP"}, wantErr: false},
+		{name: "failed scenario returns typed error", result: scenarioResult{number: "2", status: "FAIL"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.result.failureError(constants.DemosOrgFedRAMP)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, constants.ErrDemoScenarioFailed)
+				assert.Contains(t, err.Error(), "fedramp scenario 2")
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func TestSummarizeScenarioResults(t *testing.T) {
 	tests := []struct {
 		name        string

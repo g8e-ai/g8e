@@ -11,11 +11,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -280,6 +282,90 @@ func TestRunDemosWithTUILifecycle_EarlyQuitCancelsAndWaitsForScenario(t *testing
 
 	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
 	assert.ErrorIs(t, err, context.Canceled)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_SuccessBeforeQuitReturnsSuccess(t *testing.T) {
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioSucceeded, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return nil
+	})
+
+	assert.NoError(t, err)
+}
+
+func TestRunDemosWithTUILifecycle_ScenarioErrorBeforeQuitReturnsScenarioError(t *testing.T) {
+	errScenario := fmt.Errorf("scenario failed")
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioFailed, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return errScenario
+	})
+
+	assert.ErrorIs(t, err, errScenario)
+}
+
+func TestRunDemosWithTUILifecycle_ProgramErrorCancelsAndWaitsForScenario(t *testing.T) {
+	errProgram := fmt.Errorf("program failed")
+	scenarioStarted := make(chan struct{})
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			<-scenarioStarted
+			return tui.NewModel(tui.Options{}), errProgram
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(ctx context.Context) error {
+		close(scenarioStarted)
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, errProgram)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_ParentDeadlineCancelsAndWaitsForScenario(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now())
+	t.Cleanup(cancel)
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			return tui.NewModel(tui.Options{}), nil
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(ctx, program, func(ctx context.Context) error {
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assertClosed(t, scenarioExited)
 	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
 	require.True(t, ok)
