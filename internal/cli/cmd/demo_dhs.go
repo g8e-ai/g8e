@@ -31,6 +31,11 @@ func newDHSSovereignIngestScenarioResult(startedAt time.Time, definition *compli
 		"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
 }
 
+func newDHSDisconnectedOperationsScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+		"Datalink severed // Local governance continues // Git ledger + SQLite vault")
+}
+
 func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
 	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
 		"L2 quorum admits cue // L5 actuator records CUE")
@@ -156,8 +161,12 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		}
 
 	case "2":
-		result = newDemoScenarioResult("2", "Resilient Disconnected Operations / Continuity of Coverage", demoStatusPassed,
-			"Datalink severed // Local governance continues // Git ledger + SQLite vault")
+		definition, err := loadDemoScenarioDefinition("dhs-disconnected-operations")
+		if err != nil {
+			return nil, err
+		}
+		startedAt := time.Now().UTC()
+		result = newDHSDisconnectedOperationsScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Resilient Disconnected Operations (LOE 2)")
@@ -173,30 +182,54 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Resilient Disconnected Operations")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm gateway is live before disconnect",
-			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm gateway is live before disconnect",
+			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"})
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-1", "gateway health check before disconnect", step1Started, time.Now().UTC(),
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 2: Sever the Mission Partner datalink ───────────────────")
 		demoEmitter.Ledger(tui.LevelWarn, "Mission Partner datalink severed — entering comms-denied mode")
-		if err := demoStep(ctx, demoDir, "sever datalink", false,
+		step2Started := time.Now().UTC()
+		step2Err := demoStep(ctx, demoDir, "sever datalink", false,
 			"docker", "network", "disconnect",
 			constants.DemosDHSPerimeterNetwork, constants.DemosDHSCoalitionDatalinkCtnr,
-		); err != nil {
-			fmt.Printf("  (sever datalink failed: %v)\n\n", err)
+		)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-2", "sever mission partner datalink", step2Started, time.Now().UTC(),
+			step2Err == nil, true, "docker network disconnect mission partner datalink"))
+		if step2Err != nil {
+			fmt.Printf("  (sever datalink failed: %v)\n\n", step2Err)
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(ctx, demoDir, "Step 3: Verify network detachment (datalink container off perimeter)",
+		step3Started := time.Now().UTC()
+		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify network detachment (datalink container off perimeter)",
 			[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
-				" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr + " && exit 1 || exit 0"}) {
+				" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr + " && exit 1 || exit 0"})
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-3", "independent state observation: datalink detached", step3Started, time.Now().UTC(),
+			step3OK, true, "docker network inspection excludes datalink container"))
+		if !step3OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-datalink-detached")
 		}
 
-		if !demoScenarioStep(ctx, demoDir, "Step 4: Verify gateway continues operating locally",
-			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
+		step4Started := time.Now().UTC()
+		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify gateway continues operating locally",
+			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"})
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-4", "independent state observation: local gateway available", step4Started, time.Now().UTC(),
+			step4OK, true, "curl gateway health endpoint while disconnected"))
+		if !step4OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-gateway-available")
 		}
 
 		demoPrintln("  ── Step 5: Govern an ingest while disconnected ──────────────────")
@@ -205,57 +238,100 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest-disco", "doctrine check (local)")
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest-disco", "doctrine admitted (local)")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest-disco", "local consensus")
-		if err := demoStep(ctx, demoDir, "dhs-ingest while disconnected",
+		step5Started := time.Now().UTC()
+		step5Err := demoStep(ctx, demoDir, "dhs-ingest while disconnected",
 			false,
 			harnessRun("dhs-ingest", hcfg)...,
-		); err != nil {
+		)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-5", "dhs-ingest harness while disconnected", step5Started, time.Now().UTC(),
+			step5Err == nil, true, "agent harness dhs-ingest while datalink detached"))
+		if step5Err != nil {
 			fmt.Println("  (ingest while disconnected failed — operator may not be processing locally)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-disconnected-ingest")
+			result.TransactionIds = append(result.TransactionIds, "dhs-disconnected-ingest-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest-disco", "local quorum met")
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest-disco", "local INGEST recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "Governance continued locally while disconnected — Git ledger + SQLite vault persisted")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 6: Verify local ledger directory exists and is non-empty",
+		step6Started := time.Now().UTC()
+		step6OK := demoScenarioStep(ctx, demoDir, "Step 6: Verify local ledger directory exists and is non-empty",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -d " + constants.ContainerLedgerFilesDir + " && test -n \"$(ls -A " + constants.ContainerLedgerFilesDir + ")\""}) {
+				"sh", "-c", "test -d " + constants.ContainerLedgerFilesDir + " && test -n \"$(ls -A " + constants.ContainerLedgerFilesDir + ")\""})
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-6", "independent state observation: local ledger persisted", step6Started, time.Now().UTC(),
+			step6OK, true, "operator ledger directory exists and is non-empty"))
+		if !step6OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-ledger-persisted")
 		}
 
-		if !demoScenarioStep(ctx, demoDir, "Step 7: Verify local audit vault DB exists and is non-empty",
+		step7Started := time.Now().UTC()
+		step7OK := demoScenarioStep(ctx, demoDir, "Step 7: Verify local audit vault DB exists and is non-empty",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-7", "independent state observation: local audit vault persisted", step7Started, time.Now().UTC(),
+			step7OK, true, "operator audit vault exists and is non-empty"))
+		if !step7OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-audit-vault-persisted")
 		}
 
 		demoPrintln("  ── Step 8: Restore the Mission Partner datalink ─────────────────")
-		demoEmitter.Ledger(tui.LevelInfo, "Mission Partner datalink restored")
-		restorationFailed := false
-		if err := demoStep(ctx, demoDir, "restore datalink", false,
+		step8Started := time.Now().UTC()
+		step8Err := demoStep(ctx, demoDir, "restore datalink", false,
 			"docker", "network", "connect",
 			constants.DemosDHSPerimeterNetwork, constants.DemosDHSCoalitionDatalinkCtnr,
-		); err != nil {
-			fmt.Printf("  (warning: restore datalink failed: %v)\n\n", err)
-			restorationFailed = true
+		)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-disconnected-step-8", "restore mission partner datalink", step8Started, time.Now().UTC(),
+			step8Err == nil, false, "docker network connect mission partner datalink"))
+		restorationFailed := step8Err != nil
+		if step8Err != nil {
+			fmt.Printf("  (warning: restore datalink failed: %v)\n\n", step8Err)
+		} else {
+			demoEmitter.Ledger(tui.LevelInfo, "Mission Partner datalink restored")
 		}
 
-		if !restorationFailed {
-			if !demoScenarioStep(ctx, demoDir, "Step 9: Verify datalink is reachable again (container back on perimeter)",
+		step9Started := time.Now().UTC()
+		if restorationFailed {
+			result.StepResults = append(result.StepResults, &compliancev1.DemoStepResult{
+				StepId: "dhs-disconnected-step-9", Operation: "independent state observation: datalink restored",
+				StartedAt: timestamppb.New(step9Started), CompletedAt: timestamppb.New(time.Now().UTC()),
+				Status: demoStatusSkipped, ProtocolResult: "datalink restoration unavailable", Failure: "restore datalink step failed", Required: false,
+			})
+		} else {
+			step9OK := demoScenarioStep(ctx, demoDir, "Step 9: Verify datalink is reachable again (container back on perimeter)",
 				[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
-					" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr}) {
-				restorationFailed = true
+					" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr})
+			result.StepResults = append(result.StepResults, buildDemoStepResult(
+				"dhs-disconnected-step-9", "independent state observation: datalink restored", step9Started, time.Now().UTC(),
+				step9OK, false, "docker network inspection includes datalink container"))
+			restorationFailed = !step9OK
+			if step9OK {
+				result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-datalink-restored")
 			}
 		}
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 2 — Continuity of coverage verified under comms denial.")
 			fmt.Println("         Governance continued locally; Git ledger + SQLite vault persisted all decisions.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Continuity of coverage verified under comms denial")
@@ -266,6 +342,9 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 			fmt.Println("  [RESTORATION FAILURE] Datalink could not be restored — continuity claim holds,")
 			fmt.Println("    but the environment requires manual reconnection before subsequent scenarios.")
 			demoEmitter.Ledger(tui.LevelWarn, "Datalink restoration failed — continuity verified but manual reconnection required")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate dhs-disconnected-operations scenario result: %w", err)
 		}
 
 	case "3":
