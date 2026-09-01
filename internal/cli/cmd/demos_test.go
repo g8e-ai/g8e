@@ -356,7 +356,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario(context.Background(), "unknown-org", "/tmp", "1")
+		err := runScenario(context.Background(), nil, "unknown-org", "/tmp", "1")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -411,7 +411,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(context.Background(), &cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")

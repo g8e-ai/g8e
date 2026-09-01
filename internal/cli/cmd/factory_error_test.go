@@ -555,6 +555,18 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestDemosRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := demosRunCmdWithConfig(failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{constants.DemosOrgFedRAMP, "2"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 // --- Docker start command (interactive walkthrough) ---
 
 func TestDockerStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {

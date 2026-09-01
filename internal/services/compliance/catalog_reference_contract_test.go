@@ -50,9 +50,9 @@ func TestCanonicalComplianceCatalogMatchesReviewedPhase1Scope(t *testing.T) {
 		}
 	}
 	assert.Len(t, assertions.Assertions, 13)
-	assert.Len(t, crosswalks.Mappings, 57)
-	assert.Equal(t, 33, mappedControls)
-	assert.Equal(t, 98, unsupportedControls)
+	assert.Len(t, crosswalks.Mappings, 60)
+	assert.Equal(t, 34, mappedControls)
+	assert.Equal(t, 97, unsupportedControls)
 }
 
 func TestCanonicalCrosswalkMapsEveryInitialAssertion(t *testing.T) {

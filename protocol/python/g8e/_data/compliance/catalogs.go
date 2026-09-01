@@ -21,6 +21,9 @@ var frameworkCatalogJSON []byte
 //go:embed fedramp-nist-crosswalk.json
 var fedRAMPAndNISTCrosswalkJSON []byte
 
+//go:embed demo-scenario-catalog.json
+var demoScenarioCatalogJSON []byte
+
 func AssertionCatalogJSON() []byte {
 	return bytes.Clone(assertionCatalogJSON)
 }
@@ -31,4 +34,8 @@ func FrameworkCatalogJSON() []byte {
 
 func FedRAMPAndNISTCrosswalkJSON() []byte {
 	return bytes.Clone(fedRAMPAndNISTCrosswalkJSON)
+}
+
+func DemoScenarioCatalogJSON() []byte {
+	return bytes.Clone(demoScenarioCatalogJSON)
 }

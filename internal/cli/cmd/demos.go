@@ -1130,7 +1130,7 @@ Available scenarios:
 	return cmd
 }
 
-func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
+func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.RuntimeFileService) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: demo environment name", constants.ErrMissingRequiredField)
 	}
@@ -1179,21 +1179,21 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	}
 
 	if useTUI {
-		return runDemosWithTUI(cmd, org, demoDir, args)
+		return runDemosWithTUI(cmd, fileSvc, org, demoDir, args)
 	}
 
 	if len(args) >= 2 {
-		return runScenario(cmd.Context(), org, demoDir, args[1]) //nolint:gosec // length checked above
+		return runScenario(cmd.Context(), fileSvc, org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
-	return runAllScenarios(cmd.Context(), cmd, org, demoDir)
+	return runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir)
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
 // demoEmitter so scenario code can send events, runs the requested scenarios
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
 // exits, it cancels and waits for scenario execution so errors are not lost.
-func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
+func runDemosWithTUI(cmd *cobra.Command, fileSvc fs.RuntimeFileService, org, demoDir string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
@@ -1206,9 +1206,9 @@ func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) err
 
 	return runDemosWithTUILifecycle(cmd.Context(), p, func(ctx context.Context) error {
 		if len(args) >= 2 {
-			return runScenario(ctx, org, demoDir, args[1])
+			return runScenario(ctx, fileSvc, org, demoDir, args[1])
 		}
-		return runAllScenarios(ctx, cmd, org, demoDir)
+		return runAllScenarios(ctx, fileSvc, cmd, org, demoDir)
 	})
 }
 
@@ -1254,7 +1254,7 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir string) error {
+func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1270,7 +1270,7 @@ func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir strin
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(ctx, org, demoDir, scenarioNum)
+		result, err := runScenarioWithResult(ctx, fileSvc, org, demoDir, scenarioNum)
 		if err != nil {
 			return err
 		}
@@ -1355,15 +1355,15 @@ func summarizeScenarioResults(cmd *cobra.Command, org string, results []*complia
 	return nil
 }
 
-func runScenario(ctx context.Context, org, demoDir, scenario string) error {
-	result, err := runScenarioWithResult(ctx, org, demoDir, scenario)
+func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) error {
+	result, err := runScenarioWithResult(ctx, fileSvc, org, demoDir, scenario)
 	if err != nil {
 		return err
 	}
 	return demoResultFailureError(result, org)
 }
 
-func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runScenarioWithResult(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	var result *compliancev1.DemoScenarioResult
 	var err error
 	switch org {
@@ -1380,6 +1380,9 @@ func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return result, ctxErr
+	}
+	if persistErr := persistDemoScenarioResult(ctx, fileSvc, result); persistErr != nil {
+		return result, errors.Join(err, persistErr)
 	}
 	return result, err
 }

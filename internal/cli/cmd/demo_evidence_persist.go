@@ -9,9 +9,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
@@ -46,7 +46,7 @@ func persistDemoScenarioResult(ctx context.Context, fileSvc fs.RuntimeFileServic
 
 	relPath := filepath.Join(runDir, constants.DemoRunResultsFilename)
 	existing, readErr := fileSvc.ReadFile(ctx, relPath)
-	if readErr != nil && !strings.Contains(readErr.Error(), constants.ErrNotFound.Error()) {
+	if readErr != nil && !errors.Is(readErr, constants.ErrNotFound) {
 		return fmt.Errorf("%w: read existing demo results: %w", constants.ErrDemoEvidencePersistFailed, readErr)
 	}
 

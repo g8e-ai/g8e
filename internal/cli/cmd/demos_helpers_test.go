@@ -547,14 +547,14 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 }
 
 func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResult(context.Background(), "unknown-org", "/tmp", "1")
+	_, err := runScenarioWithResult(context.Background(), nil, "unknown-org", "/tmp", "1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runAllScenarios(context.Background(), cmd, "unknown-org", "/tmp")
+	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
@@ -563,7 +563,7 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := runAllScenarios(ctx, &cobra.Command{}, "unknown-org", "/tmp")
+	err := runAllScenarios(ctx, nil, &cobra.Command{}, "unknown-org", "/tmp")
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, constants.ErrNotFound)
@@ -571,14 +571,14 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 
 func TestRunDemosRun_NoArgsReturnsMissingRequiredField(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runDemosRun(cmd, []string{}, false)
+	err := runDemosRun(cmd, []string{}, false, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
 }
 
 func TestRunDemosRun_TooManyArgsReturnsValidationFailed(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runDemosRun(cmd, []string{"org", "1", "extra"}, false)
+	err := runDemosRun(cmd, []string{"org", "1", "extra"}, false, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
 }

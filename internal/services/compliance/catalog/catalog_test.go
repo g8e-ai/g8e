@@ -254,9 +254,9 @@ func TestValidateEvidenceReferenceRejectsUnsafeAndCrossScopePaths(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			candidate := *valid
-			tt.mutate(&candidate)
-			err := catalog.ValidateEvidenceReference(&candidate, "scope-1")
+			candidate := proto.Clone(valid).(*compliancev1.ComplianceEvidenceReference)
+			tt.mutate(candidate)
+			err := catalog.ValidateEvidenceReference(candidate, "scope-1")
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, tt.want), "error %v does not wrap %v", err, tt.want)
 		})
@@ -303,12 +303,31 @@ func TestLoadCanonicalCatalogsResolveAllReferences(t *testing.T) {
 }
 
 func TestLoadDemoScenarioCatalogResolvesAssertionAndFrameworkReferences(t *testing.T) {
-	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
 
 	demoCatalog, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
 	require.NoError(t, err)
-	require.Len(t, demoCatalog.Definitions, 1)
+	expectedScenarioIDs := []string{
+		"healthcare-success",
+		"healthcare-gold-card",
+		"healthcare-sla-breach",
+		"healthcare-phi-blocked",
+		"finance-unauthorized-trade",
+		"dhs-ingest",
+		"dhs-disconnected-operations",
+		"dhs-cue",
+		"dhs-destruction-block",
+		"dhs-destruction-purge",
+		"fedramp-provision",
+		"fedramp-deny",
+		"fedramp-revert",
+		"fedramp-evidence-block",
+	}
+	require.Len(t, demoCatalog.Definitions, len(expectedScenarioIDs))
+	for _, scenarioID := range expectedScenarioIDs {
+		assert.NotNil(t, catalog.FindDemoScenarioDefinition(demoCatalog, scenarioID, "1.0.0"), scenarioID)
+	}
 
 	definition := catalog.FindDemoScenarioDefinition(demoCatalog, "fedramp-deny", "1.0.0")
 	require.NotNil(t, definition)
@@ -323,5 +342,81 @@ func TestLoadDemoScenarioCatalogResolvesAssertionAndFrameworkReferences(t *testi
 		framework := catalog.FindFramework(frameworks, ref.FrameworkRef.Id, ref.FrameworkRef.Version)
 		require.NotNil(t, framework, ref.FrameworkRef.Id)
 		assert.NotNil(t, catalog.FindFrameworkControl(framework, ref.ControlId), ref.ControlId)
+	}
+
+	// Crosswalk consistency: every framework-control reference in each definition has at
+	// least one canonical crosswalk mapping to an assertion carried by that definition.
+	scenarioAssertions := make(map[string]bool, len(definition.AssertionRefs))
+	for _, ref := range definition.AssertionRefs {
+		scenarioAssertions[ref.Id] = true
+	}
+	for _, ref := range definition.FrameworkControlRefs {
+		hasMapping := false
+		for _, mapping := range crosswalks.Mappings {
+			if mapping.FrameworkRef.Id != ref.FrameworkRef.Id ||
+				mapping.FrameworkRef.Version != ref.FrameworkRef.Version ||
+				mapping.ControlId != ref.ControlId {
+				continue
+			}
+			for _, assertionRef := range mapping.AssertionRefs {
+				if scenarioAssertions[assertionRef.Id] {
+					hasMapping = true
+					break
+				}
+			}
+			if hasMapping {
+				break
+			}
+		}
+		assert.True(t, hasMapping,
+			"scenario %s: framework control %s@%s:%s has no crosswalk mapping to any assertion carried by this definition",
+			definition.ScenarioId, ref.FrameworkRef.Id, ref.FrameworkRef.Version, ref.ControlId)
+	}
+}
+
+// TestLoadDemoScenarioCatalogEveryDefinitionHasCrosswalkConsistency verifies that every
+// framework-control reference across all 13 demo scenario definitions has at least one
+// canonical crosswalk mapping to an assertion carried by that definition. This is the
+// catalog-wide assertion of the per-scenario check in
+// TestLoadDemoScenarioCatalogResolvesAssertionAndFrameworkReferences.
+func TestLoadDemoScenarioCatalogEveryDefinitionHasCrosswalkConsistency(t *testing.T) {
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	demoCatalog, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	require.NoError(t, err)
+
+	crosswalkByControl := make(map[string][]*compliancev1.ControlCrosswalk)
+	for _, mapping := range crosswalks.Mappings {
+		key := mapping.FrameworkRef.Id + "@" + mapping.FrameworkRef.Version + ":" + mapping.ControlId
+		crosswalkByControl[key] = append(crosswalkByControl[key], mapping)
+	}
+
+	for _, definition := range demoCatalog.Definitions {
+		scenarioAssertions := make(map[string]bool, len(definition.AssertionRefs))
+		for _, ref := range definition.AssertionRefs {
+			scenarioAssertions[ref.Id] = true
+		}
+		for _, ref := range definition.FrameworkControlRefs {
+			key := ref.FrameworkRef.Id + "@" + ref.FrameworkRef.Version + ":" + ref.ControlId
+			mappings, ok := crosswalkByControl[key]
+			require.True(t, ok,
+				"scenario %s: no crosswalk exists for %s",
+				definition.ScenarioId, key)
+			hasOverlap := false
+			for _, mapping := range mappings {
+				for _, assertionRef := range mapping.AssertionRefs {
+					if scenarioAssertions[assertionRef.Id] {
+						hasOverlap = true
+						break
+					}
+				}
+				if hasOverlap {
+					break
+				}
+			}
+			assert.True(t, hasOverlap,
+				"scenario %s: crosswalk for %s does not map to any assertion carried by this definition",
+				definition.ScenarioId, key)
+		}
 	}
 }

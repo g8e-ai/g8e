@@ -42,6 +42,23 @@ var fedrampFrameworkControlRefs = []*compliancev1.FrameworkControlReference{
 	{FrameworkRef: &compliancev1.VersionedReference{Id: "nist-sp-800-53", Version: "rev5"}, ControlId: "AU-2"},
 }
 
+func newFedRAMPDenyScenarioResult(startedAt time.Time) *compliancev1.DemoScenarioResult {
+	return &compliancev1.DemoScenarioResult{
+		ResultId:             fmt.Sprintf("fedramp-run:%s:fedramp-deny", startedAt.Format("20060102T150405Z")),
+		ScenarioRef:          &compliancev1.VersionedReference{Id: "fedramp-deny", Version: "1.0.0"},
+		DemoId:               constants.DemosOrgFedRAMP,
+		ScopeId:              "fedramp-demo-scope",
+		RunId:                fmt.Sprintf("fedramp-run-%s", startedAt.Format("20060102T150405Z")),
+		StartedAt:            timestamppb.New(startedAt),
+		Status:               demoStatusPassed,
+		AssertionRefs:        cloneVersionedRefs(fedrampAssertionRefs),
+		FrameworkControlRefs: cloneFrameworkControlRefs(fedrampFrameworkControlRefs),
+		DisplayNumber:        "2",
+		Title:                "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine",
+		MetricsSummary:       "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident",
+	}
+}
+
 func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultFedRAMPHarnessConfig()
 	var hasErrors bool
@@ -126,20 +143,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		// results, and required evidence references. The scenario definition
 		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
 		startedAt := time.Now().UTC()
-		result = &compliancev1.DemoScenarioResult{
-			ResultId:             fmt.Sprintf("fedramp-run:%s:fedramp-deny", startedAt.Format("20060102T150405Z")),
-			ScenarioRef:          &compliancev1.VersionedReference{Id: "fedramp-deny", Version: "1.0.0"},
-			DemoId:               constants.DemosOrgFedRAMP,
-			ScopeId:              "fedramp-demo-scope",
-			RunId:                fmt.Sprintf("fedramp-run-%s", startedAt.Format("20060102T150405Z")),
-			StartedAt:            timestamppb.New(startedAt),
-			Status:               demoStatusPassed,
-			AssertionRefs:        cloneVersionedRefs(fedrampAssertionRefs),
-			FrameworkControlRefs: cloneFrameworkControlRefs(fedrampFrameworkControlRefs),
-			DisplayNumber:        "2",
-			Title:                "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine",
-			MetricsSummary:       "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident",
-		}
+		result = newFedRAMPDenyScenarioResult(startedAt)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 2 — Unauthorized Audit Trail Destruction Blocked (CR-26)")
