@@ -312,3 +312,10 @@ message DemoScenarioResult {
   string title = 22;
   string metrics_summary = 23;
 }
+
+message DemoScenarioCatalog {
+  string catalog_id = 1;
+  string catalog_version = 2;
+  string sha256 = 3;
+  repeated DemoScenarioDefinition definitions = 4;
+}

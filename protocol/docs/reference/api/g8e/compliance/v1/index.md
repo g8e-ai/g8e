@@ -16,6 +16,7 @@
     - [ControlCrosswalk](#g8e-compliance-v1-ControlCrosswalk)
     - [ControlCrosswalkCatalog](#g8e-compliance-v1-ControlCrosswalkCatalog)
     - [DemoManifest](#g8e-compliance-v1-DemoManifest)
+    - [DemoScenarioCatalog](#g8e-compliance-v1-DemoScenarioCatalog)
     - [DemoScenarioDefinition](#g8e-compliance-v1-DemoScenarioDefinition)
     - [DemoScenarioResult](#g8e-compliance-v1-DemoScenarioResult)
     - [DemoStepResult](#g8e-compliance-v1-DemoStepResult)
@@ -324,6 +325,24 @@
 | required_environment | [string](#string) | repeated |  |
 | framework_control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
 | supported_lanes | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-DemoScenarioCatalog"></a>
+
+### DemoScenarioCatalog
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| catalog_id | [string](#string) |  |  |
+| catalog_version | [string](#string) |  |  |
+| sha256 | [string](#string) |  |  |
+| definitions | [DemoScenarioDefinition](#g8e-compliance-v1-DemoScenarioDefinition) | repeated |  |
 
 
 

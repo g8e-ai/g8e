@@ -203,6 +203,39 @@ func ValidateCatalogSet(assertions *compliancev1.ControlAssertionCatalog, framew
 	return nil
 }
 
+func ValidateDemoScenarioCatalog(catalog *compliancev1.DemoScenarioCatalog, assertions *compliancev1.ControlAssertionCatalog, frameworks *compliancev1.FrameworkCatalog) error {
+	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Definitions) == 0 {
+		return fmt.Errorf("%w: demo scenario catalog requires identity, version, and definitions", constants.ErrInvalidEvidenceGraph)
+	}
+	if err := validateSHA256(catalog.Sha256); err != nil {
+		return err
+	}
+	seen := make(map[string]struct{}, len(catalog.Definitions))
+	for _, definition := range catalog.Definitions {
+		if err := ValidateDemoScenarioDefinition(definition, assertions, frameworks); err != nil {
+			return err
+		}
+		key := versionedKey(definition.ScenarioId, definition.ScenarioVersion)
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("%w: duplicate demo scenario %s", constants.ErrInvalidEvidenceGraph, key)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func FindDemoScenarioDefinition(catalog *compliancev1.DemoScenarioCatalog, id, version string) *compliancev1.DemoScenarioDefinition {
+	if catalog == nil {
+		return nil
+	}
+	for _, definition := range catalog.Definitions {
+		if definition.ScenarioId == id && definition.ScenarioVersion == version {
+			return definition
+		}
+	}
+	return nil
+}
+
 func ValidateAssessmentScope(scope *compliancev1.AssessmentScope) error {
 	if scope == nil || scope.ScopeId == "" || scope.OrganizationId == "" || scope.DeploymentId == "" || scope.ProductVersion == "" || scope.BuildIdentity == "" || scope.SourceRevision == "" || scope.NetworkTopologyHash == "" || scope.CryptographicMode == "" || len(scope.ImageDigests) == 0 || len(scope.ComponentInventory) == 0 || len(scope.ConfigurationHashes) == 0 || len(scope.DoctrineBundleHashes) == 0 || len(scope.ConsensusPolicyHashes) == 0 || len(scope.TrustAnchorIds) == 0 {
 		return fmt.Errorf("%w: assessment scope is incomplete", constants.ErrInvalidEvidenceGraph)
@@ -492,6 +525,8 @@ func CatalogDigest(message proto.Message) (string, error) {
 	case *compliancev1.FrameworkDefinition:
 		typed.CatalogSha256 = ""
 	case *compliancev1.ControlCrosswalkCatalog:
+		typed.Sha256 = ""
+	case *compliancev1.DemoScenarioCatalog:
 		typed.Sha256 = ""
 	default:
 		return "", fmt.Errorf("%w: unsupported catalog message %T", constants.ErrInvalidEvidenceGraph, message)

@@ -50,6 +50,20 @@ func LoadCanonicalCatalogs() (*compliancev1.ControlAssertionCatalog, *compliance
 	return assertions, frameworks, crosswalks, nil
 }
 
+func LoadDemoScenarioCatalog(assertions *compliancev1.ControlAssertionCatalog, frameworks *compliancev1.FrameworkCatalog) (*compliancev1.DemoScenarioCatalog, error) {
+	catalog := &compliancev1.DemoScenarioCatalog{}
+	if err := compliancev1.UnmarshalCanonical(complianceconstants.DemoScenarioCatalogJSON(), catalog); err != nil {
+		return nil, fmt.Errorf("%w: parse demo scenario catalog: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := ValidateDemoScenarioCatalog(catalog, assertions, frameworks); err != nil {
+		return nil, err
+	}
+	if err := verifyCatalogDigest(catalog.Sha256, catalog); err != nil {
+		return nil, err
+	}
+	return catalog, nil
+}
+
 func verifyCatalogDigest(expected string, message proto.Message) error {
 	actual, err := CatalogDigest(message)
 	if err != nil {

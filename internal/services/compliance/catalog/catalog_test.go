@@ -283,6 +283,11 @@ func TestCanonicalCatalogDigestsMatchContent(t *testing.T) {
 	}
 	t.Run("framework catalog", func(t *testing.T) { assertDigest(t, frameworks.Sha256, frameworks) })
 	t.Run("crosswalk catalog", func(t *testing.T) { assertDigest(t, crosswalks.Sha256, crosswalks) })
+	t.Run("demo scenario catalog", func(t *testing.T) {
+		demoCatalog := &compliancev1.DemoScenarioCatalog{}
+		require.NoError(t, compliancev1.UnmarshalCanonical(complianceconstants.DemoScenarioCatalogJSON(), demoCatalog))
+		assertDigest(t, demoCatalog.Sha256, demoCatalog)
+	})
 }
 
 func TestLoadCanonicalCatalogsResolveAllReferences(t *testing.T) {
@@ -295,4 +300,28 @@ func TestLoadCanonicalCatalogsResolveAllReferences(t *testing.T) {
 	}
 	assert.NotNil(t, catalog.FindFramework(frameworks, "fedramp-20x", "CR26-2026-06-24"))
 	assert.NotNil(t, catalog.FindFramework(frameworks, "nist-sp-800-53", "rev5"))
+}
+
+func TestLoadDemoScenarioCatalogResolvesAssertionAndFrameworkReferences(t *testing.T) {
+	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+
+	demoCatalog, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	require.NoError(t, err)
+	require.Len(t, demoCatalog.Definitions, 1)
+
+	definition := catalog.FindDemoScenarioDefinition(demoCatalog, "fedramp-deny", "1.0.0")
+	require.NotNil(t, definition)
+	assert.Equal(t, "blocked", definition.ExpectedOutcome)
+	assert.Equal(t, "L1", definition.ExpectedRejectionLayer)
+	assert.Equal(t, "L3", definition.RequiredEvidenceLevel)
+
+	for _, ref := range definition.AssertionRefs {
+		assert.NotNil(t, catalog.FindAssertion(assertions, ref.Id, ref.Version), ref.Id)
+	}
+	for _, ref := range definition.FrameworkControlRefs {
+		framework := catalog.FindFramework(frameworks, ref.FrameworkRef.Id, ref.FrameworkRef.Version)
+		require.NotNil(t, framework, ref.FrameworkRef.Id)
+		assert.NotNil(t, catalog.FindFrameworkControl(framework, ref.ControlId), ref.ControlId)
+	}
 }

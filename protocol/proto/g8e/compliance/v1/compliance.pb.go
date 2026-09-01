@@ -2729,6 +2729,74 @@ func (x *DemoScenarioResult) GetMetricsSummary() string {
 	return ""
 }
 
+type DemoScenarioCatalog struct {
+	state          protoimpl.MessageState    `protogen:"open.v1"`
+	CatalogId      string                    `protobuf:"bytes,1,opt,name=catalog_id,json=catalogId,proto3" json:"catalog_id,omitempty"`
+	CatalogVersion string                    `protobuf:"bytes,2,opt,name=catalog_version,json=catalogVersion,proto3" json:"catalog_version,omitempty"`
+	Sha256         string                    `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	Definitions    []*DemoScenarioDefinition `protobuf:"bytes,4,rep,name=definitions,proto3" json:"definitions,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *DemoScenarioCatalog) Reset() {
+	*x = DemoScenarioCatalog{}
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DemoScenarioCatalog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DemoScenarioCatalog) ProtoMessage() {}
+
+func (x *DemoScenarioCatalog) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DemoScenarioCatalog.ProtoReflect.Descriptor instead.
+func (*DemoScenarioCatalog) Descriptor() ([]byte, []int) {
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *DemoScenarioCatalog) GetCatalogId() string {
+	if x != nil {
+		return x.CatalogId
+	}
+	return ""
+}
+
+func (x *DemoScenarioCatalog) GetCatalogVersion() string {
+	if x != nil {
+		return x.CatalogVersion
+	}
+	return ""
+}
+
+func (x *DemoScenarioCatalog) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *DemoScenarioCatalog) GetDefinitions() []*DemoScenarioDefinition {
+	if x != nil {
+		return x.Definitions
+	}
+	return nil
+}
+
 var File_g8e_compliance_v1_compliance_proto protoreflect.FileDescriptor
 
 const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
@@ -3028,7 +3096,13 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\vlimitations\x18\x14 \x03(\tR\vlimitations\x12%\n" +
 	"\x0edisplay_number\x18\x15 \x01(\tR\rdisplayNumber\x12\x14\n" +
 	"\x05title\x18\x16 \x01(\tR\x05title\x12'\n" +
-	"\x0fmetrics_summary\x18\x17 \x01(\tR\x0emetricsSummaryBHZFgithub.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1;compliancev1b\x06proto3"
+	"\x0fmetrics_summary\x18\x17 \x01(\tR\x0emetricsSummary\"\xc2\x01\n" +
+	"\x13DemoScenarioCatalog\x12\x1d\n" +
+	"\n" +
+	"catalog_id\x18\x01 \x01(\tR\tcatalogId\x12'\n" +
+	"\x0fcatalog_version\x18\x02 \x01(\tR\x0ecatalogVersion\x12\x16\n" +
+	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12K\n" +
+	"\vdefinitions\x18\x04 \x03(\v2).g8e.compliance.v1.DemoScenarioDefinitionR\vdefinitionsBHZFgithub.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1;compliancev1b\x06proto3"
 
 var (
 	file_g8e_compliance_v1_compliance_proto_rawDescOnce sync.Once
@@ -3042,7 +3116,7 @@ func file_g8e_compliance_v1_compliance_proto_rawDescGZIP() []byte {
 	return file_g8e_compliance_v1_compliance_proto_rawDescData
 }
 
-var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
 	(*VersionedReference)(nil),           // 0: g8e.compliance.v1.VersionedReference
 	(*NamedDigest)(nil),                  // 1: g8e.compliance.v1.NamedDigest
@@ -3069,7 +3143,8 @@ var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
 	(*DemoScenarioDefinition)(nil),       // 22: g8e.compliance.v1.DemoScenarioDefinition
 	(*DemoStepResult)(nil),               // 23: g8e.compliance.v1.DemoStepResult
 	(*DemoScenarioResult)(nil),           // 24: g8e.compliance.v1.DemoScenarioResult
-	(*timestamppb.Timestamp)(nil),        // 25: google.protobuf.Timestamp
+	(*DemoScenarioCatalog)(nil),          // 25: g8e.compliance.v1.DemoScenarioCatalog
+	(*timestamppb.Timestamp)(nil),        // 26: google.protobuf.Timestamp
 }
 var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	0,  // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
@@ -3079,47 +3154,48 @@ var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	5,  // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
 	0,  // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,  // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	25, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
+	26, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
 	7,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
 	1,  // 9: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
 	9,  // 10: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
 	1,  // 11: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	1,  // 12: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	1,  // 13: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	25, // 14: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
-	25, // 15: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
-	25, // 16: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
-	25, // 17: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
+	26, // 14: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
+	26, // 15: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
+	26, // 16: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
+	26, // 17: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
 	11, // 18: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
 	0,  // 19: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	25, // 20: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
+	26, // 20: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
 	0,  // 21: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,  // 22: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	25, // 23: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
+	26, // 23: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
 	0,  // 24: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
 	16, // 25: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
-	25, // 26: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	26, // 26: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
 	18, // 27: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
 	0,  // 28: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	25, // 29: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	26, // 29: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
 	0,  // 30: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
 	1,  // 31: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	20, // 32: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
 	0,  // 33: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
 	20, // 34: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	25, // 35: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	25, // 36: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	26, // 35: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	26, // 36: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
 	0,  // 37: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	25, // 38: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	25, // 39: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	26, // 38: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	26, // 39: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
 	0,  // 40: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
 	20, // 41: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
 	23, // 42: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	43, // [43:43] is the sub-list for method output_type
-	43, // [43:43] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	22, // 43: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	44, // [44:44] is the sub-list for method output_type
+	44, // [44:44] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }
@@ -3133,7 +3209,7 @@ func file_g8e_compliance_v1_compliance_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_compliance_v1_compliance_proto_rawDesc), len(file_g8e_compliance_v1_compliance_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
