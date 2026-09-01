@@ -67,8 +67,8 @@ func TestPhase0KSI_ReceiptSignatureMethodAcceptsNonemptyInvalidSignature(t *test
 	assert.True(t, atLeastOnePassedOnBadSig,
 		phase0RegressionBeforeFix+
 			": the current receipt-signature KSI method accepts a nonempty but cryptographically "+
-				"invalid signature string. It checks field presence, not signature validity. "+
-				"After Phase 3, this assertion flips to False: an invalid signature must not satisfy the method.")
+			"invalid signature string. It checks field presence, not signature validity. "+
+			"After Phase 3, this assertion flips to False: an invalid signature must not satisfy the method.")
 }
 
 // TestPhase0KSI_ReceiptSignatureMethodDoesNotVerifyAgainstTrustedKey documents

@@ -1,0 +1,232 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+syntax = "proto3";
+
+package g8e.compliance.v1;
+
+option go_package = "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1;compliancev1";
+
+import "google/protobuf/timestamp.proto";
+
+message VersionedReference {
+  string id = 1;
+  string version = 2;
+}
+
+message NamedDigest {
+  string name = 1;
+  string sha256 = 2;
+}
+
+message ControlAssertionDefinition {
+  string assertion_id = 1;
+  string assertion_version = 2;
+  string title = 3;
+  string statement = 4;
+  string category = 5;
+  repeated string component_scope = 6;
+  string responsibility = 7;
+  repeated string applicable_action_classes = 8;
+  repeated string applicable_arms = 9;
+  repeated string required_evidence_types = 10;
+  repeated VersionedReference required_grader_refs = 11;
+  repeated VersionedReference required_verifier_refs = 12;
+  string minimum_evidence_level = 13;
+  string validation_cycle = 14;
+  string missing_evidence_policy = 15;
+  string passing_rule = 16;
+  repeated string exclusions = 17;
+}
+
+message ControlAssertionCatalog {
+  string catalog_id = 1;
+  string catalog_version = 2;
+  string sha256 = 3;
+  repeated ControlAssertionDefinition assertions = 4;
+}
+
+message FrameworkControlDefinition {
+  string control_id = 1;
+  string title = 2;
+  string description = 3;
+  repeated string applicability_rules = 4;
+  string responsibility = 5;
+  string source_reference = 6;
+}
+
+message FrameworkDefinition {
+  string framework_id = 1;
+  string framework_version = 2;
+  string title = 3;
+  string publisher = 4;
+  string source = 5;
+  string catalog_sha256 = 6;
+  string effective_date = 7;
+  repeated FrameworkControlDefinition controls = 8;
+}
+
+message FrameworkCatalog {
+  string catalog_id = 1;
+  string catalog_version = 2;
+  string sha256 = 3;
+  repeated FrameworkDefinition frameworks = 4;
+}
+
+message ControlCrosswalk {
+  string crosswalk_id = 1;
+  string crosswalk_version = 2;
+  VersionedReference framework_ref = 3;
+  string control_id = 4;
+  repeated VersionedReference assertion_refs = 5;
+  string mapping_type = 6;
+  string rationale = 7;
+  repeated string applicability_conditions = 8;
+  string responsibility = 9;
+  string required_evidence_level = 10;
+  google.protobuf.Timestamp reviewed_at = 11;
+  string reviewer_identity = 12;
+}
+
+message ControlCrosswalkCatalog {
+  string catalog_id = 1;
+  string catalog_version = 2;
+  string sha256 = 3;
+  repeated ControlCrosswalk mappings = 4;
+}
+
+message ComponentInventoryEntry {
+  string component_id = 1;
+  string component_type = 2;
+  string version = 3;
+  string digest = 4;
+}
+
+message AssessmentScope {
+  string scope_id = 1;
+  string organization_id = 2;
+  string deployment_id = 3;
+  string product_version = 4;
+  string build_identity = 5;
+  string source_revision = 6;
+  repeated NamedDigest image_digests = 7;
+  repeated ComponentInventoryEntry component_inventory = 8;
+  string network_topology_hash = 9;
+  repeated NamedDigest configuration_hashes = 10;
+  repeated NamedDigest doctrine_bundle_hashes = 11;
+  repeated NamedDigest consensus_policy_hashes = 12;
+  repeated string trust_anchor_ids = 13;
+  string cryptographic_mode = 14;
+  google.protobuf.Timestamp assessment_window_start = 15;
+  google.protobuf.Timestamp assessment_window_end = 16;
+  repeated string excluded_components = 17;
+  repeated string customer_responsibilities = 18;
+}
+
+message EvidenceEncryptionMetadata {
+  string algorithm = 1;
+  string key_id = 2;
+  string authorization_scope = 3;
+  string plaintext_sha256 = 4;
+  string authenticated_metadata_sha256 = 5;
+}
+
+message ComplianceEvidenceReference {
+  string artifact_id = 1;
+  string artifact_type = 2;
+  string sha256 = 3;
+  string media_type = 4;
+  string schema_ref = 5;
+  string producer_identity = 6;
+  google.protobuf.Timestamp produced_at = 7;
+  string scope_id = 8;
+  string run_id = 9;
+  string attempt_id = 10;
+  string scenario_id = 11;
+  string transaction_id = 12;
+  string verification_status = 13;
+  string verifier_id = 14;
+  string verifier_version = 15;
+  google.protobuf.Timestamp verified_at = 16;
+  string bundle_path = 17;
+  EvidenceEncryptionMetadata encryption = 18;
+}
+
+message ControlAssertionAssessment {
+  string assessment_id = 1;
+  string scope_id = 2;
+  VersionedReference assertion_ref = 3;
+  string status = 4;
+  string evidence_level = 5;
+  google.protobuf.Timestamp evaluated_at = 6;
+  VersionedReference verifier_ref = 7;
+  repeated string evidence_refs = 8;
+  repeated string metric_refs = 9;
+  string freshness_status = 10;
+  string failure_reason = 11;
+  repeated string limitations = 12;
+}
+
+message FrameworkControlAssessment {
+  string assessment_id = 1;
+  string scope_id = 2;
+  VersionedReference framework_ref = 3;
+  string control_id = 4;
+  string status = 5;
+  string responsibility = 6;
+  repeated string mapping_refs = 7;
+  repeated string assertion_assessment_refs = 8;
+  repeated string customer_attestation_refs = 9;
+  string evidence_level = 10;
+  repeated string findings = 11;
+  repeated string limitations = 12;
+  repeated string remediation = 13;
+}
+
+message ChecksumEntry {
+  string bundle_path = 1;
+  string sha256 = 2;
+}
+
+message ReportSignature {
+  string key_id = 1;
+  string algorithm = 2;
+  string signed_sha256 = 3;
+  string signature = 4;
+}
+
+message ComplianceReportManifest {
+  string report_id = 1;
+  string report_schema_version = 2;
+  google.protobuf.Timestamp generated_at = 3;
+  string generator_identity = 4;
+  string generator_version = 5;
+  string scope_ref = 6;
+  repeated VersionedReference framework_refs = 7;
+  string assertion_catalog_ref = 8;
+  repeated string crosswalk_refs = 9;
+  repeated string assessment_refs = 10;
+  string evidence_index_ref = 11;
+  string checksum_root = 12;
+  ReportSignature signature = 13;
+}
+
+message VerificationFailure {
+  string code = 1;
+  string subject_ref = 2;
+  string reason = 3;
+}
+
+message ComplianceVerificationReport {
+  string report_id = 1;
+  bool valid = 2;
+  google.protobuf.Timestamp verified_at = 3;
+  string verifier_id = 4;
+  string verifier_version = 5;
+  repeated VerificationFailure failures = 6;
+  string reproduced_checksum_root = 7;
+}

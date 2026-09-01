@@ -58,7 +58,7 @@ func TestPhase0OSCAL_RandomUUIDsPreventByteIdenticalOutput(t *testing.T) {
 	assert.NotEqual(t, string(raw1), string(raw2),
 		phase0RegressionBeforeFix+
 			": identical inputs produce different OSCAL output because UUIDs are random v4; "+
-				"deterministic regeneration is impossible today. After Phase 4 this flips to Equal.")
+			"deterministic regeneration is impossible today. After Phase 4 this flips to Equal.")
 }
 
 // TestPhase0OSCAL_RandomUUIDsDifferAcrossDocuments documents that every call to
@@ -95,5 +95,5 @@ func TestPhase0OSCAL_GenerateUUIDIsRandomV4(t *testing.T) {
 	assert.NotEqual(t, u1, u2,
 		phase0RegressionBeforeFix+
 			": generateUUID returns a random value on every call; "+
-				"Phase 4 replaces this with deterministic namespace-derived identifiers")
+			"Phase 4 replaces this with deterministic namespace-derived identifiers")
 }

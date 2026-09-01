@@ -253,6 +253,7 @@ proto-python:
 		--python_out=protocol/python/g8e_protocol \
 		--proto_path=protocol/proto \
 		protocol/proto/g8e/common/v1/common.proto \
+		protocol/proto/g8e/compliance/v1/compliance.proto \
 		protocol/proto/g8e/operator/v1/operator.proto \
 		protocol/proto/g8e/pubsub/v1/pubsub.proto
 	@echo "Python Protobuf generation complete."

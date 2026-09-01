@@ -57,7 +57,7 @@ func TestPhase0Demo_ScenarioResultIsPrivateStringOnlyStruct(t *testing.T) {
 	assert.Len(t, fields, 0,
 		demoPhase0RegressionBeforeFix+
 			": scenarioResult has no exported JSON fields; it is a private string-only struct "+
-				"with no typed evidence payload. Current fields: %+v", r)
+			"with no typed evidence payload. Current fields: %+v", r)
 }
 
 // TestPhase0Demo_NoTypedEvidencePersistedAfterScenarioRun documents that
@@ -97,7 +97,7 @@ func TestPhase0Demo_NoTypedEvidencePersistedAfterScenarioRun(t *testing.T) {
 		assert.False(t, exists,
 			demoPhase0RegressionBeforeFix+
 				": no typed demo evidence must be persisted under the runtime tree today; "+
-					"found unexpected file at %s", rel)
+				"found unexpected file at %s", rel)
 	}
 }
 
