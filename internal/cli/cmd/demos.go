@@ -1566,17 +1566,6 @@ func demoStepWarn(ctx context.Context, demoDir, label string, args ...string) {
 	}
 }
 
-type twoLayerScenarioConfig struct {
-	scenarioName      string
-	metrics           string
-	httpPort          string
-	harnessScenario   string
-	provesDescription string
-	step3Label        string
-	step3Description  string
-	passMessage       string
-}
-
 // harnessConfig holds the fixed connection parameters for building a docker
 // compose exec/run command for a demos scenarios run. Centralising these in a
 // struct avoids positional-argument drift across demos.
@@ -1622,82 +1611,4 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		scenario,
 	)
 	return cmd
-}
-
-func runTwoLayerScenario(ctx context.Context, demoDir string, cfg twoLayerScenarioConfig) (*compliancev1.DemoScenarioResult, error) {
-	var hasErrors bool
-
-	result := newDemoScenarioResult("1", cfg.scenarioName, demoStatusPassed, cfg.metrics)
-
-	demoPrintf("\n%s\n", strings.Repeat("─", 60))
-	demoPrintf("  Scenario 1 — %s\n", cfg.scenarioName)
-	demoPrintln(strings.Repeat("─", 60))
-	demoPrintln()
-	demoPrintf("  PROVES: %s\n", cfg.provesDescription)
-	demoPrintln()
-
-	demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-	if err := demoStep(ctx, demoDir, "gateway health",
-		false,
-		"curl", "-s", "http://localhost:"+cfg.httpPort+"/api/v1/health",
-	); err != nil {
-		fmt.Println("  (gateway health check failed — is the demo running?)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintln("  ── Step 2: Verify operator enrollment (mTLS certs) ────────────")
-	if err := demoStep(ctx, demoDir, "enrollment check",
-		false,
-		"docker", "compose", "exec", "-T", "operator",
-		"test", "-f", constants.ContainerOperatorCert,
-	); err != nil {
-		fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintf("  ── Step 3: %s ───────\n", cfg.step3Label)
-	demoPrintf("  %s\n", cfg.step3Description)
-	demoPrintln()
-	hcfg := defaultHarnessConfig("agent-runtime")
-	hcfg.PublicURL = "http://g8e.local:" + cfg.httpPort
-	if err := demoStep(ctx, demoDir, cfg.harnessScenario+" via agent",
-		false,
-		harnessRun(cfg.harnessScenario, hcfg)...,
-	); err != nil {
-		fmt.Println("  (agent scenario failed)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintln("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
-	if err := demoStep(ctx, demoDir, "audit tail",
-		false,
-		"docker", "compose", "logs", "observability", "--tail", "10",
-	); err != nil {
-		fmt.Println("  (audit tail failed)")
-	}
-
-	demoPrintln("  ── Step 5: Network isolation (supplementary proof) ───────────")
-	demoPrintln("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
-	demoPrintln()
-	if err := demoStep(ctx, demoDir, "network isolation",
-		false,
-		"docker", "compose", "exec", "-T", "bad-actor",
-		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
-	); err != nil {
-		fmt.Println("  (network isolation check failed)")
-	}
-
-	demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
-
-	if hasErrors {
-		result.Status = demoStatusFailed
-		fmt.Printf("  [FAIL] Scenario 1 — One or more steps failed.\n")
-	} else {
-		fmt.Printf("  [PASS] %s\n", cfg.passMessage)
-	}
-
-	return result, nil
 }

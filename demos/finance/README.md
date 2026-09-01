@@ -130,13 +130,14 @@ g8e demos run finance 1
 
 **Proves**: Two-layer defense against unauthorized trading.
 
-The scenario runs a 5-step flow:
+The scenario runs a 6-step flow and persists the typed result under the runtime compliance evidence tree:
 
 1. **Gateway health check**: confirms the g8e gateway is live
 2. **Operator enrollment verification**: confirms mTLS certs exist
 3. **Demo scenario mTLS transaction**: submits a `finance-unauthorized-trade` scenario via the real gateway; L1 doctrine blocks the unauthorized trade execution payload at confidence >= 0.90
-4. **Audit log tail**: verifies doctrine rejection in gateway logs
-5. **Network isolation proof**: bad-actor on net_untrusted has no route to net_secure (supplementary proof)
+4. **Independent target-state observation**: verifies the prohibited trade artifact is absent from the target-system boundary
+5. **Audit log tail**: records supplementary doctrine-rejection output from the observability boundary
+6. **Network isolation proof**: records supplementary evidence that net_untrusted has no route to net_secure
 
 ### Run all scenarios
 

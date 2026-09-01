@@ -289,3 +289,26 @@ func TestNewDHSCueScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
 	}
 }
+
+func TestNewFinanceUnauthorizedTradeScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("finance-unauthorized-trade")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newFinanceUnauthorizedTradeScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "finance-unauthorized-trade", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, constants.DemosOrgFinance, result.GetDemoId())
+	assert.Equal(t, "finance-demo-scope", result.GetScopeId())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}

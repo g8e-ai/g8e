@@ -273,15 +273,16 @@ const (
 // Container paths for Docker exec commands in demo environments.
 // These are paths inside the g8e Docker containers, not local filesystem paths.
 const (
-	ContainerRootG8E          = "/root/.g8e"
-	ContainerPKIDir           = ContainerRootG8E + "/" + PkiDirname
-	ContainerOperatorCert     = ContainerPKIDir + "/" + PkiFileOperatorCert
-	ContainerOperatorKey      = ContainerPKIDir + "/" + PkiFileOperatorKey
-	ContainerCABundle         = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
-	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
-	ContainerAuditVaultDB     = ContainerDataDir + "/" + DbFilename
-	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
-	ContainerLedgerFilesDir   = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerRootG8E                  = "/root/.g8e"
+	ContainerPKIDir                   = ContainerRootG8E + "/" + PkiDirname
+	ContainerOperatorCert             = ContainerPKIDir + "/" + PkiFileOperatorCert
+	ContainerOperatorKey              = ContainerPKIDir + "/" + PkiFileOperatorKey
+	ContainerCABundle                 = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
+	ContainerDataDir                  = ContainerRootG8E + "/" + DataDirname
+	ContainerAuditVaultDB             = ContainerDataDir + "/" + DbFilename
+	ContainerExecutionVaultDB         = ContainerDataDir + "/" + ExecutionVaultDBFilename
+	ContainerLedgerFilesDir           = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerFinanceUnauthorizedTrade = "/var/g8e/target/unauthorized_trade_execution.log"
 
 	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
 	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
