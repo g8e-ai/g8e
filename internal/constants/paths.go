@@ -586,3 +586,15 @@ const (
 	ComplianceBundlePublicKeysFilename           = "public-keys.json"
 	ComplianceBundleSignaturesFilename           = "signatures.json"
 )
+
+// Per-run demo evidence path constants. Typed demo evidence is persisted under
+// the runtime compliance tree at data/compliance/demo-evidence/<run-id>/ before
+// bundle generation. These are runtime evidence store paths, distinct from the
+// ComplianceBundle* constants which describe the generated report bundle layout.
+const (
+	DemoEvidenceDirname        = "demo-evidence"
+	DemoRunManifestFilename    = "manifest.json"
+	DemoRunResultsFilename     = "scenario-results.jsonl"
+	DemoRunStepsFilename       = "step-results.jsonl"
+	DemoRunDefinitionsFilename = "scenario-definitions.jsonl"
+)

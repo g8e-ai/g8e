@@ -10,9 +10,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-func runFinanceScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
+func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	switch scenario {
 	case "1":
 		return runTwoLayerScenario(ctx, demoDir, twoLayerScenarioConfig{
@@ -32,6 +34,6 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (scenario
 				"         Layer 2: doctrine unauthorized_trade_execution loaded at confidence 0.90.",
 		})
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
+		return nil, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
 }

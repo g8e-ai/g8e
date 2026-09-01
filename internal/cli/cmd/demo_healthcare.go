@@ -11,18 +11,18 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
+func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
 	case "1":
 		var hasErrors bool
-		result.number = "1"
-		result.name = "Authorized Agent Submits a FHIR PA Request"
-		result.status = "PASS"
-		result.metrics = "11 PHI/HIPAA rules evaluated, FHIR PA queued"
+		result = newDemoScenarioResult("1", "Authorized Agent Submits a FHIR PA Request", demoStatusPassed,
+			"11 PHI/HIPAA rules evaluated, FHIR PA queued")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 1 — Authorized Agent Submits a FHIR PA Request")
@@ -65,7 +65,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 		)
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 1 — PA request submitted through governed native tool.")
@@ -74,10 +74,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 
 	case "2":
 		var hasErrors bool
-		result.number = "2"
-		result.name = "Gold Card Auto-Approval (HB 3134 §6)"
-		result.status = "PASS"
-		result.metrics = "Threshold: 90%, PA-2026-0043: 96% (auto-approved)"
+		result = newDemoScenarioResult("2", "Gold Card Auto-Approval (HB 3134 §6)", demoStatusPassed,
+			"Threshold: 90%, PA-2026-0043: 96% (auto-approved)")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Gold Card Auto-Approval (HB 3134 §6)")
@@ -123,7 +121,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 		)
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
@@ -132,10 +130,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 
 	case "3":
 		var hasErrors bool
-		result.number = "3"
-		result.name = "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)"
-		result.status = "PASS"
-		result.metrics = "Alert: day 5, Breach: day 7, PA-2026-0044: 10 days"
+		result = newDemoScenarioResult("3", "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", demoStatusPassed,
+			"Alert: day 5, Breach: day 7, PA-2026-0044: 10 days")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)")
@@ -185,7 +181,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 		demoPrintln()
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 3 — SLA enforcement active (alert: day 5, breach: day 7).")
@@ -194,10 +190,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 
 	case "4":
 		var hasErrors bool
-		result.number = "4"
-		result.name = "Bad Actor PHI Exfiltration Blocked"
-		result.status = "PASS"
-		result.metrics = "Layer 1: net isolation, Layer 2: doctrine (0.95 conf)"
+		result = newDemoScenarioResult("4", "Bad Actor PHI Exfiltration Blocked", demoStatusPassed,
+			"Layer 1: net isolation, Layer 2: doctrine (0.95 conf)")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 4 — Bad Actor PHI Exfiltration Blocked")
@@ -240,7 +234,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 		demoPrintln()
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
@@ -249,7 +243,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scena
 		}
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for healthcare: %q (valid: 1-4)", scenario)
+		return nil, fmt.Errorf("invalid scenario number for healthcare: %q (valid: 1-4)", scenario)
 	}
 
 	return result, nil

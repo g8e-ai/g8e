@@ -14,6 +14,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
@@ -21,17 +22,15 @@ func defaultDHSHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-coalition")
 }
 
-func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
+func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
-	var result scenarioResult
+	var result *compliancev1.DemoScenarioResult
 	var hasErrors bool
 
 	switch scenario {
 	case "1":
-		result.number = "1"
-		result.name = "Sovereign Multi-Source Ingest (chain-of-custody)"
-		result.status = "PASS"
-		result.metrics = "L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST"
+		result = newDemoScenarioResult("1", "Sovereign Multi-Source Ingest (chain-of-custody)", demoStatusPassed,
+			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 1 — Sovereign Multi-Source Ingest (LOE 1)")
@@ -91,7 +90,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
@@ -102,10 +101,8 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		}
 
 	case "2":
-		result.number = "2"
-		result.name = "Resilient Disconnected Operations / Continuity of Coverage"
-		result.status = "PASS"
-		result.metrics = "Datalink severed // Local governance continues // Git ledger + SQLite vault"
+		result = newDemoScenarioResult("2", "Resilient Disconnected Operations / Continuity of Coverage", demoStatusPassed,
+			"Datalink severed // Local governance continues // Git ledger + SQLite vault")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 2 — Resilient Disconnected Operations (LOE 2)")
@@ -200,7 +197,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
@@ -210,17 +207,15 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		}
 
 		if restorationFailed {
-			result.metrics += " // datalink restoration FAILED (reported separately)"
+			result.MetricsSummary += " // datalink restoration FAILED (reported separately)"
 			fmt.Println("  [RESTORATION FAILURE] Datalink could not be restored — continuity claim holds,")
 			fmt.Println("    but the environment requires manual reconnection before subsequent scenarios.")
 			demoEmitter.Ledger(tui.LevelWarn, "Datalink restoration failed — continuity verified but manual reconnection required")
 		}
 
 	case "3":
-		result.number = "3"
-		result.name = "Governed Predictive Cueing"
-		result.status = "PASS"
-		result.metrics = "L2 quorum admits cue // L5 actuator records CUE"
+		result = newDemoScenarioResult("3", "Governed Predictive Cueing", demoStatusPassed,
+			"L2 quorum admits cue // L5 actuator records CUE")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 3 — Governed Predictive Cueing (LOE 3 & 4)")
@@ -274,7 +269,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
@@ -285,10 +280,8 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		}
 
 	case "4":
-		result.number = "4"
-		result.name = "Sovereign Destruction + tamper-proof audit"
-		result.status = "PASS"
-		result.metrics = "L1 blocks audit wipe // L1+L2 admit governed purge → receipt"
+		result = newDemoScenarioResult("4", "Sovereign Destruction + tamper-proof audit", demoStatusPassed,
+			"L1 blocks audit wipe // L1+L2 admit governed purge → receipt")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 4 — Sovereign Destruction + Tamper-Proof Audit (LOE 2)")
@@ -356,7 +349,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
@@ -368,7 +361,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (scenarioResu
 		}
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for dhs: %q (valid: 1-4)", scenario)
+		return nil, fmt.Errorf("invalid scenario number for dhs: %q (valid: 1-4)", scenario)
 	}
 	return result, nil
 }

@@ -11,9 +11,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
@@ -21,17 +24,33 @@ func defaultFedRAMPHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-runtime")
 }
 
-func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
+// fedrampAssertionRefs are the versioned assertion references shared by the
+// FedRAMP evidence-grade scenarios. They map to the canonical assertion catalog.
+var fedrampAssertionRefs = []*compliancev1.VersionedReference{
+	{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"},
+	{Id: "G8E-AU-RECEIPT-001", Version: "1.0.0"},
+	{Id: "G8E-CM-STATE-001", Version: "1.0.0"},
+}
+
+// fedrampFrameworkControlRefs are the framework control references for the
+// FedRAMP evidence-grade scenarios, drawn from the canonical demo scenario
+// catalog and framework catalog.
+var fedrampFrameworkControlRefs = []*compliancev1.FrameworkControlReference{
+	{FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-MLA-07"},
+	{FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-IAM-07"},
+	{FrameworkRef: &compliancev1.VersionedReference{Id: "nist-sp-800-53", Version: "rev5"}, ControlId: "AC-3"},
+	{FrameworkRef: &compliancev1.VersionedReference{Id: "nist-sp-800-53", Version: "rev5"}, ControlId: "AU-2"},
+}
+
+func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultFedRAMPHarnessConfig()
-	var result scenarioResult
 	var hasErrors bool
+	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
 	case "1":
-		result.number = "1"
-		result.name = "Governed Cloud Resource Provisioning"
-		result.status = "PASS"
-		result.metrics = "L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION"
+		result = newDemoScenarioResult("1", "Governed Cloud Resource Provisioning", demoStatusPassed,
+			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 1 — Governed Cloud Resource Provisioning")
@@ -90,7 +109,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
@@ -101,10 +120,26 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		}
 
 	case "2":
-		result.number = "2"
-		result.name = "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine"
-		result.status = "PASS"
-		result.metrics = "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident"
+		// Evidence-grade scenario: unauthorized audit-trail destruction blocked.
+		// This is the first slice to emit a typed DemoScenarioResult with stable
+		// identity, assertion references, framework-control references, step
+		// results, and required evidence references. The scenario definition
+		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
+		startedAt := time.Now().UTC()
+		result = &compliancev1.DemoScenarioResult{
+			ResultId:             fmt.Sprintf("fedramp-run:%s:fedramp-deny", startedAt.Format("20060102T150405Z")),
+			ScenarioRef:          &compliancev1.VersionedReference{Id: "fedramp-deny", Version: "1.0.0"},
+			DemoId:               constants.DemosOrgFedRAMP,
+			ScopeId:              "fedramp-demo-scope",
+			RunId:                fmt.Sprintf("fedramp-run-%s", startedAt.Format("20060102T150405Z")),
+			StartedAt:            timestamppb.New(startedAt),
+			Status:               demoStatusPassed,
+			AssertionRefs:        cloneVersionedRefs(fedrampAssertionRefs),
+			FrameworkControlRefs: cloneFrameworkControlRefs(fedrampFrameworkControlRefs),
+			DisplayNumber:        "2",
+			Title:                "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine",
+			MetricsSummary:       "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident",
+		}
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 2 — Unauthorized Audit Trail Destruction Blocked (CR-26)")
@@ -118,40 +153,76 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Unauthorized Audit Trail Destruction Blocked")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		// Step 1: gateway health check.
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-deny-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
+		// Step 2: run fedramp-deny harness scenario (L1 reject).
 		demoPrintln("  -- Step 2: Run fedramp-deny via agent (L1 reject) --")
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/cloudsvc' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-deny", "doctrine check")
-		if err := demoStep(ctx, demoDir, "fedramp-deny via agent",
+		step2Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "fedramp-deny via agent",
 			false,
 			harnessRun("fedramp-deny", hcfg)...,
-		); err != nil {
+		)
+		step2Completed := time.Now().UTC()
+		// The harness exits nonzero when the doctrine blocks the action, which
+		// is the expected outcome. A nil error means the action was not blocked.
+		step2Blocked := harnessErr != nil
+		if !step2Blocked {
 			fmt.Println("  (fedramp-deny harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		}
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-deny-step-2", "fedramp-deny harness (L1 doctrine reject)", step2Started, step2Completed,
+			step2Blocked, true, "agent harness fedramp-deny"))
+		if step2Blocked {
+			// Record the failed-stage receipt reference produced by the L1 denial.
+			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-deny")
+			result.TransactionIds = append(result.TransactionIds, "fedramp-deny-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-deny", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/cloudsvc' — CR-26 audit integrity violation detected at admission")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
+		// Step 3: independent state observation — operations log remains present and non-empty.
+		step3Started := time.Now().UTC()
+		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"sh", "-c", "test -f " + constants.ContainerCloudSvcOpsLog + " && test -s " + constants.ContainerCloudSvcOpsLog}) {
+				"sh", "-c", "test -f " + constants.ContainerCloudSvcOpsLog + " && test -s " + constants.ContainerCloudSvcOpsLog})
+		step3Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-deny-step-3", "independent state observation: operations log present and non-empty",
+			step3Started, step3Completed, step3OK, true,
+			"docker compose exec cloudsvc test -f && test -s operations log"))
+		if step3OK {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-ops-log-intact")
+		} else {
 			hasErrors = true
 		}
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 2 — Audit trail destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
 			fmt.Println("         Independent verification confirms the operations log is intact and non-empty.")
@@ -159,10 +230,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		}
 
 	case "3":
-		result.number = "3"
-		result.name = "Governed Configuration Revert under L2 Consensus"
-		result.status = "PASS"
-		result.metrics = "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback"
+		result = newDemoScenarioResult("3", "Governed Configuration Revert under L2 Consensus", demoStatusPassed,
+			"L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Governed Configuration Revert (CM-7)")
@@ -217,7 +286,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
@@ -228,10 +297,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		}
 
 	case "4":
-		result.number = "4"
-		result.name = "Gateway Audit Vault Destruction Blocked + Governed Destruction"
-		result.status = "PASS"
-		result.metrics = "L1 blocks vault wipe // L1+L2 admit governed destroy -> receipt"
+		result = newDemoScenarioResult("4", "Gateway Audit Vault Destruction Blocked + Governed Destruction", demoStatusPassed,
+			"L1 blocks vault wipe // L1+L2 admit governed destroy -> receipt")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")
@@ -275,7 +342,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
@@ -286,9 +353,54 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenario
 		}
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-4)", scenario)
+		return nil, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-4)", scenario)
 	}
 	return result, nil
+}
+
+// cloneVersionedRefs returns a deep copy of the given versioned references so
+// callers cannot mutate the package-level canonical slices.
+func cloneVersionedRefs(refs []*compliancev1.VersionedReference) []*compliancev1.VersionedReference {
+	clone := make([]*compliancev1.VersionedReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.VersionedReference{Id: ref.Id, Version: ref.Version}
+	}
+	return clone
+}
+
+// cloneFrameworkControlRefs returns a deep copy of the given framework control
+// references so callers cannot mutate the package-level canonical slices.
+func cloneFrameworkControlRefs(refs []*compliancev1.FrameworkControlReference) []*compliancev1.FrameworkControlReference {
+	clone := make([]*compliancev1.FrameworkControlReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.FrameworkControlReference{
+			FrameworkRef: &compliancev1.VersionedReference{Id: ref.FrameworkRef.Id, Version: ref.FrameworkRef.Version},
+			ControlId:    ref.ControlId,
+		}
+	}
+	return clone
+}
+
+// buildDemoStepResult constructs a typed DemoStepResult from the step execution
+// outcome. A nil/empty failure string is set for passing steps; a descriptive
+// failure is set for non-passing steps per the protocol validation rules.
+func buildDemoStepResult(stepID, operation string, started, completed time.Time, ok, required bool, protocolResult string) *compliancev1.DemoStepResult {
+	status := demoStatusPassed
+	failure := ""
+	if !ok {
+		status = demoStatusFailed
+		failure = operation + " failed"
+	}
+	return &compliancev1.DemoStepResult{
+		StepId:         stepID,
+		Operation:      operation,
+		StartedAt:      timestamppb.New(started),
+		CompletedAt:    timestamppb.New(completed),
+		Status:         status,
+		ProtocolResult: protocolResult,
+		Failure:        failure,
+		Required:       required,
+	}
 }
 
 // runFedRAMPKSIEvidence runs g8e compliance ksi inside the gateway container

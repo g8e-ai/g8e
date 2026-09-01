@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func TestToDockerPath_NonWindowsReturnsPathUnchanged(t *testing.T) {
@@ -527,9 +528,9 @@ func TestDemoStepWarn_FailurePrintsWarning(t *testing.T) {
 }
 
 func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
-	results := []scenarioResult{
-		{number: "1", name: "First Scenario", status: "PASS", metrics: "100% good"},
-		{number: "2", name: "Second Scenario", status: "FAIL", metrics: "timeout"},
+	results := []*compliancev1.DemoScenarioResult{
+		newDemoScenarioResult("1", "First Scenario", demoStatusPassed, "100% good"),
+		newDemoScenarioResult("2", "Second Scenario", demoStatusFailed, "timeout"),
 	}
 
 	var buf bytes.Buffer

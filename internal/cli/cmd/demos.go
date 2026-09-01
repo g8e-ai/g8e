@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,9 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // demoVerbose controls demo output verbosity. When false (default), step-by-step
@@ -1082,6 +1085,10 @@ var scenarioCounts = map[string]int{
 }
 
 func demosRunCmd() *cobra.Command {
+	return demosRunCmdWithConfig(newFileSvc)
+}
+
+func demosRunCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var useTUI bool
 	cmd := &cobra.Command{
 		Use:   "run <org> [scenario]",
@@ -1109,7 +1116,11 @@ Available scenarios:
     4 - Gateway Audit Vault Destruction Blocked (CR-26)`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDemosRun(cmd, args, useTUI)
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			return runDemosRun(cmd, args, useTUI, fileSvc)
 		},
 	}
 
@@ -1255,7 +1266,7 @@ func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir strin
 	cmd.Printf("\n%s\n  Running all %s demo scenarios\n%s\n",
 		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 
-	results := make([]scenarioResult, 0, count)
+	results := make([]*compliancev1.DemoScenarioResult, 0, count)
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
@@ -1268,19 +1279,9 @@ func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir strin
 
 	if org == constants.DemosOrgFedRAMP {
 		if !runFedRAMPKSIEvidence(ctx, demoDir) {
-			results = append(results, scenarioResult{
-				number:  "KSI",
-				name:    "KSI Evidence Export",
-				status:  "FAIL",
-				metrics: "snapshot emission or verification failed",
-			})
+			results = append(results, newDemoScenarioResult("KSI", "KSI Evidence Export", demoStatusFailed, "snapshot emission or verification failed"))
 		} else {
-			results = append(results, scenarioResult{
-				number:  "KSI",
-				name:    "KSI Evidence Export",
-				status:  "PASS",
-				metrics: "snapshots emitted and verified",
-			})
+			results = append(results, newDemoScenarioResult("KSI", "KSI Evidence Export", demoStatusPassed, "snapshots emitted and verified"))
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -1297,13 +1298,43 @@ func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir strin
 // result rows are retained in the printed table regardless of outcome; this
 // only determines the command's exit status so automation cannot treat a failed
 // run as a gate pass.
-func summarizeScenarioResults(cmd *cobra.Command, org string, results []scenarioResult) error {
+// Demo scenario status values matching the protocol-owned DemoScenarioResult
+// status field. These replace the legacy uppercase "PASS"/"FAIL"/"SKIP" strings.
+const (
+	demoStatusPassed  = "passed"
+	demoStatusFailed  = "failed"
+	demoStatusSkipped = "skipped"
+)
+
+// newDemoScenarioResult constructs a minimal typed DemoScenarioResult populated
+// with the display fields used by the results table and summary banner. The
+// full evidence-grade fields (assertion refs, framework refs, step results,
+// receipt/state refs) are populated by evidence-grade scenario runners.
+func newDemoScenarioResult(number, title, status, metrics string) *compliancev1.DemoScenarioResult {
+	return &compliancev1.DemoScenarioResult{
+		DisplayNumber:  number,
+		Title:          title,
+		Status:         status,
+		MetricsSummary: metrics,
+	}
+}
+
+// demoResultFailureError returns ErrDemoScenarioFailed when the typed result
+// has a failed status, or nil for passing, skipped, or other non-failing statuses.
+func demoResultFailureError(result *compliancev1.DemoScenarioResult, org string) error {
+	if result == nil || result.Status != demoStatusFailed {
+		return nil
+	}
+	return fmt.Errorf("%w: %s scenario %s", constants.ErrDemoScenarioFailed, org, result.DisplayNumber)
+}
+
+func summarizeScenarioResults(cmd *cobra.Command, org string, results []*compliancev1.DemoScenarioResult) error {
 	hasFail, hasSkip := false, false
 	for _, r := range results {
-		switch r.status {
-		case "FAIL":
+		switch r.Status {
+		case demoStatusFailed:
 			hasFail = true
-		case "SKIP":
+		case demoStatusSkipped:
 			hasSkip = true
 		}
 	}
@@ -1324,30 +1355,16 @@ func summarizeScenarioResults(cmd *cobra.Command, org string, results []scenario
 	return nil
 }
 
-type scenarioResult struct {
-	number  string
-	name    string
-	status  string
-	metrics string
-}
-
-func (r scenarioResult) failureError(org string) error {
-	if r.status != "FAIL" {
-		return nil
-	}
-	return fmt.Errorf("%w: %s scenario %s", constants.ErrDemoScenarioFailed, org, r.number)
-}
-
 func runScenario(ctx context.Context, org, demoDir, scenario string) error {
 	result, err := runScenarioWithResult(ctx, org, demoDir, scenario)
 	if err != nil {
 		return err
 	}
-	return result.failureError(org)
+	return demoResultFailureError(result, org)
 }
 
-func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
+func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+	var result *compliancev1.DemoScenarioResult
 	var err error
 	switch org {
 	case constants.DemosOrgHealthcare:
@@ -1378,7 +1395,7 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult) {
+func printResultsTable(cmd *cobra.Command, org string, results []*compliancev1.DemoScenarioResult) {
 	cmd.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
 		strings.Repeat("═", 60), titleCase(org), strings.Repeat("═", 60))
 	cmd.Println()
@@ -1391,7 +1408,7 @@ func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult)
 	// Print rows
 	for _, r := range results {
 		cmd.Printf("%-10s\t%-50s\t%-12s\t%s\n",
-			r.number, r.name, r.status, r.metrics)
+			r.DisplayNumber, r.Title, strings.ToUpper(r.Status), r.MetricsSummary)
 	}
 	cmd.Println()
 }
@@ -1546,14 +1563,10 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 	return cmd
 }
 
-func runTwoLayerScenario(ctx context.Context, demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
-	var result scenarioResult
+func runTwoLayerScenario(ctx context.Context, demoDir string, cfg twoLayerScenarioConfig) (*compliancev1.DemoScenarioResult, error) {
 	var hasErrors bool
 
-	result.number = "1"
-	result.name = cfg.scenarioName
-	result.status = "PASS"
-	result.metrics = cfg.metrics
+	result := newDemoScenarioResult("1", cfg.scenarioName, demoStatusPassed, cfg.metrics)
 
 	demoPrintf("\n%s\n", strings.Repeat("─", 60))
 	demoPrintf("  Scenario 1 — %s\n", cfg.scenarioName)
@@ -1619,7 +1632,7 @@ func runTwoLayerScenario(ctx context.Context, demoDir string, cfg twoLayerScenar
 	demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 	if hasErrors {
-		result.status = "FAIL"
+		result.Status = demoStatusFailed
 		fmt.Printf("  [FAIL] Scenario 1 — One or more steps failed.\n")
 	} else {
 		fmt.Printf("  [PASS] %s\n", cfg.passMessage)

@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func getProjectRoot() string {
@@ -444,17 +445,17 @@ func TestRunAllScenarios(t *testing.T) {
 func TestScenarioResultFailureError(t *testing.T) {
 	tests := []struct {
 		name    string
-		result  scenarioResult
+		result  *compliancev1.DemoScenarioResult
 		wantErr bool
 	}{
-		{name: "passing scenario returns nil", result: scenarioResult{number: "2", status: "PASS"}, wantErr: false},
-		{name: "skipped scenario returns nil", result: scenarioResult{number: "2", status: "SKIP"}, wantErr: false},
-		{name: "failed scenario returns typed error", result: scenarioResult{number: "2", status: "FAIL"}, wantErr: true},
+		{name: "passing scenario returns nil", result: newDemoScenarioResult("2", "test", demoStatusPassed, ""), wantErr: false},
+		{name: "skipped scenario returns nil", result: newDemoScenarioResult("2", "test", demoStatusSkipped, ""), wantErr: false},
+		{name: "failed scenario returns typed error", result: newDemoScenarioResult("2", "test", demoStatusFailed, ""), wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.result.failureError(constants.DemosOrgFedRAMP)
+			err := demoResultFailureError(tt.result, constants.DemosOrgFedRAMP)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, constants.ErrDemoScenarioFailed)
@@ -469,35 +470,35 @@ func TestScenarioResultFailureError(t *testing.T) {
 func TestSummarizeScenarioResults(t *testing.T) {
 	tests := []struct {
 		name        string
-		results     []scenarioResult
+		results     []*compliancev1.DemoScenarioResult
 		wantErr     bool
 		wantErrorIs error
 	}{
 		{
 			name:    "all pass returns nil",
-			results: []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "PASS"}},
+			results: []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusPassed, "")},
 			wantErr: false,
 		},
 		{
 			name:        "any FAIL returns ErrDemoScenarioFailed",
-			results:     []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "FAIL"}, {number: "3", status: "PASS"}},
+			results:     []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusFailed, ""), newDemoScenarioResult("3", "c", demoStatusPassed, "")},
 			wantErr:     true,
 			wantErrorIs: constants.ErrDemoScenarioFailed,
 		},
 		{
 			name:    "skip without fail returns nil",
-			results: []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "SKIP"}},
+			results: []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusSkipped, "")},
 			wantErr: false,
 		},
 		{
 			name:        "mixed fail and skip returns ErrDemoScenarioFailed",
-			results:     []scenarioResult{{number: "1", status: "SKIP"}, {number: "2", status: "FAIL"}},
+			results:     []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusSkipped, ""), newDemoScenarioResult("2", "b", demoStatusFailed, "")},
 			wantErr:     true,
 			wantErrorIs: constants.ErrDemoScenarioFailed,
 		},
 		{
 			name:    "empty results returns nil",
-			results: []scenarioResult{},
+			results: []*compliancev1.DemoScenarioResult{},
 			wantErr: false,
 		},
 	}
