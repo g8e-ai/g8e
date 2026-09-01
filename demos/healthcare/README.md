@@ -319,10 +319,11 @@ g8e demos run healthcare 1
 
 **Proves**: An authorized agent on `net_internal` submits a PA request through the g8e gateway via the native `run_shell_command` tool driving the `paop` wrapper. Every request passes through the doctrine engine (11 PHI/HIPAA rules) before execution.
 
-The scenario runs a 3-step flow:
+The scenario runs a 4-step flow and persists the typed result under the runtime compliance evidence tree:
 1. **Gateway health check** — confirms the g8e gateway is live
 2. **PA submission** — submits a governed `run_shell_command` request driving `paop submit` through the gateway via the agent runtime
-3. **Audit trail inspection** — verifies doctrine enforcement in the observability logs
+3. **Independent state observation** — verifies that the Operator PA operation log contains the exact `PA-2026-0045` submission record
+4. **Audit trail inspection** — records supplementary doctrine-enforcement output from the observability logs
 
 For manual exploration:
 
@@ -362,9 +363,9 @@ g8e demos run healthcare 4
 
 **Proves**: Two-layer defense — Layer 1: network isolation (bad-actor on `net_untrusted` has no route to `net_internal`/`net_secure`). Layer 2: doctrine enforcement (`phi_exfil_attempt` at confidence 0.95).
 
-The scenario runs a 2-layer test:
-1. **Network isolation** — verifies that the bad-actor container on `net_untrusted` cannot reach the gateway on `net_internal`
-2. **Doctrine enforcement** — submits a PHI exfiltration payload through the governed endpoint; the gateway blocks it at confidence ≥ 0.95
+The scenario runs a 2-layer test and persists the typed result under the runtime compliance evidence tree:
+1. **Network isolation** — fails closed unless the bad-actor container on `net_untrusted` cannot reach the gateway on `net_internal`, and records the result as an independent state observation
+2. **Doctrine enforcement** — submits a PHI exfiltration payload through the governed endpoint; the harness verifies that the gateway blocks it at confidence ≥ 0.95 and the result retains receipt and transaction references
 
 For manual exploration:
 

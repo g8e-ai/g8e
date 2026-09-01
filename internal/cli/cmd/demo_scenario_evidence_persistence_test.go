@@ -312,3 +312,49 @@ func TestNewFinanceUnauthorizedTradeScenarioResult_UsesCanonicalDefinition(t *te
 		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
 	}
 }
+
+func TestNewHealthcareSuccessScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("healthcare-success")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newHealthcareSuccessScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "healthcare-success", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, constants.DemosOrgHealthcare, result.GetDemoId())
+	assert.Equal(t, "healthcare-demo-scope", result.GetScopeId())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}
+
+func TestNewHealthcarePHIBlockedScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("healthcare-phi-blocked")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newHealthcarePHIBlockedScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "healthcare-phi-blocked", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, constants.DemosOrgHealthcare, result.GetDemoId())
+	assert.Equal(t, "healthcare-demo-scope", result.GetScopeId())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}

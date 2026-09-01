@@ -283,6 +283,7 @@ const (
 	ContainerExecutionVaultDB         = ContainerDataDir + "/" + ExecutionVaultDBFilename
 	ContainerLedgerFilesDir           = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
 	ContainerFinanceUnauthorizedTrade = "/var/g8e/target/unauthorized_trade_execution.log"
+	ContainerHealthcarePAOperations   = "/var/pa_operations.log"
 
 	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
 	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
