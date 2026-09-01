@@ -218,7 +218,7 @@ python-build:
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
-	@cd protocol/python && python -m build
+	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
 # =============================================================================
@@ -244,17 +244,17 @@ proto: buf-install
 .PHONY: proto-python
 proto-python:
 	@echo "Generating Python Protobuf code..."
-	@if command -v python3 &> /dev/null; then \
-		python3 -m grpc_tools.protoc \
-			--python_out=protocol/python/g8e_protocol \
-			--proto_path=protocol/proto \
-			protocol/proto/g8e/common/v1/common.proto \
-			protocol/proto/g8e/operator/v1/operator.proto \
-			protocol/proto/g8e/pubsub/v1/pubsub.proto; \
-	else \
-		echo "Error: python3 not found. Install grpc_tools.protoc." >&2; \
+	@if ! $(PYTHON) -c "import grpc_tools" &> /dev/null; then \
+		echo "Error: grpc_tools not found in $(PYTHON). Install with: pip install grpcio-tools" >&2; \
 		exit 1; \
 	fi
+	@mkdir -p protocol/python/g8e_protocol
+	@$(PYTHON) -m grpc_tools.protoc \
+		--python_out=protocol/python/g8e_protocol \
+		--proto_path=protocol/proto \
+		protocol/proto/g8e/common/v1/common.proto \
+		protocol/proto/g8e/operator/v1/operator.proto \
+		protocol/proto/g8e/pubsub/v1/pubsub.proto
 	@echo "Python Protobuf generation complete."
 
 .PHONY: proto-force
@@ -575,7 +575,7 @@ demo-verify: build
 # The targets prefer the repo-root .venv if present (development), falling back
 # to system python3 (CI installs protocol/python + ensemble into system python).
 
-ENSEMBLE_PY := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
+PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
 ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
 ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
@@ -583,7 +583,7 @@ EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
-	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
 
 .PHONY: evals-test
 evals-test: evals-test-unit evals-test-integration
@@ -601,7 +601,7 @@ evals-test-integration:
 .PHONY: test-external
 test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
 
 .PHONY: ensemble-lint
 ensemble-lint:
@@ -832,7 +832,7 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+	@G8E_STRICT_CONSTANTS_LINT=1 go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
 		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
 	@$(FILTER_PROFILE)
 	@COVERAGE=$$($(COVERAGE_PCT)); \

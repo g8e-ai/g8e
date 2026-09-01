@@ -136,29 +136,34 @@
         "value": "MCP_RESOURCE_READ"
       },
       "PLATFORM_ENROLLMENT_CREATE": {
+        "_bootstrap": true,
         "_go_const": "ActionTypePlatformEnrollmentCreate",
         "_python_const": "PLATFORM_ENROLLMENT_CREATE",
         "value": "PLATFORM_ENROLLMENT_CREATE"
       },
       "PLATFORM_ENROLLMENT_DECIDE": {
+        "_bootstrap": true,
         "_go_const": "ActionTypePlatformEnrollmentDecide",
         "_mutation": true,
         "_python_const": "PLATFORM_ENROLLMENT_DECIDE",
         "value": "PLATFORM_ENROLLMENT_DECIDE"
       },
       "PLATFORM_ENROLLMENT_ISSUE": {
+        "_bootstrap": true,
         "_go_const": "ActionTypePlatformEnrollmentIssue",
         "_mutation": true,
         "_python_const": "PLATFORM_ENROLLMENT_ISSUE",
         "value": "PLATFORM_ENROLLMENT_ISSUE"
       },
       "PLATFORM_ENROLLMENT_PERSIST_POLICY": {
+        "_bootstrap": true,
         "_go_const": "ActionTypePlatformEnrollmentPersistPolicy",
         "_mutation": true,
         "_python_const": "PLATFORM_ENROLLMENT_PERSIST_POLICY",
         "value": "PLATFORM_ENROLLMENT_PERSIST_POLICY"
       },
       "PLATFORM_ENROLLMENT_CREATE_SESSION": {
+        "_bootstrap": true,
         "_go_const": "ActionTypePlatformEnrollmentCreateSession",
         "_mutation": true,
         "_python_const": "PLATFORM_ENROLLMENT_CREATE_SESSION",
