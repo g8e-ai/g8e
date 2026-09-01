@@ -23,13 +23,16 @@ VECTORS_DIRECTORY_NAME = "vectors"
 COMPLIANCE_DIRECTORY_NAME = "compliance"
 VECTOR_FILENAME = "control_assertion_definition.json"
 PHASE1_VECTOR_FILENAME = "phase1_records.json"
+PHASE2_DEMO_VECTOR_FILENAME = "phase2_demo_records.json"
 PROTOCOL_ROOT = Path(__file__).resolve().parents[2]
 VECTOR_PATH = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / COMPLIANCE_DIRECTORY_NAME / VECTOR_FILENAME
 PHASE1_VECTOR_PATH = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / COMPLIANCE_DIRECTORY_NAME / PHASE1_VECTOR_FILENAME
+PHASE2_DEMO_VECTOR_PATH = PROTOCOL_ROOT / VECTORS_DIRECTORY_NAME / COMPLIANCE_DIRECTORY_NAME / PHASE2_DEMO_VECTOR_FILENAME
 FRAMEWORK_CATALOG_FILENAME = "framework-catalog.json"
 CATALOG_FILENAMES = ("assertion-catalog.json", FRAMEWORK_CATALOG_FILENAME, "fedramp-nist-crosswalk.json")
 COMPLIANCE_PATHS_FILENAME = "compliance_paths.json"
 PHASE1_MESSAGE_COUNT = 20
+PHASE2_DEMO_MESSAGE_COUNT = 5
 
 
 def catalog_digest(record: dict[str, object], digest_field: str) -> tuple[str, str]:
@@ -58,15 +61,23 @@ def test_compliance_canonical_parser_rejects_noncanonical_json(vector):
         parse_canonical(encoded, ControlAssertionDefinition())
 
 
-def test_compliance_phase1_records_match_cross_language_vectors():
-    vector_set = json.loads(PHASE1_VECTOR_PATH.read_text())
-    assert len(vector_set["vectors"]) == PHASE1_MESSAGE_COUNT
-    assert len({vector["message_type"] for vector in vector_set["vectors"]}) == PHASE1_MESSAGE_COUNT
+def assert_compliance_vectors(vector_path: Path, expected_count: int):
+    vector_set = json.loads(vector_path.read_text())
+    assert len(vector_set["vectors"]) == expected_count
+    assert len({vector["message_type"] for vector in vector_set["vectors"]}) == expected_count
     for vector in vector_set["vectors"]:
         message = getattr(compliance_pb2, vector["message_type"])()
         encoded = vector["canonical_json"].encode()
         assert parse_canonical(encoded, message) == message
         assert serialize_canonical(message) == encoded
+
+
+def test_compliance_phase1_records_match_cross_language_vectors():
+    assert_compliance_vectors(PHASE1_VECTOR_PATH, PHASE1_MESSAGE_COUNT)
+
+
+def test_compliance_phase2_demo_records_match_cross_language_vectors():
+    assert_compliance_vectors(PHASE2_DEMO_VECTOR_PATH, PHASE2_DEMO_MESSAGE_COUNT)
 
 
 def test_packaged_compliance_catalogs_match_go_source_bytes_and_digests():

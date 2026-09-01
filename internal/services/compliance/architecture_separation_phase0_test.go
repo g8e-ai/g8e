@@ -104,6 +104,10 @@ func TestPhase1Architecture_ModelsAreProtocolOwned(t *testing.T) {
 		{name: "assertion assessment", message: &compliancev1.ControlAssertionAssessment{}, fullName: "g8e.compliance.v1.ControlAssertionAssessment"},
 		{name: "control assessment", message: &compliancev1.FrameworkControlAssessment{}, fullName: "g8e.compliance.v1.FrameworkControlAssessment"},
 		{name: "report manifest", message: &compliancev1.ComplianceReportManifest{}, fullName: "g8e.compliance.v1.ComplianceReportManifest"},
+		{name: "demo manifest", message: &compliancev1.DemoManifest{}, fullName: "g8e.compliance.v1.DemoManifest"},
+		{name: "demo scenario definition", message: &compliancev1.DemoScenarioDefinition{}, fullName: "g8e.compliance.v1.DemoScenarioDefinition"},
+		{name: "demo step result", message: &compliancev1.DemoStepResult{}, fullName: "g8e.compliance.v1.DemoStepResult"},
+		{name: "demo scenario result", message: &compliancev1.DemoScenarioResult{}, fullName: "g8e.compliance.v1.DemoScenarioResult"},
 	}
 
 	for _, tt := range tests {

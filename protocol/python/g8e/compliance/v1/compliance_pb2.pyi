@@ -408,3 +408,153 @@ class ComplianceVerificationReport(_message.Message):
     failures: _containers.RepeatedCompositeFieldContainer[VerificationFailure]
     reproduced_checksum_root: str
     def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ...) -> None: ...
+
+class FrameworkControlReference(_message.Message):
+    __slots__ = ("framework_ref", "control_id")
+    FRAMEWORK_REF_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_ID_FIELD_NUMBER: _ClassVar[int]
+    framework_ref: VersionedReference
+    control_id: str
+    def __init__(self, framework_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., control_id: _Optional[str] = ...) -> None: ...
+
+class DemoManifest(_message.Message):
+    __slots__ = ("demo_id", "demo_version", "run_id", "scope_id", "generated_at", "scenario_definition_refs", "provenance_hashes", "required_environment", "framework_control_refs", "supported_lanes")
+    DEMO_ID_FIELD_NUMBER: _ClassVar[int]
+    DEMO_VERSION_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_DEFINITION_REFS_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_HASHES_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_ENVIRONMENT_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_CONTROL_REFS_FIELD_NUMBER: _ClassVar[int]
+    SUPPORTED_LANES_FIELD_NUMBER: _ClassVar[int]
+    demo_id: str
+    demo_version: str
+    run_id: str
+    scope_id: str
+    generated_at: _timestamp_pb2.Timestamp
+    scenario_definition_refs: _containers.RepeatedCompositeFieldContainer[VersionedReference]
+    provenance_hashes: _containers.RepeatedCompositeFieldContainer[NamedDigest]
+    required_environment: _containers.RepeatedScalarFieldContainer[str]
+    framework_control_refs: _containers.RepeatedCompositeFieldContainer[FrameworkControlReference]
+    supported_lanes: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, demo_id: _Optional[str] = ..., demo_version: _Optional[str] = ..., run_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., scenario_definition_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., provenance_hashes: _Optional[_Iterable[_Union[NamedDigest, _Mapping]]] = ..., required_environment: _Optional[_Iterable[str]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., supported_lanes: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class DemoScenarioDefinition(_message.Message):
+    __slots__ = ("scenario_id", "scenario_version", "display_number", "title", "purpose", "risk_category", "expected_action_classes", "expected_outcome", "expected_rejection_layer", "initial_state_fixture_ref", "terminal_state_assertions", "required_receipts", "required_deterministic_stages", "assertion_refs", "framework_control_refs", "required_evidence_types", "required_evidence_level", "timeout_seconds", "failure_policy", "harness_scenario")
+    SCENARIO_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_VERSION_FIELD_NUMBER: _ClassVar[int]
+    DISPLAY_NUMBER_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    PURPOSE_FIELD_NUMBER: _ClassVar[int]
+    RISK_CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_ACTION_CLASSES_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_REJECTION_LAYER_FIELD_NUMBER: _ClassVar[int]
+    INITIAL_STATE_FIXTURE_REF_FIELD_NUMBER: _ClassVar[int]
+    TERMINAL_STATE_ASSERTIONS_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_RECEIPTS_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_DETERMINISTIC_STAGES_FIELD_NUMBER: _ClassVar[int]
+    ASSERTION_REFS_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_CONTROL_REFS_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_EVIDENCE_TYPES_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_EVIDENCE_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    TIMEOUT_SECONDS_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_POLICY_FIELD_NUMBER: _ClassVar[int]
+    HARNESS_SCENARIO_FIELD_NUMBER: _ClassVar[int]
+    scenario_id: str
+    scenario_version: str
+    display_number: str
+    title: str
+    purpose: str
+    risk_category: str
+    expected_action_classes: _containers.RepeatedScalarFieldContainer[str]
+    expected_outcome: str
+    expected_rejection_layer: str
+    initial_state_fixture_ref: str
+    terminal_state_assertions: _containers.RepeatedScalarFieldContainer[str]
+    required_receipts: _containers.RepeatedScalarFieldContainer[str]
+    required_deterministic_stages: _containers.RepeatedScalarFieldContainer[str]
+    assertion_refs: _containers.RepeatedCompositeFieldContainer[VersionedReference]
+    framework_control_refs: _containers.RepeatedCompositeFieldContainer[FrameworkControlReference]
+    required_evidence_types: _containers.RepeatedScalarFieldContainer[str]
+    required_evidence_level: str
+    timeout_seconds: int
+    failure_policy: str
+    harness_scenario: str
+    def __init__(self, scenario_id: _Optional[str] = ..., scenario_version: _Optional[str] = ..., display_number: _Optional[str] = ..., title: _Optional[str] = ..., purpose: _Optional[str] = ..., risk_category: _Optional[str] = ..., expected_action_classes: _Optional[_Iterable[str]] = ..., expected_outcome: _Optional[str] = ..., expected_rejection_layer: _Optional[str] = ..., initial_state_fixture_ref: _Optional[str] = ..., terminal_state_assertions: _Optional[_Iterable[str]] = ..., required_receipts: _Optional[_Iterable[str]] = ..., required_deterministic_stages: _Optional[_Iterable[str]] = ..., assertion_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., required_evidence_types: _Optional[_Iterable[str]] = ..., required_evidence_level: _Optional[str] = ..., timeout_seconds: _Optional[int] = ..., failure_policy: _Optional[str] = ..., harness_scenario: _Optional[str] = ...) -> None: ...
+
+class DemoStepResult(_message.Message):
+    __slots__ = ("step_id", "operation", "started_at", "completed_at", "status", "exit_code", "protocol_result", "evidence_refs", "failure", "required")
+    STEP_ID_FIELD_NUMBER: _ClassVar[int]
+    OPERATION_FIELD_NUMBER: _ClassVar[int]
+    STARTED_AT_FIELD_NUMBER: _ClassVar[int]
+    COMPLETED_AT_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    EXIT_CODE_FIELD_NUMBER: _ClassVar[int]
+    PROTOCOL_RESULT_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_REFS_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRED_FIELD_NUMBER: _ClassVar[int]
+    step_id: str
+    operation: str
+    started_at: _timestamp_pb2.Timestamp
+    completed_at: _timestamp_pb2.Timestamp
+    status: str
+    exit_code: int
+    protocol_result: str
+    evidence_refs: _containers.RepeatedScalarFieldContainer[str]
+    failure: str
+    required: bool
+    def __init__(self, step_id: _Optional[str] = ..., operation: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., exit_code: _Optional[int] = ..., protocol_result: _Optional[str] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., failure: _Optional[str] = ..., required: _Optional[bool] = ...) -> None: ...
+
+class DemoScenarioResult(_message.Message):
+    __slots__ = ("result_id", "scenario_ref", "demo_id", "scope_id", "run_id", "started_at", "completed_at", "status", "investigation_ids", "transaction_ids", "receipt_refs", "state_observation_refs", "metric_refs", "ksi_refs", "assertion_refs", "framework_control_refs", "step_results", "verification_status", "failure", "limitations", "display_number", "title", "metrics_summary")
+    RESULT_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_REF_FIELD_NUMBER: _ClassVar[int]
+    DEMO_ID_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    STARTED_AT_FIELD_NUMBER: _ClassVar[int]
+    COMPLETED_AT_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    INVESTIGATION_IDS_FIELD_NUMBER: _ClassVar[int]
+    TRANSACTION_IDS_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_REFS_FIELD_NUMBER: _ClassVar[int]
+    STATE_OBSERVATION_REFS_FIELD_NUMBER: _ClassVar[int]
+    METRIC_REFS_FIELD_NUMBER: _ClassVar[int]
+    KSI_REFS_FIELD_NUMBER: _ClassVar[int]
+    ASSERTION_REFS_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_CONTROL_REFS_FIELD_NUMBER: _ClassVar[int]
+    STEP_RESULTS_FIELD_NUMBER: _ClassVar[int]
+    VERIFICATION_STATUS_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_FIELD_NUMBER: _ClassVar[int]
+    LIMITATIONS_FIELD_NUMBER: _ClassVar[int]
+    DISPLAY_NUMBER_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    METRICS_SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    result_id: str
+    scenario_ref: VersionedReference
+    demo_id: str
+    scope_id: str
+    run_id: str
+    started_at: _timestamp_pb2.Timestamp
+    completed_at: _timestamp_pb2.Timestamp
+    status: str
+    investigation_ids: _containers.RepeatedScalarFieldContainer[str]
+    transaction_ids: _containers.RepeatedScalarFieldContainer[str]
+    receipt_refs: _containers.RepeatedScalarFieldContainer[str]
+    state_observation_refs: _containers.RepeatedScalarFieldContainer[str]
+    metric_refs: _containers.RepeatedScalarFieldContainer[str]
+    ksi_refs: _containers.RepeatedScalarFieldContainer[str]
+    assertion_refs: _containers.RepeatedCompositeFieldContainer[VersionedReference]
+    framework_control_refs: _containers.RepeatedCompositeFieldContainer[FrameworkControlReference]
+    step_results: _containers.RepeatedCompositeFieldContainer[DemoStepResult]
+    verification_status: str
+    failure: str
+    limitations: _containers.RepeatedScalarFieldContainer[str]
+    display_number: str
+    title: str
+    metrics_summary: str
+    def __init__(self, result_id: _Optional[str] = ..., scenario_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., demo_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., investigation_ids: _Optional[_Iterable[str]] = ..., transaction_ids: _Optional[_Iterable[str]] = ..., receipt_refs: _Optional[_Iterable[str]] = ..., state_observation_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., ksi_refs: _Optional[_Iterable[str]] = ..., assertion_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., step_results: _Optional[_Iterable[_Union[DemoStepResult, _Mapping]]] = ..., verification_status: _Optional[str] = ..., failure: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ..., display_number: _Optional[str] = ..., title: _Optional[str] = ..., metrics_summary: _Optional[str] = ...) -> None: ...

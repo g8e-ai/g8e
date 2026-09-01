@@ -232,3 +232,83 @@ message ComplianceVerificationReport {
   repeated VerificationFailure failures = 6;
   string reproduced_checksum_root = 7;
 }
+
+message FrameworkControlReference {
+  VersionedReference framework_ref = 1;
+  string control_id = 2;
+}
+
+message DemoManifest {
+  string demo_id = 1;
+  string demo_version = 2;
+  string run_id = 3;
+  string scope_id = 4;
+  google.protobuf.Timestamp generated_at = 5;
+  repeated VersionedReference scenario_definition_refs = 6;
+  repeated NamedDigest provenance_hashes = 7;
+  repeated string required_environment = 8;
+  repeated FrameworkControlReference framework_control_refs = 9;
+  repeated string supported_lanes = 10;
+}
+
+message DemoScenarioDefinition {
+  string scenario_id = 1;
+  string scenario_version = 2;
+  string display_number = 3;
+  string title = 4;
+  string purpose = 5;
+  string risk_category = 6;
+  repeated string expected_action_classes = 7;
+  string expected_outcome = 8;
+  string expected_rejection_layer = 9;
+  string initial_state_fixture_ref = 10;
+  repeated string terminal_state_assertions = 11;
+  repeated string required_receipts = 12;
+  repeated string required_deterministic_stages = 13;
+  repeated VersionedReference assertion_refs = 14;
+  repeated FrameworkControlReference framework_control_refs = 15;
+  repeated string required_evidence_types = 16;
+  string required_evidence_level = 17;
+  uint32 timeout_seconds = 18;
+  string failure_policy = 19;
+  string harness_scenario = 20;
+}
+
+message DemoStepResult {
+  string step_id = 1;
+  string operation = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp completed_at = 4;
+  string status = 5;
+  int32 exit_code = 6;
+  string protocol_result = 7;
+  repeated string evidence_refs = 8;
+  string failure = 9;
+  bool required = 10;
+}
+
+message DemoScenarioResult {
+  string result_id = 1;
+  VersionedReference scenario_ref = 2;
+  string demo_id = 3;
+  string scope_id = 4;
+  string run_id = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp completed_at = 7;
+  string status = 8;
+  repeated string investigation_ids = 9;
+  repeated string transaction_ids = 10;
+  repeated string receipt_refs = 11;
+  repeated string state_observation_refs = 12;
+  repeated string metric_refs = 13;
+  repeated string ksi_refs = 14;
+  repeated VersionedReference assertion_refs = 15;
+  repeated FrameworkControlReference framework_control_refs = 16;
+  repeated DemoStepResult step_results = 17;
+  string verification_status = 18;
+  string failure = 19;
+  repeated string limitations = 20;
+  string display_number = 21;
+  string title = 22;
+  string metrics_summary = 23;
+}

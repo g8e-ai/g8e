@@ -15,10 +15,15 @@
     - [ControlAssertionDefinition](#g8e-compliance-v1-ControlAssertionDefinition)
     - [ControlCrosswalk](#g8e-compliance-v1-ControlCrosswalk)
     - [ControlCrosswalkCatalog](#g8e-compliance-v1-ControlCrosswalkCatalog)
+    - [DemoManifest](#g8e-compliance-v1-DemoManifest)
+    - [DemoScenarioDefinition](#g8e-compliance-v1-DemoScenarioDefinition)
+    - [DemoScenarioResult](#g8e-compliance-v1-DemoScenarioResult)
+    - [DemoStepResult](#g8e-compliance-v1-DemoStepResult)
     - [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata)
     - [FrameworkCatalog](#g8e-compliance-v1-FrameworkCatalog)
     - [FrameworkControlAssessment](#g8e-compliance-v1-FrameworkControlAssessment)
     - [FrameworkControlDefinition](#g8e-compliance-v1-FrameworkControlDefinition)
+    - [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference)
     - [FrameworkDefinition](#g8e-compliance-v1-FrameworkDefinition)
     - [NamedDigest](#g8e-compliance-v1-NamedDigest)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
@@ -301,6 +306,125 @@
 
 
 
+<a name="g8e-compliance-v1-DemoManifest"></a>
+
+### DemoManifest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| demo_id | [string](#string) |  |  |
+| demo_version | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| scope_id | [string](#string) |  |  |
+| generated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| scenario_definition_refs | [VersionedReference](#g8e-compliance-v1-VersionedReference) | repeated |  |
+| provenance_hashes | [NamedDigest](#g8e-compliance-v1-NamedDigest) | repeated |  |
+| required_environment | [string](#string) | repeated |  |
+| framework_control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
+| supported_lanes | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-DemoScenarioDefinition"></a>
+
+### DemoScenarioDefinition
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| scenario_id | [string](#string) |  |  |
+| scenario_version | [string](#string) |  |  |
+| display_number | [string](#string) |  |  |
+| title | [string](#string) |  |  |
+| purpose | [string](#string) |  |  |
+| risk_category | [string](#string) |  |  |
+| expected_action_classes | [string](#string) | repeated |  |
+| expected_outcome | [string](#string) |  |  |
+| expected_rejection_layer | [string](#string) |  |  |
+| initial_state_fixture_ref | [string](#string) |  |  |
+| terminal_state_assertions | [string](#string) | repeated |  |
+| required_receipts | [string](#string) | repeated |  |
+| required_deterministic_stages | [string](#string) | repeated |  |
+| assertion_refs | [VersionedReference](#g8e-compliance-v1-VersionedReference) | repeated |  |
+| framework_control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
+| required_evidence_types | [string](#string) | repeated |  |
+| required_evidence_level | [string](#string) |  |  |
+| timeout_seconds | [uint32](#uint32) |  |  |
+| failure_policy | [string](#string) |  |  |
+| harness_scenario | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-DemoScenarioResult"></a>
+
+### DemoScenarioResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| result_id | [string](#string) |  |  |
+| scenario_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| demo_id | [string](#string) |  |  |
+| scope_id | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| started_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| completed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| status | [string](#string) |  |  |
+| investigation_ids | [string](#string) | repeated |  |
+| transaction_ids | [string](#string) | repeated |  |
+| receipt_refs | [string](#string) | repeated |  |
+| state_observation_refs | [string](#string) | repeated |  |
+| metric_refs | [string](#string) | repeated |  |
+| ksi_refs | [string](#string) | repeated |  |
+| assertion_refs | [VersionedReference](#g8e-compliance-v1-VersionedReference) | repeated |  |
+| framework_control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
+| step_results | [DemoStepResult](#g8e-compliance-v1-DemoStepResult) | repeated |  |
+| verification_status | [string](#string) |  |  |
+| failure | [string](#string) |  |  |
+| limitations | [string](#string) | repeated |  |
+| display_number | [string](#string) |  |  |
+| title | [string](#string) |  |  |
+| metrics_summary | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-DemoStepResult"></a>
+
+### DemoStepResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| step_id | [string](#string) |  |  |
+| operation | [string](#string) |  |  |
+| started_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| completed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| status | [string](#string) |  |  |
+| exit_code | [int32](#int32) |  |  |
+| protocol_result | [string](#string) |  |  |
+| evidence_refs | [string](#string) | repeated |  |
+| failure | [string](#string) |  |  |
+| required | [bool](#bool) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-EvidenceEncryptionMetadata"></a>
 
 ### EvidenceEncryptionMetadata
@@ -381,6 +505,22 @@
 | source_reference | [string](#string) |  |  |
 | support_status | [string](#string) |  |  |
 | support_rationale | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-FrameworkControlReference"></a>
+
+### FrameworkControlReference
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| framework_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| control_id | [string](#string) |  |  |
 
 
 

@@ -23,6 +23,7 @@ import (
 )
 
 const compliancePhase1MessageCount = 20
+const compliancePhase2DemoMessageCount = 5
 
 type complianceCanonicalizationVector struct {
 	Message       json.RawMessage `json:"message"`
@@ -44,6 +45,9 @@ var complianceCanonicalizationVectorJSON []byte
 //go:embed vectors/compliance/phase1_records.json
 var compliancePhase1VectorJSON []byte
 
+//go:embed vectors/compliance/phase2_demo_records.json
+var compliancePhase2DemoVectorJSON []byte
+
 func TestComplianceCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 	var vector complianceCanonicalizationVector
 	require.NoError(t, json.Unmarshal(complianceCanonicalizationVectorJSON, &vector))
@@ -60,9 +64,18 @@ func TestComplianceCanonicalizationMatchesCrossLanguageVector(t *testing.T) {
 }
 
 func TestCompliancePhase1RecordsMatchCrossLanguageVectors(t *testing.T) {
+	validateComplianceVectorSet(t, compliancePhase1VectorJSON, compliancePhase1MessageCount)
+}
+
+func TestCompliancePhase2DemoRecordsMatchCrossLanguageVectors(t *testing.T) {
+	validateComplianceVectorSet(t, compliancePhase2DemoVectorJSON, compliancePhase2DemoMessageCount)
+}
+
+func validateComplianceVectorSet(t *testing.T, encodedVectorSet []byte, expectedCount int) {
+	t.Helper()
 	var vectorSet compliancePhase1VectorSet
-	require.NoError(t, json.Unmarshal(compliancePhase1VectorJSON, &vectorSet))
-	require.Len(t, vectorSet.Vectors, compliancePhase1MessageCount)
+	require.NoError(t, json.Unmarshal(encodedVectorSet, &vectorSet))
+	require.Len(t, vectorSet.Vectors, expectedCount)
 	seen := make(map[string]struct{}, len(vectorSet.Vectors))
 
 	for _, vector := range vectorSet.Vectors {
