@@ -8,13 +8,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 )
 
-func runFinanceScenario(demoDir, scenario string) (scenarioResult, error) {
+func runFinanceScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
 	switch scenario {
 	case "1":
-		return runTwoLayerScenario(demoDir, twoLayerScenarioConfig{
+		return runTwoLayerScenario(ctx, demoDir, twoLayerScenarioConfig{
 			scenarioName:    "Unauthorized Trade Blocked",
 			metrics:         "L1 doctrine: unauthorized_trade_execution (0.90 conf) // Network isolation: net_untrusted blocked",
 			httpPort:        "8082",

@@ -8,11 +8,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
 
-func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
+func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
 	var result scenarioResult
 
 	switch scenario {
@@ -34,7 +35,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(demoDir, "gateway health",
+		if err := demoStep(ctx, demoDir, "gateway health",
 			false,
 			"curl", "-s", "http://localhost:8081/api/v1/health",
 		); err != nil {
@@ -48,7 +49,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(demoDir, "fhir request", false,
+		if err := demoStep(ctx, demoDir, "fhir request", false,
 			harnessRun("healthcare-success", hcfg)...,
 		); err != nil {
 			fmt.Println("  (healthcare-success harness scenario failed)")
@@ -59,7 +60,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
-		demoStepWarn(demoDir, "audit tail",
+		demoStepWarn(ctx, demoDir, "audit tail",
 			"docker", "compose", "logs", "observability", "--tail", "10",
 		)
 
@@ -88,7 +89,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(demoDir, "gateway health",
+		if err := demoStep(ctx, demoDir, "gateway health",
 			false,
 			"curl", "-s", "http://localhost:8081/api/v1/health",
 		); err != nil {
@@ -105,7 +106,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(demoDir, "gold-card PA via agent",
+		if err := demoStep(ctx, demoDir, "gold-card PA via agent",
 			false,
 			harnessRun("healthcare-gold-card", hcfg)...,
 		); err != nil {
@@ -117,7 +118,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
-		demoStepWarn(demoDir, "audit tail",
+		demoStepWarn(ctx, demoDir, "audit tail",
 			"docker", "compose", "logs", "observability", "--tail", "10",
 		)
 
@@ -146,7 +147,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(demoDir, "gateway health",
+		if err := demoStep(ctx, demoDir, "gateway health",
 			false,
 			"curl", "-s", "http://localhost:8081/api/v1/health",
 		); err != nil {
@@ -163,7 +164,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(demoDir, "SLA breach query via agent",
+		if err := demoStep(ctx, demoDir, "SLA breach query via agent",
 			false,
 			harnessRun("healthcare-sla-breach", hcfg)...,
 		); err != nil {
@@ -212,7 +213,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  ── Layer 1: Network isolation ────────────────────────────────")
 		demoPrintln("  bad-actor (net_untrusted) → gateway (net_internal) — should timeout")
 		demoPrintln()
-		if err := demoStep(demoDir, "network isolation",
+		if err := demoStep(ctx, demoDir, "network isolation",
 			false,
 			"docker", "compose", "exec", "-T", "bad-actor",
 			"sh", "-c", "wget -qO- -T 5 http://10.22.0.10:8080/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal (production network policy)'",
@@ -227,7 +228,7 @@ func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(demoDir, "phi exfiltration",
+		if err := demoStep(ctx, demoDir, "phi exfiltration",
 			false,
 			harnessRun("healthcare-phi-blocked", hcfg)...,
 		); err != nil {

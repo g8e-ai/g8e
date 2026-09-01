@@ -8,6 +8,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,7 @@ func defaultFedRAMPHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-runtime")
 }
 
-func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
+func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (scenarioResult, error) {
 	hcfg := defaultFedRAMPHarnessConfig()
 	var result scenarioResult
 	var hasErrors bool
@@ -47,12 +48,12 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-provision", "doctrine check")
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Governed Cloud Resource Provisioning")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
+		if !demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
 			[]string{"docker", "compose", "exec", "-T", "operator",
 				"test", "-f", constants.ContainerOperatorCert}) {
 			hasErrors = true
@@ -64,7 +65,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-provision", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-provision", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-provision")
-		if err := demoStep(demoDir, "fedramp-provision via agent",
+		if err := demoStep(ctx, demoDir, "fedramp-provision via agent",
 			false,
 			harnessRun("fedramp-provision", hcfg)...,
 		); err != nil {
@@ -77,7 +78,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-provision", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
-		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
+		if !demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 				"python", constants.ContainerVerifyOpsPy, "PROVISION"}) {
 			hasErrors = true
@@ -117,7 +118,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Unauthorized Audit Trail Destruction Blocked")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
 			hasErrors = true
 		}
@@ -126,7 +127,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/cloudsvc' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-deny", "doctrine check")
-		if err := demoStep(demoDir, "fedramp-deny via agent",
+		if err := demoStep(ctx, demoDir, "fedramp-deny via agent",
 			false,
 			harnessRun("fedramp-deny", hcfg)...,
 		); err != nil {
@@ -138,7 +139,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-deny", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/cloudsvc' — CR-26 audit integrity violation detected at admission")
 
-		if !demoScenarioStep(demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
+		if !demoScenarioStep(ctx, demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 				"sh", "-c", "test -f " + constants.ContainerCloudSvcOpsLog + " && test -s " + constants.ContainerCloudSvcOpsLog}) {
 			hasErrors = true
@@ -176,7 +177,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Governed Configuration Revert")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
 			hasErrors = true
 		}
@@ -190,7 +191,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "fedramp-revert via agent",
+		if err := demoStep(ctx, demoDir, "fedramp-revert via agent",
 			false,
 			harnessRun("fedramp-revert", hcfg)...,
 		); err != nil {
@@ -204,7 +205,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "revert-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — revert admitted")
 
-		if !demoScenarioStep(demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
+		if !demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 				"python", constants.ContainerVerifyOpsPy, "REVERT"}) {
 			hasErrors = true
@@ -244,7 +245,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Gateway Audit Vault Destruction Blocked")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
 			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
 			hasErrors = true
 		}
@@ -253,7 +254,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  L1 doctrine detects 'rm -rf /root/.g8e/data' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-evidence-block", "doctrine check")
-		if err := demoStep(demoDir, "fedramp-evidence-block via agent",
+		if err := demoStep(ctx, demoDir, "fedramp-evidence-block via agent",
 			false,
 			harnessRun("fedramp-evidence-block", hcfg)...,
 		); err != nil {
@@ -265,7 +266,7 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-evidence-block", "AUDIT VAULT DESTRUCTION BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /root/.g8e/data' — CR-26 audit integrity violation detected at admission")
 
-		if !demoScenarioStep(demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
+		if !demoScenarioStep(ctx, demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
 			[]string{"docker", "compose", "exec", "-T", "gateway",
 				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
 			hasErrors = true
@@ -293,20 +294,20 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 // runFedRAMPKSIEvidence runs g8e compliance ksi inside the gateway container
 // to emit KSI result snapshots, then verifies them via verify_ops.py --ksi-result.
 // Returns true if both steps succeed.
-func runFedRAMPKSIEvidence(demoDir string) bool {
+func runFedRAMPKSIEvidence(ctx context.Context, demoDir string) bool {
 	demoPrintf("\n%s\n", strings.Repeat("-", 60))
 	demoPrintln("  KSI Evidence Export")
 	demoPrintln(strings.Repeat("-", 60))
 	demoPrintln()
 
-	if !demoScenarioStep(demoDir, "Step 1: Emit KSI result snapshots (g8e compliance ksi --class C)",
+	if !demoScenarioStep(ctx, demoDir, "Step 1: Emit KSI result snapshots (g8e compliance ksi --class C)",
 		[]string{"docker", "compose", "exec", "-T", "gateway",
 			"/g8e", "compliance", "ksi", "--class", "C", "--catalog", constants.ContainerKSICatalog}) {
 		fmt.Println("  [FAIL] KSI evidence export — could not emit snapshots.")
 		return false
 	}
 
-	if !demoScenarioStep(demoDir, "Step 2: Verify KSI result snapshots (verify_ops.py --ksi-result)",
+	if !demoScenarioStep(ctx, demoDir, "Step 2: Verify KSI result snapshots (verify_ops.py --ksi-result)",
 		[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 			"python", constants.ContainerVerifyOpsPy, "--ksi-result"}) {
 		fmt.Println("  [FAIL] KSI evidence export — snapshot verification failed.")

@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -57,12 +58,20 @@ var demoEmitter DemoEmitter
 
 // DemoEmitter translates demo scenario events into TUI messages.
 // When --tui is not active, demoEmitter is nil and all methods are no-ops.
+type demoProgram interface {
+	Run() (tea.Model, error)
+	Send(tea.Msg)
+}
+
 type DemoEmitter struct {
-	program *tea.Program
+	program demoProgram
 }
 
 // NewDemoEmitter creates a DemoEmitter backed by the given bubbletea program.
 func NewDemoEmitter(p *tea.Program) *DemoEmitter {
+	if p == nil {
+		return &DemoEmitter{}
+	}
 	return &DemoEmitter{program: p}
 }
 
@@ -1163,47 +1172,65 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	}
 
 	if len(args) >= 2 {
-		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
+		return runScenario(cmd.Context(), org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
-	return runAllScenarios(cmd, org, demoDir)
+	return runAllScenarios(cmd.Context(), cmd, org, demoDir)
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
 // demoEmitter so scenario code can send events, runs the requested scenarios
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
-// exits, it waits up to 5 seconds for the scenario goroutine to finish so
-// errors are not silently lost.
+// exits, it cancels and waits for scenario execution so errors are not lost.
 func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
 		NetLabel: "AIR-GAP",
 	})
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(cmd.Context()))
 
 	demoEmitter = *NewDemoEmitter(p)
 	defer func() { demoEmitter = DemoEmitter{} }()
 
+	return runDemosWithTUILifecycle(cmd.Context(), p, func(ctx context.Context) error {
+		if len(args) >= 2 {
+			return runScenario(ctx, org, demoDir, args[1])
+		}
+		return runAllScenarios(ctx, cmd, org, demoDir)
+	})
+}
+
+func runDemosWithTUILifecycle(ctx context.Context, program demoProgram, runScenario func(context.Context) error) error {
+	scenarioCtx, cancelScenario := context.WithCancel(ctx)
+	defer cancelScenario()
+
 	scenarioErrCh := make(chan error, 1)
 	go func() {
-		if len(args) >= 2 {
-			scenarioErrCh <- runScenario(org, demoDir, args[1])
-		} else {
-			scenarioErrCh <- runAllScenarios(cmd, org, demoDir)
+		err := runScenario(scenarioCtx)
+		status := tui.ScenarioSucceeded
+		if errors.Is(err, context.Canceled) {
+			status = tui.ScenarioCancelled
+		} else if err != nil {
+			status = tui.ScenarioFailed
 		}
+		program.Send(tui.ScenarioCompleteMsg{Status: status})
+		scenarioErrCh <- err
 	}()
 
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("tui: run: %w", err)
+	_, tuiErr := program.Run()
+	cancelScenario()
+	scenarioErr := <-scenarioErrCh
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDemoScenarioCancelled, ctxErr)
 	}
-
-	select {
-	case err := <-scenarioErrCh:
-		return err
-	case <-time.After(5 * time.Second):
-		return nil
+	if tuiErr != nil {
+		return fmt.Errorf("tui: run: %w", tuiErr)
 	}
+	if errors.Is(scenarioErr, context.Canceled) {
+		return fmt.Errorf("%w: %w", constants.ErrDemoScenarioCancelled, scenarioErr)
+	}
+	return scenarioErr
 }
 
 func isDemoRunning(demoDir, composePath string) bool {
@@ -1216,7 +1243,10 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
+func runAllScenarios(ctx context.Context, cmd *cobra.Command, org, demoDir string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	count, ok := scenarioCounts[org]
 	if !ok {
 		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1229,7 +1259,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(org, demoDir, scenarioNum)
+		result, err := runScenarioWithResult(ctx, org, demoDir, scenarioNum)
 		if err != nil {
 			return err
 		}
@@ -1237,7 +1267,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	}
 
 	if org == constants.DemosOrgFedRAMP {
-		if !runFedRAMPKSIEvidence(demoDir) {
+		if !runFedRAMPKSIEvidence(ctx, demoDir) {
 			results = append(results, scenarioResult{
 				number:  "KSI",
 				name:    "KSI Evidence Export",
@@ -1252,6 +1282,9 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 				metrics: "snapshots emitted and verified",
 			})
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	printResultsTable(cmd, org, results)
@@ -1298,24 +1331,30 @@ type scenarioResult struct {
 	metrics string
 }
 
-func runScenario(org, demoDir, scenario string) error {
-	_, err := runScenarioWithResult(org, demoDir, scenario)
+func runScenario(ctx context.Context, org, demoDir, scenario string) error {
+	_, err := runScenarioWithResult(ctx, org, demoDir, scenario)
 	return err
 }
 
-func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
+func runScenarioWithResult(ctx context.Context, org, demoDir, scenario string) (scenarioResult, error) {
+	var result scenarioResult
+	var err error
 	switch org {
 	case constants.DemosOrgHealthcare:
-		return runHealthcareScenario(demoDir, scenario)
+		result, err = runHealthcareScenario(ctx, demoDir, scenario)
 	case constants.DemosOrgFinance:
-		return runFinanceScenario(demoDir, scenario)
+		result, err = runFinanceScenario(ctx, demoDir, scenario)
 	case constants.DemosOrgDHS:
-		return runDHSScenario(demoDir, scenario)
+		result, err = runDHSScenario(ctx, demoDir, scenario)
 	case constants.DemosOrgFedRAMP:
-		return runFedRAMPScenario(demoDir, scenario)
+		result, err = runFedRAMPScenario(ctx, demoDir, scenario)
 	default:
-		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
+		err = fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return result, ctxErr
+	}
+	return result, err
 }
 
 // titleCase capitalizes the first letter of each word in s, leaving the rest lowercase.
@@ -1350,11 +1389,11 @@ func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult)
 // demoStep prints a labeled command and runs it, streaming output inline.
 // In non-verbose mode, output is suppressed. Always returns error if command
 // fails, but only stops execution if fatal is true.
-func demoStep(demoDir, label string, fatal bool, args ...string) error {
+func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
-	c := exec.Command(args[0], args[1:]...)
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
 	c.Dir = demoDir
 	if demoVerbose {
 		c.Stdout = os.Stdout
@@ -1380,8 +1419,8 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 // (via -o /dev/null -w "%{http_code}") and validates the response against the
 // single expected status code. Unlike demoStep, this checks the actual HTTP
 // response status, not just the curl exit code.
-func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) error {
-	return demoStepHTTPAny(demoDir, label, []string{expectedCode}, args...)
+func demoStepHTTP(ctx context.Context, demoDir, label string, expectedCode string, args ...string) error {
+	return demoStepHTTPAny(ctx, demoDir, label, []string{expectedCode}, args...)
 }
 
 // demoStepHTTPAny runs a curl command that writes the HTTP status code to stdout
@@ -1390,11 +1429,11 @@ func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) er
 // multiple codes (e.g. a passkey challenge endpoint that returns 200 for a
 // valid body but 400 for a malformed one — both prove the endpoint is
 // reachable and enforcing input validation).
-func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...string) error {
+func demoStepHTTPAny(ctx context.Context, demoDir, label string, expectedCodes []string, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
-	c := exec.Command(args[0], args[1:]...)
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
 	c.Dir = demoDir
 	var stdout strings.Builder
 	c.Stdout = &stdout
@@ -1421,9 +1460,9 @@ func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...stri
 // demoScenarioStep prints the step description, runs the command via demoStep,
 // prints pass/fail, and returns whether it succeeded. This extracts the
 // repetitive print → demoStep → error pattern from each scenario case block.
-func demoScenarioStep(demoDir, desc string, cmd []string) bool {
+func demoScenarioStep(ctx context.Context, demoDir, desc string, cmd []string) bool {
 	demoPrintf("  ── %s ──\n", desc)
-	if err := demoStep(demoDir, desc, false, cmd...); err != nil {
+	if err := demoStep(ctx, demoDir, desc, false, cmd...); err != nil {
 		fmt.Printf("  (%s failed)\n\n", desc)
 		return false
 	}
@@ -1433,8 +1472,8 @@ func demoScenarioStep(demoDir, desc string, cmd []string) bool {
 // demoStepWarn runs a non-critical demoStep and prints a warning on failure
 // without setting hasErrors. Use for supplementary verification steps whose
 // failure does not invalidate the scenario result.
-func demoStepWarn(demoDir, label string, args ...string) {
-	if err := demoStep(demoDir, label, false, args...); err != nil {
+func demoStepWarn(ctx context.Context, demoDir, label string, args ...string) {
+	if err := demoStep(ctx, demoDir, label, false, args...); err != nil {
 		fmt.Printf("  (warning: %s failed)\n", label)
 	}
 }
@@ -1497,7 +1536,7 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 	return cmd
 }
 
-func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
+func runTwoLayerScenario(ctx context.Context, demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
 	var result scenarioResult
 	var hasErrors bool
 
@@ -1514,7 +1553,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	demoPrintln()
 
 	demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-	if err := demoStep(demoDir, "gateway health",
+	if err := demoStep(ctx, demoDir, "gateway health",
 		false,
 		"curl", "-s", "http://localhost:"+cfg.httpPort+"/api/v1/health",
 	); err != nil {
@@ -1524,7 +1563,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	}
 
 	demoPrintln("  ── Step 2: Verify operator enrollment (mTLS certs) ────────────")
-	if err := demoStep(demoDir, "enrollment check",
+	if err := demoStep(ctx, demoDir, "enrollment check",
 		false,
 		"docker", "compose", "exec", "-T", "operator",
 		"test", "-f", constants.ContainerOperatorCert,
@@ -1539,7 +1578,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	demoPrintln()
 	hcfg := defaultHarnessConfig("agent-runtime")
 	hcfg.PublicURL = "http://g8e.local:" + cfg.httpPort
-	if err := demoStep(demoDir, cfg.harnessScenario+" via agent",
+	if err := demoStep(ctx, demoDir, cfg.harnessScenario+" via agent",
 		false,
 		harnessRun(cfg.harnessScenario, hcfg)...,
 	); err != nil {
@@ -1549,7 +1588,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	}
 
 	demoPrintln("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
-	if err := demoStep(demoDir, "audit tail",
+	if err := demoStep(ctx, demoDir, "audit tail",
 		false,
 		"docker", "compose", "logs", "observability", "--tail", "10",
 	); err != nil {
@@ -1559,7 +1598,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	demoPrintln("  ── Step 5: Network isolation (supplementary proof) ───────────")
 	demoPrintln("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
 	demoPrintln()
-	if err := demoStep(demoDir, "network isolation",
+	if err := demoStep(ctx, demoDir, "network isolation",
 		false,
 		"docker", "compose", "exec", "-T", "bad-actor",
 		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",

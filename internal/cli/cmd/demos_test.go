@@ -14,6 +14,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -354,35 +355,35 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario("unknown-org", "/tmp", "1")
+		err := runScenario(context.Background(), "unknown-org", "/tmp", "1")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
 	t.Run("returns error with valid range for invalid healthcare scenario number", func(t *testing.T) {
-		_, err := runHealthcareScenario("/tmp", "99")
+		_, err := runHealthcareScenario(context.Background(), "/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
-		_, err := runFinanceScenario("/tmp", "99")
+		_, err := runFinanceScenario(context.Background(), "/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario("/tmp", "99")
+		_, err := runDHSScenario(context.Background(), "/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario("/tmp", "99")
+		_, err := runFedRAMPScenario(context.Background(), "/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-4")
@@ -409,7 +410,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(context.Background(), &cobra.Command{}, "unknown-org", "/tmp")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -442,9 +443,9 @@ func TestRunAllScenarios(t *testing.T) {
 
 func TestSummarizeScenarioResults(t *testing.T) {
 	tests := []struct {
-		name      string
-		results   []scenarioResult
-		wantErr   bool
+		name        string
+		results     []scenarioResult
+		wantErr     bool
 		wantErrorIs error
 	}{
 		{
@@ -453,9 +454,9 @@ func TestSummarizeScenarioResults(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "any FAIL returns ErrDemoScenarioFailed",
-			results:   []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "FAIL"}, {number: "3", status: "PASS"}},
-			wantErr:   true,
+			name:        "any FAIL returns ErrDemoScenarioFailed",
+			results:     []scenarioResult{{number: "1", status: "PASS"}, {number: "2", status: "FAIL"}, {number: "3", status: "PASS"}},
+			wantErr:     true,
 			wantErrorIs: constants.ErrDemoScenarioFailed,
 		},
 		{
@@ -464,9 +465,9 @@ func TestSummarizeScenarioResults(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:      "mixed fail and skip returns ErrDemoScenarioFailed",
-			results:   []scenarioResult{{number: "1", status: "SKIP"}, {number: "2", status: "FAIL"}},
-			wantErr:   true,
+			name:        "mixed fail and skip returns ErrDemoScenarioFailed",
+			results:     []scenarioResult{{number: "1", status: "SKIP"}, {number: "2", status: "FAIL"}},
+			wantErr:     true,
 			wantErrorIs: constants.ErrDemoScenarioFailed,
 		},
 		{
@@ -560,7 +561,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	})
 
 	t.Run("returns error when command fails", func(t *testing.T) {
-		err := demoStepHTTP(t.TempDir(), "failing command", "200",
+		err := demoStepHTTP(context.Background(), t.TempDir(), "failing command", "200",
 			"false",
 		)
 		require.Error(t, err)
@@ -570,7 +571,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	t.Run("returns error on status code mismatch", func(t *testing.T) {
 		dir := t.TempDir()
 		// Use echo to simulate curl writing a status code to stdout
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"echo", "404",
 		)
 		require.Error(t, err)
@@ -580,7 +581,7 @@ func TestDemoStepHTTP(t *testing.T) {
 
 	t.Run("passes when status code matches", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"echo", "200",
 		)
 		assert.NoError(t, err)
@@ -588,7 +589,7 @@ func TestDemoStepHTTP(t *testing.T) {
 
 	t.Run("passes with 401 expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTP(dir, "SSE protection", "401",
+		err := demoStepHTTP(context.Background(), dir, "SSE protection", "401",
 			"echo", "401",
 		)
 		assert.NoError(t, err)
@@ -597,7 +598,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	t.Run("trims whitespace from output", func(t *testing.T) {
 		dir := t.TempDir()
 		// printf adds trailing newline; demoStepHTTP should trim it
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"printf", "200\n",
 		)
 		assert.NoError(t, err)
@@ -611,7 +612,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 
 	t.Run("passes when status matches any expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+		err := demoStepHTTPAny(context.Background(), dir, "passkey challenge", []string{"200", "400"},
 			"echo", "400",
 		)
 		assert.NoError(t, err)
@@ -619,7 +620,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 
 	t.Run("returns error when status matches no expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+		err := demoStepHTTPAny(context.Background(), dir, "passkey challenge", []string{"200", "400"},
 			"echo", "500",
 		)
 		require.Error(t, err)
@@ -628,7 +629,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 	})
 
 	t.Run("returns error when command fails", func(t *testing.T) {
-		err := demoStepHTTPAny(t.TempDir(), "failing command", []string{"200"},
+		err := demoStepHTTPAny(context.Background(), t.TempDir(), "failing command", []string{"200"},
 			"false",
 		)
 		require.Error(t, err)
