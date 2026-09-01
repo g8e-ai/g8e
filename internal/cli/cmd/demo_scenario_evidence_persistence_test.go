@@ -358,3 +358,30 @@ func TestNewHealthcarePHIBlockedScenarioResult_UsesCanonicalDefinition(t *testin
 		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
 	}
 }
+
+func TestNewHealthcareDisplayScenarioResult_DoesNotClaimEvidenceGradeBinding(t *testing.T) {
+	tests := []struct {
+		name       string
+		scenarioID string
+	}{
+		{name: "gold card uses pre-seeded reporting state", scenarioID: "healthcare-gold-card"},
+		{name: "SLA breach uses pre-seeded reporting state", scenarioID: "healthcare-sla-breach"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			definition, err := loadDemoScenarioDefinition(tt.scenarioID)
+			require.NoError(t, err)
+
+			result := newHealthcareDisplayScenarioResult(definition, "pre-seeded fixture is not run-bound evidence")
+
+			assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+			assert.Equal(t, definition.GetTitle(), result.GetTitle())
+			assert.Nil(t, result.GetScenarioRef())
+			assert.Empty(t, result.GetRunId())
+			assert.Empty(t, result.GetReceiptRefs())
+			assert.Empty(t, result.GetStateObservationRefs())
+			assert.Empty(t, result.GetVerificationStatus())
+		})
+	}
+}

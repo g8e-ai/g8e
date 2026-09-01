@@ -91,8 +91,8 @@ func mcpScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("gold card PA submission failed: %s", resp.Error.Message)
 				}
-				r.note("PA-2026-0043 submitted through governed endpoint (Dr. Priya Nair, 96%% historic approval)")
-				r.note("exemption engine evaluated provider against 90%% threshold — auto-approved")
+				r.note("PA-2026-0043 gold-card operation recorded through governed endpoint (Dr. Priya Nair, 96%% historic approval)")
+				r.note("reporting outcome is a pre-seeded fixture and is not run-bound evidence")
 				return nil
 			},
 		},
@@ -106,8 +106,8 @@ func mcpScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("SLA breach query failed: %s", resp.Error.Message)
 				}
-				r.note("PA-2026-0044 queried through governed endpoint (Dr. James O'Brien, 10 days elapsed)")
-				r.note("SLA enforcement: alert at day 5, breach at day 7 — reportable_to_oha=true")
+				r.note("PA-2026-0044 SLA query recorded through governed endpoint (Dr. James O'Brien, 10 days elapsed)")
+				r.note("reporting outcome is a pre-seeded fixture and is not run-bound evidence")
 				return nil
 			},
 		},

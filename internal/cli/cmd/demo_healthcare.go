@@ -30,6 +30,10 @@ func newHealthcarePHIBlockedScenarioResult(startedAt time.Time, definition *comp
 		"Network isolation verified // L1 doctrine rejection verified at 0.95 confidence")
 }
 
+func newHealthcareDisplayScenarioResult(definition *compliancev1.DemoScenarioDefinition, metrics string) *compliancev1.DemoScenarioResult {
+	return newDemoScenarioResult(definition.GetDisplayNumber(), definition.GetTitle(), demoStatusPassed, metrics)
+}
+
 func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	var result *compliancev1.DemoScenarioResult
 
@@ -131,41 +135,40 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		}
 
 	case "2":
+		definition, err := loadDemoScenarioDefinition("healthcare-gold-card")
+		if err != nil {
+			return nil, err
+		}
 		var hasErrors bool
-		result = newDemoScenarioResult("2", "Gold Card Auto-Approval (HB 3134 §6)", demoStatusPassed,
-			"Threshold: 90%, PA-2026-0043: 96% (auto-approved)")
+		result = newHealthcareDisplayScenarioResult(definition,
+			"Governed gold-card operation recorded // reporting state is a pre-seeded fixture, not run-bound evidence")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
-		demoPrintln("  Scenario 2 — Gold Card Auto-Approval (HB 3134 §6)")
+		demoPrintf("  Scenario 2 — %s\n", definition.GetTitle())
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  PROVES: Providers whose historic approval rate meets or exceeds")
-		demoPrintln("          the plan threshold (90%) are auto-approved without manual")
-		demoPrintln("          review. PA-2026-0043 (Dr. Priya Nair, 96%) is the proof case.")
+		demoPrintln("  DEMONSTRATES: A gold-card operation traverses the governed endpoint.")
+		demoPrintln("                The reporting database contains a pre-seeded example")
+		demoPrintln("                outcome; this run does not evaluate the threshold or")
+		demoPrintln("                produce run-bound terminal-state evidence.")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(ctx, demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8081/api/v1/health",
-		); err != nil {
+		if err := demoStep(ctx, demoDir, "gateway health", false,
+			"curl", "-s", "http://localhost:8081/api/v1/health"); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 2: Submit gold-card PA through the gateway ───────────")
-		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is submitted")
+		demoPrintln("  ── Step 2: Record gold-card operation through the gateway ───")
+		demoPrintln("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is carried")
 		demoPrintln("  through the governed endpoint via the native run_shell_command tool.")
-		demoPrintln("  The exemption narrative evaluates the provider against the 90%")
-		demoPrintln("  threshold (HB 3134 §6).")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(ctx, demoDir, "gold-card PA via agent",
-			false,
-			harnessRun("healthcare-gold-card", hcfg)...,
-		); err != nil {
+		if err := demoStep(ctx, demoDir, "gold-card PA via agent", false,
+			harnessRun("healthcare-gold-card", hcfg)...); err != nil {
 			fmt.Println("  (healthcare-gold-card harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
@@ -175,53 +178,51 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
 		demoStepWarn(ctx, demoDir, "audit tail",
-			"docker", "compose", "logs", "observability", "--tail", "10",
-		)
+			"docker", "compose", "logs", "observability", "--tail", "10")
 
 		if hasErrors {
 			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 		} else {
-			fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
-			fmt.Println("         PA-2026-0043 qualifies (96%): zero-day decision, no manual review.")
+			fmt.Println("  [PASS] Scenario 2 — Governed gold-card operation recorded.")
+			fmt.Println("         Pre-seeded reporting state is display-only and is not persisted as evidence.")
 		}
 
 	case "3":
+		definition, err := loadDemoScenarioDefinition("healthcare-sla-breach")
+		if err != nil {
+			return nil, err
+		}
 		var hasErrors bool
-		result = newDemoScenarioResult("3", "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", demoStatusPassed,
-			"Alert: day 5, Breach: day 7, PA-2026-0044: 10 days")
+		result = newHealthcareDisplayScenarioResult(definition,
+			"Governed SLA query recorded // reporting state is a pre-seeded fixture, not run-bound evidence")
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
-		demoPrintln("  Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)")
+		demoPrintf("  Scenario 3 — %s\n", definition.GetTitle())
 		demoPrintln(strings.Repeat("─", 60))
 		demoPrintln()
-		demoPrintln("  PROVES: The SLA tracking narrative flags breaches for mandatory")
-		demoPrintln("          DCBS/OHA annual reporting. PA-2026-0044 (Dr. James")
-		demoPrintln("          O'Brien, 10 days) is the proof case.")
+		demoPrintln("  DEMONSTRATES: An SLA query traverses the governed endpoint and the")
+		demoPrintln("                reporting dashboard exposes a pre-seeded breach example.")
+		demoPrintln("                This run does not calculate or transition the breach state,")
+		demoPrintln("                so the fixture is not run-bound terminal evidence.")
 		demoPrintln()
 
 		demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(ctx, demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8081/api/v1/health",
-		); err != nil {
+		if err := demoStep(ctx, demoDir, "gateway health", false,
+			"curl", "-s", "http://localhost:8081/api/v1/health"); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 2: Query SLA-breach status through the gateway ──────")
-		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is queried through")
-		demoPrintln("  the governed endpoint via the native run_shell_command tool. The SLA")
-		demoPrintln("  narrative tracks days-elapsed per request and flags breaches for")
-		demoPrintln("  mandatory DCBS/OHA annual reporting.")
+		demoPrintln("  ── Step 2: Record SLA query through the gateway ─────────────")
+		demoPrintln("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is carried through")
+		demoPrintln("  the governed endpoint via the native run_shell_command tool.")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		if err := demoStep(ctx, demoDir, "SLA breach query via agent",
-			false,
-			harnessRun("healthcare-sla-breach", hcfg)...,
-		); err != nil {
+		if err := demoStep(ctx, demoDir, "SLA breach query via agent", false,
+			harnessRun("healthcare-sla-breach", hcfg)...); err != nil {
 			fmt.Println("  (healthcare-sla-breach harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
@@ -242,8 +243,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			result.Status = demoStatusFailed
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 		} else {
-			fmt.Println("  [PASS] Scenario 3 — SLA enforcement active (alert: day 5, breach: day 7).")
-			fmt.Println("         PA-2026-0044 is SLA_BREACHED with reportable_to_oha=true.")
+			fmt.Println("  [PASS] Scenario 3 — Governed SLA query recorded.")
+			fmt.Println("         Pre-seeded reporting state is display-only and is not persisted as evidence.")
 		}
 
 	case "4":
