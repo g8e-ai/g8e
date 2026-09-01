@@ -836,7 +836,7 @@ func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) 
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
 
-	vaultPath := filepath.Join(repoRoot, paths.Infra.AuditVaultDBPath)
+	vaultPath := filepath.Join(repoRoot, paths.Infra.DbPath)
 
 	db, err := sql.Open("sqlite", vaultPath)
 	require.NoError(t, err)

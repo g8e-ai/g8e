@@ -279,7 +279,7 @@ const (
 	ContainerOperatorKey      = ContainerPKIDir + "/" + PkiFileOperatorKey
 	ContainerCABundle         = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
 	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
-	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
+	ContainerAuditVaultDB     = ContainerDataDir + "/" + DbFilename
 	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
 	ContainerLedgerFilesDir   = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
 

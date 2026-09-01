@@ -122,11 +122,12 @@ Approve the operator, ensemble, and dashboard requests using the exact request I
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
 ```
 
-Wait until all four services are healthy, then capture the canonical authentication context:
+Wait until all four services are healthy. The initial owner CLI session predates the Operator session, so refresh it after Operator enrollment to bind the canonical CLI session to the active Operator session. Then capture the canonical authentication context:
 
 ```bash
 ./g8e docker status | tee "${CAMPAIGN_DIR}/logs/docker-status-full.log"
 ./g8e operator list | tee "${CAMPAIGN_DIR}/logs/operator-list.txt"
+./g8e auth refresh | tee "${CAMPAIGN_DIR}/logs/auth-refresh.log"
 ./g8e auth context --project-root "${REPO_ROOT}" > "${CAMPAIGN_DIR}/metadata/auth-context.json"
 USER_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["user_id"])' "${CAMPAIGN_DIR}/metadata/auth-context.json")"
 CLI_SESSION_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cli_session_id"])' "${CAMPAIGN_DIR}/metadata/auth-context.json")"
@@ -200,36 +201,50 @@ Both summaries must report `ok` and include correlated transaction hashes. Prese
 
 Required gate: the retained scenario output and receipt artifacts show the expected `FILE_EDIT` and `DOCUMENT_UPDATE` transactions. A scenario summary is a useful visual, but the receipt and report rows are the stronger evidence.
 
-Verify every exported receipt's canonical signature and final persistence attestation with the producing operator's public key:
+Verify every exported receipt's canonical signature and final persistence attestation with the producing actuators' public keys. Receipts in a unified-stack run are signed by two distinct actuators: the gateway actuator and the operator actuator. Each receipt carries a `signer_key_id` that identifies which actuator signed it, so the verifier loads both public keys and matches each receipt to its signer:
 
 ```bash
 mkdir -p "${CAMPAIGN_DIR}/unified/verifier-pki"
-docker cp g8e-operator:/root/.g8e/pki/warden_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/warden_pub.pem"
+docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem"
+docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem"
 cd "${REPO_ROOT}/ensemble/evals"
 uv sync --locked
-uv run python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/warden_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
+uv run python - "${CAMPAIGN_DIR}/unified/receipts-export.json" "${CAMPAIGN_DIR}/unified/verifier-pki/gateway-Actuator_pub.pem" "${CAMPAIGN_DIR}/unified/verifier-pki/operator-Actuator_pub.pem" <<'PY' | tee "${CAMPAIGN_DIR}/unified/receipt-verification.txt"
+import binascii
 import json
 import sys
 from pathlib import Path
 
-from g8e.receipts import parse_action_receipt, verify_action_receipt_signature, verify_receipt_persistence_attestation
+from g8e.receipts import decode_ed25519_public_key, parse_action_receipt, verify_action_receipt_signature, verify_receipt_persistence_attestation
 
 records = json.loads(Path(sys.argv[1]).read_text())["receipts"]
 if not records:
     raise SystemExit("receipt verification failed: export is empty")
-public_key = Path(sys.argv[2]).read_text()
+keys: dict[str, str] = {}
+for path in sys.argv[2:]:
+    pem = Path(path).read_text()
+    key_id = binascii.hexlify(decode_ed25519_public_key(pem)).decode()
+    keys[key_id] = pem
+    print(f"loaded key {key_id[:16]}... from {Path(path).name}")
+no_key = 0
 for index, record in enumerate(records, start=1):
     receipt = parse_action_receipt(record["action_receipt"])
+    public_key = keys.get(receipt.signer_key_id)
+    if public_key is None:
+        no_key += 1
+        raise SystemExit(f"receipt verification failed: no key for signer_key_id {receipt.signer_key_id} at record {index}")
     if not verify_action_receipt_signature(receipt, public_key):
         raise SystemExit(f"receipt verification failed: invalid signature at record {index}")
     if not verify_receipt_persistence_attestation(receipt, public_key):
         raise SystemExit(f"receipt verification failed: invalid persistence attestation at record {index}")
 print(f"VERIFIED: {len(records)}/{len(records)} receipt signatures and persistence attestations")
+print(f"  keys loaded: {len(keys)}")
+print(f"  no-key receipts: {no_key}")
 PY
 cd "${REPO_ROOT}"
 ```
 
-The public key comes from the producing environment, so the result verifies integrity against that key but does not independently establish trust in the key. Retain `receipt-verification.txt`; do not claim receipt verification from the presence of signature columns alone.
+The public keys come from the producing environment, so the result verifies integrity against those keys but does not independently establish trust in them. Retain `receipt-verification.txt`; do not claim receipt verification from the presence of signature columns alone.
 
 ### 3.5 Generate deterministic CSV reports
 
@@ -348,15 +363,18 @@ fi
 
 If an existing key must be replaced, preserve it or choose a new versioned key ID deliberately; do not overwrite retained key material without user approval.
 
-Copy the producing operator's Warden public key to a verifier directory. This is public verification material, not the private evidence key:
+Copy the producing actuators' public keys to a verifier directory. Receipts in a unified-stack run are signed by both the gateway actuator and the operator actuator, so the verifier needs both keys. This is public verification material, not the private evidence key. Set the app and gateway trust-bundle paths separately; the eval transport fails closed when either bundle is missing:
 
 ```bash
 mkdir -p "${CAMPAIGN_DIR}/evals/verifier-pki"
-docker cp g8e-operator:/root/.g8e/pki/warden_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/warden_pub.pem"
+docker cp g8e-gateway:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/gateway-Actuator_pub.pem"
+docker cp g8e-operator:/root/.g8e/pki/Actuator_pub.pem "${CAMPAIGN_DIR}/evals/verifier-pki/operator-Actuator_pub.pem"
 export G8E_GATEWAY_PKI_DIR="${CAMPAIGN_DIR}/evals/verifier-pki"
+export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
 ```
 
-From `ensemble/evals/`, install the locked environment and run a diagnostic arm against the healthy unified stack:
+From `ensemble/evals/`, install the locked environment and run a diagnostic arm against the healthy unified stack. Declare provider and model flags explicitly when the fresh stack has no saved user settings. Set `--idle-timeout` above the measured interval between events for the selected model; the example uses 180 seconds for a local 12B model whose measured responses exceeded the 10-second default:
 
 ```bash
 cd "${REPO_ROOT}/ensemble/evals"
@@ -364,15 +382,20 @@ uv sync --locked --extra test
 uv run g8e-evals run \
   --suite ifeval_subset \
   --arm doctrine \
+  --idle-timeout 180 \
   --g8ee-url http://localhost:8000 \
   --operator-url https://localhost:8443 \
-  --auth-project-root ../.. \
+  --g8e-cli "${REPO_ROOT}/g8e" \
+  --auth-project-root "${REPO_ROOT}" \
+  --provider ollama \
+  --model '<declared-local-model>' \
+  --primary-endpoint '<declared-local-endpoint>' \
   --evidence-key-file "${EVIDENCE_KEY_FILE}" \
   --output-dir "${CAMPAIGN_DIR}/evals" \
   2>&1 | tee "${CAMPAIGN_DIR}/logs/evals-doctrine.log"
 ```
 
-Provider, model, endpoint, API-key, judge, task-limit, and headless options are listed by `uv run g8e-evals run --help`. Record exact model-role mappings from `manifest.json`; never describe an omitted or fake role as a real frontier model.
+Provider, model, endpoint, API-key, judge, task-limit, headless, and timeout options are listed by `uv run g8e-evals run --help`. Record exact model-role mappings from `manifest.json`; never describe an omitted or fake role as a real frontier model.
 
 Locate the generated report and verify receipt signatures and final persistence attestations:
 
@@ -382,7 +405,7 @@ uv run g8e-evals verify-receipts "${EVAL_REPORT_DIR}" --pki-dir "${G8E_GATEWAY_P
 printf '%s\n' "${EVAL_REPORT_DIR}"
 ```
 
-The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts. A missing key or missing `receipts.jsonl` is not a pass even if the current command returns without a non-zero exit. The command is not complete-bundle verification.
+The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts before making any receipt-verification claim. A missing key, missing `receipts.jsonl`, or zero bound receipts is not a receipt-verification pass even when the command exits zero. The current `ifeval_subset` tasks can complete as answer-only turns with no ActionReceipt; that run remains a model and eval-system diagnostic, reports zero receipt coverage, and supports no signed-receipt claim. The command is not complete-bundle verification.
 
 The useful eval files are:
 
