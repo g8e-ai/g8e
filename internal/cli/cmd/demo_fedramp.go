@@ -13,10 +13,12 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
@@ -24,49 +26,74 @@ func defaultFedRAMPHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-runtime")
 }
 
-// fedrampAssertionRefs are the versioned assertion references shared by the
-// FedRAMP evidence-grade scenarios. They map to the canonical assertion catalog.
-var fedrampAssertionRefs = []*compliancev1.VersionedReference{
-	{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"},
-	{Id: "G8E-AU-RECEIPT-001", Version: "1.0.0"},
-	{Id: "G8E-CM-STATE-001", Version: "1.0.0"},
+func fedRAMPDenyHarnessVerified(err error) bool {
+	return err == nil
 }
 
-// fedrampFrameworkControlRefs are the framework control references for the
-// FedRAMP evidence-grade scenarios, drawn from the canonical demo scenario
-// catalog and framework catalog.
-var fedrampFrameworkControlRefs = []*compliancev1.FrameworkControlReference{
-	{FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-MLA-07"},
-	{FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-IAM-07"},
-	{FrameworkRef: &compliancev1.VersionedReference{Id: "nist-sp-800-53", Version: "rev5"}, ControlId: "AC-3"},
-	{FrameworkRef: &compliancev1.VersionedReference{Id: "nist-sp-800-53", Version: "rev5"}, ControlId: "AU-2"},
+func fedRAMPScenarioID(scenario string) (string, error) {
+	switch scenario {
+	case "1":
+		return "fedramp-provision", nil
+	case "2":
+		return "fedramp-deny", nil
+	case "3":
+		return "fedramp-revert", nil
+	case "4":
+		return "fedramp-evidence-block", nil
+	default:
+		return "", fmt.Errorf("%w: invalid scenario number for fedramp: %q (valid: 1-4)", constants.ErrNotFound, scenario)
+	}
 }
 
-func newFedRAMPDenyScenarioResult(startedAt time.Time) *compliancev1.DemoScenarioResult {
+func loadFedRAMPScenarioDefinition(scenarioID string) (*compliancev1.DemoScenarioDefinition, error) {
+	assertions, frameworks, _, err := compliancecatalog.LoadCanonicalCatalogs()
+	if err != nil {
+		return nil, fmt.Errorf("load canonical compliance catalogs: %w", err)
+	}
+	scenarios, err := compliancecatalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	if err != nil {
+		return nil, fmt.Errorf("load canonical demo scenario catalog: %w", err)
+	}
+	definition := compliancecatalog.FindDemoScenarioDefinition(scenarios, scenarioID, "1.0.0")
+	if definition == nil {
+		return nil, fmt.Errorf("%w: %s@1.0.0", constants.ErrUnresolvedReference, scenarioID)
+	}
+	return definition, nil
+}
+
+func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
 	return &compliancev1.DemoScenarioResult{
-		ResultId:             fmt.Sprintf("fedramp-run:%s:fedramp-deny", startedAt.Format("20060102T150405Z")),
-		ScenarioRef:          &compliancev1.VersionedReference{Id: "fedramp-deny", Version: "1.0.0"},
+		ResultId:             fmt.Sprintf("fedramp-run:%s:%s", startedAt.Format("20060102T150405Z"), definition.ScenarioId),
+		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
 		DemoId:               constants.DemosOrgFedRAMP,
 		ScopeId:              "fedramp-demo-scope",
 		RunId:                fmt.Sprintf("fedramp-run-%s", startedAt.Format("20060102T150405Z")),
 		StartedAt:            timestamppb.New(startedAt),
 		Status:               demoStatusPassed,
-		AssertionRefs:        cloneVersionedRefs(fedrampAssertionRefs),
-		FrameworkControlRefs: cloneFrameworkControlRefs(fedrampFrameworkControlRefs),
-		DisplayNumber:        "2",
-		Title:                "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine",
+		AssertionRefs:        cloneVersionedRefs(definition.AssertionRefs),
+		FrameworkControlRefs: cloneFrameworkControlRefs(definition.FrameworkControlRefs),
+		DisplayNumber:        definition.DisplayNumber,
+		Title:                definition.Title,
 		MetricsSummary:       "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident",
 	}
 }
 
 func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+	scenarioID, err := fedRAMPScenarioID(scenario)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := loadFedRAMPScenarioDefinition(scenarioID)
+	if err != nil {
+		return nil, err
+	}
 	hcfg := defaultFedRAMPHarnessConfig()
 	var hasErrors bool
 	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
 	case "1":
-		result = newDemoScenarioResult("1", "Governed Cloud Resource Provisioning", demoStatusPassed,
+		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
 			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
@@ -143,7 +170,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		// results, and required evidence references. The scenario definition
 		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
 		startedAt := time.Now().UTC()
-		result = newFedRAMPDenyScenarioResult(startedAt)
+		result = newFedRAMPDenyScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 2 — Unauthorized Audit Trail Destruction Blocked (CR-26)")
@@ -180,18 +207,18 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			harnessRun("fedramp-deny", hcfg)...,
 		)
 		step2Completed := time.Now().UTC()
-		// The harness exits nonzero when the doctrine blocks the action, which
-		// is the expected outcome. A nil error means the action was not blocked.
-		step2Blocked := harnessErr != nil
-		if !step2Blocked {
+		// The harness exits successfully only after it verifies that doctrine blocked
+		// the action. A nonzero exit means the expected rejection was not verified.
+		step2Verified := fedRAMPDenyHarnessVerified(harnessErr)
+		if !step2Verified {
 			fmt.Println("  (fedramp-deny harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
 		}
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"fedramp-deny-step-2", "fedramp-deny harness (L1 doctrine reject)", step2Started, step2Completed,
-			step2Blocked, true, "agent harness fedramp-deny"))
-		if step2Blocked {
+			step2Verified, true, "agent harness fedramp-deny"))
+		if step2Verified {
 			// Record the failed-stage receipt reference produced by the L1 denial.
 			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-deny")
 			result.TransactionIds = append(result.TransactionIds, "fedramp-deny-tx")
@@ -232,9 +259,12 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			fmt.Println("         Independent verification confirms the operations log is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Audit trail destruction blocked by L1 doctrine")
 		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-deny scenario result: %w", err)
+		}
 
 	case "3":
-		result = newDemoScenarioResult("3", "Governed Configuration Revert under L2 Consensus", demoStatusPassed,
+		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
 			"L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
@@ -301,8 +331,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		}
 
 	case "4":
-		result = newDemoScenarioResult("4", "Gateway Audit Vault Destruction Blocked + Governed Destruction", demoStatusPassed,
-			"L1 blocks vault wipe // L1+L2 admit governed destroy -> receipt")
+		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
+			"L1 blocks vault wipe // audit vault remains intact")
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")
@@ -357,7 +387,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		}
 
 	default:
-		return nil, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-4)", scenario)
+		return nil, fmt.Errorf("%w: invalid scenario number for fedramp: %q (valid: 1-4)", constants.ErrNotFound, scenario)
 	}
 	return result, nil
 }
