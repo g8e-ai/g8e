@@ -76,20 +76,24 @@ class ControlAssertionCatalog(_message.Message):
     def __init__(self, catalog_id: _Optional[str] = ..., catalog_version: _Optional[str] = ..., sha256: _Optional[str] = ..., assertions: _Optional[_Iterable[_Union[ControlAssertionDefinition, _Mapping]]] = ...) -> None: ...
 
 class FrameworkControlDefinition(_message.Message):
-    __slots__ = ("control_id", "title", "description", "applicability_rules", "responsibility", "source_reference")
+    __slots__ = ("control_id", "title", "description", "applicability_rules", "responsibility", "source_reference", "support_status", "support_rationale")
     CONTROL_ID_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
     APPLICABILITY_RULES_FIELD_NUMBER: _ClassVar[int]
     RESPONSIBILITY_FIELD_NUMBER: _ClassVar[int]
     SOURCE_REFERENCE_FIELD_NUMBER: _ClassVar[int]
+    SUPPORT_STATUS_FIELD_NUMBER: _ClassVar[int]
+    SUPPORT_RATIONALE_FIELD_NUMBER: _ClassVar[int]
     control_id: str
     title: str
     description: str
     applicability_rules: _containers.RepeatedScalarFieldContainer[str]
     responsibility: str
     source_reference: str
-    def __init__(self, control_id: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., applicability_rules: _Optional[_Iterable[str]] = ..., responsibility: _Optional[str] = ..., source_reference: _Optional[str] = ...) -> None: ...
+    support_status: str
+    support_rationale: str
+    def __init__(self, control_id: _Optional[str] = ..., title: _Optional[str] = ..., description: _Optional[str] = ..., applicability_rules: _Optional[_Iterable[str]] = ..., responsibility: _Optional[str] = ..., source_reference: _Optional[str] = ..., support_status: _Optional[str] = ..., support_rationale: _Optional[str] = ...) -> None: ...
 
 class FrameworkDefinition(_message.Message):
     __slots__ = ("framework_id", "framework_version", "title", "publisher", "source", "catalog_sha256", "effective_date", "controls")

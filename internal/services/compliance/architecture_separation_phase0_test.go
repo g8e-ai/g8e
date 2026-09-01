@@ -14,6 +14,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // Phase 0 regression markers for the proof-backed compliance reporting plan
@@ -84,44 +87,28 @@ func TestPhase0Architecture_EvidenceStructLacksContentAddressedFields(t *testing
 	assert.NotContains(t, e.Reference, "sha256:", phase0RegressionBeforeFix+": reference is not content-addressed")
 }
 
-// TestPhase0Architecture_NoTypedAssertionOrAssessmentModels documents that the
-// compliance package does not yet define the typed assertion, framework,
-// crosswalk, assessment-scope, assertion-assessment, control-assessment, or
-// report-manifest models described in the v2.1.3 plan. The current surface is
-// KSI catalog/results, OSCAL export, KSI history, and overlay loading only.
-//
-// This test uses go list -json to enumerate exported types and asserts the
-// planned types are absent. When Phase 1 adds them, this test is updated to
-// assert their presence and required fields.
-func TestPhase0Architecture_NoTypedAssertionOrAssessmentModels(t *testing.T) {
-	plannedTypes := []string{
-		"ControlAssertionDefinition",
-		"FrameworkDefinition",
-		"ControlCrosswalk",
-		"AssessmentScope",
-		"ComplianceEvidenceReference",
-		"ControlAssertionAssessment",
-		"FrameworkControlAssessment",
-		"ComplianceReportManifest",
-		"DemoManifest",
-		"DemoScenarioDefinition",
-		"DemoStepResult",
-		"DemoScenarioResult",
+// TestPhase1Architecture_ModelsAreProtocolOwned verifies that Phase 1 closes
+// the untyped-model gap through protocol-owned records rather than adding
+// parallel models to the legacy compliance package.
+func TestPhase1Architecture_ModelsAreProtocolOwned(t *testing.T) {
+	tests := []struct {
+		name     string
+		message  proto.Message
+		fullName string
+	}{
+		{name: "control assertion definition", message: &compliancev1.ControlAssertionDefinition{}, fullName: "g8e.compliance.v1.ControlAssertionDefinition"},
+		{name: "framework definition", message: &compliancev1.FrameworkDefinition{}, fullName: "g8e.compliance.v1.FrameworkDefinition"},
+		{name: "control crosswalk", message: &compliancev1.ControlCrosswalk{}, fullName: "g8e.compliance.v1.ControlCrosswalk"},
+		{name: "assessment scope", message: &compliancev1.AssessmentScope{}, fullName: "g8e.compliance.v1.AssessmentScope"},
+		{name: "evidence reference", message: &compliancev1.ComplianceEvidenceReference{}, fullName: "g8e.compliance.v1.ComplianceEvidenceReference"},
+		{name: "assertion assessment", message: &compliancev1.ControlAssertionAssessment{}, fullName: "g8e.compliance.v1.ControlAssertionAssessment"},
+		{name: "control assessment", message: &compliancev1.FrameworkControlAssessment{}, fullName: "g8e.compliance.v1.FrameworkControlAssessment"},
+		{name: "report manifest", message: &compliancev1.ComplianceReportManifest{}, fullName: "g8e.compliance.v1.ComplianceReportManifest"},
 	}
 
-	// Enumerate exported symbols declared in this package via go doc.
-	out, err := exec.Command("go", "doc", "-all", ".").Output()
-	require.NoError(t, err, "go doc -all must succeed for the compliance package")
-	docText := string(out)
-
-	var present []string
-	for _, name := range plannedTypes {
-		if strings.Contains(docText, "type "+name+" ") || strings.Contains(docText, "type "+name+" struct") {
-			present = append(present, name)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.fullName, string(tt.message.ProtoReflect().Descriptor().FullName()), phase0RegressionAfterFix)
+		})
 	}
-
-	assert.Empty(t, present,
-		phase0RegressionBeforeFix+": planned typed models must not exist yet in Phase 0; "+
-			"they are introduced in Phase 1. Found already-present types: %v", present)
 }

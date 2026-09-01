@@ -381,6 +381,8 @@ type FrameworkControlDefinition struct {
 	ApplicabilityRules []string               `protobuf:"bytes,4,rep,name=applicability_rules,json=applicabilityRules,proto3" json:"applicability_rules,omitempty"`
 	Responsibility     string                 `protobuf:"bytes,5,opt,name=responsibility,proto3" json:"responsibility,omitempty"`
 	SourceReference    string                 `protobuf:"bytes,6,opt,name=source_reference,json=sourceReference,proto3" json:"source_reference,omitempty"`
+	SupportStatus      string                 `protobuf:"bytes,7,opt,name=support_status,json=supportStatus,proto3" json:"support_status,omitempty"`
+	SupportRationale   string                 `protobuf:"bytes,8,opt,name=support_rationale,json=supportRationale,proto3" json:"support_rationale,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -453,6 +455,20 @@ func (x *FrameworkControlDefinition) GetResponsibility() string {
 func (x *FrameworkControlDefinition) GetSourceReference() string {
 	if x != nil {
 		return x.SourceReference
+	}
+	return ""
+}
+
+func (x *FrameworkControlDefinition) GetSupportStatus() string {
+	if x != nil {
+		return x.SupportStatus
+	}
+	return ""
+}
+
+func (x *FrameworkControlDefinition) GetSupportRationale() string {
+	if x != nil {
+		return x.SupportRationale
 	}
 	return ""
 }
@@ -2052,7 +2068,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12M\n" +
 	"\n" +
 	"assertions\x18\x04 \x03(\v2-.g8e.compliance.v1.ControlAssertionDefinitionR\n" +
-	"assertions\"\xf7\x01\n" +
+	"assertions\"\xcb\x02\n" +
 	"\x1aFrameworkControlDefinition\x12\x1d\n" +
 	"\n" +
 	"control_id\x18\x01 \x01(\tR\tcontrolId\x12\x14\n" +
@@ -2060,7 +2076,9 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12/\n" +
 	"\x13applicability_rules\x18\x04 \x03(\tR\x12applicabilityRules\x12&\n" +
 	"\x0eresponsibility\x18\x05 \x01(\tR\x0eresponsibility\x12)\n" +
-	"\x10source_reference\x18\x06 \x01(\tR\x0fsourceReference\"\xca\x02\n" +
+	"\x10source_reference\x18\x06 \x01(\tR\x0fsourceReference\x12%\n" +
+	"\x0esupport_status\x18\a \x01(\tR\rsupportStatus\x12+\n" +
+	"\x11support_rationale\x18\b \x01(\tR\x10supportRationale\"\xca\x02\n" +
 	"\x13FrameworkDefinition\x12!\n" +
 	"\fframework_id\x18\x01 \x01(\tR\vframeworkId\x12+\n" +
 	"\x11framework_version\x18\x02 \x01(\tR\x10frameworkVersion\x12\x14\n" +

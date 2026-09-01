@@ -65,7 +65,7 @@ func validFramework() *compliancev1.FrameworkDefinition {
 		CatalogSha256:    validSHA256,
 		EffectiveDate:    "2026-06-24",
 		Controls: []*compliancev1.FrameworkControlDefinition{
-			{ControlId: "KSI-MLA-07", Title: "Protecting Logs", Description: "Protect audit information.", Responsibility: "shared", SourceReference: "CR26"},
+			{ControlId: "KSI-MLA-07", Title: "Protecting Logs", Description: "Protect audit information.", Responsibility: "shared", SourceReference: "CR26", SupportStatus: "mapped", SupportRationale: "A reviewed crosswalk maps this control to the initial assertion catalog."},
 		},
 	}
 }
@@ -103,6 +103,16 @@ func TestValidateAssertionCatalogRejectsInvalidRecords(t *testing.T) {
 		{name: "invalid responsibility", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].Responsibility = "vendor" }},
 		{name: "unknown evidence level", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].MinimumEvidenceLevel = "L9" }},
 		{name: "unknown missing evidence policy", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].MissingEvidencePolicy = "pass" }},
+		{name: "missing action classes", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].ApplicableActionClasses = nil }},
+		{name: "missing applicable arms", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].ApplicableArms = nil }},
+		{name: "missing grader references", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].RequiredGraderRefs = nil }},
+		{name: "missing verifier references", mutate: func(c *compliancev1.ControlAssertionCatalog) { c.Assertions[0].RequiredVerifierRefs = nil }},
+		{name: "duplicate component scope", mutate: func(c *compliancev1.ControlAssertionCatalog) {
+			c.Assertions[0].ComponentScope = append(c.Assertions[0].ComponentScope, c.Assertions[0].ComponentScope[0])
+		}},
+		{name: "duplicate evidence type", mutate: func(c *compliancev1.ControlAssertionCatalog) {
+			c.Assertions[0].RequiredEvidenceTypes = append(c.Assertions[0].RequiredEvidenceTypes, c.Assertions[0].RequiredEvidenceTypes[0])
+		}},
 	}
 
 	for _, tt := range tests {
@@ -137,6 +147,30 @@ func TestValidateAssertionCatalogRejectsUnknownVerifierAndGraderVersions(t *test
 	}
 }
 
+func TestValidateFrameworkDefinitionRejectsMalformedDefinitions(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.FrameworkDefinition)
+	}{
+		{name: "malformed effective date", mutate: func(f *compliancev1.FrameworkDefinition) { f.EffectiveDate = "2026-13-40" }},
+		{name: "duplicate control", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls = append(f.Controls, f.Controls[0]) }},
+		{name: "invalid control responsibility", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].Responsibility = "vendor" }},
+		{name: "missing support status", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportStatus = "" }},
+		{name: "invalid support status", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportStatus = "planned" }},
+		{name: "missing support rationale", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportRationale = "" }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			framework := validFramework()
+			tt.mutate(framework)
+			err := catalog.ValidateFrameworkDefinition(framework)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+		})
+	}
+}
+
 func TestValidateCrosswalkRejectsUnknownAndInvalidReferences(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -146,7 +180,12 @@ func TestValidateCrosswalkRejectsUnknownAndInvalidReferences(t *testing.T) {
 		{name: "unknown framework version", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].FrameworkRef.Version = "unknown" }, want: constants.ErrUnsupportedFramework},
 		{name: "unknown control", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].ControlId = "KSI-UNKNOWN-01" }, want: constants.ErrUnresolvedReference},
 		{name: "unknown assertion", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].AssertionRefs[0].Id = "G8E-UNKNOWN-001" }, want: constants.ErrUnsupportedAssertion},
+		{name: "duplicate assertion reference", mutate: func(c *compliancev1.ControlCrosswalkCatalog) {
+			c.Mappings[0].AssertionRefs = append(c.Mappings[0].AssertionRefs, c.Mappings[0].AssertionRefs[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
 		{name: "invalid mapping type", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].MappingType = "equivalent" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "mismatched responsibility", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].Responsibility = "platform" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "insufficient evidence level", mutate: func(c *compliancev1.ControlCrosswalkCatalog) { c.Mappings[0].RequiredEvidenceLevel = "L1" }, want: constants.ErrInvalidEvidenceGraph},
 	}
 
 	for _, tt := range tests {
@@ -158,6 +197,16 @@ func TestValidateCrosswalkRejectsUnknownAndInvalidReferences(t *testing.T) {
 			assert.ErrorIs(t, err, tt.want)
 		})
 	}
+}
+
+func TestValidateCrosswalkRejectsMappingToUnsupportedControl(t *testing.T) {
+	framework := validFramework()
+	framework.Controls[0].SupportStatus = "unsupported"
+	framework.Controls[0].SupportRationale = "No reviewed assertion mapping exists."
+
+	err := catalog.ValidateCrosswalkCatalog(validCrosswalk(), validAssertionCatalog(), framework)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
 func TestValidateEvidenceReferenceRejectsUnsafeAndCrossScopePaths(t *testing.T) {
@@ -186,8 +235,21 @@ func TestValidateEvidenceReferenceRejectsUnsafeAndCrossScopePaths(t *testing.T) 
 	}{
 		{name: "absolute bundle path", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.BundlePath = "/tmp/receipt.json" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "escaping bundle path", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.BundlePath = "evidence/../../receipt.json" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "parent bundle path", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.BundlePath = constants.PathParentDir }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "drive-qualified bundle path", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.BundlePath = "C:/receipt.json" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "cross scope reference", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.ScopeId = "scope-2" }, want: constants.ErrEvidenceScopeMismatch},
 		{name: "malformed artifact digest", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.Sha256 = "bad" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "unknown verifier version", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.VerifierVersion = "2.0.0" }, want: constants.ErrUnsupportedVerifier},
+		{name: "invalid verification status", mutate: func(r *compliancev1.ComplianceEvidenceReference) { r.VerificationStatus = "trusted" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "verification before production", mutate: func(r *compliancev1.ComplianceEvidenceReference) {
+			r.VerifiedAt = timestamppb.New(r.ProducedAt.AsTime().Add(-time.Second))
+		}, want: constants.ErrInvalidEvidenceGraph},
+		{name: "incomplete encryption metadata", mutate: func(r *compliancev1.ComplianceEvidenceReference) {
+			r.Encryption = &compliancev1.EvidenceEncryptionMetadata{Algorithm: "AES-256-GCM"}
+		}, want: constants.ErrInvalidEvidenceGraph},
+		{name: "malformed encrypted plaintext digest", mutate: func(r *compliancev1.ComplianceEvidenceReference) {
+			r.Encryption = &compliancev1.EvidenceEncryptionMetadata{Algorithm: "AES-256-GCM", KeyId: "key-1", AuthorizationScope: "assessor", PlaintextSha256: "bad", AuthenticatedMetadataSha256: validSHA256}
+		}, want: constants.ErrInvalidEvidenceGraph},
 	}
 
 	for _, tt := range tests {

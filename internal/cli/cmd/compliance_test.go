@@ -92,37 +92,23 @@ func writeTestOverlays(t *testing.T, dir string, overlayCat *compliance.OverlayC
 }
 
 // TestComplianceCmd_Structure asserts that complianceCmd() is non-nil and has
-// the expected "export", "ksi", "ksi-history", and "overlay" subcommands.
+// the expected "ksi", "ksi-history", and "overlay" subcommands.
 func TestComplianceCmd_Structure(t *testing.T) {
 	cmd := complianceCmd()
 	require.NotNil(t, cmd)
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 4)
+	assert.Len(t, subcommands, 3)
 
-	names := make(map[string]bool, 4)
+	names := make(map[string]bool, 3)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
-	assert.True(t, names["export"], "compliance should have 'export' subcommand")
+	assert.False(t, names["export"], "compliance should not retain the superseded 'export' subcommand")
 	assert.True(t, names["ksi"], "compliance should have 'ksi' subcommand")
 	assert.True(t, names["ksi-history"], "compliance should have 'ksi-history' subcommand")
 	assert.True(t, names["overlay"], "compliance should have 'overlay' subcommand")
-}
-
-// TestComplianceExportCmd_FileSvcFactoryError asserts that the export subcommand
-// wraps fileSvcFactory errors with ErrFileServiceInit.
-func TestComplianceExportCmd_FileSvcFactoryError(t *testing.T) {
-	cmd := complianceExportCmdWithConfig(failingFileSvcFactory(errFactory))
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
-	assert.ErrorIs(t, err, errFactory)
 }
 
 // TestComplianceKSICmd_FileSvcFactoryError asserts that the ksi subcommand
@@ -151,21 +137,6 @@ func TestComplianceKSIHistoryCmd_FileSvcFactoryError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
-}
-
-// TestComplianceExportCmd_InvalidFormat asserts that a non-"oscal" format
-// returns a validation error before touching fileSvcFactory.
-func TestComplianceExportCmd_InvalidFormat(t *testing.T) {
-	cmd := complianceExportCmdWithConfig(failingFileSvcFactory(errFactory))
-	cmd.Flags().Set("format", "xml")
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
-	assert.Contains(t, err.Error(), "xml")
 }
 
 // TestComplianceOverlayCmd_FileSvcFactoryError asserts that the overlay subcommand
@@ -209,206 +180,6 @@ func TestValidateCertClass(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt.input, string(class))
 			}
-		})
-	}
-}
-
-// TestComplianceExportCmd_ValidationErrors tests flag and input validation for export.
-func TestComplianceExportCmd_ValidationErrors(t *testing.T) {
-	tests := []struct {
-		name        string
-		setup       func(t *testing.T, fileSvc fs.RuntimeFileService) (catalogPath, certClass string)
-		expectedErr error
-		errContains string
-	}{
-		{
-			name: "invalid certification class",
-			setup: func(t *testing.T, fileSvc fs.RuntimeFileService) (string, string) {
-				catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
-				return catPath, "INVALID"
-			},
-			expectedErr: constants.ErrValidationFailed,
-		},
-		{
-			name: "catalog file not found",
-			setup: func(t *testing.T, fileSvc fs.RuntimeFileService) (string, string) {
-				return constants.TestPathNonexistentCatalog, "C"
-			},
-			errContains: "load KSI catalog",
-		},
-		{
-			name: "invalid catalog missing version",
-			setup: func(t *testing.T, fileSvc fs.RuntimeFileService) (string, string) {
-				invalidCat := &compliance.KSICatalog{
-					Source: "test",
-					KSIs:   []compliance.KSI{{ID: "KSI-CMT-01", Title: "Test", Category: compliance.KSICategoryCMT}},
-				}
-				data, err := json.Marshal(invalidCat)
-				require.NoError(t, err)
-				require.NoError(t, fileSvc.WriteFile(context.Background(), constants.TestInvalidJSONFilename, data, constants.PermFilePublic))
-				return fileSvc.Resolve(constants.TestInvalidJSONFilename), "C"
-			},
-			expectedErr: constants.ErrKSICatalogInvalid,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fileSvc, _ := newCmdTestEnv(t)
-			catPath, certClass := tt.setup(t, fileSvc)
-
-			cmd := complianceExportCmdWithConfig(fileSvcFactoryFor(fileSvc))
-			require.NoError(t, cmd.Flags().Set("catalog", catPath))
-			require.NoError(t, cmd.Flags().Set("class", certClass))
-
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
-			cmd.SetErr(&buf)
-
-			err := cmd.RunE(cmd, nil)
-			require.Error(t, err)
-			if tt.expectedErr != nil {
-				assert.ErrorIs(t, err, tt.expectedErr)
-			}
-			if tt.errContains != "" {
-				assert.Contains(t, err.Error(), tt.errContains)
-			}
-		})
-	}
-}
-
-// TestComplianceExportCmd_StoresUnavailable asserts that export fails gracefully
-// with ErrReportStoreUnavailable when backend evaluation stores cannot be opened.
-func TestComplianceExportCmd_StoresUnavailable(t *testing.T) {
-	fileSvc, _ := newCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
-
-	// Block data directory with a plain file so SQLite / audit store cannot open.
-	dataDir := fileSvc.Resolve(constants.DataDirname)
-	require.NoError(t, os.RemoveAll(dataDir))
-	require.NoError(t, os.WriteFile(dataDir, []byte("blocking-file"), constants.PermFileReadOnly))
-
-	cmd := complianceExportCmdWithConfig(fileSvcFactoryFor(fileSvc))
-	require.NoError(t, cmd.Flags().Set("catalog", catPath))
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	runErr := cmd.RunE(cmd, nil)
-	require.Error(t, runErr)
-	assert.ErrorIs(t, runErr, constants.ErrReportStoreUnavailable)
-}
-
-// TestComplianceExportCmd_Success_DefaultOutDir asserts that compliance export
-// generates both OSCAL artifacts, writes them to the default output directory,
-// saves a KSI history snapshot, and prints execution summary.
-func TestComplianceExportCmd_Success_DefaultOutDir(t *testing.T) {
-	fileSvc, _ := newCmdTestEnv(t)
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	setupTestVaultWithKey(t, fileSvc, privKey)
-
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
-
-	cmd := complianceExportCmdWithConfig(fileSvcFactoryFor(fileSvc))
-	require.NoError(t, cmd.Flags().Set("catalog", catPath))
-	require.NoError(t, cmd.Flags().Set("class", "C"))
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err = cmd.RunE(cmd, nil)
-	require.NoError(t, err)
-
-	outStr := buf.String()
-	assert.Contains(t, outStr, "OSCAL artifacts written to:")
-	assert.Contains(t, outStr, constants.OSCALComponentDefFilename)
-	assert.Contains(t, outStr, constants.OSCALAssessmentResultsFilename)
-	assert.Contains(t, outStr, "KSI evaluation: 0 satisfied, 2 not satisfied (Class C)")
-
-	// Verify OSCAL component-definition artifact exists and parses.
-	ctx := context.Background()
-	compDefRel := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.OSCALComponentDefFilename)
-	exists, err := fileSvc.FileExists(ctx, compDefRel)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	compDefData, err := fileSvc.ReadFile(ctx, compDefRel)
-	require.NoError(t, err)
-	var compDef compliance.OSCALComponentDefinition
-	require.NoError(t, json.Unmarshal(compDefData, &compDef))
-	assert.NotEmpty(t, compDef.UUID)
-	assert.NotEmpty(t, compDef.Components)
-
-	// Verify OSCAL assessment-results artifact exists and parses.
-	assessRel := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.OSCALAssessmentResultsFilename)
-	exists, err = fileSvc.FileExists(ctx, assessRel)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	assessData, err := fileSvc.ReadFile(ctx, assessRel)
-	require.NoError(t, err)
-	var assessResults compliance.OSCALAssessmentResults
-	require.NoError(t, json.Unmarshal(assessData, &assessResults))
-	assert.NotEmpty(t, assessResults.UUID)
-	assert.NotEmpty(t, assessResults.Results)
-
-	// Verify KSI history store snapshot was written.
-	historyStore := newKSIHistoryStore(fileSvc)
-	snapshots, err := historyStore.ListSnapshots(ctx)
-	require.NoError(t, err)
-	assert.Len(t, snapshots, 1)
-}
-
-// TestComplianceExportCmd_Success_CustomOutDir asserts that compliance export
-// writes artifacts to the directory specified by the --out flag.
-func TestComplianceExportCmd_Success_CustomOutDir(t *testing.T) {
-	fileSvc, _ := newCmdTestEnv(t)
-	catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
-
-	cmd := complianceExportCmdWithConfig(fileSvcFactoryFor(fileSvc))
-	require.NoError(t, cmd.Flags().Set("catalog", catPath))
-	require.NoError(t, cmd.Flags().Set("out", constants.TestCustomComplianceOutDir))
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	compDefRel := filepath.Join(constants.TestCustomComplianceOutDir, constants.OSCALComponentDefFilename)
-	exists, err := fileSvc.FileExists(ctx, compDefRel)
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	assessRel := filepath.Join(constants.TestCustomComplianceOutDir, constants.OSCALAssessmentResultsFilename)
-	exists, err = fileSvc.FileExists(ctx, assessRel)
-	require.NoError(t, err)
-	assert.True(t, exists)
-}
-
-// TestComplianceExportCmd_CertClasses asserts export succeeds across all certification classes.
-func TestComplianceExportCmd_CertClasses(t *testing.T) {
-	classes := []string{"A", "B", "C", "D"}
-	for _, certClass := range classes {
-		t.Run("class "+certClass, func(t *testing.T) {
-			fileSvc, _ := newCmdTestEnv(t)
-			catPath := writeTestKSICatalog(t, fileSvc, constants.KSICatalogFilename)
-
-			cmd := complianceExportCmdWithConfig(fileSvcFactoryFor(fileSvc))
-			require.NoError(t, cmd.Flags().Set("catalog", catPath))
-			require.NoError(t, cmd.Flags().Set("class", certClass))
-
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
-			cmd.SetErr(&buf)
-
-			err := cmd.RunE(cmd, nil)
-			require.NoError(t, err)
-			assert.Contains(t, buf.String(), "Class "+certClass)
 		})
 	}
 }

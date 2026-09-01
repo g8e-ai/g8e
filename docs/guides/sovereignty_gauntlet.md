@@ -275,7 +275,7 @@ test -z "$(awk -F, '$4 == "FAIL" { print }' "${VERIFICATION}")"
 
 For a public integrity claim, inspect every `SKIPPED` row. Do not advertise a skipped check as covered. The current CSV verification pass checks commitment-chain structure, canonical commitment hashes, Auditor signatures on commitments, the Git root, mutation linkage, and receipt/commitment cross-links. It does not validate the receipt signature or final persistence attestation; the separate protocol verification in step 3.4 does that. `report all` verifies live stores and is not a complete verifier for the copied eval or campaign bundle.
 
-### 3.6 Generate KSI and OSCAL evidence
+### 3.6 Generate KSI evidence
 
 Run compliance evaluation against the same populated operator state:
 
@@ -284,16 +284,9 @@ docker exec g8e-operator /g8e compliance ksi \
   --class C \
   --catalog /docs/reference/ksi-catalog.json \
   > "${CAMPAIGN_DIR}/unified/ksi-result.json"
-docker exec g8e-operator /g8e compliance export \
-  --format oscal \
-  --class C \
-  --catalog /docs/reference/ksi-catalog.json
-docker cp g8e-operator:/root/.g8e/data/compliance/. "${CAMPAIGN_DIR}/unified/compliance/"
-test -s "${CAMPAIGN_DIR}/unified/compliance/component-definition.json"
-test -s "${CAMPAIGN_DIR}/unified/compliance/assessment-results.json"
 ```
 
-Report the measured satisfied/not-satisfied result and evidence anchors. A KSI result is evidence alignment, not FedRAMP authorization.
+Report the measured satisfied/not-satisfied result. A KSI result is evidence alignment, not FedRAMP authorization. The superseded flat OSCAL export is unavailable while proof-backed bundle generation is implemented.
 
 ## 4. Run the audience-specific visual demos
 
@@ -321,12 +314,10 @@ The verbose log is the durable source for quotes. For a separate presentation ru
 4. Destruction of the gateway audit vault is blocked at L1.
 5. The automatically appended KSI evidence row reports whether snapshot emission and verification passed.
 
-Copy compliance output from the FedRAMP gateway after the scenarios:
+Copy KSI output from the FedRAMP gateway after the scenarios:
 
 ```bash
 docker exec g8e-fedramp-gateway /g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json > "${CAMPAIGN_DIR}/fedramp/ksi-result.json"
-docker exec g8e-fedramp-gateway /g8e compliance export --format oscal --class C --catalog /docs/reference/ksi-catalog.json
-docker cp g8e-fedramp-gateway:/root/.g8e/data/compliance/. "${CAMPAIGN_DIR}/fedramp/compliance/"
 ```
 
 Do not claim that a blocked wipe proves the audit vault is impossible to tamper with. The measured result is that the declared request was rejected at L1 and did not reach the synthetic actuator in this run. Scenarios 2 and 4 now include an independent post-rejection verification step that checks the target state (operations log or audit vault DB) is still present and non-empty, proving the prohibited operation did not occur.

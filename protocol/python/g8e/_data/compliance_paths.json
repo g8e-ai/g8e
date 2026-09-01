@@ -9,6 +9,7 @@
     "ComplianceBundleAssertionsDirname": {"_go_const": "ComplianceBundleAssertionsDirname", "value": "assertions"},
     "ComplianceBundleAssertionCatalogFilename": {"_go_const": "ComplianceBundleAssertionCatalogFilename", "value": "assertion-catalog.json"},
     "ComplianceBundleCrosswalksDirname": {"_go_const": "ComplianceBundleCrosswalksDirname", "value": "crosswalks"},
+    "ComplianceBundleCrosswalkFilename": {"_go_const": "ComplianceBundleCrosswalkFilename", "value": "fedramp-nist-crosswalk.json"},
     "ComplianceBundleAssessmentsDirname": {"_go_const": "ComplianceBundleAssessmentsDirname", "value": "assessments"},
     "ComplianceBundleAssertionAssessmentsFilename": {"_go_const": "ComplianceBundleAssertionAssessmentsFilename", "value": "assertion-assessments.jsonl"},
     "ComplianceBundleControlAssessmentsFilename": {"_go_const": "ComplianceBundleControlAssessmentsFilename", "value": "control-assessments.jsonl"},

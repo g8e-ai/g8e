@@ -213,10 +213,9 @@ Each list or export record includes searchable transaction, investigation, ident
 
 ### 5b. Export FedRAMP 20x Compliance Evidence
 
-For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state and emits machine-readable OSCAL artifacts:
+For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state:
 
 - `g8e compliance ksi --class C` - Evaluate KSIs against live state and print the result set as JSON
-- `g8e compliance export --format oscal --class C` - Export OSCAL component-definition and assessment-results JSON artifacts
 - `g8e compliance ksi-history --ksi KSI-CMT-01` - Read persisted KSI evaluation history snapshots (optionally filter by KSI ID)
 - `g8e compliance overlay --overlay-dir docs/reference` - Load and validate COSAiS overlay catalogs against the KSI catalog
 

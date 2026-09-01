@@ -31,126 +31,17 @@ import (
 func complianceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compliance",
-		Short: "FedRAMP 20x KSI evaluation and OSCAL export",
-		Long: `FedRAMP 20x Key Security Indicator (KSI) evaluation and OSCAL
-machine-readable evidence export. Evaluates g8e's live state against
-CR26 KSIs and emits OSCAL component-definition and assessment-results
-artifacts. Persists KSI evaluation snapshots for historical metrics.`,
+		Short: "FedRAMP 20x KSI evaluation and history",
+		Long: `FedRAMP 20x Key Security Indicator (KSI) evaluation, historical
+snapshots, and COSAiS overlay inspection. Evaluates g8e's live state against
+CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
 	}
 
 	cmd.AddCommand(
-		complianceExportCmdWithConfig(newFileSvc),
 		complianceKSICmdWithConfig(newFileSvc),
 		complianceKSIHistoryCmdWithConfig(newFileSvc),
 		complianceOverlayCmdWithConfig(newFileSvc),
 	)
-
-	return cmd
-}
-
-// complianceExportCmdWithConfig creates the `compliance export` subcommand
-// with injectable dependencies for testing.
-func complianceExportCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
-	var format string
-	var class string
-	var outDir string
-	var catalogPath string
-
-	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export OSCAL compliance artifacts",
-		Long: `Export OSCAL component-definition and assessment-results JSON artifacts
-from the KSI catalog and g8e's live evaluation state. Both artifacts are
-always emitted; the command fails if the audit store or ledger are
-unavailable for KSI evaluation. Output is written to the specified
-directory (default: .g8e/data/compliance/).`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if format != "oscal" {
-				return fmt.Errorf("%w: unsupported format: %s (only 'oscal' is supported)", constants.ErrValidationFailed, format)
-			}
-
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
-			}
-
-			fileSvc, err := fileSvcFactory("", slog.Default())
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
-			}
-
-			cat, err := loadKSICatalog(catalogPath)
-			if err != nil {
-				return err
-			}
-
-			certClass, err := validateCertClass(class)
-			if err != nil {
-				return err
-			}
-			exporter := compliance.NewOSCALExporter(cat)
-
-			compDef, err := exporter.GenerateComponentDefinition()
-			if err != nil {
-				return fmt.Errorf("compliance: generate component-definition: %w", err)
-			}
-
-			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass)
-			if resultSet == nil {
-				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
-			}
-
-			historyStore := newKSIHistoryStore(fileSvc)
-			if err := saveKSIHistorySnapshot(ctx, historyStore, resultSet); err != nil {
-				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
-			}
-
-			assessResults, err := exporter.GenerateAssessmentResults(resultSet)
-			if err != nil {
-				return fmt.Errorf("compliance: generate assessment-results: %w", err)
-			}
-
-			// Resolve output directory.
-			relOutDir := outDir
-			if relOutDir == "" {
-				relOutDir = filepath.Join(constants.DataDirname, constants.ComplianceDirname)
-			}
-
-			if err := fileSvc.MkdirAll(ctx, relOutDir, constants.PermDirStandard); err != nil {
-				return fmt.Errorf("compliance: create output directory: %w", err)
-			}
-
-			compDefPath := filepath.Join(relOutDir, constants.OSCALComponentDefFilename)
-			compDefJSON, err := json.MarshalIndent(compDef, "", "  ")
-			if err != nil {
-				return fmt.Errorf("compliance: marshal component-definition: %w", err)
-			}
-			if err := fileSvc.WriteFile(ctx, compDefPath, compDefJSON, constants.PermFilePublic); err != nil {
-				return fmt.Errorf("compliance: write component-definition: %w", err)
-			}
-
-			assessPath := filepath.Join(relOutDir, constants.OSCALAssessmentResultsFilename)
-			assessJSON, err := json.MarshalIndent(assessResults, "", "  ")
-			if err != nil {
-				return fmt.Errorf("compliance: marshal assessment-results: %w", err)
-			}
-			if err := fileSvc.WriteFile(ctx, assessPath, assessJSON, constants.PermFilePublic); err != nil {
-				return fmt.Errorf("compliance: write assessment-results: %w", err)
-			}
-
-			cmd.Printf("OSCAL artifacts written to: %s\n", fileSvc.Resolve(relOutDir))
-			cmd.Printf("  %s\n", constants.OSCALComponentDefFilename)
-			cmd.Printf("  %s\n", constants.OSCALAssessmentResultsFilename)
-			cmd.Printf("KSI evaluation: %d satisfied, %d not satisfied (Class %s)\n",
-				resultSet.SatisfiedCount(), resultSet.NotSatisfiedCount(), class)
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&format, "format", "oscal", "Output format (only 'oscal' supported)")
-	cmd.Flags().StringVar(&class, "class", "C", "FedRAMP 20x certification class (A, B, C, D)")
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory (default: .g8e/data/compliance/)")
-	cmd.Flags().StringVar(&catalogPath, "catalog", constants.DefaultKSICatalogPath, "Path to KSI catalog JSON file")
 
 	return cmd
 }

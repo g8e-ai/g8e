@@ -9,7 +9,8 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
+	"path"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,18 +47,15 @@ func TestPhase0Demo_ScenarioResultIsPrivateStringOnlyStruct(t *testing.T) {
 		metrics: "L1 doctrine blocks rm -rf /var/cloudsvc",
 	}
 
-	// The struct serializes to exactly four string fields and nothing else.
+	// The struct has exactly four unexported string fields and nothing else.
 	// No typed evidence, no receipts, no state observations, no assertion refs.
-	raw, err := json.Marshal(r)
-	require.NoError(t, err)
-
-	var fields map[string]any
-	require.NoError(t, json.Unmarshal(raw, &fields))
-
-	assert.Len(t, fields, 0,
-		demoPhase0RegressionBeforeFix+
-			": scenarioResult has no exported JSON fields; it is a private string-only struct "+
-			"with no typed evidence payload. Current fields: %+v", r)
+	resultType := reflect.TypeOf(r)
+	assert.Equal(t, 4, resultType.NumField(), demoPhase0RegressionBeforeFix)
+	for i := 0; i < resultType.NumField(); i++ {
+		field := resultType.Field(i)
+		assert.Equal(t, reflect.String, field.Type.Kind(), demoPhase0RegressionBeforeFix)
+		assert.False(t, field.IsExported(), demoPhase0RegressionBeforeFix)
+	}
 }
 
 // TestPhase0Demo_NoTypedEvidencePersistedAfterScenarioRun documents that
@@ -86,9 +84,9 @@ func TestPhase0Demo_NoTypedEvidencePersistedAfterScenarioRun(t *testing.T) {
 	// compliance evidence tree. No such tree exists today.
 	candidateRelPaths := []string{
 		constants.ComplianceReportFilename,
-		"evidence/demos/scenario-results.jsonl",
-		"evidence/demos/manifests.jsonl",
-		"assessments/assertion-assessments.jsonl",
+		path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleDemoEvidenceDirname, constants.ComplianceBundleDemoResultsFilename),
+		path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleDemoEvidenceDirname, constants.ComplianceBundleDemoManifestsFilename),
+		path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename),
 	}
 
 	for _, rel := range candidateRelPaths {

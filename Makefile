@@ -685,7 +685,8 @@ validate-doctrines:
 			python3 -m json.tool "$$file" > /dev/null || exit 1; \
 		fi \
 	done
-	@echo "All doctrine files are valid JSON."
+	@go run ./internal/tools/doctrine_validator
+	@echo "All doctrine files and compliance references are valid."
 
 .PHONY: validate-cosais
 validate-cosais:

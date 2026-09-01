@@ -57,6 +57,8 @@ message FrameworkControlDefinition {
   repeated string applicability_rules = 4;
   string responsibility = 5;
   string source_reference = 6;
+  string support_status = 7;
+  string support_rationale = 8;
 }
 
 message FrameworkDefinition {

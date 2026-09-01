@@ -539,15 +539,11 @@ The typed KSI catalog (`docs/reference/ksi-catalog.json`) defines 31 KSIs across
 
 Machine-based resources validate at least every 7 days; non-machine resources at least every 3 months (PVA standard, RFC-0017). The evaluator checks staleness and fails closed for Class C if a KSI exceeds its validation cycle.
 
-### OSCAL Evidence Export
+### Compliance evidence commands
 
-The OSCAL exporter (`internal/services/compliance/oscal.go`) generates machine-readable evidence packages:
-
-- **Component Definition**: g8e platform component with control implementations grouped by KSI category.
-- **Assessment Results**: Per-KSI observations and findings with evidence anchors linking to receipt IDs, ledger commit hashes, and LFAA execution IDs.
+The OSCAL model and renderer remain in `internal/services/compliance/oscal.go`, but the legacy flat live-state export command is removed because it does not produce content-addressed, scope-bound evidence. Proof-backed report bundle generation is not yet available.
 
 CLI commands:
-- `g8e compliance export --format oscal --class C` generates OSCAL JSON artifacts.
 - `g8e compliance ksi --class C` evaluates KSIs and prints the result set as JSON.
 - `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
@@ -727,10 +723,10 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **MCP Gateway ThreatScanner** | `internal/services/mcp/gateway.go` | Threat scanning delegation and audit event recording |
 | **KSI Catalog** | `docs/reference/ksi-catalog.json` | Typed per-KSI model with 31 KSIs across 10 categories |
 | **KSI Evaluator** | `internal/services/compliance/ksi_evaluator.go` | Binary KSI status derivation from live audit state |
-| **OSCAL Exporter** | `internal/services/compliance/oscal.go` | OSCAL component-definition and assessment-results generation |
+| **OSCAL Renderer Model** | `internal/services/compliance/oscal.go` | Typed OSCAL component-definition and assessment-results generation retained for the proof-backed bundle renderer |
 | **KSI History Store** | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
 | **COSAiS Overlay Loader** | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
-| **Compliance CLI** | `internal/cli/cmd/compliance.go` | `compliance export`, `ksi`, `ksi-history`, and `overlay` subcommands |
+| **Compliance CLI** | `internal/cli/cmd/compliance.go` | `ksi`, `ksi-history`, and `overlay` subcommands |
 | **Log Service** | `internal/services/logging/log_service.go` | Platform logging lifecycle, streaming file append and read |
 | **Enrollment Coordinator** | `internal/cli/auth/enrollment.go` | CLI enrollment state machine for browser and headless flows |
 | **CLI Recovery Controller** | `internal/services/gateway/cli_recovery_controller.go` | CLI recovery approval via browser and mTLS endpoints |
@@ -751,7 +747,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment ordering, signatures and structured columns, receipt signatures and persistence attestations, receipt cross-links, mutation linkage, and Git Merkle roots |
 | **Logging Tests** | `internal/services/logging/*_test.go` | LogService, handler, formatting, and stream file tests |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
-| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (92.7% coverage) |
+| **Compliance Tests** | `internal/services/compliance/*_test.go`, `internal/services/compliance/catalog/*_test.go` | KSI model, evaluator, OSCAL model, history store, overlay loader, canonical catalogs, crosswalk contracts, assessment validation, and Phase 0 regressions |
 
 ---
 

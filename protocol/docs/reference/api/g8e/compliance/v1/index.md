@@ -379,6 +379,8 @@
 | applicability_rules | [string](#string) | repeated |  |
 | responsibility | [string](#string) |  |  |
 | source_reference | [string](#string) |  |  |
+| support_status | [string](#string) |  |  |
+| support_rationale | [string](#string) |  |  |
 
 
 

@@ -552,6 +552,7 @@ const (
 	ComplianceBundleAssertionsDirname            = "assertions"
 	ComplianceBundleAssertionCatalogFilename     = "assertion-catalog.json"
 	ComplianceBundleCrosswalksDirname            = "crosswalks"
+	ComplianceBundleCrosswalkFilename            = "fedramp-nist-crosswalk.json"
 	ComplianceBundleAssessmentsDirname           = "assessments"
 	ComplianceBundleAssertionAssessmentsFilename = "assertion-assessments.jsonl"
 	ComplianceBundleControlAssessmentsFilename   = "control-assessments.jsonl"
