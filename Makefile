@@ -217,6 +217,7 @@ python-build:
 	@echo "Building Python protocol package..."
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
+	@cp -r protocol/constants/compliance protocol/python/g8e/_data/
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"

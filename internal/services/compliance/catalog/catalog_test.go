@@ -116,6 +116,27 @@ func TestValidateAssertionCatalogRejectsInvalidRecords(t *testing.T) {
 	}
 }
 
+func TestValidateAssertionCatalogRejectsUnknownVerifierAndGraderVersions(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ControlAssertionDefinition)
+		want   error
+	}{
+		{name: "unknown verifier", mutate: func(a *compliancev1.ControlAssertionDefinition) { a.RequiredVerifierRefs[0].Version = "2.0.0" }, want: constants.ErrUnsupportedVerifier},
+		{name: "unknown grader", mutate: func(a *compliancev1.ControlAssertionDefinition) { a.RequiredGraderRefs[0].Version = "2.0.0" }, want: constants.ErrUnsupportedGrader},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			candidate := validAssertionCatalog()
+			tt.mutate(candidate.Assertions[0])
+			err := catalog.ValidateAssertionCatalog(candidate)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
 func TestValidateCrosswalkRejectsUnknownAndInvalidReferences(t *testing.T) {
 	tests := []struct {
 		name   string

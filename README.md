@@ -19,7 +19,7 @@ g8e is a sovereign execution platform that delivers frontier AI reasoning to the
 > [!NOTE]
 > I designed and built g8e independently, using AI coding agents as implementation collaborators. Its architecture distills 30 years of systems integration and data protection experience into a platform that enables AI to operate with the context, discipline, and safeguards of an experienced systems engineer.
 >
-> I am available for W-2 roles, contract engineering and architecture work, consulting engagements, and paid pilot deployments. Lateralus Labs is a SAM.gov-registered, certified Veteran-Owned Small Business (VOSB) and can accept Government Purchase Card engagements. I am also open to strategic conversations about investment, acquisition of g8e, or an acqui-hire. To discuss a role, project, pilot, or partnership, contact [hello@lateraluslabs.com](mailto:hello@lateraluslabs.com).
+> I am available for W-2 roles, contract engineering and architecture work, consulting engagements, and paid pilot deployments. Lateralus Labs is a SAM.gov-registered, certified Veteran-Owned Small Business (VOSB) and can accept Government Purchase Card engagements. I am also open to strategic conversations about investment, acquisition of g8e, or an acqui-hire. To discuss a role, project, pilot, or partnership, contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com).
 
 ## The Sovereignty Inversion
 

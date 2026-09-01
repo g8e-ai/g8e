@@ -28,6 +28,8 @@ var validationCycles = []string{"7d", "90d"}
 var missingEvidencePolicies = []string{"unverifiable", "customer_attestation_required", "not_applicable"}
 var verificationStatuses = []string{"verified", "invalid", "unverifiable", "unsupported"}
 var freshnessStatuses = []string{"fresh", "stale", "incomplete", "not_applicable"}
+var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
+var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", "compliance_bundle@1.0.0"}
 
 func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) error {
 	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Assertions) == 0 {
@@ -57,6 +59,16 @@ func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) err
 		}
 		if err := validateVersionedReferences(assertion.RequiredVerifierRefs); err != nil {
 			return fmt.Errorf("%w: assertion %s verifier references: %v", constants.ErrInvalidEvidenceGraph, key, err)
+		}
+		for _, reference := range assertion.RequiredGraderRefs {
+			if !contains(supportedGraders, referenceKey(reference)) {
+				return fmt.Errorf("%w: %s", constants.ErrUnsupportedGrader, referenceKey(reference))
+			}
+		}
+		for _, reference := range assertion.RequiredVerifierRefs {
+			if !contains(supportedVerifiers, referenceKey(reference)) {
+				return fmt.Errorf("%w: %s", constants.ErrUnsupportedVerifier, referenceKey(reference))
+			}
 		}
 	}
 	return nil
@@ -193,15 +205,21 @@ func ValidateEvidenceReference(reference *compliancev1.ComplianceEvidenceReferen
 	return nil
 }
 
-func ValidateAssertionAssessment(assessment *compliancev1.ControlAssertionAssessment) error {
+func ValidateAssertionAssessment(assessment *compliancev1.ControlAssertionAssessment, assertions *compliancev1.ControlAssertionCatalog) error {
 	if assessment == nil || assessment.AssessmentId == "" || assessment.ScopeId == "" || assessment.AssertionRef == nil || assessment.VerifierRef == nil || assessment.EvaluatedAt == nil || assessment.EvaluatedAt.CheckValid() != nil {
 		return fmt.Errorf("%w: assertion assessment is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	if FindAssertion(assertions, assessment.AssertionRef.Id, assessment.AssertionRef.Version) == nil {
+		return fmt.Errorf("%w: %s", constants.ErrUnsupportedAssertion, referenceKey(assessment.AssertionRef))
+	}
+	if !contains(supportedVerifiers, referenceKey(assessment.VerifierRef)) {
+		return fmt.Errorf("%w: %s", constants.ErrUnsupportedVerifier, referenceKey(assessment.VerifierRef))
 	}
 	if !contains(assessmentStatuses, assessment.Status) || !contains(evidenceLevels, assessment.EvidenceLevel) || !contains(freshnessStatuses, assessment.FreshnessStatus) {
 		return fmt.Errorf("%w: assertion assessment has invalid semantics", constants.ErrInvalidEvidenceGraph)
 	}
-	if assessment.Status == "satisfied" && (len(assessment.EvidenceRefs) == 0 || assessment.FailureReason != "") {
-		return fmt.Errorf("%w: satisfied assertion assessment requires evidence and no failure", constants.ErrInvalidEvidenceGraph)
+	if assessment.Status == "satisfied" && (len(assessment.EvidenceRefs) == 0 || assessment.FailureReason != "" || assessment.FreshnessStatus != "fresh") {
+		return fmt.Errorf("%w: satisfied assertion assessment requires fresh evidence and no failure", constants.ErrInvalidEvidenceGraph)
 	}
 	if assessment.Status == "unverifiable" && assessment.FailureReason == "" {
 		return fmt.Errorf("%w: unverifiable assertion assessment requires a failure reason", constants.ErrInvalidEvidenceGraph)
@@ -209,15 +227,30 @@ func ValidateAssertionAssessment(assessment *compliancev1.ControlAssertionAssess
 	return nil
 }
 
-func ValidateControlAssessment(assessment *compliancev1.FrameworkControlAssessment) error {
+func ValidateControlAssessment(assessment *compliancev1.FrameworkControlAssessment, frameworks *compliancev1.FrameworkCatalog, crosswalks *compliancev1.ControlCrosswalkCatalog) error {
 	if assessment == nil || assessment.AssessmentId == "" || assessment.ScopeId == "" || assessment.FrameworkRef == nil || assessment.ControlId == "" || len(assessment.MappingRefs) == 0 {
 		return fmt.Errorf("%w: control assessment is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	framework := FindFramework(frameworks, assessment.FrameworkRef.Id, assessment.FrameworkRef.Version)
+	if framework == nil {
+		return fmt.Errorf("%w: %s", constants.ErrUnsupportedFramework, referenceKey(assessment.FrameworkRef))
+	}
+	if FindFrameworkControl(framework, assessment.ControlId) == nil {
+		return fmt.Errorf("%w: framework control %s", constants.ErrUnresolvedReference, assessment.ControlId)
+	}
+	for _, reference := range assessment.MappingRefs {
+		if FindCrosswalk(crosswalks, reference) == nil {
+			return fmt.Errorf("%w: crosswalk %s", constants.ErrUnresolvedReference, reference)
+		}
 	}
 	if !contains(assessmentStatuses, assessment.Status) || !contains(responsibilities, assessment.Responsibility) || !contains(evidenceLevels, assessment.EvidenceLevel) {
 		return fmt.Errorf("%w: control assessment has invalid semantics", constants.ErrInvalidEvidenceGraph)
 	}
 	if assessment.Status == "satisfied" && len(assessment.AssertionAssessmentRefs) == 0 {
 		return fmt.Errorf("%w: satisfied control assessment requires assertion assessments", constants.ErrInvalidEvidenceGraph)
+	}
+	if assessment.Status == "satisfied" && assessment.Responsibility == "customer" && len(assessment.CustomerAttestationRefs) == 0 {
+		return fmt.Errorf("%w: satisfied customer control requires attestation evidence", constants.ErrInvalidEvidenceGraph)
 	}
 	return nil
 }
@@ -234,11 +267,46 @@ func ValidateReportManifest(manifest *compliancev1.ComplianceReportManifest) err
 	if err := validateSHA256(manifest.ChecksumRoot); err != nil {
 		return err
 	}
-	if manifest.Signature.KeyId == "" || manifest.Signature.Algorithm == "" || manifest.Signature.Signature == "" {
+	return ValidateReportSignature(manifest.Signature)
+}
+
+func ValidateChecksumEntry(checksum *compliancev1.ChecksumEntry) error {
+	if checksum == nil {
+		return fmt.Errorf("%w: checksum entry is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if err := validateBundlePath(checksum.BundlePath); err != nil {
+		return err
+	}
+	return validateSHA256(checksum.Sha256)
+}
+
+func ValidateReportSignature(signature *compliancev1.ReportSignature) error {
+	if signature == nil || signature.KeyId == "" || signature.Algorithm == "" || signature.Signature == "" {
 		return fmt.Errorf("%w: report signature is incomplete", constants.ErrReportSignatureFailed)
 	}
-	if err := validateSHA256(manifest.Signature.SignedSha256); err != nil {
+	if err := validateSHA256(signature.SignedSha256); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrReportSignatureFailed, err)
+	}
+	return nil
+}
+
+func ValidateVerificationReport(report *compliancev1.ComplianceVerificationReport) error {
+	if report == nil || report.ReportId == "" || report.VerifiedAt == nil || report.VerifiedAt.CheckValid() != nil || report.VerifierId == "" || report.VerifierVersion == "" {
+		return fmt.Errorf("%w: verification report is incomplete", constants.ErrReportVerificationFailed)
+	}
+	if !contains(supportedVerifiers, versionedKey(report.VerifierId, report.VerifierVersion)) {
+		return fmt.Errorf("%w: %s", constants.ErrUnsupportedVerifier, versionedKey(report.VerifierId, report.VerifierVersion))
+	}
+	if err := validateSHA256(report.ReproducedChecksumRoot); err != nil {
+		return fmt.Errorf("%w: %v", constants.ErrReportVerificationFailed, err)
+	}
+	if report.Valid && len(report.Failures) != 0 || !report.Valid && len(report.Failures) == 0 {
+		return fmt.Errorf("%w: verification result and failures disagree", constants.ErrReportVerificationFailed)
+	}
+	for _, failure := range report.Failures {
+		if failure == nil || failure.Code == "" || failure.SubjectRef == "" || failure.Reason == "" {
+			return fmt.Errorf("%w: verification failure is incomplete", constants.ErrReportVerificationFailed)
+		}
 	}
 	return nil
 }
@@ -274,6 +342,18 @@ func FindFrameworkControl(framework *compliancev1.FrameworkDefinition, id string
 	for _, control := range framework.Controls {
 		if control.ControlId == id {
 			return control
+		}
+	}
+	return nil
+}
+
+func FindCrosswalk(catalog *compliancev1.ControlCrosswalkCatalog, id string) *compliancev1.ControlCrosswalk {
+	if catalog == nil {
+		return nil
+	}
+	for _, crosswalk := range catalog.Mappings {
+		if crosswalk.CrosswalkId == id {
+			return crosswalk
 		}
 	}
 	return nil

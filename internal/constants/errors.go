@@ -1176,6 +1176,7 @@ var (
 	ErrUnsupportedFramework  = errors.New("compliance: unsupported framework")
 	ErrUnsupportedAssertion  = errors.New("compliance: unsupported assertion")
 	ErrUnsupportedVerifier   = errors.New("compliance: unsupported verifier")
+	ErrUnsupportedGrader     = errors.New("compliance: unsupported grader")
 	ErrInvalidEvidenceGraph  = errors.New("compliance: invalid evidence graph")
 	ErrStaleEvidence         = errors.New("compliance: stale evidence")
 	ErrEvidenceScopeMismatch = errors.New("compliance: evidence scope mismatch")
