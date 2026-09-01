@@ -26,7 +26,7 @@ func defaultFedRAMPHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-runtime")
 }
 
-func fedRAMPDenyHarnessVerified(err error) bool {
+func fedRAMPBlockedHarnessVerified(err error) bool {
 	return err == nil
 }
 
@@ -45,37 +45,8 @@ func fedRAMPScenarioID(scenario string) (string, error) {
 	}
 }
 
-func loadFedRAMPScenarioDefinition(scenarioID string) (*compliancev1.DemoScenarioDefinition, error) {
-	assertions, frameworks, _, err := compliancecatalog.LoadCanonicalCatalogs()
-	if err != nil {
-		return nil, fmt.Errorf("load canonical compliance catalogs: %w", err)
-	}
-	scenarios, err := compliancecatalog.LoadDemoScenarioCatalog(assertions, frameworks)
-	if err != nil {
-		return nil, fmt.Errorf("load canonical demo scenario catalog: %w", err)
-	}
-	definition := compliancecatalog.FindDemoScenarioDefinition(scenarios, scenarioID, "1.0.0")
-	if definition == nil {
-		return nil, fmt.Errorf("%w: %s@1.0.0", constants.ErrUnresolvedReference, scenarioID)
-	}
-	return definition, nil
-}
-
 func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, metricsSummary string) *compliancev1.DemoScenarioResult {
-	return &compliancev1.DemoScenarioResult{
-		ResultId:             fmt.Sprintf("fedramp-run:%s:%s", startedAt.Format("20060102T150405Z"), definition.ScenarioId),
-		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
-		DemoId:               constants.DemosOrgFedRAMP,
-		ScopeId:              "fedramp-demo-scope",
-		RunId:                fmt.Sprintf("fedramp-run-%s", startedAt.Format("20060102T150405Z")),
-		StartedAt:            timestamppb.New(startedAt),
-		Status:               demoStatusPassed,
-		AssertionRefs:        cloneVersionedRefs(definition.AssertionRefs),
-		FrameworkControlRefs: cloneFrameworkControlRefs(definition.FrameworkControlRefs),
-		DisplayNumber:        definition.DisplayNumber,
-		Title:                definition.Title,
-		MetricsSummary:       metricsSummary,
-	}
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, "fedramp-demo-scope", metricsSummary)
 }
 
 func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
@@ -86,12 +57,16 @@ func newFedRAMPRevertScenarioResult(startedAt time.Time, definition *compliancev
 	return newFedRAMPScenarioResult(startedAt, definition, "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
 }
 
+func newFedRAMPEvidenceBlockScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, "L1 blocks vault wipe // audit vault remains intact")
+}
+
 func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	scenarioID, err := fedRAMPScenarioID(scenario)
 	if err != nil {
 		return nil, err
 	}
-	definition, err := loadFedRAMPScenarioDefinition(scenarioID)
+	definition, err := loadDemoScenarioDefinition(scenarioID)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +230,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		step2Completed := time.Now().UTC()
 		// The harness exits successfully only after it verifies that doctrine blocked
 		// the action. A nonzero exit means the expected rejection was not verified.
-		step2Verified := fedRAMPDenyHarnessVerified(harnessErr)
+		step2Verified := fedRAMPBlockedHarnessVerified(harnessErr)
 		if !step2Verified {
 			fmt.Println("  (fedramp-deny harness scenario failed)")
 			fmt.Println()
@@ -408,8 +383,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		}
 
 	case "4":
-		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
-			"L1 blocks vault wipe // audit vault remains intact")
+		startedAt := time.Now().UTC()
+		result = newFedRAMPEvidenceBlockScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")
@@ -423,8 +398,14 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Gateway Audit Vault Destruction Blocked")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-evidence-block-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
@@ -432,64 +413,67 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoPrintln("  L1 doctrine detects 'rm -rf /root/.g8e/data' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-evidence-block", "doctrine check")
-		if err := demoStep(ctx, demoDir, "fedramp-evidence-block via agent",
+		step2Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "fedramp-evidence-block via agent",
 			false,
 			harnessRun("fedramp-evidence-block", hcfg)...,
-		); err != nil {
+		)
+		step2Completed := time.Now().UTC()
+		step2Verified := fedRAMPBlockedHarnessVerified(harnessErr)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-evidence-block-step-2", "fedramp-evidence-block harness (L1 doctrine reject)", step2Started, step2Completed,
+			step2Verified, true, "agent harness fedramp-evidence-block"))
+		if !step2Verified {
 			fmt.Println("  (fedramp-evidence-block harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-evidence-block")
+			result.TransactionIds = append(result.TransactionIds, "fedramp-evidence-block-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-evidence-block", "AUDIT VAULT DESTRUCTION BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /root/.g8e/data' — CR-26 audit integrity violation detected at admission")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
+		step3Started := time.Now().UTC()
+		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
 			[]string{"docker", "compose", "exec", "-T", "gateway",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB}) {
+				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
+		step3Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-evidence-block-step-3", "independent state observation: audit vault present and non-empty",
+			step3Started, step3Completed, step3OK, true,
+			"docker compose exec gateway test -f && test -s audit vault DB"))
+		if !step3OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:gateway-audit-vault-intact")
 		}
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 4 — Audit vault destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
 			fmt.Println("         Independent verification confirms the audit vault DB is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Audit vault destruction blocked by L1 doctrine")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-evidence-block scenario result: %w", err)
 		}
 
 	default:
 		return nil, fmt.Errorf("%w: invalid scenario number for fedramp: %q (valid: 1-4)", constants.ErrNotFound, scenario)
 	}
 	return result, nil
-}
-
-// cloneVersionedRefs returns a deep copy of the given versioned references so
-// callers cannot mutate the package-level canonical slices.
-func cloneVersionedRefs(refs []*compliancev1.VersionedReference) []*compliancev1.VersionedReference {
-	clone := make([]*compliancev1.VersionedReference, len(refs))
-	for i, ref := range refs {
-		clone[i] = &compliancev1.VersionedReference{Id: ref.Id, Version: ref.Version}
-	}
-	return clone
-}
-
-// cloneFrameworkControlRefs returns a deep copy of the given framework control
-// references so callers cannot mutate the package-level canonical slices.
-func cloneFrameworkControlRefs(refs []*compliancev1.FrameworkControlReference) []*compliancev1.FrameworkControlReference {
-	clone := make([]*compliancev1.FrameworkControlReference, len(refs))
-	for i, ref := range refs {
-		clone[i] = &compliancev1.FrameworkControlReference{
-			FrameworkRef: &compliancev1.VersionedReference{Id: ref.FrameworkRef.Id, Version: ref.FrameworkRef.Version},
-			ControlId:    ref.ControlId,
-		}
-	}
-	return clone
 }
 
 // buildDemoStepResult constructs a typed DemoStepResult from the step execution

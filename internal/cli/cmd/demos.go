@@ -24,9 +24,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -1317,6 +1319,62 @@ func newDemoScenarioResult(number, title, status, metrics string) *compliancev1.
 		Status:         status,
 		MetricsSummary: metrics,
 	}
+}
+
+func loadDemoScenarioDefinition(scenarioID string) (*compliancev1.DemoScenarioDefinition, error) {
+	assertions, frameworks, _, err := compliancecatalog.LoadCanonicalCatalogs()
+	if err != nil {
+		return nil, fmt.Errorf("load canonical compliance catalogs: %w", err)
+	}
+	scenarios, err := compliancecatalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	if err != nil {
+		return nil, fmt.Errorf("load canonical demo scenario catalog: %w", err)
+	}
+	definition := compliancecatalog.FindDemoScenarioDefinition(scenarios, scenarioID, "1.0.0")
+	if definition == nil {
+		return nil, fmt.Errorf("%w: %s@1.0.0", constants.ErrUnresolvedReference, scenarioID)
+	}
+	return definition, nil
+}
+
+func newDemoEvidenceScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, demoID, scopeID, metricsSummary string) *compliancev1.DemoScenarioResult {
+	return &compliancev1.DemoScenarioResult{
+		ResultId:             fmt.Sprintf("%s-run:%s:%s", demoID, startedAt.Format("20060102T150405Z"), definition.ScenarioId),
+		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
+		DemoId:               demoID,
+		ScopeId:              scopeID,
+		RunId:                fmt.Sprintf("%s-run-%s", demoID, startedAt.Format("20060102T150405Z")),
+		StartedAt:            timestamppb.New(startedAt),
+		Status:               demoStatusPassed,
+		AssertionRefs:        cloneVersionedRefs(definition.AssertionRefs),
+		FrameworkControlRefs: cloneFrameworkControlRefs(definition.FrameworkControlRefs),
+		DisplayNumber:        definition.DisplayNumber,
+		Title:                definition.Title,
+		MetricsSummary:       metricsSummary,
+	}
+}
+
+// cloneVersionedRefs returns a deep copy of the given versioned references so
+// callers cannot mutate the package-level canonical slices.
+func cloneVersionedRefs(refs []*compliancev1.VersionedReference) []*compliancev1.VersionedReference {
+	clone := make([]*compliancev1.VersionedReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.VersionedReference{Id: ref.Id, Version: ref.Version}
+	}
+	return clone
+}
+
+// cloneFrameworkControlRefs returns a deep copy of the given framework control
+// references so callers cannot mutate the package-level canonical slices.
+func cloneFrameworkControlRefs(refs []*compliancev1.FrameworkControlReference) []*compliancev1.FrameworkControlReference {
+	clone := make([]*compliancev1.FrameworkControlReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.FrameworkControlReference{
+			FrameworkRef: &compliancev1.VersionedReference{Id: ref.FrameworkRef.Id, Version: ref.FrameworkRef.Version},
+			ControlId:    ref.ControlId,
+		}
+	}
+	return clone
 }
 
 // demoResultFailureError returns ErrDemoScenarioFailed when the typed result

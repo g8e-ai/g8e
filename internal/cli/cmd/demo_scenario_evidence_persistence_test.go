@@ -31,7 +31,7 @@ const (
 
 func newFedRAMPDenyScenarioResultForTest(t *testing.T, startedAt time.Time) *compliancev1.DemoScenarioResult {
 	t.Helper()
-	definition, err := loadFedRAMPScenarioDefinition("fedramp-deny")
+	definition, err := loadDemoScenarioDefinition("fedramp-deny")
 	require.NoError(t, err)
 	return newFedRAMPDenyScenarioResult(startedAt, definition)
 }
@@ -132,7 +132,7 @@ func TestFedRAMPScenarioReferencesResolveCanonicalDefinitions(t *testing.T) {
 			id, err := fedRAMPScenarioID(tt.scenario)
 			require.NoError(t, err)
 			assert.Equal(t, tt.id, id)
-			definition, err := loadFedRAMPScenarioDefinition(id)
+			definition, err := loadDemoScenarioDefinition(id)
 			require.NoError(t, err)
 			assert.Equal(t, tt.scenario, definition.GetDisplayNumber())
 			assert.Equal(t, tt.title, definition.GetTitle())
@@ -140,7 +140,7 @@ func TestFedRAMPScenarioReferencesResolveCanonicalDefinitions(t *testing.T) {
 	}
 }
 
-func TestFedRAMPDenyHarnessVerified_InterpretsHarnessExitStatus(t *testing.T) {
+func TestFedRAMPBlockedHarnessVerified_InterpretsHarnessExitStatus(t *testing.T) {
 	tests := []struct {
 		name       string
 		harnessErr error
@@ -152,13 +152,13 @@ func TestFedRAMPDenyHarnessVerified_InterpretsHarnessExitStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.verified, fedRAMPDenyHarnessVerified(tt.harnessErr))
+			assert.Equal(t, tt.verified, fedRAMPBlockedHarnessVerified(tt.harnessErr))
 		})
 	}
 }
 
 func TestNewFedRAMPScenarioResult_UsesCanonicalProvisionDefinition(t *testing.T) {
-	definition, err := loadFedRAMPScenarioDefinition("fedramp-provision")
+	definition, err := loadDemoScenarioDefinition("fedramp-provision")
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
@@ -180,7 +180,7 @@ func TestNewFedRAMPScenarioResult_UsesCanonicalProvisionDefinition(t *testing.T)
 }
 
 func TestNewFedRAMPRevertScenarioResult_UsesCanonicalDefinition(t *testing.T) {
-	definition, err := loadFedRAMPScenarioDefinition("fedramp-revert")
+	definition, err := loadDemoScenarioDefinition("fedramp-revert")
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
@@ -188,6 +188,73 @@ func TestNewFedRAMPRevertScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 
 	assert.Equal(t, "fedramp-revert", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}
+
+func TestNewFedRAMPEvidenceBlockScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("fedramp-evidence-block")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newFedRAMPEvidenceBlockScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "fedramp-evidence-block", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}
+
+func TestNewDHSSovereignIngestScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("dhs-ingest")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newDHSSovereignIngestScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "dhs-ingest", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, constants.DemosOrgDHS, result.GetDemoId())
+	assert.Equal(t, "dhs-demo-scope", result.GetScopeId())
+	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
+	assert.Equal(t, definition.GetTitle(), result.GetTitle())
+	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))
+	for i := range definition.GetAssertionRefs() {
+		assert.True(t, proto.Equal(definition.GetAssertionRefs()[i], result.GetAssertionRefs()[i]))
+	}
+	require.Len(t, result.GetFrameworkControlRefs(), len(definition.GetFrameworkControlRefs()))
+	for i := range definition.GetFrameworkControlRefs() {
+		assert.True(t, proto.Equal(definition.GetFrameworkControlRefs()[i], result.GetFrameworkControlRefs()[i]))
+	}
+}
+
+func TestNewDHSCueScenarioResult_UsesCanonicalDefinition(t *testing.T) {
+	definition, err := loadDemoScenarioDefinition("dhs-cue")
+	require.NoError(t, err)
+	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
+
+	result := newDHSCueScenarioResult(startedAt, definition)
+
+	assert.Equal(t, "dhs-cue", result.GetScenarioRef().GetId())
+	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
+	assert.Equal(t, constants.DemosOrgDHS, result.GetDemoId())
+	assert.Equal(t, "dhs-demo-scope", result.GetScopeId())
 	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
 	assert.Equal(t, definition.GetTitle(), result.GetTitle())
 	require.Len(t, result.GetAssertionRefs(), len(definition.GetAssertionRefs()))

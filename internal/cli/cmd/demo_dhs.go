@@ -11,15 +11,29 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-coalition")
+}
+
+func newDHSSovereignIngestScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+		"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
+}
+
+func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+		"L2 quorum admits cue // L5 actuator records CUE")
 }
 
 func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
@@ -29,8 +43,12 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 
 	switch scenario {
 	case "1":
-		result = newDemoScenarioResult("1", "Sovereign Multi-Source Ingest (chain-of-custody)", demoStatusPassed,
-			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
+		definition, err := loadDemoScenarioDefinition("dhs-ingest")
+		if err != nil {
+			return nil, err
+		}
+		startedAt := time.Now().UTC()
+		result = newDHSSovereignIngestScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 1 — Sovereign Multi-Source Ingest (LOE 1)")
@@ -48,14 +66,26 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest", "doctrine check")
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Sovereign Multi-Source Ingest")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-ingest-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
+		step2Started := time.Now().UTC()
+		step2OK := demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"test", "-f", constants.ContainerOperatorCert}) {
+				"test", "-f", constants.ContainerOperatorCert})
+		step2Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-ingest-step-2", "operator enrollment check", step2Started, step2Completed,
+			step2OK, true, "docker compose exec operator test client certificate"))
+		if !step2OK {
 			hasErrors = true
 		}
 
@@ -65,23 +95,41 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-ingest")
-		if err := demoStep(ctx, demoDir, "dhs-ingest via agent",
+		step3Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "dhs-ingest via agent",
 			false,
 			harnessRun("dhs-ingest", hcfg)...,
-		); err != nil {
+		)
+		step3Completed := time.Now().UTC()
+		step3OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-ingest-step-3", "dhs-ingest harness", step3Started, step3Completed,
+			step3OK, true, "agent harness dhs-ingest"))
+		if !step3OK {
 			fmt.Println("  (dhs-ingest harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-ingest")
+			result.TransactionIds = append(result.TransactionIds, "dhs-ingest-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest", "quorum met (3/5)")
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-ingest", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the INGEST",
+		step4Started := time.Now().UTC()
+		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the INGEST",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "INGEST"}) {
+				"python", constants.ContainerVerifyOpsPy, "INGEST"})
+		step4Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-ingest-step-4", "independent state observation: ingest recorded", step4Started, step4Completed,
+			step4OK, true, "datasvc verify_ops.py INGEST"))
+		if !step4OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:datasvc-ingest-recorded")
 		}
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest", "INGEST recorded")
@@ -89,15 +137,22 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 1 — Sovereign ingest governed end to end.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         L5 actuator recorded the ingest; signed receipt in hash-chained ledger.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 PASSED — Sovereign ingest governed end to end")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate dhs-ingest scenario result: %w", err)
 		}
 
 	case "2":
@@ -214,8 +269,12 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		}
 
 	case "3":
-		result = newDemoScenarioResult("3", "Governed Predictive Cueing", demoStatusPassed,
-			"L2 quorum admits cue // L5 actuator records CUE")
+		definition, err := loadDemoScenarioDefinition("dhs-cue")
+		if err != nil {
+			return nil, err
+		}
+		startedAt := time.Now().UTC()
+		result = newDHSCueScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
 		demoPrintln("  Scenario 3 — Governed Predictive Cueing (LOE 3 & 4)")
@@ -229,8 +288,14 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Governed Predictive Cueing")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-cue-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
@@ -243,13 +308,23 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(ctx, demoDir, "dhs-cue via agent",
+		step2Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "dhs-cue via agent",
 			false,
 			harnessRun("dhs-cue", hcfg)...,
-		); err != nil {
+		)
+		step2Completed := time.Now().UTC()
+		step2OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-cue-step-2", "dhs-cue harness", step2Started, step2Completed,
+			step2OK, true, "agent harness dhs-cue"))
+		if !step2OK {
 			fmt.Println("  (dhs-cue harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-cue")
+			result.TransactionIds = append(result.TransactionIds, "dhs-cue-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-cue", "quorum met (3/5)")
@@ -257,10 +332,18 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "cue-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — cue admitted")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
+		step3Started := time.Now().UTC()
+		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "CUE"}) {
+				"python", constants.ContainerVerifyOpsPy, "CUE"})
+		step3Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"dhs-cue-step-3", "independent state observation: cue recorded", step3Started, step3Completed,
+			step3OK, true, "datasvc verify_ops.py CUE"))
+		if !step3OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:datasvc-cue-recorded")
 		}
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
@@ -268,15 +351,22 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) (*compliancev
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 3 — Predictive cueing governed by L2 consensus.")
 			fmt.Println("         Authorized cue admitted with quorum.")
 			fmt.Println("         CUE operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Predictive cueing governed by L2 consensus")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate dhs-cue scenario result: %w", err)
 		}
 
 	case "4":
