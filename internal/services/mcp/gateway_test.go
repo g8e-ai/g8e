@@ -124,6 +124,24 @@ func (f *fakeSuspendedStore) GetExpiredSuspendedTransactions(_ context.Context) 
 	return expired, nil
 }
 
+func TestGatewayService_HandleToolsCall_ReturnsAuthoritativeReceiptReference(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:   "tx-1",
+		TransactionHash: "hash-1",
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:   "tool result",
+		Signature:       "signature-1",
+	}
+	g := newTestGatewayService(t, withEnvProc(&fakeEnvelopeProcessor{receipt: receipt}))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`))
+	w := httptest.NewRecorder()
+
+	g.HandleMCP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}}`, w.Body.String())
+}
+
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 	cases := []struct {
 		name         string

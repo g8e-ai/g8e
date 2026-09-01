@@ -82,6 +82,20 @@ func TestPostureEquality(t *testing.T) {
 	assert.NotEqual(t, Doctrine, Notary, "Doctrine should not equal Notary")
 }
 
+func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
+	r := &Result{}
+	resp := &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}`)}
+
+	err := r.retainToolReceipt(resp)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"tx-1"}, r.TransactionIDs)
+	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "tx-1", r.Receipts[0].TransactionID)
+	assert.Equal(t, "hash-1", r.Receipts[0].TransactionHash)
+	assert.Equal(t, "signature-1", r.Receipts[0].Signature)
+}
+
 func TestResult_Note(t *testing.T) {
 	r := &Result{}
 	r.note("test note %d", 42)

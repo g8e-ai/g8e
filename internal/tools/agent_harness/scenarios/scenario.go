@@ -12,6 +12,7 @@ package scenarios
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -51,6 +52,8 @@ type Result struct {
 	ScenarioID      string               `json:"scenario_id,omitempty"`
 	Exchanges       []clientpkg.Exchange `json:"exchanges"`
 	TxHashes        []string             `json:"tx_hashes,omitempty"`
+	TransactionIDs  []string             `json:"transaction_ids,omitempty"`
+	Receipts        []clientpkg.Receipt  `json:"receipts,omitempty"`
 	Notes           []string             `json:"notes,omitempty"`
 	OK              bool                 `json:"ok"`
 	Err             string               `json:"error,omitempty"`
@@ -61,6 +64,27 @@ func (r *Result) tx(h string) {
 	if h != "" {
 		r.TxHashes = append(r.TxHashes, h)
 	}
+}
+
+func (r *Result) retainToolReceipt(resp *clientpkg.JSONRPCResponse) error {
+	if resp == nil || len(resp.Result) == 0 {
+		return constants.ErrHarnessReceiptReferenceMissing
+	}
+	var result struct {
+		Receipt *clientpkg.Receipt `json:"receipt"`
+	}
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return fmt.Errorf("agent harness: decode tool receipt reference: %w", err)
+	}
+	if result.Receipt == nil {
+		return constants.ErrHarnessReceiptReferenceMissing
+	}
+	if result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.Signature == "" {
+		return constants.ErrHarnessReceiptReferenceInvalid
+	}
+	r.TransactionIDs = append(r.TransactionIDs, result.Receipt.TransactionID)
+	r.Receipts = append(r.Receipts, *result.Receipt)
+	return nil
 }
 
 // Scenario is one impersonation. Run does the work; the runner handles

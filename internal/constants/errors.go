@@ -1112,9 +1112,11 @@ var (
 	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
 
 	// Agent harness errors
-	ErrHarnessNoScenarios       = errors.New("no scenarios selected")
-	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
-	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
+	ErrHarnessNoScenarios             = errors.New("no scenarios selected")
+	ErrHarnessGovKitNotInit           = errors.New("gov kit not initialized (call SetGovKit)")
+	ErrHarnessGovKitMissingSign       = errors.New("gov kit not initialized (need ensemble + principal)")
+	ErrHarnessReceiptReferenceMissing = errors.New("governed tool response is missing its receipt reference")
+	ErrHarnessReceiptReferenceInvalid = errors.New("governed tool response contains an invalid receipt reference")
 
 	// Agent harness ensemble scenario errors
 	ErrHarnessEnsembleChatFailed       = errors.New("ensemble chat request returned success=false")

@@ -537,6 +537,11 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 				Text: receipt.ResultSummary,
 			},
 		},
+		Receipt: &toolReceiptReference{
+			TransactionID:   receipt.TransactionId,
+			TransactionHash: receipt.TransactionHash,
+			Signature:       receipt.Signature,
+		},
 	}
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
 		mcpRes.IsError = true

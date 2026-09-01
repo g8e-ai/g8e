@@ -83,6 +83,9 @@ func dhsScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("ingest rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("admitted — operator executing dataop ingest via L5 actuator; provenance receipt written to ledger")
 				return nil
 			},
@@ -140,6 +143,9 @@ func dhsScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("authorized cue rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("admitted — gateway quorum reached; cue executed and recorded with full data lineage")
 				return nil
 			},
@@ -178,6 +184,9 @@ func dhsScenarios() []Scenario {
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("governed purge rejected: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("admitted — operator executed dataop purge; cryptographic destruction receipt written to ledger")
 				return nil

@@ -33,8 +33,15 @@ type CallToolRequest struct {
 
 // CallToolResult is the result for the "tools/call" method.
 type CallToolResult struct {
-	Content []TextContent `json:"content"`
-	IsError bool          `json:"isError,omitempty"`
+	Content []TextContent         `json:"content"`
+	IsError bool                  `json:"isError,omitempty"`
+	Receipt *toolReceiptReference `json:"receipt,omitempty"`
+}
+
+type toolReceiptReference struct {
+	TransactionID   string `json:"transaction_id"`
+	TransactionHash string `json:"transaction_hash"`
+	Signature       string `json:"signature"`
 }
 
 // TextContent represents a text part of a tool response.

@@ -69,6 +69,9 @@ func mcpScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("PA submission rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("FHIR PA PA-2026-0045 submitted through governed native tool endpoint")
 				return nil
 			},
@@ -107,6 +110,9 @@ func mcpScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("gold card PA submission failed: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("PA-2026-0043 transitioned through the governed healthcare actuator (Dr. Priya Nair, 96%% historic approval, 90%% threshold)")
 				r.note("actuator observation is bound to run %s", runID)
 				return nil
@@ -128,6 +134,9 @@ func mcpScenarios() []Scenario {
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("SLA breach query failed: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("PA-2026-0044 transitioned through the governed healthcare actuator (10 days elapsed, 7-day SLA)")
 				r.note("actuator observation is bound to run %s", runID)

@@ -84,6 +84,9 @@ func fedrampScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("provision rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("admitted — operator executing cloudop provision via L5 actuator; provenance receipt written to ledger")
 				return nil
 			},
@@ -160,6 +163,9 @@ func fedrampScenarios() []Scenario {
 				}
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("revert rejected: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("admitted — gateway quorum reached; revert executed and recorded with full configuration lineage")
 				return nil
