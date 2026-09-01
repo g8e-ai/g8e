@@ -82,6 +82,10 @@ func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.
 	return newFedRAMPScenarioResult(startedAt, definition, "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident")
 }
 
+func newFedRAMPRevertScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
+}
+
 func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	scenarioID, err := fedRAMPScenarioID(scenario)
 	if err != nil {
@@ -306,8 +310,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		}
 
 	case "3":
-		result = newDemoScenarioResult(definition.DisplayNumber, definition.Title, demoStatusPassed,
-			"L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
+		startedAt := time.Now().UTC()
+		result = newFedRAMPRevertScenarioResult(startedAt, definition)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Governed Configuration Revert (CM-7)")
@@ -317,13 +321,19 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoPrintln("          submitted with L2 ensemble quorum. The revert is")
 		demoPrintln("          admitted and executed by the L5 actuator. This")
 		demoPrintln("          demonstrates that configuration changes are governed")
-		demoPrintln("          through the full L1/L2/L3 pipeline with signed receipts.")
+		demoPrintln("          through the L1/L2/L5 pipeline with signed receipts.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Governed Configuration Revert")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-revert-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
@@ -336,13 +346,23 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(ctx, demoDir, "fedramp-revert via agent",
+		step2Started := time.Now().UTC()
+		harnessErr := demoStep(ctx, demoDir, "fedramp-revert via agent",
 			false,
 			harnessRun("fedramp-revert", hcfg)...,
-		); err != nil {
+		)
+		step2Completed := time.Now().UTC()
+		step2OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-revert-step-2", "fedramp-revert harness", step2Started, step2Completed,
+			step2OK, true, "agent harness fedramp-revert"))
+		if !step2OK {
 			fmt.Println("  (fedramp-revert harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:fedramp-revert")
+			result.TransactionIds = append(result.TransactionIds, "fedramp-revert-tx")
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-revert", "quorum met (3/5)")
@@ -350,10 +370,18 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "revert-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — revert admitted")
 
-		if !demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
+		step3Started := time.Now().UTC()
+		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
 			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "REVERT"}) {
+				"python", constants.ContainerVerifyOpsPy, "REVERT"})
+		step3Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-revert-step-3", "independent state observation: revert recorded", step3Started, step3Completed,
+			step3OK, true, "cloudsvc verify_ops.py REVERT"))
+		if !step3OK {
 			hasErrors = true
+		} else {
+			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-revert-recorded")
 		}
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-revert", "REVERT recorded")
@@ -361,15 +389,22 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
 			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 3 — Configuration revert governed by L2 consensus.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         REVERT operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Configuration revert governed by L2 consensus")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-revert scenario result: %w", err)
 		}
 
 	case "4":
