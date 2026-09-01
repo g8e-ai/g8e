@@ -760,15 +760,17 @@ The following packages are test-only and are not part of the production dependen
 - `cloudop.sh` - Demo artifact for cloud operations invocation (operator execution bridge)
 - `verify_ops.py` - Demo artifact for verifying cloud service operation results
 
-**`demos/healthcare/`** - Healthcare analytics demo with Metabase integration
-- `paop.sh` - PA operation wrapper (governed run_shell_command bridge, equivalent of dhs dataop / fedramp cloudop)
+**`demos/healthcare/`** - Healthcare policy enforcement and analytics demo with Metabase integration
+- `healthcare_actuator.py` - Typed gold-card and SLA policy actuator that records run-bound terminal observations
+- `paop.sh` - Governed `run_shell_command` bridge to the healthcare actuator
+- `verify_pa.py` - Exact-match terminal-state collector for run, scenario, request, policy inputs, and result
 - `setup_metabase.py` - Metabase initialization and dashboard setup
-- `init.sql` - Database schema initialization for healthcare data
+- `init.sql` - Database schema and initial reporting fixtures
 
 **`demos/finance/`** - Financial data governance demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4) and `printDemoEndpoints` (prints available endpoints per org) support listing.
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, RunID, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4) and `printDemoEndpoints` (prints available endpoints per org) support listing.
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (4 scenarios, each calls `harnessRun`). `defaultDHSHarnessConfig()` returns `defaultHarnessConfig("agent-coalition")`.
