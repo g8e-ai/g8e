@@ -319,6 +319,8 @@ Look for operator enrollment confirmation in the gateway log and the identity ce
 
 ## Demo Scenarios
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definitions `healthcare-success@1.0.0`, `healthcare-gold-card@1.0.0`, `healthcare-sla-breach@1.0.0`, `healthcare-phi-blocked@1.0.0`). The prose descriptions below are narrative context; the canonical definitions are authoritative for evidence-grade result production and compliance crosswalks.
+
 ### Scenario 1 — Authorized Agent Submits a FHIR PA Request
 
 ```bash

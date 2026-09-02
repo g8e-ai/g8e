@@ -288,6 +288,12 @@ export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 g8e demos scenarios run ensemble-chat-file-create --ensemble-url http://localhost:8000 ...
 ```
 
+### Canonical scenario definitions
+
+Every demo scenario has a typed, content-addressed definition in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json`. Each definition carries stable scenario identity and version, expected action classes, expected allow or block outcome, expected rejection layer, initial-state fixture reference, terminal-state assertions, required receipts and deterministic stages, assertion references, framework-control references, required evidence level, timeout, and failure policy. The catalog is the source of truth for scenario identity, assertion mappings, and framework-control mappings. The prose descriptions in the per-demo READMEs and the scenario listings below are narrative context; the canonical catalog is authoritative for all machine-checked compliance crosswalks and evidence-grade result production.
+
+The catalog is loaded at demo runtime through `internal/services/compliance/catalog` and validated against the canonical assertion catalog (`protocol/constants/compliance/assertion-catalog.json`) and framework catalog (`protocol/constants/compliance/framework-catalog.json`). Every framework-control reference in every definition has at least one canonical crosswalk mapping (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) to an assertion carried by that definition.
+
 ### Demo Output Format
 
 By default, `g8e demos run` produces concise output: each scenario prints its PASS/FAIL result line. After all scenarios complete, a results table summarizes scenario numbers, names, statuses, and key metrics.

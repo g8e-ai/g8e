@@ -31,6 +31,8 @@ The cloud resources are **synthetic**; the point is to demonstrate how g8e gover
 
 ## Coverage against FedRAMP CR26 KSI categories
 
+The table below is a narrative view for demo orientation. The authoritative assertion and framework-control mappings for every FedRAMP scenario live in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definitions `fedramp-provision@1.0.0`, `fedramp-deny@1.0.0`, `fedramp-revert@1.0.0`, `fedramp-evidence-block@1.0.0`). Each definition carries typed assertion references and framework-control references that are validated against the canonical assertion catalog and FedRAMP/NIST crosswalk at runtime.
+
 | KSI category | KSI IDs | Demonstrated by |
 |---|---|---|
 | AC | KSI-IAM-05, KSI-IAM-07 | Scenario 1 (governed provisioning), Scenario 2 (unauthorized destruction blocked) |
@@ -165,6 +167,8 @@ See [FIPS 140-3 Compliance](../../docs/reference/fips140-3.md) for the validated
 
 All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and admits or rejects the envelope at L1/L2. The operator executes admitted commands via `run_shell_command`, driving the `cloudsvc` actuator through the `cloudop` wrapper.
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json`. The prose descriptions below are narrative context; the canonical definitions are authoritative for evidence-grade result production and compliance crosswalks.
+
 ### 1: Governed Cloud Resource Provisioning (AC, CM, AU)
 **Scenario `fedramp-provision`**: A cloud operations agent submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Cloud Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The provision is executed and a signed receipt is written to the hash-chained ledger. The `cloudsvc` records a `PROVISION` operation.
 
@@ -182,6 +186,8 @@ All scenarios run via `demos scenarios run`, a real g8e binary that submits genu
 After all scenarios, `g8e audit export` produces a single evidence bundle with all receipts. The bundle is tagged to CR26 KSI categories from `ksi_categories.json`. `g8e audit receipts` shows the full hash-chained ledger. Tampering with any record in a copy causes chain verification to fail.
 
 The demo also emits a machine-readable KSI result artifact via `g8e compliance ksi --class C`, which evaluates KSIs against the live audit state and produces a binary result set. This step runs automatically after all four scenarios complete — the demo orchestrator executes `g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json` inside the gateway container, then verifies the snapshots via `verify_ops.py --ksi-result`. Snapshots are persisted to `/root/.g8e/data/compliance/ksi-history/` inside the gateway container. The legacy flat OSCAL export is removed because it does not produce content-addressed, scope-bound evidence.
+
+Each scenario run also persists a typed `DemoScenarioResult` and `DemoManifest` under the runtime compliance evidence tree at `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories plus the union of framework-control references across all bound scenario definitions. Each scenario result carries its canonical definition reference, assertion references, framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. Receipt and persistence bodies are persisted as resolvable artifacts under `receipts/<hex>.json` and `persistence/<hex>.json` so the content addresses on the result resolve to concrete evidence.
 
 ## License
 

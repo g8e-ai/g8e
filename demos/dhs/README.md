@@ -131,6 +131,8 @@ g8e demos status dhs
 
 All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and admits or rejects the envelope at L1/L2. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definitions `dhs-ingest@1.0.0`, `dhs-disconnected-operations@1.0.0`, `dhs-cue@1.0.0`, `dhs-destruction-block@1.0.0`, `dhs-destruction-purge@1.0.0`). The prose descriptions below are narrative context; the canonical definitions are authoritative for evidence-grade result production and compliance crosswalks.
+
 ### 1: Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 

@@ -122,6 +122,8 @@ docker compose logs -f observability
 
 The `g8e demos run` command automatically starts the demo environment if it is not already running. Use `-v` for verbose step-by-step output, or `--tui` for the tactical governance TUI overlay.
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definition `finance-unauthorized-trade@1.0.0`). The prose descriptions below are narrative context; the canonical definition is authoritative for evidence-grade result production and compliance crosswalks.
+
 ### Scenario 1: Unauthorized Trade Blocked
 
 ```bash
