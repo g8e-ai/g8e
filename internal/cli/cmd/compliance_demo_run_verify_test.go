@@ -245,3 +245,92 @@ func TestComplianceDemoRunVerifyCmdWithConfig_NonexistentRunReportsFailures(t *t
 	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
 	assert.Contains(t, buf.String(), "nonexistent-run")
 }
+
+// TestComplianceDemoRunVerifyCmdWithConfig_DetectsTamperedArtifacts exercises
+// the full RuntimeFileService read path and verifies the command fails closed
+// when persisted artifacts are mutated after persistence.
+func TestComplianceDemoRunVerifyCmdWithConfig_DetectsTamperedArtifacts(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutate    func(t *testing.T, fileSvc fs.RuntimeFileService, runID string)
+		expectErr error
+		expectSub string
+	}{
+		{
+			name: "tampered manifest adds trailing newline",
+			mutate: func(t *testing.T, fileSvc fs.RuntimeFileService, runID string) {
+				ctx := context.Background()
+				relPath := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID, constants.DemoRunManifestFilename)
+				body, err := fileSvc.ReadFile(ctx, relPath)
+				require.NoError(t, err)
+				require.NoError(t, fileSvc.WriteFile(ctx, relPath, append(body, '\n'), constants.PermFileReadOnly))
+			},
+			expectErr: constants.ErrReportVerificationFailed,
+			expectSub: "malformed evidence artifact",
+		},
+		{
+			name: "tampered result changes run ID",
+			mutate: func(t *testing.T, fileSvc fs.RuntimeFileService, runID string) {
+				ctx := context.Background()
+				relPath := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID, constants.DemoRunResultsFilename)
+				body, err := fileSvc.ReadFile(ctx, relPath)
+				require.NoError(t, err)
+				tampered := strings.Replace(string(body), `"run_id":"`+runID+`"`, `"run_id":"tampered-run"`, 1)
+				require.NoError(t, fileSvc.WriteFile(ctx, relPath, []byte(tampered), constants.PermFileReadOnly))
+			},
+			expectErr: constants.ErrReportVerificationFailed,
+			expectSub: "evidence scope mismatch",
+		},
+		{
+			name: "unexpected root artifact",
+			mutate: func(t *testing.T, fileSvc fs.RuntimeFileService, runID string) {
+				ctx := context.Background()
+				relPath := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID, "unexpected.json")
+				require.NoError(t, fileSvc.WriteFile(ctx, relPath, []byte("{}"), constants.PermFileReadOnly))
+			},
+			expectErr: constants.ErrReportVerificationFailed,
+			expectSub: "unexpected evidence artifact",
+		},
+		{
+			name:      "provenance digest mismatch via wrong source",
+			mutate:    func(_ *testing.T, _ fs.RuntimeFileService, _ string) {},
+			expectErr: nil, // handled by swapping the provenance source below
+			expectSub: "checksum mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fileSvc, _ := newCmdTestEnv(t)
+			projectRoot := writeDemoProvenanceTree(t)
+			runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
+			tt.mutate(t, fileSvc, runID)
+
+			// For the provenance mismatch case, use a source that returns
+			// different artifacts than what the manifest recorded.
+			var source evidence.ProvenanceSource
+			if tt.name == "provenance digest mismatch via wrong source" {
+				source = &stubProvenanceSource{artifacts: []evidence.ProvenanceArtifact{
+					{Name: constants.DemosComposeFile, Body: []byte("different-content")},
+				}}
+			} else {
+				source = evidence.NewDemoDirectoryProvenanceSource(projectRoot)
+			}
+
+			cmd := complianceDemoRunVerifyCmdWithConfig(
+				fileSvcFactoryFor(fileSvc),
+				func(string) evidence.ProvenanceSource { return source },
+			)
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			err := cmd.RunE(cmd, []string{runID})
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
+			assert.Contains(t, buf.String(), tt.expectSub)
+			assert.Contains(t, buf.String(), `"failures"`)
+			assert.NotContains(t, buf.String(), `"valid":true`)
+		})
+	}
+}
