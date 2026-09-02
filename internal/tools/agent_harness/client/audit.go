@@ -20,8 +20,11 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
@@ -99,6 +102,29 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 	}
 	rec.Raw = body
 	return &rec, body, nil
+}
+
+func (c *Client) GetActionReceipt(ctx context.Context, transactionID string, persona ...Persona) (*operatorv1.ActionReceipt, []byte, error) {
+	p := c.auditorPersona()
+	if len(persona) > 0 {
+		p = persona[0]
+	}
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?tx_id=" + url.QueryEscape(transactionID)
+	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, body, err
+	}
+	if status == http.StatusNotFound {
+		return nil, body, nil
+	}
+	if status >= 400 {
+		return nil, body, fmt.Errorf("gateway returned status %d for transaction %s: %s", status, transactionID, string(body))
+	}
+	receipt := &operatorv1.ActionReceipt{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(body, receipt); err != nil {
+		return nil, body, fmt.Errorf("decode canonical action receipt: %w", err)
+	}
+	return receipt, body, nil
 }
 
 // auditorPersona builds a persona carrying the config's CLI session and user

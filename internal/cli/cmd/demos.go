@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
@@ -1550,22 +1551,23 @@ func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...st
 // The parent demo runner parses this to extract authoritative attempt, execution,
 // transaction, and receipt identities retained by the child harness inside the container.
 type harnessResult struct {
-	Name             string           `json:"name"`
-	Title            string           `json:"title"`
-	Persona          string           `json:"persona"`
-	RequiresPosture  string           `json:"requires_posture"`
-	StartedAt        time.Time        `json:"started_at"`
-	DurationMS       int64            `json:"duration_ms"`
-	RunID            string           `json:"run_id,omitempty"`
-	ScenarioID       string           `json:"scenario_id,omitempty"`
-	AttemptIDs       []string         `json:"attempt_ids,omitempty"`
-	ExecutionIDs     []string         `json:"execution_ids,omitempty"`
-	TransactionIDs   []string         `json:"transaction_ids,omitempty"`
-	InvestigationIDs []string         `json:"investigation_ids,omitempty"`
-	Receipts         []harnessReceipt `json:"receipts,omitempty"`
-	Notes            []string         `json:"notes,omitempty"`
-	OK               bool             `json:"ok"`
-	Err              string           `json:"error,omitempty"`
+	Name             string                      `json:"name"`
+	Title            string                      `json:"title"`
+	Persona          string                      `json:"persona"`
+	RequiresPosture  string                      `json:"requires_posture"`
+	StartedAt        time.Time                   `json:"started_at"`
+	DurationMS       int64                       `json:"duration_ms"`
+	RunID            string                      `json:"run_id,omitempty"`
+	ScenarioID       string                      `json:"scenario_id,omitempty"`
+	AttemptIDs       []string                    `json:"attempt_ids,omitempty"`
+	ExecutionIDs     []string                    `json:"execution_ids,omitempty"`
+	TransactionIDs   []string                    `json:"transaction_ids,omitempty"`
+	InvestigationIDs []string                    `json:"investigation_ids,omitempty"`
+	Receipts         []harnessReceipt            `json:"receipts,omitempty"`
+	ReceiptEvidence  []scenarios.ReceiptEvidence `json:"receipt_evidence,omitempty"`
+	Notes            []string                    `json:"notes,omitempty"`
+	OK               bool                        `json:"ok"`
+	Err              string                      `json:"error,omitempty"`
 }
 
 type harnessReceipt struct {
@@ -1618,13 +1620,38 @@ func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, 
 	if hr == nil || len(hr.AttemptIDs) == 0 || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.InvestigationIDs) == 0 || len(hr.Receipts) == 0 {
 		return false
 	}
+	if len(hr.ReceiptEvidence) != len(hr.Receipts) {
+		return false
+	}
+	receiptRefs := make([]string, 0, len(hr.ReceiptEvidence)*2)
+	for _, rcpt := range hr.Receipts {
+		var matched *scenarios.ReceiptEvidence
+		for i := range hr.ReceiptEvidence {
+			if hr.ReceiptEvidence[i].TransactionID == rcpt.TransactionID {
+				matched = &hr.ReceiptEvidence[i]
+				break
+			}
+		}
+		if matched == nil {
+			return false
+		}
+		bound, err := scenarios.BuildReceiptEvidence(&scenarios.Result{
+			RunID: hr.RunID, ScenarioID: hr.ScenarioID, AttemptIDs: hr.AttemptIDs, ExecutionIDs: hr.ExecutionIDs,
+			TransactionIDs: hr.TransactionIDs, InvestigationIDs: hr.InvestigationIDs,
+		}, clientpkg.Receipt{
+			ExecutionID: rcpt.ExecutionID, TransactionID: rcpt.TransactionID, TransactionHash: rcpt.TransactionHash,
+			SignerKeyID: rcpt.SignerKeyID, Signature: rcpt.Signature, InvestigationID: rcpt.InvestigationID,
+		}, matched.Receipt)
+		if err != nil || bound.ReceiptRef != matched.ReceiptRef || bound.PersistenceRef != matched.PersistenceRef {
+			return false
+		}
+		receiptRefs = append(receiptRefs, bound.ReceiptRef, bound.PersistenceRef)
+	}
 	result.AttemptIds = append(result.AttemptIds, hr.AttemptIDs...)
 	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
 	result.InvestigationIds = append(result.InvestigationIds, hr.InvestigationIDs...)
-	for _, rcpt := range hr.Receipts {
-		result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:"+rcpt.TransactionID)
-	}
+	result.ReceiptRefs = append(result.ReceiptRefs, receiptRefs...)
 	return true
 }
 

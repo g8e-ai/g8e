@@ -47,7 +47,7 @@ func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
 	assert.Equal(t, "investigation-abc-123", r.Receipts[0].InvestigationID)
 }
 
-func TestApplyHarnessAuthoritativeIdentity_RetainsAttemptExecutionTransactionInvestigationAndReceiptReferences(t *testing.T) {
+func TestApplyHarnessAuthoritativeIdentityFailsClosedWhenReceiptEvidenceMissing(t *testing.T) {
 	result := &compliancev1.DemoScenarioResult{}
 	var parsed []harnessResult
 	require.NoError(t, json.Unmarshal([]byte(`[{"attempt_ids":["attempt-1"],"execution_ids":["execution-1"],"transaction_ids":["tx-1"],"investigation_ids":["investigation-1"],"receipts":[{"execution_id":"execution-1","transaction_id":"tx-1","investigation_id":"investigation-1"}]}]`), &parsed))
@@ -55,12 +55,12 @@ func TestApplyHarnessAuthoritativeIdentity_RetainsAttemptExecutionTransactionInv
 
 	applied := applyHarnessAuthoritativeIdentity(result, &parsed[0])
 
-	assert.True(t, applied)
-	assert.Equal(t, []string{"attempt-1"}, result.GetAttemptIds())
-	assert.Equal(t, []string{"execution-1"}, result.GetExecutionIds())
-	assert.Equal(t, []string{"tx-1"}, result.GetTransactionIds())
-	assert.Equal(t, []string{"investigation-1"}, result.GetInvestigationIds())
-	assert.Equal(t, []string{"action-receipt:tx-1"}, result.GetReceiptRefs())
+	assert.False(t, applied)
+	assert.Empty(t, result.GetAttemptIds())
+	assert.Empty(t, result.GetExecutionIds())
+	assert.Empty(t, result.GetTransactionIds())
+	assert.Empty(t, result.GetInvestigationIds())
+	assert.Empty(t, result.GetReceiptRefs())
 }
 
 func TestApplyHarnessAuthoritativeIdentity_FailsClosedWhenInvestigationIDsMissing(t *testing.T) {

@@ -59,6 +59,7 @@ type Result struct {
 	TransactionIDs   []string             `json:"transaction_ids,omitempty"`
 	InvestigationIDs []string             `json:"investigation_ids,omitempty"`
 	Receipts         []clientpkg.Receipt  `json:"receipts,omitempty"`
+	ReceiptEvidence  []ReceiptEvidence    `json:"receipt_evidence,omitempty"`
 	Notes            []string             `json:"notes,omitempty"`
 	OK               bool                 `json:"ok"`
 	Err              string               `json:"error,omitempty"`

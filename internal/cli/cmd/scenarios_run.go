@@ -109,7 +109,18 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	results := make([]scenarios.Result, 0, len(selected))
 	for _, s := range selected {
-		results = append(results, scenarios.Execute(ctx, client, s))
+		result := scenarios.Execute(ctx, client, s)
+		if result.RunID != "" && result.ScenarioID != "" && len(result.Receipts) > 0 {
+			if err := scenarios.ResolveReceiptEvidence(ctx, client, &result); err != nil {
+				result.OK = false
+				if result.Err == "" {
+					result.Err = err.Error()
+				} else {
+					result.Err += "; " + err.Error()
+				}
+			}
+		}
+		results = append(results, result)
 	}
 
 	opSession := cfg.OperatorSessionID
