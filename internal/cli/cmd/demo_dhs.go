@@ -317,6 +317,371 @@ func collectDHSNetworkEvidence(ctx context.Context, demoDir string, result *comp
 	return string(encoded), evidenceRef, nil
 }
 
+// ── DHS local gateway health collector ──────────────────────────────────────
+
+const (
+	dhsGatewayHealthCollectorID      = "dhs-local-gateway-health"
+	dhsGatewayHealthCollectorVersion = "1.0.0"
+	dhsGatewayHealthBoundary         = "dhs-local-gateway-endpoint"
+)
+
+type dhsGatewayHealthExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	Endpoint                string
+	Available               bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type dhsGatewayHealthObservation struct {
+	Available  bool   `json:"available"`
+	Endpoint   string `json:"endpoint"`
+	ObservedAt string `json:"observed_at"`
+	RunID      string `json:"run_id"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type dhsGatewayHealthCollection struct {
+	CollectorID             string                      `json:"collector_id"`
+	CollectorVersion        string                      `json:"collector_version"`
+	Boundary                string                      `json:"boundary"`
+	InitialStateFixtureRef  string                      `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                    `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                   `json:"collected_at"`
+	Observation             dhsGatewayHealthObservation `json:"observation"`
+}
+
+type dhsGatewayHealthObservationWire struct {
+	Available  *bool  `json:"available"`
+	Endpoint   string `json:"endpoint"`
+	ObservedAt string `json:"observed_at"`
+	RunID      string `json:"run_id"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+func decodeDHSGatewayHealthObservation(raw []byte, expected dhsGatewayHealthExpectation, collectedAt time.Time) (*dhsGatewayHealthCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: DHS gateway health collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire dhsGatewayHealthObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode DHS gateway health observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: DHS gateway health observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.Available == nil {
+		return nil, fmt.Errorf("%w: DHS gateway health observation omits availability", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := dhsGatewayHealthObservation{
+		Available: *wire.Available, Endpoint: wire.Endpoint, ObservedAt: wire.ObservedAt,
+		RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS gateway health observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: DHS gateway health observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID ||
+		observed.Endpoint != expected.Endpoint || observed.Available != expected.Available {
+		return nil, fmt.Errorf("%w: DHS gateway health observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &dhsGatewayHealthCollection{
+		CollectorID: dhsGatewayHealthCollectorID, CollectorVersion: dhsGatewayHealthCollectorVersion, Boundary: dhsGatewayHealthBoundary,
+		InitialStateFixtureRef: expected.InitialStateFixtureRef, TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt: collectedAt, Observation: observed,
+	}, nil
+}
+
+func encodeDHSGatewayHealthCollection(collection *dhsGatewayHealthCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode DHS gateway health collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectDHSGatewayHealthEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition) (string, string, error) {
+	command := exec.CommandContext(ctx, "sh", constants.DemosDHSGatewayHealthCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), constants.DemosDHSGatewayHealthEndpoint)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: DHS gateway health collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeDHSGatewayHealthObservation(stdout.Bytes(), dhsGatewayHealthExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), Endpoint: constants.DemosDHSGatewayHealthEndpoint,
+		Available: true, InitialStateFixtureRef: definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeDHSGatewayHealthCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
+}
+
+// ── DHS local ledger persistence collector ──────────────────────────────────
+
+const (
+	dhsLedgerPersistenceCollectorID      = "dhs-local-ledger-persistence"
+	dhsLedgerPersistenceCollectorVersion = "1.0.0"
+	dhsLedgerPersistenceBoundary         = "dhs-operator-local-ledger"
+)
+
+type dhsLedgerPersistenceExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	Container               string
+	Directory               string
+	Persisted               bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type dhsLedgerPersistenceObservation struct {
+	Persisted  bool   `json:"persisted"`
+	Directory  string `json:"directory"`
+	EntryCount int    `json:"entry_count"`
+	ObservedAt string `json:"observed_at"`
+	RunID      string `json:"run_id"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type dhsLedgerPersistenceCollection struct {
+	CollectorID             string                          `json:"collector_id"`
+	CollectorVersion        string                          `json:"collector_version"`
+	Boundary                string                          `json:"boundary"`
+	InitialStateFixtureRef  string                          `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                        `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                       `json:"collected_at"`
+	Observation             dhsLedgerPersistenceObservation `json:"observation"`
+}
+
+type dhsLedgerPersistenceObservationWire struct {
+	Persisted  *bool  `json:"persisted"`
+	Directory  string `json:"directory"`
+	EntryCount *int   `json:"entry_count"`
+	ObservedAt string `json:"observed_at"`
+	RunID      string `json:"run_id"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+func decodeDHSLedgerPersistenceObservation(raw []byte, expected dhsLedgerPersistenceExpectation, collectedAt time.Time) (*dhsLedgerPersistenceCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: DHS ledger collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire dhsLedgerPersistenceObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode DHS ledger observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: DHS ledger observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.Persisted == nil {
+		return nil, fmt.Errorf("%w: DHS ledger observation omits persistence", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.EntryCount == nil {
+		return nil, fmt.Errorf("%w: DHS ledger observation omits entry count", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := dhsLedgerPersistenceObservation{
+		Persisted: *wire.Persisted, Directory: wire.Directory, EntryCount: *wire.EntryCount,
+		ObservedAt: wire.ObservedAt, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS ledger observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: DHS ledger observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID ||
+		observed.Directory != expected.Directory || observed.Persisted != expected.Persisted || observed.EntryCount <= 0 {
+		return nil, fmt.Errorf("%w: DHS ledger observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &dhsLedgerPersistenceCollection{
+		CollectorID: dhsLedgerPersistenceCollectorID, CollectorVersion: dhsLedgerPersistenceCollectorVersion, Boundary: dhsLedgerPersistenceBoundary,
+		InitialStateFixtureRef: expected.InitialStateFixtureRef, TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt: collectedAt, Observation: observed,
+	}, nil
+}
+
+func encodeDHSLedgerPersistenceCollection(collection *dhsLedgerPersistenceCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode DHS ledger collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectDHSLedgerPersistenceEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition) (string, string, error) {
+	command := exec.CommandContext(ctx, "sh", constants.DemosDHSLedgerCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), "operator", constants.ContainerLedgerFilesDir)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: DHS ledger collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeDHSLedgerPersistenceObservation(stdout.Bytes(), dhsLedgerPersistenceExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), Container: "operator",
+		Directory: constants.ContainerLedgerFilesDir, Persisted: true,
+		InitialStateFixtureRef:  definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeDHSLedgerPersistenceCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
+}
+
+// ── DHS local audit vault persistence collector ─────────────────────────────
+
+const (
+	dhsAuditVaultPersistenceCollectorID      = "dhs-local-audit-vault-persistence"
+	dhsAuditVaultPersistenceCollectorVersion = "1.0.0"
+	dhsAuditVaultPersistenceBoundary         = "dhs-operator-local-audit-vault"
+)
+
+type dhsAuditVaultPersistenceExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	Container               string
+	DatabasePath            string
+	Persisted               bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type dhsAuditVaultPersistenceObservation struct {
+	Persisted    bool   `json:"persisted"`
+	DatabasePath string `json:"database_path"`
+	SizeBytes    int64  `json:"size_bytes"`
+	ObservedAt   string `json:"observed_at"`
+	RunID        string `json:"run_id"`
+	ScenarioID   string `json:"scenario_id"`
+}
+
+type dhsAuditVaultPersistenceCollection struct {
+	CollectorID             string                              `json:"collector_id"`
+	CollectorVersion        string                              `json:"collector_version"`
+	Boundary                string                              `json:"boundary"`
+	InitialStateFixtureRef  string                              `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                            `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                           `json:"collected_at"`
+	Observation             dhsAuditVaultPersistenceObservation `json:"observation"`
+}
+
+type dhsAuditVaultPersistenceObservationWire struct {
+	Persisted    *bool  `json:"persisted"`
+	DatabasePath string `json:"database_path"`
+	SizeBytes    *int64 `json:"size_bytes"`
+	ObservedAt   string `json:"observed_at"`
+	RunID        string `json:"run_id"`
+	ScenarioID   string `json:"scenario_id"`
+}
+
+func decodeDHSAuditVaultPersistenceObservation(raw []byte, expected dhsAuditVaultPersistenceExpectation, collectedAt time.Time) (*dhsAuditVaultPersistenceCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: DHS audit vault collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire dhsAuditVaultPersistenceObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode DHS audit vault observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: DHS audit vault observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.Persisted == nil {
+		return nil, fmt.Errorf("%w: DHS audit vault observation omits persistence", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.SizeBytes == nil {
+		return nil, fmt.Errorf("%w: DHS audit vault observation omits size bytes", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := dhsAuditVaultPersistenceObservation{
+		Persisted: *wire.Persisted, DatabasePath: wire.DatabasePath, SizeBytes: *wire.SizeBytes,
+		ObservedAt: wire.ObservedAt, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS audit vault observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: DHS audit vault observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID ||
+		observed.DatabasePath != expected.DatabasePath || observed.Persisted != expected.Persisted || observed.SizeBytes <= 0 {
+		return nil, fmt.Errorf("%w: DHS audit vault observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &dhsAuditVaultPersistenceCollection{
+		CollectorID: dhsAuditVaultPersistenceCollectorID, CollectorVersion: dhsAuditVaultPersistenceCollectorVersion, Boundary: dhsAuditVaultPersistenceBoundary,
+		InitialStateFixtureRef: expected.InitialStateFixtureRef, TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt: collectedAt, Observation: observed,
+	}, nil
+}
+
+func encodeDHSAuditVaultPersistenceCollection(collection *dhsAuditVaultPersistenceCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode DHS audit vault collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectDHSAuditVaultPersistenceEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition) (string, string, error) {
+	command := exec.CommandContext(ctx, "sh", constants.DemosDHSAuditVaultCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), "operator", constants.ContainerAuditVaultDB)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: DHS audit vault collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeDHSAuditVaultPersistenceObservation(stdout.Bytes(), dhsAuditVaultPersistenceExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), Container: "operator",
+		DatabasePath: constants.ContainerAuditVaultDB, Persisted: true,
+		InitialStateFixtureRef:  definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeDHSAuditVaultPersistenceCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
+}
+
 func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result *compliancev1.DemoScenarioResult
@@ -499,16 +864,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		result.StepResults = append(result.StepResults, step3Result)
 
 		step4Started := time.Now().UTC()
-		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify gateway continues operating locally",
-			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"})
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		step4Protocol, step4Ref, step4Err := collectDHSGatewayHealthEvidence(ctx, demoDir, result, definition)
+		step4Result := buildDemoStepResult(
 			"dhs-disconnected-step-4", "independent state observation: local gateway available", step4Started, time.Now().UTC(),
-			step4OK, true, "curl gateway health endpoint while disconnected"))
-		if !step4OK {
+			step4Err == nil, true, step4Protocol)
+		if step4Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-gateway-available")
+			step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, step4Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step4Ref)
 		}
+		result.StepResults = append(result.StepResults, step4Result)
 
 		demoPrintln("  ── Step 5: Govern an ingest while disconnected ──────────────────")
 		demoPrintln("  Running dhs-ingest through the gateway (consensus) with the datalink severed:")
@@ -539,30 +905,30 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Ledger(tui.LevelInfo, "Governance continued locally while disconnected — Git ledger + SQLite vault persisted")
 
 		step6Started := time.Now().UTC()
-		step6OK := demoScenarioStep(ctx, demoDir, "Step 6: Verify local ledger directory exists and is non-empty",
-			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -d " + constants.ContainerLedgerFilesDir + " && test -n \"$(ls -A " + constants.ContainerLedgerFilesDir + ")\""})
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		step6Protocol, step6Ref, step6Err := collectDHSLedgerPersistenceEvidence(ctx, demoDir, result, definition)
+		step6Result := buildDemoStepResult(
 			"dhs-disconnected-step-6", "independent state observation: local ledger persisted", step6Started, time.Now().UTC(),
-			step6OK, true, "operator ledger directory exists and is non-empty"))
-		if !step6OK {
+			step6Err == nil, true, step6Protocol)
+		if step6Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-ledger-persisted")
+			step6Result.EvidenceRefs = append(step6Result.EvidenceRefs, step6Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step6Ref)
 		}
+		result.StepResults = append(result.StepResults, step6Result)
 
 		step7Started := time.Now().UTC()
-		step7OK := demoScenarioStep(ctx, demoDir, "Step 7: Verify local audit vault DB exists and is non-empty",
-			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		step7Protocol, step7Ref, step7Err := collectDHSAuditVaultPersistenceEvidence(ctx, demoDir, result, definition)
+		step7Result := buildDemoStepResult(
 			"dhs-disconnected-step-7", "independent state observation: local audit vault persisted", step7Started, time.Now().UTC(),
-			step7OK, true, "operator audit vault exists and is non-empty"))
-		if !step7OK {
+			step7Err == nil, true, step7Protocol)
+		if step7Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-local-audit-vault-persisted")
+			step7Result.EvidenceRefs = append(step7Result.EvidenceRefs, step7Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step7Ref)
 		}
+		result.StepResults = append(result.StepResults, step7Result)
 
 		demoPrintln("  ── Step 8: Restore the Mission Partner datalink ─────────────────")
 		step8Started := time.Now().UTC()
@@ -788,17 +1154,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/log/g8e' — data-destruction threat detected at admission")
 
 		step2Started := time.Now().UTC()
-		step2OK := demoScenarioStep(ctx, demoDir, "Step 2: Independently verify operator audit vault DB still exists and is non-empty (prohibited side-effect check)",
-			[]string{"docker", "compose", "exec", "-T", "operator",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
-		blockResult.StepResults = append(blockResult.StepResults, buildDemoStepResult(
+		step2Protocol, step2Ref, step2Err := collectDHSAuditVaultPersistenceEvidence(ctx, demoDir, blockResult, blockDefinition)
+		step2Result := buildDemoStepResult(
 			"dhs-destruction-block-step-2", "independent state observation: audit vault present and non-empty", step2Started, time.Now().UTC(),
-			step2OK, true, "operator audit vault exists and is non-empty"))
-		if !step2OK {
+			step2Err == nil, true, step2Protocol)
+		if step2Err != nil {
 			blockHasErrors = true
 		} else {
-			blockResult.StateObservationRefs = append(blockResult.StateObservationRefs, "state-observation:dhs-audit-vault-intact")
+			step2Result.EvidenceRefs = append(step2Result.EvidenceRefs, step2Ref)
+			blockResult.StateObservationRefs = append(blockResult.StateObservationRefs, step2Ref)
 		}
+		blockResult.StepResults = append(blockResult.StepResults, step2Result)
 		blockResult.CompletedAt = timestamppb.New(time.Now().UTC())
 		if blockHasErrors {
 			blockResult.Status = demoStatusFailed

@@ -246,24 +246,27 @@ const (
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
-	DemosDirname                    = "demos"
-	DemosComposeFile                = "compose.yml"
-	DemosBinDirname                 = "bin"
-	DemosBinaryName                 = "g8e"
-	DemosTargetDataDir              = "target-data"
-	DemosDoctrineDir                = "doctrine"
-	DemosPARequestsFile             = "pa_requests.json"
-	DemosHIPAADoctrineFile          = "phi_hipaa_doctrine.json"
-	DemosDHSDoctrineFile            = "dhs_sovereign_doctrine.json"
-	DemosFedRAMPDoctrineFile        = "fedramp_doctrine.json"
-	DemosFinanceStateCollectorFile  = "verify_trade_absence.sh"
-	DemosHealthcareNetCollectorFile = "collect_network_isolation.sh"
-	DemosDHSNetworkCollectorFile    = "collect_network_membership.sh"
-	DemosImagesManifestFile         = "images.json"
-	DemosOrgHealthcare              = "healthcare"
-	DemosOrgFinance                 = "finance"
-	DemosOrgDHS                     = "dhs"
-	DemosOrgFedRAMP                 = "fedramp"
+	DemosDirname                       = "demos"
+	DemosComposeFile                   = "compose.yml"
+	DemosBinDirname                    = "bin"
+	DemosBinaryName                    = "g8e"
+	DemosTargetDataDir                 = "target-data"
+	DemosDoctrineDir                   = "doctrine"
+	DemosPARequestsFile                = "pa_requests.json"
+	DemosHIPAADoctrineFile             = "phi_hipaa_doctrine.json"
+	DemosDHSDoctrineFile               = "dhs_sovereign_doctrine.json"
+	DemosFedRAMPDoctrineFile           = "fedramp_doctrine.json"
+	DemosFinanceStateCollectorFile     = "verify_trade_absence.sh"
+	DemosHealthcareNetCollectorFile    = "collect_network_isolation.sh"
+	DemosDHSNetworkCollectorFile       = "collect_network_membership.sh"
+	DemosDHSGatewayHealthCollectorFile = "collect_gateway_health.sh"
+	DemosDHSLedgerCollectorFile        = "collect_ledger_persistence.sh"
+	DemosDHSAuditVaultCollectorFile    = "collect_audit_vault_persistence.sh"
+	DemosImagesManifestFile            = "images.json"
+	DemosOrgHealthcare                 = "healthcare"
+	DemosOrgFinance                    = "finance"
+	DemosOrgDHS                        = "dhs"
+	DemosOrgFedRAMP                    = "fedramp"
 
 	// DHS demo docker resource names. The compose project is named "dhs-demo"
 	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
@@ -271,6 +274,11 @@ const (
 	// Mission Partner link severed in Scenario 2.
 	DemosDHSPerimeterNetwork      = "dhs-demo_net_perimeter"
 	DemosDHSCoalitionDatalinkCtnr = "dhs-coalition-datalink"
+
+	// DHS gateway health endpoint used by the local gateway availability
+	// collector in dhs-disconnected-operations. The compose file maps
+	// container port 8080 to host port 8087.
+	DemosDHSGatewayHealthEndpoint = "http://localhost:8087/api/v1/health"
 )
 
 // Container paths for Docker exec commands in demo environments.
