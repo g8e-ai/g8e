@@ -14,9 +14,10 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Inventory the changes since the previous release tag
 2. Reconcile documentation with the code changes
 3. Write `docs/release_notes/vX.Y.x/vX.Y.Z.md`
-4. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix) so CI's version sync and locked-environment checks pass on the PR
-5. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
-6. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
+4. Generate compliance evidence: run `g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation))
+5. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix) so CI's version sync and locked-environment checks pass on the PR
+6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
+7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
 
 **Release owner (commits, merges, tags, pushes):**
 1. Review the prepared changes, then `git add`, `git commit`, `git push`, and open the PR on GitHub
@@ -33,10 +34,11 @@ The Python package files (`pyproject.toml`, `__init__.py`, and the editable pack
 1. **Inventory the changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
 2. **Update documentation to match the code**: For every doc in scope, do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
 3. **Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory (see [Release Notes](#release-notes)). The CHANGELOG entry is a summary of this.
-4. **Bump version files**: Set `VERSION`, sync the Python package files (`pyproject.toml`, `__init__.py`, and `uv.lock`) to match, and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python files must be synced during PR prep so CI's version sync check passes on the PR — `make release` re-syncs them after merge as a no-op safety net.
-5. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
-6. **Hand the prepared working tree back to the release owner.** The agent stops here — it does NOT commit, push, open a PR, or run `make release`. See [Separation of Duties](#separation-of-duties).
-7. **Release owner**: commit, push, open and merge the PR; after CI on `main` passes, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
+4. **Generate compliance evidence**: Run `g8e compliance release-evidence` to produce the per-release compliance evidence report and CSV alongside the release notes (see [Compliance Evidence Generation](#compliance-evidence-generation)). This captures demonstrated technical control operation at the release boundary.
+5. **Bump version files**: Set `VERSION`, sync the Python package files (`pyproject.toml`, `__init__.py`, and `uv.lock`) to match, and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python files must be synced during PR prep so CI's version sync check passes on the PR — `make release` re-syncs them after merge as a no-op safety net.
+6. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
+7. **Hand the prepared working tree back to the release owner.** The agent stops here — it does NOT commit, push, open a PR, or run `make release`. See [Separation of Duties](#separation-of-duties).
+8. **Release owner**: commit, push, open and merge the PR; after CI on `main` passes, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
 
 ---
 
@@ -224,6 +226,68 @@ Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in
 
 ---
 
+## Compliance Evidence Generation
+
+Every release generates a per-release compliance evidence artifact that captures demonstrated technical control operation at the release boundary. The artifact is produced by `g8e compliance release-evidence` and lives alongside the release notes in `docs/release_notes/vX.Y.x/`.
+
+### What it captures
+
+The command runs three currently-available compliance evidence sources and renders them into a single markdown report and a CSV:
+
+1. **KSI evaluation** — runs `g8e compliance ksi --class C` against the live runtime stores (audit store, git ledger, commitment ledger) and records the per-KSI status, method count, and last-validated timestamp. When the runtime stores are unavailable, the report records the gap honestly rather than inventing a passing result.
+2. **KSI history snapshot** — reads persisted KSI evaluation snapshots from `.g8e/data/compliance/ksi-history/` and records the snapshot count and time range. The current evaluation is also persisted as a new snapshot.
+3. **Demo-run verification** — runs `g8e compliance demo-run verify <run-id>` for each persisted demo evidence run (or for explicit run IDs passed via `--demo-run`) and records the verification result, failure count, verifier ID and version, reproduced checksum root, and verified-at timestamp.
+
+The full `g8e compliance report generate` bundle (signed, cross-framework OSCAL, historical effectiveness) is planned (Phase 4-7 of the proof-backed reporting pipeline) and not yet implemented. The release-evidence artifact captures what the pipeline can demonstrate today; it does not claim certification, accreditation, authorization, or legal compliance. See the [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) document for the pipeline architecture, assertion catalog, evidence levels, and roadmap.
+
+### Output files
+
+Two files are written into the output directory (typically `docs/release_notes/vX.Y.x/`):
+
+| File | Format | Purpose |
+|------|--------|---------|
+| `vX.Y.Z-compliance-evidence.md` | Markdown | Readable report with summary table, KSI evaluation table, KSI history summary, demo-run verification table, and claim boundaries |
+| `vX.Y.Z-compliance-evidence.csv` | CSV | One row per evidence item (KSI results and demo-run verifications) with columns: `evidence_type`, `identifier`, `status`, `valid`, `method_count`, `last_validated`, `failure_count`, `verifier_id`, `verifier_version`, `checksum_root`, `evaluated_at` |
+
+### Command
+
+```bash
+g8e compliance release-evidence \
+  --version vX.Y.Z \
+  --out docs/release_notes/vX.Y.x/ \
+  --class C \
+  [--demo-run <run-id> ...] \
+  [--fail-closed]
+```
+
+Flags:
+
+- `--version` (required): Release version with `v` prefix (e.g. `v2.1.3`).
+- `--out` (required): Output directory for the markdown report and CSV. Typically `docs/release_notes/vX.Y.x/`.
+- `--class`: FedRAMP 20x certification class (A, B, C, D). Defaults to `C`.
+- `--catalog`: Path to KSI catalog JSON. Defaults to `docs/reference/ksi-catalog.json`.
+- `--demo-run`: Demo run ID to verify. Repeatable. When omitted, all persisted runs under `.g8e/data/compliance/demo-evidence/` are verified.
+- `--project-root`: Project root for demo provenance verification. Defaults to cwd.
+- `--fail-closed`: Exit nonzero if any KSI is not satisfied, KSI evaluation is unavailable, or any demo run is invalid. Use this in CI gates; do not use it during release prep when the runtime stores may not have live governance data.
+
+### When to run it
+
+Run step 4 (compliance evidence generation) after step 3 (release notes) and before step 5 (version files). The command needs the release version string, which is determined during the change inventory, and writes into the release notes directory, which is created in step 3.
+
+The command reads runtime evidence from the `.g8e/` tree of the deployment it runs against. For release prep, run it against a deployment with current demo evidence persisted (e.g. after `./g8e demos scenarios run` has produced evidence-grade demo runs). If no demo evidence is persisted, the report records "No demo runs persisted" — this is an honest gap, not a failure.
+
+### Release notes cross-reference
+
+Add a `### Compliance Evidence` subsection to the release notes file pointing to the generated artifact:
+
+```markdown
+### Compliance Evidence
+
+Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). The report captures KSI evaluation, KSI history, and demo-run verification at the release boundary.
+```
+
+---
+
 ## Version-Bearing Files
 
 After the change inventory and documentation reconciliation are complete, bump the version files. `VERSION` is the single source of truth; `make release` auto-syncs all derived files from it.
@@ -400,18 +464,19 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
 - [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
-- [ ] **4. `VERSION`**: Set to `vX.Y.Z`
-- [ ] **5. Sync Python files**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`), `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`), and the editable `g8e` package entry in `protocol/python/uv.lock` (`version = "X.Y.Z"`) to match `VERSION` (no `v` prefix). This is required so CI's version sync check passes and `uv run --locked` remains usable on the PR. The agent edits these files manually; it cannot run `make release` to do it. `make release` re-syncs them after merge as a no-op safety net.
-- [ ] **6. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
-- [ ] **7. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
-- [ ] **8. Run [Verification](#verification)** to catch any missed files — including stale version callouts (step 8 of Verification)
-- [ ] **9. Hand off**: The agent stops here. It does NOT `git add`, `git commit`, `git push`, open a PR, or run `make release`. The prepared working tree is handed back to the release owner.
-- [ ] **10. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
-- [ ] **11. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
+- [ ] **4. Generate compliance evidence**: Run `g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/` to produce the per-release compliance evidence report and CSV (see [Compliance Evidence Generation](#compliance-evidence-generation))
+- [ ] **5. `VERSION`**: Set to `vX.Y.Z`
+- [ ] **6. Sync Python files**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`), `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`), and the editable `g8e` package entry in `protocol/python/uv.lock` (`version = "X.Y.Z"`) to match `VERSION` (no `v` prefix). This is required so CI's version sync check passes and `uv run --locked` remains usable on the PR. The agent edits these files manually; it cannot run `make release` to do it. `make release` re-syncs them after merge as a no-op safety net.
+- [ ] **7. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
+- [ ] **8. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
+- [ ] **9. Run [Verification](#verification)** to catch any missed files — including stale version callouts (step 8 of Verification)
+- [ ] **10. Hand off**: The agent stops here. It does NOT `git add`, `git commit`, `git push`, open a PR, or run `make release`. The prepared working tree is handed back to the release owner.
+- [ ] **11. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
+- [ ] **12. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
 
-**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `uv.lock`), all made by the agent. `make release` re-syncs the Python files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, and release notes.
+**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `uv.lock`), all made by the agent. `make release` re-syncs the Python files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, release notes, and compliance evidence.
 
-> **Workflow note:** All release prep (steps 1-9) happens on a feature branch. The agent does steps 1-8 and stops; it does not commit, push, or open the PR. The release owner does steps 10-11 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
+> **Workflow note:** All release prep (steps 1-10) happens on a feature branch. The agent does steps 1-9 and stops; it does not commit, push, or open the PR. The release owner does steps 11-12 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
 ---
 
@@ -513,7 +578,7 @@ For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
 2. Inventory the changes and reconcile documentation for the touched areas
-3. Set `VERSION`, sync the Python package files to match, update `CHANGELOG.md`, and write release notes
+3. Set `VERSION`, sync the Python package files to match, update `CHANGELOG.md`, write release notes, and generate compliance evidence (`g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/`)
 4. Hand off to the release owner, who commits, pushes, opens and merges the PR; after CI on `main` passes, pulls main locally, and runs `make release` to re-sync the Python files (no-op), tag, and push; GitHub Actions workflows create the release and upload assets
 
 ---

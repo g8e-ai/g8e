@@ -671,10 +671,10 @@ The following packages are test-only and are not part of the production dependen
 - `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, consensus enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies
 - Used by integration tests for MCP flow, A2A flow, L2 consensus, governance envelope verification, OOB suspension/approval, and downstream integration
 
-**`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)
-- `DockerE2EFixture` spins up docker-compose, allocates host ports, waits for gateway health, and tears down on cleanup
+**`test/e2e/main_test.go`** - E2E test entry point (build tag: `e2e`)
+- `TestMain` loads configuration from the local `.g8e/` runtime tree, runs a bounded preflight health check against the running gateway, and constructs the shared `E2EClient`. It does not start, stop, restart, or inspect any containers — the user starts the platform (`docker compose up` or `./g8e gw start`) before running `./g8e test e2e`
 - Tests only what is observable from outside containers: HTTP health, CA bundle discovery, port reachability, and mTLS handshake over network
-- E2E tests require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL` message so a broken Docker environment can never produce a green build with zero tests run
+- E2E tests require a running platform — there is no opt-out. If the platform is not reachable, the suite exits non-zero with a `FATAL` message so a missing platform can never produce a green build with zero tests run
 
 **`test/integration_helper.go`** - Shared integration test helpers (build tag: `integration` or `e2e`)
 - `NewLiveOperatorHTTPClient` creates an mTLS API client against a running g8e platform

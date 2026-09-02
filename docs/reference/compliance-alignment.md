@@ -712,7 +712,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **PKI Controller** | `internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
 | **Audit Store** | `internal/services/storage/audit_store.go` | Searchable receipt columns, complete canonical receipt persistence and export, audit logging, encryption, retention |
 | **Commitment Ledger** | `internal/services/storage/commitment_ledger.go` | Atomic insertion-ordered signed hash chain and durable receipt linkage |
-| **Receipt Protocol** | `protocol/action_receipt.go`, `protocol/python/g8e/receipts.py`, `protocol/vectors/` | Cross-language canonical receipt and persistence-attestation verification |
+| **Receipt Protocol** | `protocol/action_receipt_canonicalization_test.go`, `protocol/python/g8e/receipts.py`, `protocol/vectors/` | Cross-language canonical receipt and persistence-attestation verification |
 | **Reporting Verification** | `internal/services/reporting/verification.go` | Receipt signatures, persistence attestations, commitment signatures and columns, cross-links, mutation linkage, and Git Merkle roots |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
