@@ -9,6 +9,7 @@ package scenarios
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -26,6 +28,15 @@ const (
 	receiptEvidenceQueryTimeout  = 5 * time.Second
 	receiptEvidenceQueryInterval = 100 * time.Millisecond
 )
+
+// ReceiptEvidenceResolver is the subset of the harness client needed to
+// resolve and independently verify receipt evidence. The real
+// *clientpkg.Client implements it; Tier 1 tests inject stubs for the
+// external gateway dependency.
+type ReceiptEvidenceResolver interface {
+	GetActionReceipt(ctx context.Context, transactionID string, persona ...clientpkg.Persona) (*operatorv1.ActionReceipt, []byte, error)
+	GetTrustedSignerPublicKey(ctx context.Context, keyID string) (ed25519.PublicKey, error)
+}
 
 type ReceiptEvidence struct {
 	RunID           string                    `json:"run_id"`
@@ -79,13 +90,34 @@ func buildReceiptEvidence(result *Result, projection clientpkg.Receipt, receipt 
 	}, nil
 }
 
-func ResolveReceiptEvidence(ctx context.Context, client *clientpkg.Client, result *Result) error {
+// VerifyReceiptEvidenceSignatures independently verifies the receipt signature
+// and final-persistence attestation signature against the assessed signer's
+// trusted public key. This is the verification that happens outside the
+// Gateway relay trust boundary: the harness fetches the signer's public key
+// from the gateway's trusted-signer endpoint and calls the shared governance
+// signature verifiers rather than trusting the relay's unchecked field
+// presence. Fail-closed: nil evidence, nil public key, invalid signature, or
+// invalid attestation all return an error.
+func VerifyReceiptEvidenceSignatures(evidence *ReceiptEvidence, publicKey ed25519.PublicKey) error {
+	if evidence == nil || evidence.Receipt == nil {
+		return constants.ErrActionReceiptMissing
+	}
+	if err := governance.VerifyActionReceiptSignature(evidence.Receipt, publicKey); err != nil {
+		return err
+	}
+	if err := governance.VerifyReceiptPersistenceAttestation(evidence.Receipt, publicKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ResolveReceiptEvidence(ctx context.Context, resolver ReceiptEvidenceResolver, result *Result) error {
 	if result == nil || len(result.Receipts) == 0 {
 		return nil
 	}
 	evidenceRecords := make([]ReceiptEvidence, 0, len(result.Receipts))
 	for _, projection := range result.Receipts {
-		receipt, err := waitForCanonicalReceipt(ctx, client, projection.TransactionID)
+		receipt, err := waitForCanonicalReceipt(ctx, resolver, projection.TransactionID)
 		if err != nil {
 			return err
 		}
@@ -93,19 +125,26 @@ func ResolveReceiptEvidence(ctx context.Context, client *clientpkg.Client, resul
 		if err != nil {
 			return err
 		}
+		signerKey, err := resolver.GetTrustedSignerPublicKey(ctx, receipt.GetSignerKeyId())
+		if err != nil {
+			return fmt.Errorf("resolve trusted signer key %s for transaction %s: %w", receipt.GetSignerKeyId(), projection.TransactionID, err)
+		}
+		if err := VerifyReceiptEvidenceSignatures(evidence, signerKey); err != nil {
+			return fmt.Errorf("verify receipt evidence signatures for transaction %s: %w", projection.TransactionID, err)
+		}
 		evidenceRecords = append(evidenceRecords, *evidence)
 	}
 	result.ReceiptEvidence = append(result.ReceiptEvidence, evidenceRecords...)
 	return nil
 }
 
-func waitForCanonicalReceipt(ctx context.Context, client *clientpkg.Client, transactionID string) (*operatorv1.ActionReceipt, error) {
+func waitForCanonicalReceipt(ctx context.Context, resolver ReceiptEvidenceResolver, transactionID string) (*operatorv1.ActionReceipt, error) {
 	deadline := time.NewTimer(receiptEvidenceQueryTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(receiptEvidenceQueryInterval)
 	defer ticker.Stop()
 	for {
-		receipt, _, err := client.GetActionReceipt(ctx, transactionID)
+		receipt, _, err := resolver.GetActionReceipt(ctx, transactionID)
 		if err != nil {
 			return nil, fmt.Errorf("resolve canonical action receipt %s: %w", transactionID, err)
 		}

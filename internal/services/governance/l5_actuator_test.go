@@ -692,7 +692,7 @@ func TestSignatureDigest_ProtocolVectors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := append([]string(nil), tt.signatures...)
-			assert.Equal(t, tt.expected, signatureDigest(input))
+			assert.Equal(t, tt.expected, SignatureDigest(input))
 			assert.Equal(t, tt.signatures, input)
 		})
 	}
