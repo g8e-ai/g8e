@@ -17,6 +17,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
@@ -52,6 +54,7 @@ type Result struct {
 	ScenarioID      string               `json:"scenario_id,omitempty"`
 	Exchanges       []clientpkg.Exchange `json:"exchanges"`
 	TxHashes        []string             `json:"tx_hashes,omitempty"`
+	AttemptIDs      []string             `json:"attempt_ids,omitempty"`
 	ExecutionIDs    []string             `json:"execution_ids,omitempty"`
 	TransactionIDs  []string             `json:"transaction_ids,omitempty"`
 	Receipts        []clientpkg.Receipt  `json:"receipts,omitempty"`
@@ -133,6 +136,7 @@ func Execute(ctx context.Context, c *clientpkg.Client, sc Scenario) Result {
 		StartedAt:       time.Now(),
 		RunID:           os.Getenv(string(constants.EnvVar.DemoRunID)),
 		ScenarioID:      os.Getenv(string(constants.EnvVar.DemoScenarioID)),
+		AttemptIDs:      []string{uuid.NewString()},
 	}
 	c.Record(&r.Exchanges) // every HTTP call lands in this result
 	defer c.Record(nil)

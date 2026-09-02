@@ -548,6 +548,31 @@ func TestExecute_RetainsDemoCorrelation(t *testing.T) {
 	assert.Equal(t, "fedramp-provision", result.ScenarioID)
 }
 
+func TestExecute_RetainsUniqueAuthoritativeAttemptID(t *testing.T) {
+	scenario := Scenario{
+		Name:    "test-attempt",
+		Persona: clientpkg.Persona{ID: "test"},
+		Run:     func(context.Context, *clientpkg.Client, *Result) error { return nil },
+	}
+
+	first := Execute(context.Background(), &clientpkg.Client{}, scenario)
+	second := Execute(context.Background(), &clientpkg.Client{}, scenario)
+	firstJSON, err := json.Marshal(first)
+	require.NoError(t, err)
+	secondJSON, err := json.Marshal(second)
+	require.NoError(t, err)
+	var firstProjection, secondProjection struct {
+		AttemptIDs []string `json:"attempt_ids"`
+	}
+	require.NoError(t, json.Unmarshal(firstJSON, &firstProjection))
+	require.NoError(t, json.Unmarshal(secondJSON, &secondProjection))
+
+	require.Len(t, firstProjection.AttemptIDs, 1)
+	require.Len(t, secondProjection.AttemptIDs, 1)
+	assert.NotEmpty(t, firstProjection.AttemptIDs[0])
+	assert.NotEqual(t, firstProjection.AttemptIDs[0], secondProjection.AttemptIDs[0])
+}
+
 func TestExecuteWithRecording(t *testing.T) {
 	ctx := context.Background()
 

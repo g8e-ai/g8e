@@ -78,6 +78,7 @@ func validDemoScenarioResult() *compliancev1.DemoScenarioResult {
 		StartedAt:            timestamppb.New(started),
 		CompletedAt:          timestamppb.New(started.Add(time.Second)),
 		Status:               "passed",
+		AttemptIds:           []string{"attempt-1"},
 		ExecutionIds:         []string{"execution-1"},
 		TransactionIds:       []string{"transaction-1"},
 		ReceiptRefs:          []string{"artifact-receipt-1"},
@@ -157,6 +158,16 @@ func TestValidateDemoStepResultRejectsContradictoryOutcomes(t *testing.T) {
 			assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 		})
 	}
+}
+
+func TestValidateDemoScenarioResultRejectsDuplicateAttemptIDs(t *testing.T) {
+	result := validDemoScenarioResult()
+	result.AttemptIds = append(result.AttemptIds, result.AttemptIds[0])
+
+	err := catalog.ValidateDemoScenarioResult(result, validDemoScenarioDefinition(), "scope-1")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
 func TestValidateDemoScenarioResultFailsClosedOnMissingRequiredEvidence(t *testing.T) {

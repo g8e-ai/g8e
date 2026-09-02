@@ -1517,8 +1517,8 @@ func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...st
 }
 
 // harnessResult is the typed JSON output emitted by `demos scenarios run --json`.
-// The parent demo runner parses this to extract authoritative transaction IDs and
-// receipt projections retained by the child harness inside the container.
+// The parent demo runner parses this to extract authoritative attempt, execution,
+// transaction, and receipt identities retained by the child harness inside the container.
 type harnessResult struct {
 	Name            string           `json:"name"`
 	Title           string           `json:"title"`
@@ -1528,6 +1528,7 @@ type harnessResult struct {
 	DurationMS      int64            `json:"duration_ms"`
 	RunID           string           `json:"run_id,omitempty"`
 	ScenarioID      string           `json:"scenario_id,omitempty"`
+	AttemptIDs      []string         `json:"attempt_ids,omitempty"`
 	ExecutionIDs    []string         `json:"execution_ids,omitempty"`
 	TransactionIDs  []string         `json:"transaction_ids,omitempty"`
 	Receipts        []harnessReceipt `json:"receipts,omitempty"`
@@ -1582,9 +1583,10 @@ func runHarnessWithJSON(ctx context.Context, demoDir, label string, args []strin
 // IDs or receipts, the result keeps its existing references and the caller is
 // expected to mark the step as failed.
 func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
-	if hr == nil || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
+	if hr == nil || len(hr.AttemptIDs) == 0 || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
 		return false
 	}
+	result.AttemptIds = append(result.AttemptIds, hr.AttemptIDs...)
 	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
 	for _, rcpt := range hr.Receipts {
