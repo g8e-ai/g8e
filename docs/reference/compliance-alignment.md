@@ -11,6 +11,8 @@
 
 This document provides a comprehensive alignment of the g8e platform's security controls and governance mechanisms against major industry compliance frameworks. g8e is designed as a zero-trust execution platform for agentic infrastructure, implementing fail-closed verification, cryptographic proof chains, and local-first data sovereignty.
 
+This document maps g8e's security controls to external frameworks. The [Proof-Backed Compliance Evidence](./compliance-evidence.md) document describes the pipeline that binds the FedRAMP 20x and NIST SP 800-53 mappings to immutable, independently verifiable evidence and the roadmap for extending that binding to the remaining frameworks.
+
 **Key Compliance Posture:**
 - **SOC 2 Type II:** Strong alignment with Trust Services Criteria (Security, Availability, Confidentiality)
 - **ISO 27001:2022:** Comprehensive coverage of Annex A controls
@@ -518,7 +520,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 
 ## 10. FedRAMP 20x (CR26) Alignment
 
-FedRAMP's Consolidated Rules for 2026 (CR26) introduce the 20x path, which replaces static System Security Plans with binary-resolution, machine-readable Key Security Indicators (KSIs) that regenerate on demand. g8e produces the raw evidence 20x consumes: signed `ActionReceipts` (Ed25519), a hash-chained git ledger, a SQLite audit vault, and the LFAA retrieval surface. The compliance package (`internal/services/compliance/`) provides typed KSI models, a binary KSI evaluator, historical snapshot retention, COSAiS overlay ingestion, protocol-owned assertion and framework catalogs, and independent verification of persisted demo evidence runs. The typed OSCAL renderer remains available to the package, but the CLI does not expose the superseded flat live-state export or the planned proof-backed report bundle generator.
+FedRAMP's Consolidated Rules for 2026 (CR26) introduce the 20x path, which replaces static System Security Plans with binary-resolution, machine-readable Key Security Indicators (KSIs) that regenerate on demand. g8e produces the raw evidence 20x consumes: signed `ActionReceipts` (Ed25519), a hash-chained git ledger, a SQLite audit vault, and the LFAA retrieval surface. The compliance package (`internal/services/compliance/`) provides typed KSI models, a binary KSI evaluator, historical snapshot retention, COSAiS overlay ingestion, protocol-owned assertion and framework catalogs, and independent verification of persisted demo evidence runs. The typed OSCAL renderer remains available to the package, but the CLI does not expose the superseded flat live-state export or the planned proof-backed report bundle generator. The [Proof-Backed Compliance Evidence](./compliance-evidence.md) document describes the assertion catalog, framework crosswalk, evidence-grade demo scenarios, and independent demo-run verification that bind the FedRAMP 20x and NIST SP 800-53 mappings to immutable evidence.
 
 ### Certification Classes
 

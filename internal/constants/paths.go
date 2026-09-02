@@ -607,6 +607,15 @@ const (
 	ComplianceBundleSignaturesFilename           = "signatures.json"
 )
 
+// Release evidence output filename suffixes. The per-release compliance
+// evidence artifacts are written to docs/release_notes/vX.Y.x/ as
+// vX.Y.Z-compliance-evidence.md and vX.Y.Z-compliance-evidence.csv. These are
+// source-tree documentation paths, not .g8e/ runtime paths.
+const (
+	ReleaseEvidenceMarkdownSuffix = "-compliance-evidence.md"
+	ReleaseEvidenceCSVSuffix      = "-compliance-evidence.csv"
+)
+
 // Per-run demo evidence path constants. Typed demo evidence is persisted under
 // the runtime compliance tree at data/compliance/demo-evidence/<run-id>/ before
 // bundle generation. These are runtime evidence store paths, distinct from the

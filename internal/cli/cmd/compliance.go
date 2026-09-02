@@ -42,6 +42,7 @@ CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
 		complianceKSIHistoryCmdWithConfig(newFileSvc),
 		complianceOverlayCmdWithConfig(newFileSvc),
 		complianceDemoRunCmd(),
+		complianceReleaseEvidenceCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory),
 	)
 
 	return cmd
