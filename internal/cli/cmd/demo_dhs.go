@@ -126,11 +126,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-ingest")
+		hcfg.JSON = true
 		step3Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "dhs-ingest via agent",
-			false,
-			harnessRun("dhs-ingest", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "dhs-ingest via agent",
+			harnessRun("dhs-ingest", hcfg))
 		step3Completed := time.Now().UTC()
 		step3OK := harnessErr == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
@@ -140,9 +139,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			fmt.Println("  (dhs-ingest harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-ingest")
-			result.TransactionIds = append(result.TransactionIds, "dhs-ingest-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (dhs-ingest harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest", "quorum met (3/5)")
@@ -265,21 +265,22 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest-disco", "doctrine check (local)")
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest-disco", "doctrine admitted (local)")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest-disco", "local consensus")
+		hcfg.JSON = true
 		step5Started := time.Now().UTC()
-		step5Err := demoStep(ctx, demoDir, "dhs-ingest while disconnected",
-			false,
-			harnessRun("dhs-ingest", hcfg)...,
-		)
+		harnessResults, step5Err := runHarnessWithJSON(ctx, demoDir, "dhs-ingest while disconnected",
+			harnessRun("dhs-ingest", hcfg))
+		step5OK := step5Err == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"dhs-disconnected-step-5", "dhs-ingest harness while disconnected", step5Started, time.Now().UTC(),
-			step5Err == nil, true, "agent harness dhs-ingest while datalink detached"))
-		if step5Err != nil {
+			step5OK, true, "agent harness dhs-ingest while datalink detached"))
+		if !step5OK {
 			fmt.Println("  (ingest while disconnected failed — operator may not be processing locally)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-disconnected-ingest")
-			result.TransactionIds = append(result.TransactionIds, "dhs-disconnected-ingest-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (dhs-ingest while disconnected harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest-disco", "local quorum met")
@@ -415,11 +416,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "dhs-cue via agent",
-			false,
-			harnessRun("dhs-cue", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "dhs-cue via agent",
+			harnessRun("dhs-cue", hcfg))
 		step2Completed := time.Now().UTC()
 		step2OK := harnessErr == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
@@ -429,9 +429,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			fmt.Println("  (dhs-cue harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:dhs-cue")
-			result.TransactionIds = append(result.TransactionIds, "dhs-cue-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (dhs-cue harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-cue", "quorum met (3/5)")
@@ -513,11 +514,12 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/log/g8e' → rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-evidence-block", "doctrine check")
+		hcfg.JSON = true
 		step1Started := time.Now().UTC()
-		step1Err := demoStep(ctx, demoDir, "dhs-evidence-block via agent",
-			false,
-			harnessRun("dhs-evidence-block", hcfg)...,
-		)
+		harnessResults, step1Err := runHarnessWithJSON(ctx, demoDir, "dhs-evidence-block via agent",
+			harnessRun("dhs-evidence-block", hcfg))
+		// The harness exits successfully only after it verifies that doctrine blocked
+		// the action. A nonzero exit means the expected rejection was not verified.
 		step1OK := step1Err == nil
 		blockResult.StepResults = append(blockResult.StepResults, buildDemoStepResult(
 			"dhs-destruction-block-step-1", "dhs-evidence-block harness (L1 doctrine reject)", step1Started, time.Now().UTC(),
@@ -527,8 +529,15 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			fmt.Println()
 			blockHasErrors = true
 		} else {
-			blockResult.ReceiptRefs = append(blockResult.ReceiptRefs, "failed-stage:dhs-evidence-block")
-			blockResult.TransactionIds = append(blockResult.TransactionIds, "dhs-evidence-block-tx")
+			if len(harnessResults) > 0 {
+				applyHarnessAuthoritativeIdentity(blockResult, &harnessResults[0])
+			}
+			if len(blockResult.ReceiptRefs) == 0 {
+				blockResult.ReceiptRefs = append(blockResult.ReceiptRefs, "failed-stage:dhs-evidence-block")
+			}
+			if len(blockResult.TransactionIds) == 0 {
+				blockResult.TransactionIds = append(blockResult.TransactionIds, "dhs-evidence-block-tx")
+			}
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "dhs-evidence-block", "DATA DESTRUCTION ATTEMPT BLOCKED")
@@ -560,11 +569,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
 		hcfg = bindHarnessConfig(hcfg, purgeResult)
+		hcfg.JSON = true
 		step3Started := time.Now().UTC()
-		step3Err := demoStep(ctx, demoDir, "dhs-purge via agent",
-			false,
-			harnessRun("dhs-purge", hcfg)...,
-		)
+		purgeHarnessResults, step3Err := runHarnessWithJSON(ctx, demoDir, "dhs-purge via agent",
+			harnessRun("dhs-purge", hcfg))
 		step3OK := step3Err == nil
 		purgeResult.StepResults = append(purgeResult.StepResults, buildDemoStepResult(
 			"dhs-destruction-purge-step-1", "dhs-purge harness", step3Started, time.Now().UTC(),
@@ -573,9 +581,10 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			fmt.Println("  (dhs-purge harness scenario failed)")
 			fmt.Println()
 			purgeHasErrors = true
-		} else {
-			purgeResult.ReceiptRefs = append(purgeResult.ReceiptRefs, "action-receipt:dhs-purge")
-			purgeResult.TransactionIds = append(purgeResult.TransactionIds, "dhs-purge-tx")
+		} else if len(purgeHarnessResults) == 0 || !applyHarnessAuthoritativeIdentity(purgeResult, &purgeHarnessResults[0]) {
+			fmt.Println("  (dhs-purge harness emitted no authoritative receipt)")
+			fmt.Println()
+			purgeHasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-purge", "doctrine admitted")

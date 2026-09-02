@@ -81,19 +81,30 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*complia
 	demoPrintln()
 	hcfg := harnessConfigForResult("agent-runtime", result)
 	hcfg.PublicURL = "http://g8e.local:8082"
+	hcfg.JSON = true
 	step3Started := time.Now().UTC()
-	step3Err := demoStep(ctx, demoDir, "finance-unauthorized-trade via agent", false,
-		harnessRun("finance-unauthorized-trade", hcfg)...)
+	harnessResults, step3Err := runHarnessWithJSON(ctx, demoDir, "finance-unauthorized-trade via agent",
+		harnessRun("finance-unauthorized-trade", hcfg))
+	// The harness exits successfully only after it verifies that doctrine blocked
+	// the unauthorized trade. A nonzero exit means the expected rejection was not verified.
+	step3OK := step3Err == nil
 	result.StepResults = append(result.StepResults, buildDemoStepResult(
 		"finance-unauthorized-trade-step-3", "finance unauthorized trade harness", step3Started, time.Now().UTC(),
-		step3Err == nil, true, "agent harness verifies L1 doctrine rejection"))
-	if step3Err != nil {
+		step3OK, true, "agent harness verifies L1 doctrine rejection"))
+	if !step3OK {
 		fmt.Println("  (agent scenario failed)")
 		fmt.Println()
 		hasErrors = true
 	} else {
-		result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:finance-unauthorized-trade")
-		result.TransactionIds = append(result.TransactionIds, "finance-unauthorized-trade-tx")
+		if len(harnessResults) > 0 {
+			applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
+		}
+		if len(result.ReceiptRefs) == 0 {
+			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:finance-unauthorized-trade")
+		}
+		if len(result.TransactionIds) == 0 {
+			result.TransactionIds = append(result.TransactionIds, "finance-unauthorized-trade-tx")
+		}
 	}
 
 	demoPrintln("  ── Step 4: Verify prohibited trade side effect is absent ─────")

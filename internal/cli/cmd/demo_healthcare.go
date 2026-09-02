@@ -81,19 +81,22 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		step2Err := demoStep(ctx, demoDir, "fhir request", false,
-			harnessRun("healthcare-success", hcfg)...)
+		harnessResults, step2Err := runHarnessWithJSON(ctx, demoDir, "fhir request",
+			harnessRun("healthcare-success", hcfg))
+		step2OK := step2Err == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"healthcare-success-step-2", "healthcare success harness", step2Started, time.Now().UTC(),
-			step2Err == nil, true, "agent harness submits PA through governed native tool"))
-		if step2Err != nil {
+			step2OK, true, "agent harness submits PA through governed native tool"))
+		if !step2OK {
 			fmt.Println("  (healthcare-success harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-success")
-			result.TransactionIds = append(result.TransactionIds, "healthcare-success-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (healthcare-success harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 3: Independently verify the PA submission record ────")
@@ -176,19 +179,22 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		step2Err := demoStep(ctx, demoDir, "gold-card PA via agent", false,
-			harnessRun("healthcare-gold-card", hcfg)...)
+		harnessResults, step2Err := runHarnessWithJSON(ctx, demoDir, "gold-card PA via agent",
+			harnessRun("healthcare-gold-card", hcfg))
+		step2OK := step2Err == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"healthcare-gold-card-step-2", "governed gold-card threshold evaluation", step2Started, time.Now().UTC(),
-			step2Err == nil, true, "agent harness invokes the healthcare actuator after governance"))
-		if step2Err != nil {
+			step2OK, true, "agent harness invokes the healthcare actuator after governance"))
+		if !step2OK {
 			fmt.Println("  (healthcare-gold-card harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-gold-card")
-			result.TransactionIds = append(result.TransactionIds, "healthcare-gold-card-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (healthcare-gold-card harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 3: Collect the run-bound AUTO_APPROVED state ────────")
@@ -259,19 +265,22 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		step2Err := demoStep(ctx, demoDir, "SLA breach evaluation via agent", false,
-			harnessRun("healthcare-sla-breach", hcfg)...)
+		harnessResults, step2Err := runHarnessWithJSON(ctx, demoDir, "SLA breach evaluation via agent",
+			harnessRun("healthcare-sla-breach", hcfg))
+		step2OK := step2Err == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"healthcare-sla-breach-step-2", "governed SLA evaluation", step2Started, time.Now().UTC(),
-			step2Err == nil, true, "agent harness invokes the healthcare actuator after governance"))
-		if step2Err != nil {
+			step2OK, true, "agent harness invokes the healthcare actuator after governance"))
+		if !step2OK {
 			fmt.Println("  (healthcare-sla-breach harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-sla-breach")
-			result.TransactionIds = append(result.TransactionIds, "healthcare-sla-breach-tx")
+		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (healthcare-sla-breach harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 3: Collect the run-bound SLA_BREACHED state ─────────")
@@ -348,19 +357,30 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln()
 		hcfg := harnessConfigForResult("agent-runtime", result)
 		hcfg.PublicURL = "http://g8e.local:8081"
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		step2Err := demoStep(ctx, demoDir, "phi exfiltration", false,
-			harnessRun("healthcare-phi-blocked", hcfg)...)
+		harnessResults, step2Err := runHarnessWithJSON(ctx, demoDir, "phi exfiltration",
+			harnessRun("healthcare-phi-blocked", hcfg))
+		// The harness exits successfully only after it verifies that doctrine blocked
+		// the PHI exfiltration attempt. A nonzero exit means the expected rejection was not verified.
+		step2OK := step2Err == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
 			"healthcare-phi-blocked-step-2", "healthcare PHI exfiltration harness", step2Started, time.Now().UTC(),
-			step2Err == nil, true, "agent harness verifies L1 doctrine rejection"))
-		if step2Err != nil {
+			step2OK, true, "agent harness verifies L1 doctrine rejection"))
+		if !step2OK {
 			fmt.Println("  (healthcare-phi-blocked harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
 		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:healthcare-phi-blocked")
-			result.TransactionIds = append(result.TransactionIds, "healthcare-phi-blocked-tx")
+			if len(harnessResults) > 0 {
+				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
+			}
+			if len(result.ReceiptRefs) == 0 {
+				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:healthcare-phi-blocked")
+			}
+			if len(result.TransactionIds) == 0 {
+				result.TransactionIds = append(result.TransactionIds, "healthcare-phi-blocked-tx")
+			}
 		}
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
