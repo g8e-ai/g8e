@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -682,7 +683,7 @@ func collectDHSAuditVaultPersistenceEvidence(ctx context.Context, demoDir string
 	return string(encoded), evidenceRef, nil
 }
 
-func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+func runDHSScenario(ctx context.Context, fileSvc fs.RuntimeFileService, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result *compliancev1.DemoScenarioResult
 	var results []*compliancev1.DemoScenarioResult
@@ -756,7 +757,7 @@ func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*co
 			fmt.Println("  (dhs-ingest harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (dhs-ingest harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -894,7 +895,7 @@ func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*co
 			fmt.Println("  (ingest while disconnected failed — operator may not be processing locally)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (dhs-ingest while disconnected harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -1046,7 +1047,7 @@ func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*co
 			fmt.Println("  (dhs-cue harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (dhs-cue harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -1145,7 +1146,7 @@ func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*co
 			fmt.Println()
 			blockHasErrors = true
 		} else {
-			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(blockResult, &harnessResults[0]) {
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, blockResult, &harnessResults[0]) {
 				blockHasErrors = true
 			}
 		}
@@ -1191,7 +1192,7 @@ func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*co
 			fmt.Println("  (dhs-purge harness scenario failed)")
 			fmt.Println()
 			purgeHasErrors = true
-		} else if len(purgeHarnessResults) == 0 || !applyHarnessAuthoritativeIdentity(purgeResult, &purgeHarnessResults[0]) {
+		} else if len(purgeHarnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, purgeResult, &purgeHarnessResults[0]) {
 			fmt.Println("  (dhs-purge harness emitted no authoritative receipt)")
 			fmt.Println()
 			purgeHasErrors = true

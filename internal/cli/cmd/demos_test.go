@@ -363,28 +363,28 @@ func TestRunScenario(t *testing.T) {
 	})
 
 	t.Run("returns error with valid range for invalid healthcare scenario number", func(t *testing.T) {
-		_, err := runHealthcareScenario(context.Background(), "/tmp", demoTestRunID, "99")
+		_, err := runHealthcareScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
-		_, err := runFinanceScenario(context.Background(), "/tmp", demoTestRunID, "99")
+		_, err := runFinanceScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario(context.Background(), "/tmp", demoTestRunID, "99")
+		_, err := runDHSScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario(context.Background(), "/tmp", demoTestRunID, "99")
+		_, err := runFedRAMPScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-4")

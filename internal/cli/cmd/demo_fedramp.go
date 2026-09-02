@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -61,7 +62,7 @@ func newFedRAMPEvidenceBlockScenarioResult(startedAt time.Time, definition *comp
 	return newFedRAMPScenarioResult(startedAt, definition, runID, "L1 blocks vault wipe // audit vault remains intact")
 }
 
-func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runFedRAMPScenario(ctx context.Context, fileSvc fs.RuntimeFileService, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	scenarioID, err := fedRAMPScenarioID(scenario)
 	if err != nil {
 		return nil, err
@@ -138,7 +139,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*
 			fmt.Println("  (fedramp-provision harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) > 0 && !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) > 0 && !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (fedramp-provision harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -243,7 +244,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*
 		if step2Verified {
 			// The harness retained the authoritative failed-stage receipt from the
 			// gateway's JSON-RPC error data. Fail closed if it is missing.
-			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 				hasErrors = true
 			}
 		}
@@ -336,7 +337,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*
 			fmt.Println("  (fedramp-revert harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) > 0 && !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) > 0 && !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (fedramp-revert harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -430,7 +431,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*
 			fmt.Println()
 			hasErrors = true
 		} else {
-			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 				hasErrors = true
 			}
 		}

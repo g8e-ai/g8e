@@ -617,6 +617,8 @@ const (
 	DemoRunResultsFilename     = "scenario-results.jsonl"
 	DemoRunStepsFilename       = "step-results.jsonl"
 	DemoRunDefinitionsFilename = "scenario-definitions.jsonl"
+	DemoRunReceiptsDirname     = "receipts"
+	DemoRunPersistenceDirname  = "persistence"
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -152,7 +153,7 @@ func collectFinanceStateEvidence(ctx context.Context, demoDir string, result *co
 	return string(encoded), evidenceRef, nil
 }
 
-func runFinanceScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runFinanceScenario(ctx context.Context, fileSvc fs.RuntimeFileService, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	if scenario != "1" {
 		return nil, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
@@ -223,7 +224,7 @@ func runFinanceScenario(ctx context.Context, demoDir, runID, scenario string) (*
 		fmt.Println()
 		hasErrors = true
 	} else {
-		if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			hasErrors = true
 		}
 	}

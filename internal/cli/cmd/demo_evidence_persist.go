@@ -12,9 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -61,4 +63,78 @@ func persistDemoScenarioResult(ctx context.Context, fileSvc fs.RuntimeFileServic
 	}
 
 	return nil
+}
+
+// persistReceiptEvidenceBodies writes the canonical ActionReceipt body and its
+// final-persistence attestation body as resolvable runtime evidence artifacts
+// under the per-run demo evidence tree. Each body is persisted as canonical
+// protojson named by its SHA-256 content-address digest so the ReceiptRefs
+// carried on DemoScenarioResult resolve to concrete artifacts rather than
+// dangling references.
+//
+// Paths are data/compliance/demo-evidence/<run-id>/receipts/<hex>.json and
+// data/compliance/demo-evidence/<run-id>/persistence/<hex>.json. The function
+// fails closed: a nil receipt body or missing persistence attestation is
+// rejected rather than persisting an incomplete artifact.
+func persistReceiptEvidenceBodies(ctx context.Context, fileSvc fs.RuntimeFileService, runID string, evidence []scenarios.ReceiptEvidence) error {
+	if runID == "" || len(evidence) == 0 {
+		return nil
+	}
+
+	runDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
+	receiptsDir := filepath.Join(runDir, constants.DemoRunReceiptsDirname)
+	persistenceDir := filepath.Join(runDir, constants.DemoRunPersistenceDirname)
+	if err := fileSvc.MkdirAll(ctx, receiptsDir, constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create demo evidence receipts dir: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+	if err := fileSvc.MkdirAll(ctx, persistenceDir, constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create demo evidence persistence dir: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+
+	for _, ev := range evidence {
+		if ev.Receipt == nil {
+			return fmt.Errorf("%w: receipt evidence for transaction %s has nil receipt body", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
+		}
+		attestation := ev.Receipt.GetFinalPersistenceAttestation()
+		if attestation == nil {
+			return fmt.Errorf("%w: receipt evidence for transaction %s has nil persistence attestation", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
+		}
+
+		receiptHex := contentAddressDigestHex(ev.ReceiptRef)
+		persistenceHex := contentAddressDigestHex(ev.PersistenceRef)
+		if receiptHex == "" || persistenceHex == "" {
+			return fmt.Errorf("%w: receipt evidence for transaction %s has malformed content address", constants.ErrDemoEvidencePersistFailed, ev.TransactionID)
+		}
+
+		receiptBytes, err := compliancev1.MarshalCanonical(ev.Receipt)
+		if err != nil {
+			return fmt.Errorf("%w: marshal receipt body for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+		}
+		persistenceBytes, err := compliancev1.MarshalCanonical(attestation)
+		if err != nil {
+			return fmt.Errorf("%w: marshal persistence attestation for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+		}
+
+		receiptPath := filepath.Join(receiptsDir, receiptHex+".json")
+		if err := fileSvc.WriteFile(ctx, receiptPath, receiptBytes, constants.PermFileReadOnly); err != nil {
+			return fmt.Errorf("%w: write receipt body for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+		}
+		persistencePath := filepath.Join(persistenceDir, persistenceHex+".json")
+		if err := fileSvc.WriteFile(ctx, persistencePath, persistenceBytes, constants.PermFileReadOnly); err != nil {
+			return fmt.Errorf("%w: write persistence attestation for transaction %s: %w", constants.ErrDemoEvidencePersistFailed, ev.TransactionID, err)
+		}
+	}
+
+	return nil
+}
+
+// contentAddressDigestHex extracts the hex digest from a content address of the
+// form "prefix:sha256:<hex>". It returns an empty string if the address is
+// malformed.
+func contentAddressDigestHex(contentAddress string) string {
+	parts := strings.SplitN(contentAddress, ":", 3)
+	if len(parts) != 3 {
+		return ""
+	}
+	return parts[2]
 }

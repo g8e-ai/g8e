@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -320,7 +321,7 @@ func collectHealthcareNetworkEvidence(ctx context.Context, demoDir string, resul
 	return string(encoded), evidenceRef, nil
 }
 
-func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runHealthcareScenario(ctx context.Context, fileSvc fs.RuntimeFileService, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
@@ -373,7 +374,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string)
 			fmt.Println("  (healthcare-success harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (healthcare-success harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -472,7 +473,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string)
 			fmt.Println("  (healthcare-gold-card harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (healthcare-gold-card harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -559,7 +560,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string)
 			fmt.Println("  (healthcare-sla-breach harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+		} else if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 			fmt.Println("  (healthcare-sla-breach harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
@@ -655,7 +656,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string)
 			fmt.Println()
 			hasErrors = true
 		} else {
-			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
 				hasErrors = true
 			}
 		}

@@ -1463,17 +1463,17 @@ func runScenarioWithResults(ctx context.Context, fileSvc fs.RuntimeFileService, 
 	switch org {
 	case constants.DemosOrgHealthcare:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runHealthcareScenario(ctx, demoDir, runID, scenario)
+		result, err = runHealthcareScenario(ctx, fileSvc, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgFinance:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runFinanceScenario(ctx, demoDir, runID, scenario)
+		result, err = runFinanceScenario(ctx, fileSvc, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgDHS:
-		results, err = runDHSScenario(ctx, demoDir, runID, scenario)
+		results, err = runDHSScenario(ctx, fileSvc, demoDir, runID, scenario)
 	case constants.DemosOrgFedRAMP:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runFedRAMPScenario(ctx, demoDir, runID, scenario)
+		result, err = runFedRAMPScenario(ctx, fileSvc, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	default:
 		err = fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1652,6 +1652,22 @@ func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, 
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
 	result.InvestigationIds = append(result.InvestigationIds, hr.InvestigationIDs...)
 	result.ReceiptRefs = append(result.ReceiptRefs, receiptRefs...)
+	return true
+}
+
+// applyAndPersistHarnessIdentity applies authoritative harness identity to the
+// result and persists the canonical receipt and persistence bodies as
+// resolvable runtime evidence artifacts. It returns true only when both
+// operations succeed. Callers should set hasErrors = true when it returns false
+// and the harness was expected to emit authoritative identity.
+func applyAndPersistHarnessIdentity(ctx context.Context, fileSvc fs.RuntimeFileService, runID string, result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
+	if !applyHarnessAuthoritativeIdentity(result, hr) {
+		return false
+	}
+	if persistErr := persistReceiptEvidenceBodies(ctx, fileSvc, runID, hr.ReceiptEvidence); persistErr != nil {
+		fmt.Printf("  (receipt evidence persist failed for %s: %v)\n", hr.ScenarioID, persistErr)
+		return false
+	}
 	return true
 }
 
