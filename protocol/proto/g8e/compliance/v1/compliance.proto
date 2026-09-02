@@ -311,6 +311,7 @@ message DemoScenarioResult {
   string display_number = 21;
   string title = 22;
   string metrics_summary = 23;
+  repeated string execution_ids = 24;
 }
 
 message DemoScenarioCatalog {

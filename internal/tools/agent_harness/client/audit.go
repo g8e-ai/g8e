@@ -28,6 +28,7 @@ import (
 // /api/audit/receipts. The Operator is the source of truth; these are the real,
 // signed records of what actually executed on the host.
 type Receipt struct {
+	ExecutionID       string          `json:"execution_id"`
 	TransactionID     string          `json:"transaction_id"`
 	TransactionHash   string          `json:"transaction_hash"`
 	OperatorID        string          `json:"operator_id"`

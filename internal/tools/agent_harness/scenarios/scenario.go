@@ -52,6 +52,7 @@ type Result struct {
 	ScenarioID      string               `json:"scenario_id,omitempty"`
 	Exchanges       []clientpkg.Exchange `json:"exchanges"`
 	TxHashes        []string             `json:"tx_hashes,omitempty"`
+	ExecutionIDs    []string             `json:"execution_ids,omitempty"`
 	TransactionIDs  []string             `json:"transaction_ids,omitempty"`
 	Receipts        []clientpkg.Receipt  `json:"receipts,omitempty"`
 	Notes           []string             `json:"notes,omitempty"`
@@ -79,9 +80,10 @@ func (r *Result) retainToolReceipt(resp *clientpkg.JSONRPCResponse) error {
 	if result.Receipt == nil {
 		return constants.ErrHarnessReceiptReferenceMissing
 	}
-	if result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" {
+	if result.Receipt.ExecutionID == "" || result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" {
 		return constants.ErrHarnessReceiptReferenceInvalid
 	}
+	r.ExecutionIDs = append(r.ExecutionIDs, result.Receipt.ExecutionID)
 	r.TransactionIDs = append(r.TransactionIDs, result.Receipt.TransactionID)
 	r.Receipts = append(r.Receipts, *result.Receipt)
 	return nil

@@ -84,13 +84,15 @@ func TestPostureEquality(t *testing.T) {
 
 func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 	r := &Result{}
-	resp := &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)}
+	resp := &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)}
 
 	err := r.retainToolReceipt(resp)
 
 	require.NoError(t, err)
+	assert.Equal(t, []string{"execution-1"}, r.ExecutionIDs)
 	assert.Equal(t, []string{"tx-1"}, r.TransactionIDs)
 	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "execution-1", r.Receipts[0].ExecutionID)
 	assert.Equal(t, "tx-1", r.Receipts[0].TransactionID)
 	assert.Equal(t, "hash-1", r.Receipts[0].TransactionHash)
 	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
@@ -129,8 +131,13 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 			wantErr: constants.ErrHarnessReceiptReferenceMissing,
 		},
 		{
+			name:    "missing execution_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
 			name:    "missing transaction_id",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
@@ -154,8 +161,13 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
+			name:    "empty string execution_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
 			name:    "empty string transaction_id",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
@@ -182,6 +194,7 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 			err := r.retainToolReceipt(tt.resp)
 
 			require.Error(t, err, "retainToolReceipt must fail closed on %s", tt.name)
+			assert.Empty(t, r.ExecutionIDs, "no execution IDs should be retained on %s", tt.name)
 			assert.Empty(t, r.TransactionIDs, "no transaction IDs should be retained on %s", tt.name)
 			assert.Empty(t, r.Receipts, "no receipts should be retained on %s", tt.name)
 

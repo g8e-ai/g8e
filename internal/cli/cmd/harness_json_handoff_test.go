@@ -17,6 +17,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
@@ -38,6 +40,25 @@ func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
 	assert.Equal(t, "hash-abc", r.Receipts[0].TransactionHash)
 	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
 	assert.Equal(t, "sig-abc", r.Receipts[0].Signature)
+}
+
+func TestApplyHarnessAuthoritativeIdentity_RetainsExecutionTransactionAndReceiptReferences(t *testing.T) {
+	result := &compliancev1.DemoScenarioResult{}
+	harness := &harnessResult{
+		ExecutionIDs:  []string{"execution-1"},
+		TransactionIDs: []string{"tx-1"},
+		Receipts: []harnessReceipt{{
+			ExecutionID:  "execution-1",
+			TransactionID: "tx-1",
+		}},
+	}
+
+	applied := applyHarnessAuthoritativeIdentity(result, harness)
+
+	assert.True(t, applied)
+	assert.Equal(t, []string{"execution-1"}, result.GetExecutionIds())
+	assert.Equal(t, []string{"tx-1"}, result.GetTransactionIds())
+	assert.Equal(t, []string{"action-receipt:tx-1"}, result.GetReceiptRefs())
 }
 
 func TestHarnessResult_ParsesBlockedScenarioWithAuthoritativeIdentity(t *testing.T) {

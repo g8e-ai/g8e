@@ -2534,6 +2534,7 @@ type DemoScenarioResult struct {
 	DisplayNumber        string                       `protobuf:"bytes,21,opt,name=display_number,json=displayNumber,proto3" json:"display_number,omitempty"`
 	Title                string                       `protobuf:"bytes,22,opt,name=title,proto3" json:"title,omitempty"`
 	MetricsSummary       string                       `protobuf:"bytes,23,opt,name=metrics_summary,json=metricsSummary,proto3" json:"metrics_summary,omitempty"`
+	ExecutionIds         []string                     `protobuf:"bytes,24,rep,name=execution_ids,json=executionIds,proto3" json:"execution_ids,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -2727,6 +2728,13 @@ func (x *DemoScenarioResult) GetMetricsSummary() string {
 		return x.MetricsSummary
 	}
 	return ""
+}
+
+func (x *DemoScenarioResult) GetExecutionIds() []string {
+	if x != nil {
+		return x.ExecutionIds
+	}
+	return nil
 }
 
 type DemoScenarioCatalog struct {
@@ -3069,7 +3077,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\revidence_refs\x18\b \x03(\tR\fevidenceRefs\x12\x18\n" +
 	"\afailure\x18\t \x01(\tR\afailure\x12\x1a\n" +
 	"\brequired\x18\n" +
-	" \x01(\bR\brequired\"\x8e\b\n" +
+	" \x01(\bR\brequired\"\xb3\b\n" +
 	"\x12DemoScenarioResult\x12\x1b\n" +
 	"\tresult_id\x18\x01 \x01(\tR\bresultId\x12H\n" +
 	"\fscenario_ref\x18\x02 \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\vscenarioRef\x12\x17\n" +
@@ -3096,7 +3104,8 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\vlimitations\x18\x14 \x03(\tR\vlimitations\x12%\n" +
 	"\x0edisplay_number\x18\x15 \x01(\tR\rdisplayNumber\x12\x14\n" +
 	"\x05title\x18\x16 \x01(\tR\x05title\x12'\n" +
-	"\x0fmetrics_summary\x18\x17 \x01(\tR\x0emetricsSummary\"\xc2\x01\n" +
+	"\x0fmetrics_summary\x18\x17 \x01(\tR\x0emetricsSummary\x12#\n" +
+	"\rexecution_ids\x18\x18 \x03(\tR\fexecutionIds\"\xc2\x01\n" +
 	"\x13DemoScenarioCatalog\x12\x1d\n" +
 	"\n" +
 	"catalog_id\x18\x01 \x01(\tR\tcatalogId\x12'\n" +

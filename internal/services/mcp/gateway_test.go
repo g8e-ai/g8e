@@ -134,13 +134,13 @@ func TestGatewayService_HandleToolsCall_ReturnsAuthoritativeReceiptReference(t *
 		Signature:       "signature-1",
 	}
 	g := newTestGatewayService(t, withEnvProc(&fakeEnvelopeProcessor{receipt: receipt}))
-	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{},"execution_id":"execution-1"}}`))
 	w := httptest.NewRecorder()
 
 	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}}`, w.Body.String())
+	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}}`, w.Body.String())
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {

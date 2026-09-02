@@ -485,10 +485,14 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		argumentsJSON = string(callParams.Arguments)
 	}
 
+	executionID := callParams.ExecutionID
+	if executionID == "" {
+		executionID = uuid.NewString()
+	}
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
 		ArgumentsJson: argumentsJSON,
-		ExecutionId:   uuid.NewString(),
+		ExecutionId:   executionID,
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -538,6 +542,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 			},
 		},
 		Receipt: &toolReceiptReference{
+			ExecutionID:     executionID,
 			TransactionID:   receipt.TransactionId,
 			TransactionHash: receipt.TransactionHash,
 			SignerKeyID:     receipt.SignerKeyId,

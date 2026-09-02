@@ -1528,6 +1528,7 @@ type harnessResult struct {
 	DurationMS      int64            `json:"duration_ms"`
 	RunID           string           `json:"run_id,omitempty"`
 	ScenarioID      string           `json:"scenario_id,omitempty"`
+	ExecutionIDs    []string         `json:"execution_ids,omitempty"`
 	TransactionIDs  []string         `json:"transaction_ids,omitempty"`
 	Receipts        []harnessReceipt `json:"receipts,omitempty"`
 	Notes           []string         `json:"notes,omitempty"`
@@ -1536,6 +1537,7 @@ type harnessResult struct {
 }
 
 type harnessReceipt struct {
+	ExecutionID     string `json:"execution_id"`
 	TransactionID   string `json:"transaction_id"`
 	TransactionHash string `json:"transaction_hash"`
 	SignerKeyID     string `json:"signer_key_id"`
@@ -1580,9 +1582,10 @@ func runHarnessWithJSON(ctx context.Context, demoDir, label string, args []strin
 // IDs or receipts, the result keeps its existing references and the caller is
 // expected to mark the step as failed.
 func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
-	if hr == nil || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
+	if hr == nil || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
 		return false
 	}
+	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
 	for _, rcpt := range hr.Receipts {
 		result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:"+rcpt.TransactionID)
