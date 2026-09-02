@@ -142,21 +142,21 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 		},
 		{
 			name:    "missing transaction_hash",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
 			name:    "missing signer_key_id",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
 			name:    "missing signature",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
-			name:    "all four fields missing",
+			name:    "all fields missing",
 			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
@@ -172,17 +172,17 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 		},
 		{
 			name:    "empty string transaction_hash",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
 			name:    "empty string signer_key_id",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"","signature":"signature-1"}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"","signature":"signature-1"}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 		{
 			name:    "empty string signature",
-			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":""}}`)},
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":""}}`)},
 			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
 		},
 	}

@@ -22,7 +22,7 @@ import (
 )
 
 func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
-	raw := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"claude-desktop","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":1234,"run_id":"fedramp-run-123","scenario_id":"fedramp-provision","transaction_ids":["tx-abc-123"],"receipts":[{"transaction_id":"tx-abc-123","transaction_hash":"hash-abc","signer_key_id":"warden-key-1","signature":"sig-abc"}],"notes":["admitted"],"ok":true}]`
+	raw := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"claude-desktop","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":1234,"run_id":"fedramp-run-123","scenario_id":"fedramp-provision","execution_ids":["execution-abc-123"],"transaction_ids":["tx-abc-123"],"receipts":[{"execution_id":"execution-abc-123","transaction_id":"tx-abc-123","transaction_hash":"hash-abc","signer_key_id":"warden-key-1","signature":"sig-abc"}],"notes":["admitted"],"ok":true}]`
 
 	var results []harnessResult
 	err := json.Unmarshal([]byte(raw), &results)
@@ -34,8 +34,10 @@ func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
 	assert.Equal(t, "fedramp-run-123", r.RunID)
 	assert.Equal(t, "fedramp-provision", r.ScenarioID)
 	assert.True(t, r.OK)
+	assert.Equal(t, []string{"execution-abc-123"}, r.ExecutionIDs)
 	assert.Equal(t, []string{"tx-abc-123"}, r.TransactionIDs)
 	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "execution-abc-123", r.Receipts[0].ExecutionID)
 	assert.Equal(t, "tx-abc-123", r.Receipts[0].TransactionID)
 	assert.Equal(t, "hash-abc", r.Receipts[0].TransactionHash)
 	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
@@ -62,7 +64,7 @@ func TestApplyHarnessAuthoritativeIdentity_RetainsExecutionTransactionAndReceipt
 }
 
 func TestHarnessResult_ParsesBlockedScenarioWithAuthoritativeIdentity(t *testing.T) {
-	raw := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"claude-desktop","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":500,"run_id":"fedramp-run-123","scenario_id":"fedramp-deny","transaction_ids":["tx-deny-456"],"receipts":[{"transaction_id":"tx-deny-456","transaction_hash":"hash-deny","signer_key_id":"warden-key-1","signature":"sig-deny"}],"ok":true}]`
+	raw := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"claude-desktop","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":500,"run_id":"fedramp-run-123","scenario_id":"fedramp-deny","execution_ids":["execution-deny-456"],"transaction_ids":["tx-deny-456"],"receipts":[{"execution_id":"execution-deny-456","transaction_id":"tx-deny-456","transaction_hash":"hash-deny","signer_key_id":"warden-key-1","signature":"sig-deny"}],"ok":true}]`
 
 	var results []harnessResult
 	err := json.Unmarshal([]byte(raw), &results)
@@ -71,8 +73,10 @@ func TestHarnessResult_ParsesBlockedScenarioWithAuthoritativeIdentity(t *testing
 
 	r := results[0]
 	assert.True(t, r.OK)
+	assert.Equal(t, []string{"execution-deny-456"}, r.ExecutionIDs)
 	assert.Equal(t, []string{"tx-deny-456"}, r.TransactionIDs)
 	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "execution-deny-456", r.Receipts[0].ExecutionID)
 	assert.Equal(t, "tx-deny-456", r.Receipts[0].TransactionID)
 	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
 }
@@ -90,8 +94,8 @@ func TestHarnessResult_ParsesEmptyReceiptsArray(t *testing.T) {
 
 func TestHarnessResult_ParsesMultipleResults(t *testing.T) {
 	raw := `[
-		{"name":"dhs-destruction-block","ok":true,"transaction_ids":["tx-block"],"receipts":[{"transaction_id":"tx-block","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}]},
-		{"name":"dhs-destruction-purge","ok":true,"transaction_ids":["tx-purge"],"receipts":[{"transaction_id":"tx-purge","transaction_hash":"h2","signer_key_id":"wk1","signature":"s2"}]}
+		{"name":"dhs-destruction-block","ok":true,"execution_ids":["execution-block"],"transaction_ids":["tx-block"],"receipts":[{"execution_id":"execution-block","transaction_id":"tx-block","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}]},
+		{"name":"dhs-destruction-purge","ok":true,"execution_ids":["execution-purge"],"transaction_ids":["tx-purge"],"receipts":[{"execution_id":"execution-purge","transaction_id":"tx-purge","transaction_hash":"h2","signer_key_id":"wk1","signature":"s2"}]}
 	]`
 
 	var results []harnessResult
@@ -119,7 +123,7 @@ func writeFakeHarnessScript(t *testing.T, dir, payload string, exitCode int) str
 
 func TestRunHarnessWithJSON_ParsesValidOutput(t *testing.T) {
 	tmpDir := t.TempDir()
-	payload := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"test","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":100,"run_id":"run-1","scenario_id":"fedramp-provision","transaction_ids":["tx-1"],"receipts":[{"transaction_id":"tx-1","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}],"ok":true}]`
+	payload := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"test","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":100,"run_id":"run-1","scenario_id":"fedramp-provision","execution_ids":["execution-1"],"transaction_ids":["tx-1"],"receipts":[{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}],"ok":true}]`
 	scriptPath := writeFakeHarnessScript(t, tmpDir, payload, 0)
 
 	results, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})
@@ -131,7 +135,7 @@ func TestRunHarnessWithJSON_ParsesValidOutput(t *testing.T) {
 
 func TestRunHarnessWithJSON_ParsesOutputEvenOnNonzeroExit(t *testing.T) {
 	tmpDir := t.TempDir()
-	payload := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"test","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":50,"run_id":"run-1","scenario_id":"fedramp-deny","transaction_ids":["tx-deny"],"receipts":[{"transaction_id":"tx-deny","transaction_hash":"hd","signer_key_id":"wk1","signature":"sd"}],"ok":true}]`
+	payload := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"test","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":50,"run_id":"run-1","scenario_id":"fedramp-deny","execution_ids":["execution-deny"],"transaction_ids":["tx-deny"],"receipts":[{"execution_id":"execution-deny","transaction_id":"tx-deny","transaction_hash":"hd","signer_key_id":"wk1","signature":"sd"}],"ok":true}]`
 	scriptPath := writeFakeHarnessScript(t, tmpDir, payload, 1)
 
 	results, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})

@@ -100,7 +100,7 @@ func ValidateDemoScenarioResult(result *compliancev1.DemoScenarioResult, definit
 	if definition == nil || result.ScenarioRef.Id != definition.ScenarioId || result.ScenarioRef.Version != definition.ScenarioVersion {
 		return fmt.Errorf("%w: demo scenario %s", constants.ErrUnresolvedReference, referenceKey(result.ScenarioRef))
 	}
-	for _, values := range [][]string{result.InvestigationIds, result.TransactionIds, result.ReceiptRefs, result.StateObservationRefs, result.MetricRefs, result.KsiRefs} {
+	for _, values := range [][]string{result.InvestigationIds, result.ExecutionIds, result.TransactionIds, result.ReceiptRefs, result.StateObservationRefs, result.MetricRefs, result.KsiRefs} {
 		if err := validateUniqueStrings(values); err != nil {
 			return fmt.Errorf("%w: demo result %s references: %v", constants.ErrInvalidEvidenceGraph, result.ResultId, err)
 		}

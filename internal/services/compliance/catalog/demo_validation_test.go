@@ -78,6 +78,7 @@ func validDemoScenarioResult() *compliancev1.DemoScenarioResult {
 		StartedAt:            timestamppb.New(started),
 		CompletedAt:          timestamppb.New(started.Add(time.Second)),
 		Status:               "passed",
+		ExecutionIds:         []string{"execution-1"},
 		TransactionIds:       []string{"transaction-1"},
 		ReceiptRefs:          []string{"artifact-receipt-1"},
 		StateObservationRefs: []string{"artifact-state-1"},
@@ -165,6 +166,7 @@ func TestValidateDemoScenarioResultFailsClosedOnMissingRequiredEvidence(t *testi
 		want   error
 	}{
 		{name: "cross-scope result", mutate: func(r *compliancev1.DemoScenarioResult) { r.ScopeId = "scope-2" }, want: constants.ErrEvidenceScopeMismatch},
+		{name: "duplicate execution ID", mutate: func(r *compliancev1.DemoScenarioResult) { r.ExecutionIds = append(r.ExecutionIds, r.ExecutionIds[0]) }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "missing receipt", mutate: func(r *compliancev1.DemoScenarioResult) { r.ReceiptRefs = nil }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "missing state observation", mutate: func(r *compliancev1.DemoScenarioResult) { r.StateObservationRefs = nil }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "unverified pass", mutate: func(r *compliancev1.DemoScenarioResult) { r.VerificationStatus = "unverifiable" }, want: constants.ErrInvalidEvidenceGraph},
