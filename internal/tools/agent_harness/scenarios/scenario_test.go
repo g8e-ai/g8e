@@ -84,7 +84,7 @@ func TestPostureEquality(t *testing.T) {
 
 func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 	r := &Result{}
-	resp := &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}`)}
+	resp := &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)}
 
 	err := r.retainToolReceipt(resp)
 
@@ -93,7 +93,104 @@ func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 	require.Len(t, r.Receipts, 1)
 	assert.Equal(t, "tx-1", r.Receipts[0].TransactionID)
 	assert.Equal(t, "hash-1", r.Receipts[0].TransactionHash)
+	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
 	assert.Equal(t, "signature-1", r.Receipts[0].Signature)
+}
+
+func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		resp    *clientpkg.JSONRPCResponse
+		wantErr error
+	}{
+		{
+			name:    "nil response",
+			resp:    nil,
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "empty result bytes",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(``)},
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "malformed JSON result",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{not valid json`)},
+			wantErr: nil, // wrapped decode error, not a sentinel
+		},
+		{
+			name:    "missing receipt field entirely",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}]}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "null receipt field",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"content":[{"type":"text","text":"done"}],"receipt":null}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "missing transaction_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing transaction_hash",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing signer_key_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing signature",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "all four fields missing",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string transaction_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string transaction_hash",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"","signer_key_id":"warden-key-1","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string signer_key_id",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"","signature":"signature-1"}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string signature",
+			resp:    &clientpkg.JSONRPCResponse{Result: json.RawMessage(`{"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":""}}`)},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Result{}
+
+			err := r.retainToolReceipt(tt.resp)
+
+			require.Error(t, err, "retainToolReceipt must fail closed on %s", tt.name)
+			assert.Empty(t, r.TransactionIDs, "no transaction IDs should be retained on %s", tt.name)
+			assert.Empty(t, r.Receipts, "no receipts should be retained on %s", tt.name)
+
+			if tt.wantErr != nil {
+				assert.True(t, errors.Is(err, tt.wantErr),
+					"expected error %v on %s, got %v", tt.wantErr, tt.name, err)
+			}
+		})
+	}
 }
 
 func TestResult_Note(t *testing.T) {

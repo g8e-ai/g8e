@@ -128,6 +128,7 @@ func TestGatewayService_HandleToolsCall_ReturnsAuthoritativeReceiptReference(t *
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:   "tx-1",
 		TransactionHash: "hash-1",
+		SignerKeyId:     "warden-key-1",
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		ResultSummary:   "tool result",
 		Signature:       "signature-1",
@@ -139,7 +140,7 @@ func TestGatewayService_HandleToolsCall_ReturnsAuthoritativeReceiptReference(t *
 	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1"}}}`, w.Body.String())
+	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}}`, w.Body.String())
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {

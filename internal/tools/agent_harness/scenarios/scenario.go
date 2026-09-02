@@ -79,7 +79,7 @@ func (r *Result) retainToolReceipt(resp *clientpkg.JSONRPCResponse) error {
 	if result.Receipt == nil {
 		return constants.ErrHarnessReceiptReferenceMissing
 	}
-	if result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.Signature == "" {
+	if result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" {
 		return constants.ErrHarnessReceiptReferenceInvalid
 	}
 	r.TransactionIDs = append(r.TransactionIDs, result.Receipt.TransactionID)

@@ -41,6 +41,7 @@ type CallToolResult struct {
 type toolReceiptReference struct {
 	TransactionID   string `json:"transaction_id"`
 	TransactionHash string `json:"transaction_hash"`
+	SignerKeyID     string `json:"signer_key_id"`
 	Signature       string `json:"signature"`
 }
 

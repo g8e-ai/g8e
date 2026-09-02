@@ -540,6 +540,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		Receipt: &toolReceiptReference{
 			TransactionID:   receipt.TransactionId,
 			TransactionHash: receipt.TransactionHash,
+			SignerKeyID:     receipt.SignerKeyId,
 			Signature:       receipt.Signature,
 		},
 	}

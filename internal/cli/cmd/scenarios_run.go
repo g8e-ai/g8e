@@ -9,6 +9,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -43,6 +44,7 @@ var (
 	harnessOutDir       string
 	harnessVerbose      bool
 	harnessPhase        string
+	harnessJSON         bool
 )
 
 func demosScenariosRunCmd() *cobra.Command {
@@ -70,6 +72,7 @@ func demosScenariosRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
 	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "scenario suite: doctrine|consensus|notary|all (ratify has no dedicated suite)")
+	cmd.Flags().BoolVar(&harnessJSON, "json", false, "emit typed scenario results as JSON to stdout for parent consumption")
 
 	return cmd
 }
@@ -122,7 +125,15 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	printAgentHarnessSummary(cmd.OutOrStdout(), results)
+	if harnessJSON {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(results); err != nil {
+			return fmt.Errorf("scenarios run: encode JSON results: %w", err)
+		}
+	} else {
+		printAgentHarnessSummary(cmd.OutOrStdout(), results)
+	}
 	return failedScenariosError(results)
 }
 

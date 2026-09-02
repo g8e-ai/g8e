@@ -245,6 +245,24 @@ func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 	assert.Equal(t, constants.ContainerOperatorKey, cfg.KeyPath)
 	assert.Equal(t, constants.ContainerCABundle, cfg.CAPath)
 	assert.False(t, cfg.UseRun)
+	assert.False(t, cfg.JSON)
+}
+
+func TestHarnessRun_JSONFlagAppendedWhenEnabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	cfg.JSON = true
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.Contains(t, args, "--json")
+	// The scenario name must still be the last positional argument.
+	assert.Equal(t, "fedramp-provision", args[len(args)-1])
+}
+
+func TestHarnessRun_JSONFlagOmittedWhenDisabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.NotContains(t, args, "--json")
 }
 
 func TestCheckDemoDirExists_ExistingDirReturnsNil(t *testing.T) {

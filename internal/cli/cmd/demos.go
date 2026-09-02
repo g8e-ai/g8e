@@ -1516,6 +1516,80 @@ func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...st
 	return nil
 }
 
+// harnessResult is the typed JSON output emitted by `demos scenarios run --json`.
+// The parent demo runner parses this to extract authoritative transaction IDs and
+// receipt projections retained by the child harness inside the container.
+type harnessResult struct {
+	Name            string           `json:"name"`
+	Title           string           `json:"title"`
+	Persona         string           `json:"persona"`
+	RequiresPosture string           `json:"requires_posture"`
+	StartedAt       time.Time        `json:"started_at"`
+	DurationMS      int64            `json:"duration_ms"`
+	RunID           string           `json:"run_id,omitempty"`
+	ScenarioID      string           `json:"scenario_id,omitempty"`
+	TransactionIDs  []string         `json:"transaction_ids,omitempty"`
+	Receipts        []harnessReceipt `json:"receipts,omitempty"`
+	Notes           []string         `json:"notes,omitempty"`
+	OK              bool             `json:"ok"`
+	Err             string           `json:"error,omitempty"`
+}
+
+type harnessReceipt struct {
+	TransactionID   string `json:"transaction_id"`
+	TransactionHash string `json:"transaction_hash"`
+	SignerKeyID     string `json:"signer_key_id"`
+	Signature       string `json:"signature"`
+}
+
+// runHarnessWithJSON runs the harness command with --json and parses the typed
+// result from stdout. It returns the parsed result and the command error
+// separately so the caller can correlate authoritative identity even when the
+// harness exits nonzero (e.g. a blocked L1 scenario that still emits a result).
+func runHarnessWithJSON(ctx context.Context, demoDir, label string, args []string) ([]harnessResult, error) {
+	if demoVerbose {
+		fmt.Printf("  $ %s\n", strings.Join(args, " "))
+	}
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
+	c.Dir = demoDir
+	var stdout strings.Builder
+	c.Stdout = &stdout
+	if demoVerbose {
+		c.Stderr = os.Stderr
+	} else {
+		c.Stderr = io.Discard
+	}
+	runErr := c.Run()
+	if demoVerbose {
+		fmt.Println()
+	}
+	raw := strings.TrimSpace(stdout.String())
+	if raw == "" {
+		return nil, fmt.Errorf("%s: no JSON output: %w", label, runErr)
+	}
+	var results []harnessResult
+	if err := json.Unmarshal([]byte(raw), &results); err != nil {
+		return nil, fmt.Errorf("%s: decode harness JSON: %w", label, err)
+	}
+	return results, runErr
+}
+
+// applyHarnessAuthoritativeIdentity replaces synthetic transaction and receipt
+// references on the DemoScenarioResult with the authoritative values retained
+// by the child harness. It fails closed: if the harness emitted no transaction
+// IDs or receipts, the result keeps its existing references and the caller is
+// expected to mark the step as failed.
+func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
+	if hr == nil || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
+		return false
+	}
+	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
+	for _, rcpt := range hr.Receipts {
+		result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:"+rcpt.TransactionID)
+	}
+	return true
+}
+
 // demoStepHTTP runs a curl command that writes the HTTP status code to stdout
 // (via -o /dev/null -w "%{http_code}") and validates the response against the
 // single expected status code. Unlike demoStep, this checks the actual HTTP
@@ -1592,6 +1666,7 @@ type harnessConfig struct {
 	RunID      string
 	ScenarioID string
 	UseRun     bool // true for `docker compose run --rm`, false for `exec`
+	JSON       bool // true emits typed JSON results to stdout for parent parsing
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1646,7 +1721,10 @@ func harnessRun(scenario string, cfg harnessConfig) []string {
 		"--cert", cfg.CertPath,
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
-		scenario,
 	)
+	if cfg.JSON {
+		cmd = append(cmd, "--json")
+	}
+	cmd = append(cmd, scenario)
 	return cmd
 }

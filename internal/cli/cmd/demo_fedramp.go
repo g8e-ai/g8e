@@ -125,11 +125,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-provision", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-provision", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-provision")
+		hcfg.JSON = true
 		step3Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "fedramp-provision via agent",
-			false,
-			harnessRun("fedramp-provision", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-provision via agent",
+			harnessRun("fedramp-provision", hcfg))
 		step3Completed := time.Now().UTC()
 		step3OK := harnessErr == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
@@ -139,9 +138,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			fmt.Println("  (fedramp-provision harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:fedramp-provision")
-			result.TransactionIds = append(result.TransactionIds, "fedramp-provision-tx")
+		} else if len(harnessResults) > 0 && !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (fedramp-provision harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-provision", "quorum met (3/5)")
@@ -224,11 +224,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/cloudsvc' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-deny", "doctrine check")
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "fedramp-deny via agent",
-			false,
-			harnessRun("fedramp-deny", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-deny via agent",
+			harnessRun("fedramp-deny", hcfg))
 		step2Completed := time.Now().UTC()
 		// The harness exits successfully only after it verifies that doctrine blocked
 		// the action. A nonzero exit means the expected rejection was not verified.
@@ -243,8 +242,15 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			step2Verified, true, "agent harness fedramp-deny"))
 		if step2Verified {
 			// Record the failed-stage receipt reference produced by the L1 denial.
-			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-deny")
-			result.TransactionIds = append(result.TransactionIds, "fedramp-deny-tx")
+			if len(harnessResults) > 0 {
+				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
+			}
+			if len(result.ReceiptRefs) == 0 {
+				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-deny")
+			}
+			if len(result.TransactionIds) == 0 {
+				result.TransactionIds = append(result.TransactionIds, "fedramp-deny-tx")
+			}
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-deny", "DATA DESTRUCTION ATTEMPT BLOCKED")
@@ -324,11 +330,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "fedramp-revert via agent",
-			false,
-			harnessRun("fedramp-revert", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-revert via agent",
+			harnessRun("fedramp-revert", hcfg))
 		step2Completed := time.Now().UTC()
 		step2OK := harnessErr == nil
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
@@ -338,9 +343,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			fmt.Println("  (fedramp-revert harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
-		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:fedramp-revert")
-			result.TransactionIds = append(result.TransactionIds, "fedramp-revert-tx")
+		} else if len(harnessResults) > 0 && !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			fmt.Println("  (fedramp-revert harness emitted no authoritative receipt)")
+			fmt.Println()
+			hasErrors = true
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "fedramp-revert", "quorum met (3/5)")
@@ -417,11 +423,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoPrintln("  L1 doctrine detects 'rm -rf /root/.g8e/data' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-evidence-block", "doctrine check")
+		hcfg.JSON = true
 		step2Started := time.Now().UTC()
-		harnessErr := demoStep(ctx, demoDir, "fedramp-evidence-block via agent",
-			false,
-			harnessRun("fedramp-evidence-block", hcfg)...,
-		)
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-evidence-block via agent",
+			harnessRun("fedramp-evidence-block", hcfg))
 		step2Completed := time.Now().UTC()
 		step2Verified := fedRAMPBlockedHarnessVerified(harnessErr)
 		result.StepResults = append(result.StepResults, buildDemoStepResult(
@@ -432,8 +437,15 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			fmt.Println()
 			hasErrors = true
 		} else {
-			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-evidence-block")
-			result.TransactionIds = append(result.TransactionIds, "fedramp-evidence-block-tx")
+			if len(harnessResults) > 0 {
+				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
+			}
+			if len(result.ReceiptRefs) == 0 {
+				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-evidence-block")
+			}
+			if len(result.TransactionIds) == 0 {
+				result.TransactionIds = append(result.TransactionIds, "fedramp-evidence-block-tx")
+			}
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-evidence-block", "AUDIT VAULT DESTRUCTION BLOCKED")

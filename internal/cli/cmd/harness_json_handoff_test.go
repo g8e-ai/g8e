@@ -1,0 +1,136 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Use of this source code is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date listed in the LICENSE file, this software is
+// released under the Apache License, Version 2.0.
+
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestHarnessResult_ParsesAuthoritativeReceiptProjection(t *testing.T) {
+	raw := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"claude-desktop","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":1234,"run_id":"fedramp-run-123","scenario_id":"fedramp-provision","transaction_ids":["tx-abc-123"],"receipts":[{"transaction_id":"tx-abc-123","transaction_hash":"hash-abc","signer_key_id":"warden-key-1","signature":"sig-abc"}],"notes":["admitted"],"ok":true}]`
+
+	var results []harnessResult
+	err := json.Unmarshal([]byte(raw), &results)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	r := results[0]
+	assert.Equal(t, "fedramp-provision", r.Name)
+	assert.Equal(t, "fedramp-run-123", r.RunID)
+	assert.Equal(t, "fedramp-provision", r.ScenarioID)
+	assert.True(t, r.OK)
+	assert.Equal(t, []string{"tx-abc-123"}, r.TransactionIDs)
+	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "tx-abc-123", r.Receipts[0].TransactionID)
+	assert.Equal(t, "hash-abc", r.Receipts[0].TransactionHash)
+	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
+	assert.Equal(t, "sig-abc", r.Receipts[0].Signature)
+}
+
+func TestHarnessResult_ParsesBlockedScenarioWithAuthoritativeIdentity(t *testing.T) {
+	raw := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"claude-desktop","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":500,"run_id":"fedramp-run-123","scenario_id":"fedramp-deny","transaction_ids":["tx-deny-456"],"receipts":[{"transaction_id":"tx-deny-456","transaction_hash":"hash-deny","signer_key_id":"warden-key-1","signature":"sig-deny"}],"ok":true}]`
+
+	var results []harnessResult
+	err := json.Unmarshal([]byte(raw), &results)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	r := results[0]
+	assert.True(t, r.OK)
+	assert.Equal(t, []string{"tx-deny-456"}, r.TransactionIDs)
+	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "tx-deny-456", r.Receipts[0].TransactionID)
+	assert.Equal(t, "warden-key-1", r.Receipts[0].SignerKeyID)
+}
+
+func TestHarnessResult_ParsesEmptyReceiptsArray(t *testing.T) {
+	raw := `[{"name":"mcp-plain","title":"MCP Plain","persona":"claude-desktop","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":100,"ok":true}]`
+
+	var results []harnessResult
+	err := json.Unmarshal([]byte(raw), &results)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Empty(t, results[0].TransactionIDs)
+	assert.Empty(t, results[0].Receipts)
+}
+
+func TestHarnessResult_ParsesMultipleResults(t *testing.T) {
+	raw := `[
+		{"name":"dhs-destruction-block","ok":true,"transaction_ids":["tx-block"],"receipts":[{"transaction_id":"tx-block","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}]},
+		{"name":"dhs-destruction-purge","ok":true,"transaction_ids":["tx-purge"],"receipts":[{"transaction_id":"tx-purge","transaction_hash":"h2","signer_key_id":"wk1","signature":"s2"}]}
+	]`
+
+	var results []harnessResult
+	err := json.Unmarshal([]byte(raw), &results)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, "tx-block", results[0].TransactionIDs[0])
+	assert.Equal(t, "tx-purge", results[1].TransactionIDs[0])
+}
+
+func TestHarnessResult_FailsClosedOnMalformedJSON(t *testing.T) {
+	raw := `{not valid json`
+	var results []harnessResult
+	err := json.Unmarshal([]byte(raw), &results)
+	require.Error(t, err)
+}
+
+func writeFakeHarnessScript(t *testing.T, dir, payload string, exitCode int) string {
+	t.Helper()
+	scriptPath := filepath.Join(dir, "fake-harness.sh")
+	content := fmt.Sprintf("#!/bin/sh\ncat <<'JSONEOF'\n%s\nJSONEOF\nexit %d\n", payload, exitCode)
+	require.NoError(t, os.WriteFile(scriptPath, []byte(content), 0o755))
+	return scriptPath
+}
+
+func TestRunHarnessWithJSON_ParsesValidOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	payload := `[{"name":"fedramp-provision","title":"FedRAMP Provision","persona":"test","requires_posture":"consensus","started_at":"2026-09-01T16:53:31Z","duration_ms":100,"run_id":"run-1","scenario_id":"fedramp-provision","transaction_ids":["tx-1"],"receipts":[{"transaction_id":"tx-1","transaction_hash":"h1","signer_key_id":"wk1","signature":"s1"}],"ok":true}]`
+	scriptPath := writeFakeHarnessScript(t, tmpDir, payload, 0)
+
+	results, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "tx-1", results[0].TransactionIDs[0])
+	assert.Equal(t, "wk1", results[0].Receipts[0].SignerKeyID)
+}
+
+func TestRunHarnessWithJSON_ParsesOutputEvenOnNonzeroExit(t *testing.T) {
+	tmpDir := t.TempDir()
+	payload := `[{"name":"fedramp-deny","title":"FedRAMP Deny","persona":"test","requires_posture":"doctrine","started_at":"2026-09-01T16:53:31Z","duration_ms":50,"run_id":"run-1","scenario_id":"fedramp-deny","transaction_ids":["tx-deny"],"receipts":[{"transaction_id":"tx-deny","transaction_hash":"hd","signer_key_id":"wk1","signature":"sd"}],"ok":true}]`
+	scriptPath := writeFakeHarnessScript(t, tmpDir, payload, 1)
+
+	results, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})
+	require.Error(t, err, "nonzero exit should be returned as the command error")
+	require.Len(t, results, 1, "results should still be parsed from stdout")
+	assert.Equal(t, "tx-deny", results[0].TransactionIDs[0])
+}
+
+func TestRunHarnessWithJSON_FailsClosedOnEmptyOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := writeFakeHarnessScript(t, tmpDir, "", 0)
+
+	_, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})
+	require.Error(t, err)
+}
+
+func TestRunHarnessWithJSON_FailsClosedOnMalformedOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := writeFakeHarnessScript(t, tmpDir, `{not valid json`, 0)
+
+	_, err := runHarnessWithJSON(context.Background(), tmpDir, "test harness", []string{"sh", scriptPath})
+	require.Error(t, err)
+}
