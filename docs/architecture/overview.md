@@ -5,8 +5,8 @@ parent: Architecture
 
 # Platform Architecture Overview
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ## What g8e Is
 
@@ -137,6 +137,14 @@ The gateway provides a Server-Sent Events (SSE) streaming infrastructure that en
 ## Protocol Library
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, and SPIFFE workload identity helpers for building compatible clients and services. The protocol publishes as two independent packages sharing a single unified version number with the platform binary: a Go module under the root module path and a Python package. There are no separate protocol-only releases. See [Protocol Library](./protocol.md) for package structure, code generation, and release workflow.
+
+---
+
+## Compliance Evidence
+
+The platform ships a protocol-owned compliance evidence foundation. Canonical assertion, framework, crosswalk, and demo-scenario catalogs are digest-verified and validated fail-closed against supported versions, references, evidence levels, responsibilities, mappings, and assessment semantics. Typed protobuf records cover control assertions, assessment scope, content-addressed evidence references, assertion and framework-control assessments, report manifests, verification reports, demo manifests, scenario definitions, step results, scenario results, and metric evidence. Client-facing serialization uses canonical protojson.
+
+Demo runs (healthcare, finance, DHS, FedRAMP) persist a typed manifest and canonical scenario results under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest binds scenario definitions, framework controls, execution lanes, required environment, and SHA-256 provenance for the compose file, doctrine, target data, and configuration. Content-addressed artifacts (receipts, persistence attestations, state observations, metric evidence) are persisted under SHA-256-addressed paths so scenario and step records carry resolvable references. The read-only `g8e compliance demo-run verify <run-id>` command emits a typed `ComplianceVerificationReport` and exits nonzero when any manifest, provenance, artifact, signature, protocol-chain, state-observation, metric, or directory-integrity check fails. See [Compliance Alignment Report](../reference/compliance-alignment.md) for the full catalog model, KSI evaluation, and evidence verification behavior.
 
 ---
 

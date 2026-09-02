@@ -158,6 +158,18 @@ The Mission Partner datalink is severed with `docker network disconnect`, and th
 | Decision Support & Predictive Analytics | Scenario 3 |
 | Auditability / Legal & Policy Adherence | every scenario (signed receipts → ledger) |
 
+## Persisted evidence and independent verification
+
+Each DHS demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories. Scenario results carry canonical definition references, assertion and framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. The destruction-block scenario includes an independent collector that verifies the operator's canonical audit database remains present and non-empty after the rejected wipe attempt. The disconnected-operations scenario independently verifies the operator's Git ledger directory and SQLite audit database through real existence and content checks.
+
+Verify a persisted run without modifying assessed state:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming the persisted evidence passed independent verification.
+
 ## License
 
 Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18.

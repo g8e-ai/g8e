@@ -294,6 +294,20 @@ Every demo scenario has a typed, content-addressed definition in the canonical d
 
 The catalog is loaded at demo runtime through `internal/services/compliance/catalog` and validated against the canonical assertion catalog (`protocol/constants/compliance/assertion-catalog.json`) and framework catalog (`protocol/constants/compliance/framework-catalog.json`). Every framework-control reference in every definition has at least one canonical crosswalk mapping (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) to an assertion carried by that definition.
 
+### Persisted demo evidence and independent verification
+
+Every demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories plus the union of framework-control references across all bound scenario definitions. Each scenario result carries its canonical definition reference, assertion references, framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. Receipt and persistence bodies are persisted as resolvable artifacts under `receipts/<hex>.json` and `persistence/<hex>.json` so the content addresses on the result resolve to concrete evidence.
+
+Finance, DHS, and FedRAMP scenarios add independent target-state, persistence, network-membership, or protected-artifact collectors so terminal claims are measured rather than inferred from command output. Healthcare uses a typed secure-network actuator for run-bound gold-card and SLA outcomes with an independent collector that fails closed unless every correlation, metric, and terminal-state field matches.
+
+The read-only `g8e compliance demo-run verify <run-id>` command (with an optional `--project-root <dir>` override for source-provenance lookup) emits a typed `ComplianceVerificationReport` as canonical JSON and exits nonzero when any manifest, provenance, artifact, signature, protocol-chain, state-observation, metric, or directory-integrity check fails:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming that the persisted demo evidence passed independent verification.
+
 ### Demo Output Format
 
 By default, `g8e demos run` produces concise output: each scenario prints its PASS/FAIL result line. After all scenarios complete, a results table summarizes scenario numbers, names, statuses, and key metrics.

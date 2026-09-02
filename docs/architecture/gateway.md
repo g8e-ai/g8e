@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -250,6 +250,10 @@ The response includes `status`, `mode`, `version`, `pid` (OS process ID), `gover
 ### Bootstrap Health Check (HTTP)
 
 The bootstrap health endpoint on the HTTP port is a lighter check that verifies only the readiness callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, `pid`, and `governance_ready`.
+
+### Operational Status (`g8e gw status`)
+
+`g8e gw status` reports the health of both the localhost Gateway and the Docker Compose stack in a single command. When the Gateway is running in Docker Compose, the command probes the containerized gateway endpoint in addition to the localhost endpoint and surfaces the Docker Compose service status. The TUI diagnoses Docker gateway state when its configured endpoint is unreachable, suppresses duplicate usage output on errors, and records machine-observable scenario success, failure, and cancellation checkpoints.
 
 ---
 

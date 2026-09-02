@@ -189,6 +189,14 @@ The demo also emits a machine-readable KSI result artifact via `g8e compliance k
 
 Each scenario run also persists a typed `DemoScenarioResult` and `DemoManifest` under the runtime compliance evidence tree at `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories plus the union of framework-control references across all bound scenario definitions. Each scenario result carries its canonical definition reference, assertion references, framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. Receipt and persistence bodies are persisted as resolvable artifacts under `receipts/<hex>.json` and `persistence/<hex>.json` so the content addresses on the result resolve to concrete evidence.
 
+Verify a persisted run without modifying assessed state:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+The read-only verifier checks manifest provenance, artifact checksums, canonical record structure, run and scope correlation, receipt and persistence signatures, deterministic-stage protocol chains, state-observation bindings, metric source and grader bindings, reproduced threshold results, and artifact-directory integrity. Require a zero exit status and `"valid":true` before claiming the persisted evidence passed independent verification.
+
 ## License
 
 Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18.

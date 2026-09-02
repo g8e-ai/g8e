@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ## Overview
 
@@ -132,6 +132,8 @@ Raw data and audit logs stay on the sovereign host. Operators initiate outbound-
 ### Cryptographic Integrity
 
 L2 consensus votes are Ed25519 signatures from enrolled members, produced over the transaction hash and the member's decision, and verified against the trusted signer store and the configured consensus policy. Every receipt is signed by the L5 Actuator using Ed25519 over its canonical fields and deterministic stage evidence hash. The final persistence attestation independently signs the receipt-signature digest, audit record, signer, and durable timestamp. Signed commitments form an insertion-ordered hash chain and bind receipt evidence to the prior chain head. Audit entries are stored in encrypted databases, and file mutations are optionally encrypted before storage. mTLS protects the HTTPS port with application-layer enforcement for non-public routes, and transport-to-envelope identity binding prevents impersonation by matching certificate SPIFFE URI SANs to envelope identity claims. See [Encryption](./encryption.md) for the key hierarchy and cryptographic primitives.
+
+The trusted signer lookup endpoint returns enabled keystore-backed signer material when a metadata document is absent, so consensus vote verification does not fail when a signer has not published a separate metadata document. The gateway receipt relay verifies both the canonical receipt signature and the final persistence attestation before accepting a relayed receipt, so a receipt with a valid signature but a missing or invalid persistence attestation is rejected.
 
 ### Defense in Depth
 

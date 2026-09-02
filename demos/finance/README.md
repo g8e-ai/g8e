@@ -147,6 +147,18 @@ The scenario runs a 6-step flow and persists the typed result under the runtime 
 g8e demos run finance
 ```
 
+### Persisted evidence and independent verification
+
+Each finance demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories. Scenario results carry canonical definition references, assertion and framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. The unauthorized-trade scenario includes an independent target-state collector that verifies the prohibited trade artifact is absent from the target-system boundary.
+
+Verify a persisted run without modifying assessed state:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming the persisted evidence passed independent verification.
+
 ## Architecture Notes
 
 ### Gateway Posture: Doctrine
