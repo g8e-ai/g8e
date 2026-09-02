@@ -122,16 +122,16 @@ func buildDemoManifest(demoID, scopeID, runID string, generatedAt time.Time, dem
 	}
 
 	manifest := &compliancev1.DemoManifest{
-		DemoId:                demoID,
-		DemoVersion:           constants.DemoVersion,
-		RunId:                 runID,
-		ScopeId:               scopeID,
-		GeneratedAt:           timestamppb.New(generatedAt),
+		DemoId:                 demoID,
+		DemoVersion:            constants.DemoVersion,
+		RunId:                  runID,
+		ScopeId:                scopeID,
+		GeneratedAt:            timestamppb.New(generatedAt),
 		ScenarioDefinitionRefs: definitionRefs,
-		ProvenanceHashes:      provenanceHashes,
-		RequiredEnvironment:   []string{"docker", "g8e-binary"},
-		FrameworkControlRefs:  collectSortedFrameworkControlRefs(frameworkControlSet),
-		SupportedLanes:        lanes,
+		ProvenanceHashes:       provenanceHashes,
+		RequiredEnvironment:    []string{"docker", "g8e-binary"},
+		FrameworkControlRefs:   collectSortedFrameworkControlRefs(frameworkControlSet),
+		SupportedLanes:         lanes,
 	}
 
 	if err := compliancecatalog.ValidateDemoManifest(manifest, definitions, frameworks); err != nil {

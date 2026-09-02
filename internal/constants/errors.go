@@ -872,6 +872,8 @@ var (
 	ErrL5ActuatorCanonicalizeReceipt        = errors.New("failed to canonicalize receipt for signing")
 	ErrL5ActuatorAuditStore                 = errors.New("audit store error")
 	ErrL5ActuatorCapabilityMint             = errors.New("L5Actuator: failed to mint execution capability")
+	ErrActionReceiptMissing                 = errors.New("action receipt missing")
+	ErrActionReceiptSignatureInvalid        = errors.New("action receipt signature invalid")
 	ErrReceiptPersistenceAttestationMissing = errors.New("receipt persistence attestation missing")
 	ErrReceiptPersistenceSignatureMismatch  = errors.New("receipt persistence signature digest mismatch")
 	ErrReceiptPersistenceAttestationInvalid = errors.New("receipt persistence attestation signature invalid")

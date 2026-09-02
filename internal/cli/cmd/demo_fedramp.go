@@ -45,23 +45,23 @@ func fedRAMPScenarioID(scenario string) (string, error) {
 	}
 }
 
-func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, metricsSummary string) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, metricsSummary)
+func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID, metricsSummary string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, runID, metricsSummary)
 }
 
-func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newFedRAMPScenarioResult(startedAt, definition, "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident")
+func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident")
 }
 
-func newFedRAMPRevertScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newFedRAMPScenarioResult(startedAt, definition, "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
+func newFedRAMPRevertScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
 }
 
-func newFedRAMPEvidenceBlockScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newFedRAMPScenarioResult(startedAt, definition, "L1 blocks vault wipe // audit vault remains intact")
+func newFedRAMPEvidenceBlockScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L1 blocks vault wipe // audit vault remains intact")
 }
 
-func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runFedRAMPScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	scenarioID, err := fedRAMPScenarioID(scenario)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 	switch scenario {
 	case "1":
 		startedAt := time.Now().UTC()
-		result = newFedRAMPScenarioResult(startedAt, definition,
+		result = newFedRAMPScenarioResult(startedAt, definition, runID,
 			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
 		hcfg = bindHarnessConfig(hcfg, result)
 
@@ -192,7 +192,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		// results, and required evidence references. The scenario definition
 		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
 		startedAt := time.Now().UTC()
-		result = newFedRAMPDenyScenarioResult(startedAt, definition)
+		result = newFedRAMPDenyScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
@@ -287,7 +287,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 	case "3":
 		startedAt := time.Now().UTC()
-		result = newFedRAMPRevertScenarioResult(startedAt, definition)
+		result = newFedRAMPRevertScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
@@ -386,7 +386,7 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 	case "4":
 		startedAt := time.Now().UTC()
-		result = newFedRAMPEvidenceBlockScenarioResult(startedAt, definition)
+		result = newFedRAMPEvidenceBlockScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))

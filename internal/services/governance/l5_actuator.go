@@ -548,6 +548,27 @@ func (w *L5Actuator) signReceiptPersistenceAttestation(receipt *operatorv1.Actio
 	return attestation, nil
 }
 
+func VerifyActionReceiptSignature(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
+	if receipt == nil {
+		return constants.ErrActionReceiptMissing
+	}
+	if receipt.Signature == "" || len(publicKey) != ed25519.PublicKeySize {
+		return constants.ErrActionReceiptSignatureInvalid
+	}
+	signature, err := hex.DecodeString(receipt.Signature)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrActionReceiptSignatureInvalid, err)
+	}
+	payload, err := CanonicalizeActionReceipt(receipt)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrActionReceiptSignatureInvalid, err)
+	}
+	if !ed25519.Verify(publicKey, payload, signature) {
+		return constants.ErrActionReceiptSignatureInvalid
+	}
+	return nil
+}
+
 func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
 	if receipt == nil || receipt.FinalPersistenceAttestation == nil {
 		return constants.ErrReceiptPersistenceAttestationMissing

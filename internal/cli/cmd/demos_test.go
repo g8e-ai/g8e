@@ -356,35 +356,35 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario(context.Background(), nil, "unknown-org", "/tmp", "1")
+		err := runScenario(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
 	t.Run("returns error with valid range for invalid healthcare scenario number", func(t *testing.T) {
-		_, err := runHealthcareScenario(context.Background(), "/tmp", "99")
+		_, err := runHealthcareScenario(context.Background(), "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
-		_, err := runFinanceScenario(context.Background(), "/tmp", "99")
+		_, err := runFinanceScenario(context.Background(), "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario(context.Background(), "/tmp", "99")
+		_, err := runDHSScenario(context.Background(), "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario(context.Background(), "/tmp", "99")
+		_, err := runFedRAMPScenario(context.Background(), "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-4")
@@ -411,7 +411,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")

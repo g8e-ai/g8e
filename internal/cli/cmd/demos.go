@@ -1185,33 +1185,33 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.Runt
 	// or persistence failure joins any scenario error but does not block
 	// scenario execution; the evidence-grade scenario results remain the
 	// authoritative per-scenario record.
-	manifestErr := buildAndPersistDemoManifest(cmd.Context(), fileSvc, org, demoDir)
+	startedAt := time.Now().UTC()
+	runID := fmt.Sprintf("%s-run-%s", org, startedAt.Format("20060102T150405Z"))
+	manifestErr := buildAndPersistDemoManifest(cmd.Context(), fileSvc, org, demoDir, runID, startedAt)
 
 	if useTUI {
-		err := runDemosWithTUI(cmd, fileSvc, org, demoDir, args)
+		err := runDemosWithTUI(cmd, fileSvc, org, demoDir, runID, args)
 		return errors.Join(err, manifestErr)
 	}
 
 	if len(args) >= 2 {
-		err := runScenario(cmd.Context(), fileSvc, org, demoDir, args[1]) //nolint:gosec // length checked above
+		err := runScenario(cmd.Context(), fileSvc, org, demoDir, runID, args[1]) //nolint:gosec // length checked above
 		return errors.Join(err, manifestErr)
 	}
 
-	err = runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir)
+	err = runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir, runID)
 	return errors.Join(err, manifestErr)
 }
 
 // buildAndPersistDemoManifest constructs a typed DemoManifest for the demo org
 // and persists it under the runtime compliance evidence tree. It returns any
 // error so the caller can join it with scenario execution errors.
-func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir string) error {
+func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID string, generatedAt time.Time) error {
 	orgCfg, ok := demoOrgConfigs[org]
 	if !ok {
 		return nil
 	}
-	startedAt := time.Now().UTC()
-	runID := fmt.Sprintf("%s-run-%s", org, startedAt.Format("20060102T150405Z"))
-	manifest, err := buildDemoManifest(org, orgCfg.scopeID, runID, startedAt, demoDir)
+	manifest, err := buildDemoManifest(org, orgCfg.scopeID, runID, generatedAt, demoDir)
 	if err != nil {
 		return fmt.Errorf("build demo manifest: %w", err)
 	}
@@ -1225,7 +1225,7 @@ func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileServ
 // demoEmitter so scenario code can send events, runs the requested scenarios
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
 // exits, it cancels and waits for scenario execution so errors are not lost.
-func runDemosWithTUI(cmd *cobra.Command, fileSvc fs.RuntimeFileService, org, demoDir string, args []string) error {
+func runDemosWithTUI(cmd *cobra.Command, fileSvc fs.RuntimeFileService, org, demoDir, runID string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
@@ -1238,9 +1238,9 @@ func runDemosWithTUI(cmd *cobra.Command, fileSvc fs.RuntimeFileService, org, dem
 
 	return runDemosWithTUILifecycle(cmd.Context(), p, func(ctx context.Context) error {
 		if len(args) >= 2 {
-			return runScenario(ctx, fileSvc, org, demoDir, args[1])
+			return runScenario(ctx, fileSvc, org, demoDir, runID, args[1])
 		}
-		return runAllScenarios(ctx, fileSvc, cmd, org, demoDir)
+		return runAllScenarios(ctx, fileSvc, cmd, org, demoDir, runID)
 	})
 }
 
@@ -1286,7 +1286,7 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir string) error {
+func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1302,7 +1302,7 @@ func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *co
 
 	for i := 1; i <= count; i++ {
 		scenarioNum := fmt.Sprintf("%d", i)
-		scenarioResults, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, scenarioNum)
+		scenarioResults, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, runID, scenarioNum)
 		if err != nil {
 			return err
 		}
@@ -1367,13 +1367,13 @@ func loadDemoScenarioDefinition(scenarioID string) (*compliancev1.DemoScenarioDe
 	return definition, nil
 }
 
-func newDemoEvidenceScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, demoID, scopeID, metricsSummary string) *compliancev1.DemoScenarioResult {
+func newDemoEvidenceScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, demoID, scopeID, runID, metricsSummary string) *compliancev1.DemoScenarioResult {
 	return &compliancev1.DemoScenarioResult{
-		ResultId:             fmt.Sprintf("%s-run:%s:%s", demoID, startedAt.Format("20060102T150405Z"), definition.ScenarioId),
+		ResultId:             fmt.Sprintf("%s:%s", runID, definition.ScenarioId),
 		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
 		DemoId:               demoID,
 		ScopeId:              scopeID,
-		RunId:                fmt.Sprintf("%s-run-%s", demoID, startedAt.Format("20060102T150405Z")),
+		RunId:                runID,
 		StartedAt:            timestamppb.New(startedAt),
 		Status:               demoStatusPassed,
 		AssertionRefs:        cloneVersionedRefs(definition.AssertionRefs),
@@ -1443,8 +1443,8 @@ func summarizeScenarioResults(cmd *cobra.Command, org string, results []*complia
 	return nil
 }
 
-func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) error {
-	results, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, scenario)
+func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) error {
+	results, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, runID, scenario)
 	if err != nil {
 		return err
 	}
@@ -1456,23 +1456,23 @@ func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDi
 	return nil
 }
 
-func runScenarioWithResults(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+func runScenarioWithResults(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	var results []*compliancev1.DemoScenarioResult
 	var err error
 	switch org {
 	case constants.DemosOrgHealthcare:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runHealthcareScenario(ctx, demoDir, scenario)
+		result, err = runHealthcareScenario(ctx, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgFinance:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runFinanceScenario(ctx, demoDir, scenario)
+		result, err = runFinanceScenario(ctx, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgDHS:
-		results, err = runDHSScenario(ctx, demoDir, scenario)
+		results, err = runDHSScenario(ctx, demoDir, runID, scenario)
 	case constants.DemosOrgFedRAMP:
 		var result *compliancev1.DemoScenarioResult
-		result, err = runFedRAMPScenario(ctx, demoDir, scenario)
+		result, err = runFedRAMPScenario(ctx, demoDir, runID, scenario)
 		results = []*compliancev1.DemoScenarioResult{result}
 	default:
 		err = fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)

@@ -26,8 +26,8 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-func newFinanceUnauthorizedTradeScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFinance, constants.DemoScopeFinance,
+func newFinanceUnauthorizedTradeScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFinance, constants.DemoScopeFinance, runID,
 		"L1 doctrine: unauthorized_trade_execution (0.90 conf) // Network isolation: net_untrusted blocked")
 }
 
@@ -152,7 +152,7 @@ func collectFinanceStateEvidence(ctx context.Context, demoDir string, result *co
 	return string(encoded), evidenceRef, nil
 }
 
-func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runFinanceScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	if scenario != "1" {
 		return nil, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
@@ -162,7 +162,7 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*complia
 		return nil, err
 	}
 	startedAt := time.Now().UTC()
-	result := newFinanceUnauthorizedTradeScenarioResult(startedAt, definition)
+	result := newFinanceUnauthorizedTradeScenarioResult(startedAt, definition, runID)
 	var hasErrors bool
 
 	demoPrintf("\n%s\n", strings.Repeat("─", 60))

@@ -263,6 +263,19 @@ func TestBuildDemoManifest_ProvenanceHashesAreSortedByName(t *testing.T) {
 	assert.Equal(t, sorted, names, manifestPhase2AfterFix)
 }
 
+func TestDemoManifestRunIDMatchesScenarioResultAfterManifestGeneration(t *testing.T) {
+	generatedAt := time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
+	manifestRunID := "fedramp-run-20260901T120000Z"
+	manifest, err := buildDemoManifest(constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, manifestRunID, generatedAt, writeDemoProvenanceFixture(t))
+	require.NoError(t, err)
+	definition, err := loadDemoScenarioDefinition("fedramp-provision")
+	require.NoError(t, err)
+
+	result := newDemoEvidenceScenarioResult(generatedAt.Add(time.Second), definition, constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, manifest.GetRunId(), "metrics")
+
+	assert.Equal(t, manifest.GetRunId(), result.GetRunId(), manifestPhase2Issue)
+}
+
 // stubFSForManifest is a minimal helper to verify persistDemoManifest wraps
 // fileSvc errors with ErrDemoEvidencePersistFailed.
 func TestPersistDemoManifest_WrapsFileSvcErrors(t *testing.T) {

@@ -27,23 +27,23 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-func newHealthcareSuccessScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
+func newHealthcareSuccessScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare, runID,
 		"11 PHI/HIPAA rules evaluated, FHIR PA submission recorded")
 }
 
-func newHealthcarePHIBlockedScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
+func newHealthcarePHIBlockedScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare, runID,
 		"Network isolation verified // L1 doctrine rejection verified at 0.95 confidence")
 }
 
-func newHealthcareGoldCardScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
+func newHealthcareGoldCardScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare, runID,
 		"96% approval rate evaluated against 90% threshold // AUTO_APPROVED")
 }
 
-func newHealthcareSLABreachScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
+func newHealthcareSLABreachScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare, runID,
 		"10 elapsed days evaluated against 7-day SLA // SLA_BREACHED // OHA reportable")
 }
 
@@ -320,7 +320,7 @@ func collectHealthcareNetworkEvidence(ctx context.Context, demoDir string, resul
 	return string(encoded), evidenceRef, nil
 }
 
-func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
+func runHealthcareScenario(ctx context.Context, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
@@ -330,7 +330,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newHealthcareSuccessScenarioResult(startedAt, definition)
+		result = newHealthcareSuccessScenarioResult(startedAt, definition, runID)
 		var hasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -429,7 +429,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newHealthcareGoldCardScenarioResult(startedAt, definition)
+		result = newHealthcareGoldCardScenarioResult(startedAt, definition, runID)
 		var hasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -516,7 +516,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newHealthcareSLABreachScenarioResult(startedAt, definition)
+		result = newHealthcareSLABreachScenarioResult(startedAt, definition, runID)
 		var hasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -603,7 +603,7 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newHealthcarePHIBlockedScenarioResult(startedAt, definition)
+		result = newHealthcarePHIBlockedScenarioResult(startedAt, definition, runID)
 		var hasErrors bool
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))

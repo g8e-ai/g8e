@@ -32,18 +32,18 @@ func defaultDHSHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-coalition")
 }
 
-func newDHSSovereignIngestScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
+func newDHSSovereignIngestScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS, runID,
 		"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
 }
 
-func newDHSDisconnectedOperationsScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
+func newDHSDisconnectedOperationsScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS, runID,
 		"Datalink severed // Local governance continues // Git ledger + SQLite vault")
 }
 
-func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
+func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS, runID,
 		"L2 quorum admits cue // L5 actuator records CUE")
 }
 
@@ -62,11 +62,11 @@ func dhsScenarioDefinitionIDs(scenario string) ([]string, error) {
 	}
 }
 
-func newDHSDestructionScenarioResults(startedAt time.Time, blockDefinition, purgeDefinition *compliancev1.DemoScenarioDefinition) []*compliancev1.DemoScenarioResult {
+func newDHSDestructionScenarioResults(startedAt time.Time, blockDefinition, purgeDefinition *compliancev1.DemoScenarioDefinition, runID string) []*compliancev1.DemoScenarioResult {
 	return []*compliancev1.DemoScenarioResult{
-		newDemoEvidenceScenarioResult(startedAt, blockDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS,
+		newDemoEvidenceScenarioResult(startedAt, blockDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS, runID,
 			"L1 blocks audit wipe // audit vault remains intact"),
-		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS,
+		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS, runID,
 			"L1+L2 admit governed purge // L5 actuator records PURGE"),
 	}
 }
@@ -682,7 +682,7 @@ func collectDHSAuditVaultPersistenceEvidence(ctx context.Context, demoDir string
 	return string(encoded), evidenceRef, nil
 }
 
-func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+func runDHSScenario(ctx context.Context, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result *compliancev1.DemoScenarioResult
 	var results []*compliancev1.DemoScenarioResult
@@ -695,7 +695,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newDHSSovereignIngestScenarioResult(startedAt, definition)
+		result = newDHSSovereignIngestScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -808,7 +808,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newDHSDisconnectedOperationsScenarioResult(startedAt, definition)
+		result = newDHSDisconnectedOperationsScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -998,7 +998,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		result = newDHSCueScenarioResult(startedAt, definition)
+		result = newDHSCueScenarioResult(startedAt, definition, runID)
 		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("─", 60))
@@ -1107,7 +1107,7 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			return nil, err
 		}
 		startedAt := time.Now().UTC()
-		results = newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition)
+		results = newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition, runID)
 		blockResult, purgeResult := results[0], results[1]
 		hcfg = bindHarnessConfig(hcfg, blockResult)
 		var blockHasErrors, purgeHasErrors bool

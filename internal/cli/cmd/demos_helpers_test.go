@@ -607,14 +607,14 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 }
 
 func TestRunScenarioWithResults_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResults(context.Background(), nil, "unknown-org", "/tmp", "1")
+	_, err := runScenarioWithResults(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp")
+	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp", demoTestRunID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
@@ -623,7 +623,7 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := runAllScenarios(ctx, nil, &cobra.Command{}, "unknown-org", "/tmp")
+	err := runAllScenarios(ctx, nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, constants.ErrNotFound)

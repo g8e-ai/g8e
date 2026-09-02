@@ -28,13 +28,14 @@ import (
 const (
 	demoPhase0RegressionAfterFix = "PHASE0: AFTER FIX"
 	demoPhase0RegressionIssue    = "PHASE0: ISSUE: v2.1.3 demo evidence not persisted as typed evidence"
+	demoTestRunID                = "demo-run-20260901T123000Z"
 )
 
 func newFedRAMPDenyScenarioResultForTest(t *testing.T, startedAt time.Time) *compliancev1.DemoScenarioResult {
 	t.Helper()
 	definition, err := loadDemoScenarioDefinition("fedramp-deny")
 	require.NoError(t, err)
-	return newFedRAMPDenyScenarioResult(startedAt, definition)
+	return newFedRAMPDenyScenarioResult(startedAt, definition, demoTestRunID)
 }
 
 // TestPhase0Demo_ScenarioResultUsesProtocolOwnedRecord verifies that the
@@ -102,7 +103,7 @@ func TestFedRAMPDenyScenarioResultUsesCanonicalDefinition(t *testing.T) {
 	definition := compliancecatalog.FindDemoScenarioDefinition(scenarios, "fedramp-deny", "1.0.0")
 	require.NotNil(t, definition)
 
-	result := newFedRAMPDenyScenarioResult(time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC), definition)
+	result := newFedRAMPDenyScenarioResult(time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC), definition, demoTestRunID)
 
 	assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
 	assert.Equal(t, definition.GetTitle(), result.GetTitle())
@@ -163,7 +164,7 @@ func TestNewFedRAMPScenarioResult_UsesCanonicalProvisionDefinition(t *testing.T)
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newFedRAMPScenarioResult(startedAt, definition, "provision metrics")
+	result := newFedRAMPScenarioResult(startedAt, definition, demoTestRunID, "provision metrics")
 
 	assert.Equal(t, "fedramp-provision", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -185,7 +186,7 @@ func TestNewFedRAMPRevertScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newFedRAMPRevertScenarioResult(startedAt, definition)
+	result := newFedRAMPRevertScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "fedramp-revert", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -206,7 +207,7 @@ func TestNewFedRAMPEvidenceBlockScenarioResult_UsesCanonicalDefinition(t *testin
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newFedRAMPEvidenceBlockScenarioResult(startedAt, definition)
+	result := newFedRAMPEvidenceBlockScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "fedramp-evidence-block", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -227,7 +228,7 @@ func TestNewDHSSovereignIngestScenarioResult_UsesCanonicalDefinition(t *testing.
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newDHSSovereignIngestScenarioResult(startedAt, definition)
+	result := newDHSSovereignIngestScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "dhs-ingest", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -250,7 +251,7 @@ func TestNewDHSDisconnectedOperationsScenarioResult_UsesCanonicalDefinition(t *t
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newDHSDisconnectedOperationsScenarioResult(startedAt, definition)
+	result := newDHSDisconnectedOperationsScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "dhs-disconnected-operations", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -273,7 +274,7 @@ func TestNewDHSCueScenarioResult_UsesCanonicalDefinition(t *testing.T) {
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newDHSCueScenarioResult(startedAt, definition)
+	result := newDHSCueScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "dhs-cue", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -298,7 +299,7 @@ func TestNewDHSDestructionScenarioResults_UseSeparateCanonicalDefinitions(t *tes
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	results := newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition)
+	results := newDHSDestructionScenarioResults(startedAt, blockDefinition, purgeDefinition, demoTestRunID)
 
 	require.Len(t, results, 2)
 	assert.Equal(t, "dhs-destruction-block", results[0].GetScenarioRef().GetId())
@@ -337,7 +338,7 @@ func TestNewFinanceUnauthorizedTradeScenarioResult_UsesCanonicalDefinition(t *te
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newFinanceUnauthorizedTradeScenarioResult(startedAt, definition)
+	result := newFinanceUnauthorizedTradeScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "finance-unauthorized-trade", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -360,7 +361,7 @@ func TestNewHealthcareSuccessScenarioResult_UsesCanonicalDefinition(t *testing.T
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newHealthcareSuccessScenarioResult(startedAt, definition)
+	result := newHealthcareSuccessScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "healthcare-success", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -383,7 +384,7 @@ func TestNewHealthcarePHIBlockedScenarioResult_UsesCanonicalDefinition(t *testin
 	require.NoError(t, err)
 	startedAt := time.Date(2026, time.September, 1, 12, 30, 0, 0, time.UTC)
 
-	result := newHealthcarePHIBlockedScenarioResult(startedAt, definition)
+	result := newHealthcarePHIBlockedScenarioResult(startedAt, definition, demoTestRunID)
 
 	assert.Equal(t, "healthcare-phi-blocked", result.GetScenarioRef().GetId())
 	assert.Equal(t, definition.GetScenarioVersion(), result.GetScenarioRef().GetVersion())
@@ -405,7 +406,7 @@ func TestNewHealthcarePolicyScenarioResult_UsesCanonicalDefinition(t *testing.T)
 	tests := []struct {
 		name       string
 		scenarioID string
-		newResult  func(time.Time, *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult
+		newResult  func(time.Time, *compliancev1.DemoScenarioDefinition, string) *compliancev1.DemoScenarioResult
 	}{
 		{name: "gold card threshold evaluation", scenarioID: "healthcare-gold-card", newResult: newHealthcareGoldCardScenarioResult},
 		{name: "SLA breach evaluation", scenarioID: "healthcare-sla-breach", newResult: newHealthcareSLABreachScenarioResult},
@@ -417,7 +418,7 @@ func TestNewHealthcarePolicyScenarioResult_UsesCanonicalDefinition(t *testing.T)
 			definition, err := loadDemoScenarioDefinition(tt.scenarioID)
 			require.NoError(t, err)
 
-			result := tt.newResult(startedAt, definition)
+			result := tt.newResult(startedAt, definition, demoTestRunID)
 
 			assert.Equal(t, definition.GetDisplayNumber(), result.GetDisplayNumber())
 			assert.Equal(t, definition.GetTitle(), result.GetTitle())
