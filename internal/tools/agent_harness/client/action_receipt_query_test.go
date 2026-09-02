@@ -9,8 +9,11 @@ package client
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,4 +78,50 @@ func TestGetActionReceiptReturnsNilForMissingTransaction(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Nil(t, receipt)
+}
+
+func TestGetTrustedSignerPublicKeyValidatesGatewayResponse(t *testing.T) {
+	publicKeyHex := strings.Repeat("ab", ed25519.PublicKeySize)
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		wantErr error
+		wantKey string
+	}{
+		{name: "enabled signer", status: http.StatusOK, body: `{"id":"signer-1","public_key_hex":"` + publicKeyHex + `","enabled":true}`, wantKey: publicKeyHex},
+		{name: "missing signer", status: http.StatusNotFound, wantErr: constants.ErrTrustedSignerKeyNotFound},
+		{name: "gateway failure", status: http.StatusInternalServerError, body: `{"error":"failed"}`},
+		{name: "malformed response", status: http.StatusOK, body: `{`},
+		{name: "disabled signer", status: http.StatusOK, body: `{"id":"signer-1","public_key_hex":"` + publicKeyHex + `","enabled":false}`, wantErr: constants.ErrTrustedSignerKeyNotFound},
+		{name: "malformed public key", status: http.StatusOK, body: `{"id":"signer-1","public_key_hex":"zz","enabled":true}`},
+		{name: "wrong public key size", status: http.StatusOK, body: `{"id":"signer-1","public_key_hex":"ab","enabled":true}`, wantErr: constants.ErrTrustedSignerKeyNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, constants.APIPaths.GovernanceSignersByID+"signer-1", r.URL.Path)
+				w.WriteHeader(tt.status)
+				_, err := w.Write([]byte(tt.body))
+				assert.NoError(t, err)
+			}))
+			t.Cleanup(server.Close)
+			client, err := New(config.Config{MTLSBaseURL: server.URL})
+			require.NoError(t, err)
+
+			key, err := client.GetTrustedSignerPublicKey(context.Background(), "signer-1")
+
+			if tt.wantKey != "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantKey, hex.EncodeToString(key))
+				return
+			}
+			require.Error(t, err)
+			assert.Nil(t, key)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
 }

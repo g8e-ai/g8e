@@ -52,6 +52,21 @@ func validDemoScenarioDefinition() *compliancev1.DemoScenarioDefinition {
 	}
 }
 
+func validDemoManifest() *compliancev1.DemoManifest {
+	return &compliancev1.DemoManifest{
+		DemoId:                 "fedramp",
+		DemoVersion:            "1.0.0",
+		RunId:                  "run-1",
+		ScopeId:                "scope-1",
+		GeneratedAt:            timestamppb.New(time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)),
+		ScenarioDefinitionRefs: []*compliancev1.VersionedReference{{Id: "fedramp-deny", Version: "1.0.0"}},
+		ProvenanceHashes:       []*compliancev1.NamedDigest{{Name: constants.DemosComposeFile, Sha256: validSHA256}},
+		RequiredEnvironment:    []string{"docker", "g8e-binary"},
+		FrameworkControlRefs:   []*compliancev1.FrameworkControlReference{validFrameworkControlReference()},
+		SupportedLanes:         []string{"automated", "manual-notary"},
+	}
+}
+
 func validDemoStepResult() *compliancev1.DemoStepResult {
 	started := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
 	return &compliancev1.DemoStepResult{
@@ -95,6 +110,38 @@ func validDemoScenarioResult() *compliancev1.DemoScenarioResult {
 	}
 }
 
+func TestValidateDemoManifestRejectsIncompleteOrUnresolvedRequirements(t *testing.T) {
+	frameworks := &compliancev1.FrameworkCatalog{CatalogId: "frameworks", CatalogVersion: "1.0.0", Sha256: validSHA256, Frameworks: []*compliancev1.FrameworkDefinition{validFramework()}}
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.DemoManifest)
+		want   error
+	}{
+		{name: "missing run identity", mutate: func(m *compliancev1.DemoManifest) { m.RunId = "" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "duplicate scenario reference", mutate: func(m *compliancev1.DemoManifest) {
+			m.ScenarioDefinitionRefs = append(m.ScenarioDefinitionRefs, m.ScenarioDefinitionRefs[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
+		{name: "unresolved scenario reference", mutate: func(m *compliancev1.DemoManifest) { m.ScenarioDefinitionRefs[0].Version = "2.0.0" }, want: constants.ErrUnresolvedReference},
+		{name: "malformed provenance digest", mutate: func(m *compliancev1.DemoManifest) { m.ProvenanceHashes[0].Sha256 = "invalid" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "duplicate environment requirement", mutate: func(m *compliancev1.DemoManifest) {
+			m.RequiredEnvironment = append(m.RequiredEnvironment, m.RequiredEnvironment[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
+		{name: "duplicate execution lane", mutate: func(m *compliancev1.DemoManifest) { m.SupportedLanes = append(m.SupportedLanes, m.SupportedLanes[0]) }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "unknown framework control", mutate: func(m *compliancev1.DemoManifest) { m.FrameworkControlRefs[0].ControlId = "KSI-UNKNOWN" }, want: constants.ErrUnresolvedReference},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := validDemoManifest()
+			tt.mutate(manifest)
+			err := catalog.ValidateDemoManifest(manifest, []*compliancev1.DemoScenarioDefinition{nil, validDemoScenarioDefinition()}, frameworks)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.want)
+		})
+	}
+	assert.NoError(t, catalog.ValidateDemoManifest(validDemoManifest(), []*compliancev1.DemoScenarioDefinition{nil, validDemoScenarioDefinition()}, frameworks))
+}
+
 func TestValidateDemoScenarioDefinitionRejectsIncompleteOrUnresolvedRequirements(t *testing.T) {
 	frameworks := &compliancev1.FrameworkCatalog{CatalogId: "frameworks", CatalogVersion: "1.0.0", Sha256: validSHA256, Frameworks: []*compliancev1.FrameworkDefinition{validFramework()}}
 	tests := []struct {
@@ -104,8 +151,21 @@ func TestValidateDemoScenarioDefinitionRejectsIncompleteOrUnresolvedRequirements
 	}{
 		{name: "missing stable identity", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.ScenarioId = "" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "missing action classes", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.ExpectedActionClasses = nil }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "invalid expected outcome", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.ExpectedOutcome = "unknown" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "blocked outcome without rejection layer", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.ExpectedRejectionLayer = "" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "duplicate action class", mutate: func(d *compliancev1.DemoScenarioDefinition) {
+			d.ExpectedActionClasses = append(d.ExpectedActionClasses, d.ExpectedActionClasses[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
+		{name: "duplicate assertion reference", mutate: func(d *compliancev1.DemoScenarioDefinition) {
+			d.AssertionRefs = append(d.AssertionRefs, d.AssertionRefs[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
 		{name: "unknown assertion", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.AssertionRefs[0].Version = "2.0.0" }, want: constants.ErrUnsupportedAssertion},
+		{name: "incomplete framework control", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.FrameworkControlRefs[0].ControlId = "" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "unknown framework", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.FrameworkControlRefs[0].FrameworkRef.Version = "2.0.0" }, want: constants.ErrUnsupportedFramework},
 		{name: "unknown framework control", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.FrameworkControlRefs[0].ControlId = "KSI-UNKNOWN" }, want: constants.ErrUnresolvedReference},
+		{name: "duplicate framework control", mutate: func(d *compliancev1.DemoScenarioDefinition) {
+			d.FrameworkControlRefs = append(d.FrameworkControlRefs, d.FrameworkControlRefs[0])
+		}, want: constants.ErrInvalidEvidenceGraph},
 		{name: "invalid evidence level", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.RequiredEvidenceLevel = "L9" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "zero timeout", mutate: func(d *compliancev1.DemoScenarioDefinition) { d.TimeoutSeconds = 0 }, want: constants.ErrInvalidEvidenceGraph},
 	}
@@ -186,11 +246,15 @@ func TestValidateDemoScenarioResultFailsClosedOnMissingRequiredEvidence(t *testi
 		mutate func(*compliancev1.DemoScenarioResult)
 		want   error
 	}{
+		{name: "missing result identity", mutate: func(r *compliancev1.DemoScenarioResult) { r.ResultId = "" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "cross-scope result", mutate: func(r *compliancev1.DemoScenarioResult) { r.ScopeId = "scope-2" }, want: constants.ErrEvidenceScopeMismatch},
 		{name: "duplicate execution ID", mutate: func(r *compliancev1.DemoScenarioResult) { r.ExecutionIds = append(r.ExecutionIds, r.ExecutionIds[0]) }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "missing assertion reference", mutate: func(r *compliancev1.DemoScenarioResult) { r.AssertionRefs = nil }, want: constants.ErrUnresolvedReference},
+		{name: "missing framework control reference", mutate: func(r *compliancev1.DemoScenarioResult) { r.FrameworkControlRefs = nil }, want: constants.ErrUnresolvedReference},
 		{name: "missing receipt", mutate: func(r *compliancev1.DemoScenarioResult) { r.ReceiptRefs = nil }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "missing state observation", mutate: func(r *compliancev1.DemoScenarioResult) { r.StateObservationRefs = nil }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "unverified pass", mutate: func(r *compliancev1.DemoScenarioResult) { r.VerificationStatus = "unverifiable" }, want: constants.ErrInvalidEvidenceGraph},
+		{name: "failed result without reason", mutate: func(r *compliancev1.DemoScenarioResult) { r.Status = "failed" }, want: constants.ErrInvalidEvidenceGraph},
 		{name: "failed required step in pass", mutate: func(r *compliancev1.DemoScenarioResult) {
 			r.StepResults[0].Status = "failed"
 			r.StepResults[0].Failure = "failed"
@@ -208,4 +272,16 @@ func TestValidateDemoScenarioResultFailsClosedOnMissingRequiredEvidence(t *testi
 		})
 	}
 	assert.NoError(t, catalog.ValidateDemoScenarioResult(validDemoScenarioResult(), validDemoScenarioDefinition(), "scope-1"))
+}
+
+func TestValidateDemoScenarioResultRejectsMissingRequiredMetricEvidence(t *testing.T) {
+	definition := validDemoScenarioDefinition()
+	definition.RequiredEvidenceTypes = append(definition.RequiredEvidenceTypes, "grader_metric")
+	result := validDemoScenarioResult()
+	result.MetricRefs = nil
+
+	err := catalog.ValidateDemoScenarioResult(result, definition, "scope-1")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }

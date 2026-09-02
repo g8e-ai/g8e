@@ -52,8 +52,9 @@ jobs:
           VERSION=$(cat VERSION | tr -d '\n\r' | sed 's/^v//')
           PY_VERSION=$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           PY_INIT_VERSION=$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ]; then
-            echo "Error: pyproject.toml ($PY_VERSION), __init__.py ($PY_INIT_VERSION) != VERSION ($VERSION)"
+          PY_LOCK_VERSION=$(sed -n -E '/^name = "g8e"$/{n;s/^version = "([^"]+)"/\1/p;}' protocol/python/uv.lock)
+          if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ] || [ "$PY_LOCK_VERSION" != "$VERSION" ]; then
+            echo "Error: pyproject.toml ($PY_VERSION), __init__.py ($PY_INIT_VERSION), uv.lock ($PY_LOCK_VERSION) != VERSION ($VERSION)"
             echo "Run 'make release' to sync."
             exit 1
           fi

@@ -14,7 +14,7 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Inventory the changes since the previous release tag
 2. Reconcile documentation with the code changes
 3. Write `docs/release_notes/vX.Y.x/vX.Y.Z.md`
-4. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py`) to `X.Y.Z` (no `v` prefix) so CI's version sync check passes on the PR
+4. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix) so CI's version sync and locked-environment checks pass on the PR
 5. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
 6. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
 
@@ -26,14 +26,14 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 5. Run `make release` — this re-syncs the Python package files from `VERSION` (a no-op if the agent already synced them), then creates and pushes the `vX.Y.Z` and `protocol/vX.Y.Z` tags
 6. GitHub Actions workflows create the GitHub release, build and sign binaries, and publish the Python package to PyPI
 
-The Python package files (`pyproject.toml`, `__init__.py`) are synced to the new version during PR prep by the agent (manually, since the agent cannot run `make release`) so CI's version sync check passes on the PR. `make release` re-syncs them after merge as a no-op safety net. The agent never runs `make release`, never commits, and never pushes.
+The Python package files (`pyproject.toml`, `__init__.py`, and the editable package entry in `uv.lock`) are synced to the new version during PR prep by the agent (manually, since the agent cannot run `make release`) so CI's version sync and locked-environment checks pass on the PR. `make release` re-syncs them after merge as a no-op safety net. The agent never runs `make release`, never commits, and never pushes.
 
 ## How to Use This Document
 
 1. **Inventory the changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
 2. **Update documentation to match the code**: For every doc in scope, do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
 3. **Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory (see [Release Notes](#release-notes)). The CHANGELOG entry is a summary of this.
-4. **Bump version files**: Set `VERSION`, sync the Python package files (`pyproject.toml`, `__init__.py`) to match, and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python files must be synced during PR prep so CI's version sync check passes on the PR — `make release` re-syncs them after merge as a no-op safety net.
+4. **Bump version files**: Set `VERSION`, sync the Python package files (`pyproject.toml`, `__init__.py`, and `uv.lock`) to match, and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python files must be synced during PR prep so CI's version sync check passes on the PR — `make release` re-syncs them after merge as a no-op safety net.
 5. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
 6. **Hand the prepared working tree back to the release owner.** The agent stops here — it does NOT commit, push, open a PR, or run `make release`. See [Separation of Duties](#separation-of-duties).
 7. **Release owner**: commit, push, open and merge the PR; after CI on `main` passes, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
@@ -236,8 +236,9 @@ After the change inventory and documentation reconciliation are complete, bump t
 | 2 | `CHANGELOG.md` | **Manual** (agent, PR prep): add a table row to the major-version section | `\| X.Y.Z \| YYYY-MM-DD \| ... \|` (no `v` prefix) |
 | 3 | `protocol/python/pyproject.toml` | **Manual** (agent, PR prep): set to match `VERSION` so CI passes; `make release` re-syncs after merge as a no-op safety net | `version = "X.Y.Z"` (no `v` prefix) |
 | 4 | `protocol/python/g8e/__init__.py` | **Manual** (agent, PR prep): set to match `VERSION` so CI passes; `make release` re-syncs after merge as a no-op safety net | `__version__ = "X.Y.Z"` (no `v` prefix) |
+| 5 | `protocol/python/uv.lock` | **Manual** (agent, PR prep): set the editable `g8e` package entry to match `VERSION` so locked environments remain usable; `make release` re-syncs after merge as a no-op safety net | `version = "X.Y.Z"` under `name = "g8e"` (no `v` prefix) |
 
-> Items 3 and 4 must be synced to `VERSION` during PR prep so CI's version sync check passes on the PR. The agent edits them manually (it cannot run `make release`). `make release` re-syncs them after merge as a no-op safety net. A mismatch will fail CI.
+> Items 3 through 5 must be synced to `VERSION` during PR prep so CI's version sync check passes on the PR. The agent edits them manually (it cannot run `make release`). `make release` re-syncs them after merge as a no-op safety net. A mismatch will fail CI.
 
 #### CHANGELOG.md Format
 
@@ -400,7 +401,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. `VERSION`**: Set to `vX.Y.Z`
-- [ ] **5. Sync Python files**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`) and `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`) to match `VERSION` (no `v` prefix). This is required so CI's version sync check passes on the PR. The agent edits these files manually; it cannot run `make release` to do it. `make release` re-syncs them after merge as a no-op safety net.
+- [ ] **5. Sync Python files**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`), `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`), and the editable `g8e` package entry in `protocol/python/uv.lock` (`version = "X.Y.Z"`) to match `VERSION` (no `v` prefix). This is required so CI's version sync check passes and `uv run --locked` remains usable on the PR. The agent edits these files manually; it cannot run `make release` to do it. `make release` re-syncs them after merge as a no-op safety net.
 - [ ] **6. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
 - [ ] **7. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
 - [ ] **8. Run [Verification](#verification)** to catch any missed files — including stale version callouts (step 8 of Verification)
@@ -408,7 +409,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **10. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **11. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
 
-**4 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py`), all made by the agent. `make release` re-syncs the Python files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, and release notes.
+**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `uv.lock`), all made by the agent. `make release` re-syncs the Python files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, and release notes.
 
 > **Workflow note:** All release prep (steps 1-9) happens on a feature branch. The agent does steps 1-8 and stops; it does not commit, push, or open the PR. The release owner does steps 10-11 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
@@ -434,10 +435,11 @@ ls "docs/release_notes/${RELEASE_VERSION%.*}.x/${RELEASE_VERSION}.md"
 
 # 4. Verify Python package version matches VERSION. The agent syncs these files
 #    manually during PR prep (step 5 of the Manual Updates Checklist) so CI's
-#    version sync check passes on the PR. Both must show X.Y.Z matching RELEASE_NUM.
+#    version sync check passes on the PR. All three must show X.Y.Z matching RELEASE_NUM.
 grep -n '^version' protocol/python/pyproject.toml
 grep -n '__version__' protocol/python/g8e/__init__.py
-# Both should show X.Y.Z matching RELEASE_NUM.
+grep -A1 '^name = "g8e"' protocol/python/uv.lock
+# All three should show X.Y.Z matching RELEASE_NUM.
 
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
 #    version; should return nothing for docs modified in this release. Docs NOT modified
@@ -471,7 +473,7 @@ grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" do
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set both to `X.Y.Z` matching `VERSION`) before handing off to the release owner. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
+If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set all three version entries to `X.Y.Z` matching `VERSION`) before handing off to the release owner. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
 
 ---
 
@@ -483,7 +485,7 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 > **Run this on the merged main branch**, not on a feature branch. The tags must point at the merge commit on main. **`make release` is run by the release owner, not by the agent preparing the PR.** The agent's work ends at opening the PR; the release owner merges, waits for CI on main to pass, pulls main locally, and then runs `make release`.
 
-1. Syncs `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` from `VERSION` (if already in sync, no changes are made)
+1. Syncs `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock` from `VERSION` (if already in sync, no changes are made)
 2. Verifies working tree is clean (fails if Python files were out of sync; commit synced files and go through the PR process first)
 3. Verifies release notes file exists at `docs/release_notes/vX.Y.x/vX.Y.Z.md`
 4. Verifies tags `vX.Y.Z` and `protocol/vX.Y.Z` don't already exist
@@ -492,7 +494,7 @@ The `make release` target handles version syncing, tagging, and pushing in a sin
 
 The `vX.Y.Z` tag triggers the `release-binary.yml` workflow, which builds all platforms, signs binaries, creates the GitHub release, and uploads assets. The `protocol/vX.Y.Z` tag triggers the `release-python-protocol.yml` workflow, which publishes the Python package to PyPI.
 
-> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml` or `__init__.py` don't match `VERSION`.
+> **Lint and tests are handled by CI** (`.github/workflows/build-and-test.yml`) on pull requests, not by `make release`. The CI workflow includes a version sync check that fails if `pyproject.toml`, `__init__.py`, or the editable `g8e` entry in `uv.lock` doesn't match `VERSION`.
 
 ### CI Workflows Triggered by Tags
 

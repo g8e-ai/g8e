@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -24,12 +24,12 @@ When asked to run this guide, the agent:
 
 ## What is runnable today
 
-The current repository supports three complementary evidence lanes:
+The current repository supports three complementary evidence lanes. Demo evidence runs have their own read-only verifier; this is distinct from the future complete eval-bundle and proof-backed report-bundle verifiers:
 
 | Lane | Best use | What it produces | Headline status |
 | --- | --- | --- | --- |
-| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, integrity verification, KSI JSON, and OSCAL | Publish measured scenario outcomes and passing checks with the provider clearly identified |
-| FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose scenario result tables, real governance against synthetic target services, signed receipts, KSI evidence for FedRAMP, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
+| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, integrity verification, and KSI JSON | Publish measured scenario outcomes and passing checks with the provider clearly identified |
+| FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, KSI evidence for FedRAMP, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
 | Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Immutable manifest, typed tasks, attempts, stages, metrics, encrypted restricted evidence, receipts, observations, and compatibility summaries | Do not use current smoke output for extraordinary headline statistics |
 
 The current eval CLI supports only `ifeval_subset`. Its `verify-receipts` command verifies canonical receipt signatures and final persistence attestations but does not verify the complete eval bundle, commitment ledger, trust root, all record references, or all input hashes. The planned 25-scenario utility/privacy/policy/protocol matrix, generated proof card, and complete one-command bundle verifier are not currently implemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
@@ -38,7 +38,7 @@ The current eval CLI supports only `ifeval_subset`. Its `verify-receipts` comman
 
 The `20260831T220953Z` rehearsal exercised this runbook against a clean source baseline and retained the failed setup attempts and corrected reruns. The unified lane completed both useful-work scenarios, verified 49 of 49 exported receipt signatures and persistence attestations against the two producing actuator public keys, and passed all six store-integrity checks with no failures or skips. The fixed FedRAMP and DHS environments each passed all four scenarios under consensus posture. The separate real-local `ollama/gemma4:12b` doctrine diagnostic passed all five supported `ifeval_subset` tasks with a measured 180-second idle threshold.
 
-These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run did not perform complete-bundle verification, and its KSI and OSCAL outputs describe measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
+These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run did not perform complete-bundle verification, and its KSI output describes measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
 
 ## 1. Create an immutable campaign workspace
 
@@ -286,7 +286,7 @@ docker exec g8e-operator /g8e compliance ksi \
   > "${CAMPAIGN_DIR}/unified/ksi-result.json"
 ```
 
-Report the measured satisfied/not-satisfied result. A KSI result is evidence alignment, not FedRAMP authorization. The superseded flat OSCAL export is unavailable while proof-backed bundle generation is implemented.
+Report the measured satisfied/not-satisfied result. A KSI result is evidence alignment, not FedRAMP authorization. The superseded flat OSCAL export and proof-backed report bundle generator are not exposed by the CLI.
 
 ## 4. Run the audience-specific visual demos
 
@@ -306,7 +306,13 @@ Follow the exact owner-enrollment and operator-approval commands printed by `dem
 ./g8e demos run fedramp --verbose 2>&1 | tee "${CAMPAIGN_DIR}/fedramp/scenarios-verbose.txt"
 ```
 
-The verbose log is the durable source for quotes. For a separate presentation run, use `./g8e demos run fedramp --tui`; do not run both modes against the same evidence state unless duplicate scenario executions are intentional and disclosed. The TUI is a visual aid for a live demo or screen recording and is not proof by itself. The highest-value moments are:
+Use the exact run ID printed by the scenario command to verify the persisted evidence without modifying it:
+
+```bash
+./g8e compliance demo-run verify <fedramp-run-id> --project-root "${REPO_ROOT}" | tee "${CAMPAIGN_DIR}/fedramp/demo-run-verification.json"
+```
+
+Require a zero exit status and `"valid":true` before claiming that the persisted demo evidence passed independent verification. The verbose log is the durable source for quotes. For a separate presentation run, use `./g8e demos run fedramp --tui`; do not run both modes against the same evidence state unless duplicate scenario executions are intentional and disclosed. The TUI is a visual aid for a live demo or screen recording and is not proof by itself. The highest-value moments are:
 
 1. Governed synthetic cloud resource provisioning succeeds under L2 quorum.
 2. Unauthorized destruction of `/var/cloudsvc` is blocked at L1 before actuation.
@@ -329,9 +335,10 @@ Start and bootstrap the DHS environment using the printed enrollment instruction
 ```bash
 ./g8e demos start dhs 2>&1 | tee "${CAMPAIGN_DIR}/logs/dhs-start.log"
 ./g8e demos run dhs --verbose 2>&1 | tee "${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt"
+./g8e compliance demo-run verify <dhs-run-id> --project-root "${REPO_ROOT}" | tee "${CAMPAIGN_DIR}/dhs/demo-run-verification.json"
 ```
 
-For a separate presentation run, use `./g8e demos run dhs --tui`; do not run both modes against the same evidence state unless duplicate scenario executions are intentional and disclosed. The highest-value moments are:
+Require a zero exit status and `"valid":true` before claiming that the persisted demo evidence passed independent verification. For a separate presentation run, use `./g8e demos run dhs --tui`; do not run both modes against the same evidence state unless duplicate scenario executions are intentional and disclosed. The highest-value moments are:
 
 1. Multi-source synthetic ingest completes with chain-of-custody evidence.
 2. Governance and local evidence continue while the simulated coalition datalink is severed.
@@ -433,8 +440,8 @@ Use this order when choosing screenshots, excerpts, and post material:
 | 4 | `${CAMPAIGN_DIR}/unified/reports/commitments.csv` and `ledger_merkle_root.csv` | Prior commitment hash, commitment hash, transaction hash, state root, and final Git root | Before/after chain graphic |
 | 5 | `${CAMPAIGN_DIR}/unified/reports/file_mutations.csv` and `file_diffs.csv` | Independently inspectable useful state change and before/after linkage | Developer carousel or demo zoom-in |
 | 6 | `${CAMPAIGN_DIR}/fedramp/scenarios-verbose.txt` | Authorized provision/revert success and unauthorized evidence-destruction rejection | Compliance/security video |
-| 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `compliance/assessment-results.json` | Measured KSI counts and `relevant-evidence` anchors | Compliance post or article |
-| 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` | Disconnected continuity, blocked wipe, and governed purge | Defense/edge video |
+| 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `demo-run-verification.json` | Measured KSI counts plus the typed independent verification result for the persisted FedRAMP demo evidence | Compliance post or article |
+| 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` and `demo-run-verification.json` | Disconnected continuity, blocked wipe, governed purge, and the typed independent verification result | Defense/edge video |
 | 9 | `${EVAL_REPORT_DIR}/manifest.json`, `attempts.jsonl`, `stages.jsonl`, and `metrics.jsonl` | Exact configuration, denominators, grader outcomes, usage, latency, and evidence linkage | Technical appendix |
 | 10 | `${CAMPAIGN_DIR}/metadata/` | Source revision, dirty-tree status, binary/FIPS versions, Docker versions, provider classification, and campaign mode | Methodology footer |
 
@@ -456,7 +463,8 @@ A current-run social claim is publishable only when all applicable checks pass:
 - Every integrity capability named in the post has a corresponding non-skipped `PASS` row with a non-empty subject.
 - Mutation-linkage claims use a non-zero mutation count.
 - Synthetic targets, canaries, and data are labeled.
-- KSI/OSCAL language says measured alignment or evidence, never authorization.
+- KSI and compliance-evidence language says measured alignment or evidence, never authorization.
+- Any demo-evidence verification claim cites a retained canonical report with `"valid":true` and a zero verifier exit status.
 - The public artifact set excludes keys, secrets, raw restricted evidence, local credential paths, and personal data.
 
 ### Publication-grade flagship gate
@@ -506,7 +514,7 @@ Replace placeholders only with values traced to retained artifacts. Remove lines
 
 ### Current compliance proof
 
-> One governed runtime decision produced signed receipts, commitment evidence, a measured FedRAMP 20x KSI result, and OSCAL `relevant-evidence` anchors.
+> One governed runtime decision produced signed receipts, commitment evidence, a measured FedRAMP 20x KSI result, and a valid independent report over the persisted demo evidence.
 >
 > Satisfied: `<measured count>`
 > Not satisfied: `<measured count>`
@@ -549,7 +557,7 @@ Do not use:
 
 - “Unhackable,” “perfect security,” “zero risk,” or “guaranteed safe.”
 - “The cloud can never see data.” State the tested provider boundary, declared synthetic canaries, detectors, and observed count.
-- “FedRAMP certified” or “FedRAMP authorized” for KSI/OSCAL output.
+- “FedRAMP certified” or “FedRAMP authorized” for KSI or demo-evidence output.
 - “Independent proof” when the producer controls the verifier and trust root. Use “independently verifiable” only after another party can run complete verification against a published root.
 - “BFT multi-agent reasoning” for protocol L2. Describe distinct Ed25519 signers enforcing quorum over deterministic doctrine decisions. The g8ee Tribunal is a separate information-isolated command-generation mechanism.
 - “100% benchmark performance” from a one-task or fake-provider run.
@@ -574,7 +582,7 @@ Measured outcomes
 - Signed receipts: <result>
 - Persistence/commitments: <result>
 - Store verification: <PASS/FAIL/SKIPPED summary>
-- KSI/OSCAL: <counts and artifact status>
+- KSI/demo evidence: <counts and verification-report status>
 - Complete-bundle verification: <PASS or NOT IMPLEMENTED/NOT RUN>
 
 Best copy/paste data
@@ -608,4 +616,4 @@ The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, 
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.
 - [FedRAMP Demo](../../demos/fedramp/README.md) — synthetic cloud campaign and KSI evidence.
 - [DHS Demo](../../demos/dhs/README.md) — disconnected-operations and governed-destruction campaign.
-- [Compliance Alignment](../reference/compliance-alignment.md) — KSI and OSCAL evidence semantics and claim boundaries.
+- [Compliance Alignment](../reference/compliance-alignment.md) — KSI, protocol-owned compliance catalog, and persisted demo-evidence semantics and claim boundaries.

@@ -848,8 +848,8 @@ _ci-test:
 # =============================================================================
 # RELEASE
 # =============================================================================
-# VERSION is the single source of truth. `make release` syncs pyproject.toml
-# and __init__.py from VERSION (if needed), tags the current commit as
+# VERSION is the single source of truth. `make release` syncs pyproject.toml,
+# __init__.py, and the Python uv.lock package entry from VERSION (if needed), tags the current commit as
 # v<VERSION> + protocol/v<VERSION>, and pushes both tags. The GitHub Actions
 # workflows create the GitHub release and upload binary assets.
 #
@@ -875,8 +875,10 @@ release:
 	\
 	PY_FILE=protocol/python/pyproject.toml; \
 	PY_INIT=protocol/python/g8e/__init__.py; \
+	PY_LOCK=protocol/python/uv.lock; \
 	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 	PY_INIT_VERSION=$$(grep -E '^__version__ = ' $$PY_INIT | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_LOCK_VERSION=$$(sed -n -E '/^name = "g8e"$$/{n;s/^version = "([^"]+)"/\1/p;}' $$PY_LOCK); \
 	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
 		echo "Syncing $$PY_FILE: $$PY_VERSION -> $$VERSION"; \
 		sed -i.bak -E 's/^version = "[^"]+"/version = "'$$VERSION'"/' $$PY_FILE; \
@@ -892,6 +894,14 @@ release:
 		echo "  __init__.py synced."; \
 	else \
 		echo "  __init__.py already in sync."; \
+	fi; \
+	if [ "$$PY_LOCK_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_LOCK: $$PY_LOCK_VERSION -> $$VERSION"; \
+		sed -i.bak -E '/^name = "g8e"$$/{n;s/^version = "[^"]+"/version = "'$$VERSION'"/;}' $$PY_LOCK; \
+		rm -f $$PY_LOCK.bak; \
+		echo "  uv.lock synced."; \
+	else \
+		echo "  uv.lock already in sync."; \
 	fi; \
 	\
 	if [ -n "$$(git status --porcelain)" ]; then \
