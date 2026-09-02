@@ -34,7 +34,7 @@ make build          # Build the g8e Operator binary
 | `./g8e auth enroll gui` | Enroll an external frontend application origin with the Gateway |
 | `./g8e auth pending-platform-enrollments` | List pending platform workload enrollment requests (operator, dashboard, ensemble) via authenticated mTLS |
 | `./g8e auth approve-platform-enrollment <request-id>` | Approve or deny (`--deny`) a pending platform workload enrollment request by exact request ID via authenticated mTLS |
-| `./g8e compliance` | FedRAMP 20x KSI evaluation and OSCAL export |
+| `./g8e compliance` | FedRAMP 20x KSI evaluation and history, COSAiS overlay inspection, and read-only verification of persisted demo evidence runs |
 | `./g8e test` | Run test suites |
 
 Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks. Platform workloads (operator, dashboard, ensemble) start not-ready and require owner-approved platform enrollment: the gateway starts with zero users, the first owner enrolls via `auth enroll user`, each workload submits a platform enrollment request at startup, and the owner approves each request by exact request ID via `auth approve-platform-enrollment` before the workload becomes ready. See [auth.md](../architecture/auth.md) and the [Docker Gateway Guide](../guides/docker_gateway.md) for the full bootstrap flow.
@@ -274,7 +274,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 | Governance layers | `internal/services/governance/` |
 | Gateway service | `internal/services/gateway/` |
 | MCP gateway & native tools | `internal/services/mcp/` |
-| Compliance (KSI/OSCAL) | `internal/services/compliance/` |
+| Compliance (KSI, catalogs, demo evidence, OSCAL renderer) | `internal/services/compliance/` |
 | CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |
 | Architecture docs | `docs/architecture/` |
 

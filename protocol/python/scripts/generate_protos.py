@@ -16,6 +16,7 @@ PYTHON_ROOT = Path(__file__).resolve().parents[1]
 PROTO_ROOT = PYTHON_ROOT.parent / "proto"
 PROTO_FILES = (
     Path("g8e/common/v1/common.proto"),
+    Path("g8e/compliance/v1/compliance.proto"),
     Path("g8e/operator/v1/operator.proto"),
     Path("g8e/pubsub/v1/pubsub.proto"),
 )

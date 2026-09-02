@@ -109,6 +109,7 @@ services:
       - fedramp-cloudsvc-data:/var/cloudsvc
       - fedramp-gateway-state:/root/.g8e:ro
       - ./cloudsvc.py:/app/cloudsvc.py:ro
+      - ./collect_cloud_service_state.py:/app/collect_cloud_service_state.py:ro
       - ./verify_ops.py:/app/verify_ops.py:ro
     networks:
       net_secure:

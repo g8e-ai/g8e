@@ -136,3 +136,50 @@ func TestActionTypeIsMutation_EveryActionTypeClassified(t *testing.T) {
 		_ = at.IsMutation()
 	}
 }
+
+func TestActionTypeIsBootstrapAction_PlatformEnrollmentReturnsTrue(t *testing.T) {
+	t.Parallel()
+
+	bootstrapActions := []ActionType{
+		ActionTypePlatformEnrollmentCreate,
+		ActionTypePlatformEnrollmentDecide,
+		ActionTypePlatformEnrollmentIssue,
+		ActionTypePlatformEnrollmentPersistPolicy,
+		ActionTypePlatformEnrollmentCreateSession,
+	}
+
+	for _, at := range bootstrapActions {
+		at := at
+		t.Run(string(at), func(t *testing.T) {
+			t.Parallel()
+			assert.True(t, at.IsBootstrapAction(), "%s should be a bootstrap action", at)
+		})
+	}
+}
+
+func TestActionTypeIsBootstrapAction_NonPlatformEnrollmentReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	for _, at := range AllActionTypes {
+		if at.IsBootstrapAction() {
+			continue
+		}
+		at := at
+		t.Run(string(at), func(t *testing.T) {
+			t.Parallel()
+			assert.False(t, at.IsBootstrapAction(), "%s should not be a bootstrap action", at)
+		})
+	}
+}
+
+func TestActionTypeIsBootstrapAction_UnknownTypeReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, ActionType("UNKNOWN_ACTION").IsBootstrapAction())
+}
+
+func TestActionTypeIsBootstrapAction_EmptyTypeReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, ActionType("").IsBootstrapAction())
+}

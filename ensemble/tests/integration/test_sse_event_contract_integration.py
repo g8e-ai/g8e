@@ -32,9 +32,11 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")
 
 def _load_protocol_sse_fixtures():
     """Load protocol SSE event fixtures from the workspace root."""
-    # Navigate from services/g8ee/tests/integration to protocol/test-fixtures/
+    # Navigate from ensemble/tests/integration to the workspace root, then
+    # into protocol/test-fixtures/. ensemble/tests/integration is three
+    # levels below the workspace root, so four parent traversals reach it.
     fixtures_path = (
-        Path(__file__).resolve().parent.parent.parent.parent.parent
+        Path(__file__).resolve().parent.parent.parent.parent
         / "protocol"
         / "test-fixtures"
         / "sse-events.json"
@@ -502,12 +504,14 @@ async def test_protocol_fixture_event_types_match_constants():
     """Protocol fixture event types match g8ee EventType constants."""
     # Map fixture keys to EventType constants
     fixture_to_constant_mapping = {
+        "llm_chat_iteration_started": EventType.AI_LLM_CHAT_ITERATION_STARTED,
         "text_chunk_received": EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
         "text_completed": EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
         "chat_iteration_failed": EventType.AI_LLM_CHAT_ITERATION_FAILED,
         "g8e_web_search_requested": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
         "g8e_web_search_completed": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
         "g8e_web_search_failed": EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED,
+        "port_check_requested": EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
         "port_check_completed": EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         "port_check_failed": EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         "citations_received": EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,

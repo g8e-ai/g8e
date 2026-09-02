@@ -14,6 +14,13 @@ g8e is a sovereign execution platform that delivers frontier AI reasoning to the
 
 **Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Unified Docker Stack](docs/guides/unified_stack.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [Build Gateway](docs/guides/build_gateway.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
+## Work with the Founder
+
+> [!NOTE]
+> I designed and built g8e independently, using AI coding agents as implementation collaborators. Its architecture distills 30 years of systems integration and data protection experience into a platform that enables AI to operate with the context, discipline, and safeguards of an experienced systems engineer.
+>
+> I am available for W-2 roles, contract engineering and architecture work, consulting engagements, and paid pilot deployments. Lateralus Labs is a SAM.gov-registered, certified Veteran-Owned Small Business (VOSB) and can accept Government Purchase Card engagements. I am also open to strategic conversations about investment, acquisition of g8e, or an acqui-hire. To discuss a role, project, pilot, or partnership, contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com).
+
 ## The Sovereignty Inversion
 
 Every contemporary agent architecture makes the same trade: give the cloud custody of your data to get frontier reasoning. g8e inverts this. The cloud model functions as a reasoning co-processor that receives tokenized projections and cryptographic commitments. It never holds state, accumulates context, or takes custody of data.
@@ -225,7 +232,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.2
+go get github.com/g8e-ai/g8e/v2@v2.1.3
 ```
 
 **Python package** (requires Python 3.10+):

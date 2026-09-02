@@ -8,8 +8,6 @@
 package gateway
 
 import (
-	"crypto/ed25519"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -724,28 +722,20 @@ func (h *pubSubSessionHandler) relayActionReceipt(channel string, data []byte) {
 			"signer_key_id", receipt.SignerKeyId)
 		return
 	}
-	if receipt.Signature == "" {
-		b.logger.Warn("PubSub receipts: relay: receipt missing signature",
-			"channel", channel, "transaction_id", receipt.TransactionId)
-		return
-	}
-	canonical, err := governance.CanonicalizeActionReceipt(receipt)
-	if err != nil {
-		b.logger.Warn("PubSub receipts: relay: failed to canonicalize receipt",
-			"channel", channel, "error", err.Error())
-		return
-	}
-	sigBytes, err := hex.DecodeString(receipt.Signature)
-	if err != nil {
-		b.logger.Warn("PubSub receipts: relay: failed to decode receipt signature",
-			"channel", channel, "error", err.Error())
-		return
-	}
-	if !ed25519.Verify(pubKey, canonical, sigBytes) {
+	if err := governance.VerifyActionReceiptSignature(receipt, pubKey); err != nil {
 		b.logger.Warn("PubSub receipts: relay: invalid receipt signature",
 			"channel", channel,
 			"transaction_id", receipt.TransactionId,
-			"signer_key_id", receipt.SignerKeyId)
+			"signer_key_id", receipt.SignerKeyId,
+			"error", err.Error())
+		return
+	}
+	if err := governance.VerifyReceiptPersistenceAttestation(receipt, pubKey); err != nil {
+		b.logger.Warn("PubSub receipts: relay: invalid receipt persistence attestation",
+			"channel", channel,
+			"transaction_id", receipt.TransactionId,
+			"signer_key_id", receipt.SignerKeyId,
+			"error", err.Error())
 		return
 	}
 

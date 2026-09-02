@@ -57,6 +57,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connStatus = msg.Status
 		m.connDetail = msg.Detail
 
+	case ScenarioCompleteMsg:
+		level := LevelCritical
+		checkpoint := "scenario-status-unknown"
+		switch msg.Status {
+		case ScenarioSucceeded:
+			level = LevelInfo
+			checkpoint = "scenario-succeeded"
+		case ScenarioFailed:
+			checkpoint = "scenario-failed"
+		case ScenarioCancelled:
+			level = LevelWarn
+			checkpoint = "scenario-cancelled"
+		}
+		m = m.applyLedgerMsg(LedgerMsg{Level: level, Message: "PRESENTATION CHECKPOINT: " + checkpoint})
+
 	case TickMsg:
 		m.blinkOn = !m.blinkOn
 		if m.hasBlinkingState() {

@@ -144,6 +144,10 @@ func (g *GatewayService) HandleMCP(w http.ResponseWriter, r *http.Request) {
 
 	result, rpcErr := g.dispatchMCP(r, &req)
 	if rpcErr != nil {
+		if len(rpcErr.data) > 0 {
+			g.responder.RPCErrorWithData(w, req.ID, rpcErr.code, rpcErr.message, rpcErr.data)
+			return
+		}
 		g.responder.RPCError(w, req.ID, rpcErr.code, rpcErr.message)
 		return
 	}
@@ -155,10 +159,15 @@ func (g *GatewayService) HandleMCP(w http.ResponseWriter, r *http.Request) {
 	g.responder.RPCResponse(w, req.ID, result)
 }
 
-// mcpDispatchError carries a JSON-RPC error code and message.
+// mcpDispatchError carries a JSON-RPC error code, message, and optional
+// structured data. The data field carries the marshaled failed-stage receipt
+// reference when a governed L1/L2 block produces a signed receipt, so the
+// agent harness can retain authoritative execution, transaction, and
+// investigation identity from the error response.
 type mcpDispatchError struct {
 	code    int
 	message string
+	data    json.RawMessage
 }
 
 // dispatchMCP routes a parsed JSON-RPC request to the appropriate governed
@@ -219,9 +228,25 @@ func (g *GatewayService) dispatchMCP(r *http.Request, req *JSONRPCRequest) (inte
 
 // wrapDispatch converts a (result, error) pair from a governed handler into the
 // dispatcher's (result, *mcpDispatchError) contract, mapping governance errors
-// to granular JSON-RPC codes.
+// to granular JSON-RPC codes. When the handler returns a *failedStageError the
+// wrapped signed receipt reference is marshaled into the dispatch error's data
+// field so HandleMCP can emit it through RPCErrorWithData.
 func (g *GatewayService) wrapDispatch(result interface{}, err error) (interface{}, *mcpDispatchError) {
 	if err != nil {
+		var fsErr *failedStageError
+		if errors.As(err, &fsErr) {
+			code, msg := g.mapGatewayError(fsErr.err)
+			if code == 0 && msg == "" {
+				code = -32603
+				msg = fsErr.err.Error()
+			}
+			data, marshalErr := json.Marshal(fsErr.receipt)
+			if marshalErr != nil {
+				g.logger.Error("Failed to marshal failed-stage receipt reference", "error", marshalErr)
+				return nil, &mcpDispatchError{code: code, message: msg}
+			}
+			return nil, &mcpDispatchError{code: code, message: msg, data: data}
+		}
 		code, msg := g.mapGatewayError(err)
 		if code == 0 && msg == "" {
 			code = -32603

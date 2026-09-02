@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 The **Governed Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions with L2-L3 proofs and L1 validation results attached from the Gateway (PDP), re-verifies the L2 and L3 proofs and re-runs L1 doctrine validation locally, then enforces L4 Warden and L5 Actuator gates, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -213,14 +213,14 @@ Each list or export record includes searchable transaction, investigation, ident
 
 ### 5b. Export FedRAMP 20x Compliance Evidence
 
-For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state and emits machine-readable OSCAL artifacts:
+For FedRAMP 20x (CR26) workloads, the `g8e compliance` command derives binary Key Security Indicator (KSI) status from the live audit state:
 
 - `g8e compliance ksi --class C` - Evaluate KSIs against live state and print the result set as JSON
-- `g8e compliance export --format oscal --class C` - Export OSCAL component-definition and assessment-results JSON artifacts
 - `g8e compliance ksi-history --ksi KSI-CMT-01` - Read persisted KSI evaluation history snapshots (optionally filter by KSI ID)
 - `g8e compliance overlay --overlay-dir docs/reference` - Load and validate COSAiS overlay catalogs against the KSI catalog
+- `g8e compliance demo-run verify <run-id> [--project-root <dir>]` - Independently verify a persisted typed demo evidence run and print a canonical `ComplianceVerificationReport`; exits nonzero when any manifest, provenance, artifact, signature, protocol-chain, state-observation, metric, or directory-integrity check fails
 
-KSI snapshots are persisted to `.g8e/data/compliance/ksi-history/` on each evaluation and pruned after a 90-day retention period. The KSI catalog (`docs/reference/ksi-catalog.json`) and COSAiS overlay catalog (`docs/reference/cosais-overlays.json`) ship with the runtime image. See [Compliance Alignment Report](../../reference/compliance-alignment.md#10-fedramp-20x-cr26-alignment) for the full KSI model, certification classes, and evidence anchor mapping.
+KSI snapshots are persisted to `.g8e/data/compliance/ksi-history/` on each evaluation and pruned after a 90-day retention period. Demo manifests, scenario results, and content-addressed artifacts are persisted separately under `.g8e/data/compliance/demo-evidence/<run-id>/`; verification is read-only. The KSI catalog (`docs/reference/ksi-catalog.json`), COSAiS overlay catalog (`docs/reference/cosais-overlays.json`), and protocol compliance catalogs ship with the runtime image. The typed OSCAL renderer remains in the compliance package, but the superseded flat live-state OSCAL export command and proof-backed report bundle generation are not exposed by the CLI. See [Compliance Alignment Report](../reference/compliance-alignment.md#10-fedramp-20x-cr26-alignment) for the full KSI model, certification classes, catalogs, and evidence verification behavior.
 
 ### 6. Explore Native Tools
 

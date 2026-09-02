@@ -56,7 +56,7 @@ func TestDemosScenariosRunCmd(t *testing.T) {
 		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase"}
+		flags := []string{"config", "mtls-url", "public-url", "approval-url", "cert", "key", "ca", "api-key", "operator-session", "out", "verbose", "phase", "json"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)

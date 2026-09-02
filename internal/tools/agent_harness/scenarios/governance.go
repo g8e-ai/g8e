@@ -102,12 +102,18 @@ func governanceScenarios() []Scenario {
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("tool execution failed after human approval: %s", summary)
 					}
+					if err := r.retainResumedReceipt(approveBody); err != nil {
+						return fmt.Errorf("retain resumed receipt: %w", err)
+					}
 					r.note("human WebAuthn L3 proof verified; transaction resumed")
 					return nil
 				}
 
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("notary tool call rejected: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("gateway admitted envelope (L3 notary satisfied inline)")
 				return nil
@@ -186,12 +192,18 @@ func governanceScenarios() []Scenario {
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("tool execution failed after human approval: %s", summary)
 					}
+					if err := r.retainResumedReceipt(approveBody); err != nil {
+						return fmt.Errorf("retain resumed receipt: %w", err)
+					}
 					r.note("human WebAuthn L3 proof verified; transaction resumed")
 					return nil
 				}
 
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("notary tool call rejected: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("gateway admitted envelope (L3 notary satisfied inline)")
 				return nil

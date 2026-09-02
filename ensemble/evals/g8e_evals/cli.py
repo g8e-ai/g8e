@@ -6,6 +6,7 @@
 # released under the Apache License, Version 2.0.
 
 import asyncio
+import binascii
 import hashlib
 import json
 import logging
@@ -29,6 +30,7 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_FAILED,
 )
 from g8e.receipts import (
+    decode_ed25519_public_key,
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
@@ -1350,16 +1352,30 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 @click.argument("report_dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--pki-dir", type=click.Path(exists=True, path_type=Path))
 def verify_receipts(report_dir, pki_dir):
-    """Re-verify all receipts in a report directory offline"""
+    """Re-verify all receipts in a report directory offline.
+
+    Loads every ``*Actuator_pub.pem`` file in the PKI directory, derives the
+    key_id from each PEM, and matches each receipt to its ``signer_key_id``.
+    Unified-stack runs produce receipts signed by two distinct actuators
+    (gateway and operator), so the verifier needs both keys. A receipt whose
+    ``signer_key_id`` has no matching key fails verification.
+    """
     if not pki_dir:
         pki_dir = Path(os.environ.get("G8E_GATEWAY_PKI_DIR", ".g8e/pki"))
 
-    warden_pub_path = pki_dir / "warden_pub.pem"
-    if not warden_pub_path.exists():
-        console.print(f"[bold red]Error:[/bold red] Warden public key not found at {warden_pub_path}")
-        return
+    keys: dict[str, str] = {}
+    for pem_path in sorted(pki_dir.glob("*Actuator_pub.pem")):
+        pem = pem_path.read_text()
+        key_id = binascii.hexlify(decode_ed25519_public_key(pem)).decode()
+        keys[key_id] = pem
+        console.print(f"  loaded key {key_id[:16]}... from {pem_path.name}")
 
-    warden_pub = warden_pub_path.read_text()
+    if not keys:
+        console.print(
+            f"[bold red]Error:[/bold red] No actuator public keys "
+            f"(*Actuator_pub.pem) found in {pki_dir}"
+        )
+        sys.exit(1)
 
     receipts_path = report_dir / "receipts.jsonl"
     if not receipts_path.exists():
@@ -1371,6 +1387,7 @@ def verify_receipts(report_dir, pki_dir):
     total = 0
     verified = 0
     failed = 0
+    no_key = 0
 
     with open(receipts_path) as f:
         for line in f:
@@ -1382,9 +1399,19 @@ def verify_receipts(report_dir, pki_dir):
                 console.print("  [red]FAILED:[/red] Could not parse typed receipt observation")
                 continue
             receipt = observation.action_receipt
+            public_key = keys.get(receipt.signer_key_id)
+            if public_key is None:
+                no_key += 1
+                failed += 1
+                console.print(
+                    f"  [red]FAILED:[/red] No key for signer_key_id "
+                    f"{receipt.signer_key_id[:16]}... "
+                    f"(attempt {observation.attempt_id}, TX: {observation.transaction_id})"
+                )
+                continue
             if (
-                verify_action_receipt_signature(receipt, warden_pub)
-                and verify_receipt_persistence_attestation(receipt, warden_pub)
+                verify_action_receipt_signature(receipt, public_key)
+                and verify_receipt_persistence_attestation(receipt, public_key)
             ):
                 verified += 1
             else:
@@ -1402,6 +1429,8 @@ def verify_receipts(report_dir, pki_dir):
         console.print(f"  Total receipts: {total}")
         console.print(f"  Verified: {verified}")
         console.print(f"  Failed: {failed}")
+        console.print(f"  Keys loaded: {len(keys)}")
+        console.print(f"  No-key receipts: {no_key}")
 
         if failed > 0:
             sys.exit(1)

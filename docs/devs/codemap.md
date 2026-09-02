@@ -486,24 +486,26 @@ The reporting system operates as a self-contained, offline verification utility 
 
 ## Compliance Package
 
-**`internal/services/compliance/`** - FedRAMP 20x (CR26) KSI/OSCAL/COSAiS compliance tooling
+**`internal/services/compliance/`** - FedRAMP 20x (CR26) KSI, OSCAL model, COSAiS overlay, and protocol-owned compliance catalog tooling
 
 - **`ksi.go`**: Typed KSI model with `KSI`, `KSIMethod`, `KSIResult`, `KSIResultSet`, `KSICatalog`, `Evidence`, `AutomatedMethod` structs. Typed enums for `KSICategory`, `KSIStatus`, `CertificationClass`, `ValidationCycle`, `EvidenceType`. No raw maps. Catalog loaded from `docs/reference/ksi-catalog.json` (31 KSIs across 10 categories, seeded from CR26 reference).
 - **`ksi_test.go`**: 11 unit tests covering catalog loading, validation (7 edge cases), lookup, class filtering, staleness detection (6 scenarios), JSON round-trip, error paths.
 - **`ksi_evaluator.go`**: `KSIEvaluator` struct with `RegisterMethods`, `RegisterDefaultMethods`, `Evaluate` methods. Derives binary KSI status from live g8e state via `EvaluatorDeps` (audit store, ledger, commitment ledger). Enforces minimum method counts per certification class (fail-closed for Class C: at least 2). `DefaultMethods` provides 8 reusable method closures bound to automatable KSIs.
 - **`ksi_evaluator_test.go`**: 17 unit tests covering method registration, evaluation (all-satisfied, insufficient methods, stale, method error, nil deps, empty stores, class thresholds, context cancellation), result set helpers, default method correctness, full integration.
 - **`ksi_evaluator_integration_test.go`**: 2 integration tests (build tag: `integration`) against real `SQLAuditStore` + `GitLedgerService` + `CommitmentLedger` using the shipped catalog. `TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs` seeds full evidence chain and asserts all 10 automatable KSIs satisfied. `TestKSIEvaluator_Integration_EmptyStoresFailClosed` asserts all KSIs fail-closed on empty stores.
-- **`oscal.go`**: `OSCALExporter` struct with `GenerateComponentDefinition` and `GenerateAssessmentResults` methods. Typed OSCAL structs for `component-definition` and `assessment-results` models. Evidence anchors link to receipt IDs, ledger commit hashes, and LFAA execution IDs. No `map[string]interface{}`.
-- **`oscal_test.go`**: 11 unit tests covering component-definition generation, assessment-results generation, nil/empty/unknown-KSI error paths, JSON marshaling, not-applicable status mapping, deterministic UUID generation.
+- **`oscal.go`**: `OSCALExporter` struct with `GenerateComponentDefinition` and `GenerateAssessmentResults` methods. Typed OSCAL structs retain the component-definition and assessment-results renderer model while proof-backed bundle generation is implemented. The legacy flat live-state export CLI is removed.
+- **OSCAL tests**: Unit tests cover component-definition generation, assessment-results generation, nil/empty/unknown-KSI error paths, JSON marshaling, not-applicable status mapping, and Phase 0 regressions for random UUIDs and non-content-addressed evidence anchors.
 - **`ksi_history.go`**: `KSIHistoryStore` struct with `SaveSnapshot`, `ListSnapshots`, `GetHistoryForKSI`, `PruneOlderThan` methods. Persists `KSIResultSet` snapshots to `.g8e/data/compliance/ksi-history/` via `RuntimeFileService`. 90-day retention pruning.
 - **`ksi_history_test.go`**: 12 unit tests covering write/read round-trip, multiple snapshots sorted, per-KSI history filtering, not-found errors, empty directory, nil result set, pruning, zero retention, ReadDir error propagation (B1/B2 regression), filename format.
 - **`overlay_loader.go`**: `Overlay`, `OverlayCatalog`, `OverlayStatus` types. `LoadOverlayCatalog` and `LoadOverlaysFromDir` (mirrors `NewL1DoctrineFromDir`), `Validate`, `FindOverlay`/`HasOverlay`, `ValidateOverlayRefs` for dangling reference detection, `CheckFinalizedOverlayCoverage` for Phase 8 CI guard (returns finalized overlay IDs lacking detector coverage).
 - **`overlay_loader_test.go`**: 32 unit tests covering catalog load, validation (8 sub-tests), lookup, directory loader (8 tests), ref validation (3 tests), finalized overlay coverage (6 tests), JSON round-trip.
-- **Package coverage**: 92.8% (exceeds 75% threshold).
-- **Error constants**: `ErrKSICatalogInvalid`, `ErrOverlayCatalogInvalid`, `ErrOverlayReadFailed`, `ErrOverlayParseFailed`, `ErrKSIHistoryWriteFailed`, `ErrKSIHistoryReadFailed`, `ErrKSIHistoryParseFailed`, `ErrKSIHistoryEmpty` in `internal/constants/errors.go`.
-- **Path constants**: `ComplianceDirname`, `KSICatalogFilename`, `COSAiSOverlaysFilename`, `OSCALAssessmentResultsFilename`, `OSCALComponentDefFilename`, `KSIHistoryDirname`, `KSIHistoryFilenamePrefix`, `KSIHistoryRetentionDays`, `DefaultOverlayDirPath` in `internal/constants/paths.go`.
+- **`catalog/`**: Loads and validates canonical assertion, framework, crosswalk, and demo-scenario catalogs. Validation fails closed on unsupported versions and references, contradictory assessment records, malformed digests, unsafe bundle paths, responsibility mismatches, evidence below declared minimum levels, and invalid demo manifests or results.
+- **`evidence/`**: `VerifyDemoRun` reads persisted demo manifests, scenario results, and content-addressed artifacts without mutation; verifies source provenance, canonical structure, scope and run bindings, receipt and persistence signatures, deterministic protocol chains, state observations, healthcare threshold metrics, and directory integrity; and returns a typed `ComplianceVerificationReport`.
+- **Demo evidence CLI**: `g8e compliance demo-run verify <run-id> [--project-root <dir>]` prints the canonical verification report and exits nonzero when verification fails. Demo orchestration persists typed manifests and scenario results for healthcare, finance, DHS, and FedRAMP under `.g8e/data/compliance/demo-evidence/<run-id>/`.
+- **Error constants**: Compliance catalog, evidence graph, scope, reference, renderer, checksum, signature, KSI, history, and overlay failure modes are centralized in `internal/constants/errors.go`.
+- **Path constants**: Live KSI history paths and every proof-backed compliance bundle directory and filename are centralized in `internal/constants/paths.go`; `protocol/constants/compliance_paths.json` is the external path reference.
 - **CI guard**: `scripts/validate-cosais-overlays.sh` checks that finalized COSAiS overlays have detector `overlay_ids` coverage. Invoked via `make validate-cosais` (part of `make lint`) and as a CI workflow step.
-- **Container support**: `Dockerfile` copies `docs/reference` into the runtime image (`COPY --from=builder /build/docs/reference /docs/reference`) so `g8e compliance ksi/export` works in containers. `docker-compose.yml` sets `working_dir: /root` on both services so named volumes at `/root/.g8e` are used correctly.
+- **Container support**: `Dockerfile` copies `docs/reference` into the runtime image (`COPY --from=builder /build/docs/reference /docs/reference`) so `g8e compliance ksi` can load the KSI catalog in containers. `docker-compose.yml` sets `working_dir: /root` on both services so named volumes at `/root/.g8e` are used correctly.
 
 ## CLI Serve Layer (Operator & Gateway Boot)
 
@@ -669,10 +671,10 @@ The following packages are test-only and are not part of the production dependen
 - `GatewayFixture` spins up a real `GatewayModeService` with `httptest.Server`, mTLS PKI, consensus enrollment, and in-process `OperatorPubSubService` wired with full governance dependencies
 - Used by integration tests for MCP flow, A2A flow, L2 consensus, governance envelope verification, OOB suspension/approval, and downstream integration
 
-**`test/e2e/harness.go`** - Docker-based E2E test fixture (build tag: `e2e`)
-- `DockerE2EFixture` spins up docker-compose, allocates host ports, waits for gateway health, and tears down on cleanup
+**`test/e2e/main_test.go`** - E2E test entry point (build tag: `e2e`)
+- `TestMain` loads configuration from the local `.g8e/` runtime tree, runs a bounded preflight health check against the running gateway, and constructs the shared `E2EClient`. It does not start, stop, restart, or inspect any containers — the user starts the platform (`docker compose up` or `./g8e gw start`) before running `./g8e test e2e`
 - Tests only what is observable from outside containers: HTTP health, CA bundle discovery, port reachability, and mTLS handshake over network
-- E2E tests require Docker — there is no opt-out. A fixture-setup failure exits non-zero with a `FATAL` message so a broken Docker environment can never produce a green build with zero tests run
+- E2E tests require a running platform — there is no opt-out. If the platform is not reachable, the suite exits non-zero with a `FATAL` message so a missing platform can never produce a green build with zero tests run
 
 **`test/integration_helper.go`** - Shared integration test helpers (build tag: `integration` or `e2e`)
 - `NewLiveOperatorHTTPClient` creates an mTLS API client against a running g8e platform
@@ -691,7 +693,7 @@ The following packages are test-only and are not part of the production dependen
 - `test/e2e/approved_restart_e2e_test.go` - E2E approved restart flow tests (build tag: `e2e`)
 - `test/e2e/auth_e2e_test.go` - E2E authentication flow tests (build tag: `e2e`)
 - `test/e2e/command_roundtrip_e2e_test.go` - E2E operator command roundtrip tests (build tag: `e2e`)
-- `test/e2e/compliance_e2e_test.go` - E2E compliance KSI pipeline test (build tag: `e2e`): runs `g8e compliance ksi/export/ksi-history` inside the operator container, verifies typed result sets, history snapshots, OSCAL artifacts, and evidence anchor resolution against real ledger commits (4 subtests)
+- `test/e2e/compliance_e2e_test.go` - E2E compliance audit-surface tests (build tag: `e2e`): verify gateway audit receipts, summary counts, and event records on an approved stack
 - `test/e2e/ensemble_chat_e2e_test.go` / `test/e2e/ensemble_e2e_test.go` - E2E ensemble chat and lifecycle tests (build tag: `e2e`)
 - `test/e2e/gateway_e2e_test.go` - E2E gateway lifecycle and health tests (build tag: `e2e`)
 - `test/e2e/governance_document_e2e_test.go` - E2E governance document mutation tests (build tag: `e2e`)
@@ -760,15 +762,17 @@ The following packages are test-only and are not part of the production dependen
 - `cloudop.sh` - Demo artifact for cloud operations invocation (operator execution bridge)
 - `verify_ops.py` - Demo artifact for verifying cloud service operation results
 
-**`demos/healthcare/`** - Healthcare analytics demo with Metabase integration
-- `paop.sh` - PA operation wrapper (governed run_shell_command bridge, equivalent of dhs dataop / fedramp cloudop)
+**`demos/healthcare/`** - Healthcare policy enforcement and analytics demo with Metabase integration
+- `healthcare_actuator.py` - Typed gold-card and SLA policy actuator that records run-bound terminal observations
+- `paop.sh` - Governed `run_shell_command` bridge to the healthcare actuator
+- `verify_pa.py` - Exact-match terminal-state collector for run, scenario, request, policy inputs, and result
 - `setup_metabase.py` - Metabase initialization and dashboard setup
-- `init.sql` - Database schema initialization for healthcare data
+- `init.sql` - Database schema and initial reporting fixtures
 
 **`demos/finance/`** - Financial data governance demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4) and `printDemoEndpoints` (prints available endpoints per org) support listing.
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, export, import, images, scenarios). Contains `harnessConfig` struct (fixed connection params: Container, MTLSURL, PublicURL, CertPath, KeyPath, CAPath, RunID, UseRun) and `defaultHarnessConfig` (returns a `harnessConfig` with the fixed connection params for a given container name). `harnessRun` builds docker compose exec/run commands for demo scenarios: exec/run prefix + fixed `--mtls-url`/`--public-url`/`--cert`/`--key`/`--ca` flags + scenario name. Verbose-aware print helpers (`demoPrintln`/`demoPrintf`) suppress output unless `-v`/`--verbose` is set. `scenarioCounts` map (healthcare: 4, finance: 1, dhs: 4, fedramp: 4) and `printDemoEndpoints` (prints available endpoints per org) support listing.
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (4 scenarios, each calls `harnessRun`). `defaultDHSHarnessConfig()` returns `defaultHarnessConfig("agent-coalition")`.

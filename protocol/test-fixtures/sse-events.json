@@ -1,0 +1,336 @@
+{
+  "_comment": "Concrete SSE event fixture instances used by the contract integration tests in ensemble/tests/integration/test_sse_event_contract_integration.py. Each entry is a sample event with a canonical wire 'type' string (matching an EventType constant from app.constants) and a 'data' payload that conforms to the schema definitions in protocol/models/sse_event_payloads.json and the payload models in protocol/python/g8e/models/events.py. Routing fields (web_session_id, investigation_id, case_id) are included in 'data' to mirror the SessionEventWire envelope shape. These fixtures are the source of truth for cross-component drift checks; the test suite skips silently when this file is absent.",
+  "_authority": "client",
+  "_consumers": ["agent", "cli"],
+
+  "llm_chat_iteration_started": {
+    "type": "g8e.v1.ai.llm.chat.iteration.started",
+    "data": {
+      "agent_mode": "g8e.not.bound",
+      "web_session_id": "fixture-sess-001",
+      "investigation_id": "fixture-inv-001",
+      "case_id": "fixture-case-001",
+      "timestamp": "2026-01-15T10:30:00Z"
+    }
+  },
+
+  "text_chunk_received": {
+    "type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+    "data": {
+      "content": "Fixture streaming text chunk content.",
+      "web_session_id": "fixture-sess-002",
+      "investigation_id": "fixture-inv-002",
+      "case_id": "fixture-case-002",
+      "timestamp": "2026-01-15T10:30:01Z"
+    }
+  },
+
+  "text_completed": {
+    "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+    "data": {
+      "content": "Fixture completed response content.",
+      "finish_reason": "STOP",
+      "has_citations": false,
+      "grounding_metadata": {},
+      "token_usage": {
+        "prompt_token_count": 10,
+        "candidates_token_count": 20,
+        "total_token_count": 30
+      },
+      "agent_mode": "g8e.bound",
+      "web_session_id": "fixture-sess-003",
+      "investigation_id": "fixture-inv-003",
+      "case_id": "fixture-case-003",
+      "timestamp": "2026-01-15T10:30:05Z"
+    }
+  },
+
+  "chat_iteration_failed": {
+    "type": "g8e.v1.ai.llm.chat.iteration.failed",
+    "data": {
+      "error": "Fixture chat iteration failure message.",
+      "web_session_id": "fixture-sess-004",
+      "investigation_id": "fixture-inv-004",
+      "case_id": "fixture-case-004",
+      "timestamp": "2026-01-15T10:30:02Z"
+    }
+  },
+
+  "g8e_web_search_requested": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.requested",
+    "data": {
+      "tool_name": "g8e_search_web",
+      "execution_id": "fixture-search-exec-001",
+      "status": "requested",
+      "display_detail": "fixture search query",
+      "is_operator_tool": true,
+      "web_session_id": "fixture-sess-005",
+      "investigation_id": "fixture-inv-005",
+      "case_id": "fixture-case-005",
+      "timestamp": "2026-01-15T10:30:03Z"
+    }
+  },
+
+  "g8e_web_search_completed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.completed",
+    "data": {
+      "tool_name": "g8e_search_web",
+      "execution_id": "fixture-search-exec-001",
+      "status": "completed",
+      "content": "Fixture search result content.",
+      "web_session_id": "fixture-sess-006",
+      "investigation_id": "fixture-inv-006",
+      "case_id": "fixture-case-006",
+      "timestamp": "2026-01-15T10:30:04Z"
+    }
+  },
+
+  "g8e_web_search_failed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.failed",
+    "data": {
+      "tool_name": "g8e_search_web",
+      "execution_id": "fixture-search-exec-002",
+      "status": "failed",
+      "error": "Fixture search failure message.",
+      "web_session_id": "fixture-sess-007",
+      "investigation_id": "fixture-inv-007",
+      "case_id": "fixture-case-007",
+      "timestamp": "2026-01-15T10:30:05Z"
+    }
+  },
+
+  "port_check_requested": {
+    "type": "g8e.v1.operator.network.port.check.requested",
+    "data": {
+      "tool_name": "port_check",
+      "execution_id": "fixture-portcheck-exec-001",
+      "status": "requested",
+      "port": "443",
+      "host": "example.com",
+      "web_session_id": "fixture-sess-008",
+      "investigation_id": "fixture-inv-008",
+      "case_id": "fixture-case-008",
+      "timestamp": "2026-01-15T10:30:06Z"
+    }
+  },
+
+  "port_check_completed": {
+    "type": "g8e.v1.operator.network.port.check.completed",
+    "data": {
+      "tool_name": "port_check",
+      "execution_id": "fixture-portcheck-exec-001",
+      "status": "completed",
+      "port": "443",
+      "host": "example.com",
+      "is_open": true,
+      "web_session_id": "fixture-sess-009",
+      "investigation_id": "fixture-inv-009",
+      "case_id": "fixture-case-009",
+      "timestamp": "2026-01-15T10:30:07Z"
+    }
+  },
+
+  "port_check_failed": {
+    "type": "g8e.v1.operator.network.port.check.failed",
+    "data": {
+      "tool_name": "port_check",
+      "execution_id": "fixture-portcheck-exec-002",
+      "status": "failed",
+      "port": "443",
+      "host": "example.com",
+      "error": "Fixture port check failure message.",
+      "web_session_id": "fixture-sess-010",
+      "investigation_id": "fixture-inv-010",
+      "case_id": "fixture-case-010",
+      "timestamp": "2026-01-15T10:30:08Z"
+    }
+  },
+
+  "citations_received": {
+    "type": "g8e.v1.ai.llm.chat.iteration.citations.received",
+    "data": {
+      "grounding_metadata": {
+        "web_search_queries": ["fixture query"],
+        "grounding_chunks": [
+          {
+            "web": {
+              "uri": "https://example.com/fixture",
+              "title": "Fixture Citation Source"
+            }
+          }
+        ]
+      },
+      "web_session_id": "fixture-sess-011",
+      "investigation_id": "fixture-inv-011",
+      "case_id": "fixture-case-011",
+      "timestamp": "2026-01-15T10:30:09Z"
+    }
+  },
+
+  "operator_command_requested": {
+    "type": "g8e.v1.operator.command.requested",
+    "data": {
+      "tool_name": "execute_bash",
+      "execution_id": "fixture-cmd-exec-001",
+      "status": "requested",
+      "display_detail": "ls -la /var/log",
+      "web_session_id": "fixture-sess-012",
+      "investigation_id": "fixture-inv-012",
+      "case_id": "fixture-case-012",
+      "timestamp": "2026-01-15T10:30:10Z"
+    }
+  },
+
+  "operator_command_started": {
+    "type": "g8e.v1.operator.command.started",
+    "data": {
+      "tool_name": "execute_bash",
+      "execution_id": "fixture-cmd-exec-001",
+      "status": "running",
+      "display_detail": "ls -la /var/log",
+      "web_session_id": "fixture-sess-013",
+      "investigation_id": "fixture-inv-013",
+      "case_id": "fixture-case-013",
+      "timestamp": "2026-01-15T10:30:11Z"
+    }
+  },
+
+  "operator_command_completed": {
+    "type": "g8e.v1.operator.command.completed",
+    "data": {
+      "tool_name": "execute_bash",
+      "execution_id": "fixture-cmd-exec-001",
+      "status": "completed",
+      "content": "drwxr-xr-x  root root 4096 Jan 15 10:30 /var/log",
+      "web_session_id": "fixture-sess-014",
+      "investigation_id": "fixture-inv-014",
+      "case_id": "fixture-case-014",
+      "timestamp": "2026-01-15T10:30:12Z"
+    }
+  },
+
+  "operator_command_failed": {
+    "type": "g8e.v1.operator.command.failed",
+    "data": {
+      "tool_name": "execute_bash",
+      "execution_id": "fixture-cmd-exec-002",
+      "status": "failed",
+      "error": "Fixture command execution failure message.",
+      "web_session_id": "fixture-sess-015",
+      "investigation_id": "fixture-inv-015",
+      "case_id": "fixture-case-015",
+      "timestamp": "2026-01-15T10:30:13Z"
+    }
+  },
+
+  "llm_lifecycle_started": {
+    "type": "g8e.v1.ai.llm.lifecycle.started",
+    "data": {
+      "agent_mode": "g8e.bound",
+      "web_session_id": "fixture-sess-016",
+      "investigation_id": "fixture-inv-016",
+      "case_id": "fixture-case-016",
+      "timestamp": "2026-01-15T10:30:00Z"
+    }
+  },
+
+  "llm_lifecycle_completed": {
+    "type": "g8e.v1.ai.llm.lifecycle.completed",
+    "data": {
+      "agent_mode": "g8e.bound",
+      "web_session_id": "fixture-sess-017",
+      "investigation_id": "fixture-inv-017",
+      "case_id": "fixture-case-017",
+      "timestamp": "2026-01-15T10:30:30Z"
+    }
+  },
+
+  "platform_sse_connection_established": {
+    "type": "g8e.v1.platform.sse.connection.established",
+    "data": {
+      "web_session_id": "fixture-sess-018",
+      "timestamp": "2026-01-15T10:30:00Z"
+    }
+  },
+
+  "platform_sse_keepalive_sent": {
+    "type": "g8e.v1.platform.sse.keepalive.sent",
+    "data": {
+      "web_session_id": "fixture-sess-018",
+      "timestamp": "2026-01-15T10:30:15Z"
+    }
+  },
+
+  "tribunal_voting_consensus_failed": {
+    "type": "g8e.v1.ai.consensus.voting.consensus.failed",
+    "data": {
+      "request": "List files in /var/log sorted by size.",
+      "vote_breakdown": {
+        "candidates_by_member": {
+          "axiom": "ls -la /var/log",
+          "concord": "ls -lah /var/log",
+          "variance": "ls -la /var/log/",
+          "pragma": "ls -lah /var/log",
+          "nemesis": "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr"
+        },
+        "candidates_by_command": {
+          "ls -la /var/log": ["axiom"],
+          "ls -lah /var/log": ["concord", "pragma"],
+          "ls -la /var/log/": ["variance"],
+          "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr": ["nemesis"]
+        },
+        "winner": null,
+        "winner_supporters": [],
+        "dissenters_by_command": {
+          "ls -la /var/log": ["axiom"],
+          "ls -lah /var/log": ["concord", "pragma"],
+          "ls -la /var/log/": ["variance"],
+          "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr": ["nemesis"]
+        },
+        "consensus_strength": 0.0,
+        "tie_broken": false,
+        "tie_break_reason": null
+      },
+      "reason": "no_agreement",
+      "web_session_id": "fixture-sess-019",
+      "investigation_id": "fixture-inv-019",
+      "case_id": "fixture-case-019",
+      "timestamp": "2026-01-15T10:30:14Z"
+    }
+  },
+
+  "tribunal_voting_dissent_recorded": {
+    "type": "g8e.v1.ai.consensus.voting.dissent.recorded",
+    "data": {
+      "request": "List files in /var/log sorted by size.",
+      "losing_command": "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr",
+      "dissenting_member_ids": ["nemesis"],
+      "winner": "ls -lah /var/log",
+      "vote_breakdown": {
+        "candidates_by_member": {
+          "axiom": "ls -lah /var/log",
+          "concord": "ls -lah /var/log",
+          "variance": "ls -lah /var/log",
+          "pragma": "ls -lah /var/log",
+          "nemesis": "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr"
+        },
+        "candidates_by_command": {
+          "ls -lah /var/log": ["axiom", "concord", "variance", "pragma"],
+          "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr": ["nemesis"]
+        },
+        "winner": "ls -lah /var/log",
+        "winner_supporters": ["axiom", "concord", "variance", "pragma"],
+        "dissenters_by_command": {
+          "find /var/log -maxdepth 1 -printf '%s %p\\n' | sort -nr": ["nemesis"]
+        },
+        "consensus_strength": 0.8,
+        "tie_broken": false,
+        "tie_break_reason": null
+      },
+      "web_session_id": "fixture-sess-020",
+      "investigation_id": "fixture-inv-020",
+      "case_id": "fixture-case-020",
+      "timestamp": "2026-01-15T10:30:14Z"
+    }
+  }
+}

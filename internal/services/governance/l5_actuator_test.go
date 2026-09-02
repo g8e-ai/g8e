@@ -338,6 +338,61 @@ func TestL5ActuatorExecuteFinalPersistenceAttestationWriteFailure(t *testing.T) 
 	assert.Equal(t, 3, callCount)
 }
 
+func TestVerifyActionReceiptSignatureFailsClosedOnInvalidEvidence(t *testing.T) {
+	actuator, publicKey := newTestActuator(t)
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    "test-transaction",
+		TransactionHash:  "test-transaction-hash",
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:    "completed",
+		ExecutedAtUnixMs: 1,
+		SignerKeyId:      actuator.KeyID,
+	}
+	signature, err := actuator.signReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = signature
+	wrongPublicKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		receipt   *operatorv1.ActionReceipt
+		publicKey ed25519.PublicKey
+		wantErr   error
+	}{
+		{name: "valid signature", receipt: receipt, publicKey: publicKey},
+		{name: "missing receipt", publicKey: publicKey, wantErr: constants.ErrActionReceiptMissing},
+		{name: "missing signature", receipt: func() *operatorv1.ActionReceipt {
+			candidate := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+			candidate.Signature = ""
+			return candidate
+		}(), publicKey: publicKey, wantErr: constants.ErrActionReceiptSignatureInvalid},
+		{name: "malformed signature", receipt: func() *operatorv1.ActionReceipt {
+			candidate := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+			candidate.Signature = "not-hex"
+			return candidate
+		}(), publicKey: publicKey, wantErr: constants.ErrActionReceiptSignatureInvalid},
+		{name: "tampered receipt", receipt: func() *operatorv1.ActionReceipt {
+			candidate := proto.Clone(receipt).(*operatorv1.ActionReceipt)
+			candidate.ResultSummary = "tampered"
+			return candidate
+		}(), publicKey: publicKey, wantErr: constants.ErrActionReceiptSignatureInvalid},
+		{name: "wrong public key", receipt: receipt, publicKey: wrongPublicKey, wantErr: constants.ErrActionReceiptSignatureInvalid},
+		{name: "malformed public key", receipt: receipt, publicKey: ed25519.PublicKey("short"), wantErr: constants.ErrActionReceiptSignatureInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := VerifyActionReceiptSignature(tt.receipt, tt.publicKey)
+			if tt.wantErr == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestVerifyReceiptPersistenceAttestationRejectsSemanticallyUnboundFields(t *testing.T) {
 	t.Parallel()
 	actuator, publicKey := newTestActuator(t)
@@ -637,7 +692,7 @@ func TestSignatureDigest_ProtocolVectors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := append([]string(nil), tt.signatures...)
-			assert.Equal(t, tt.expected, signatureDigest(input))
+			assert.Equal(t, tt.expected, SignatureDigest(input))
 			assert.Equal(t, tt.signatures, input)
 		})
 	}

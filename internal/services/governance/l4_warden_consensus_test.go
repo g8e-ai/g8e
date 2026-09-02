@@ -107,6 +107,76 @@ func TestL4Warden_Consensus_MissingL2Rejects(t *testing.T) {
 	}
 }
 
+// TestL4Warden_Consensus_BootstrapActionPassesWithoutL2 verifies that
+// platform enrollment (bootstrap) actions pass under consensus posture
+// without L2 votes. Bootstrap actions bring the consensus tribunal into
+// existence and predate its ability to sign, so they are exempt from the
+// L2 enforcement gate. L1 doctrine and stateful checks still apply.
+func TestL4Warden_Consensus_BootstrapActionPassesWithoutL2(t *testing.T) {
+	t.Parallel()
+
+	bootstrapActions := []constants.ActionType{
+		constants.ActionTypePlatformEnrollmentCreate,
+		constants.ActionTypePlatformEnrollmentDecide,
+		constants.ActionTypePlatformEnrollmentIssue,
+		constants.ActionTypePlatformEnrollmentPersistPolicy,
+		constants.ActionTypePlatformEnrollmentCreateSession,
+	}
+
+	for _, actionType := range bootstrapActions {
+		actionType := actionType
+		t.Run(string(actionType), func(t *testing.T) {
+			t.Parallel()
+			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+			env := signedEnvelope(t, actionType, typedPayload(t, actionType), privKey, "consensus")
+
+			// Strip L2 votes to simulate bootstrap before the tribunal is available.
+			env.Governance.L2 = nil
+			// Bootstrap mutation actions also lack L3 proofs at bootstrap time.
+			env.Governance.L3 = nil
+			rehash(t, env)
+
+			verified, err := verifier.VerifyEnvelope(context.Background(), env)
+			if err != nil {
+				t.Fatalf("expected bootstrap action %s to pass under consensus without L2, got %v", actionType, err)
+			}
+			if verified == nil {
+				t.Fatalf("verified transaction is nil for bootstrap action %s", actionType)
+			}
+			if verified.L2Valid {
+				t.Fatalf("expected L2Valid=false for bootstrap action %s with no L2 votes", actionType)
+			}
+		})
+	}
+}
+
+// TestL4Warden_Consensus_BootstrapActionWithInvalidL2StillPasses verifies
+// that a bootstrap action with invalid L2 votes (e.g., unconfigured consensus
+// policy) still passes under consensus posture. L2 votes on bootstrap actions
+// are audit evidence, not an enforcement gate.
+func TestL4Warden_Consensus_BootstrapActionWithInvalidL2StillPasses(t *testing.T) {
+	t.Parallel()
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true))
+	env := signedEnvelope(t, constants.ActionTypePlatformEnrollmentDecide, typedPayload(t, constants.ActionTypePlatformEnrollmentDecide), privKey, "consensus")
+
+	// Point L2 at a nonexistent consensus set so verification would fail
+	// for a non-bootstrap action.
+	env.Governance.L2.ConsensusSetId = "nonexistent-consensus"
+	env.Governance.L3 = nil
+	rehash(t, env)
+
+	verified, err := verifier.VerifyEnvelope(context.Background(), env)
+	if err != nil {
+		t.Fatalf("expected bootstrap action to pass even with invalid L2, got %v", err)
+	}
+	if verified == nil {
+		t.Fatalf("verified transaction is nil")
+	}
+	if verified.L2Valid {
+		t.Fatalf("expected L2Valid=false for bootstrap action with invalid L2 votes")
+	}
+}
+
 // TestL4Warden_Consensus_MissingL3DoesNotReject verifies that missing L3
 // proof does not reject a mutation under consensus (L3 is audited, not enforced).
 func TestL4Warden_Consensus_MissingL3DoesNotReject(t *testing.T) {

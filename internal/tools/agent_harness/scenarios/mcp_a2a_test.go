@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 )
 
@@ -396,11 +397,20 @@ func TestA2AScenarioRunNotNil(t *testing.T) {
 	}
 }
 
+func TestHealthcareDemoRunID_FailsClosedWhenMissing(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.DemoRunID), "")
+
+	_, err := healthcareDemoRunID()
+
+	assert.ErrorIs(t, err, constants.ErrDemoRunIDMissing)
+}
+
 func TestPaopArgs(t *testing.T) {
-	got := paopArgs("submit", "PA-2026-0045", "ClaimResponse", "preauthorization")
-	assert.Contains(t, got, "paop", "paopArgs should contain 'paop' command")
-	assert.Contains(t, got, "submit", "paopArgs should contain the action 'submit'")
-	assert.Contains(t, got, "PA-2026-0045", "paopArgs should contain the request ID")
-	assert.Contains(t, got, "ClaimResponse", "paopArgs should contain the resource type")
-	assert.Contains(t, got, "preauthorization", "paopArgs should contain the detail")
+	got := paopArgs(paOperation{
+		Action: "gold-card", RequestID: "PA-2026-0043", ResourceType: "ClaimResponse", Subject: "Dr. Priya Nair",
+		MeasuredValue: 96, ThresholdValue: 90, RunID: "healthcare-run-123", ScenarioID: "healthcare-gold-card",
+	})
+	for _, value := range []string{"paop", "gold-card", "PA-2026-0043", "ClaimResponse", "Dr. Priya Nair", "96", "90", "healthcare-run-123", "healthcare-gold-card"} {
+		assert.Contains(t, got, value)
+	}
 }

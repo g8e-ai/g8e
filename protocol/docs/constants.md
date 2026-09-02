@@ -223,11 +223,13 @@ Additional constants in `auth.go`:
 
 ### Action Types (`action_types.go`)
 
-GovernanceEnvelope action types, typed as `ActionType`. The file also defines `AllActionTypes` (a canonical slice of all valid action types) and an `IsMutation()` method that returns true for action types that modify system state:
+GovernanceEnvelope action types, typed as `ActionType`. The file also defines `AllActionTypes` (a canonical slice of all valid action types), an `IsMutation()` method that returns true for action types that modify system state, and an `IsBootstrapAction()` method that returns true for platform enrollment actions exempt from L2/L3 enforcement gates because they bring the consensus tribunal and notary into existence:
 
 - `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeEvalAnswer`, `ActionTypeExecuteBash`, `ActionTypeFetchFileDiff`, `ActionTypeFetchFileHistory`, `ActionTypeFetchHistory`, `ActionTypeFetchLogs`, `ActionTypeFileEdit`, `ActionTypeFsGrep`, `ActionTypeFsList`, `ActionTypeFsRead`, `ActionTypeHeartbeat`, `ActionTypeMcpCall`, `ActionTypeMcpPromptGet`, `ActionTypeMcpPromptList`, `ActionTypeMcpResourceList`, `ActionTypeMcpResourceRead`, `ActionTypePortCheck`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`
 
-Mutation action types: `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeExecuteBash`, `ActionTypeFileEdit`, `ActionTypeMcpCall`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`.
+Mutation action types: `ActionTypeA2aCall`, `ActionTypeCancel`, `ActionTypeDocumentDelete`, `ActionTypeDocumentUpdate`, `ActionTypeExecuteBash`, `ActionTypeFileEdit`, `ActionTypeMcpCall`, `ActionTypeRestoreFile`, `ActionTypeShutdown`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`.
+
+Bootstrap action types: `ActionTypePlatformEnrollmentCreate`, `ActionTypePlatformEnrollmentDecide`, `ActionTypePlatformEnrollmentIssue`, `ActionTypePlatformEnrollmentPersistPolicy`, `ActionTypePlatformEnrollmentCreateSession`.
 
 ### Paths (`paths.go`)
 

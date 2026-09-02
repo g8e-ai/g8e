@@ -9,13 +9,18 @@ package gateway
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	commonv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // handleApprovalAction dispatches approval sub-actions (challenge, verify) based on
@@ -155,13 +160,50 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	receiptRef, err := approvalReceiptReference(suspendedTx, receipt)
+	if err != nil {
+		h.logger.Error("Failed to construct approval receipt reference", "error", err, "txHash", txHash)
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	sseUserID := userID
 	if sseUserID == "" {
 		sseUserID = suspendedTx.UserID
 	}
-	h.orchestrator.EmitApprovalCompletedSSE(sseUserID, suspendedTx.SubmitterCLISessionID, txHash)
+	h.orchestrator.EmitApprovalCompletedSSE(sseUserID, suspendedTx.SubmitterCLISessionID, txHash, receiptRef)
 
 	h.responder.JSON(w, http.StatusOK, receipt)
+}
+
+func approvalReceiptReference(suspendedTx *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) (*models.ApprovalReceiptReference, error) {
+	if suspendedTx == nil || receipt == nil {
+		return nil, constants.ErrApprovalReceiptReferenceInvalid
+	}
+
+	envelope := &commonv1.GovernanceEnvelope{}
+	if err := protojson.Unmarshal(suspendedTx.Envelope, envelope); err != nil {
+		return nil, fmt.Errorf("approval: decode suspended envelope: %w", err)
+	}
+	request := &operatorv1.McpCallRequested{}
+	if err := proto.Unmarshal(envelope.Payload, request); err != nil {
+		return nil, fmt.Errorf("approval: decode suspended MCP request: %w", err)
+	}
+
+	ref := &models.ApprovalReceiptReference{
+		ExecutionID:     request.ExecutionId,
+		TransactionID:   receipt.TransactionId,
+		TransactionHash: receipt.TransactionHash,
+		SignerKeyID:     receipt.SignerKeyId,
+		Signature:       receipt.Signature,
+		InvestigationID: envelope.InvestigationId,
+		Status:          int32(receipt.Status),
+		ResultSummary:   receipt.ResultSummary,
+	}
+	if ref.ExecutionID == "" || ref.TransactionID == "" || ref.TransactionHash == "" || ref.TransactionHash != suspendedTx.TransactionHash || ref.SignerKeyID == "" || ref.Signature == "" || ref.InvestigationID == "" {
+		return nil, constants.ErrApprovalReceiptReferenceInvalid
+	}
+	return ref, nil
 }
 
 // handleCLIApprovalStatus is an mTLS-authenticated endpoint that returns the current

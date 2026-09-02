@@ -393,6 +393,30 @@ func TestQuitMsg(t *testing.T) {
 	assert.NotNil(t, cmd)
 }
 
+func TestScenarioCompleteMsg_AppendsTypedPresentationCheckpoint(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  ScenarioStatus
+		level   LedgerLevel
+		message string
+	}{
+		{name: "unknown status", status: ScenarioUnknown, level: LevelCritical, message: "PRESENTATION CHECKPOINT: scenario-status-unknown"},
+		{name: "successful scenario", status: ScenarioSucceeded, level: LevelInfo, message: "PRESENTATION CHECKPOINT: scenario-succeeded"},
+		{name: "failed scenario", status: ScenarioFailed, level: LevelCritical, message: "PRESENTATION CHECKPOINT: scenario-failed"},
+		{name: "cancelled scenario", status: ScenarioCancelled, level: LevelWarn, message: "PRESENTATION CHECKPOINT: scenario-cancelled"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model, _ := NewModel(Options{}).Update(ScenarioCompleteMsg{Status: tt.status})
+			m := model.(Model)
+			require.Len(t, m.ledger, 1)
+			assert.Equal(t, tt.level, m.ledger[0].level)
+			assert.Equal(t, tt.message, m.ledger[0].message)
+		})
+	}
+}
+
 func TestWindowSizeMsg(t *testing.T) {
 	m := NewModel(Options{})
 	model, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})

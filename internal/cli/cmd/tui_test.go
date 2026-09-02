@@ -26,6 +26,8 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
+const RegressionMarkerAfterFix = "REGRESSION: AFTER FIX"
+
 // --- helpers ---
 
 // stubTUIDeps returns a tuiDeps where every dependency succeeds by default.
@@ -39,6 +41,9 @@ func stubTUIDeps(t *testing.T, cfg *config.Config) tuiDeps {
 		fileSvcFactory: newFileSvc,
 		checkOperatorRunning: func(*config.Config) error {
 			return nil
+		},
+		inspectDockerGateway: func(context.Context) (dockerContainerState, error) {
+			return dockerContainerState{}, constants.ErrNotFound
 		},
 		loadCredentials: func(fs.RuntimeFileService, *config.Config) (*auth.Credentials, error) {
 			return &auth.Credentials{
@@ -130,6 +135,48 @@ func TestTUI_GatewayNotReachable(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrGatewayNotReachable)
 		assert.ErrorIs(t, err, gwErr)
 	})
+}
+
+func TestTUI_GatewayNotReachableReportsDockerState(t *testing.T) {
+	testCases := []struct {
+		name           string
+		state          dockerContainerState
+		inspectErr     error
+		expectedDetail string
+	}{
+		{name: "exited unhealthy gateway", state: dockerContainerState{Status: dockerContainerStatusExited, Health: dockerContainerHealthUnhealthy}, expectedDetail: "Docker gateway is exited (health: unhealthy)"},
+		{name: "gateway healthcheck starting", state: dockerContainerState{Status: dockerContainerStatusRunning, Health: dockerContainerHealthStarting}, expectedDetail: "Docker gateway is running and its healthcheck is starting"},
+		{name: "running unhealthy gateway", state: dockerContainerState{Status: dockerContainerStatusRunning, Health: dockerContainerHealthUnhealthy}, expectedDetail: "Docker gateway is running but unhealthy"},
+		{name: "healthy gateway with unreachable configured endpoint", state: dockerContainerState{Status: dockerContainerStatusRunning, Health: dockerContainerHealthHealthy}, expectedDetail: "Docker gateway is healthy, but the configured endpoint"},
+		{name: "gateway container not found", inspectErr: constants.ErrNotFound, expectedDetail: "no running gateway was detected"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := setupTUITestConfig(t)
+			deps := stubTUIDeps(t, cfg)
+			gwErr := errors.New("connection refused")
+			deps.checkOperatorRunning = func(*config.Config) error { return gwErr }
+			deps.inspectDockerGateway = func(context.Context) (dockerContainerState, error) {
+				return tc.state, tc.inspectErr
+			}
+			cmd := tuiCmdWithDeps(deps)
+			cmd.SetArgs([]string{})
+
+			err := cmd.Execute()
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrGatewayNotReachable)
+			assert.ErrorIs(t, err, gwErr)
+			assert.Contains(t, err.Error(), tc.expectedDetail, RegressionMarkerAfterFix)
+		})
+	}
+}
+
+func TestTUICmdSuppressesUsageForRuntimeFailures(t *testing.T) {
+	cmd := tuiCmd()
+	assert.True(t, cmd.SilenceErrors, RegressionMarkerAfterFix)
+	assert.True(t, cmd.SilenceUsage, RegressionMarkerAfterFix)
 }
 
 // --- credential loading ---
@@ -284,9 +331,12 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
 			fileSvcFactory:       fileSvcFactoryFor(fileSvc),
 			checkOperatorRunning: func(*config.Config) error { return constants.ErrGatewayNotReachable },
-			loadCredentials:      auth.LoadCredentials,
-			buildMTLSClient:      auth.BuildMTLSClient,
-			tuiRun:               func(context.Context, tui.Options) error { return nil },
+			inspectDockerGateway: func(context.Context) (dockerContainerState, error) {
+				return dockerContainerState{}, constants.ErrNotFound
+			},
+			loadCredentials: auth.LoadCredentials,
+			buildMTLSClient: auth.BuildMTLSClient,
+			tuiRun:          func(context.Context, tui.Options) error { return nil },
 		}
 
 		cmd := tuiCmdWithDeps(deps)

@@ -9,21 +9,38 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
+
+func TestNewDemoRunID_DiffersForRunsStartedInSameSecond(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 2, 14, 27, 58, 0, time.UTC)
+
+	first := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	second := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+
+	assert.NotEqual(t, first, second)
+	assert.True(t, strings.HasPrefix(first, "fedramp-run-20260902T142758Z-"))
+	assert.True(t, strings.HasPrefix(second, "fedramp-run-20260902T142758Z-"))
+}
 
 func TestToDockerPath_NonWindowsReturnsPathUnchanged(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -153,11 +170,13 @@ func TestHarnessRun_ExecMode(t *testing.T) {
 	assert.Equal(t, "compose", args[1])
 	assert.Equal(t, "exec", args[2])
 	assert.Equal(t, "-T", args[3])
-	assert.Equal(t, "agent-runtime", args[4])
-	assert.Equal(t, "/g8e", args[5])
-	assert.Equal(t, "demos", args[6])
-	assert.Equal(t, "scenarios", args[7])
-	assert.Equal(t, "run", args[8])
+	assert.Equal(t, "-e", args[4])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=mcp_basic_read", args[5])
+	assert.Equal(t, "agent-runtime", args[6])
+	assert.Equal(t, "/g8e", args[7])
+	assert.Equal(t, "demos", args[8])
+	assert.Equal(t, "scenarios", args[9])
+	assert.Equal(t, "run", args[10])
 	assert.Contains(t, args, "--mtls-url")
 	assert.Contains(t, args, "https://g8e.local:8443")
 	assert.Contains(t, args, "--public-url")
@@ -182,10 +201,50 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "--rm", args[3])
 	assert.Equal(t, "-T", args[4])
 	assert.Equal(t, "--no-deps", args[5])
-	assert.Equal(t, "agent-runtime", args[6])
-	assert.Equal(t, "demos", args[7])
-	assert.Equal(t, "scenarios", args[8])
-	assert.Equal(t, "run", args[9])
+	assert.Equal(t, "-e", args[6])
+	assert.Equal(t, string(constants.EnvVar.DemoScenarioID)+"=a2a_discover", args[7])
+	assert.Equal(t, "agent-runtime", args[8])
+	assert.Equal(t, "demos", args[9])
+	assert.Equal(t, "scenarios", args[10])
+	assert.Equal(t, "run", args[11])
+}
+
+func TestHarnessRun_PropagatesDemoCorrelation(t *testing.T) {
+	tests := []struct {
+		name   string
+		useRun bool
+	}{
+		{name: "exec mode"},
+		{name: "run mode", useRun: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := defaultHarnessConfig("agent-runtime")
+			cfg.UseRun = tt.useRun
+			cfg.RunID = "healthcare-run-123"
+
+			args := harnessRun("healthcare-gold-card", cfg)
+
+			assert.Contains(t, args, "-e")
+			assert.Contains(t, args, string(constants.EnvVar.DemoRunID)+"=healthcare-run-123")
+			assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=healthcare-gold-card")
+		})
+	}
+}
+
+func TestHarnessConfigForResult_UsesCanonicalCorrelation(t *testing.T) {
+	result := &compliancev1.DemoScenarioResult{
+		RunId:       "fedramp-run-123",
+		ScenarioRef: &compliancev1.VersionedReference{Id: "fedramp-provision", Version: "1.0.0"},
+	}
+
+	cfg := harnessConfigForResult("agent-runtime", result)
+
+	assert.Equal(t, "fedramp-run-123", cfg.RunID)
+	assert.Equal(t, "fedramp-provision", cfg.ScenarioID)
+	args := harnessRun("shared-harness-scenario", cfg)
+	assert.Contains(t, args, string(constants.EnvVar.DemoScenarioID)+"=fedramp-provision")
 }
 
 func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
@@ -198,6 +257,24 @@ func TestDefaultHarnessConfig_ReturnsExpectedDefaults(t *testing.T) {
 	assert.Equal(t, constants.ContainerOperatorKey, cfg.KeyPath)
 	assert.Equal(t, constants.ContainerCABundle, cfg.CAPath)
 	assert.False(t, cfg.UseRun)
+	assert.False(t, cfg.JSON)
+}
+
+func TestHarnessRun_JSONFlagAppendedWhenEnabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	cfg.JSON = true
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.Contains(t, args, "--json")
+	// The scenario name must still be the last positional argument.
+	assert.Equal(t, "fedramp-provision", args[len(args)-1])
+}
+
+func TestHarnessRun_JSONFlagOmittedWhenDisabled(t *testing.T) {
+	cfg := defaultHarnessConfig("agent-runtime")
+	args := harnessRun("fedramp-provision", cfg)
+
+	assert.NotContains(t, args, "--json")
 }
 
 func TestCheckDemoDirExists_ExistingDirReturnsNil(t *testing.T) {
@@ -256,6 +333,138 @@ func TestNewDemoEmitter_NilProgramIsNoOp(t *testing.T) {
 	e.Pipeline(tui.StageL1, tui.StatusActive, "tx-1", "detail")
 	e.Ledger(tui.LevelInfo, "message")
 	e.Consensus(constants.ConsensusMemberAxiom, true, true, 2, 3, tui.ConsensusReached, "hash-1")
+}
+
+func TestRunDemosWithTUILifecycle_EarlyQuitCancelsAndWaitsForScenario(t *testing.T) {
+	scenarioStarted := make(chan struct{})
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			<-scenarioStarted
+			return tui.NewModel(tui.Options{}), nil
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(ctx context.Context) error {
+		close(scenarioStarted)
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
+	assert.ErrorIs(t, err, context.Canceled)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_SuccessBeforeQuitReturnsSuccess(t *testing.T) {
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioSucceeded, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return nil
+	})
+
+	assert.NoError(t, err)
+}
+
+func TestRunDemosWithTUILifecycle_ScenarioErrorBeforeQuitReturnsScenarioError(t *testing.T) {
+	errScenario := fmt.Errorf("scenario failed")
+	program := &stubDemoProgram{sent: make(chan tea.Msg, 1)}
+	program.run = func() (tea.Model, error) {
+		msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+		require.True(t, ok)
+		assert.Equal(t, tui.ScenarioFailed, msg.Status)
+		return tui.NewModel(tui.Options{}), nil
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(context.Context) error {
+		return errScenario
+	})
+
+	assert.ErrorIs(t, err, errScenario)
+}
+
+func TestRunDemosWithTUILifecycle_ProgramErrorCancelsAndWaitsForScenario(t *testing.T) {
+	errProgram := fmt.Errorf("program failed")
+	scenarioStarted := make(chan struct{})
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			<-scenarioStarted
+			return tui.NewModel(tui.Options{}), errProgram
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(context.Background(), program, func(ctx context.Context) error {
+		close(scenarioStarted)
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, errProgram)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+func TestRunDemosWithTUILifecycle_ParentDeadlineCancelsAndWaitsForScenario(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now())
+	t.Cleanup(cancel)
+	scenarioExited := make(chan struct{})
+	program := &stubDemoProgram{
+		run: func() (tea.Model, error) {
+			return tui.NewModel(tui.Options{}), nil
+		},
+		sent: make(chan tea.Msg, 1),
+	}
+
+	err := runDemosWithTUILifecycle(ctx, program, func(ctx context.Context) error {
+		<-ctx.Done()
+		close(scenarioExited)
+		return ctx.Err()
+	})
+
+	assert.ErrorIs(t, err, constants.ErrDemoScenarioCancelled)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assertClosed(t, scenarioExited)
+	msg, ok := (<-program.sent).(tui.ScenarioCompleteMsg)
+	require.True(t, ok)
+	assert.Equal(t, tui.ScenarioCancelled, msg.Status)
+}
+
+type stubDemoProgram struct {
+	run  func() (tea.Model, error)
+	sent chan tea.Msg
+}
+
+func (p *stubDemoProgram) Run() (tea.Model, error) {
+	return p.run()
+}
+
+func (p *stubDemoProgram) Send(msg tea.Msg) {
+	p.sent <- msg
+}
+
+func assertClosed(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-ch:
+	default:
+		assert.Fail(t, "channel is not closed")
+	}
 }
 
 func TestDemoPrintln_VerboseMode(t *testing.T) {
@@ -324,7 +533,7 @@ func TestDemoStep_CommandSucceeds(t *testing.T) {
 	t.Cleanup(func() { demoVerbose = original })
 
 	tmp := testutil.TempDir(t)
-	err := demoStep(tmp, "true command", false, "true")
+	err := demoStep(context.Background(), tmp, "true command", false, "true")
 	assert.NoError(t, err)
 }
 
@@ -334,7 +543,7 @@ func TestDemoStep_CommandFails(t *testing.T) {
 	t.Cleanup(func() { demoVerbose = original })
 
 	tmp := testutil.TempDir(t)
-	err := demoStep(tmp, "false command", false, "false")
+	err := demoStep(context.Background(), tmp, "false command", false, "false")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "false command")
 }
@@ -345,7 +554,7 @@ func TestDemoStep_FatalError(t *testing.T) {
 	t.Cleanup(func() { demoVerbose = original })
 
 	tmp := testutil.TempDir(t)
-	err := demoStep(tmp, "critical step", true, "false")
+	err := demoStep(context.Background(), tmp, "critical step", true, "false")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "critical step")
 	assert.NotContains(t, err.Error(), "non-fatal")
@@ -357,7 +566,7 @@ func TestDemoScenarioStep_Success(t *testing.T) {
 	t.Cleanup(func() { demoVerbose = original })
 
 	tmp := testutil.TempDir(t)
-	assert.True(t, demoScenarioStep(tmp, "step that succeeds", []string{"true"}))
+	assert.True(t, demoScenarioStep(context.Background(), tmp, "step that succeeds", []string{"true"}))
 }
 
 func TestDemoScenarioStep_Failure(t *testing.T) {
@@ -366,7 +575,7 @@ func TestDemoScenarioStep_Failure(t *testing.T) {
 	t.Cleanup(func() { demoVerbose = original })
 
 	tmp := testutil.TempDir(t)
-	assert.False(t, demoScenarioStep(tmp, "step that fails", []string{"false"}))
+	assert.False(t, demoScenarioStep(context.Background(), tmp, "step that fails", []string{"false"}))
 }
 
 func TestDemoStepWarn_FailurePrintsWarning(t *testing.T) {
@@ -384,16 +593,16 @@ func TestDemoStepWarn_FailurePrintsWarning(t *testing.T) {
 		r.Close()
 	})
 
-	demoStepWarn(tmp, "warning step", "false")
+	demoStepWarn(context.Background(), tmp, "warning step", "false")
 	w.Close()
 	buf.ReadFrom(r)
 	assert.Contains(t, buf.String(), "warning")
 }
 
 func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
-	results := []scenarioResult{
-		{number: "1", name: "First Scenario", status: "PASS", metrics: "100% good"},
-		{number: "2", name: "Second Scenario", status: "FAIL", metrics: "timeout"},
+	results := []*compliancev1.DemoScenarioResult{
+		newDemoScenarioResult("1", "First Scenario", demoStatusPassed, "100% good"),
+		newDemoScenarioResult("2", "Second Scenario", demoStatusFailed, "timeout"),
 	}
 
 	var buf bytes.Buffer
@@ -409,29 +618,98 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 	assert.Contains(t, output, "FAIL")
 }
 
-func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
-	_, err := runScenarioWithResult("unknown-org", "/tmp", "1")
+func TestRunScenarioWithResults_UnknownOrgReturnsNotFound(t *testing.T) {
+	_, err := runScenarioWithResults(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runAllScenarios(cmd, "unknown-org", "/tmp")
+	err := runAllScenarios(context.Background(), nil, cmd, "unknown-org", "/tmp", demoTestRunID)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
 
+func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := runAllScenarios(ctx, nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, constants.ErrNotFound)
+}
+
+func TestRunAllScenariosWithRunner_PreservesResultsAfterScenarioError(t *testing.T) {
+	scenarioErr := errors.New("persistence failure")
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		result := newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")
+		if scenario == "2" {
+			return []*compliancev1.DemoScenarioResult{result}, scenarioErr
+		}
+		return []*compliancev1.DemoScenarioResult{result}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	assert.ErrorIs(t, err, scenarioErr)
+	assert.Equal(t, 4, callCount, "all scenarios should run even when one errors")
+	for i := 1; i <= 4; i++ {
+		assert.Contains(t, output.String(), fmt.Sprintf("scenario %d", i))
+	}
+}
+
+func TestRunAllScenariosWithRunner_ContextCancellationStopsLoop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		if scenario == "2" {
+			cancel()
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	err := runAllScenariosWithRunner(ctx, nil, &cobra.Command{}, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 2, callCount, "loop should stop after context cancellation")
+}
+
+func TestRunAllScenariosWithRunner_FiltersNilResultsFromErroredScenarios(t *testing.T) {
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		if scenario == "2" {
+			return nil, errors.New("validation failure")
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.NotContains(t, output.String(), "scenario 2")
+	assert.Contains(t, output.String(), "scenario 1")
+	assert.Contains(t, output.String(), "scenario 3")
+	assert.Contains(t, output.String(), "scenario 4")
+}
+
 func TestRunDemosRun_NoArgsReturnsMissingRequiredField(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runDemosRun(cmd, []string{}, false)
+	err := runDemosRun(cmd, []string{}, false, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
 }
 
 func TestRunDemosRun_TooManyArgsReturnsValidationFailed(t *testing.T) {
 	cmd := &cobra.Command{}
-	err := runDemosRun(cmd, []string{"org", "1", "extra"}, false)
+	err := runDemosRun(cmd, []string{"org", "1", "extra"}, false, nil)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
 }

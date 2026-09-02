@@ -16,6 +16,7 @@ should be, or if a re-export breaks identity with the protocol symbol.
 
 import ast
 import importlib
+import json
 from enum import Enum, StrEnum
 from pathlib import Path
 
@@ -355,4 +356,132 @@ class TestNoEnumDuplicates:
         assert duplicates == [], (
             f"Ensemble constants redefine protocol enum names with drifting values: {duplicates}; "
             "re-export from g8e.enums or build from protocol values + ensemble-specific extras"
+        )
+
+
+# ---------------------------------------------------------------------------
+# SSE event fixture file presence and shape
+# ---------------------------------------------------------------------------
+
+# Path to the protocol SSE fixtures file, resolved from this test file's
+# location (ensemble/tests/unit/constants/) up to the workspace root.
+_SSE_FIXTURES_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent.parent
+    / "protocol"
+    / "test-fixtures"
+    / "sse-events.json"
+)
+
+# Every event-type key the contract integration test suite expects. Kept in
+# sync with required_event_types in
+# ensemble/tests/integration/test_sse_event_contract_integration.py.
+_REQUIRED_SSE_FIXTURE_KEYS = [
+    "llm_chat_iteration_started",
+    "text_chunk_received",
+    "text_completed",
+    "chat_iteration_failed",
+    "g8e_web_search_requested",
+    "g8e_web_search_completed",
+    "g8e_web_search_failed",
+    "port_check_requested",
+    "port_check_completed",
+    "port_check_failed",
+    "citations_received",
+    "operator_command_requested",
+    "operator_command_started",
+    "operator_command_completed",
+    "operator_command_failed",
+    "llm_lifecycle_started",
+    "llm_lifecycle_completed",
+    "platform_sse_connection_established",
+    "platform_sse_keepalive_sent",
+    "tribunal_voting_consensus_failed",
+    "tribunal_voting_dissent_recorded",
+]
+
+
+class TestSSEEventFixturesPresence:
+    """The protocol SSE fixtures file must exist and parse.
+
+    The contract integration tests in
+    ensemble/tests/integration/test_sse_event_contract_integration.py load
+    protocol/test-fixtures/sse-events.json at module import and call
+    pytest.skip(allow_module_level=True) when it is absent. That skip is
+    silent: the suite reports as passed rather than failed, hiding drift
+    between the ensemble's emitted events and the protocol contract. These
+    Tier 1 guards fail closed if the fixture file is missing, unparseable,
+    or incomplete, so a deletion or schema regression is caught immediately
+    instead of being masked by the integration-tier skip.
+    """
+
+    def test_sse_fixtures_file_exists(self):
+        assert _SSE_FIXTURES_PATH.exists(), (
+            f"Protocol SSE fixtures file not found at {_SSE_FIXTURES_PATH}. "
+            "The contract integration tests will silently skip without it."
+        )
+
+    def test_sse_fixtures_file_parses_as_json(self):
+        assert _SSE_FIXTURES_PATH.exists(), (
+            f"Protocol SSE fixtures file not found at {_SSE_FIXTURES_PATH}"
+        )
+        with _SSE_FIXTURES_PATH.open() as f:
+            data = json.load(f)
+        assert isinstance(data, dict), "SSE fixtures root must be a JSON object"
+
+    @pytest.mark.parametrize("key", _REQUIRED_SSE_FIXTURE_KEYS)
+    def test_required_fixture_key_present(self, key: str):
+        with _SSE_FIXTURES_PATH.open() as f:
+            data = json.load(f)
+        assert key in data, (
+            f"Missing required SSE fixture key: {key}. "
+            "Update protocol/test-fixtures/sse-events.json to include it."
+        )
+
+    @pytest.mark.parametrize("key", _REQUIRED_SSE_FIXTURE_KEYS)
+    def test_fixture_entry_has_type_and_data(self, key: str):
+        with _SSE_FIXTURES_PATH.open() as f:
+            data = json.load(f)
+        entry = data[key]
+        assert "type" in entry, f"Fixture {key} missing 'type' field"
+        assert isinstance(entry["type"], str), f"Fixture {key} 'type' must be a string"
+        assert "data" in entry, f"Fixture {key} missing 'data' field"
+        assert isinstance(entry["data"], dict), f"Fixture {key} 'data' must be an object"
+
+    def test_fixture_type_strings_match_event_type_constants(self):
+        """Every fixture 'type' string must equal the canonical EventType value."""
+        fixture_to_constant = {
+            "llm_chat_iteration_started": gs.EventType.AI_LLM_CHAT_ITERATION_STARTED,
+            "text_chunk_received": gs.EventType.AI_LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+            "text_completed": gs.EventType.AI_LLM_CHAT_ITERATION_TEXT_COMPLETED,
+            "chat_iteration_failed": gs.EventType.AI_LLM_CHAT_ITERATION_FAILED,
+            "g8e_web_search_requested": gs.EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+            "g8e_web_search_completed": gs.EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+            "g8e_web_search_failed": gs.EventType.AI_LLM_TOOL_G8E_WEB_SEARCH_FAILED,
+            "port_check_requested": gs.EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
+            "port_check_completed": gs.EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
+            "port_check_failed": gs.EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
+            "citations_received": gs.EventType.AI_LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+            "operator_command_requested": gs.EventType.OPERATOR_COMMAND_REQUESTED,
+            "operator_command_started": gs.EventType.OPERATOR_COMMAND_STARTED,
+            "operator_command_completed": gs.EventType.OPERATOR_COMMAND_COMPLETED,
+            "operator_command_failed": gs.EventType.OPERATOR_COMMAND_FAILED,
+            "llm_lifecycle_started": gs.EventType.AI_LLM_LIFECYCLE_STARTED,
+            "llm_lifecycle_completed": gs.EventType.AI_LLM_LIFECYCLE_COMPLETED,
+            "platform_sse_connection_established": gs.EventType.PLATFORM_SSE_CONNECTION_ESTABLISHED,
+            "platform_sse_keepalive_sent": gs.EventType.PLATFORM_SSE_KEEPALIVE_SENT,
+            "tribunal_voting_consensus_failed": gs.EventType.AI_CONSENSUS_VOTING_CONSENSUS_FAILED,
+            "tribunal_voting_dissent_recorded": gs.EventType.AI_CONSENSUS_VOTING_DISSENT_RECORDED,
+        }
+        with _SSE_FIXTURES_PATH.open() as f:
+            data = json.load(f)
+        mismatches = []
+        for key, expected_constant in fixture_to_constant.items():
+            actual = data[key]["type"]
+            if actual != expected_constant.value:
+                mismatches.append(
+                    f"{key}: fixture={actual!r} != EventType={expected_constant.value!r}"
+                )
+        assert mismatches == [], (
+            "SSE fixture 'type' strings drifted from EventType constants: "
+            + "; ".join(mismatches)
         )

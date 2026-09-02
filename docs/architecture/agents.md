@@ -5,8 +5,8 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ## Overview
 
@@ -31,7 +31,7 @@ AI clients connect to the gateway over mTLS JSON. The gateway never reaches into
 
 g8e exposes two standard protocols for AI clients.
 
-- **MCP (Model Context Protocol)**: A unified JSON-RPC endpoint that lets standard MCP clients such as Claude Code, Codex, Goose, or Gemini CLI discover tools, call them, and receive typed results. The gateway translates each MCP `tools/call` into a canonical `GovernanceEnvelope` and routes it through the governance pipeline.
+- **MCP (Model Context Protocol)**: A unified JSON-RPC endpoint that lets standard MCP clients such as Claude Code, Codex, Goose, or Gemini CLI discover tools, call them, and receive typed results. The gateway translates each MCP `tools/call` into a canonical `GovernanceEnvelope` and routes it through the governance pipeline. MCP `tools/call` accepts caller-supplied execution and investigation IDs, returns authoritative signed receipt references for completed calls and failed L1/L2 stages, and carries resumed receipt identity in human-approval completion events so callers can correlate the returned receipt with the original request without synthetic fallback references.
 - **A2A (Agent-to-Agent)**: A JSON-RPC endpoint for direct A2A skill invocations. The gateway wraps the skill request in an envelope and either executes it through a governed operator or forwards it to a configured downstream A2A server, depending on posture and authorization.
 
 The gateway also publishes signed execution results and out-of-band approval events over pub/sub. AI clients consume these results through MCP/A2A responses, SSE streams, or direct pub/sub channels. See [Network Architecture](./network.md) for the mTLS and port topology and [SSE Streaming](./sse.md) for the event surface.
@@ -85,7 +85,7 @@ The practical flow for an AI client is:
 5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
 6. The bound operator pulls the envelope, and the L4 Warden re-verifies L1-L4 and emits deterministic stage evidence.
 7. The L5 Actuator persists the signed pre-execution receipt, appends the signed commitment, executes the action, persists the signed final receipt, and adds its persistence attestation.
-8. The operator publishes the complete receipt back to the gateway, which returns it through the original MCP/A2A response or SSE channel.
+8. The operator publishes the complete receipt back to the gateway, which returns it through the original MCP/A2A response or SSE channel. The response carries the authoritative signed receipt reference bound to the caller-supplied execution and investigation IDs so the caller can resolve and verify the canonical receipt and persistence bodies without synthetic fallback references.
 
 Only the operator bound to the envelope receives the work. The gateway binds the envelope to the authenticated operator session and publishes to that operator's unique command channel. No broadcast occurs.
 

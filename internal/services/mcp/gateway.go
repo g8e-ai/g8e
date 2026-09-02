@@ -447,6 +447,22 @@ func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request
 
 	result, err := handler(r.Context(), req.ID, req.Params)
 	if err != nil {
+		var fsErr *failedStageError
+		if errors.As(err, &fsErr) {
+			code, msg := g.mapGatewayError(fsErr.err)
+			if code == 0 && msg == "" {
+				code = -32603
+				msg = fsErr.err.Error()
+			}
+			data, marshalErr := json.Marshal(fsErr.receipt)
+			if marshalErr != nil {
+				g.logger.Error("Failed to marshal failed-stage receipt reference", "error", marshalErr)
+				g.responder.RPCError(w, req.ID, code, msg)
+				return
+			}
+			g.responder.RPCErrorWithData(w, req.ID, code, msg, data)
+			return
+		}
 		code, msg := g.mapGatewayError(err)
 		// If it's a standard error we don't recognize, use Internal Error
 		if code == 0 && msg == "" {
@@ -485,10 +501,18 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		argumentsJSON = string(callParams.Arguments)
 	}
 
+	executionID := callParams.ExecutionID
+	if executionID == "" {
+		executionID = uuid.NewString()
+	}
+	investigationID := callParams.InvestigationID
+	if investigationID == "" {
+		investigationID = uuid.NewString()
+	}
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
 		ArgumentsJson: argumentsJSON,
-		ExecutionId:   uuid.NewString(),
+		ExecutionId:   executionID,
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -496,9 +520,10 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpCall,
-		targetResource: callParams.Name,
-		payloadBytes:   payloadBytes,
+		actionType:      constants.ActionTypeMcpCall,
+		targetResource:  callParams.Name,
+		payloadBytes:    payloadBytes,
+		investigationID: investigationID,
 	})
 	if err != nil {
 		return nil, err
@@ -527,6 +552,19 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 				},
 			}, nil
 		}
+		if receipt != nil {
+			return nil, &failedStageError{
+				err: err,
+				receipt: &toolReceiptReference{
+					ExecutionID:     executionID,
+					TransactionID:   receipt.TransactionId,
+					TransactionHash: receipt.TransactionHash,
+					SignerKeyID:     receipt.SignerKeyId,
+					Signature:       receipt.Signature,
+					InvestigationID: investigationID,
+				},
+			}
+		}
 		return nil, err
 	}
 
@@ -536,6 +574,14 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 				Type: "text",
 				Text: receipt.ResultSummary,
 			},
+		},
+		Receipt: &toolReceiptReference{
+			ExecutionID:     executionID,
+			TransactionID:   receipt.TransactionId,
+			TransactionHash: receipt.TransactionHash,
+			SignerKeyID:     receipt.SignerKeyId,
+			Signature:       receipt.Signature,
+			InvestigationID: investigationID,
 		},
 	}
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
@@ -752,10 +798,24 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 }
 
 type processGatewayOptions struct {
-	actionType     constants.ActionType
-	targetResource string
-	payloadBytes   []byte
+	actionType      constants.ActionType
+	targetResource  string
+	payloadBytes    []byte
+	investigationID string
 }
+
+// failedStageError wraps a governance rejection error with the signed
+// failed-stage receipt reference that the Gateway returns in the JSON-RPC
+// error's Data field. Callers (e.g. the agent harness) retain the
+// authoritative execution, transaction, and investigation identity from
+// the error response rather than falling back to synthetic references.
+type failedStageError struct {
+	err     error
+	receipt *toolReceiptReference
+}
+
+func (e *failedStageError) Error() string { return e.err.Error() }
+func (e *failedStageError) Unwrap() error { return e.err }
 
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, stateRoot string, err error) {
 	stateRoot = ""
@@ -780,6 +840,9 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		StateMerkleRoot: stateRoot,
 		Posture:         g.posture,
 		Governance:      &commonv1.GovernanceMetadata{},
+	}
+	if opts.investigationID != "" {
+		env.InvestigationId = opts.investigationID
 	}
 
 	// Enrich from context if present

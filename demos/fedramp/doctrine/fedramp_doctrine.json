@@ -17,6 +17,7 @@
       "enabled": true,
       "ksi_ids": ["KSI-MLA-07"],
       "control_ids": ["AU-2", "AU-6"],
+      "assertion_refs": [{"id": "G8E-GOV-BLOCK-001", "version": "1.0.0"}, {"id": "G8E-AU-RECEIPT-001", "version": "1.0.0"}, {"id": "G8E-CM-STATE-001", "version": "1.0.0"}],
       "overlay_ids": []
     },
     {
@@ -32,6 +33,7 @@
       "enabled": true,
       "ksi_ids": ["KSI-IAM-07"],
       "control_ids": ["AC-2"],
+      "assertion_refs": [{"id": "G8E-GOV-BLOCK-001", "version": "1.0.0"}, {"id": "G8E-IA-NOTARY-001", "version": "1.0.0"}],
       "overlay_ids": []
     },
     {
@@ -47,6 +49,7 @@
       "enabled": true,
       "ksi_ids": ["KSI-IAM-05"],
       "control_ids": ["SI-4"],
+      "assertion_refs": [{"id": "G8E-GOV-BLOCK-001", "version": "1.0.0"}],
       "overlay_ids": []
     },
     {
@@ -62,6 +65,7 @@
       "enabled": true,
       "ksi_ids": ["KSI-SVC-03", "KSI-CNA-01"],
       "control_ids": ["SC-8"],
+      "assertion_refs": [{"id": "G8E-GOV-BLOCK-001", "version": "1.0.0"}, {"id": "G8E-IA-MTLS-001", "version": "1.0.0"}, {"id": "G8E-DLP-BOUNDARY-001", "version": "1.0.0"}],
       "overlay_ids": []
     },
     {
@@ -77,6 +81,7 @@
       "enabled": true,
       "ksi_ids": ["KSI-CMT-01", "KSI-SVC-04"],
       "control_ids": ["CM-7"],
+      "assertion_refs": [{"id": "G8E-GOV-BLOCK-001", "version": "1.0.0"}, {"id": "G8E-CM-STATE-001", "version": "1.0.0"}],
       "overlay_ids": []
     }
   ]

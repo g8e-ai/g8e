@@ -135,3 +135,25 @@ func (w *Writer) RPCError(rw http.ResponseWriter, id interface{}, code int, msg 
 		w.logger.Error("Failed to encode JSON-RPC error response", "error", err)
 	}
 }
+
+// RPCErrorWithData writes a JSON-RPC 2.0 error response with a Data field
+// carrying structured metadata (e.g. a failed-stage receipt reference on
+// governed L1/L2 rejections).
+func (w *Writer) RPCErrorWithData(rw http.ResponseWriter, id interface{}, code int, msg string, data json.RawMessage) {
+	res := JSONRPCResponse{
+		JSONRPC: constants.JSONRPCVersion,
+		ID:      id,
+		Error: &JSONRPCError{
+			Code:    code,
+			Message: msg,
+			Data:    data,
+		},
+	}
+	rw.Header().Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
+	rw.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	rw.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
+	rw.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(rw).Encode(res); err != nil {
+		w.logger.Error("Failed to encode JSON-RPC error response with data", "error", err)
+	}
+}

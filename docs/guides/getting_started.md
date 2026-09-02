@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ---
 
@@ -163,7 +163,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.2
+go get github.com/g8e-ai/g8e/v2@v2.1.3
 ```
 
 Import the protocol packages in your Go code:
@@ -190,7 +190,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.1.2
+pip install g8e==2.1.3
 ```
 
 The package provides:
@@ -537,7 +537,7 @@ docker compose down -v
 | dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
 | dhs | 2 | Resilient disconnected operations / continuity of coverage |
 | dhs | 3 | Governed predictive cueing (quorum vs veto) |
-| dhs | 4 | Sovereign destruction + tamper-proof audit |
+| dhs | 4 | Sovereign destruction + tamper-evident audit |
 | fedramp | 1 | Governed cloud resource provisioning |
 | fedramp | 2 | Unauthorized audit trail destruction blocked |
 | fedramp | 3 | Governed configuration revert |

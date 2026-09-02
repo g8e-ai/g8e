@@ -107,3 +107,24 @@ func (a ActionType) IsMutation() bool {
 		return false
 	}
 }
+
+// IsBootstrapAction returns true for platform enrollment actions, which are
+// bootstrap operations that bring the consensus tribunal and notary into
+// existence. They cannot be gated by L2 consensus or L3 notary proofs because
+// those layers depend on the platform being enrolled first — a chicken-and-egg
+// dependency. The L4 Warden exempts bootstrap actions from L2/L3 enforcement
+// gates while still auditing them through L1 doctrine and recording their
+// posture stage evidence. Must match the "_bootstrap": true flag in
+// protocol/constants/status.json.
+func (a ActionType) IsBootstrapAction() bool {
+	switch a {
+	case ActionTypePlatformEnrollmentCreate,
+		ActionTypePlatformEnrollmentDecide,
+		ActionTypePlatformEnrollmentIssue,
+		ActionTypePlatformEnrollmentPersistPolicy,
+		ActionTypePlatformEnrollmentCreateSession:
+		return true
+	default:
+		return false
+	}
+}

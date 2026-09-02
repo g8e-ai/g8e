@@ -29,6 +29,9 @@ func financeScenarios() []Scenario {
 					return err
 				}
 				if resp != nil && resp.Error != nil {
+					if err := r.retainFailedStageReceipt(resp); err != nil {
+						return fmt.Errorf("retain failed-stage receipt: %w", err)
+					}
 					r.note("L1 Doctrine blocked unauthorized trade as expected: %s", resp.Error.Message)
 					return nil
 				}

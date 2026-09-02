@@ -306,9 +306,9 @@ test "$(./g8e-linux-amd64 version)" = "$(docker exec g8e-gateway /g8e version)"
 
 Expected: the gateway serves a runnable static `g8e` binary over the plain HTTP discovery port. The downloaded binary prints valid build metadata, and the comparison exits zero only when its version, build ID, build time, and platform match the binary currently running in the gateway container. This proves the "gateway hosts and serves these binaries via `/.well-known/g8e/bin/{filename}`" statement from `README.md` and `docs/guides/getting_started.md`. Clean up the downloaded binary afterwards.
 
-### 12. Optional: evaluate KSIs and export OSCAL evidence
+### 12. Optional: evaluate KSIs
 
-The compliance commands read the live audit, commitment, and Git ledger stores, so run them inside the operator container after the governed scenarios have populated those stores:
+The compliance command reads the live audit, commitment, and Git ledger stores, so run it inside the operator container after the governed scenarios have populated those stores:
 
 ```bash
 docker exec g8e-operator /g8e compliance ksi \
@@ -316,19 +316,9 @@ docker exec g8e-operator /g8e compliance ksi \
   --catalog /docs/reference/ksi-catalog.json > ./ksi-result.json
 grep -q '"class": "C"' ./ksi-result.json
 grep -q '"evidence":' ./ksi-result.json
-
-docker exec g8e-operator /g8e compliance export \
-  --format oscal \
-  --class C \
-  --catalog /docs/reference/ksi-catalog.json
-mkdir -p ./compliance
-docker cp g8e-operator:/root/.g8e/data/compliance/. ./compliance/
-test -s ./compliance/component-definition.json
-test -s ./compliance/assessment-results.json
-grep -q '"relevant-evidence"' ./compliance/assessment-results.json
 ```
 
-Expected: the KSI command emits a Class C result set with evidence from the live post-run stores. The export command writes non-empty OSCAL component-definition and assessment-results artifacts, and the assessment results contain relevant-evidence anchors linking findings to platform evidence. This optional step exercises the continuous compliance evidence pipeline; individual KSIs may report `not-satisfied` when the smoke environment lacks the history or configuration required by that indicator.
+Expected: the KSI command emits a Class C result set with evidence from the live post-run stores. Individual KSIs may report `not-satisfied` when the smoke environment lacks the history or configuration required by that indicator. The superseded flat OSCAL export is unavailable, and proof-backed bundle generation is not yet available.
 
 ### 13. Optional: governance posture sweep
 
@@ -363,7 +353,7 @@ To remove all state, including PKI, vault, and audit ledger:
 | "g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody" | The ensemble scenario sends the prompt to a real LLM, but the actual `file_create` execution and receipt are produced by the operator inside the container and stored in the operator's local audit vault. |
 | "The gateway and operator are a single static Go binary" | `./g8e version` and the `/.well-known/g8e/bin/` endpoint. |
 | "FIPS mode is verifiable at runtime via `g8e version --fips`" | `docker exec g8e-gateway /g8e version --fips` verifies approved mode against the FIPS-built container binary. |
-| Continuous compliance evidence | The optional `compliance ksi` and `compliance export` commands evaluate live stores and emit OSCAL assessment results with evidence anchors. |
+| Continuous compliance evidence | The optional `compliance ksi` command evaluates live stores and emits a typed KSI result set. |
 | "Secure MCP" | `g8e mcp agent list` exercises the documented MCP agent-integration command surface; the ensemble file scenario drives a typed MCP `tools/call` through governance. |
 | "docker compose up from the repo root brings up the whole stack" | `g8e docker start` followed by `g8e docker status` showing the gateway, operator, ensemble, and dashboard, plus direct HTTP probes of the ensemble and dashboard. |
 | "The operator initiates a single outbound mTLS tunnel to the gateway. It listens on no ports" | `g8e operator list` shows the operator session; capturing `docker port g8e-operator` and asserting an empty result explicitly verifies that the container publishes no ports. |

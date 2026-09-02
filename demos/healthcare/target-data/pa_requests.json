@@ -76,12 +76,12 @@
       "submitted_date": "2026-06-09",
       "sla_deadline": "2026-06-09",
       "days_elapsed": 0,
-      "status": "AUTO_APPROVED",
+      "status": "PENDING_REVIEW",
       "request_type": "expedited",
       "exemption_check": {
-        "evaluated": true,
-        "auto_approved": true,
-        "reason": "gold_card_threshold_met"
+        "evaluated": false,
+        "auto_approved": false,
+        "reason": "gold_card_pending_evaluation"
       }
     },
     {
@@ -104,7 +104,7 @@
       "submitted_date": "2026-05-30",
       "sla_deadline": "2026-06-06",
       "days_elapsed": 10,
-      "status": "SLA_BREACHED",
+      "status": "IN_REVIEW",
       "request_type": "standard",
       "exemption_check": {
         "evaluated": true,
@@ -112,20 +112,20 @@
         "reason": "below_exemption_threshold"
       },
       "sla_alert": {
-        "triggered": true,
-        "alert_date": "2026-06-04",
-        "breach_date": "2026-06-06",
-        "reportable_to_oha": true
+        "triggered": false,
+        "alert_date": "",
+        "breach_date": "",
+        "reportable_to_oha": false
       }
     }
   ],
   "compliance_summary": {
     "reporting_period": "2026-Q2",
     "total_requests": 4,
-    "auto_approved_gold_card": 1,
-    "pending_review": 1,
-    "in_review": 1,
-    "sla_breached": 1,
+    "auto_approved_gold_card": 0,
+    "pending_review": 2,
+    "in_review": 2,
+    "sla_breached": 0,
     "standard_denial_rate": 0.0,
     "expedited_denial_rate": 0.0,
     "median_decision_days": 2.5,

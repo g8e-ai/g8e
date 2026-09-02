@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,7 +59,7 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.2
+go get github.com/g8e-ai/g8e/v2@v2.1.3
 ```
 
 To fetch the latest release:
@@ -80,6 +80,7 @@ The Go protocol package provides the canonical wire structures and helpers for p
 
 - **Generated Protobuf Types**: Contains compiled Go structs and gRPC client stubs generated from protobuf schemas in `protocol/proto/g8e/...`, plus generated Python modules and type stubs under `protocol/python/g8e/`.
 - **Governance Types**: Provides structures for the canonical transaction envelope, governance metadata, consensus votes, deterministic governance-stage evidence, persistence attestations, and threat pattern options.
+- **Compliance Types**: Provides canonical assertion, framework, crosswalk, assessment-scope, content-addressed evidence, assessment, report-manifest, verification-report, demo-manifest, scenario, step-result, scenario-result, and metric-evidence messages in `g8e.compliance.v1`, with deterministic protojson helpers in Go and Python.
 - **Operator Services**: Defines gRPC service interfaces for command execution, file modifications, filesystem inspection, and governance verification.
 - **Receipt Verification**: Defines canonical receipt and persistence-attestation serialization and Ed25519 verification in Go and in `g8e.receipts`, backed by shared cross-language vectors.
 - **Pub/Sub Messages**: Defines pub/sub message and event transport structures for event distribution across nodes.
@@ -124,12 +125,12 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.2
+pip install g8e==2.1.3
 ```
 
 ### Python Package Overview
 
-The Python package installs as `g8e` and provides generated protobuf modules and type stubs, type-checked models, runtime constants, and canonical `ActionReceipt` parsing and Ed25519 verification helpers for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, receipt and persistence-attestation verification, and cross-language parity.
+The Python package installs as `g8e` and provides generated protobuf modules and type stubs, including `g8e.compliance.v1`, type-checked models, runtime constants, canonical compliance protojson helpers, and canonical `ActionReceipt` parsing and Ed25519 verification helpers for Python applications. It includes standard type markers (`py.typed`) for static type-checker support. Unit tests cover constant loading, enum generation, model validation, receipt and persistence-attestation verification, and cross-language parity.
 
 ### Python Constants & Enums
 
@@ -176,7 +177,7 @@ export G8E_PROTOCOL_DIR=/custom/path/to/protocol
 
 JSON files in `protocol/constants/` serve as the single source of truth for protocol identifiers, endpoint paths, and default configurations. Both Go and Python packages consume these definitions to maintain cross-language alignment.
 
-Registries cover event names (`events.json`), status codes (`status.json`), database collections (`collections.json`), API paths (`api_paths.json`), authentication parameters (`auth.json`), HTTP headers (`headers.json`), key-value keys (`kv_keys.json`), channels (`channels.json`), pubsub definitions (`pubsub.json`), intents (`intents.json`), prompt templates (`prompts.json`), agent roles (`agents.json`), platform settings (`platform.json`), platform enrollment parameters and transcript vectors (`platform_enrollment.json`, `platform_enrollment_completion_transcript_vectors.json`), senders (`senders.json`), exit codes (`exit_codes.json`), field paths (`field_paths.json`), document types (`document_ids.json`), network parameters (`network.json`), output formats (`output.json`), default ports (`ports.json`), timestamp formats (`timestamp.json`), and environment variable names (`env_vars.json`). Threat detection pattern registries in `protocol/constants/doctrine/` define forbidden execution patterns, blacklist/whitelist rules, Gitleaks patterns, OWASP CRS rules, and MCP attack vector patterns for L1 Doctrine evaluation.
+Registries cover event names (`events.json`), status codes (`status.json`), database collections (`collections.json`), API paths (`api_paths.json`), authentication parameters (`auth.json`), HTTP headers (`headers.json`), key-value keys (`kv_keys.json`), channels (`channels.json`), pubsub definitions (`pubsub.json`), intents (`intents.json`), prompt templates (`prompts.json`), agent roles (`agents.json`), platform settings (`platform.json`), platform enrollment parameters and transcript vectors (`platform_enrollment.json`, `platform_enrollment_completion_transcript_vectors.json`), compliance artifact paths and digest-verified assertion, framework, crosswalk, and demo-scenario catalogs (`compliance_paths.json`, `compliance/`), senders (`senders.json`), exit codes (`exit_codes.json`), field paths (`field_paths.json`), document types (`document_ids.json`), network parameters (`network.json`), output formats (`output.json`), default ports (`ports.json`), timestamp formats (`timestamp.json`), and environment variable names (`env_vars.json`). Threat detection pattern registries in `protocol/constants/doctrine/` define forbidden execution patterns, blacklist/whitelist rules, Gitleaks patterns, OWASP CRS rules, and MCP attack vector patterns for L1 Doctrine evaluation.
 
 ### JSON Model Schemas
 

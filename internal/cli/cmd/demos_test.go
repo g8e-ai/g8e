@@ -14,6 +14,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -25,9 +26,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func getProjectRoot() string {
@@ -352,37 +355,67 @@ func TestPrintDemoEndpoints(t *testing.T) {
 	})
 }
 
+func TestPrintPlatformEnrollmentInstructions_UsesSplitDemoPorts(t *testing.T) {
+	tests := []struct {
+		name      string
+		org       string
+		httpPort  string
+		httpsPort string
+	}{
+		{name: "healthcare", org: constants.DemosOrgHealthcare, httpPort: "8081", httpsPort: "8444"},
+		{name: "finance", org: constants.DemosOrgFinance, httpPort: "8082", httpsPort: "8445"},
+		{name: "dhs", org: constants.DemosOrgDHS, httpPort: "8087", httpsPort: "8450"},
+		{name: "fedramp", org: constants.DemosOrgFedRAMP, httpPort: "8088", httpsPort: "8451"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetOut(&buf)
+
+			printPlatformEnrollmentInstructions(cmd, tt.org)
+
+			output := buf.String()
+			endpointFlags := " -e localhost:" + tt.httpPort + " --port " + tt.httpsPort
+			assert.Contains(t, output, "./g8e auth enroll user"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth pending-platform-enrollments"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth approve-platform-enrollment <request-id> --yes"+endpointFlags)
+		})
+	}
+}
+
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
-		err := runScenario("unknown-org", "/tmp", "1")
+		err := runScenario(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
 	t.Run("returns error with valid range for invalid healthcare scenario number", func(t *testing.T) {
-		_, err := runHealthcareScenario("/tmp", "99")
+		_, err := runHealthcareScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
-		_, err := runFinanceScenario("/tmp", "99")
+		_, err := runFinanceScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
 	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
-		_, err := runDHSScenario("/tmp", "99")
+		_, err := runDHSScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error with valid range for invalid fedramp scenario number", func(t *testing.T) {
-		_, err := runFedRAMPScenario("/tmp", "99")
+		_, err := runFedRAMPScenario(context.Background(), nil, "/tmp", demoTestRunID, "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for fedramp")
 		assert.Contains(t, err.Error(), "valid: 1-4")
@@ -409,7 +442,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
+		err := runAllScenarios(context.Background(), nil, &cobra.Command{}, "unknown-org", "/tmp", demoTestRunID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
@@ -438,6 +471,83 @@ func TestRunAllScenarios(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, 4, count)
 	})
+}
+
+func TestScenarioResultFailureError(t *testing.T) {
+	tests := []struct {
+		name    string
+		result  *compliancev1.DemoScenarioResult
+		wantErr bool
+	}{
+		{name: "passing scenario returns nil", result: newDemoScenarioResult("2", "test", demoStatusPassed, ""), wantErr: false},
+		{name: "skipped scenario returns nil", result: newDemoScenarioResult("2", "test", demoStatusSkipped, ""), wantErr: false},
+		{name: "failed scenario returns typed error", result: newDemoScenarioResult("2", "test", demoStatusFailed, ""), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := demoResultFailureError(tt.result, constants.DemosOrgFedRAMP)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, constants.ErrDemoScenarioFailed)
+				assert.Contains(t, err.Error(), "fedramp scenario 2")
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestSummarizeScenarioResults(t *testing.T) {
+	tests := []struct {
+		name        string
+		results     []*compliancev1.DemoScenarioResult
+		wantErr     bool
+		wantErrorIs error
+	}{
+		{
+			name:    "all pass returns nil",
+			results: []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusPassed, "")},
+			wantErr: false,
+		},
+		{
+			name:        "any FAIL returns ErrDemoScenarioFailed",
+			results:     []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusFailed, ""), newDemoScenarioResult("3", "c", demoStatusPassed, "")},
+			wantErr:     true,
+			wantErrorIs: constants.ErrDemoScenarioFailed,
+		},
+		{
+			name:    "skip without fail returns nil",
+			results: []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusPassed, ""), newDemoScenarioResult("2", "b", demoStatusSkipped, "")},
+			wantErr: false,
+		},
+		{
+			name:        "mixed fail and skip returns ErrDemoScenarioFailed",
+			results:     []*compliancev1.DemoScenarioResult{newDemoScenarioResult("1", "a", demoStatusSkipped, ""), newDemoScenarioResult("2", "b", demoStatusFailed, "")},
+			wantErr:     true,
+			wantErrorIs: constants.ErrDemoScenarioFailed,
+		},
+		{
+			name:    "empty results returns nil",
+			results: []*compliancev1.DemoScenarioResult{},
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			err := summarizeScenarioResults(cmd, "fedramp", tc.results)
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.wantErrorIs != nil {
+					assert.ErrorIs(t, err, tc.wantErrorIs)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestGetProjectRoot(t *testing.T) {
@@ -508,7 +618,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	})
 
 	t.Run("returns error when command fails", func(t *testing.T) {
-		err := demoStepHTTP(t.TempDir(), "failing command", "200",
+		err := demoStepHTTP(context.Background(), t.TempDir(), "failing command", "200",
 			"false",
 		)
 		require.Error(t, err)
@@ -518,7 +628,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	t.Run("returns error on status code mismatch", func(t *testing.T) {
 		dir := t.TempDir()
 		// Use echo to simulate curl writing a status code to stdout
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"echo", "404",
 		)
 		require.Error(t, err)
@@ -528,7 +638,7 @@ func TestDemoStepHTTP(t *testing.T) {
 
 	t.Run("passes when status code matches", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"echo", "200",
 		)
 		assert.NoError(t, err)
@@ -536,7 +646,7 @@ func TestDemoStepHTTP(t *testing.T) {
 
 	t.Run("passes with 401 expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTP(dir, "SSE protection", "401",
+		err := demoStepHTTP(context.Background(), dir, "SSE protection", "401",
 			"echo", "401",
 		)
 		assert.NoError(t, err)
@@ -545,7 +655,7 @@ func TestDemoStepHTTP(t *testing.T) {
 	t.Run("trims whitespace from output", func(t *testing.T) {
 		dir := t.TempDir()
 		// printf adds trailing newline; demoStepHTTP should trim it
-		err := demoStepHTTP(dir, "status check", "200",
+		err := demoStepHTTP(context.Background(), dir, "status check", "200",
 			"printf", "200\n",
 		)
 		assert.NoError(t, err)
@@ -559,7 +669,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 
 	t.Run("passes when status matches any expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+		err := demoStepHTTPAny(context.Background(), dir, "passkey challenge", []string{"200", "400"},
 			"echo", "400",
 		)
 		assert.NoError(t, err)
@@ -567,7 +677,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 
 	t.Run("returns error when status matches no expected code", func(t *testing.T) {
 		dir := t.TempDir()
-		err := demoStepHTTPAny(dir, "passkey challenge", []string{"200", "400"},
+		err := demoStepHTTPAny(context.Background(), dir, "passkey challenge", []string{"200", "400"},
 			"echo", "500",
 		)
 		require.Error(t, err)
@@ -576,7 +686,7 @@ func TestDemoStepHTTPAny(t *testing.T) {
 	})
 
 	t.Run("returns error when command fails", func(t *testing.T) {
-		err := demoStepHTTPAny(t.TempDir(), "failing command", []string{"200"},
+		err := demoStepHTTPAny(context.Background(), t.TempDir(), "failing command", []string{"200"},
 			"false",
 		)
 		require.Error(t, err)
@@ -695,7 +805,7 @@ func TestHarnessRun(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cmd := harnessRun("finance-unauthorized-trade", cfg)
 		assert.Equal(t, []string{
-			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "demos", "scenarios", "run",
+			"docker", "compose", "exec", "-T", "-e", string(constants.EnvVar.DemoScenarioID) + "=finance-unauthorized-trade", "agent-runtime", "/g8e", "demos", "scenarios", "run",
 			"--mtls-url", "https://g8e.local:8443",
 			"--public-url", "http://g8e.local:8080",
 			"--cert", "/root/.g8e/pki/operator.crt",
@@ -955,6 +1065,50 @@ func resolveRepoRoot(t *testing.T) string {
 // containers mounted ensemble-seed.hex but not consensus-bootstrap.json,
 // causing L2 quorum failures (0 affirmative votes) because MemberKeyIDs
 // stayed nil.
+type demoComposeConfig struct {
+	Services demoComposeServices `yaml:"services"`
+}
+
+type demoComposeServices struct {
+	Gateway demoComposeGateway `yaml:"gateway"`
+}
+
+type demoComposeGateway struct {
+	Networks demoComposeGatewayNetworks `yaml:"networks"`
+}
+
+type demoComposeGatewayNetworks struct {
+	Secure *demoComposeNetworkAttachment `yaml:"net_secure"`
+}
+
+type demoComposeNetworkAttachment struct {
+	IPv4Address string `yaml:"ipv4_address"`
+}
+
+func TestComposeConfig_GatewaySharesSecureActuatorNetwork(t *testing.T) {
+	repoRoot := resolveRepoRoot(t)
+	tests := []struct {
+		name        string
+		composePath string
+	}{
+		{name: constants.DemosOrgHealthcare, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgHealthcare, constants.DemosComposeFile)},
+		{name: constants.DemosOrgDHS, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgDHS, constants.DemosComposeFile)},
+		{name: constants.DemosOrgFedRAMP, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgFedRAMP, constants.DemosComposeFile)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(tt.composePath)
+			require.NoError(t, err)
+
+			var config demoComposeConfig
+			require.NoError(t, yaml.Unmarshal(data, &config))
+			require.NotNil(t, config.Services.Gateway.Networks.Secure, "%s gateway must share net_secure with its actuator", tt.name)
+			assert.NotEmpty(t, config.Services.Gateway.Networks.Secure.IPv4Address, "%s gateway net_secure attachment must have a stable IPv4 address", tt.name)
+		})
+	}
+}
+
 func TestComposeConfig_ConsensusBootstrapMounts(t *testing.T) {
 	repoRoot := resolveRepoRoot(t)
 

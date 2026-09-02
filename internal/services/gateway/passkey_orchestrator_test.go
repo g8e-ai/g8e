@@ -203,7 +203,7 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		require.NoError(t, err)
 
-		o.EmitApprovalCompletedSSE("", "cli-1", "tx-1")
+		o.EmitApprovalCompletedSSE("", "cli-1", "tx-1", nil)
 
 		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
 		require.NoError(t, err)
 
-		o.EmitApprovalCompletedSSE("u-1", "", "tx-1")
+		o.EmitApprovalCompletedSSE("u-1", "", "tx-1", nil)
 
 		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "u-1", CLISessionID: "cli-1"}, 0, 10)
 		require.NoError(t, err)

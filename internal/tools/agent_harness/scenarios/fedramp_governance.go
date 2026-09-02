@@ -84,6 +84,9 @@ func fedrampScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("provision rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("admitted — operator executing cloudop provision via L5 actuator; provenance receipt written to ledger")
 				return nil
 			},
@@ -102,6 +105,9 @@ func fedrampScenarios() []Scenario {
 				}
 				if resp == nil || resp.Error == nil {
 					return fmt.Errorf("audit-wipe was accepted — expected L1 rejection")
+				}
+				if err := r.retainFailedStageReceipt(resp); err != nil {
+					return fmt.Errorf("retain failed-stage receipt: %w", err)
 				}
 				r.note("correctly rejected by L1 doctrine (CR-26 audit integrity) — audit trail is tamper-evident")
 				r.note("response: %s", resp.Error.Message)
@@ -135,12 +141,18 @@ func fedrampScenarios() []Scenario {
 					if summary, failed := receiptFailed(approveBody); failed {
 						return fmt.Errorf("destroy tool execution failed: %s", summary)
 					}
+					if err := r.retainResumedReceipt(approveBody); err != nil {
+						return fmt.Errorf("retain resumed receipt: %w", err)
+					}
 					r.note("human WebAuthn L3 proof verified; destruction executed")
 					return nil
 				}
 
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("destroy rejected: %s", resp.Error.Message)
+				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
 				}
 				r.note("gateway admitted destroy (L3 notary satisfied inline)")
 				return nil
@@ -161,6 +173,9 @@ func fedrampScenarios() []Scenario {
 				if resp != nil && resp.Error != nil {
 					return fmt.Errorf("revert rejected: %s", resp.Error.Message)
 				}
+				if err := r.retainToolReceipt(resp); err != nil {
+					return err
+				}
 				r.note("admitted — gateway quorum reached; revert executed and recorded with full configuration lineage")
 				return nil
 			},
@@ -179,6 +194,9 @@ func fedrampScenarios() []Scenario {
 				}
 				if resp == nil || resp.Error == nil {
 					return fmt.Errorf("vault-wipe was accepted — expected L1 rejection")
+				}
+				if err := r.retainFailedStageReceipt(resp); err != nil {
+					return fmt.Errorf("retain failed-stage receipt: %w", err)
 				}
 				r.note("correctly rejected by L1 doctrine (CR-26 audit integrity) — audit vault is tamper-evident")
 				r.note("response: %s", resp.Error.Message)

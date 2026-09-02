@@ -8,11 +8,18 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // defaultFedRAMPHarnessConfig returns the config matching the FedRAMP compose topology.
@@ -20,17 +27,60 @@ func defaultFedRAMPHarnessConfig() harnessConfig {
 	return defaultHarnessConfig("agent-runtime")
 }
 
-func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
+func fedRAMPBlockedHarnessVerified(err error) bool {
+	return err == nil
+}
+
+func fedRAMPScenarioID(scenario string) (string, error) {
+	switch scenario {
+	case "1":
+		return "fedramp-provision", nil
+	case "2":
+		return "fedramp-deny", nil
+	case "3":
+		return "fedramp-revert", nil
+	case "4":
+		return "fedramp-evidence-block", nil
+	default:
+		return "", fmt.Errorf("%w: invalid scenario number for fedramp: %q (valid: 1-4)", constants.ErrNotFound, scenario)
+	}
+}
+
+func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID, metricsSummary string) *compliancev1.DemoScenarioResult {
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, runID, metricsSummary)
+}
+
+func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident")
+}
+
+func newFedRAMPRevertScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback")
+}
+
+func newFedRAMPEvidenceBlockScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, runID string) *compliancev1.DemoScenarioResult {
+	return newFedRAMPScenarioResult(startedAt, definition, runID, "L1 blocks vault wipe // audit vault remains intact")
+}
+
+func runFedRAMPScenario(ctx context.Context, fileSvc fs.RuntimeFileService, demoDir, runID, scenario string) (*compliancev1.DemoScenarioResult, error) {
+	scenarioID, err := fedRAMPScenarioID(scenario)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := loadDemoScenarioDefinition(scenarioID)
+	if err != nil {
+		return nil, err
+	}
 	hcfg := defaultFedRAMPHarnessConfig()
-	var result scenarioResult
 	var hasErrors bool
+	var result *compliancev1.DemoScenarioResult
 
 	switch scenario {
 	case "1":
-		result.number = "1"
-		result.name = "Governed Cloud Resource Provisioning"
-		result.status = "PASS"
-		result.metrics = "L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION"
+		startedAt := time.Now().UTC()
+		result = newFedRAMPScenarioResult(startedAt, definition, runID,
+			"L1 doctrine admits // L2 consensus quorum met // L5 actuator records PROVISION")
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 1 — Governed Cloud Resource Provisioning")
@@ -47,14 +97,26 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-provision", "doctrine check")
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Governed Cloud Resource Provisioning")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
-		if !demoScenarioStep(demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
+		step2Started := time.Now().UTC()
+		step2OK := demoScenarioStep(ctx, demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
 			[]string{"docker", "compose", "exec", "-T", "operator",
-				"test", "-f", constants.ContainerOperatorCert}) {
+				"test", "-f", constants.ContainerOperatorCert})
+		step2Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-2", "operator enrollment check", step2Started, step2Completed,
+			step2OK, true, "docker compose exec operator test client certificate"))
+		if !step2OK {
 			hasErrors = true
 		}
 
@@ -64,11 +126,21 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "fedramp-provision", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "fedramp-provision", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for fedramp-provision")
-		if err := demoStep(demoDir, "fedramp-provision via agent",
-			false,
-			harnessRun("fedramp-provision", hcfg)...,
-		); err != nil {
+		hcfg.JSON = true
+		step3Started := time.Now().UTC()
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-provision via agent",
+			harnessRun("fedramp-provision", hcfg))
+		step3Completed := time.Now().UTC()
+		step3OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-provision-step-3", "fedramp-provision harness", step3Started, step3Completed,
+			step3OK, true, "agent harness fedramp-provision"))
+		if !step3OK {
 			fmt.Println("  (fedramp-provision harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		} else if len(harnessResults) > 0 && !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
+			fmt.Println("  (fedramp-provision harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
 		}
@@ -77,33 +149,52 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "fedramp-provision", "actuator executing")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
-		if !demoScenarioStep(demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "PROVISION"}) {
+		step4Started := time.Now().UTC()
+		step4Protocol, step4Ref, step4Err := collectFedRAMPCloudOperationEvidence(
+			ctx, demoDir, result, definition, "PROVISION", "fedramp-vm-prod-01", "FIPS-199-MODERATE")
+		step4Result := buildDemoStepResult(
+			"fedramp-provision-step-4", "independent state observation: provision recorded", step4Started, time.Now().UTC(),
+			step4Err == nil, true, step4Protocol)
+		if step4Err != nil {
 			hasErrors = true
+		} else {
+			step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, step4Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step4Ref)
 		}
+		result.StepResults = append(result.StepResults, step4Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-provision", "PROVISION recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded PROVISION — signed receipt in hash-chained ledger")
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 1 — Cloud resource provisioning governed end to end.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         L5 actuator recorded the provision; signed receipt in hash-chained ledger.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 PASSED — Cloud resource provisioning governed end to end")
 		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-provision scenario result: %w", err)
+		}
 
 	case "2":
-		result.number = "2"
-		result.name = "Unauthorized Audit Trail Destruction Blocked by L1 Doctrine"
-		result.status = "PASS"
-		result.metrics = "L1 doctrine blocks rm -rf /var/cloudsvc // audit trail tamper-evident"
+		// Evidence-grade scenario: unauthorized audit-trail destruction blocked.
+		// This is the first slice to emit a typed DemoScenarioResult with stable
+		// identity, assertion references, framework-control references, step
+		// results, and required evidence references. The scenario definition
+		// lives in the canonical demo scenario catalog (fedramp-deny@1.0.0).
+		startedAt := time.Now().UTC()
+		result = newFedRAMPDenyScenarioResult(startedAt, definition, runID)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 2 — Unauthorized Audit Trail Destruction Blocked (CR-26)")
@@ -117,45 +208,88 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Unauthorized Audit Trail Destruction Blocked")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		// Step 1: gateway health check.
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-deny-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
+		// Step 2: run fedramp-deny harness scenario (L1 reject).
 		demoPrintln("  -- Step 2: Run fedramp-deny via agent (L1 reject) --")
 		demoPrintln("  L1 doctrine detects 'rm -rf /var/cloudsvc' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-deny", "doctrine check")
-		if err := demoStep(demoDir, "fedramp-deny via agent",
-			false,
-			harnessRun("fedramp-deny", hcfg)...,
-		); err != nil {
+		hcfg.JSON = true
+		step2Started := time.Now().UTC()
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-deny via agent",
+			harnessRun("fedramp-deny", hcfg))
+		step2Completed := time.Now().UTC()
+		// The harness exits successfully only after it verifies that doctrine blocked
+		// the action. A nonzero exit means the expected rejection was not verified.
+		step2Verified := fedRAMPBlockedHarnessVerified(harnessErr)
+		if !step2Verified {
 			fmt.Println("  (fedramp-deny harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		}
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-deny-step-2", "fedramp-deny harness (L1 doctrine reject)", step2Started, step2Completed,
+			step2Verified, true, "agent harness fedramp-deny"))
+		if step2Verified {
+			// The harness retained the authoritative failed-stage receipt from the
+			// gateway's JSON-RPC error data. Fail closed if it is missing.
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
+				hasErrors = true
+			}
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-deny", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/cloudsvc' — CR-26 audit integrity violation detected at admission")
 
+		// Step 3: independent state observation — operations log remains present and non-empty.
+		step3Started := time.Now().UTC()
+		step3Protocol, step3Ref, step3Err := collectFedRAMPCloudLogEvidence(ctx, demoDir, result, definition)
+		step3Result := buildDemoStepResult(
+			"fedramp-deny-step-3", "independent state observation: operations log present and non-empty",
+			step3Started, time.Now().UTC(), step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
+			hasErrors = true
+		} else {
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
+		}
+		result.StepResults = append(result.StepResults, step3Result)
+
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 2 — Audit trail destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
-			fmt.Println("         The audit trail is tamper-evident and intact.")
+			fmt.Println("         Independent verification confirms the operations log is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Audit trail destruction blocked by L1 doctrine")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-deny scenario result: %w", err)
 		}
 
 	case "3":
-		result.number = "3"
-		result.name = "Governed Configuration Revert under L2 Consensus"
-		result.status = "PASS"
-		result.metrics = "L2 quorum admits revert // L5 actuator records REVERT // CM-7 rollback"
+		startedAt := time.Now().UTC()
+		result = newFedRAMPRevertScenarioResult(startedAt, definition, runID)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 3 — Governed Configuration Revert (CM-7)")
@@ -165,13 +299,19 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("          submitted with L2 ensemble quorum. The revert is")
 		demoPrintln("          admitted and executed by the L5 actuator. This")
 		demoPrintln("          demonstrates that configuration changes are governed")
-		demoPrintln("          through the full L1/L2/L3 pipeline with signed receipts.")
+		demoPrintln("          through the L1/L2/L5 pipeline with signed receipts.")
 		demoPrintln()
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Governed Configuration Revert")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-revert-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
@@ -184,11 +324,21 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus(constants.ConsensusMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "fedramp-revert via agent",
-			false,
-			harnessRun("fedramp-revert", hcfg)...,
-		); err != nil {
+		hcfg.JSON = true
+		step2Started := time.Now().UTC()
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-revert via agent",
+			harnessRun("fedramp-revert", hcfg))
+		step2Completed := time.Now().UTC()
+		step2OK := harnessErr == nil
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-revert-step-2", "fedramp-revert harness", step2Started, step2Completed,
+			step2OK, true, "agent harness fedramp-revert"))
+		if !step2OK {
 			fmt.Println("  (fedramp-revert harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		} else if len(harnessResults) > 0 && !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
+			fmt.Println("  (fedramp-revert harness emitted no authoritative receipt)")
 			fmt.Println()
 			hasErrors = true
 		}
@@ -198,33 +348,47 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoEmitter.Consensus(constants.ConsensusMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "revert-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — revert admitted")
 
-		if !demoScenarioStep(demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "REVERT"}) {
+		step3Started := time.Now().UTC()
+		step3Protocol, step3Ref, step3Err := collectFedRAMPCloudOperationEvidence(
+			ctx, demoDir, result, definition, "REVERT", "fedramp-iam-roles-01", "CM-7-ROLLBACK")
+		step3Result := buildDemoStepResult(
+			"fedramp-revert-step-3", "independent state observation: revert recorded", step3Started, time.Now().UTC(),
+			step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
 			hasErrors = true
+		} else {
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-revert", "REVERT recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded REVERT — signed receipt in hash-chained ledger")
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 3 — Configuration revert governed by L2 consensus.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         REVERT operation recorded by the L5 actuator.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Configuration revert governed by L2 consensus")
 		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-revert scenario result: %w", err)
+		}
 
 	case "4":
-		result.number = "4"
-		result.name = "Gateway Audit Vault Destruction Blocked + Governed Destruction"
-		result.status = "PASS"
-		result.metrics = "L1 blocks vault wipe // L1+L2 admit governed destroy -> receipt"
+		startedAt := time.Now().UTC()
+		result = newFedRAMPEvidenceBlockScenarioResult(startedAt, definition, runID)
+		hcfg = bindHarnessConfig(hcfg, result)
 
 		demoPrintf("\n%s\n", strings.Repeat("-", 60))
 		demoPrintln("  Scenario 4 — Gateway Audit Vault Destruction Blocked (CR-26)")
@@ -238,8 +402,14 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Gateway Audit Vault Destruction Blocked")
 
-		if !demoScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
-			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"}) {
+		step1Started := time.Now().UTC()
+		step1OK := demoScenarioStep(ctx, demoDir, "Step 1: Confirm the governance gateway is live (doctrine)",
+			[]string{"curl", "-sf", "http://localhost:8088/api/v1/health"})
+		step1Completed := time.Now().UTC()
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-evidence-block-step-1", "gateway health check", step1Started, step1Completed,
+			step1OK, true, "curl gateway health endpoint"))
+		if !step1OK {
 			hasErrors = true
 		}
 
@@ -247,54 +417,106 @@ func runFedRAMPScenario(demoDir, scenario string) (scenarioResult, error) {
 		demoPrintln("  L1 doctrine detects 'rm -rf /root/.g8e/data' -> rejected at admission:")
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "fedramp-evidence-block", "doctrine check")
-		if err := demoStep(demoDir, "fedramp-evidence-block via agent",
-			false,
-			harnessRun("fedramp-evidence-block", hcfg)...,
-		); err != nil {
+		hcfg.JSON = true
+		step2Started := time.Now().UTC()
+		harnessResults, harnessErr := runHarnessWithJSON(ctx, demoDir, "fedramp-evidence-block via agent",
+			harnessRun("fedramp-evidence-block", hcfg))
+		step2Completed := time.Now().UTC()
+		step2Verified := fedRAMPBlockedHarnessVerified(harnessErr)
+		result.StepResults = append(result.StepResults, buildDemoStepResult(
+			"fedramp-evidence-block-step-2", "fedramp-evidence-block harness (L1 doctrine reject)", step2Started, step2Completed,
+			step2Verified, true, "agent harness fedramp-evidence-block"))
+		if !step2Verified {
 			fmt.Println("  (fedramp-evidence-block harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
+		} else {
+			if len(harnessResults) == 0 || !applyAndPersistHarnessIdentity(ctx, fileSvc, runID, result, &harnessResults[0]) {
+				hasErrors = true
+			}
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "fedramp-evidence-block", "AUDIT VAULT DESTRUCTION BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /root/.g8e/data' — CR-26 audit integrity violation detected at admission")
 
+		step3Started := time.Now().UTC()
+		step3Protocol, step3Ref, step3Err := collectFedRAMPAuditVaultEvidence(ctx, demoDir, result, definition)
+		step3Result := buildDemoStepResult(
+			"fedramp-evidence-block-step-3", "independent state observation: audit vault present and non-empty",
+			step3Started, time.Now().UTC(), step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
+			hasErrors = true
+		} else {
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
+		}
+		result.StepResults = append(result.StepResults, step3Result)
+
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
+		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
-			result.status = "FAIL"
+			result.Status = demoStatusFailed
+			result.VerificationStatus = "unverifiable"
+			result.Failure = "one or more required steps failed"
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
 			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
+			result.VerificationStatus = "verified"
 			fmt.Println("  [PASS] Scenario 4 — Audit vault destruction blocked by L1 doctrine.")
 			fmt.Println("         CR-26 audit integrity rule fired at admission.")
-			fmt.Println("         The audit vault is tamper-evident and intact.")
+			fmt.Println("         Independent verification confirms the audit vault DB is intact and non-empty.")
 			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Audit vault destruction blocked by L1 doctrine")
+		}
+		if err := compliancecatalog.ValidateDemoScenarioResult(result, definition, result.ScopeId); err != nil {
+			return nil, fmt.Errorf("validate fedramp-evidence-block scenario result: %w", err)
 		}
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for fedramp: %q (valid: 1-4)", scenario)
+		return nil, fmt.Errorf("%w: invalid scenario number for fedramp: %q (valid: 1-4)", constants.ErrNotFound, scenario)
 	}
 	return result, nil
+}
+
+// buildDemoStepResult constructs a typed DemoStepResult from the step execution
+// outcome. A nil/empty failure string is set for passing steps; a descriptive
+// failure is set for non-passing steps per the protocol validation rules.
+func buildDemoStepResult(stepID, operation string, started, completed time.Time, ok, required bool, protocolResult string) *compliancev1.DemoStepResult {
+	status := demoStatusPassed
+	failure := ""
+	if !ok {
+		status = demoStatusFailed
+		failure = operation + " failed"
+	}
+	return &compliancev1.DemoStepResult{
+		StepId:         stepID,
+		Operation:      operation,
+		StartedAt:      timestamppb.New(started),
+		CompletedAt:    timestamppb.New(completed),
+		Status:         status,
+		ProtocolResult: protocolResult,
+		Failure:        failure,
+		Required:       required,
+	}
 }
 
 // runFedRAMPKSIEvidence runs g8e compliance ksi inside the gateway container
 // to emit KSI result snapshots, then verifies them via verify_ops.py --ksi-result.
 // Returns true if both steps succeed.
-func runFedRAMPKSIEvidence(demoDir string) bool {
+func runFedRAMPKSIEvidence(ctx context.Context, demoDir string) bool {
 	demoPrintf("\n%s\n", strings.Repeat("-", 60))
 	demoPrintln("  KSI Evidence Export")
 	demoPrintln(strings.Repeat("-", 60))
 	demoPrintln()
 
-	if !demoScenarioStep(demoDir, "Step 1: Emit KSI result snapshots (g8e compliance ksi --class C)",
+	if !demoScenarioStep(ctx, demoDir, "Step 1: Emit KSI result snapshots (g8e compliance ksi --class C)",
 		[]string{"docker", "compose", "exec", "-T", "gateway",
 			"/g8e", "compliance", "ksi", "--class", "C", "--catalog", constants.ContainerKSICatalog}) {
 		fmt.Println("  [FAIL] KSI evidence export — could not emit snapshots.")
 		return false
 	}
 
-	if !demoScenarioStep(demoDir, "Step 2: Verify KSI result snapshots (verify_ops.py --ksi-result)",
+	if !demoScenarioStep(ctx, demoDir, "Step 2: Verify KSI result snapshots (verify_ops.py --ksi-result)",
 		[]string{"docker", "compose", "exec", "-T", "cloudsvc",
 			"python", constants.ContainerVerifyOpsPy, "--ksi-result"}) {
 		fmt.Println("  [FAIL] KSI evidence export — snapshot verification failed.")

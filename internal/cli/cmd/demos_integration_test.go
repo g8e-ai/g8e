@@ -367,6 +367,8 @@ func TestRunDemosClean(t *testing.T) {
 }
 
 func TestRunDemosRun(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+
 	t.Run("returns error when demo directory does not exist", func(t *testing.T) {
 		// Save original working directory
 		originalWd, err := os.Getwd()
@@ -382,7 +384,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosRun(cmd, []string{"nonexistent"}, false)
+		err = runDemosRun(cmd, []string{"nonexistent"}, false, fileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
@@ -406,7 +408,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosRun(cmd, []string{"healthcare"}, false)
+		err = runDemosRun(cmd, []string{"healthcare"}, false, fileSvc)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
@@ -433,7 +435,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosRun(cmd, []string{"healthcare", "1"}, false)
+		err = runDemosRun(cmd, []string{"healthcare", "1"}, false, fileSvc)
 		// Will fail due to Docker not being available, but should not fail due to missing compose.yml
 		assert.NotContains(t, err.Error(), "compose.yml not found")
 	})
@@ -460,7 +462,7 @@ func TestRunDemosRun(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosRun(cmd, []string{"healthcare"}, false)
+		err = runDemosRun(cmd, []string{"healthcare"}, false, fileSvc)
 		// Will fail due to Docker not being available, but should not fail due to missing compose.yml
 		assert.NotContains(t, err.Error(), "compose.yml not found")
 	})
