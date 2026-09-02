@@ -246,43 +246,75 @@ const (
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
-	DemosDirname             = "demos"
-	DemosComposeFile         = "compose.yml"
-	DemosBinDirname          = "bin"
-	DemosBinaryName          = "g8e"
-	DemosTargetDataDir       = "target-data"
-	DemosDoctrineDir         = "doctrine"
-	DemosPARequestsFile      = "pa_requests.json"
-	DemosHIPAADoctrineFile   = "phi_hipaa_doctrine.json"
-	DemosDHSDoctrineFile     = "dhs_sovereign_doctrine.json"
-	DemosFedRAMPDoctrineFile = "fedramp_doctrine.json"
-	DemosImagesManifestFile  = "images.json"
-	DemosOrgHealthcare       = "healthcare"
-	DemosOrgFinance          = "finance"
-	DemosOrgDHS              = "dhs"
-	DemosOrgFedRAMP          = "fedramp"
+	DemosDirname                        = "demos"
+	DemosComposeFile                    = "compose.yml"
+	DemosBinDirname                     = "bin"
+	DemosBinaryName                     = "g8e"
+	DemosTargetDataDir                  = "target-data"
+	DemosDoctrineDir                    = "doctrine"
+	DemosPARequestsFile                 = "pa_requests.json"
+	DemosHIPAADoctrineFile              = "phi_hipaa_doctrine.json"
+	DemosDHSDoctrineFile                = "dhs_sovereign_doctrine.json"
+	DemosFedRAMPDoctrineFile            = "fedramp_doctrine.json"
+	DemosFinanceStateCollectorFile      = "verify_trade_absence.sh"
+	DemosHealthcareNetCollectorFile     = "collect_network_isolation.sh"
+	DemosDHSNetworkCollectorFile        = "collect_network_membership.sh"
+	DemosDHSGatewayHealthCollectorFile  = "collect_gateway_health.sh"
+	DemosDHSLedgerCollectorFile         = "collect_ledger_persistence.sh"
+	DemosDHSAuditVaultCollectorFile     = "collect_audit_vault_persistence.sh"
+	DemosFedRAMPCloudCollectorFile      = "collect_cloud_service_state.py"
+	DemosFedRAMPAuditVaultCollectorFile = "collect_audit_vault_persistence.sh"
+	DemosImagesManifestFile             = "images.json"
+	DemosOrgHealthcare                  = "healthcare"
+	DemosOrgFinance                     = "finance"
+	DemosOrgDHS                         = "dhs"
+	DemosOrgFedRAMP                     = "fedramp"
+
+	// DHS demo docker resource names. The compose project is named "dhs-demo"
+	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
+	// the project name. The coalition-datalink container is the synthetic
+	// Mission Partner link severed in Scenario 2.
+	DemosDHSPerimeterNetwork      = "dhs-demo_net_perimeter"
+	DemosDHSCoalitionDatalinkCtnr = "dhs-coalition-datalink"
+
+	// DHS gateway health endpoint used by the local gateway availability
+	// collector in dhs-disconnected-operations. The compose file maps
+	// container port 8080 to host port 8087.
+	DemosDHSGatewayHealthEndpoint = "http://localhost:8087/api/v1/health"
 )
 
 // Container paths for Docker exec commands in demo environments.
 // These are paths inside the g8e Docker containers, not local filesystem paths.
 const (
-	ContainerRootG8E          = "/root/.g8e"
-	ContainerPKIDir           = ContainerRootG8E + "/" + PkiDirname
-	ContainerOperatorCert     = ContainerPKIDir + "/" + PkiFileOperatorCert
-	ContainerOperatorKey      = ContainerPKIDir + "/" + PkiFileOperatorKey
-	ContainerCABundle         = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
-	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
-	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
-	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
-	ContainerLedgerFilesDir   = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerRootG8E                  = "/root/.g8e"
+	ContainerPKIDir                   = ContainerRootG8E + "/" + PkiDirname
+	ContainerOperatorCert             = ContainerPKIDir + "/" + PkiFileOperatorCert
+	ContainerOperatorKey              = ContainerPKIDir + "/" + PkiFileOperatorKey
+	ContainerCABundle                 = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
+	ContainerDataDir                  = ContainerRootG8E + "/" + DataDirname
+	ContainerAuditVaultDB             = ContainerDataDir + "/" + DbFilename
+	ContainerExecutionVaultDB         = ContainerDataDir + "/" + ExecutionVaultDBFilename
+	ContainerLedgerFilesDir           = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerFinanceTargetDir         = "/var/g8e/target"
+	ContainerFinanceUnauthorizedTrade = ContainerFinanceTargetDir + "/unauthorized_trade_execution.log"
+	ContainerHealthcarePAOperations   = "/var/pa_operations.log"
 
-	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
-	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
-	ContainerVerifyOpsPy   = "/app/verify_ops.py"
-	ContainerInspectRFPy   = "/app/inspect_rf.py"
-	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
-	ContainerVerifySlewsPy = "/app/verify_slews.py"
-	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
+	ContainerDoctrineDir                = "/etc/g8e/" + DemosDoctrineDir
+	ContainerFinanceStateCollectorFile  = ContainerFinanceTargetDir + "/" + DemosFinanceStateCollectorFile
+	ContainerHealthcareNetCollectorFile = "/app/" + DemosHealthcareNetCollectorFile
+	ContainerFedRAMPCloudCollectorFile  = "/app/" + DemosFedRAMPCloudCollectorFile
+	ContainerEnsembleSeed               = "/etc/g8e/ensemble-seed.hex"
+	ContainerVerifyOpsPy                = "/app/verify_ops.py"
+	ContainerVerifyPAPy                 = "/app/verify_pa.py"
+	ContainerInspectRFPy                = "/app/inspect_rf.py"
+	ContainerInspectPNTPy               = "/app/inspect_pnt.py"
+	ContainerVerifySlewsPy              = "/app/verify_slews.py"
+	ContainerKSICatalog                 = "/docs/reference/" + KSICatalogFilename
+
+	// FedRAMP cloudsvc operations log path inside the cloudsvc container.
+	// Used for independent prohibited-side-effect verification after blocked
+	// destruction attempts.
+	ContainerCloudSvcOpsLog = "/var/cloudsvc/operations.jsonl"
 )
 
 // Local binary names for the g8e CLI executable.
@@ -443,25 +475,26 @@ const (
 	TestTempDirname = ".g8e-test-tmp"
 
 	// Test path constants for gateway config and consensus bootstrap tests
-	TestPathVarLibDataDir         = "/var/lib/g8e/data"
-	TestPathVarLibPKIDir          = "/var/lib/g8e/pki"
-	TestPathVarLibSecretsDir      = "/var/lib/g8e/secrets"
-	TestPathVarLibVaultDir        = "/var/lib/g8e/vault"
-	TestPathVarLibVaultKey        = "/var/lib/g8e/vault/key"
-	TestPathEtcNetworkIdentity    = "/etc/g8e/network-identity.json"
-	TestPathShortData             = "/data"
-	TestPathShortPKI              = "/pki"
-	TestPathShortSecrets          = "/secrets"
-	TestPathShortVault            = "/vault"
-	TestPathShortVaultKey         = "/vault/key"
-	TestPathIdentityFile          = "/path/to/identity.json"
-	TestPathIdentityFileShort     = "/path/identity.json"
-	TestPathNonexistentConsensus  = "/nonexistent/path/consensus.json"
-	TestPathNonexistentCatalog    = "/nonexistent/path/ksi-catalog.json"
-	TestPathNonexistentOverlayDir = "/nonexistent/path/overlays"
-	TestCustomComplianceOutDir    = "custom-compliance-out"
-	TestInvalidJSONFilename       = "invalid.json"
-	TestOverlaysDirname           = "test-overlays"
+	TestPathVarLibDataDir                 = "/var/lib/g8e/data"
+	TestPathVarLibPKIDir                  = "/var/lib/g8e/pki"
+	TestPathVarLibSecretsDir              = "/var/lib/g8e/secrets"
+	TestPathVarLibVaultDir                = "/var/lib/g8e/vault"
+	TestPathVarLibVaultKey                = "/var/lib/g8e/vault/key"
+	TestPathEtcNetworkIdentity            = "/etc/g8e/network-identity.json"
+	TestPathShortData                     = "/data"
+	TestPathShortPKI                      = "/pki"
+	TestPathShortSecrets                  = "/secrets"
+	TestPathShortVault                    = "/vault"
+	TestPathShortVaultKey                 = "/vault/key"
+	TestPathIdentityFile                  = "/path/to/identity.json"
+	TestPathIdentityFileShort             = "/path/identity.json"
+	TestPathNonexistentConsensus          = "/nonexistent/path/consensus.json"
+	TestPathNonexistentCatalog            = "/nonexistent/path/ksi-catalog.json"
+	TestPathNonexistentOverlayDir         = "/nonexistent/path/overlays"
+	TestCustomComplianceOutDir            = "custom-compliance-out"
+	TestInvalidJSONFilename               = "invalid.json"
+	TestOverlaysDirname                   = "test-overlays"
+	TestPathRepoRootFromCompliancePackage = "../../.."
 )
 
 // Consensus bootstrap config filename for declarative consensus seeding.
@@ -531,4 +564,98 @@ const (
 	DefaultKSICatalogPath          = DocsDirname + "/reference/" + KSICatalogFilename
 	DefaultOverlayDirPath          = DocsDirname + "/reference"
 	KSIHistoryRetentionDays        = 90
+
+	ComplianceBundlesDirname                     = "reports"
+	ComplianceBundleManifestFilename             = "manifest.json"
+	ComplianceBundleScopeFilename                = "scope.json"
+	ComplianceBundleFrameworkCatalogsDirname     = "framework-catalogs"
+	ComplianceBundleAssertionsDirname            = "assertions"
+	ComplianceBundleAssertionCatalogFilename     = "assertion-catalog.json"
+	ComplianceBundleCrosswalksDirname            = "crosswalks"
+	ComplianceBundleCrosswalkFilename            = "fedramp-nist-crosswalk.json"
+	ComplianceBundleAssessmentsDirname           = "assessments"
+	ComplianceBundleAssertionAssessmentsFilename = "assertion-assessments.jsonl"
+	ComplianceBundleControlAssessmentsFilename   = "control-assessments.jsonl"
+	ComplianceBundleEvidenceDirname              = "evidence"
+	ComplianceBundleEvidenceIndexFilename        = "evidence-index.jsonl"
+	ComplianceBundleEvalEvidenceDirname          = "eval"
+	ComplianceBundleEvalManifestsFilename        = "manifests.jsonl"
+	ComplianceBundleEvalTasksFilename            = "tasks.jsonl"
+	ComplianceBundleEvalAttemptsFilename         = "attempts.jsonl"
+	ComplianceBundleEvalReceiptsFilename         = "receipts.jsonl"
+	ComplianceBundleEvalStagesFilename           = "stages.jsonl"
+	ComplianceBundleEvalMetricsFilename          = "metrics.jsonl"
+	ComplianceBundleEvalStateFilename            = "state-observations.jsonl"
+	ComplianceBundleDemoEvidenceDirname          = "demos"
+	ComplianceBundleDemoManifestsFilename        = "manifests.jsonl"
+	ComplianceBundleDemoDefinitionsFilename      = "scenario-definitions.jsonl"
+	ComplianceBundleDemoStepsFilename            = "step-results.jsonl"
+	ComplianceBundleDemoResultsFilename          = "scenario-results.jsonl"
+	ComplianceBundlePlatformEvidenceDirname      = "platform"
+	ComplianceBundleKSIResultsFilename           = "ksi-results.json"
+	ComplianceBundleKSIHistoryFilename           = "ksi-history.jsonl"
+	ComplianceBundleCommitmentsFilename          = "commitments.jsonl"
+	ComplianceBundleAttestationsFilename         = "attestations.jsonl"
+	ComplianceBundleRestrictedDirname            = "restricted"
+	ComplianceBundleOSCALDirname                 = "oscal"
+	ComplianceBundleAnalysisFilename             = "analysis.json"
+	ComplianceBundleGapsFilename                 = "gaps.json"
+	ComplianceBundleMarkdownFilename             = "report.md"
+	ComplianceBundleHTMLFilename                 = "report.html"
+	ComplianceBundleChecksumsFilename            = "checksums.json"
+	ComplianceBundlePublicKeysFilename           = "public-keys.json"
+	ComplianceBundleSignaturesFilename           = "signatures.json"
+)
+
+// Release evidence output filename suffixes. The per-release compliance
+// evidence artifacts are written to docs/release_notes/vX.Y.x/ as
+// vX.Y.Z-compliance-evidence.md and vX.Y.Z-compliance-evidence.csv. These are
+// source-tree documentation paths, not .g8e/ runtime paths.
+const (
+	ReleaseEvidenceMarkdownSuffix = "-compliance-evidence.md"
+	ReleaseEvidenceCSVSuffix      = "-compliance-evidence.csv"
+)
+
+// Per-run demo evidence path constants. Typed demo evidence is persisted under
+// the runtime compliance tree at data/compliance/demo-evidence/<run-id>/ before
+// bundle generation. These are runtime evidence store paths, distinct from the
+// ComplianceBundle* constants which describe the generated report bundle layout.
+const (
+	DemoEvidenceDirname                    = "demo-evidence"
+	DemoRunManifestFilename                = "manifest.json"
+	DemoRunResultsFilename                 = "scenario-results.jsonl"
+	DemoRunStepsFilename                   = "step-results.jsonl"
+	DemoRunDefinitionsFilename             = "scenario-definitions.jsonl"
+	DemoRunReceiptsDirname                 = "receipts"
+	DemoRunPersistenceDirname              = "persistence"
+	DemoRunStateObservationsDirname        = "state-observations"
+	DemoRunMetricsDirname                  = "metrics"
+	DemoRunVerifierID                      = "g8e-demo-run-verifier"
+	DemoRunVerifierVersion                 = "1.0.0"
+	DemoMetricEvidenceVersion              = "1.0.0"
+	DemoMetricGraderID                     = "healthcare-threshold"
+	DemoMetricGraderVersion                = "1.0.0"
+	DemoMetricComparisonGreaterThanOrEqual = "greater_than_or_equal"
+	DemoRunMaxArtifactBytes                = 16 << 20
+	DemoRunMaxResults                      = 1024
+	DemoRunMaxArtifactsPerDirectory        = 4096
+)
+
+// Demo scope identifiers. Each demo org binds its typed scenario results to a
+// stable scope ID so manifest and result records share the same assessment
+// scope binding.
+const (
+	DemoScopeFedRAMP    = "fedramp-demo-scope"
+	DemoScopeDHS        = "dhs-demo-scope"
+	DemoScopeFinance    = "finance-demo-scope"
+	DemoScopeHealthcare = "healthcare-demo-scope"
+)
+
+// DemoVersion is the version of the demo environment topology and scenario
+// catalog binding. It is distinct from individual scenario definition versions.
+const DemoVersion = "1.0.0"
+
+// Demo provenance subdirectory names hashed by buildDemoManifest.
+const (
+	DemoConfigDirname = "config"
 )

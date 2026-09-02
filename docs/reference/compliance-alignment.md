@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 2.1.2
-**Last Updated:** 2026-08-31
-**Platform:** g8e v2.1.2
+**Document Version:** 2.1.3
+**Last Updated:** 2026-09-02
+**Platform:** g8e v2.1.3
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -10,6 +10,8 @@
 ## Executive Summary
 
 This document provides a comprehensive alignment of the g8e platform's security controls and governance mechanisms against major industry compliance frameworks. g8e is designed as a zero-trust execution platform for agentic infrastructure, implementing fail-closed verification, cryptographic proof chains, and local-first data sovereignty.
+
+This document maps g8e's security controls to external frameworks. The [Proof-Backed Compliance Evidence](./compliance-evidence.md) document describes the pipeline that binds the FedRAMP 20x and NIST SP 800-53 mappings to immutable, independently verifiable evidence and the roadmap for extending that binding to the remaining frameworks.
 
 **Key Compliance Posture:**
 - **SOC 2 Type II:** Strong alignment with Trust Services Criteria (Security, Availability, Confidentiality)
@@ -19,7 +21,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 - **NIST SP 800-53 Rev 5.2.0:** Moderate-to-High baseline coverage
 - **NIST SP 800-63B-4:** AAL2/AAL3 alignment with phishing-resistant authenticators
 - **PCI DSS v4.0.1:** Relevant controls for cardholder data environments
-- **FedRAMP 20x (CR26):** Machine-readable Key Security Indicators (KSIs) with OSCAL evidence export and COSAiS overlay alignment
+- **FedRAMP 20x (CR26):** Machine-readable Key Security Indicators (KSIs), protocol-owned control catalogs, persisted demo evidence verification, and COSAiS overlay alignment
 - **NSA Zero Trust Implementation Guidelines (ZIG):** Strong alignment with Discovery, Phase One, and Phase Two activities
 
 ---
@@ -518,7 +520,7 @@ NIST SP 800-63B-4 (July 2025) supersedes SP 800-63B (2020) and defines technical
 
 ## 10. FedRAMP 20x (CR26) Alignment
 
-FedRAMP's Consolidated Rules for 2026 (CR26) introduce the 20x path, which replaces static System Security Plans with binary-resolution, machine-readable Key Security Indicators (KSIs) that regenerate on demand. g8e produces the raw evidence 20x consumes: signed `ActionReceipts` (Ed25519), a hash-chained git ledger, a SQLite audit vault, and the LFAA retrieval surface. The compliance package (`internal/services/compliance/`) provides typed KSI models, a binary KSI evaluator, OSCAL evidence export, historical snapshot retention, and COSAiS overlay ingestion.
+FedRAMP's Consolidated Rules for 2026 (CR26) introduce the 20x path, which replaces static System Security Plans with binary-resolution, machine-readable Key Security Indicators (KSIs) that regenerate on demand. g8e produces the raw evidence 20x consumes: signed `ActionReceipts` (Ed25519), a hash-chained git ledger, a SQLite audit vault, and the LFAA retrieval surface. The compliance package (`internal/services/compliance/`) provides typed KSI models, a binary KSI evaluator, historical snapshot retention, COSAiS overlay ingestion, protocol-owned assertion and framework catalogs, and independent verification of persisted demo evidence runs. The typed OSCAL renderer remains available to the package, but the CLI does not expose the superseded flat live-state export or the planned proof-backed report bundle generator. The [Proof-Backed Compliance Evidence](./compliance-evidence.md) document describes the assertion catalog, framework crosswalk, evidence-grade demo scenarios, and independent demo-run verification that bind the FedRAMP 20x and NIST SP 800-53 mappings to immutable evidence.
 
 ### Certification Classes
 
@@ -539,18 +541,15 @@ The typed KSI catalog (`docs/reference/ksi-catalog.json`) defines 31 KSIs across
 
 Machine-based resources validate at least every 7 days; non-machine resources at least every 3 months (PVA standard, RFC-0017). The evaluator checks staleness and fails closed for Class C if a KSI exceeds its validation cycle.
 
-### OSCAL Evidence Export
+### Compliance evidence commands
 
-The OSCAL exporter (`internal/services/compliance/oscal.go`) generates machine-readable evidence packages:
-
-- **Component Definition**: g8e platform component with control implementations grouped by KSI category.
-- **Assessment Results**: Per-KSI observations and findings with evidence anchors linking to receipt IDs, ledger commit hashes, and LFAA execution IDs.
+The OSCAL model and renderer remain in `internal/services/compliance/oscal.go`, but the legacy flat live-state export command is removed because it does not produce content-addressed, scope-bound evidence. Proof-backed report bundle generation is not yet available. The protocol-owned compliance foundation instead defines digest-verified assertion, framework, crosswalk, and demo-scenario catalogs plus typed scope, evidence, assessment, manifest, and verification records.
 
 CLI commands:
-- `g8e compliance export --format oscal --class C` generates OSCAL JSON artifacts.
 - `g8e compliance ksi --class C` evaluates KSIs and prints the result set as JSON.
 - `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
+- `g8e compliance demo-run verify <run-id> [--project-root <dir>]` reads `.g8e/data/compliance/demo-evidence/<run-id>/`, verifies its canonical manifest, scenario results, provenance, content-addressed artifacts, signatures, protocol chains, state observations, healthcare threshold metrics, and directory integrity, then emits a canonical `ComplianceVerificationReport`. The verifier is read-only and exits nonzero when the report is invalid.
 
 ### Historical Metrics Retention
 
@@ -651,7 +650,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Gateway construction refactor** to single-phase construction with lazy forwarding adapters and per-controller dependency injection, eliminating late-bound dependency injection
 - **Dead code removal** (107 unreachable functions removed from production and test code)
 - **FedRAMP sovereign cloud governance demo** demonstrating compliance posture for federal workloads
-- **FedRAMP 20x (CR26) alignment** with typed KSI model, OSCAL evidence export, historical metrics retention, and COSAiS overlay ingestion for Class C certification
+- **FedRAMP 20x (CR26) alignment** with typed KSI evaluation, historical metrics retention, COSAiS overlay ingestion, protocol-owned compliance catalogs, persisted demo evidence, and fail-closed independent demo-run verification
 - **EnrollmentCoordinator** replacing the scattered CLI enrollment transport (`BootstrapWithURL`/`CLIEnroll`/`ReEnroll`/`EnrollWithGateway`/`AutoRenewCertificate`) with a single state machine owning the enrollment lifecycle
 - **Human-approved CLI recovery flow** for new CLIs against an existing gateway, using a one-time approval (browser Console SPA or mTLS-enrolled CLI via `g8e auth approve-recovery`) and opaque proof-of-possession token
 - **mTLS-protected CLI certificate rotation endpoint** enabling in-band certificate renewal without re-enrollment
@@ -713,7 +712,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **PKI Controller** | `internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
 | **Audit Store** | `internal/services/storage/audit_store.go` | Searchable receipt columns, complete canonical receipt persistence and export, audit logging, encryption, retention |
 | **Commitment Ledger** | `internal/services/storage/commitment_ledger.go` | Atomic insertion-ordered signed hash chain and durable receipt linkage |
-| **Receipt Protocol** | `protocol/action_receipt.go`, `protocol/python/g8e/receipts.py`, `protocol/vectors/` | Cross-language canonical receipt and persistence-attestation verification |
+| **Receipt Protocol** | `protocol/action_receipt_canonicalization_test.go`, `protocol/python/g8e/receipts.py`, `protocol/vectors/` | Cross-language canonical receipt and persistence-attestation verification |
 | **Reporting Verification** | `internal/services/reporting/verification.go` | Receipt signatures, persistence attestations, commitment signatures and columns, cross-links, mutation linkage, and Git Merkle roots |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
@@ -727,10 +726,12 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **MCP Gateway ThreatScanner** | `internal/services/mcp/gateway.go` | Threat scanning delegation and audit event recording |
 | **KSI Catalog** | `docs/reference/ksi-catalog.json` | Typed per-KSI model with 31 KSIs across 10 categories |
 | **KSI Evaluator** | `internal/services/compliance/ksi_evaluator.go` | Binary KSI status derivation from live audit state |
-| **OSCAL Exporter** | `internal/services/compliance/oscal.go` | OSCAL component-definition and assessment-results generation |
+| **OSCAL Renderer Model** | `internal/services/compliance/oscal.go` | Typed OSCAL component-definition and assessment-results generation retained for the proof-backed bundle renderer |
 | **KSI History Store** | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
 | **COSAiS Overlay Loader** | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
-| **Compliance CLI** | `internal/cli/cmd/compliance.go` | `compliance export`, `ksi`, `ksi-history`, and `overlay` subcommands |
+| **Compliance Catalogs** | `protocol/constants/compliance/`, `internal/services/compliance/catalog/` | Digest-verified assertion, framework, crosswalk, and demo-scenario definitions with fail-closed validation |
+| **Demo Evidence Verifier** | `internal/services/compliance/evidence/`, `internal/cli/cmd/compliance_demo_run.go` | Read-only verification of persisted demo manifests, scenario results, provenance, content-addressed artifacts, signatures, protocol chains, state observations, and healthcare threshold metrics |
+| **Compliance CLI** | `internal/cli/cmd/compliance.go` | `ksi`, `ksi-history`, `overlay`, and `demo-run verify` subcommands |
 | **Log Service** | `internal/services/logging/log_service.go` | Platform logging lifecycle, streaming file append and read |
 | **Enrollment Coordinator** | `internal/cli/auth/enrollment.go` | CLI enrollment state machine for browser and headless flows |
 | **CLI Recovery Controller** | `internal/services/gateway/cli_recovery_controller.go` | CLI recovery approval via browser and mTLS endpoints |
@@ -751,7 +752,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 | **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment ordering, signatures and structured columns, receipt signatures and persistence attestations, receipt cross-links, mutation linkage, and Git Merkle roots |
 | **Logging Tests** | `internal/services/logging/*_test.go` | LogService, handler, formatting, and stream file tests |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
-| **Compliance Tests** | `internal/services/compliance/*_test.go` | KSI model, evaluator, OSCAL exporter, history store, overlay loader (92.7% coverage) |
+| **Compliance Tests** | `internal/services/compliance/*_test.go`, `internal/services/compliance/catalog/*_test.go`, `internal/services/compliance/evidence/*_test.go`, `internal/cli/cmd/compliance_demo_run_verify_test.go` | KSI model, evaluator, OSCAL model, history store, overlay loader, canonical catalogs, crosswalk contracts, assessment validation, demo evidence persistence, and fail-closed verifier tamper cases |
 
 ---
 
@@ -804,6 +805,7 @@ For specific compliance questions or audit support, contact:
 | 2.0.0 | 2026-08-25 | Lateralus Labs | Updated platform version to v2.0.0; documented polyglot monorepo reunification shipping Go platform, in-tree Python ensemble (`ensemble/`), Node.js dashboard (`dashboard/`), unified Docker compose orchestration, and updated test suite metrics |
 | 2.1.0 | 2026-08-30 | Lateralus Labs | Added deterministic stage-evidence receipt binding, signed durable-persistence attestations, atomic signed commitment chaining, full canonical receipt persistence and export, cross-language offline verification, and expanded code and test evidence |
 | 2.1.2 | 2026-08-31 | Lateralus Labs | Added ratify posture with L1/L3 enforcement and audited L2, clarified posture-required fail-closed verification, and reconciled posture-dependent passkey and consensus requirements |
+| 2.1.3 | 2026-09-02 | Lateralus Labs | Added protocol-owned compliance catalogs and records, persisted typed evidence across the healthcare, finance, DHS, and FedRAMP demos, and read-only fail-closed demo-run verification; reconciled OSCAL CLI availability and proof-backed bundle limitations |
 
 ---
 

@@ -11,8 +11,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,10 +24,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancecatalog "github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
+	"github.com/g8e-ai/g8e/v2/internal/uuid"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // demoVerbose controls demo output verbosity. When false (default), step-by-step
@@ -57,12 +65,20 @@ var demoEmitter DemoEmitter
 
 // DemoEmitter translates demo scenario events into TUI messages.
 // When --tui is not active, demoEmitter is nil and all methods are no-ops.
+type demoProgram interface {
+	Run() (tea.Model, error)
+	Send(tea.Msg)
+}
+
 type DemoEmitter struct {
-	program *tea.Program
+	program demoProgram
 }
 
 // NewDemoEmitter creates a DemoEmitter backed by the given bubbletea program.
 func NewDemoEmitter(p *tea.Program) *DemoEmitter {
+	if p == nil {
+		return &DemoEmitter{}
+	}
 	return &DemoEmitter{program: p}
 }
 
@@ -577,13 +593,18 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	}
 }
 
-// demoGatewayHTTPPort maps each demo org to its gateway HTTP discovery port,
+// demoGatewayPort maps each demo org to its gateway HTTP discovery and HTTPS/mTLS ports,
 // used for the platform enrollment instructions.
-var demoGatewayHTTPPort = map[string]string{
-	constants.DemosOrgHealthcare: "8081",
-	constants.DemosOrgFinance:    "8082",
-	constants.DemosOrgDHS:        "8087",
-	constants.DemosOrgFedRAMP:    "8088",
+type demoGatewayPort struct {
+	http  string
+	https string
+}
+
+var demoGatewayPorts = map[string]demoGatewayPort{
+	constants.DemosOrgHealthcare: {http: "8081", https: "8444"},
+	constants.DemosOrgFinance:    {http: "8082", https: "8445"},
+	constants.DemosOrgDHS:        {http: "8087", https: "8450"},
+	constants.DemosOrgFedRAMP:    {http: "8088", https: "8451"},
 }
 
 // demoOperatorContainer maps each demo org to its operator container name,
@@ -600,7 +621,7 @@ var demoOperatorContainer = map[string]string{
 // users, so platform workloads (operator and its dependents) stay not-ready
 // until the owner enrolls and approves their platform enrollment requests.
 func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
-	port, ok := demoGatewayHTTPPort[org]
+	ports, ok := demoGatewayPorts[org]
 	if !ok {
 		return
 	}
@@ -611,13 +632,13 @@ func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
 	cmd.Println("  Complete the enrollment flow:")
 	cmd.Println()
 	cmd.Println("  1. Enroll the first owner (creates CLI mTLS credentials):")
-	cmd.Printf("     ./g8e auth enroll user -e localhost:%s\n", port)
+	cmd.Printf("     ./g8e auth enroll user -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  2. List pending platform enrollment requests:")
-	cmd.Println("     ./g8e auth pending-platform-enrollments")
+	cmd.Printf("     ./g8e auth pending-platform-enrollments -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  3. Approve each request by ID (operator first, then dependents):")
-	cmd.Println("     ./g8e auth approve-platform-enrollment <request-id> --yes")
+	cmd.Printf("     ./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  4. Wait for workload health:")
 	cmd.Printf("     g8e demos status %s\n", org)
@@ -1073,6 +1094,10 @@ var scenarioCounts = map[string]int{
 }
 
 func demosRunCmd() *cobra.Command {
+	return demosRunCmdWithConfig(newFileSvc)
+}
+
+func demosRunCmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var useTUI bool
 	cmd := &cobra.Command{
 		Use:   "run <org> [scenario]",
@@ -1100,7 +1125,11 @@ Available scenarios:
     4 - Gateway Audit Vault Destruction Blocked (CR-26)`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDemosRun(cmd, args, useTUI)
+			fileSvc, err := fileSvcFactory("", slog.Default())
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
+			}
+			return runDemosRun(cmd, args, useTUI, fileSvc)
 		},
 	}
 
@@ -1110,7 +1139,7 @@ Available scenarios:
 	return cmd
 }
 
-func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
+func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.RuntimeFileService) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: demo environment name", constants.ErrMissingRequiredField)
 	}
@@ -1158,52 +1187,104 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 		cmd.Printf("this command. Run 'g8e demos status %s' to check readiness.\n", org)
 	}
 
+	// Build and persist the typed DemoManifest before scenario execution so the
+	// run's provenance is recorded even if a scenario fails. Manifest creation
+	// or persistence failure joins any scenario error but does not block
+	// scenario execution; the evidence-grade scenario results remain the
+	// authoritative per-scenario record.
+	startedAt := time.Now().UTC()
+	runID := newDemoRunID(org, startedAt)
+	manifestErr := buildAndPersistDemoManifest(cmd.Context(), fileSvc, org, demoDir, runID, startedAt)
+
 	if useTUI {
-		return runDemosWithTUI(cmd, org, demoDir, args)
+		err := runDemosWithTUI(cmd, fileSvc, org, demoDir, runID, args)
+		return errors.Join(err, manifestErr)
 	}
 
 	if len(args) >= 2 {
-		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
+		err := runScenario(cmd.Context(), fileSvc, org, demoDir, runID, args[1]) //nolint:gosec // length checked above
+		return errors.Join(err, manifestErr)
 	}
 
-	return runAllScenarios(cmd, org, demoDir)
+	err = runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir, runID)
+	return errors.Join(err, manifestErr)
+}
+
+// buildAndPersistDemoManifest constructs a typed DemoManifest for the demo org
+// and persists it under the runtime compliance evidence tree. It returns any
+// error so the caller can join it with scenario execution errors.
+func newDemoRunID(org string, startedAt time.Time) string {
+	return fmt.Sprintf("%s-run-%s-%s", org, startedAt.Format("20060102T150405Z"), uuid.NewString())
+}
+
+func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID string, generatedAt time.Time) error {
+	orgCfg, ok := demoOrgConfigs[org]
+	if !ok {
+		return nil
+	}
+	manifest, err := buildDemoManifest(org, orgCfg.scopeID, runID, generatedAt, demoDir)
+	if err != nil {
+		return fmt.Errorf("build demo manifest: %w", err)
+	}
+	if err := persistDemoManifest(ctx, fileSvc, manifest); err != nil {
+		return fmt.Errorf("persist demo manifest: %w", err)
+	}
+	return nil
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
 // demoEmitter so scenario code can send events, runs the requested scenarios
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
-// exits, it waits up to 5 seconds for the scenario goroutine to finish so
-// errors are not silently lost.
-func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
+// exits, it cancels and waits for scenario execution so errors are not lost.
+func runDemosWithTUI(cmd *cobra.Command, fileSvc fs.RuntimeFileService, org, demoDir, runID string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
 		NetLabel: "AIR-GAP",
 	})
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(cmd.Context()))
 
 	demoEmitter = *NewDemoEmitter(p)
 	defer func() { demoEmitter = DemoEmitter{} }()
 
+	return runDemosWithTUILifecycle(cmd.Context(), p, func(ctx context.Context) error {
+		if len(args) >= 2 {
+			return runScenario(ctx, fileSvc, org, demoDir, runID, args[1])
+		}
+		return runAllScenarios(ctx, fileSvc, cmd, org, demoDir, runID)
+	})
+}
+
+func runDemosWithTUILifecycle(ctx context.Context, program demoProgram, runScenario func(context.Context) error) error {
+	scenarioCtx, cancelScenario := context.WithCancel(ctx)
+	defer cancelScenario()
+
 	scenarioErrCh := make(chan error, 1)
 	go func() {
-		if len(args) >= 2 {
-			scenarioErrCh <- runScenario(org, demoDir, args[1])
-		} else {
-			scenarioErrCh <- runAllScenarios(cmd, org, demoDir)
+		err := runScenario(scenarioCtx)
+		status := tui.ScenarioSucceeded
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			status = tui.ScenarioCancelled
+		} else if err != nil {
+			status = tui.ScenarioFailed
 		}
+		program.Send(tui.ScenarioCompleteMsg{Status: status})
+		scenarioErrCh <- err
 	}()
 
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("tui: run: %w", err)
+	_, tuiErr := program.Run()
+	cancelScenario()
+	scenarioErr := <-scenarioErrCh
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDemoScenarioCancelled, ctxErr)
 	}
-
-	select {
-	case err := <-scenarioErrCh:
-		return err
-	case <-time.After(5 * time.Second):
-		return nil
+	if tuiErr != nil {
+		return fmt.Errorf("tui: run: %w", tuiErr)
 	}
+	if errors.Is(scenarioErr, context.Canceled) {
+		return fmt.Errorf("%w: %w", constants.ErrDemoScenarioCancelled, scenarioErr)
+	}
+	return scenarioErr
 }
 
 func isDemoRunning(demoDir, composePath string) bool {
@@ -1216,7 +1297,21 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
+// scenarioRunnerFunc is the signature of runScenarioWithResults, extracted as a
+// function type so the all-scenarios loop can be tested with a stub runner.
+type scenarioRunnerFunc func(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error)
+
+// runAllScenariosWithRunner runs every scenario for the given org through the
+// provided runner function, preserving all results even when individual
+// scenarios error. Context cancellation stops the loop immediately; all other
+// errors are accumulated and returned after every scenario has been attempted
+// so partial-failure results remain in the printed table and the summary
+// banner. Non-nil results from errored scenarios are retained so persistence
+// failures and validation errors do not discard evidence that was collected.
+func runAllScenariosWithRunner(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string, runner scenarioRunnerFunc) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	count, ok := scenarioCounts[org]
 	if !ok {
 		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1225,43 +1320,146 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	cmd.Printf("\n%s\n  Running all %s demo scenarios\n%s\n",
 		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 
-	results := make([]scenarioResult, 0, count)
+	results := make([]*compliancev1.DemoScenarioResult, 0, count)
+	var runErr error
 
 	for i := 1; i <= count; i++ {
-		scenarioNum := fmt.Sprintf("%d", i)
-		result, err := runScenarioWithResult(org, demoDir, scenarioNum)
-		if err != nil {
-			return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return errors.Join(runErr, ctxErr)
 		}
-		results = append(results, result)
+		scenarioNum := fmt.Sprintf("%d", i)
+		scenarioResults, err := runner(ctx, fileSvc, org, demoDir, runID, scenarioNum)
+		if err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		for _, r := range scenarioResults {
+			if r != nil {
+				results = append(results, r)
+			}
+		}
 	}
 
 	if org == constants.DemosOrgFedRAMP {
-		if !runFedRAMPKSIEvidence(demoDir) {
-			results = append(results, scenarioResult{
-				number:  "KSI",
-				name:    "KSI Evidence Export",
-				status:  "FAIL",
-				metrics: "snapshot emission or verification failed",
-			})
+		if !runFedRAMPKSIEvidence(ctx, demoDir) {
+			results = append(results, newDemoScenarioResult("KSI", "KSI Evidence Export", demoStatusFailed, "snapshot emission or verification failed"))
 		} else {
-			results = append(results, scenarioResult{
-				number:  "KSI",
-				name:    "KSI Evidence Export",
-				status:  "PASS",
-				metrics: "snapshots emitted and verified",
-			})
+			results = append(results, newDemoScenarioResult("KSI", "KSI Evidence Export", demoStatusPassed, "snapshots emitted and verified"))
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(runErr, err)
 	}
 
 	printResultsTable(cmd, org, results)
 
+	if summaryErr := summarizeScenarioResults(cmd, org, results); summaryErr != nil {
+		return errors.Join(runErr, summaryErr)
+	}
+	return runErr
+}
+
+func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string) error {
+	return runAllScenariosWithRunner(ctx, fileSvc, cmd, org, demoDir, runID, runScenarioWithResults)
+}
+
+// summarizeScenarioResults prints the pass/fail/skip summary banner for a demo
+// run and returns ErrDemoScenarioFailed when any scenario result is FAIL. All
+// result rows are retained in the printed table regardless of outcome; this
+// only determines the command's exit status so automation cannot treat a failed
+// run as a gate pass.
+// Demo scenario status values matching the protocol-owned DemoScenarioResult
+// status field. These replace the legacy uppercase "PASS"/"FAIL"/"SKIP" strings.
+const (
+	demoStatusPassed  = "passed"
+	demoStatusFailed  = "failed"
+	demoStatusSkipped = "skipped"
+)
+
+// newDemoScenarioResult constructs a minimal typed DemoScenarioResult populated
+// with the display fields used by the results table and summary banner. The
+// full evidence-grade fields (assertion refs, framework refs, step results,
+// receipt/state refs) are populated by evidence-grade scenario runners.
+func newDemoScenarioResult(number, title, status, metrics string) *compliancev1.DemoScenarioResult {
+	return &compliancev1.DemoScenarioResult{
+		DisplayNumber:  number,
+		Title:          title,
+		Status:         status,
+		MetricsSummary: metrics,
+	}
+}
+
+func loadDemoScenarioDefinition(scenarioID string) (*compliancev1.DemoScenarioDefinition, error) {
+	assertions, frameworks, _, err := compliancecatalog.LoadCanonicalCatalogs()
+	if err != nil {
+		return nil, fmt.Errorf("load canonical compliance catalogs: %w", err)
+	}
+	scenarios, err := compliancecatalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	if err != nil {
+		return nil, fmt.Errorf("load canonical demo scenario catalog: %w", err)
+	}
+	definition := compliancecatalog.FindDemoScenarioDefinition(scenarios, scenarioID, "1.0.0")
+	if definition == nil {
+		return nil, fmt.Errorf("%w: %s@1.0.0", constants.ErrUnresolvedReference, scenarioID)
+	}
+	return definition, nil
+}
+
+func newDemoEvidenceScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, demoID, scopeID, runID, metricsSummary string) *compliancev1.DemoScenarioResult {
+	return &compliancev1.DemoScenarioResult{
+		ResultId:             fmt.Sprintf("%s:%s", runID, definition.ScenarioId),
+		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.ScenarioId, Version: definition.ScenarioVersion},
+		DemoId:               demoID,
+		ScopeId:              scopeID,
+		RunId:                runID,
+		StartedAt:            timestamppb.New(startedAt),
+		Status:               demoStatusPassed,
+		AssertionRefs:        cloneVersionedRefs(definition.AssertionRefs),
+		FrameworkControlRefs: cloneFrameworkControlRefs(definition.FrameworkControlRefs),
+		DisplayNumber:        definition.DisplayNumber,
+		Title:                definition.Title,
+		MetricsSummary:       metricsSummary,
+	}
+}
+
+// cloneVersionedRefs returns a deep copy of the given versioned references so
+// callers cannot mutate the package-level canonical slices.
+func cloneVersionedRefs(refs []*compliancev1.VersionedReference) []*compliancev1.VersionedReference {
+	clone := make([]*compliancev1.VersionedReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.VersionedReference{Id: ref.Id, Version: ref.Version}
+	}
+	return clone
+}
+
+// cloneFrameworkControlRefs returns a deep copy of the given framework control
+// references so callers cannot mutate the package-level canonical slices.
+func cloneFrameworkControlRefs(refs []*compliancev1.FrameworkControlReference) []*compliancev1.FrameworkControlReference {
+	clone := make([]*compliancev1.FrameworkControlReference, len(refs))
+	for i, ref := range refs {
+		clone[i] = &compliancev1.FrameworkControlReference{
+			FrameworkRef: &compliancev1.VersionedReference{Id: ref.FrameworkRef.Id, Version: ref.FrameworkRef.Version},
+			ControlId:    ref.ControlId,
+		}
+	}
+	return clone
+}
+
+// demoResultFailureError returns ErrDemoScenarioFailed when the typed result
+// has a failed status, or nil for passing, skipped, or other non-failing statuses.
+func demoResultFailureError(result *compliancev1.DemoScenarioResult, org string) error {
+	if result == nil || result.Status != demoStatusFailed {
+		return nil
+	}
+	return fmt.Errorf("%w: %s scenario %s", constants.ErrDemoScenarioFailed, org, result.DisplayNumber)
+}
+
+func summarizeScenarioResults(cmd *cobra.Command, org string, results []*compliancev1.DemoScenarioResult) error {
 	hasFail, hasSkip := false, false
 	for _, r := range results {
-		switch r.status {
-		case "FAIL":
+		switch r.Status {
+		case demoStatusFailed:
 			hasFail = true
-		case "SKIP":
+		case demoStatusSkipped:
 			hasSkip = true
 		}
 	}
@@ -1270,6 +1468,7 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	case hasFail:
 		cmd.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+		return fmt.Errorf("%w: %s", constants.ErrDemoScenarioFailed, org)
 	case hasSkip:
 		cmd.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
@@ -1281,31 +1480,52 @@ func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	return nil
 }
 
-type scenarioResult struct {
-	number  string
-	name    string
-	status  string
-	metrics string
+func runScenario(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) error {
+	results, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, runID, scenario)
+	if err != nil {
+		return err
+	}
+	for _, result := range results {
+		if err := demoResultFailureError(result, org); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func runScenario(org, demoDir, scenario string) error {
-	_, err := runScenarioWithResult(org, demoDir, scenario)
-	return err
-}
-
-func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
+func runScenarioWithResults(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+	var results []*compliancev1.DemoScenarioResult
+	var err error
 	switch org {
 	case constants.DemosOrgHealthcare:
-		return runHealthcareScenario(demoDir, scenario)
+		var result *compliancev1.DemoScenarioResult
+		result, err = runHealthcareScenario(ctx, fileSvc, demoDir, runID, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgFinance:
-		return runFinanceScenario(demoDir, scenario)
+		var result *compliancev1.DemoScenarioResult
+		result, err = runFinanceScenario(ctx, fileSvc, demoDir, runID, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	case constants.DemosOrgDHS:
-		return runDHSScenario(demoDir, scenario)
+		results, err = runDHSScenario(ctx, fileSvc, demoDir, runID, scenario)
 	case constants.DemosOrgFedRAMP:
-		return runFedRAMPScenario(demoDir, scenario)
+		var result *compliancev1.DemoScenarioResult
+		result, err = runFedRAMPScenario(ctx, fileSvc, demoDir, runID, scenario)
+		results = []*compliancev1.DemoScenarioResult{result}
 	default:
-		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
+		err = fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return results, ctxErr
+	}
+	for _, result := range results {
+		if persistErr := persistStateObservationEvidenceBodies(ctx, fileSvc, result); persistErr != nil {
+			err = errors.Join(err, persistErr)
+		}
+		if persistErr := persistDemoScenarioResult(ctx, fileSvc, result); persistErr != nil {
+			err = errors.Join(err, persistErr)
+		}
+	}
+	return results, err
 }
 
 // titleCase capitalizes the first letter of each word in s, leaving the rest lowercase.
@@ -1319,7 +1539,7 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult) {
+func printResultsTable(cmd *cobra.Command, org string, results []*compliancev1.DemoScenarioResult) {
 	cmd.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
 		strings.Repeat("═", 60), titleCase(org), strings.Repeat("═", 60))
 	cmd.Println()
@@ -1332,7 +1552,7 @@ func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult)
 	// Print rows
 	for _, r := range results {
 		cmd.Printf("%-10s\t%-50s\t%-12s\t%s\n",
-			r.number, r.name, r.status, r.metrics)
+			r.DisplayNumber, r.Title, strings.ToUpper(r.Status), r.MetricsSummary)
 	}
 	cmd.Println()
 }
@@ -1340,11 +1560,11 @@ func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult)
 // demoStep prints a labeled command and runs it, streaming output inline.
 // In non-verbose mode, output is suppressed. Always returns error if command
 // fails, but only stops execution if fatal is true.
-func demoStep(demoDir, label string, fatal bool, args ...string) error {
+func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
-	c := exec.Command(args[0], args[1:]...)
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
 	c.Dir = demoDir
 	if demoVerbose {
 		c.Stdout = os.Stdout
@@ -1366,12 +1586,142 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	return nil
 }
 
+// harnessResult is the typed JSON output emitted by `demos scenarios run --json`.
+// The parent demo runner parses this to extract authoritative attempt, execution,
+// transaction, and receipt identities retained by the child harness inside the container.
+type harnessResult struct {
+	Name             string                      `json:"name"`
+	Title            string                      `json:"title"`
+	Persona          string                      `json:"persona"`
+	RequiresPosture  string                      `json:"requires_posture"`
+	StartedAt        time.Time                   `json:"started_at"`
+	DurationMS       int64                       `json:"duration_ms"`
+	RunID            string                      `json:"run_id,omitempty"`
+	ScenarioID       string                      `json:"scenario_id,omitempty"`
+	AttemptIDs       []string                    `json:"attempt_ids,omitempty"`
+	ExecutionIDs     []string                    `json:"execution_ids,omitempty"`
+	TransactionIDs   []string                    `json:"transaction_ids,omitempty"`
+	InvestigationIDs []string                    `json:"investigation_ids,omitempty"`
+	Receipts         []harnessReceipt            `json:"receipts,omitempty"`
+	ReceiptEvidence  []scenarios.ReceiptEvidence `json:"receipt_evidence,omitempty"`
+	Notes            []string                    `json:"notes,omitempty"`
+	OK               bool                        `json:"ok"`
+	Err              string                      `json:"error,omitempty"`
+}
+
+type harnessReceipt struct {
+	ExecutionID     string `json:"execution_id"`
+	TransactionID   string `json:"transaction_id"`
+	TransactionHash string `json:"transaction_hash"`
+	SignerKeyID     string `json:"signer_key_id"`
+	Signature       string `json:"signature"`
+	InvestigationID string `json:"investigation_id"`
+}
+
+// runHarnessWithJSON runs the harness command with --json and parses the typed
+// result from stdout. It returns the parsed result and the command error
+// separately so the caller can correlate authoritative identity even when the
+// harness exits nonzero (e.g. a blocked L1 scenario that still emits a result).
+func runHarnessWithJSON(ctx context.Context, demoDir, label string, args []string) ([]harnessResult, error) {
+	if demoVerbose {
+		fmt.Printf("  $ %s\n", strings.Join(args, " "))
+	}
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
+	c.Dir = demoDir
+	var stdout strings.Builder
+	c.Stdout = &stdout
+	if demoVerbose {
+		c.Stderr = os.Stderr
+	} else {
+		c.Stderr = io.Discard
+	}
+	runErr := c.Run()
+	if demoVerbose {
+		fmt.Println()
+	}
+	raw := strings.TrimSpace(stdout.String())
+	if raw == "" {
+		return nil, fmt.Errorf("%s: no JSON output: %w", label, runErr)
+	}
+	var results []harnessResult
+	if err := json.Unmarshal([]byte(raw), &results); err != nil {
+		return nil, fmt.Errorf("%s: decode harness JSON: %w", label, err)
+	}
+	return results, runErr
+}
+
+// applyHarnessAuthoritativeIdentity replaces synthetic transaction and receipt
+// references on the DemoScenarioResult with the authoritative values retained
+// by the child harness. It fails closed: if the harness emitted no transaction
+// IDs or receipts, the result keeps its existing references and the caller is
+// expected to mark the step as failed.
+func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
+	if hr == nil || len(hr.AttemptIDs) == 0 || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.InvestigationIDs) == 0 || len(hr.Receipts) == 0 {
+		return false
+	}
+	if len(hr.ReceiptEvidence) != len(hr.Receipts) {
+		return false
+	}
+	receiptRefs := make([]string, 0, len(hr.ReceiptEvidence)*2)
+	protocolChainRefs := make([]string, 0, len(hr.ReceiptEvidence))
+	for _, rcpt := range hr.Receipts {
+		var matched *scenarios.ReceiptEvidence
+		for i := range hr.ReceiptEvidence {
+			if hr.ReceiptEvidence[i].TransactionID == rcpt.TransactionID {
+				matched = &hr.ReceiptEvidence[i]
+				break
+			}
+		}
+		if matched == nil {
+			return false
+		}
+		bound, err := scenarios.BuildReceiptEvidence(&scenarios.Result{
+			RunID: hr.RunID, ScenarioID: hr.ScenarioID, AttemptIDs: hr.AttemptIDs, ExecutionIDs: hr.ExecutionIDs,
+			TransactionIDs: hr.TransactionIDs, InvestigationIDs: hr.InvestigationIDs,
+		}, clientpkg.Receipt{
+			ExecutionID: rcpt.ExecutionID, TransactionID: rcpt.TransactionID, TransactionHash: rcpt.TransactionHash,
+			SignerKeyID: rcpt.SignerKeyID, Signature: rcpt.Signature, InvestigationID: rcpt.InvestigationID,
+		}, matched.Receipt)
+		if err != nil || bound.ReceiptRef != matched.ReceiptRef || bound.PersistenceRef != matched.PersistenceRef {
+			return false
+		}
+		if matched.ProtocolChainGrade == nil || !matched.ProtocolChainGrade.Verified || matched.ProtocolChainGrade.StageEvidenceRef == "" {
+			return false
+		}
+		receiptRefs = append(receiptRefs, bound.ReceiptRef, bound.PersistenceRef)
+		protocolChainRefs = append(protocolChainRefs, matched.ProtocolChainGrade.StageEvidenceRef)
+	}
+	result.AttemptIds = append(result.AttemptIds, hr.AttemptIDs...)
+	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
+	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
+	result.InvestigationIds = append(result.InvestigationIds, hr.InvestigationIDs...)
+	result.ReceiptRefs = append(result.ReceiptRefs, receiptRefs...)
+	result.ProtocolChainRefs = append(result.ProtocolChainRefs, protocolChainRefs...)
+	return true
+}
+
+// applyAndPersistHarnessIdentity applies authoritative harness identity to the
+// result and persists the canonical receipt and persistence bodies as
+// resolvable runtime evidence artifacts. It returns true only when both
+// operations succeed. Callers should set hasErrors = true when it returns false
+// and the harness was expected to emit authoritative identity.
+func applyAndPersistHarnessIdentity(ctx context.Context, fileSvc fs.RuntimeFileService, runID string, result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
+	if !applyHarnessAuthoritativeIdentity(result, hr) {
+		return false
+	}
+	if persistErr := persistReceiptEvidenceBodies(ctx, fileSvc, runID, hr.ReceiptEvidence); persistErr != nil {
+		fmt.Printf("  (receipt evidence persist failed for %s: %v)\n", hr.ScenarioID, persistErr)
+		return false
+	}
+	return true
+}
+
 // demoStepHTTP runs a curl command that writes the HTTP status code to stdout
 // (via -o /dev/null -w "%{http_code}") and validates the response against the
 // single expected status code. Unlike demoStep, this checks the actual HTTP
 // response status, not just the curl exit code.
-func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) error {
-	return demoStepHTTPAny(demoDir, label, []string{expectedCode}, args...)
+func demoStepHTTP(ctx context.Context, demoDir, label string, expectedCode string, args ...string) error {
+	return demoStepHTTPAny(ctx, demoDir, label, []string{expectedCode}, args...)
 }
 
 // demoStepHTTPAny runs a curl command that writes the HTTP status code to stdout
@@ -1380,11 +1730,11 @@ func demoStepHTTP(demoDir, label string, expectedCode string, args ...string) er
 // multiple codes (e.g. a passkey challenge endpoint that returns 200 for a
 // valid body but 400 for a malformed one — both prove the endpoint is
 // reachable and enforcing input validation).
-func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...string) error {
+func demoStepHTTPAny(ctx context.Context, demoDir, label string, expectedCodes []string, args ...string) error {
 	if demoVerbose {
 		fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	}
-	c := exec.Command(args[0], args[1:]...)
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
 	c.Dir = demoDir
 	var stdout strings.Builder
 	c.Stdout = &stdout
@@ -1411,9 +1761,9 @@ func demoStepHTTPAny(demoDir, label string, expectedCodes []string, args ...stri
 // demoScenarioStep prints the step description, runs the command via demoStep,
 // prints pass/fail, and returns whether it succeeded. This extracts the
 // repetitive print → demoStep → error pattern from each scenario case block.
-func demoScenarioStep(demoDir, desc string, cmd []string) bool {
+func demoScenarioStep(ctx context.Context, demoDir, desc string, cmd []string) bool {
 	demoPrintf("  ── %s ──\n", desc)
-	if err := demoStep(demoDir, desc, false, cmd...); err != nil {
+	if err := demoStep(ctx, demoDir, desc, false, cmd...); err != nil {
 		fmt.Printf("  (%s failed)\n\n", desc)
 		return false
 	}
@@ -1423,34 +1773,26 @@ func demoScenarioStep(demoDir, desc string, cmd []string) bool {
 // demoStepWarn runs a non-critical demoStep and prints a warning on failure
 // without setting hasErrors. Use for supplementary verification steps whose
 // failure does not invalidate the scenario result.
-func demoStepWarn(demoDir, label string, args ...string) {
-	if err := demoStep(demoDir, label, false, args...); err != nil {
+func demoStepWarn(ctx context.Context, demoDir, label string, args ...string) {
+	if err := demoStep(ctx, demoDir, label, false, args...); err != nil {
 		fmt.Printf("  (warning: %s failed)\n", label)
 	}
-}
-
-type twoLayerScenarioConfig struct {
-	scenarioName      string
-	metrics           string
-	httpPort          string
-	harnessScenario   string
-	provesDescription string
-	step3Label        string
-	step3Description  string
-	passMessage       string
 }
 
 // harnessConfig holds the fixed connection parameters for building a docker
 // compose exec/run command for a demos scenarios run. Centralising these in a
 // struct avoids positional-argument drift across demos.
 type harnessConfig struct {
-	Container string
-	MTLSURL   string
-	PublicURL string
-	CertPath  string
-	KeyPath   string
-	CAPath    string
-	UseRun    bool // true for `docker compose run --rm`, false for `exec`
+	Container  string
+	MTLSURL    string
+	PublicURL  string
+	CertPath   string
+	KeyPath    string
+	CAPath     string
+	RunID      string
+	ScenarioID string
+	UseRun     bool // true for `docker compose run --rm`, false for `exec`
+	JSON       bool // true emits typed JSON results to stdout for parent parsing
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
@@ -1466,105 +1808,49 @@ func defaultHarnessConfig(container string) harnessConfig {
 	}
 }
 
+func harnessConfigForResult(container string, result *compliancev1.DemoScenarioResult) harnessConfig {
+	return bindHarnessConfig(defaultHarnessConfig(container), result)
+}
+
+func bindHarnessConfig(cfg harnessConfig, result *compliancev1.DemoScenarioResult) harnessConfig {
+	cfg.RunID = result.GetRunId()
+	cfg.ScenarioID = result.GetScenarioRef().GetId()
+	return cfg
+}
+
 // harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
-		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "demos", "scenarios", "run"}
+		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps"}
 	} else {
-		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "demos", "scenarios", "run"}
+		cmd = []string{"docker", "compose", "exec", "-T"}
 	}
+	if cfg.RunID != "" {
+		cmd = append(cmd, "-e", string(constants.EnvVar.DemoRunID)+"="+cfg.RunID)
+	}
+	scenarioID := cfg.ScenarioID
+	if scenarioID == "" {
+		scenarioID = scenario
+	}
+	cmd = append(cmd, "-e", string(constants.EnvVar.DemoScenarioID)+"="+scenarioID)
+	cmd = append(cmd, cfg.Container)
+	if !cfg.UseRun {
+		cmd = append(cmd, "/g8e")
+	}
+	cmd = append(cmd, "demos", "scenarios", "run")
 	cmd = append(cmd,
 		"--mtls-url", cfg.MTLSURL,
 		"--public-url", cfg.PublicURL,
 		"--cert", cfg.CertPath,
 		"--key", cfg.KeyPath,
 		"--ca", cfg.CAPath,
-		scenario,
 	)
+	if cfg.JSON {
+		cmd = append(cmd, "--json")
+	}
+	cmd = append(cmd, scenario)
 	return cmd
-}
-
-func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
-	var result scenarioResult
-	var hasErrors bool
-
-	result.number = "1"
-	result.name = cfg.scenarioName
-	result.status = "PASS"
-	result.metrics = cfg.metrics
-
-	demoPrintf("\n%s\n", strings.Repeat("─", 60))
-	demoPrintf("  Scenario 1 — %s\n", cfg.scenarioName)
-	demoPrintln(strings.Repeat("─", 60))
-	demoPrintln()
-	demoPrintf("  PROVES: %s\n", cfg.provesDescription)
-	demoPrintln()
-
-	demoPrintln("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-	if err := demoStep(demoDir, "gateway health",
-		false,
-		"curl", "-s", "http://localhost:"+cfg.httpPort+"/api/v1/health",
-	); err != nil {
-		fmt.Println("  (gateway health check failed — is the demo running?)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintln("  ── Step 2: Verify operator enrollment (mTLS certs) ────────────")
-	if err := demoStep(demoDir, "enrollment check",
-		false,
-		"docker", "compose", "exec", "-T", "operator",
-		"test", "-f", constants.ContainerOperatorCert,
-	); err != nil {
-		fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintf("  ── Step 3: %s ───────\n", cfg.step3Label)
-	demoPrintf("  %s\n", cfg.step3Description)
-	demoPrintln()
-	hcfg := defaultHarnessConfig("agent-runtime")
-	hcfg.PublicURL = "http://g8e.local:" + cfg.httpPort
-	if err := demoStep(demoDir, cfg.harnessScenario+" via agent",
-		false,
-		harnessRun(cfg.harnessScenario, hcfg)...,
-	); err != nil {
-		fmt.Println("  (agent scenario failed)")
-		fmt.Println()
-		hasErrors = true
-	}
-
-	demoPrintln("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
-	if err := demoStep(demoDir, "audit tail",
-		false,
-		"docker", "compose", "logs", "observability", "--tail", "10",
-	); err != nil {
-		fmt.Println("  (audit tail failed)")
-	}
-
-	demoPrintln("  ── Step 5: Network isolation (supplementary proof) ───────────")
-	demoPrintln("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
-	demoPrintln()
-	if err := demoStep(demoDir, "network isolation",
-		false,
-		"docker", "compose", "exec", "-T", "bad-actor",
-		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
-	); err != nil {
-		fmt.Println("  (network isolation check failed)")
-	}
-
-	demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
-
-	if hasErrors {
-		result.status = "FAIL"
-		fmt.Printf("  [FAIL] Scenario 1 — One or more steps failed.\n")
-	} else {
-		fmt.Printf("  [PASS] %s\n", cfg.passMessage)
-	}
-
-	return result, nil
 }

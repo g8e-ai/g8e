@@ -14,9 +14,9 @@ The CLI exposes five typed arms:
 | --- | --- | --- | --- |
 | `direct` | Provider API only | none | no |
 | `ensemble_ungoverned` | Real g8ee chat pipeline without gateway governance | none | no |
-| `doctrine` | g8ee, gateway, and operator | L1 enforced; L2/L3 audited | yes |
-| `consensus` | g8ee, gateway, and operator | L1/L2 enforced; L3 audited | yes |
-| `notary` | g8ee, gateway, and operator | L1/L2/L3 enforced | yes |
+| `doctrine` | g8ee, gateway, and operator | L1 enforced; L2/L3 audited | when the turn emits an `ActionReceipt` |
+| `consensus` | g8ee, gateway, and operator | L1/L2 enforced; L3 audited | when the turn emits an `ActionReceipt` |
+| `notary` | g8ee, gateway, and operator | L1/L2/L3 enforced | when the turn emits an `ActionReceipt` |
 
 The posture-only comparisons are `consensus - doctrine` and `notary - consensus`. The ensemble orchestration comparison is `ensemble_ungoverned - direct`; a direct-versus-governed comparison combines orchestration and governance effects.
 
@@ -46,16 +46,21 @@ Create an owner-only evidence key file containing a random 32-byte key:
 {"version":1,"key_id":"eval-owner-1","key_b64":"<32-byte-base64>"}
 ```
 
-Run the CLI from `ensemble/evals/` through the locked environment. Governed and ensemble arms load the canonical local CLI identity through `./g8e auth context`; `--auth-project-root` identifies the project runtime containing that identity. The command returns `operator_session_id`, `cli_session_id`, `user_id`, `operator_id`, `client_cert`, and `client_key`. The certificate and key values are filesystem paths, not credential contents. g8ee validates the session tuple with the Gateway before admitting the request context.
+Run the CLI from `ensemble/evals/` through the locked environment. Governed and ensemble arms load the canonical local CLI identity through `g8e auth context`; `--auth-project-root` identifies the project runtime containing that identity, and `--g8e-cli` identifies the repository binary. Refresh the CLI identity after Operator enrollment so its session is bound to the active Operator session. The command returns `operator_session_id`, `cli_session_id`, `user_id`, `operator_id`, `client_cert`, and `client_key`. The certificate and key values are filesystem paths, not credential contents. g8ee validates the session tuple with the Gateway before admitting the request context. Set both trust-bundle variables explicitly when the eval working directory does not contain the project runtime; transport fails closed if either trust bundle is unavailable.
 
 ```bash
+REPO_ROOT="$PWD"
+./g8e auth refresh
+export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
 cd ensemble/evals
 uv sync --locked --extra test
 uv run g8e-evals run \
   --suite ifeval_subset \
   --arm doctrine \
   --g8ee-url http://localhost:8000 \
-  --auth-project-root ../.. \
+  --g8e-cli "${REPO_ROOT}/g8e" \
+  --auth-project-root "${REPO_ROOT}" \
   --evidence-key-file /path/to/owner-only-evidence-key.json
 ```
 
@@ -83,13 +88,13 @@ A report directory contains:
 
 The evidence key file is versioned JSON containing a key ID and exactly 32 bytes of base64-encoded key material. It must be a regular, non-symlink file with no group or other permission bits. The runner never embeds the key in the report. The `named_key_holders` policy means only principals explicitly given the corresponding key out of band can decrypt restricted evidence; deleting that external key makes the ciphertext unrecoverable, while retaining it requires the owner to protect and rotate it outside the bundle lifecycle.
 
-Verify receipts in an existing report bundle with:
+Verify receipts in an existing report bundle with a directory containing every producing actuator's `*Actuator_pub.pem` file:
 
 ```bash
-uv run g8e-evals verify-receipts <report-directory> --pki-dir <operator-pki-directory>
+uv run g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>
 ```
 
-`verify-receipts` parses every `ReceiptObservation` in `receipts.jsonl` and verifies both the canonical receipt signature and final persistence attestation against the supplied Warden public key. It exits non-zero when a parsed receipt fails verification. It does not validate the manifest and dataset hashes, decrypt restricted evidence, reconcile all stage or metric links, verify the commitment ledger, or establish trust in the supplied public key; complete offline report validation must perform those checks separately and fail closed on any missing or inconsistent record.
+`verify-receipts` derives a key ID from each discovered actuator public key, selects the key matching each receipt's `signer_key_id`, and verifies both the canonical receipt signature and final persistence attestation. It exits non-zero when no public keys are available, a receipt has no matching signer key, or a parsed receipt fails verification. A report with no bound receipts produces a zero-receipt result, not a receipt-verification pass; require a non-zero total, no missing keys, zero failures, and equal verified and total counts before making a receipt-verification claim. The command does not validate the manifest and dataset hashes, decrypt restricted evidence, reconcile all stage or metric links, verify the commitment ledger, or establish trust in the supplied public keys; complete offline report validation must perform those checks separately and fail closed on any missing or inconsistent record.
 
 ## Tests and Lint
 

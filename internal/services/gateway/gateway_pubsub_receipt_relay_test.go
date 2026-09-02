@@ -11,6 +11,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"log/slog"
@@ -113,6 +115,24 @@ func buildSignedReceiptEnvelope(t *testing.T, signerPriv ed25519.PrivateKey, key
 	require.NoError(t, err)
 	sig := ed25519.Sign(signerPriv, canonical)
 	receipt.Signature = hex.EncodeToString(sig)
+	var digestPayload bytes.Buffer
+	var count [4]byte
+	binary.BigEndian.PutUint32(count[:], 1)
+	digestPayload.Write(count[:])
+	binary.BigEndian.PutUint32(count[:], uint32(len(receipt.Signature)))
+	digestPayload.Write(count[:])
+	digestPayload.WriteString(receipt.Signature)
+	digest := sha256.Sum256(digestPayload.Bytes())
+	receipt.FinalPersistenceAttestation = &operatorv1.ReceiptPersistenceAttestation{
+		TransactionId:          transactionID,
+		ReceiptSignatureDigest: hex.EncodeToString(digest[:]),
+		PersistedAtUnixMs:      1700000000001,
+		AuditRecordId:          transactionID,
+		SignerKeyId:            keyID,
+	}
+	attestationPayload, err := governance.CanonicalizeReceiptPersistenceAttestation(receipt.FinalPersistenceAttestation)
+	require.NoError(t, err)
+	receipt.FinalPersistenceAttestation.Signature = hex.EncodeToString(ed25519.Sign(signerPriv, attestationPayload))
 
 	receiptBytes, err := proto.Marshal(receipt)
 	require.NoError(t, err)
@@ -230,6 +250,56 @@ func TestRelayActionReceipt_InvalidSignatureRejected(t *testing.T) {
 
 	assert.Empty(t, recorder.recorded(), "invalid signature must not be recorded")
 	assert.False(t, called, "invalid signature must not be fanned out")
+}
+
+func TestRelayActionReceipt_MissingOrInvalidPersistenceAttestationRejected(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	const keyID = "actuator-key-persistence"
+	const operatorID = "op-persistence"
+	const sessionID = "session-persistence"
+	channel := pubsub.ReceiptsChannel(operatorID, sessionID)
+
+	tests := []struct {
+		name   string
+		mutate func(*operatorv1.ActionReceipt)
+	}{
+		{name: "missing attestation", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.FinalPersistenceAttestation = nil
+		}},
+		{name: "invalid attestation signature", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.FinalPersistenceAttestation.Signature = "invalid"
+		}},
+		{name: "mismatched receipt digest", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.FinalPersistenceAttestation.ReceiptSignatureDigest = "different-digest"
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			broker, _, recorder := newReceiptRelayTestBroker(t, keyID, publicKey)
+			handler := newOperatorSessionHandler(broker, operatorID)
+			var called bool
+			unregister := broker.RegisterHandler(channel, func(_ string, _ []byte) { called = true })
+			t.Cleanup(unregister)
+			wire, _ := buildSignedReceiptEnvelope(t, privateKey, keyID, operatorID, sessionID,
+				string(constants.ActionTypeFileEdit), "/tmp/test.txt", "user-persistence", "app-persistence", "tx-persistence")
+			envelope := &commonv1.GovernanceEnvelope{}
+			require.NoError(t, protojson.Unmarshal(wire, envelope))
+			receipt := &operatorv1.ActionReceipt{}
+			require.NoError(t, proto.Unmarshal(envelope.Payload, receipt))
+			tt.mutate(receipt)
+			envelope.Payload, err = proto.Marshal(receipt)
+			require.NoError(t, err)
+			wire, err = protojson.Marshal(envelope)
+			require.NoError(t, err)
+
+			handler.handleAction(&pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: wire})
+
+			assert.Empty(t, recorder.recorded())
+			assert.False(t, called)
+		})
+	}
 }
 
 func TestRelayActionReceipt_UnknownSignerKeyRejected(t *testing.T) {

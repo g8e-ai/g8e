@@ -872,9 +872,12 @@ var (
 	ErrL5ActuatorCanonicalizeReceipt        = errors.New("failed to canonicalize receipt for signing")
 	ErrL5ActuatorAuditStore                 = errors.New("audit store error")
 	ErrL5ActuatorCapabilityMint             = errors.New("L5Actuator: failed to mint execution capability")
+	ErrActionReceiptMissing                 = errors.New("action receipt missing")
+	ErrActionReceiptSignatureInvalid        = errors.New("action receipt signature invalid")
 	ErrReceiptPersistenceAttestationMissing = errors.New("receipt persistence attestation missing")
 	ErrReceiptPersistenceSignatureMismatch  = errors.New("receipt persistence signature digest mismatch")
 	ErrReceiptPersistenceAttestationInvalid = errors.New("receipt persistence attestation signature invalid")
+	ErrTrustedSignerKeyNotFound             = errors.New("trusted signer public key not found")
 	ErrL5ActuatorCapabilityDissolve         = errors.New("L5Actuator: failed to dissolve execution capability")
 	ErrL5ActuatorRehydrate                  = errors.New("L5Actuator: failed to rehydrate payload")
 	ErrL5ActuatorDocStore                   = errors.New("L5Actuator: document store error")
@@ -1109,12 +1112,15 @@ var (
 	ErrGatewayStoresNil                = errors.New("gateway stores is nil")
 
 	// SSE approval errors
-	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
+	ErrApprovalSSETimeout              = errors.New("L3 approval: timed out waiting for SSE event")
+	ErrApprovalReceiptReferenceInvalid = errors.New("L3 approval completed without a valid receipt reference")
 
 	// Agent harness errors
-	ErrHarnessNoScenarios       = errors.New("no scenarios selected")
-	ErrHarnessGovKitNotInit     = errors.New("gov kit not initialized (call SetGovKit)")
-	ErrHarnessGovKitMissingSign = errors.New("gov kit not initialized (need ensemble + principal)")
+	ErrHarnessNoScenarios             = errors.New("no scenarios selected")
+	ErrHarnessGovKitNotInit           = errors.New("gov kit not initialized (call SetGovKit)")
+	ErrHarnessGovKitMissingSign       = errors.New("gov kit not initialized (need ensemble + principal)")
+	ErrHarnessReceiptReferenceMissing = errors.New("governed tool response is missing its receipt reference")
+	ErrHarnessReceiptReferenceInvalid = errors.New("governed tool response contains an invalid receipt reference")
 
 	// Agent harness ensemble scenario errors
 	ErrHarnessEnsembleChatFailed       = errors.New("ensemble chat request returned success=false")
@@ -1169,10 +1175,26 @@ var (
 	ErrConsoleStaticFS = errors.New("console: failed to sub static FS")
 
 	// Compliance KSI errors
-	ErrKSICatalogInvalid     = errors.New("KSI catalog invalid")
-	ErrOverlayCatalogInvalid = errors.New("overlay catalog invalid")
-	ErrOverlayReadFailed     = errors.New("overlay read failed")
-	ErrOverlayParseFailed    = errors.New("overlay parse failed")
+	ErrKSICatalogInvalid          = errors.New("KSI catalog invalid")
+	ErrOverlayCatalogInvalid      = errors.New("overlay catalog invalid")
+	ErrOverlayReadFailed          = errors.New("overlay read failed")
+	ErrOverlayParseFailed         = errors.New("overlay parse failed")
+	ErrUnsupportedFramework       = errors.New("compliance: unsupported framework")
+	ErrUnsupportedAssertion       = errors.New("compliance: unsupported assertion")
+	ErrUnsupportedVerifier        = errors.New("compliance: unsupported verifier")
+	ErrUnsupportedGrader          = errors.New("compliance: unsupported grader")
+	ErrInvalidEvidenceGraph       = errors.New("compliance: invalid evidence graph")
+	ErrStaleEvidence              = errors.New("compliance: stale evidence")
+	ErrEvidenceScopeMismatch      = errors.New("compliance: evidence scope mismatch")
+	ErrUnresolvedReference        = errors.New("compliance: unresolved reference")
+	ErrRendererMismatch           = errors.New("compliance: renderer mismatch")
+	ErrChecksumMismatch           = errors.New("compliance: checksum mismatch")
+	ErrReportSignatureFailed      = errors.New("compliance: report signature failed")
+	ErrEvidenceArtifactMalformed  = errors.New("compliance: malformed evidence artifact")
+	ErrUnexpectedEvidenceArtifact = errors.New("compliance: unexpected evidence artifact")
+	ErrEvidenceArtifactTooLarge   = errors.New("compliance: evidence artifact exceeds size limit")
+	ErrDemoRunVerificationFailed  = errors.New("compliance: demo run verification failed")
+	ErrComplianceReleaseEvidence  = errors.New("compliance: release evidence generation failed")
 
 	// Compliance KSI history errors
 	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
@@ -1184,4 +1206,12 @@ var (
 	ErrDockerStartEnrollmentFailed = errors.New("docker start: owner enrollment failed")
 	ErrDockerStartApprovalFailed   = errors.New("docker start: platform enrollment approval failed")
 	ErrDockerStartNoPendingRequest = errors.New("docker start: no pending platform enrollment request found for component")
+
+	// Demo scenario execution errors
+	ErrDemoScenarioFailed        = errors.New("demo: one or more scenarios failed")
+	ErrDemoScenarioCancelled     = errors.New("demo: scenario cancelled")
+	ErrDemoDatalinkDisconnect    = errors.New("demo: coalition datalink disconnect failed")
+	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
+	ErrDemoEvidencePersistFailed = errors.New("demo: typed evidence persistence failed")
+	ErrDemoRunIDMissing          = errors.New("demo: run ID is required")
 )

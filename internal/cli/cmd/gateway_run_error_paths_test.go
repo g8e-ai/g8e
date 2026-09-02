@@ -205,6 +205,55 @@ func TestGatewayStatusCmd_NotRunningReturnsStopped(t *testing.T) {
 	assert.Contains(t, buf.String(), "STOPPED")
 }
 
+// TestGatewayStatusCmd_ReportsBothLocalhostAndDockerSections verifies that
+// `g8e gw status` emits both the Localhost Gateway section and the Docker
+// Compose Stack section in a single invocation, so users do not need to run
+// `g8e docker status` separately.
+func TestGatewayStatusCmd_ReportsBothLocalhostAndDockerSections(t *testing.T) {
+	setupGatewayTestEnv(t)
+
+	cmd := gatewayStatusCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Localhost Gateway")
+	assert.Contains(t, output, "Docker Compose Stack")
+	// No compose file in the temp cwd, so the docker section reports that.
+	assert.Contains(t, output, "No docker-compose.yml found in current directory")
+}
+
+// TestGatewayStatusCmd_DockerSectionShowsNotAvailableWhenDockerMissing
+// verifies the docker section degrades gracefully when Docker is not
+// installed, while the localhost section still reports STOPPED.
+func TestGatewayStatusCmd_DockerSectionShowsNotAvailableWhenDockerMissing(t *testing.T) {
+	if dockerAvailable() {
+		t.Skip("test exercises the no-Docker status note")
+	}
+	tmpDir := setupGatewayTestEnv(t)
+	// Place a compose file so the existence guard passes and the
+	// checkDockerAvailable guard is reached instead.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, constants.DockerComposeFile),
+		[]byte("version: '3'\n"), constants.PermFilePublic))
+
+	cmd := gatewayStatusCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, nil)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "STOPPED")
+	assert.Contains(t, output, "Docker not available")
+}
+
 func TestGatewayLogsCmd_NoLogFileReturnsMessage(t *testing.T) {
 	setupGatewayTestEnv(t)
 

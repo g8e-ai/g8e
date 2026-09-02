@@ -5,8 +5,8 @@ parent: Architecture
 
 # Ensemble (g8ee)
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ## What g8ee Is
 
@@ -50,6 +50,8 @@ The ensemble ships with its own Dockerfile (`ensemble/Dockerfile`), rooted at th
 - `make build-ensemble` — builds the ensemble Docker image.
 
 The application test suite lives under `ensemble/tests/`. The evidence-grade evaluation harness is a separate Python package under `ensemble/evals/` with its own `pyproject.toml`, lockfile, CLI, and CI job. `make evals-test` runs its Tier 1 and Tier 2 tests, and `make evals-lint` runs Ruff and Pyright. Neither suite is moved under the repo-root `test/` directory, which remains Go-specific. The polyglot tests map onto the 4-tier test model as Tier 1 (unit, in-component), Tier 2 (in-process integration), Tier 3 (Docker E2E against the unified compose), and Tier 4 (external, real LLM/API). See [Ensemble Tests](../ensemble/tests.md), [Evals](../ensemble/evals.md), and the [Unified Docker Stack guide](../guides/unified_stack.md).
+
+The eval `verify-receipts` command loads all actuator public keys in the verifier PKI directory, derives their key IDs, selects the key matching each receipt's `signer_key_id`, and verifies both the canonical receipt signature and final persistence attestation. It fails when no key matches a receipt. This supports unified-stack reports containing receipts signed by different actuators (Gateway and Operator), so a single verification pass covers multi-signer evidence without pre-configuring which key belongs to which receipt.
 
 ## License
 

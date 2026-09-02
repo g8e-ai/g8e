@@ -578,6 +578,8 @@ func gatewayStatusCmdWithConfig(
 		Short: "Check Gateway health and status",
 		Long: `Check whether the g8e Gateway is running by first attempting an HTTP health
 check against the gateway API, then falling back to a process-manager check.
+Also reports the status of the Docker Compose unified stack, so a single command
+shows both the localhost (host-mode) gateway and any Docker-managed gateway.
 Displays the process ID and endpoint URLs when the gateway is running.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
@@ -593,6 +595,11 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrFileServiceInit, err)
 			}
+
+			cmd.Println()
+			cmd.Println("Localhost Gateway")
+			cmd.Println("-----------------")
+			httpOK := false
 			client, err := api.NewClient(fileSvc, cfg)
 			if err == nil {
 				respBody, err := client.Get("/api/v1/health")
@@ -609,31 +616,39 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
-					return nil
+					httpOK = true
 				}
 			}
 
-			// Fallback to ProcessManager check (for background/host mode)
-			pm, err := platform.NewProcessManager(fileSvc)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			// Fallback to ProcessManager check (for background/host mode) when
+			// the HTTP health probe did not succeed. Fail-closed on internal
+			// errors, matching the pre-Docker-section behavior.
+			if !httpOK {
+				pm, err := platform.NewProcessManager(fileSvc)
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				}
+				running, pid, err := pm.OperatorStatus()
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
+				}
+				if running {
+					cmd.Printf("State: RUNNING (PID: %d)\n", pid)
+					cmd.Printf("\nEndpoints:\n")
+					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+				} else {
+					cmd.Println("State: STOPPED")
+				}
 			}
 
-			running, pid, err := pm.OperatorStatus()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
-			}
-
-			if running {
-				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
-				cmd.Printf("\nEndpoints:\n")
-				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  Console UI:         %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", network.LocalhostHTTPURL(constants.Ports.OperatorHttp))
-			} else {
-				cmd.Println("State: STOPPED")
-			}
+			// Report the Docker Compose unified stack status. Errors are
+			// surfaced as in-section notes rather than aborting the command,
+			// since the localhost status above already succeeded.
+			cmd.Println()
+			_ = printDockerStackStatus(cmd.OutOrStdout(), "")
 
 			return nil
 		},

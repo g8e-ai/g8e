@@ -173,6 +173,22 @@ type ConnStatusMsg struct {
 	Detail string
 }
 
+// ScenarioStatus represents the terminal state of a demo scenario run.
+type ScenarioStatus int
+
+const (
+	ScenarioUnknown ScenarioStatus = iota
+	ScenarioSucceeded
+	ScenarioFailed
+	ScenarioCancelled
+)
+
+// ScenarioCompleteMsg reports a machine-observable demo scenario completion.
+type ScenarioCompleteMsg struct {
+	Status ScenarioStatus
+	Detail string
+}
+
 // TickMsg drives the blink/pulse animation for waiting and failed states.
 type TickMsg struct{}
 

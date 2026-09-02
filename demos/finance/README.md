@@ -73,13 +73,13 @@ After `docker compose up -d --build`, the gateway is healthy but the operator an
 until curl -fsS http://localhost:8082/api/v1/health >/dev/null 2>&1; do sleep 2; done
 
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
-./g8e auth enroll user -e https://localhost:8445
+./g8e auth enroll user -e localhost:8082 --port 8445
 
 # 3. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:8082 --port 8445
 
 # 4. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8082 --port 8445
 
 # 5. Wait for the operator and its dependents to become healthy.
 docker compose ps
@@ -122,6 +122,8 @@ docker compose logs -f observability
 
 The `g8e demos run` command automatically starts the demo environment if it is not already running. Use `-v` for verbose step-by-step output, or `--tui` for the tactical governance TUI overlay.
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definition `finance-unauthorized-trade@1.0.0`). The prose descriptions below are narrative context; the canonical definition is authoritative for evidence-grade result production and compliance crosswalks.
+
 ### Scenario 1: Unauthorized Trade Blocked
 
 ```bash
@@ -130,19 +132,32 @@ g8e demos run finance 1
 
 **Proves**: Two-layer defense against unauthorized trading.
 
-The scenario runs a 5-step flow:
+The scenario runs a 6-step flow and persists the typed result under the runtime compliance evidence tree:
 
 1. **Gateway health check**: confirms the g8e gateway is live
 2. **Operator enrollment verification**: confirms mTLS certs exist
 3. **Demo scenario mTLS transaction**: submits a `finance-unauthorized-trade` scenario via the real gateway; L1 doctrine blocks the unauthorized trade execution payload at confidence >= 0.90
-4. **Audit log tail**: verifies doctrine rejection in gateway logs
-5. **Network isolation proof**: bad-actor on net_untrusted has no route to net_secure (supplementary proof)
+4. **Independent target-state observation**: verifies the prohibited trade artifact is absent from the target-system boundary
+5. **Audit log tail**: records supplementary doctrine-rejection output from the observability boundary
+6. **Network isolation proof**: records supplementary evidence that net_untrusted has no route to net_secure
 
 ### Run all scenarios
 
 ```bash
 g8e demos run finance
 ```
+
+### Persisted evidence and independent verification
+
+Each finance demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories. Scenario results carry canonical definition references, assertion and framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. The unauthorized-trade scenario includes an independent target-state collector that verifies the prohibited trade artifact is absent from the target-system boundary.
+
+Verify a persisted run without modifying assessed state:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming the persisted evidence passed independent verification.
 
 ## Architecture Notes
 

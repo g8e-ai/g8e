@@ -41,6 +41,8 @@ var EnvVar = struct {
 	AppID                 EnvVarKey
 	AppCert               EnvVarKey
 	AppKey                EnvVarKey
+	DemoRunID             EnvVarKey
+	DemoScenarioID        EnvVarKey
 }{
 	ConsensusID:           EnvVarKey("G8E_CONSENSUS_ID"),
 	ConsensusURL:          EnvVarKey("G8E_CONSENSUS_URL"),
@@ -71,4 +73,6 @@ var EnvVar = struct {
 	AppID:                 EnvVarKey("G8E_APP_ID"),
 	AppCert:               EnvVarKey("G8E_APP_CERT"),
 	AppKey:                EnvVarKey("G8E_APP_KEY"),
+	DemoRunID:             EnvVarKey("G8E_DEMO_RUN_ID"),
+	DemoScenarioID:        EnvVarKey("G8E_DEMO_SCENARIO_ID"),
 }

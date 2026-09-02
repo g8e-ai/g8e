@@ -217,8 +217,9 @@ python-build:
 	@echo "Building Python protocol package..."
 	@mkdir -p protocol/python/g8e/_data
 	@cp protocol/constants/*.json protocol/python/g8e/_data/
+	@cp -r protocol/constants/compliance protocol/python/g8e/_data/
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
-	@cd protocol/python && python -m build
+	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
 
 # =============================================================================
@@ -231,7 +232,7 @@ generate: proto
 # Note: buf has its own built-in compiler (protocompile) and invokes the
 # protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
 .PHONY: proto
-proto: buf-install
+proto: buf-install proto-python proto-lockfiles
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
@@ -244,18 +245,35 @@ proto: buf-install
 .PHONY: proto-python
 proto-python:
 	@echo "Generating Python Protobuf code..."
-	@if command -v python3 &> /dev/null; then \
-		python3 -m grpc_tools.protoc \
-			--python_out=protocol/python/g8e_protocol \
-			--proto_path=protocol/proto \
-			protocol/proto/g8e/common/v1/common.proto \
-			protocol/proto/g8e/operator/v1/operator.proto \
-			protocol/proto/g8e/pubsub/v1/pubsub.proto; \
-	else \
-		echo "Error: python3 not found. Install grpc_tools.protoc." >&2; \
+	@if ! $(PYTHON) -c "import grpc_tools" &> /dev/null; then \
+		echo "Error: grpc_tools not found in $(PYTHON). Install with: pip install grpcio-tools" >&2; \
 		exit 1; \
 	fi
+	@mkdir -p protocol/python/g8e_protocol
+	@$(PYTHON) -m grpc_tools.protoc \
+		--python_out=protocol/python/g8e_protocol \
+		--proto_path=protocol/proto \
+		protocol/proto/g8e/common/v1/common.proto \
+		protocol/proto/g8e/compliance/v1/compliance.proto \
+		protocol/proto/g8e/operator/v1/operator.proto \
+		protocol/proto/g8e/pubsub/v1/pubsub.proto
 	@echo "Python Protobuf generation complete."
+
+# Regenerate downstream uv.lock files that depend on the protocol/python
+# package via directory dependencies. The g8e version in protocol/python is
+# the source of truth; any bump propagates into ensemble/ and ensemble/evals/.
+# Without this, `uv sync --locked` (used by CI and local dev) fails because the
+# locked g8e version no longer matches the directory source.
+.PHONY: proto-lockfiles
+proto-lockfiles:
+	@echo "Regenerating downstream uv.lock files..."
+	@if ! command -v $(EVALS_UV) &> /dev/null; then \
+		echo "Error: uv not found. Install with: pip install uv" >&2; \
+		exit 1; \
+	fi
+	@cd ensemble/evals && $(EVALS_UV) lock --quiet
+	@cd ensemble && $(EVALS_UV) lock --quiet
+	@echo "Downstream uv.lock files regenerated."
 
 .PHONY: proto-force
 proto-force: buf-install
@@ -575,7 +593,7 @@ demo-verify: build
 # The targets prefer the repo-root .venv if present (development), falling back
 # to system python3 (CI installs protocol/python + ensemble into system python).
 
-ENSEMBLE_PY := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
+PYTHON := $(shell if [ -f .venv/bin/python ]; then echo $(CURDIR)/.venv/bin/python; else echo python3; fi)
 ENSEMBLE_RUFF := $(shell if [ -f .venv/bin/ruff ]; then echo $(CURDIR)/.venv/bin/ruff; else command -v ruff 2>/dev/null || echo ruff; fi)
 ENSEMBLE_PYRIGHT := $(shell if [ -f .venv/bin/pyright ]; then echo $(CURDIR)/.venv/bin/pyright; else command -v pyright 2>/dev/null || echo pyright; fi)
 EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
@@ -583,7 +601,7 @@ EVALS_UV := $(shell command -v uv 2>/dev/null || echo uv)
 .PHONY: ensemble-test
 ensemble-test:
 	@echo "Running ensemble (g8ee) pytest unit + in-process integration suite (Tier 1 + Tier 2)..."
-	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/unit/ tests/integration/ -q -m "not ai_integration and not requires_web_search and not requires_api"
 
 .PHONY: evals-test
 evals-test: evals-test-unit evals-test-integration
@@ -601,7 +619,7 @@ evals-test-integration:
 .PHONY: test-external
 test-external:
 	@echo "Running ensemble (g8ee) external test suite (Tier 4: real LLM/API calls)..."
-	@cd ensemble && $(ENSEMBLE_PY) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
+	@cd ensemble && $(PYTHON) -m pytest tests/integration/ -q -m "ai_integration or requires_web_search or requires_api"
 
 .PHONY: ensemble-lint
 ensemble-lint:
@@ -683,7 +701,8 @@ validate-doctrines:
 			python3 -m json.tool "$$file" > /dev/null || exit 1; \
 		fi \
 	done
-	@echo "All doctrine files are valid JSON."
+	@go run ./internal/tools/doctrine_validator
+	@echo "All doctrine files and compliance references are valid."
 
 .PHONY: validate-cosais
 validate-cosais:
@@ -832,7 +851,7 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+	@G8E_STRICT_CONSTANTS_LINT=1 go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
 		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
 	@$(FILTER_PROFILE)
 	@COVERAGE=$$($(COVERAGE_PCT)); \
@@ -845,8 +864,8 @@ _ci-test:
 # =============================================================================
 # RELEASE
 # =============================================================================
-# VERSION is the single source of truth. `make release` syncs pyproject.toml
-# and __init__.py from VERSION (if needed), tags the current commit as
+# VERSION is the single source of truth. `make release` syncs pyproject.toml,
+# __init__.py, and the Python uv.lock package entry from VERSION (if needed), tags the current commit as
 # v<VERSION> + protocol/v<VERSION>, and pushes both tags. The GitHub Actions
 # workflows create the GitHub release and upload binary assets.
 #
@@ -872,8 +891,10 @@ release:
 	\
 	PY_FILE=protocol/python/pyproject.toml; \
 	PY_INIT=protocol/python/g8e/__init__.py; \
+	PY_LOCK=protocol/python/uv.lock; \
 	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 	PY_INIT_VERSION=$$(grep -E '^__version__ = ' $$PY_INIT | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_LOCK_VERSION=$$(sed -n -E '/^name = "g8e"$$/{n;s/^version = "([^"]+)"/\1/p;}' $$PY_LOCK); \
 	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
 		echo "Syncing $$PY_FILE: $$PY_VERSION -> $$VERSION"; \
 		sed -i.bak -E 's/^version = "[^"]+"/version = "'$$VERSION'"/' $$PY_FILE; \
@@ -889,6 +910,14 @@ release:
 		echo "  __init__.py synced."; \
 	else \
 		echo "  __init__.py already in sync."; \
+	fi; \
+	if [ "$$PY_LOCK_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_LOCK: $$PY_LOCK_VERSION -> $$VERSION"; \
+		sed -i.bak -E '/^name = "g8e"$$/{n;s/^version = "[^"]+"/version = "'$$VERSION'"/;}' $$PY_LOCK; \
+		rm -f $$PY_LOCK.bak; \
+		echo "  uv.lock synced."; \
+	else \
+		echo "  uv.lock already in sync."; \
 	fi; \
 	\
 	if [ -n "$$(git status --porcelain)" ]; then \

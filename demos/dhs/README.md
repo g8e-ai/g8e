@@ -11,7 +11,7 @@ g8e does **not** collect sensor data, build the fusion engine, or render the COP
 - **Sovereign control**: every byte stays under U.S. Government authority, enforced at the network/caveat boundary.
 - **U.S.-person privacy & civil-liberties protection**: PII is tokenized on ingest and rehydrated on-host only under authority.
 - **Provable auditability**: every ingest, release, inference, and destruction lands in a hash-chained Git ledger and SQLite audit vault.
-- **Resilience**: governance continues in contested, comms-denied corridors with no cloud dependency.
+- **Resilience**: local governance, actuation, and evidence persistence continue while the simulated coalition datalink is detached; this scenario does not exercise cloud-model inference.
 
 ## What is real vs. display
 
@@ -113,13 +113,13 @@ After `g8e demos start dhs`, the gateway is healthy but the operator and its dep
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start dhs`).
-./g8e auth enroll user -e https://localhost:<demo-https-port>
+./g8e auth enroll user -e localhost:8087 --port 8450
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:8087 --port 8450
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8087 --port 8450
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status dhs
@@ -131,17 +131,19 @@ g8e demos status dhs
 
 All scenarios run via `demos scenarios run`, a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Scenarios use `MCPToolsCall` (Path A): the harness calls the MCP `tools/call` endpoint, the gateway builds the `GovernanceEnvelope` internally, runs L2 consensus deliberation via `LocalDeliberator`, and admits or rejects the envelope at L1/L2. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
 
+Each scenario's stable identity, expected outcome, rejection layer, assertion references, framework-control references, required evidence, and terminal-state assertions are defined in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json` (definitions `dhs-ingest@1.0.0`, `dhs-disconnected-operations@1.0.0`, `dhs-cue@1.0.0`, `dhs-destruction-block@1.0.0`, `dhs-destruction-purge@1.0.0`). The prose descriptions below are narrative context; the canonical definitions are authoritative for evidence-grade result production and compliance crosswalks.
+
 ### 1: Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
 ### 2: Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
-The Mission Partner datalink is severed (docker network disconnect). Governance continues locally; a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.
+The Mission Partner datalink is severed with `docker network disconnect`, and the scenario verifies through `docker network inspect` that the display container is no longer attached to the perimeter network. A governed `dhs-ingest` runs through the local gateway during the disconnected interval, after which real existence and content checks verify the operator's Git ledger directory and SQLite audit database. Datalink restoration and reattachment are verified separately; a restoration failure is reported without rewriting the measured continuity result.
 
 ### 3: Governed Predictive Cueing (LOE 3 & 4)
 **Scenario `dhs-cue`**: An authorized interdiction cue with L2 ensemble quorum (decision=true) is admitted and executed by the L5 actuator. The `datasvc` records a `CUE` operation.
 
-### 4: Sovereign Destruction + tamper-proof audit (LOE 2)
-**Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e`; L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 + L3 proofs attached, L1 is the hard gate and runs first.
+### 4: Sovereign Destruction + tamper-evident audit (LOE 2)
+**Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e`; L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 and L3 proofs attached, L1 is the hard gate and runs first. The scenario independently verifies that the operator's canonical audit database remains present and non-empty after rejection; a failed check fails the scenario.
 **Scenario `dhs-purge`**: A governed retention purge is admitted by L1 doctrine with L2 consensus quorum met, and the L5 actuator records a `PURGE` operation with a cryptographic destruction receipt written to the ledger.
 
 ## Compliance & sovereignty mapping (evaluation rubric)
@@ -155,6 +157,18 @@ The Mission Partner datalink is severed (docker network disconnect). Governance 
 | System Resilience & Scalability | Scenario 2 |
 | Decision Support & Predictive Analytics | Scenario 3 |
 | Auditability / Legal & Policy Adherence | every scenario (signed receipts → ledger) |
+
+## Persisted evidence and independent verification
+
+Each DHS demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories. Scenario results carry canonical definition references, assertion and framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. The destruction-block scenario includes an independent collector that verifies the operator's canonical audit database remains present and non-empty after the rejected wipe attempt. The disconnected-operations scenario independently verifies the operator's Git ledger directory and SQLite audit database through real existence and content checks.
+
+Verify a persisted run without modifying assessed state:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming the persisted evidence passed independent verification.
 
 ## License
 

@@ -10,7 +10,9 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -76,6 +78,66 @@ func runDockerCompose(args []string, profile string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
+}
+
+// runDockerComposeOutput runs a `docker compose` command against the root
+// compose file and returns its combined stdout/stderr output. Unlike
+// runDockerCompose it does not stream to the console, so callers can embed the
+// output in a larger status view (e.g. `g8e gw status`).
+func runDockerComposeOutput(args []string, profile string) (string, error) {
+	composePath, err := dockerComposePath()
+	if err != nil {
+		return "", err
+	}
+	if err := checkDockerAvailable(); err != nil {
+		return "", err
+	}
+	fullArgs := []string{"compose", "-f", toDockerPath(composePath)}
+	if profile != "" {
+		fullArgs = append(fullArgs, "--profile", profile)
+	}
+	fullArgs = append(fullArgs, args...)
+
+	c := exec.Command("docker", fullArgs...)
+	out, err := c.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	return string(out), nil
+}
+
+// printDockerStackStatus writes a "Docker Compose Stack" section to w showing
+// the output of `docker compose ps`. It prints a friendly in-section note and
+// returns the error when Docker is not available or the root compose file is
+// missing, so callers can decide whether to abort (docker status) or continue
+// (gw status, which reports both localhost and Docker status in one view).
+func printDockerStackStatus(w io.Writer, profile string) error {
+	fmt.Fprintln(w, "Docker Compose Stack")
+	fmt.Fprintln(w, "---------------------")
+	if err := checkDockerComposeFileExists(); err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			fmt.Fprintln(w, "No docker-compose.yml found in current directory")
+		} else {
+			fmt.Fprintf(w, "Docker status unavailable: %v\n", err)
+		}
+		return err
+	}
+	if err := checkDockerAvailable(); err != nil {
+		fmt.Fprintln(w, "Docker not available (install Docker or start the daemon)")
+		return err
+	}
+	out, err := runDockerComposeOutput([]string{"ps"}, profile)
+	if err != nil {
+		fmt.Fprintf(w, "Docker status unavailable: %v\n", err)
+		return err
+	}
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "" {
+		fmt.Fprintln(w, "No running containers")
+		return nil
+	}
+	fmt.Fprintln(w, trimmed)
+	return nil
 }
 
 func dockerCmd() *cobra.Command {

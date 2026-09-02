@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -281,7 +281,7 @@ The build links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) and enters 
 Protocol constants are bundled from the `protocol/` directory. The Python protocol package (`g8e`) can be installed separately:
 
 ```bash
-pip install g8e==2.1.2
+pip install g8e==2.1.3
 ```
 
 Or configure `G8E_PROTOCOL_DIR=/protocol` to direct the Python package to bundled constants. See [Protocol Library](../architecture/protocol.md) for details.

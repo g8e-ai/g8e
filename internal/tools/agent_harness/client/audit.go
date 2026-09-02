@@ -9,7 +9,9 @@ package client
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -20,16 +22,21 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	harnessconfig "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/config"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
 // /api/audit/receipts. The Operator is the source of truth; these are the real,
 // signed records of what actually executed on the host.
 type Receipt struct {
+	ExecutionID       string          `json:"execution_id"`
 	TransactionID     string          `json:"transaction_id"`
 	TransactionHash   string          `json:"transaction_hash"`
+	InvestigationID   string          `json:"investigation_id"`
 	OperatorID        string          `json:"operator_id"`
 	OperatorSessionID string          `json:"operator_session_id"`
 	RequestorUserID   string          `json:"requestor_user_id"`
@@ -97,6 +104,69 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 	}
 	rec.Raw = body
 	return &rec, body, nil
+}
+
+func (c *Client) GetActionReceipt(ctx context.Context, transactionID string, persona ...Persona) (*operatorv1.ActionReceipt, []byte, error) {
+	p := c.auditorPersona()
+	if len(persona) > 0 {
+		p = persona[0]
+	}
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?tx_id=" + url.QueryEscape(transactionID)
+	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, body, err
+	}
+	if status == http.StatusNotFound {
+		return nil, body, nil
+	}
+	if status >= 400 {
+		return nil, body, fmt.Errorf("gateway returned status %d for transaction %s: %s", status, transactionID, string(body))
+	}
+	receipt := &operatorv1.ActionReceipt{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(body, receipt); err != nil {
+		return nil, body, fmt.Errorf("decode canonical action receipt: %w", err)
+	}
+	return receipt, body, nil
+}
+
+// GetTrustedSignerPublicKey fetches the Ed25519 public key for a governance
+// trusted signer by key ID from the Gateway's signer endpoint. It is used by
+// the harness to independently verify receipt and persistence attestation
+// signatures outside the Gateway relay trust boundary. Returns
+// constants.ErrTrustedSignerKeyNotFound when the gateway has no record of the
+// requested key ID.
+func (c *Client) GetTrustedSignerPublicKey(ctx context.Context, keyID string) (ed25519.PublicKey, error) {
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.GovernanceSignersByID + url.PathEscape(keyID)
+	status, body, err := c.do(ctx, c.auditorPersona(), http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch trusted signer %s: %w", keyID, err)
+	}
+	if status == http.StatusNotFound {
+		return nil, constants.ErrTrustedSignerKeyNotFound
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("gateway returned status %d for signer %s: %s", status, keyID, string(body))
+	}
+
+	var doc struct {
+		ID        string `json:"id"`
+		PublicKey string `json:"public_key_hex"`
+		Enabled   bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("decode trusted signer response: %w", err)
+	}
+	if doc.ID == "" || !doc.Enabled || doc.PublicKey == "" {
+		return nil, constants.ErrTrustedSignerKeyNotFound
+	}
+	pubBytes, err := hex.DecodeString(doc.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("decode signer public key hex: %w", err)
+	}
+	if len(pubBytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("%w: invalid public key size: %d", constants.ErrTrustedSignerKeyNotFound, len(pubBytes))
+	}
+	return ed25519.PublicKey(pubBytes), nil
 }
 
 // auditorPersona builds a persona carrying the config's CLI session and user

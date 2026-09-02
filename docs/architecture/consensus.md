@@ -1,7 +1,7 @@
 # Consensus
 
-Last Updated: 2026-08-25
-Version: v2.0.0
+Last Updated: 2026-09-02
+Version: v2.1.3
 
 ## Overview
 
@@ -110,6 +110,10 @@ The consensus bootstrap sequence at gateway startup is:
 2. For `consensus` and `notary` postures, the gateway logs a warning if the consensus ID is empty or the policy is not found or disabled. If a valid policy exists, it logs the consensus ID, member count, and quorum.
 3. For `consensus` and `notary` postures with a non-empty `--consensus-id`, the gateway loads the policy, builds the in-process consensus service with a file-based key provider and actuator fallback, and wires the local deliberator into the MCP gateway.
 4. Under `doctrine` posture, the Consensus service is not constructed.
+
+### Bootstrap Enrollment Under Enforced Consensus
+
+Bootstrap platform enrollment actions (operator, dashboard, ensemble) no longer require an L2 tribunal that does not yet exist at first-boot. Supplied votes on bootstrap enrollment envelopes are still verified and audited, but the L2 quorum gate is not enforced for bootstrap enrollment actions. Non-bootstrap mutations continue to enforce the configured posture. This allows a fresh gateway under `consensus` or `notary` posture to accept its first platform enrollment requests before any consensus members are enrolled.
 
 The `POST /consensus/v1/deliberate` route is registered at startup. It returns `503 Service Unavailable` when consensus is not configured for the current posture.
 

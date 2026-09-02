@@ -79,7 +79,7 @@ Each org deploys five isolated networks:
 
 \† Gateway appears on net_secure only in the `dhs` and `fedramp` demos, where it needs direct access to the actuator boundary.
 
-The `healthcare` demo runs a reporting-db (Postgres) on net_secure for compliance metrics, a Metabase compliance dashboard on net_perimeter (with a net_secure leg to reach reporting-db), and a one-shot metabase-setup service on net_perimeter that configures it on startup. Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop.sh` wrapper) governed by the PHI/HIPAA doctrine engine, consistent with the fedramp (`cloudop`) and dhs (`dataop`) demos — no downstream MCP server is involved.
+The `healthcare` demo runs a typed policy actuator and reporting database on `net_secure`, a Metabase compliance dashboard on `net_perimeter` with a `net_secure` leg to the reporting database, and a one-shot Metabase setup service on `net_perimeter`. Healthcare scenarios use native gateway tools (`run_shell_command` driving the `paop.sh` wrapper) governed by the PHI/HIPAA doctrine engine. The actuator evaluates gold-card and SLA inputs only after admission and records terminal observations bound to the exact run and canonical scenario; no downstream MCP server is involved.
 
 The `dhs` demo deploys a real `agent-coalition` container (the exec target for `g8e demos run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s when driven by the CLI. The display connectors are Alpine echo loops for narrative only.
 
@@ -159,19 +159,21 @@ g8e demos run <org> <scenario> --tui
 g8e demos pull
 ```
 
+`g8e demos run <org>` prints every scenario result, then exits non-zero with `ErrDemoScenarioFailed` if any result is `FAIL`. Automation can gate on the exit status, but evidence capture still retains and reviews the complete result table, including skipped and failed rows.
+
 ### Owner-approved platform bootstrap
 
 Every demo boots the gateway with zero users. The operator (and any service that depends on it) starts not-ready and remains not-ready until its owner-approved platform enrollment request is approved. After `g8e demos start <org>` completes, the CLI prints the bootstrap instructions: enroll the first owner, list pending platform enrollment requests, and approve the operator's request by exact request ID.
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
-./g8e auth enroll user -e https://localhost:<demo-https-port>
+./g8e auth enroll user -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status <org>
@@ -217,7 +219,7 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
 - `g8e demos run dhs 2` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
 - `g8e demos run dhs 3` - Governed Predictive Cueing (LOE 3 & 4)
-- `g8e demos run dhs 4` - Sovereign Destruction + tamper-proof audit (LOE 2)
+- `g8e demos run dhs 4` - Sovereign Destruction + tamper-evident audit (LOE 2)
 
 **FedRAMP Sovereign Cloud Governance Demo Scenarios:**
 - `g8e demos run fedramp 1` - Governed Cloud Resource Provisioning
@@ -236,16 +238,22 @@ Ensemble scenarios require the **unified platform compose** (`docker-compose.yml
 docker compose up -d g8e-gateway
 
 # 2. Enroll the first owner.
-./g8e auth enroll user -e https://localhost:8443
+./g8e auth enroll user -e localhost
 
 # 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
 docker compose --profile bootstrapped up -d
 
-# 4. Approve the operator and ensemble enrollment requests.
+# 4. Approve the workload enrollment requests.
 ./g8e auth pending-platform-enrollments
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+
+# 5. Refresh the owner CLI session after Operator enrollment.
+./g8e auth refresh
 ```
+
+The initial owner CLI session predates the Operator session. Refreshing it after workload enrollment binds the canonical CLI session to the active Operator session and prevents downstream identity validation from failing closed with a session-binding mismatch.
 
 Run ensemble scenarios via the agent harness:
 
@@ -279,6 +287,26 @@ export G8E_HARNESS_LLM_MODEL=gemma4:12b
 export G8E_HARNESS_LLM_ENDPOINT=http://192.168.1.2:11434
 g8e demos scenarios run ensemble-chat-file-create --ensemble-url http://localhost:8000 ...
 ```
+
+### Canonical scenario definitions
+
+Every demo scenario has a typed, content-addressed definition in the canonical demo scenario catalog at `protocol/constants/compliance/demo-scenario-catalog.json`. Each definition carries stable scenario identity and version, expected action classes, expected allow or block outcome, expected rejection layer, initial-state fixture reference, terminal-state assertions, required receipts and deterministic stages, assertion references, framework-control references, required evidence level, timeout, and failure policy. The catalog is the source of truth for scenario identity, assertion mappings, and framework-control mappings. The prose descriptions in the per-demo READMEs and the scenario listings below are narrative context; the canonical catalog is authoritative for all machine-checked compliance crosswalks and evidence-grade result production.
+
+The catalog is loaded at demo runtime through `internal/services/compliance/catalog` and validated against the canonical assertion catalog (`protocol/constants/compliance/assertion-catalog.json`) and framework catalog (`protocol/constants/compliance/framework-catalog.json`). Every framework-control reference in every definition has at least one canonical crosswalk mapping (`protocol/constants/compliance/fedramp-nist-crosswalk.json`) to an assertion carried by that definition.
+
+### Persisted demo evidence and independent verification
+
+Every demo run persists a typed `DemoManifest` and canonical `DemoScenarioResult` records under `.g8e/data/compliance/demo-evidence/<run-id>/`. The manifest records provenance hashes for the compose file, doctrine, target-data, and config subdirectories plus the union of framework-control references across all bound scenario definitions. Each scenario result carries its canonical definition reference, assertion references, framework-control references, typed step results, content-addressed state observations, authoritative execution and transaction identity, receipt and persistence content addresses, and verification status. Receipt and persistence bodies are persisted as resolvable artifacts under `receipts/<hex>.json` and `persistence/<hex>.json` so the content addresses on the result resolve to concrete evidence.
+
+Finance, DHS, and FedRAMP scenarios add independent target-state, persistence, network-membership, or protected-artifact collectors so terminal claims are measured rather than inferred from command output. Healthcare uses a typed secure-network actuator for run-bound gold-card and SLA outcomes with an independent collector that fails closed unless every correlation, metric, and terminal-state field matches.
+
+The read-only `g8e compliance demo-run verify <run-id>` command (with an optional `--project-root <dir>` override for source-provenance lookup) emits a typed `ComplianceVerificationReport` as canonical JSON and exits nonzero when any manifest, provenance, artifact, signature, protocol-chain, state-observation, metric, or directory-integrity check fails:
+
+```bash
+g8e compliance demo-run verify <run-id> --project-root /path/to/g8e
+```
+
+Require a zero exit status and `"valid":true` before claiming that the persisted demo evidence passed independent verification.
 
 ### Demo Output Format
 

@@ -142,7 +142,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 	)
 	receiptPersistenceStage.SignerKeyId = receipt.SignerKeyId
-	receiptPersistenceStage.ReceiptSignatureDigest = signatureDigest([]string{receipt.Signature})
+	receiptPersistenceStage.ReceiptSignatureDigest = SignatureDigest([]string{receipt.Signature})
 	receiptPersistenceStage.AuditRecordId = receipt.TransactionId
 	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, receiptPersistenceStage)
 	if w.SQLAuditStore != nil {
@@ -378,7 +378,7 @@ func (w *L5Actuator) persistCommitment(vt *VerifiedTransaction, receipt *operato
 			PriorCommitmentHash:         priorHash,
 			StateRootAtCommit:           receipt.StateRootBefore,
 			L2SignatureDigest:           l2SignatureDigest(vt.Envelope),
-			WardenIntentSignatureDigest: signatureDigest([]string{receipt.Signature}),
+			WardenIntentSignatureDigest: SignatureDigest([]string{receipt.Signature}),
 			HumanSignatureDigest:        humanSignatureDigest(vt.Envelope),
 			ActionType:                  string(vt.ActionType),
 			TargetResource:              vt.Envelope.TargetResource,
@@ -415,7 +415,7 @@ func l2SignatureDigest(env *govtypes.GovernanceEnvelope) string {
 			signatures = append(signatures, vote.ConsensusSignature)
 		}
 	}
-	return signatureDigest(signatures)
+	return SignatureDigest(signatures)
 }
 
 func humanSignatureDigest(env *govtypes.GovernanceEnvelope) string {
@@ -423,10 +423,10 @@ func humanSignatureDigest(env *govtypes.GovernanceEnvelope) string {
 		return ""
 	}
 	proof := env.Governance.L3.Proof
-	return signatureDigest([]string{proof.Signature, proof.CliSignature})
+	return SignatureDigest([]string{proof.Signature, proof.CliSignature})
 }
 
-func signatureDigest(signatures []string) string {
+func SignatureDigest(signatures []string) string {
 	values := make([]string, 0, len(signatures))
 	for _, signature := range signatures {
 		if signature != "" {
@@ -535,7 +535,7 @@ func CanonicalizeReceiptPersistenceAttestation(attestation *operatorv1.ReceiptPe
 func (w *L5Actuator) signReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt) (*operatorv1.ReceiptPersistenceAttestation, error) {
 	attestation := &operatorv1.ReceiptPersistenceAttestation{
 		TransactionId:          receipt.TransactionId,
-		ReceiptSignatureDigest: signatureDigest([]string{receipt.Signature}),
+		ReceiptSignatureDigest: SignatureDigest([]string{receipt.Signature}),
 		PersistedAtUnixMs:      time.Now().UnixMilli(),
 		AuditRecordId:          receipt.TransactionId,
 		SignerKeyId:            w.KeyID,
@@ -546,6 +546,27 @@ func (w *L5Actuator) signReceiptPersistenceAttestation(receipt *operatorv1.Actio
 	}
 	attestation.Signature = hex.EncodeToString(ed25519.Sign(w.SigningKey, payload))
 	return attestation, nil
+}
+
+func VerifyActionReceiptSignature(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
+	if receipt == nil {
+		return constants.ErrActionReceiptMissing
+	}
+	if receipt.Signature == "" || len(publicKey) != ed25519.PublicKeySize {
+		return constants.ErrActionReceiptSignatureInvalid
+	}
+	signature, err := hex.DecodeString(receipt.Signature)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrActionReceiptSignatureInvalid, err)
+	}
+	payload, err := CanonicalizeActionReceipt(receipt)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrActionReceiptSignatureInvalid, err)
+	}
+	if !ed25519.Verify(publicKey, payload, signature) {
+		return constants.ErrActionReceiptSignatureInvalid
+	}
+	return nil
 }
 
 func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
@@ -561,7 +582,7 @@ func VerifyReceiptPersistenceAttestation(receipt *operatorv1.ActionReceipt, publ
 		attestation.PersistedAtUnixMs <= 0 {
 		return constants.ErrReceiptPersistenceAttestationInvalid
 	}
-	if receipt.Signature == "" || attestation.ReceiptSignatureDigest != signatureDigest([]string{receipt.Signature}) {
+	if receipt.Signature == "" || attestation.ReceiptSignatureDigest != SignatureDigest([]string{receipt.Signature}) {
 		return constants.ErrReceiptPersistenceSignatureMismatch
 	}
 	signature, err := hex.DecodeString(attestation.Signature)

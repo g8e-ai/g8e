@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -550,6 +551,52 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestComplianceDemoRunVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceDemoRunVerifyCmdWithConfig(
+		failingFileSvcFactory(errFactory),
+		func(string) evidence.ProvenanceSource {
+			panic("provenance source should not be created when fileSvcFactory fails")
+		},
+	)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, []string{"any-run"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestComplianceReleaseEvidenceCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceReleaseEvidenceCmdWithConfig(
+		failingFileSvcFactory(errFactory),
+		func(string) evidence.ProvenanceSource {
+			panic("provenance source should not be created when fileSvcFactory fails")
+		},
+	)
+	require.NoError(t, cmd.Flags().Set("version", "v2.1.3"))
+	require.NoError(t, cmd.Flags().Set("out", t.TempDir()))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestDemosRunCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := demosRunCmdWithConfig(failingFileSvcFactory(errFactory))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{constants.DemosOrgFedRAMP, "2"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)
