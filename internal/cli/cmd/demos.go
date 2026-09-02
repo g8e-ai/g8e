@@ -1624,6 +1624,7 @@ func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, 
 		return false
 	}
 	receiptRefs := make([]string, 0, len(hr.ReceiptEvidence)*2)
+	protocolChainRefs := make([]string, 0, len(hr.ReceiptEvidence))
 	for _, rcpt := range hr.Receipts {
 		var matched *scenarios.ReceiptEvidence
 		for i := range hr.ReceiptEvidence {
@@ -1645,13 +1646,18 @@ func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, 
 		if err != nil || bound.ReceiptRef != matched.ReceiptRef || bound.PersistenceRef != matched.PersistenceRef {
 			return false
 		}
+		if matched.ProtocolChainGrade == nil || !matched.ProtocolChainGrade.Verified || matched.ProtocolChainGrade.StageEvidenceRef == "" {
+			return false
+		}
 		receiptRefs = append(receiptRefs, bound.ReceiptRef, bound.PersistenceRef)
+		protocolChainRefs = append(protocolChainRefs, matched.ProtocolChainGrade.StageEvidenceRef)
 	}
 	result.AttemptIds = append(result.AttemptIds, hr.AttemptIDs...)
 	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
 	result.InvestigationIds = append(result.InvestigationIds, hr.InvestigationIDs...)
 	result.ReceiptRefs = append(result.ReceiptRefs, receiptRefs...)
+	result.ProtocolChainRefs = append(result.ProtocolChainRefs, protocolChainRefs...)
 	return true
 }
 

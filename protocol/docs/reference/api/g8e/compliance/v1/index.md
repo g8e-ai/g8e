@@ -416,6 +416,7 @@
 | metrics_summary | [string](#string) |  |  |
 | execution_ids | [string](#string) | repeated |  |
 | attempt_ids | [string](#string) | repeated |  |
+| protocol_chain_refs | [string](#string) | repeated |  |
 
 
 

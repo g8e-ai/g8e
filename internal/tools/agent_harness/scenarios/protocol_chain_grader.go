@@ -272,7 +272,7 @@ func validateVerifiedChain(receipt *operatorv1.ActionReceipt, stagesByKind map[o
 		return "commitment-append stage is not completed"
 	}
 	l5 := stagesByKind[operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION]
-	expectedL5Outcome := operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_UNSPECIFIED
+	var expectedL5Outcome operatorv1.DeterministicStageOutcome
 	switch receipt.GetStatus() {
 	case operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED:
 		expectedL5Outcome = operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED
@@ -290,7 +290,7 @@ func validateVerifiedChain(receipt *operatorv1.ActionReceipt, stagesByKind map[o
 	l4ID := stagesByKind[operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION].GetStageId()
 	l5ID := l5.GetStageId()
 	expectedParents := map[operatorv1.DeterministicStageKind]string{
-		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE:          l4ID,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE:         l4ID,
 		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2:         l4ID,
 		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY:           l4ID,
 		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:     l5ID,
@@ -341,7 +341,7 @@ func validateRejectedChain(receipt *operatorv1.ActionReceipt, stages []*operator
 		return "rejected protocol chain has ambiguous prerequisite outcomes"
 	}
 	expectedOutcomes := map[operatorv1.DeterministicStageKind]operatorv1.DeterministicStageOutcome{
-		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE:  operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: l2StatusOutcome[receipt.GetL2Status()],
 		operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY:   l3StatusOutcome[receipt.GetL3Status()],
 	}

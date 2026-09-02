@@ -2536,6 +2536,7 @@ type DemoScenarioResult struct {
 	MetricsSummary       string                       `protobuf:"bytes,23,opt,name=metrics_summary,json=metricsSummary,proto3" json:"metrics_summary,omitempty"`
 	ExecutionIds         []string                     `protobuf:"bytes,24,rep,name=execution_ids,json=executionIds,proto3" json:"execution_ids,omitempty"`
 	AttemptIds           []string                     `protobuf:"bytes,25,rep,name=attempt_ids,json=attemptIds,proto3" json:"attempt_ids,omitempty"`
+	ProtocolChainRefs    []string                     `protobuf:"bytes,26,rep,name=protocol_chain_refs,json=protocolChainRefs,proto3" json:"protocol_chain_refs,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -2741,6 +2742,13 @@ func (x *DemoScenarioResult) GetExecutionIds() []string {
 func (x *DemoScenarioResult) GetAttemptIds() []string {
 	if x != nil {
 		return x.AttemptIds
+	}
+	return nil
+}
+
+func (x *DemoScenarioResult) GetProtocolChainRefs() []string {
+	if x != nil {
+		return x.ProtocolChainRefs
 	}
 	return nil
 }
@@ -3085,7 +3093,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\revidence_refs\x18\b \x03(\tR\fevidenceRefs\x12\x18\n" +
 	"\afailure\x18\t \x01(\tR\afailure\x12\x1a\n" +
 	"\brequired\x18\n" +
-	" \x01(\bR\brequired\"\xd4\b\n" +
+	" \x01(\bR\brequired\"\x84\t\n" +
 	"\x12DemoScenarioResult\x12\x1b\n" +
 	"\tresult_id\x18\x01 \x01(\tR\bresultId\x12H\n" +
 	"\fscenario_ref\x18\x02 \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\vscenarioRef\x12\x17\n" +
@@ -3115,7 +3123,8 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x0fmetrics_summary\x18\x17 \x01(\tR\x0emetricsSummary\x12#\n" +
 	"\rexecution_ids\x18\x18 \x03(\tR\fexecutionIds\x12\x1f\n" +
 	"\vattempt_ids\x18\x19 \x03(\tR\n" +
-	"attemptIds\"\xc2\x01\n" +
+	"attemptIds\x12.\n" +
+	"\x13protocol_chain_refs\x18\x1a \x03(\tR\x11protocolChainRefs\"\xc2\x01\n" +
 	"\x13DemoScenarioCatalog\x12\x1d\n" +
 	"\n" +
 	"catalog_id\x18\x01 \x01(\tR\tcatalogId\x12'\n" +

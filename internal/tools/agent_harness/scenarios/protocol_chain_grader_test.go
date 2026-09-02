@@ -36,43 +36,43 @@ func buildVerifiedChainStages(txID, txHash, investigationID string) []*operatorv
 	return []*operatorv1.DeterministicStageEvidence{
 		{
 			StageId: txID + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l4ID,
 		},
 		{
 			StageId: txID + ":L2", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l4ID,
 		},
 		{
 			StageId: txID + ":L3", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l4ID,
 		},
 		{
 			StageId: l4ID, Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l5ID,
 		},
 		{
 			StageId: txID + ":PERSIST", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l5ID,
 		},
 		{
 			StageId: txID + ":COMMIT", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l5ID,
 		},
 		{
 			StageId: l5ID, Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			StateRootBefore: "root-before", StateRootAfter: "root-after",
 			ParentStageId: "",
@@ -87,13 +87,13 @@ func buildRejectedChainStages(txID, txHash, investigationID string) []*operatorv
 	return []*operatorv1.DeterministicStageEvidence{
 		{
 			StageId: txID + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: l4ID,
 		},
 		{
 			StageId: l4ID, Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
-			Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
+			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
 			TransactionId: txID, TransactionHash: txHash, InvestigationId: investigationID,
 			ParentStageId: "",
 		},
@@ -391,7 +391,7 @@ func TestGradeProtocolChain_FailsClosedOnRejectedChainWithExtraStages(t *testing
 	// Add an L5 stage that should not be present in an L1-rejected chain.
 	receipt.DeterministicStageEvidence = append(receipt.DeterministicStageEvidence, &operatorv1.DeterministicStageEvidence{
 		StageId: "transaction-1:L5", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION,
-		Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
+		Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED,
 		TransactionId: "transaction-1", TransactionHash: "transaction-hash-1", InvestigationId: "investigation-1",
 	})
 

@@ -333,3 +333,40 @@ func TestResolveReceiptEvidence_FailsClosedOnMissingSignerKey(t *testing.T) {
 		"expected signer key not found or evidence graph error, got: %v", err)
 	assert.Empty(t, result.ReceiptEvidence, "unverifiable evidence must not be appended to the result")
 }
+
+// TestResolveReceiptEvidence_PopulatesProtocolChainGradesOnResult proves that
+// ResolveReceiptEvidence populates the ProtocolChainGrades slice on the result
+// with a verified grade carrying a content-addressed stage evidence reference.
+// This closes the Phase 2 gap where the protocol-chain grader was wired into
+// ResolveReceiptEvidence but no test asserted the grades reached the result.
+func TestResolveReceiptEvidence_PopulatesProtocolChainGradesOnResult(t *testing.T) {
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+
+	projection := baseSignedEvidenceProjection()
+	result := baseSignedEvidenceResult()
+	evidence := buildSignedReceiptEvidence(t, result, projection, privKey, "signer-1")
+	projection.Signature = evidence.Receipt.Signature
+	result.Receipts = []clientpkg.Receipt{projection}
+
+	stub := &stubReceiptEvidenceResolver{
+		receipts:   map[string]*operatorv1.ActionReceipt{projection.TransactionID: evidence.Receipt},
+		signerKeys: map[string]ed25519.PublicKey{"signer-1": pubKey},
+	}
+
+	err = ResolveReceiptEvidence(context.Background(), stub, result)
+
+	require.NoError(t, err)
+	require.Len(t, result.ProtocolChainGrades, 1, "ProtocolChainGrades must be populated with one grade per receipt")
+	grade := result.ProtocolChainGrades[0]
+	assert.True(t, grade.Verified, "protocol chain grade must be verified for a valid chain")
+	assert.InDelta(t, 1.0, grade.Value, 0.001)
+	assert.Empty(t, grade.Failure)
+	assert.Regexp(t, `^deterministic-stages:sha256:[0-9a-f]{64}$`, grade.StageEvidenceRef,
+		"stage evidence reference must be a content-addressed SHA-256 digest")
+	require.Len(t, result.ReceiptEvidence, 1)
+	assert.NotNil(t, result.ReceiptEvidence[0].ProtocolChainGrade,
+		"each ReceiptEvidence record must carry its ProtocolChainGrade")
+	assert.Equal(t, grade.StageEvidenceRef, result.ReceiptEvidence[0].ProtocolChainGrade.StageEvidenceRef,
+		"the grade on the result and the grade on the evidence record must match")
+}

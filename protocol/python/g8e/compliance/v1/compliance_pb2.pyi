@@ -510,7 +510,7 @@ class DemoStepResult(_message.Message):
     def __init__(self, step_id: _Optional[str] = ..., operation: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., exit_code: _Optional[int] = ..., protocol_result: _Optional[str] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., failure: _Optional[str] = ..., required: _Optional[bool] = ...) -> None: ...
 
 class DemoScenarioResult(_message.Message):
-    __slots__ = ("result_id", "scenario_ref", "demo_id", "scope_id", "run_id", "started_at", "completed_at", "status", "investigation_ids", "transaction_ids", "receipt_refs", "state_observation_refs", "metric_refs", "ksi_refs", "assertion_refs", "framework_control_refs", "step_results", "verification_status", "failure", "limitations", "display_number", "title", "metrics_summary", "execution_ids", "attempt_ids")
+    __slots__ = ("result_id", "scenario_ref", "demo_id", "scope_id", "run_id", "started_at", "completed_at", "status", "investigation_ids", "transaction_ids", "receipt_refs", "state_observation_refs", "metric_refs", "ksi_refs", "assertion_refs", "framework_control_refs", "step_results", "verification_status", "failure", "limitations", "display_number", "title", "metrics_summary", "execution_ids", "attempt_ids", "protocol_chain_refs")
     RESULT_ID_FIELD_NUMBER: _ClassVar[int]
     SCENARIO_REF_FIELD_NUMBER: _ClassVar[int]
     DEMO_ID_FIELD_NUMBER: _ClassVar[int]
@@ -536,6 +536,7 @@ class DemoScenarioResult(_message.Message):
     METRICS_SUMMARY_FIELD_NUMBER: _ClassVar[int]
     EXECUTION_IDS_FIELD_NUMBER: _ClassVar[int]
     ATTEMPT_IDS_FIELD_NUMBER: _ClassVar[int]
+    PROTOCOL_CHAIN_REFS_FIELD_NUMBER: _ClassVar[int]
     result_id: str
     scenario_ref: VersionedReference
     demo_id: str
@@ -561,7 +562,8 @@ class DemoScenarioResult(_message.Message):
     metrics_summary: str
     execution_ids: _containers.RepeatedScalarFieldContainer[str]
     attempt_ids: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, result_id: _Optional[str] = ..., scenario_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., demo_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., investigation_ids: _Optional[_Iterable[str]] = ..., transaction_ids: _Optional[_Iterable[str]] = ..., receipt_refs: _Optional[_Iterable[str]] = ..., state_observation_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., ksi_refs: _Optional[_Iterable[str]] = ..., assertion_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., step_results: _Optional[_Iterable[_Union[DemoStepResult, _Mapping]]] = ..., verification_status: _Optional[str] = ..., failure: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ..., display_number: _Optional[str] = ..., title: _Optional[str] = ..., metrics_summary: _Optional[str] = ..., execution_ids: _Optional[_Iterable[str]] = ..., attempt_ids: _Optional[_Iterable[str]] = ...) -> None: ...
+    protocol_chain_refs: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, result_id: _Optional[str] = ..., scenario_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., demo_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., investigation_ids: _Optional[_Iterable[str]] = ..., transaction_ids: _Optional[_Iterable[str]] = ..., receipt_refs: _Optional[_Iterable[str]] = ..., state_observation_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., ksi_refs: _Optional[_Iterable[str]] = ..., assertion_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., step_results: _Optional[_Iterable[_Union[DemoStepResult, _Mapping]]] = ..., verification_status: _Optional[str] = ..., failure: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ..., display_number: _Optional[str] = ..., title: _Optional[str] = ..., metrics_summary: _Optional[str] = ..., execution_ids: _Optional[_Iterable[str]] = ..., attempt_ids: _Optional[_Iterable[str]] = ..., protocol_chain_refs: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class DemoScenarioCatalog(_message.Message):
     __slots__ = ("catalog_id", "catalog_version", "sha256", "definitions")
