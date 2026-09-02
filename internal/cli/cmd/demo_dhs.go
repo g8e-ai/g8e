@@ -33,17 +33,17 @@ func defaultDHSHarnessConfig() harnessConfig {
 }
 
 func newDHSSovereignIngestScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
 		"L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST")
 }
 
 func newDHSDisconnectedOperationsScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
 		"Datalink severed // Local governance continues // Git ledger + SQLite vault")
 }
 
 func newDHSCueScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, "dhs-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgDHS, constants.DemoScopeDHS,
 		"L2 quorum admits cue // L5 actuator records CUE")
 }
 
@@ -64,9 +64,9 @@ func dhsScenarioDefinitionIDs(scenario string) ([]string, error) {
 
 func newDHSDestructionScenarioResults(startedAt time.Time, blockDefinition, purgeDefinition *compliancev1.DemoScenarioDefinition) []*compliancev1.DemoScenarioResult {
 	return []*compliancev1.DemoScenarioResult{
-		newDemoEvidenceScenarioResult(startedAt, blockDefinition, constants.DemosOrgDHS, "dhs-demo-scope",
+		newDemoEvidenceScenarioResult(startedAt, blockDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS,
 			"L1 blocks audit wipe // audit vault remains intact"),
-		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, "dhs-demo-scope",
+		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, constants.DemoScopeDHS,
 			"L1+L2 admit governed purge // L5 actuator records PURGE"),
 	}
 }

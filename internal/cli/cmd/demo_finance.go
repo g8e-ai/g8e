@@ -27,7 +27,7 @@ import (
 )
 
 func newFinanceUnauthorizedTradeScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFinance, "finance-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFinance, constants.DemoScopeFinance,
 		"L1 doctrine: unauthorized_trade_execution (0.90 conf) // Network isolation: net_untrusted blocked")
 }
 

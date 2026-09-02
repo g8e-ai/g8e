@@ -246,27 +246,29 @@ const (
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
-	DemosDirname                       = "demos"
-	DemosComposeFile                   = "compose.yml"
-	DemosBinDirname                    = "bin"
-	DemosBinaryName                    = "g8e"
-	DemosTargetDataDir                 = "target-data"
-	DemosDoctrineDir                   = "doctrine"
-	DemosPARequestsFile                = "pa_requests.json"
-	DemosHIPAADoctrineFile             = "phi_hipaa_doctrine.json"
-	DemosDHSDoctrineFile               = "dhs_sovereign_doctrine.json"
-	DemosFedRAMPDoctrineFile           = "fedramp_doctrine.json"
-	DemosFinanceStateCollectorFile     = "verify_trade_absence.sh"
-	DemosHealthcareNetCollectorFile    = "collect_network_isolation.sh"
-	DemosDHSNetworkCollectorFile       = "collect_network_membership.sh"
-	DemosDHSGatewayHealthCollectorFile = "collect_gateway_health.sh"
-	DemosDHSLedgerCollectorFile        = "collect_ledger_persistence.sh"
-	DemosDHSAuditVaultCollectorFile    = "collect_audit_vault_persistence.sh"
-	DemosImagesManifestFile            = "images.json"
-	DemosOrgHealthcare                 = "healthcare"
-	DemosOrgFinance                    = "finance"
-	DemosOrgDHS                        = "dhs"
-	DemosOrgFedRAMP                    = "fedramp"
+	DemosDirname                        = "demos"
+	DemosComposeFile                    = "compose.yml"
+	DemosBinDirname                     = "bin"
+	DemosBinaryName                     = "g8e"
+	DemosTargetDataDir                  = "target-data"
+	DemosDoctrineDir                    = "doctrine"
+	DemosPARequestsFile                 = "pa_requests.json"
+	DemosHIPAADoctrineFile              = "phi_hipaa_doctrine.json"
+	DemosDHSDoctrineFile                = "dhs_sovereign_doctrine.json"
+	DemosFedRAMPDoctrineFile            = "fedramp_doctrine.json"
+	DemosFinanceStateCollectorFile      = "verify_trade_absence.sh"
+	DemosHealthcareNetCollectorFile     = "collect_network_isolation.sh"
+	DemosDHSNetworkCollectorFile        = "collect_network_membership.sh"
+	DemosDHSGatewayHealthCollectorFile  = "collect_gateway_health.sh"
+	DemosDHSLedgerCollectorFile         = "collect_ledger_persistence.sh"
+	DemosDHSAuditVaultCollectorFile     = "collect_audit_vault_persistence.sh"
+	DemosFedRAMPCloudCollectorFile      = "collect_cloud_service_state.py"
+	DemosFedRAMPAuditVaultCollectorFile = "collect_audit_vault_persistence.sh"
+	DemosImagesManifestFile             = "images.json"
+	DemosOrgHealthcare                  = "healthcare"
+	DemosOrgFinance                     = "finance"
+	DemosOrgDHS                         = "dhs"
+	DemosOrgFedRAMP                     = "fedramp"
 
 	// DHS demo docker resource names. The compose project is named "dhs-demo"
 	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
@@ -300,6 +302,7 @@ const (
 	ContainerDoctrineDir                = "/etc/g8e/" + DemosDoctrineDir
 	ContainerFinanceStateCollectorFile  = ContainerFinanceTargetDir + "/" + DemosFinanceStateCollectorFile
 	ContainerHealthcareNetCollectorFile = "/app/" + DemosHealthcareNetCollectorFile
+	ContainerFedRAMPCloudCollectorFile  = "/app/" + DemosFedRAMPCloudCollectorFile
 	ContainerEnsembleSeed               = "/etc/g8e/ensemble-seed.hex"
 	ContainerVerifyOpsPy                = "/app/verify_ops.py"
 	ContainerVerifyPAPy                 = "/app/verify_pa.py"
@@ -614,4 +617,23 @@ const (
 	DemoRunResultsFilename     = "scenario-results.jsonl"
 	DemoRunStepsFilename       = "step-results.jsonl"
 	DemoRunDefinitionsFilename = "scenario-definitions.jsonl"
+)
+
+// Demo scope identifiers. Each demo org binds its typed scenario results to a
+// stable scope ID so manifest and result records share the same assessment
+// scope binding.
+const (
+	DemoScopeFedRAMP    = "fedramp-demo-scope"
+	DemoScopeDHS        = "dhs-demo-scope"
+	DemoScopeFinance    = "finance-demo-scope"
+	DemoScopeHealthcare = "healthcare-demo-scope"
+)
+
+// DemoVersion is the version of the demo environment topology and scenario
+// catalog binding. It is distinct from individual scenario definition versions.
+const DemoVersion = "1.0.0"
+
+// Demo provenance subdirectory names hashed by buildDemoManifest.
+const (
+	DemoConfigDirname = "config"
 )

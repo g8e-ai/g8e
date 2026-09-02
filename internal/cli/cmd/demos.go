@@ -1180,15 +1180,45 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool, fileSvc fs.Runt
 		cmd.Printf("this command. Run 'g8e demos status %s' to check readiness.\n", org)
 	}
 
+	// Build and persist the typed DemoManifest before scenario execution so the
+	// run's provenance is recorded even if a scenario fails. Manifest creation
+	// or persistence failure joins any scenario error but does not block
+	// scenario execution; the evidence-grade scenario results remain the
+	// authoritative per-scenario record.
+	manifestErr := buildAndPersistDemoManifest(cmd.Context(), fileSvc, org, demoDir)
+
 	if useTUI {
-		return runDemosWithTUI(cmd, fileSvc, org, demoDir, args)
+		err := runDemosWithTUI(cmd, fileSvc, org, demoDir, args)
+		return errors.Join(err, manifestErr)
 	}
 
 	if len(args) >= 2 {
-		return runScenario(cmd.Context(), fileSvc, org, demoDir, args[1]) //nolint:gosec // length checked above
+		err := runScenario(cmd.Context(), fileSvc, org, demoDir, args[1]) //nolint:gosec // length checked above
+		return errors.Join(err, manifestErr)
 	}
 
-	return runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir)
+	err = runAllScenarios(cmd.Context(), fileSvc, cmd, org, demoDir)
+	return errors.Join(err, manifestErr)
+}
+
+// buildAndPersistDemoManifest constructs a typed DemoManifest for the demo org
+// and persists it under the runtime compliance evidence tree. It returns any
+// error so the caller can join it with scenario execution errors.
+func buildAndPersistDemoManifest(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir string) error {
+	orgCfg, ok := demoOrgConfigs[org]
+	if !ok {
+		return nil
+	}
+	startedAt := time.Now().UTC()
+	runID := fmt.Sprintf("%s-run-%s", org, startedAt.Format("20060102T150405Z"))
+	manifest, err := buildDemoManifest(org, orgCfg.scopeID, runID, startedAt, demoDir)
+	if err != nil {
+		return fmt.Errorf("build demo manifest: %w", err)
+	}
+	if err := persistDemoManifest(ctx, fileSvc, manifest); err != nil {
+		return fmt.Errorf("persist demo manifest: %w", err)
+	}
+	return nil
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level

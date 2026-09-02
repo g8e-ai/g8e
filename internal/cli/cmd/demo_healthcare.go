@@ -28,22 +28,22 @@ import (
 )
 
 func newHealthcareSuccessScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
 		"11 PHI/HIPAA rules evaluated, FHIR PA submission recorded")
 }
 
 func newHealthcarePHIBlockedScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
 		"Network isolation verified // L1 doctrine rejection verified at 0.95 confidence")
 }
 
 func newHealthcareGoldCardScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
 		"96% approval rate evaluated against 90% threshold // AUTO_APPROVED")
 }
 
 func newHealthcareSLABreachScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, constants.DemoScopeHealthcare,
 		"10 elapsed days evaluated against 7-day SLA // SLA_BREACHED // OHA reportable")
 }
 

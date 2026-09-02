@@ -46,7 +46,7 @@ func fedRAMPScenarioID(scenario string) (string, error) {
 }
 
 func newFedRAMPScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition, metricsSummary string) *compliancev1.DemoScenarioResult {
-	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, "fedramp-demo-scope", metricsSummary)
+	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFedRAMP, constants.DemoScopeFedRAMP, metricsSummary)
 }
 
 func newFedRAMPDenyScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
@@ -149,18 +149,18 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
 		step4Started := time.Now().UTC()
-		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Cloud Service recorded the PROVISION",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "PROVISION"})
-		step4Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
-			"fedramp-provision-step-4", "independent state observation: provision recorded", step4Started, step4Completed,
-			step4OK, true, "cloudsvc verify_ops.py PROVISION"))
-		if !step4OK {
+		step4Protocol, step4Ref, step4Err := collectFedRAMPCloudOperationEvidence(
+			ctx, demoDir, result, definition, "PROVISION", "fedramp-vm-prod-01", "FIPS-199-MODERATE")
+		step4Result := buildDemoStepResult(
+			"fedramp-provision-step-4", "independent state observation: provision recorded", step4Started, time.Now().UTC(),
+			step4Err == nil, true, step4Protocol)
+		if step4Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-provision-recorded")
+			step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, step4Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step4Ref)
 		}
+		result.StepResults = append(result.StepResults, step4Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-provision", "PROVISION recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded PROVISION — signed receipt in hash-chained ledger")
@@ -253,19 +253,17 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 		// Step 3: independent state observation — operations log remains present and non-empty.
 		step3Started := time.Now().UTC()
-		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Independently verify cloudsvc operations log still exists and is non-empty (prohibited side-effect check)",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"sh", "-c", "test -f " + constants.ContainerCloudSvcOpsLog + " && test -s " + constants.ContainerCloudSvcOpsLog})
-		step3Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		step3Protocol, step3Ref, step3Err := collectFedRAMPCloudLogEvidence(ctx, demoDir, result, definition)
+		step3Result := buildDemoStepResult(
 			"fedramp-deny-step-3", "independent state observation: operations log present and non-empty",
-			step3Started, step3Completed, step3OK, true,
-			"docker compose exec cloudsvc test -f && test -s operations log"))
-		if step3OK {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-ops-log-intact")
-		} else {
+			step3Started, time.Now().UTC(), step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
 			hasErrors = true
+		} else {
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
@@ -350,18 +348,18 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — revert admitted")
 
 		step3Started := time.Now().UTC()
-		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Cloud Service recorded the REVERT",
-			[]string{"docker", "compose", "exec", "-T", "cloudsvc",
-				"python", constants.ContainerVerifyOpsPy, "REVERT"})
-		step3Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
-			"fedramp-revert-step-3", "independent state observation: revert recorded", step3Started, step3Completed,
-			step3OK, true, "cloudsvc verify_ops.py REVERT"))
-		if !step3OK {
+		step3Protocol, step3Ref, step3Err := collectFedRAMPCloudOperationEvidence(
+			ctx, demoDir, result, definition, "REVERT", "fedramp-iam-roles-01", "CM-7-ROLLBACK")
+		step3Result := buildDemoStepResult(
+			"fedramp-revert-step-3", "independent state observation: revert recorded", step3Started, time.Now().UTC(),
+			step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:cloudsvc-revert-recorded")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "fedramp-revert", "REVERT recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded REVERT — signed receipt in hash-chained ledger")
@@ -441,19 +439,17 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /root/.g8e/data' — CR-26 audit integrity violation detected at admission")
 
 		step3Started := time.Now().UTC()
-		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Independently verify gateway audit vault DB still exists and is non-empty (prohibited side-effect check)",
-			[]string{"docker", "compose", "exec", "-T", "gateway",
-				"sh", "-c", "test -f " + constants.ContainerAuditVaultDB + " && test -s " + constants.ContainerAuditVaultDB})
-		step3Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		step3Protocol, step3Ref, step3Err := collectFedRAMPAuditVaultEvidence(ctx, demoDir, result, definition)
+		step3Result := buildDemoStepResult(
 			"fedramp-evidence-block-step-3", "independent state observation: audit vault present and non-empty",
-			step3Started, step3Completed, step3OK, true,
-			"docker compose exec gateway test -f && test -s audit vault DB"))
-		if !step3OK {
+			step3Started, time.Now().UTC(), step3Err == nil, true, step3Protocol)
+		if step3Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:gateway-audit-vault-intact")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, step3Ref)
+			result.StateObservationRefs = append(result.StateObservationRefs, step3Ref)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
