@@ -136,6 +136,17 @@ func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
+	t.Run("GET - self-describing Ed25519 key ID", func(t *testing.T) {
+		keyID := strings.Repeat("d", 64)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/"+keyID, nil)
+		rr := httptest.NewRecorder()
+		signerController.handleGovernanceSignerByID(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"id":"`+keyID+`"`)
+		assert.Contains(t, rr.Body.String(), `"public_key_hex":"`+keyID+`"`)
+		assert.Contains(t, rr.Body.String(), `"enabled":true`)
+	})
+
 	t.Run("GET - success", func(t *testing.T) {
 		signer := models.TrustedSigner{
 			ID:        "test-signer-get",
