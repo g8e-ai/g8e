@@ -18,6 +18,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -550,6 +551,22 @@ func TestComplianceOverlayCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+func TestComplianceDemoRunVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceDemoRunVerifyCmdWithConfig(
+		failingFileSvcFactory(errFactory),
+		func(string) evidence.ProvenanceSource {
+			panic("provenance source should not be created when fileSvcFactory fails")
+		},
+	)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, []string{"any-run"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)

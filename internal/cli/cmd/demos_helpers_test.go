@@ -31,6 +31,17 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
+func TestNewDemoRunID_DiffersForRunsStartedInSameSecond(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 2, 14, 27, 58, 0, time.UTC)
+
+	first := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+	second := newDemoRunID(constants.DemosOrgFedRAMP, startedAt)
+
+	assert.NotEqual(t, first, second)
+	assert.True(t, strings.HasPrefix(first, "fedramp-run-20260902T142758Z-"))
+	assert.True(t, strings.HasPrefix(second, "fedramp-run-20260902T142758Z-"))
+}
+
 func TestToDockerPath_NonWindowsReturnsPathUnchanged(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping non-Windows test on Windows")

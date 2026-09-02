@@ -138,3 +138,46 @@ func contentAddressDigestHex(contentAddress string) string {
 	}
 	return parts[2]
 }
+
+func persistStateObservationEvidenceBodies(ctx context.Context, fileSvc fs.RuntimeFileService, result *compliancev1.DemoScenarioResult) error {
+	if result == nil || result.GetRunId() == "" || len(result.GetStateObservationRefs()) == 0 {
+		return nil
+	}
+
+	bodies := make(map[string][]byte, len(result.GetStateObservationRefs()))
+	for _, step := range result.GetStepResults() {
+		for _, ref := range step.GetEvidenceRefs() {
+			if !strings.HasPrefix(ref, "state-observation:") {
+				continue
+			}
+			body := []byte(step.GetProtocolResult())
+			digest := contentAddressDigestHex(ref)
+			if len(body) == 0 || !strings.HasPrefix(ref, "state-observation:sha256:") || digest != computeSHA256Hex(body) {
+				return fmt.Errorf("%w: state observation %s does not match its content address", constants.ErrDemoEvidencePersistFailed, ref)
+			}
+			bodies[ref] = body
+		}
+	}
+
+	for _, ref := range result.GetStateObservationRefs() {
+		if _, ok := bodies[ref]; !ok {
+			return fmt.Errorf("%w: state observation %s has no step evidence body", constants.ErrDemoEvidencePersistFailed, ref)
+		}
+	}
+	if len(bodies) != len(result.GetStateObservationRefs()) {
+		return fmt.Errorf("%w: step state observations do not match scenario references", constants.ErrDemoEvidencePersistFailed)
+	}
+
+	runDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, result.GetRunId())
+	observationsDir := filepath.Join(runDir, constants.DemoRunStateObservationsDirname)
+	if err := fileSvc.MkdirAll(ctx, observationsDir, constants.PermDirStandard); err != nil {
+		return fmt.Errorf("%w: create demo state observations dir: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+	for ref, body := range bodies {
+		path := filepath.Join(observationsDir, contentAddressDigestHex(ref)+".json")
+		if err := fileSvc.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+			return fmt.Errorf("%w: write state observation %s: %w", constants.ErrDemoEvidencePersistFailed, ref, err)
+		}
+	}
+	return nil
+}

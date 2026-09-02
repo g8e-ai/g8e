@@ -92,16 +92,16 @@ func writeTestOverlays(t *testing.T, dir string, overlayCat *compliance.OverlayC
 }
 
 // TestComplianceCmd_Structure asserts that complianceCmd() is non-nil and has
-// the expected "ksi", "ksi-history", and "overlay" subcommands.
+// the expected "ksi", "ksi-history", "overlay", and "demo-run" subcommands.
 func TestComplianceCmd_Structure(t *testing.T) {
 	cmd := complianceCmd()
 	require.NotNil(t, cmd)
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 3)
+	assert.Len(t, subcommands, 4)
 
-	names := make(map[string]bool, 3)
+	names := make(map[string]bool, 4)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
@@ -109,6 +109,7 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.True(t, names["ksi"], "compliance should have 'ksi' subcommand")
 	assert.True(t, names["ksi-history"], "compliance should have 'ksi-history' subcommand")
 	assert.True(t, names["overlay"], "compliance should have 'overlay' subcommand")
+	assert.True(t, names["demo-run"], "compliance should have 'demo-run' subcommand")
 }
 
 // TestComplianceKSICmd_FileSvcFactoryError asserts that the ksi subcommand

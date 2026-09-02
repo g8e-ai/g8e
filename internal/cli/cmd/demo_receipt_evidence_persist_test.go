@@ -190,3 +190,62 @@ func TestPersistReceiptEvidenceBodies_FailsClosedOnMissingPersistenceAttestation
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDemoEvidencePersistFailed)
 }
+
+func TestPersistStateObservationEvidenceBodies_WritesContentAddressedArtifact(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	ctx := context.Background()
+	body := `{"collector_id":"fedramp-cloud-operation-v1","operation_found":true}`
+	digest := computeSHA256Hex([]byte(body))
+	result := &compliancev1.DemoScenarioResult{
+		RunId: "run-1",
+		StepResults: []*compliancev1.DemoStepResult{{
+			StepId:         "step-1",
+			ProtocolResult: body,
+			EvidenceRefs:   []string{"state-observation:sha256:" + digest},
+		}},
+		StateObservationRefs: []string{"state-observation:sha256:" + digest},
+	}
+
+	require.NoError(t, persistStateObservationEvidenceBodies(ctx, fileSvc, result))
+
+	path := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, "run-1", constants.DemoRunStateObservationsDirname, digest+".json")
+	persisted, err := fileSvc.ReadFile(ctx, path)
+	require.NoError(t, err)
+	assert.Equal(t, body, string(persisted))
+}
+
+func TestPersistStateObservationEvidenceBodies_FailsClosedOnInvalidEvidence(t *testing.T) {
+	body := `{"collector_id":"fedramp-cloud-operation-v1","operation_found":true}`
+	digest := computeSHA256Hex([]byte(body))
+	tests := []struct {
+		name      string
+		body      string
+		stepRefs  []string
+		resultRef string
+	}{
+		{name: "missing step body", stepRefs: []string{"state-observation:sha256:" + digest}, resultRef: "state-observation:sha256:" + digest},
+		{name: "malformed step reference", body: body, stepRefs: []string{"state-observation:" + digest}, resultRef: "state-observation:" + digest},
+		{name: "digest mismatch", body: body, stepRefs: []string{"state-observation:sha256:" + strings.Repeat("0", 64)}, resultRef: "state-observation:sha256:" + strings.Repeat("0", 64)},
+		{name: "unresolved result reference", body: body, resultRef: "state-observation:sha256:" + digest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fileSvc, _ := newCmdTestEnv(t)
+			result := &compliancev1.DemoScenarioResult{
+				RunId: "run-1",
+				StepResults: []*compliancev1.DemoStepResult{{
+					StepId:         "step-1",
+					ProtocolResult: tt.body,
+					EvidenceRefs:   tt.stepRefs,
+				}},
+				StateObservationRefs: []string{tt.resultRef},
+			}
+
+			err := persistStateObservationEvidenceBodies(context.Background(), fileSvc, result)
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrDemoEvidencePersistFailed)
+		})
+	}
+}
