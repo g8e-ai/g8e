@@ -258,6 +258,7 @@ const (
 	DemosFedRAMPDoctrineFile        = "fedramp_doctrine.json"
 	DemosFinanceStateCollectorFile  = "verify_trade_absence.sh"
 	DemosHealthcareNetCollectorFile = "collect_network_isolation.sh"
+	DemosDHSNetworkCollectorFile    = "collect_network_membership.sh"
 	DemosImagesManifestFile         = "images.json"
 	DemosOrgHealthcare              = "healthcare"
 	DemosOrgFinance                 = "finance"

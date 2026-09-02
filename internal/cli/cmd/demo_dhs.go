@@ -198,6 +198,125 @@ func collectDHSDataServiceEvidence(ctx context.Context, demoDir string, result *
 	return string(encoded), evidenceRef, nil
 }
 
+const (
+	dhsNetworkCollectorID      = "dhs-network-membership"
+	dhsNetworkCollectorVersion = "1.0.0"
+	dhsNetworkBoundary         = "docker-network-control-plane"
+)
+
+type dhsNetworkExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	NetworkName             string
+	ContainerName           string
+	Connected               bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type dhsNetworkObservation struct {
+	Connected     bool   `json:"connected"`
+	ContainerName string `json:"container_name"`
+	NetworkName   string `json:"network_name"`
+	ObservedAt    string `json:"observed_at"`
+	RunID         string `json:"run_id"`
+	ScenarioID    string `json:"scenario_id"`
+}
+
+type dhsNetworkCollection struct {
+	CollectorID             string                `json:"collector_id"`
+	CollectorVersion        string                `json:"collector_version"`
+	Boundary                string                `json:"boundary"`
+	InitialStateFixtureRef  string                `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string              `json:"terminal_state_assertions"`
+	CollectedAt             time.Time             `json:"collected_at"`
+	Observation             dhsNetworkObservation `json:"observation"`
+}
+
+type dhsNetworkObservationWire struct {
+	Connected     *bool  `json:"connected"`
+	ContainerName string `json:"container_name"`
+	NetworkName   string `json:"network_name"`
+	ObservedAt    string `json:"observed_at"`
+	RunID         string `json:"run_id"`
+	ScenarioID    string `json:"scenario_id"`
+}
+
+func decodeDHSNetworkObservation(raw []byte, expected dhsNetworkExpectation, collectedAt time.Time) (*dhsNetworkCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: DHS network collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire dhsNetworkObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode DHS network observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: DHS network observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.Connected == nil {
+		return nil, fmt.Errorf("%w: DHS network observation omits container membership", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := dhsNetworkObservation{
+		Connected: *wire.Connected, ContainerName: wire.ContainerName, NetworkName: wire.NetworkName,
+		ObservedAt: wire.ObservedAt, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS network observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: DHS network observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID || observed.NetworkName != expected.NetworkName ||
+		observed.ContainerName != expected.ContainerName || observed.Connected != expected.Connected {
+		return nil, fmt.Errorf("%w: DHS network observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &dhsNetworkCollection{
+		CollectorID: dhsNetworkCollectorID, CollectorVersion: dhsNetworkCollectorVersion, Boundary: dhsNetworkBoundary,
+		InitialStateFixtureRef: expected.InitialStateFixtureRef, TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt: collectedAt, Observation: observed,
+	}, nil
+}
+
+func encodeDHSNetworkCollection(collection *dhsNetworkCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode DHS network collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectDHSNetworkEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition, connected bool) (string, string, error) {
+	command := exec.CommandContext(ctx, "sh", constants.DemosDHSNetworkCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), constants.DemosDHSPerimeterNetwork, constants.DemosDHSCoalitionDatalinkCtnr)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: DHS network collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeDHSNetworkObservation(stdout.Bytes(), dhsNetworkExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), NetworkName: constants.DemosDHSPerimeterNetwork,
+		ContainerName: constants.DemosDHSCoalitionDatalinkCtnr, Connected: connected,
+		InitialStateFixtureRef: definition.GetInitialStateFixtureRef(), TerminalStateAssertions: definition.GetTerminalStateAssertions(),
+		NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeDHSNetworkCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
+}
+
 func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result *compliancev1.DemoScenarioResult
@@ -367,17 +486,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		}
 
 		step3Started := time.Now().UTC()
-		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify network detachment (datalink container off perimeter)",
-			[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
-				" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr + " && exit 1 || exit 0"})
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step3Err := collectDHSNetworkEvidence(ctx, demoDir, result, definition, false)
+		step3Result := buildDemoStepResult(
 			"dhs-disconnected-step-3", "independent state observation: datalink detached", step3Started, time.Now().UTC(),
-			step3OK, true, "docker network inspection excludes datalink container"))
-		if !step3OK {
+			step3Err == nil, true, protocolResult)
+		if step3Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-datalink-detached")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		step4Started := time.Now().UTC()
 		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify gateway continues operating locally",
@@ -469,16 +588,16 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 				Status: demoStatusSkipped, ProtocolResult: "datalink restoration unavailable", Failure: "restore datalink step failed", Required: false,
 			})
 		} else {
-			step9OK := demoScenarioStep(ctx, demoDir, "Step 9: Verify datalink is reachable again (container back on perimeter)",
-				[]string{"sh", "-c", "docker network inspect " + constants.DemosDHSPerimeterNetwork +
-					" --format '{{range .Containers}}{{.Name}} {{end}}' | grep -q " + constants.DemosDHSCoalitionDatalinkCtnr})
-			result.StepResults = append(result.StepResults, buildDemoStepResult(
+			protocolResult, evidenceRef, step9Err := collectDHSNetworkEvidence(ctx, demoDir, result, definition, true)
+			step9Result := buildDemoStepResult(
 				"dhs-disconnected-step-9", "independent state observation: datalink restored", step9Started, time.Now().UTC(),
-				step9OK, false, "docker network inspection includes datalink container"))
-			restorationFailed = !step9OK
-			if step9OK {
-				result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:dhs-datalink-restored")
+				step9Err == nil, false, protocolResult)
+			restorationFailed = step9Err != nil
+			if step9Err == nil {
+				step9Result.EvidenceRefs = append(step9Result.EvidenceRefs, evidenceRef)
+				result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 			}
+			result.StepResults = append(result.StepResults, step9Result)
 		}
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
