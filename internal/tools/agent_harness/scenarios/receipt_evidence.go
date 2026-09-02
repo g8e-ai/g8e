@@ -39,15 +39,16 @@ type ReceiptEvidenceResolver interface {
 }
 
 type ReceiptEvidence struct {
-	RunID           string                    `json:"run_id"`
-	ScenarioID      string                    `json:"scenario_id"`
-	AttemptID       string                    `json:"attempt_id"`
-	ExecutionID     string                    `json:"execution_id"`
-	InvestigationID string                    `json:"investigation_id"`
-	TransactionID   string                    `json:"transaction_id"`
-	ReceiptRef      string                    `json:"receipt_ref"`
-	PersistenceRef  string                    `json:"persistence_ref"`
-	Receipt         *operatorv1.ActionReceipt `json:"receipt"`
+	RunID              string                    `json:"run_id"`
+	ScenarioID         string                    `json:"scenario_id"`
+	AttemptID          string                    `json:"attempt_id"`
+	ExecutionID        string                    `json:"execution_id"`
+	InvestigationID    string                    `json:"investigation_id"`
+	TransactionID      string                    `json:"transaction_id"`
+	ReceiptRef         string                    `json:"receipt_ref"`
+	PersistenceRef     string                    `json:"persistence_ref"`
+	ProtocolChainGrade *ProtocolChainGrade       `json:"protocol_chain_grade,omitempty"`
+	Receipt            *operatorv1.ActionReceipt `json:"receipt"`
 }
 
 func BuildReceiptEvidence(result *Result, projection clientpkg.Receipt, receipt *operatorv1.ActionReceipt) (*ReceiptEvidence, error) {
@@ -116,6 +117,7 @@ func ResolveReceiptEvidence(ctx context.Context, resolver ReceiptEvidenceResolve
 		return nil
 	}
 	evidenceRecords := make([]ReceiptEvidence, 0, len(result.Receipts))
+	chainGrades := make([]ProtocolChainGrade, 0, len(result.Receipts))
 	for _, projection := range result.Receipts {
 		receipt, err := waitForCanonicalReceipt(ctx, resolver, projection.TransactionID)
 		if err != nil {
@@ -132,9 +134,16 @@ func ResolveReceiptEvidence(ctx context.Context, resolver ReceiptEvidenceResolve
 		if err := VerifyReceiptEvidenceSignatures(evidence, signerKey); err != nil {
 			return fmt.Errorf("verify receipt evidence signatures for transaction %s: %w", projection.TransactionID, err)
 		}
+		chainGrade, err := ValidateProtocolChain(receipt)
+		if err != nil {
+			return fmt.Errorf("validate protocol chain for transaction %s: %w", projection.TransactionID, err)
+		}
+		evidence.ProtocolChainGrade = chainGrade
 		evidenceRecords = append(evidenceRecords, *evidence)
+		chainGrades = append(chainGrades, *chainGrade)
 	}
 	result.ReceiptEvidence = append(result.ReceiptEvidence, evidenceRecords...)
+	result.ProtocolChainGrades = append(result.ProtocolChainGrades, chainGrades...)
 	return nil
 }
 

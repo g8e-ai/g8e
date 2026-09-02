@@ -877,7 +877,7 @@ var (
 	ErrReceiptPersistenceAttestationMissing = errors.New("receipt persistence attestation missing")
 	ErrReceiptPersistenceSignatureMismatch  = errors.New("receipt persistence signature digest mismatch")
 	ErrReceiptPersistenceAttestationInvalid = errors.New("receipt persistence attestation signature invalid")
-	ErrTrustedSignerKeyNotFound            = errors.New("trusted signer public key not found")
+	ErrTrustedSignerKeyNotFound             = errors.New("trusted signer public key not found")
 	ErrL5ActuatorCapabilityDissolve         = errors.New("L5Actuator: failed to dissolve execution capability")
 	ErrL5ActuatorRehydrate                  = errors.New("L5Actuator: failed to rehydrate payload")
 	ErrL5ActuatorDocStore                   = errors.New("L5Actuator: document store error")

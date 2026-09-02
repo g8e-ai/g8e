@@ -58,8 +58,9 @@ type Result struct {
 	ExecutionIDs     []string             `json:"execution_ids,omitempty"`
 	TransactionIDs   []string             `json:"transaction_ids,omitempty"`
 	InvestigationIDs []string             `json:"investigation_ids,omitempty"`
-	Receipts         []clientpkg.Receipt  `json:"receipts,omitempty"`
-	ReceiptEvidence  []ReceiptEvidence    `json:"receipt_evidence,omitempty"`
+	Receipts           []clientpkg.Receipt  `json:"receipts,omitempty"`
+	ReceiptEvidence    []ReceiptEvidence    `json:"receipt_evidence,omitempty"`
+	ProtocolChainGrades []ProtocolChainGrade `json:"protocol_chain_grades,omitempty"`
 	Notes            []string             `json:"notes,omitempty"`
 	OK               bool                 `json:"ok"`
 	Err              string               `json:"error,omitempty"`

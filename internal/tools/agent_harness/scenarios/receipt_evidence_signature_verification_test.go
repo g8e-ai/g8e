@@ -26,22 +26,26 @@ import (
 
 // buildSignedReceiptEvidence constructs a ReceiptEvidence whose receipt and
 // persistence attestation carry real Ed25519 signatures from the provided
-// signing key. This is the canonical fixture for signature-verification tests.
+// signing key. The receipt carries a complete verified deterministic stage
+// chain so ResolveReceiptEvidence's protocol-chain validation passes. This is
+// the canonical fixture for signature-verification tests.
 func buildSignedReceiptEvidence(t *testing.T, result *Result, projection clientpkg.Receipt, signerPriv ed25519.PrivateKey, signerKeyID string) *ReceiptEvidence {
 	t.Helper()
 
 	receipt := &operatorv1.ActionReceipt{
-		TransactionId:   projection.TransactionID,
-		TransactionHash: projection.TransactionHash,
-		SignerKeyId:     signerKeyID,
-		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-		ResultSummary:   "completed",
+		TransactionId:    projection.TransactionID,
+		TransactionHash:  projection.TransactionHash,
+		SignerKeyId:      signerKeyID,
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		StateRootBefore:  "root-before",
+		StateRootAfter:   "root-after",
+		ResultSummary:    "completed",
 		ExecutedAtUnixMs: time.Now().UnixMilli(),
-		DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{
-			TransactionId:   projection.TransactionID,
-			TransactionHash: projection.TransactionHash,
-			InvestigationId: projection.InvestigationID,
-		}},
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Status:         operatorv1.L3Status_L3_STATUS_NOT_REQUIRED,
+		DeterministicStageEvidence: buildVerifiedChainStages(
+			projection.TransactionID, projection.TransactionHash, projection.InvestigationID,
+		),
 	}
 
 	payload, err := governance.CanonicalizeActionReceipt(receipt)
