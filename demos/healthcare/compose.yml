@@ -45,6 +45,8 @@ services:
         ipv4_address: 10.21.0.10
       net_internal:
         ipv4_address: 10.22.0.10
+      net_secure:
+        ipv4_address: 10.23.0.10
     volumes:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro

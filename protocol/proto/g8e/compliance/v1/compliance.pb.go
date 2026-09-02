@@ -2753,6 +2753,154 @@ func (x *DemoScenarioResult) GetProtocolChainRefs() []string {
 	return nil
 }
 
+type DemoMetricEvidence struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MetricId          string                 `protobuf:"bytes,1,opt,name=metric_id,json=metricId,proto3" json:"metric_id,omitempty"`
+	MetricVersion     string                 `protobuf:"bytes,2,opt,name=metric_version,json=metricVersion,proto3" json:"metric_version,omitempty"`
+	RunId             string                 `protobuf:"bytes,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	ScopeId           string                 `protobuf:"bytes,4,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ScenarioRef       *VersionedReference    `protobuf:"bytes,5,opt,name=scenario_ref,json=scenarioRef,proto3" json:"scenario_ref,omitempty"`
+	SourceEvidenceRef string                 `protobuf:"bytes,6,opt,name=source_evidence_ref,json=sourceEvidenceRef,proto3" json:"source_evidence_ref,omitempty"`
+	SubjectRef        string                 `protobuf:"bytes,7,opt,name=subject_ref,json=subjectRef,proto3" json:"subject_ref,omitempty"`
+	MeasuredValue     int64                  `protobuf:"varint,8,opt,name=measured_value,json=measuredValue,proto3" json:"measured_value,omitempty"`
+	ThresholdValue    int64                  `protobuf:"varint,9,opt,name=threshold_value,json=thresholdValue,proto3" json:"threshold_value,omitempty"`
+	Unit              string                 `protobuf:"bytes,10,opt,name=unit,proto3" json:"unit,omitempty"`
+	Comparison        string                 `protobuf:"bytes,11,opt,name=comparison,proto3" json:"comparison,omitempty"`
+	Passed            bool                   `protobuf:"varint,12,opt,name=passed,proto3" json:"passed,omitempty"`
+	EvaluatedAt       *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=evaluated_at,json=evaluatedAt,proto3" json:"evaluated_at,omitempty"`
+	GraderRef         *VersionedReference    `protobuf:"bytes,14,opt,name=grader_ref,json=graderRef,proto3" json:"grader_ref,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *DemoMetricEvidence) Reset() {
+	*x = DemoMetricEvidence{}
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DemoMetricEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DemoMetricEvidence) ProtoMessage() {}
+
+func (x *DemoMetricEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DemoMetricEvidence.ProtoReflect.Descriptor instead.
+func (*DemoMetricEvidence) Descriptor() ([]byte, []int) {
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *DemoMetricEvidence) GetMetricId() string {
+	if x != nil {
+		return x.MetricId
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetMetricVersion() string {
+	if x != nil {
+		return x.MetricVersion
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetScopeId() string {
+	if x != nil {
+		return x.ScopeId
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetScenarioRef() *VersionedReference {
+	if x != nil {
+		return x.ScenarioRef
+	}
+	return nil
+}
+
+func (x *DemoMetricEvidence) GetSourceEvidenceRef() string {
+	if x != nil {
+		return x.SourceEvidenceRef
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetSubjectRef() string {
+	if x != nil {
+		return x.SubjectRef
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetMeasuredValue() int64 {
+	if x != nil {
+		return x.MeasuredValue
+	}
+	return 0
+}
+
+func (x *DemoMetricEvidence) GetThresholdValue() int64 {
+	if x != nil {
+		return x.ThresholdValue
+	}
+	return 0
+}
+
+func (x *DemoMetricEvidence) GetUnit() string {
+	if x != nil {
+		return x.Unit
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetComparison() string {
+	if x != nil {
+		return x.Comparison
+	}
+	return ""
+}
+
+func (x *DemoMetricEvidence) GetPassed() bool {
+	if x != nil {
+		return x.Passed
+	}
+	return false
+}
+
+func (x *DemoMetricEvidence) GetEvaluatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EvaluatedAt
+	}
+	return nil
+}
+
+func (x *DemoMetricEvidence) GetGraderRef() *VersionedReference {
+	if x != nil {
+		return x.GraderRef
+	}
+	return nil
+}
+
 type DemoScenarioCatalog struct {
 	state          protoimpl.MessageState    `protogen:"open.v1"`
 	CatalogId      string                    `protobuf:"bytes,1,opt,name=catalog_id,json=catalogId,proto3" json:"catalog_id,omitempty"`
@@ -2765,7 +2913,7 @@ type DemoScenarioCatalog struct {
 
 func (x *DemoScenarioCatalog) Reset() {
 	*x = DemoScenarioCatalog{}
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2777,7 +2925,7 @@ func (x *DemoScenarioCatalog) String() string {
 func (*DemoScenarioCatalog) ProtoMessage() {}
 
 func (x *DemoScenarioCatalog) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[25]
+	mi := &file_g8e_compliance_v1_compliance_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2790,7 +2938,7 @@ func (x *DemoScenarioCatalog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DemoScenarioCatalog.ProtoReflect.Descriptor instead.
 func (*DemoScenarioCatalog) Descriptor() ([]byte, []int) {
-	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{25}
+	return file_g8e_compliance_v1_compliance_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DemoScenarioCatalog) GetCatalogId() string {
@@ -3124,7 +3272,27 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\rexecution_ids\x18\x18 \x03(\tR\fexecutionIds\x12\x1f\n" +
 	"\vattempt_ids\x18\x19 \x03(\tR\n" +
 	"attemptIds\x12.\n" +
-	"\x13protocol_chain_refs\x18\x1a \x03(\tR\x11protocolChainRefs\"\xc2\x01\n" +
+	"\x13protocol_chain_refs\x18\x1a \x03(\tR\x11protocolChainRefs\"\xc6\x04\n" +
+	"\x12DemoMetricEvidence\x12\x1b\n" +
+	"\tmetric_id\x18\x01 \x01(\tR\bmetricId\x12%\n" +
+	"\x0emetric_version\x18\x02 \x01(\tR\rmetricVersion\x12\x15\n" +
+	"\x06run_id\x18\x03 \x01(\tR\x05runId\x12\x19\n" +
+	"\bscope_id\x18\x04 \x01(\tR\ascopeId\x12H\n" +
+	"\fscenario_ref\x18\x05 \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\vscenarioRef\x12.\n" +
+	"\x13source_evidence_ref\x18\x06 \x01(\tR\x11sourceEvidenceRef\x12\x1f\n" +
+	"\vsubject_ref\x18\a \x01(\tR\n" +
+	"subjectRef\x12%\n" +
+	"\x0emeasured_value\x18\b \x01(\x03R\rmeasuredValue\x12'\n" +
+	"\x0fthreshold_value\x18\t \x01(\x03R\x0ethresholdValue\x12\x12\n" +
+	"\x04unit\x18\n" +
+	" \x01(\tR\x04unit\x12\x1e\n" +
+	"\n" +
+	"comparison\x18\v \x01(\tR\n" +
+	"comparison\x12\x16\n" +
+	"\x06passed\x18\f \x01(\bR\x06passed\x12=\n" +
+	"\fevaluated_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\vevaluatedAt\x12D\n" +
+	"\n" +
+	"grader_ref\x18\x0e \x01(\v2%.g8e.compliance.v1.VersionedReferenceR\tgraderRef\"\xc2\x01\n" +
 	"\x13DemoScenarioCatalog\x12\x1d\n" +
 	"\n" +
 	"catalog_id\x18\x01 \x01(\tR\tcatalogId\x12'\n" +
@@ -3144,7 +3312,7 @@ func file_g8e_compliance_v1_compliance_proto_rawDescGZIP() []byte {
 	return file_g8e_compliance_v1_compliance_proto_rawDescData
 }
 
-var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_g8e_compliance_v1_compliance_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
 	(*VersionedReference)(nil),           // 0: g8e.compliance.v1.VersionedReference
 	(*NamedDigest)(nil),                  // 1: g8e.compliance.v1.NamedDigest
@@ -3171,8 +3339,9 @@ var file_g8e_compliance_v1_compliance_proto_goTypes = []any{
 	(*DemoScenarioDefinition)(nil),       // 22: g8e.compliance.v1.DemoScenarioDefinition
 	(*DemoStepResult)(nil),               // 23: g8e.compliance.v1.DemoStepResult
 	(*DemoScenarioResult)(nil),           // 24: g8e.compliance.v1.DemoScenarioResult
-	(*DemoScenarioCatalog)(nil),          // 25: g8e.compliance.v1.DemoScenarioCatalog
-	(*timestamppb.Timestamp)(nil),        // 26: google.protobuf.Timestamp
+	(*DemoMetricEvidence)(nil),           // 25: g8e.compliance.v1.DemoMetricEvidence
+	(*DemoScenarioCatalog)(nil),          // 26: g8e.compliance.v1.DemoScenarioCatalog
+	(*timestamppb.Timestamp)(nil),        // 27: google.protobuf.Timestamp
 }
 var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	0,  // 0: g8e.compliance.v1.ControlAssertionDefinition.required_grader_refs:type_name -> g8e.compliance.v1.VersionedReference
@@ -3182,48 +3351,51 @@ var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	5,  // 4: g8e.compliance.v1.FrameworkCatalog.frameworks:type_name -> g8e.compliance.v1.FrameworkDefinition
 	0,  // 5: g8e.compliance.v1.ControlCrosswalk.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,  // 6: g8e.compliance.v1.ControlCrosswalk.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	26, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
+	27, // 7: g8e.compliance.v1.ControlCrosswalk.reviewed_at:type_name -> google.protobuf.Timestamp
 	7,  // 8: g8e.compliance.v1.ControlCrosswalkCatalog.mappings:type_name -> g8e.compliance.v1.ControlCrosswalk
 	1,  // 9: g8e.compliance.v1.AssessmentScope.image_digests:type_name -> g8e.compliance.v1.NamedDigest
 	9,  // 10: g8e.compliance.v1.AssessmentScope.component_inventory:type_name -> g8e.compliance.v1.ComponentInventoryEntry
 	1,  // 11: g8e.compliance.v1.AssessmentScope.configuration_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	1,  // 12: g8e.compliance.v1.AssessmentScope.doctrine_bundle_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	1,  // 13: g8e.compliance.v1.AssessmentScope.consensus_policy_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	26, // 14: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
-	26, // 15: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
-	26, // 16: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
-	26, // 17: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
+	27, // 14: g8e.compliance.v1.AssessmentScope.assessment_window_start:type_name -> google.protobuf.Timestamp
+	27, // 15: g8e.compliance.v1.AssessmentScope.assessment_window_end:type_name -> google.protobuf.Timestamp
+	27, // 16: g8e.compliance.v1.ComplianceEvidenceReference.produced_at:type_name -> google.protobuf.Timestamp
+	27, // 17: g8e.compliance.v1.ComplianceEvidenceReference.verified_at:type_name -> google.protobuf.Timestamp
 	11, // 18: g8e.compliance.v1.ComplianceEvidenceReference.encryption:type_name -> g8e.compliance.v1.EvidenceEncryptionMetadata
 	0,  // 19: g8e.compliance.v1.ControlAssertionAssessment.assertion_ref:type_name -> g8e.compliance.v1.VersionedReference
-	26, // 20: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
+	27, // 20: g8e.compliance.v1.ControlAssertionAssessment.evaluated_at:type_name -> google.protobuf.Timestamp
 	0,  // 21: g8e.compliance.v1.ControlAssertionAssessment.verifier_ref:type_name -> g8e.compliance.v1.VersionedReference
 	0,  // 22: g8e.compliance.v1.FrameworkControlAssessment.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	26, // 23: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
+	27, // 23: g8e.compliance.v1.ComplianceReportManifest.generated_at:type_name -> google.protobuf.Timestamp
 	0,  // 24: g8e.compliance.v1.ComplianceReportManifest.framework_refs:type_name -> g8e.compliance.v1.VersionedReference
 	16, // 25: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
-	26, // 26: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
+	27, // 26: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
 	18, // 27: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
 	0,  // 28: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	26, // 29: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	27, // 29: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
 	0,  // 30: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
 	1,  // 31: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
 	20, // 32: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
 	0,  // 33: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
 	20, // 34: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	26, // 35: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	26, // 36: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	27, // 35: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	27, // 36: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
 	0,  // 37: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	26, // 38: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	26, // 39: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	27, // 38: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	27, // 39: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
 	0,  // 40: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
 	20, // 41: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
 	23, // 42: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	22, // 43: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
-	44, // [44:44] is the sub-list for method output_type
-	44, // [44:44] is the sub-list for method input_type
-	44, // [44:44] is the sub-list for extension type_name
-	44, // [44:44] is the sub-list for extension extendee
-	0,  // [0:44] is the sub-list for field type_name
+	0,  // 43: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	27, // 44: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	0,  // 45: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	22, // 46: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	47, // [47:47] is the sub-list for method output_type
+	47, // [47:47] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }
@@ -3237,7 +3409,7 @@ func file_g8e_compliance_v1_compliance_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_compliance_v1_compliance_proto_rawDesc), len(file_g8e_compliance_v1_compliance_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

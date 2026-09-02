@@ -565,6 +565,38 @@ class DemoScenarioResult(_message.Message):
     protocol_chain_refs: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, result_id: _Optional[str] = ..., scenario_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., demo_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., run_id: _Optional[str] = ..., started_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., completed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., status: _Optional[str] = ..., investigation_ids: _Optional[_Iterable[str]] = ..., transaction_ids: _Optional[_Iterable[str]] = ..., receipt_refs: _Optional[_Iterable[str]] = ..., state_observation_refs: _Optional[_Iterable[str]] = ..., metric_refs: _Optional[_Iterable[str]] = ..., ksi_refs: _Optional[_Iterable[str]] = ..., assertion_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., framework_control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ..., step_results: _Optional[_Iterable[_Union[DemoStepResult, _Mapping]]] = ..., verification_status: _Optional[str] = ..., failure: _Optional[str] = ..., limitations: _Optional[_Iterable[str]] = ..., display_number: _Optional[str] = ..., title: _Optional[str] = ..., metrics_summary: _Optional[str] = ..., execution_ids: _Optional[_Iterable[str]] = ..., attempt_ids: _Optional[_Iterable[str]] = ..., protocol_chain_refs: _Optional[_Iterable[str]] = ...) -> None: ...
 
+class DemoMetricEvidence(_message.Message):
+    __slots__ = ("metric_id", "metric_version", "run_id", "scope_id", "scenario_ref", "source_evidence_ref", "subject_ref", "measured_value", "threshold_value", "unit", "comparison", "passed", "evaluated_at", "grader_ref")
+    METRIC_ID_FIELD_NUMBER: _ClassVar[int]
+    METRIC_VERSION_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
+    SCENARIO_REF_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_EVIDENCE_REF_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_REF_FIELD_NUMBER: _ClassVar[int]
+    MEASURED_VALUE_FIELD_NUMBER: _ClassVar[int]
+    THRESHOLD_VALUE_FIELD_NUMBER: _ClassVar[int]
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    COMPARISON_FIELD_NUMBER: _ClassVar[int]
+    PASSED_FIELD_NUMBER: _ClassVar[int]
+    EVALUATED_AT_FIELD_NUMBER: _ClassVar[int]
+    GRADER_REF_FIELD_NUMBER: _ClassVar[int]
+    metric_id: str
+    metric_version: str
+    run_id: str
+    scope_id: str
+    scenario_ref: VersionedReference
+    source_evidence_ref: str
+    subject_ref: str
+    measured_value: int
+    threshold_value: int
+    unit: str
+    comparison: str
+    passed: bool
+    evaluated_at: _timestamp_pb2.Timestamp
+    grader_ref: VersionedReference
+    def __init__(self, metric_id: _Optional[str] = ..., metric_version: _Optional[str] = ..., run_id: _Optional[str] = ..., scope_id: _Optional[str] = ..., scenario_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., source_evidence_ref: _Optional[str] = ..., subject_ref: _Optional[str] = ..., measured_value: _Optional[int] = ..., threshold_value: _Optional[int] = ..., unit: _Optional[str] = ..., comparison: _Optional[str] = ..., passed: _Optional[bool] = ..., evaluated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., grader_ref: _Optional[_Union[VersionedReference, _Mapping]] = ...) -> None: ...
+
 class DemoScenarioCatalog(_message.Message):
     __slots__ = ("catalog_id", "catalog_version", "sha256", "definitions")
     CATALOG_ID_FIELD_NUMBER: _ClassVar[int]

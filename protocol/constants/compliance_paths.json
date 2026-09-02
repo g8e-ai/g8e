@@ -41,6 +41,7 @@
     "ComplianceBundleHTMLFilename": {"_go_const": "ComplianceBundleHTMLFilename", "value": "report.html"},
     "ComplianceBundleChecksumsFilename": {"_go_const": "ComplianceBundleChecksumsFilename", "value": "checksums.json"},
     "ComplianceBundlePublicKeysFilename": {"_go_const": "ComplianceBundlePublicKeysFilename", "value": "public-keys.json"},
-    "ComplianceBundleSignaturesFilename": {"_go_const": "ComplianceBundleSignaturesFilename", "value": "signatures.json"}
+    "ComplianceBundleSignaturesFilename": {"_go_const": "ComplianceBundleSignaturesFilename", "value": "signatures.json"},
+    "DemoRunMetricsDirname": {"_go_const": "DemoRunMetricsDirname", "value": "metrics"}
   }
 }

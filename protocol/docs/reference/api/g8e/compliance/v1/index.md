@@ -16,6 +16,7 @@
     - [ControlCrosswalk](#g8e-compliance-v1-ControlCrosswalk)
     - [ControlCrosswalkCatalog](#g8e-compliance-v1-ControlCrosswalkCatalog)
     - [DemoManifest](#g8e-compliance-v1-DemoManifest)
+    - [DemoMetricEvidence](#g8e-compliance-v1-DemoMetricEvidence)
     - [DemoScenarioCatalog](#g8e-compliance-v1-DemoScenarioCatalog)
     - [DemoScenarioDefinition](#g8e-compliance-v1-DemoScenarioDefinition)
     - [DemoScenarioResult](#g8e-compliance-v1-DemoScenarioResult)
@@ -325,6 +326,34 @@
 | required_environment | [string](#string) | repeated |  |
 | framework_control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
 | supported_lanes | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-DemoMetricEvidence"></a>
+
+### DemoMetricEvidence
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| metric_id | [string](#string) |  |  |
+| metric_version | [string](#string) |  |  |
+| run_id | [string](#string) |  |  |
+| scope_id | [string](#string) |  |  |
+| scenario_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| source_evidence_ref | [string](#string) |  |  |
+| subject_ref | [string](#string) |  |  |
+| measured_value | [int64](#int64) |  |  |
+| threshold_value | [int64](#int64) |  |  |
+| unit | [string](#string) |  |  |
+| comparison | [string](#string) |  |  |
+| passed | [bool](#bool) |  |  |
+| evaluated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| grader_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
 
 
 

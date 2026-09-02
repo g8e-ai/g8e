@@ -612,19 +612,24 @@ const (
 // bundle generation. These are runtime evidence store paths, distinct from the
 // ComplianceBundle* constants which describe the generated report bundle layout.
 const (
-	DemoEvidenceDirname             = "demo-evidence"
-	DemoRunManifestFilename         = "manifest.json"
-	DemoRunResultsFilename          = "scenario-results.jsonl"
-	DemoRunStepsFilename            = "step-results.jsonl"
-	DemoRunDefinitionsFilename      = "scenario-definitions.jsonl"
-	DemoRunReceiptsDirname          = "receipts"
-	DemoRunPersistenceDirname       = "persistence"
-	DemoRunStateObservationsDirname = "state-observations"
-	DemoRunVerifierID               = "g8e-demo-run-verifier"
-	DemoRunVerifierVersion          = "1.0.0"
-	DemoRunMaxArtifactBytes         = 16 << 20
-	DemoRunMaxResults               = 1024
-	DemoRunMaxArtifactsPerDirectory = 4096
+	DemoEvidenceDirname                    = "demo-evidence"
+	DemoRunManifestFilename                = "manifest.json"
+	DemoRunResultsFilename                 = "scenario-results.jsonl"
+	DemoRunStepsFilename                   = "step-results.jsonl"
+	DemoRunDefinitionsFilename             = "scenario-definitions.jsonl"
+	DemoRunReceiptsDirname                 = "receipts"
+	DemoRunPersistenceDirname              = "persistence"
+	DemoRunStateObservationsDirname        = "state-observations"
+	DemoRunMetricsDirname                  = "metrics"
+	DemoRunVerifierID                      = "g8e-demo-run-verifier"
+	DemoRunVerifierVersion                 = "1.0.0"
+	DemoMetricEvidenceVersion              = "1.0.0"
+	DemoMetricGraderID                     = "healthcare-threshold"
+	DemoMetricGraderVersion                = "1.0.0"
+	DemoMetricComparisonGreaterThanOrEqual = "greater_than_or_equal"
+	DemoRunMaxArtifactBytes                = 16 << 20
+	DemoRunMaxResults                      = 1024
+	DemoRunMaxArtifactsPerDirectory        = 4096
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

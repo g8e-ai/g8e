@@ -32,7 +32,7 @@ FRAMEWORK_CATALOG_FILENAME = "framework-catalog.json"
 CATALOG_FILENAMES = ("assertion-catalog.json", FRAMEWORK_CATALOG_FILENAME, "fedramp-nist-crosswalk.json")
 COMPLIANCE_PATHS_FILENAME = "compliance_paths.json"
 PHASE1_MESSAGE_COUNT = 20
-PHASE2_DEMO_MESSAGE_COUNT = 6
+PHASE2_DEMO_MESSAGE_COUNT = 7
 
 
 def catalog_digest(record: dict[str, object], digest_field: str) -> tuple[str, str]:

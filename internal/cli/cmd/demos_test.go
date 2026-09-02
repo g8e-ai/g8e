@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -1064,6 +1065,50 @@ func resolveRepoRoot(t *testing.T) string {
 // containers mounted ensemble-seed.hex but not consensus-bootstrap.json,
 // causing L2 quorum failures (0 affirmative votes) because MemberKeyIDs
 // stayed nil.
+type demoComposeConfig struct {
+	Services demoComposeServices `yaml:"services"`
+}
+
+type demoComposeServices struct {
+	Gateway demoComposeGateway `yaml:"gateway"`
+}
+
+type demoComposeGateway struct {
+	Networks demoComposeGatewayNetworks `yaml:"networks"`
+}
+
+type demoComposeGatewayNetworks struct {
+	Secure *demoComposeNetworkAttachment `yaml:"net_secure"`
+}
+
+type demoComposeNetworkAttachment struct {
+	IPv4Address string `yaml:"ipv4_address"`
+}
+
+func TestComposeConfig_GatewaySharesSecureActuatorNetwork(t *testing.T) {
+	repoRoot := resolveRepoRoot(t)
+	tests := []struct {
+		name        string
+		composePath string
+	}{
+		{name: constants.DemosOrgHealthcare, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgHealthcare, constants.DemosComposeFile)},
+		{name: constants.DemosOrgDHS, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgDHS, constants.DemosComposeFile)},
+		{name: constants.DemosOrgFedRAMP, composePath: filepath.Join(repoRoot, constants.DemosDirname, constants.DemosOrgFedRAMP, constants.DemosComposeFile)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(tt.composePath)
+			require.NoError(t, err)
+
+			var config demoComposeConfig
+			require.NoError(t, yaml.Unmarshal(data, &config))
+			require.NotNil(t, config.Services.Gateway.Networks.Secure, "%s gateway must share net_secure with its actuator", tt.name)
+			assert.NotEmpty(t, config.Services.Gateway.Networks.Secure.IPv4Address, "%s gateway net_secure attachment must have a stable IPv4 address", tt.name)
+		})
+	}
+}
+
 func TestComposeConfig_ConsensusBootstrapMounts(t *testing.T) {
 	repoRoot := resolveRepoRoot(t)
 

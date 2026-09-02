@@ -229,18 +229,15 @@ func (v *demoRunVerifier) loadResults(manifest *compliancev1.DemoManifest) []*co
 func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results []*compliancev1.DemoScenarioResult) {
 	expected := map[string]map[string]struct{}{
 		constants.DemoRunReceiptsDirname: {}, constants.DemoRunPersistenceDirname: {}, constants.DemoRunStateObservationsDirname: {},
+		constants.DemoRunMetricsDirname: {},
 	}
 	for _, result := range results {
 		definition := v.definitions[versionedKey(result.GetScenarioRef().GetId(), result.GetScenarioRef().GetVersion())]
 		resultRefs := make(map[string]struct{})
-		for _, ref := range append(append([]string{}, result.GetReceiptRefs()...), result.GetStateObservationRefs()...) {
-			resultRefs[ref] = struct{}{}
-		}
-		for _, ref := range result.GetProtocolChainRefs() {
-			resultRefs[ref] = struct{}{}
-		}
-		for _, ref := range result.GetMetricRefs() {
-			v.fail(constants.ErrUnresolvedReference, ref, "metric evidence bodies are not present in the demo run artifact layout")
+		for _, refs := range [][]string{result.GetReceiptRefs(), result.GetStateObservationRefs(), result.GetMetricRefs(), result.GetProtocolChainRefs()} {
+			for _, ref := range refs {
+				resultRefs[ref] = struct{}{}
+			}
 		}
 		for _, ref := range result.GetKsiRefs() {
 			v.fail(constants.ErrUnresolvedReference, ref, "KSI evidence bodies are not present in the demo run artifact layout")
@@ -270,6 +267,15 @@ func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results 
 			}
 			expected[constants.DemoRunStateObservationsDirname][digest] = struct{}{}
 			v.verifyObservation(result, ref, digest)
+		}
+		for _, ref := range result.GetMetricRefs() {
+			_, digest, ok := parseExpectedContentReference(ref, "metric")
+			if !ok {
+				v.fail(constants.ErrEvidenceArtifactMalformed, ref, "metric reference is malformed")
+				continue
+			}
+			expected[constants.DemoRunMetricsDirname][digest] = struct{}{}
+			v.verifyMetric(result, ref, digest)
 		}
 	}
 	for directory, digests := range expected {
@@ -377,6 +383,129 @@ func (v *demoRunVerifier) verifyObservation(result *compliancev1.DemoScenarioRes
 	v.fail(constants.ErrUnresolvedReference, ref, "state-observation body is not bound to a scenario step")
 }
 
+func (v *demoRunVerifier) verifyMetric(result *compliancev1.DemoScenarioResult, ref, digest string) {
+	path := v.runPath(constants.DemoRunMetricsDirname, digest+constants.FileExtJSON)
+	body, err := v.read(path)
+	if err != nil {
+		v.fail(classifyReadError(err), ref, err.Error())
+		return
+	}
+	metric := &compliancev1.DemoMetricEvidence{}
+	if err := compliancev1.UnmarshalCanonical(body, metric); err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
+		return
+	}
+	if !digestMatches(body, digest) {
+		v.fail(constants.ErrChecksumMismatch, ref, "metric content digest does not match its reference")
+	}
+	_, observationDigest, ok := parseExpectedContentReference(metric.GetSourceEvidenceRef(), "state-observation")
+	if !ok || !contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+		v.fail(constants.ErrUnresolvedReference, ref, "metric source observation is not declared by the scenario result")
+		return
+	}
+	observationBody, err := v.read(v.runPath(constants.DemoRunStateObservationsDirname, observationDigest+constants.FileExtJSON))
+	if err != nil {
+		v.fail(classifyReadError(err), metric.GetSourceEvidenceRef(), err.Error())
+		return
+	}
+	if err := verifyDemoMetricEvidence(result, metric, observationBody); err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, ref, err.Error())
+	}
+	for _, step := range result.GetStepResults() {
+		if contains(step.GetEvidenceRefs(), ref) && contains(step.GetEvidenceRefs(), metric.GetSourceEvidenceRef()) {
+			return
+		}
+	}
+	v.fail(constants.ErrUnresolvedReference, ref, "metric and source observation are not bound to the same scenario step")
+}
+
+type healthcareMetricObservation struct {
+	Action          string `json:"action"`
+	RequestID       string `json:"request_id"`
+	ResourceType    string `json:"resource_type"`
+	Subject         string `json:"subject"`
+	MeasuredValue   int64  `json:"measured_value"`
+	ThresholdValue  int64  `json:"threshold_value"`
+	RunID           string `json:"run_id"`
+	ScenarioID      string `json:"scenario_id"`
+	Status          string `json:"status"`
+	AutoApproved    bool   `json:"auto_approved"`
+	ReportableToOHA bool   `json:"reportable_to_oha"`
+	EvaluatedAt     string `json:"evaluated_at"`
+}
+
+type healthcareMetricCollection struct {
+	CollectorID             string                      `json:"collector_id"`
+	CollectorVersion        string                      `json:"collector_version"`
+	Boundary                string                      `json:"boundary"`
+	InitialStateFixtureRef  string                      `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                    `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                   `json:"collected_at"`
+	Observation             healthcareMetricObservation `json:"observation"`
+}
+
+type healthcareMetricExpectation struct {
+	MetricID, SubjectRef, Unit, Action, Status string
+	AutoApproved, ReportableToOHA              bool
+}
+
+func verifyDemoMetricEvidence(result *compliancev1.DemoScenarioResult, metric *compliancev1.DemoMetricEvidence, observationBody []byte) error {
+	if result == nil || metric == nil || metric.GetScenarioRef() == nil || metric.GetGraderRef() == nil || metric.GetEvaluatedAt() == nil || metric.GetEvaluatedAt().CheckValid() != nil {
+		return fmt.Errorf("%w: metric evidence is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	expectations := map[string]healthcareMetricExpectation{
+		"healthcare-gold-card": {
+			MetricID: "healthcare-provider-approval-rate", SubjectRef: "PA-2026-0043", Unit: "percent",
+			Action: "gold-card", Status: "AUTO_APPROVED", AutoApproved: true,
+		},
+		"healthcare-sla-breach": {
+			MetricID: "healthcare-sla-elapsed-days", SubjectRef: "PA-2026-0044", Unit: "days",
+			Action: "sla-check", Status: "SLA_BREACHED", ReportableToOHA: true,
+		},
+	}
+	expected, ok := expectations[result.GetScenarioRef().GetId()]
+	if !ok {
+		return fmt.Errorf("%w: metric evidence is unsupported for scenario %s", constants.ErrUnsupportedGrader, result.GetScenarioRef().GetId())
+	}
+	if metric.GetMetricId() != expected.MetricID || metric.GetMetricVersion() != constants.DemoMetricEvidenceVersion ||
+		metric.GetRunId() != result.GetRunId() || metric.GetScopeId() != result.GetScopeId() ||
+		metric.GetScenarioRef().GetId() != result.GetScenarioRef().GetId() || metric.GetScenarioRef().GetVersion() != result.GetScenarioRef().GetVersion() ||
+		metric.GetSubjectRef() != expected.SubjectRef || metric.GetUnit() != expected.Unit ||
+		metric.GetComparison() != constants.DemoMetricComparisonGreaterThanOrEqual ||
+		metric.GetGraderRef().GetId() != constants.DemoMetricGraderID || metric.GetGraderRef().GetVersion() != constants.DemoMetricGraderVersion {
+		return fmt.Errorf("%w: metric identity, scope, or grader binding is invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	if contentReferenceForBody("state-observation", observationBody) != metric.GetSourceEvidenceRef() || !contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+		return fmt.Errorf("%w: metric source observation binding is invalid", constants.ErrEvidenceScopeMismatch)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(observationBody))
+	decoder.DisallowUnknownFields()
+	collection := healthcareMetricCollection{}
+	if err := decoder.Decode(&collection); err != nil {
+		return fmt.Errorf("%w: decode metric source observation: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("%w: metric source observation contains trailing JSON", constants.ErrEvidenceArtifactMalformed)
+	}
+	observation := collection.Observation
+	evaluatedAt, err := time.Parse(time.RFC3339Nano, observation.EvaluatedAt)
+	if err != nil || collection.CollectedAt.Before(evaluatedAt) {
+		return fmt.Errorf("%w: metric source timestamps are invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	if collection.CollectorID != "healthcare-actuator-state" || collection.CollectorVersion != "1.0.0" || collection.Boundary != "healthcare-actuator" ||
+		collection.InitialStateFixtureRef == "" || len(collection.TerminalStateAssertions) == 0 || observation.RunID != result.GetRunId() ||
+		observation.ScenarioID != result.GetScenarioRef().GetId() || observation.RequestID != expected.SubjectRef || observation.Action != expected.Action ||
+		observation.ResourceType != "ClaimResponse" || observation.Status != expected.Status || observation.AutoApproved != expected.AutoApproved ||
+		observation.ReportableToOHA != expected.ReportableToOHA || metric.GetMeasuredValue() != observation.MeasuredValue ||
+		metric.GetThresholdValue() != observation.ThresholdValue || !metric.GetEvaluatedAt().AsTime().Equal(evaluatedAt) {
+		return fmt.Errorf("%w: metric does not reproduce its bound source observation", constants.ErrInvalidEvidenceGraph)
+	}
+	if metric.GetPassed() != (metric.GetMeasuredValue() >= metric.GetThresholdValue()) || !metric.GetPassed() {
+		return fmt.Errorf("%w: metric grade does not reproduce the registered comparison", constants.ErrInvalidEvidenceGraph)
+	}
+	return nil
+}
+
 func (v *demoRunVerifier) verifyStepReferences(result *compliancev1.DemoScenarioResult, artifactRefs map[string]struct{}) {
 	identities := make(map[string]struct{})
 	for _, values := range [][]string{result.GetAttemptIds(), result.GetExecutionIds(), result.GetInvestigationIds(), result.GetTransactionIds()} {
@@ -430,6 +559,7 @@ func (v *demoRunVerifier) verifyRootEntries() {
 	allowed := map[string]bool{
 		constants.DemoRunManifestFilename: false, constants.DemoRunResultsFilename: false,
 		constants.DemoRunReceiptsDirname: true, constants.DemoRunPersistenceDirname: true, constants.DemoRunStateObservationsDirname: true,
+		constants.DemoRunMetricsDirname: true,
 	}
 	for _, entry := range entries {
 		directory, ok := allowed[entry.Name()]

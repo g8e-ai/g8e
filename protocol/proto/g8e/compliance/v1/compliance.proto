@@ -316,6 +316,23 @@ message DemoScenarioResult {
   repeated string protocol_chain_refs = 26;
 }
 
+message DemoMetricEvidence {
+  string metric_id = 1;
+  string metric_version = 2;
+  string run_id = 3;
+  string scope_id = 4;
+  VersionedReference scenario_ref = 5;
+  string source_evidence_ref = 6;
+  string subject_ref = 7;
+  int64 measured_value = 8;
+  int64 threshold_value = 9;
+  string unit = 10;
+  string comparison = 11;
+  bool passed = 12;
+  google.protobuf.Timestamp evaluated_at = 13;
+  VersionedReference grader_ref = 14;
+}
+
 message DemoScenarioCatalog {
   string catalog_id = 1;
   string catalog_version = 2;

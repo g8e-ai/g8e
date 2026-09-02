@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	clientpkg "github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/client"
@@ -189,6 +191,49 @@ func TestPersistReceiptEvidenceBodies_FailsClosedOnMissingPersistenceAttestation
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrDemoEvidencePersistFailed)
+}
+
+func TestPersistDemoMetricEvidence_WritesCanonicalContentAddressedArtifact(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	metric := &compliancev1.DemoMetricEvidence{
+		MetricId: "healthcare-provider-approval-rate", MetricVersion: constants.DemoMetricEvidenceVersion,
+		RunId: "run-1", ScopeId: constants.DemoScopeHealthcare,
+		ScenarioRef:       &compliancev1.VersionedReference{Id: "healthcare-gold-card", Version: "1.0.0"},
+		SourceEvidenceRef: "state-observation:sha256:" + strings.Repeat("0", 64), SubjectRef: "PA-2026-0043",
+		MeasuredValue: 96, ThresholdValue: 90, Unit: "percent", Comparison: constants.DemoMetricComparisonGreaterThanOrEqual,
+		Passed: true, EvaluatedAt: timestamppb.New(time.Date(2026, time.September, 2, 16, 30, 0, 0, time.UTC)),
+		GraderRef: &compliancev1.VersionedReference{Id: constants.DemoMetricGraderID, Version: constants.DemoMetricGraderVersion},
+	}
+
+	ref, err := persistDemoMetricEvidence(context.Background(), fileSvc, metric)
+	require.NoError(t, err)
+	assert.Regexp(t, `^metric:sha256:[0-9a-f]{64}$`, ref)
+
+	path := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, metric.GetRunId(), constants.DemoRunMetricsDirname, contentAddressDigestHex(ref)+constants.FileExtJSON)
+	body, err := fileSvc.ReadFile(context.Background(), path)
+	require.NoError(t, err)
+	assert.Equal(t, computeSHA256Hex(body), contentAddressDigestHex(ref))
+	decoded := &compliancev1.DemoMetricEvidence{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(body, decoded))
+	assert.True(t, proto.Equal(metric, decoded))
+}
+
+func TestPersistDemoMetricEvidence_FailsClosedOnIncompleteEvidence(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	tests := []struct {
+		name   string
+		metric *compliancev1.DemoMetricEvidence
+	}{
+		{name: "nil metric"},
+		{name: "missing run ID", metric: &compliancev1.DemoMetricEvidence{MetricId: "metric"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := persistDemoMetricEvidence(context.Background(), fileSvc, tt.metric)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrDemoEvidencePersistFailed)
+		})
+	}
 }
 
 func TestPersistStateObservationEvidenceBodies_WritesContentAddressedArtifact(t *testing.T) {

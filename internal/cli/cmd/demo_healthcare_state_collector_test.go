@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func TestDecodeHealthcareStateObservation_BindsTypedObservationToCanonicalFixture(t *testing.T) {
@@ -60,6 +61,57 @@ func TestDecodeHealthcareStateObservation_BindsTypedObservationToCanonicalFixtur
 	assert.Equal(t, encoded, encodedAgain)
 	assert.Equal(t, evidenceRef, evidenceRefAgain)
 	assert.Regexp(t, `^state-observation:sha256:[0-9a-f]{64}$`, evidenceRef)
+}
+
+func TestBuildHealthcareMetricEvidence_DerivesTypedGradeFromCollectedObservation(t *testing.T) {
+	collection := &healthcareStateCollection{
+		CollectorID: healthcareStateCollectorID, CollectorVersion: healthcareStateCollectorVersion, Boundary: healthcareActuatorBoundary,
+		InitialStateFixtureRef: "fixture:healthcare-pa-pending-review@1.0.0", TerminalStateAssertions: []string{"PA-2026-0043 status is AUTO_APPROVED"},
+		CollectedAt: time.Date(2026, time.September, 1, 12, 32, 0, 0, time.UTC),
+		Observation: healthcareStateObservation{
+			Action: "gold-card", RequestID: "PA-2026-0043", ResourceType: "ClaimResponse", Subject: "Dr. Priya Nair",
+			MeasuredValue: 96, ThresholdValue: 90, RunID: "healthcare-run-123", ScenarioID: "healthcare-gold-card",
+			Status: "AUTO_APPROVED", AutoApproved: true, EvaluatedAt: "2026-09-01T12:31:00Z",
+		},
+	}
+	body, observationRef, err := encodeHealthcareStateCollection(collection)
+	require.NoError(t, err)
+	result := &compliancev1.DemoScenarioResult{
+		RunId: "healthcare-run-123", ScopeId: constants.DemoScopeHealthcare,
+		ScenarioRef: &compliancev1.VersionedReference{Id: "healthcare-gold-card", Version: "1.0.0"},
+	}
+
+	metric, err := buildHealthcareMetricEvidence(result, observationRef, string(body))
+	require.NoError(t, err)
+
+	assert.Equal(t, "healthcare-provider-approval-rate", metric.GetMetricId())
+	assert.Equal(t, int64(96), metric.GetMeasuredValue())
+	assert.Equal(t, int64(90), metric.GetThresholdValue())
+	assert.Equal(t, "percent", metric.GetUnit())
+	assert.True(t, metric.GetPassed())
+	assert.Equal(t, observationRef, metric.GetSourceEvidenceRef())
+	assert.Equal(t, constants.DemoMetricGraderID, metric.GetGraderRef().GetId())
+}
+
+func TestBuildHealthcareMetricEvidence_FailsClosedOnInvalidSourceBinding(t *testing.T) {
+	result := &compliancev1.DemoScenarioResult{
+		RunId: "healthcare-run-123", ScopeId: constants.DemoScopeHealthcare,
+		ScenarioRef: &compliancev1.VersionedReference{Id: "healthcare-gold-card", Version: "1.0.0"},
+	}
+	tests := []struct {
+		name, sourceRef, body string
+	}{
+		{name: "malformed content address", sourceRef: "state-observation:invalid", body: `{}`},
+		{name: "digest mismatch", sourceRef: "state-observation:sha256:" + strings.Repeat("0", 64), body: `{}`},
+		{name: "malformed observation", sourceRef: "state-observation:sha256:" + computeSHA256Hex([]byte(`{`)), body: `{`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := buildHealthcareMetricEvidence(result, tt.sourceRef, tt.body)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+		})
+	}
 }
 
 func TestDecodeHealthcareStateObservation_FailsClosedOnMalformedMismatchedOrStaleEvidence(t *testing.T) {

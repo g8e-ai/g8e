@@ -139,6 +139,26 @@ func contentAddressDigestHex(contentAddress string) string {
 	return parts[2]
 }
 
+func persistDemoMetricEvidence(ctx context.Context, fileSvc fs.RuntimeFileService, metric *compliancev1.DemoMetricEvidence) (string, error) {
+	if metric == nil || metric.GetRunId() == "" {
+		return "", fmt.Errorf("%w: metric evidence is incomplete", constants.ErrDemoEvidencePersistFailed)
+	}
+	body, err := compliancev1.MarshalCanonical(metric)
+	if err != nil {
+		return "", fmt.Errorf("%w: marshal metric evidence: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+	ref := "metric:sha256:" + computeSHA256Hex(body)
+	dir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, metric.GetRunId(), constants.DemoRunMetricsDirname)
+	if err := fileSvc.MkdirAll(ctx, dir, constants.PermDirStandard); err != nil {
+		return "", fmt.Errorf("%w: create demo metric evidence dir: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+	path := filepath.Join(dir, contentAddressDigestHex(ref)+constants.FileExtJSON)
+	if err := fileSvc.WriteFile(ctx, path, body, constants.PermFileReadOnly); err != nil {
+		return "", fmt.Errorf("%w: write demo metric evidence: %w", constants.ErrDemoEvidencePersistFailed, err)
+	}
+	return ref, nil
+}
+
 func persistStateObservationEvidenceBodies(ctx context.Context, fileSvc fs.RuntimeFileService, result *compliancev1.DemoScenarioResult) error {
 	if result == nil || result.GetRunId() == "" || len(result.GetStateObservationRefs()) == 0 {
 		return nil

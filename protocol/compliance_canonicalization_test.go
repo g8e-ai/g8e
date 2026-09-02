@@ -23,7 +23,7 @@ import (
 )
 
 const compliancePhase1MessageCount = 20
-const compliancePhase2DemoMessageCount = 6
+const compliancePhase2DemoMessageCount = 7
 
 type complianceCanonicalizationVector struct {
 	Message       json.RawMessage `json:"message"`

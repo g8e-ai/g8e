@@ -165,6 +165,46 @@ func encodeHealthcareStateCollection(collection *healthcareStateCollection) ([]b
 	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
+func buildHealthcareMetricEvidence(result *compliancev1.DemoScenarioResult, sourceEvidenceRef, protocolResult string) (*compliancev1.DemoMetricEvidence, error) {
+	if result == nil || result.GetScenarioRef() == nil || !strings.HasPrefix(sourceEvidenceRef, "state-observation:sha256:") ||
+		contentAddressDigestHex(sourceEvidenceRef) != computeSHA256Hex([]byte(protocolResult)) {
+		return nil, fmt.Errorf("%w: healthcare metric source binding is invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(strings.NewReader(protocolResult))
+	decoder.DisallowUnknownFields()
+	collection := healthcareStateCollection{}
+	if err := decoder.Decode(&collection); err != nil {
+		return nil, fmt.Errorf("%w: decode healthcare metric source: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: healthcare metric source contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	metricID := ""
+	unit := ""
+	switch result.GetScenarioRef().GetId() {
+	case "healthcare-gold-card":
+		metricID = "healthcare-provider-approval-rate"
+		unit = "percent"
+	case "healthcare-sla-breach":
+		metricID = "healthcare-sla-elapsed-days"
+		unit = "days"
+	default:
+		return nil, fmt.Errorf("%w: healthcare metric scenario %s", constants.ErrUnsupportedGrader, result.GetScenarioRef().GetId())
+	}
+	evaluatedAt, err := time.Parse(time.RFC3339Nano, collection.Observation.EvaluatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: healthcare metric evaluated_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	return &compliancev1.DemoMetricEvidence{
+		MetricId: metricID, MetricVersion: constants.DemoMetricEvidenceVersion, RunId: result.GetRunId(), ScopeId: result.GetScopeId(),
+		ScenarioRef: result.GetScenarioRef(), SourceEvidenceRef: sourceEvidenceRef, SubjectRef: collection.Observation.RequestID,
+		MeasuredValue: int64(collection.Observation.MeasuredValue), ThresholdValue: int64(collection.Observation.ThresholdValue), Unit: unit,
+		Comparison: constants.DemoMetricComparisonGreaterThanOrEqual, Passed: collection.Observation.MeasuredValue >= collection.Observation.ThresholdValue,
+		EvaluatedAt: timestamppb.New(evaluatedAt),
+		GraderRef:   &compliancev1.VersionedReference{Id: constants.DemoMetricGraderID, Version: constants.DemoMetricGraderVersion},
+	}, nil
+}
+
 func collectHealthcareStateEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition, requestID, action, resourceType, subject, status string, measuredValue, thresholdValue int, autoApproved, reportableToOHA bool) (string, string, error) {
 	command := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
 		result.GetRunId(), result.GetScenarioRef().GetId(), requestID, action, status, strconv.Itoa(measuredValue), strconv.Itoa(thresholdValue))
@@ -492,7 +532,17 @@ func runHealthcareScenario(ctx context.Context, fileSvc fs.RuntimeFileService, d
 		} else {
 			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
 			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
-			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-provider-approval-rate:96", "metric:healthcare-gold-card-threshold:90")
+			metric, metricErr := buildHealthcareMetricEvidence(result, evidenceRef, protocolResult)
+			if metricErr != nil {
+				fmt.Println("  (gold-card metric evidence construction failed)")
+				hasErrors = true
+			} else if metricRef, persistErr := persistDemoMetricEvidence(ctx, fileSvc, metric); persistErr != nil {
+				fmt.Println("  (gold-card metric evidence persistence failed)")
+				hasErrors = true
+			} else {
+				step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, metricRef)
+				result.MetricRefs = append(result.MetricRefs, metricRef)
+			}
 		}
 		result.StepResults = append(result.StepResults, step3Result)
 
@@ -579,7 +629,17 @@ func runHealthcareScenario(ctx context.Context, fileSvc fs.RuntimeFileService, d
 		} else {
 			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
 			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
-			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-sla-elapsed-days:10", "metric:healthcare-sla-threshold-days:7")
+			metric, metricErr := buildHealthcareMetricEvidence(result, evidenceRef, protocolResult)
+			if metricErr != nil {
+				fmt.Println("  (SLA metric evidence construction failed)")
+				hasErrors = true
+			} else if metricRef, persistErr := persistDemoMetricEvidence(ctx, fileSvc, metric); persistErr != nil {
+				fmt.Println("  (SLA metric evidence persistence failed)")
+				hasErrors = true
+			} else {
+				step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, metricRef)
+				result.MetricRefs = append(result.MetricRefs, metricRef)
+			}
 		}
 		result.StepResults = append(result.StepResults, step3Result)
 
