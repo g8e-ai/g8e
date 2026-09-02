@@ -8,8 +8,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -23,6 +29,127 @@ import (
 func newFinanceUnauthorizedTradeScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
 	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgFinance, "finance-demo-scope",
 		"L1 doctrine: unauthorized_trade_execution (0.90 conf) // Network isolation: net_untrusted blocked")
+}
+
+const (
+	financeStateCollectorID      = "finance-target-state"
+	financeStateCollectorVersion = "1.0.0"
+	financeTargetBoundary        = "finance-target-system"
+)
+
+type financeStateExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	ArtifactPath            string
+	ArtifactExists          bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type financeStateObservation struct {
+	ArtifactExists bool   `json:"artifact_exists"`
+	ArtifactPath   string `json:"artifact_path"`
+	ObservedAt     string `json:"observed_at"`
+	RunID          string `json:"run_id"`
+	ScenarioID     string `json:"scenario_id"`
+}
+
+type financeStateCollection struct {
+	CollectorID             string                  `json:"collector_id"`
+	CollectorVersion        string                  `json:"collector_version"`
+	Boundary                string                  `json:"boundary"`
+	InitialStateFixtureRef  string                  `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                `json:"terminal_state_assertions"`
+	CollectedAt             time.Time               `json:"collected_at"`
+	Observation             financeStateObservation `json:"observation"`
+}
+
+type financeStateObservationWire struct {
+	ArtifactExists *bool  `json:"artifact_exists"`
+	ArtifactPath   string `json:"artifact_path"`
+	ObservedAt     string `json:"observed_at"`
+	RunID          string `json:"run_id"`
+	ScenarioID     string `json:"scenario_id"`
+}
+
+func decodeFinanceStateObservation(raw []byte, expected financeStateExpectation, collectedAt time.Time) (*financeStateCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: finance state collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire financeStateObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode finance state observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: finance state observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.ArtifactExists == nil {
+		return nil, fmt.Errorf("%w: finance state observation omits artifact existence", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := financeStateObservation{
+		ArtifactExists: *wire.ArtifactExists,
+		ArtifactPath:   wire.ArtifactPath,
+		ObservedAt:     wire.ObservedAt,
+		RunID:          wire.RunID,
+		ScenarioID:     wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: finance state observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: finance state observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID || observed.ArtifactPath != expected.ArtifactPath || observed.ArtifactExists != expected.ArtifactExists {
+		return nil, fmt.Errorf("%w: finance state observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &financeStateCollection{
+		CollectorID:             financeStateCollectorID,
+		CollectorVersion:        financeStateCollectorVersion,
+		Boundary:                financeTargetBoundary,
+		InitialStateFixtureRef:  expected.InitialStateFixtureRef,
+		TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt:             collectedAt,
+		Observation:             observed,
+	}, nil
+}
+
+func encodeFinanceStateCollection(collection *financeStateCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode finance state collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectFinanceStateEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition) (string, string, error) {
+	command := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "target-system", "sh", constants.ContainerFinanceStateCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), constants.ContainerFinanceUnauthorizedTrade)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: finance state collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeFinanceStateObservation(stdout.Bytes(), financeStateExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), ArtifactPath: constants.ContainerFinanceUnauthorizedTrade,
+		ArtifactExists: false, InitialStateFixtureRef: definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeFinanceStateCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
 }
 
 func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
@@ -103,17 +230,18 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*complia
 
 	demoPrintln("  ── Step 4: Verify prohibited trade side effect is absent ─────")
 	step4Started := time.Now().UTC()
-	step4Err := demoStep(ctx, demoDir, "unauthorized trade absence", false,
-		"docker", "compose", "exec", "-T", "target-system", "test", "!", "-e", constants.ContainerFinanceUnauthorizedTrade)
-	result.StepResults = append(result.StepResults, buildDemoStepResult(
+	protocolResult, evidenceRef, step4Err := collectFinanceStateEvidence(ctx, demoDir, result, definition)
+	step4Result := buildDemoStepResult(
 		"finance-unauthorized-trade-step-4", "independent state observation: unauthorized trade absent", step4Started, time.Now().UTC(),
-		step4Err == nil, true, "target-system unauthorized trade artifact is absent"))
+		step4Err == nil, true, protocolResult)
 	if step4Err != nil {
 		fmt.Println("  (unauthorized trade side-effect check failed)")
 		hasErrors = true
 	} else {
-		result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:finance-unauthorized-trade-absent")
+		step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, evidenceRef)
+		result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 	}
+	result.StepResults = append(result.StepResults, step4Result)
 
 	demoPrintln("  ── Step 5: Verify doctrine rejection in gateway logs ──────────")
 	step5Started := time.Now().UTC()

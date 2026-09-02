@@ -215,6 +215,8 @@ services:
     container_name: healthcare-bad-actor
     networks:
       net_untrusted:
+    volumes:
+      - ./collect_network_isolation.sh:/app/collect_network_isolation.sh:ro
     command: ["sh", "-c", "while true; do sleep 3600; done"]
 
   observability:

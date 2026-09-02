@@ -8,8 +8,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -63,6 +69,133 @@ func newDHSDestructionScenarioResults(startedAt time.Time, blockDefinition, purg
 		newDemoEvidenceScenarioResult(startedAt, purgeDefinition, constants.DemosOrgDHS, "dhs-demo-scope",
 			"L1+L2 admit governed purge // L5 actuator records PURGE"),
 	}
+}
+
+const (
+	dhsDataServiceCollectorID      = "dhs-data-service-state"
+	dhsDataServiceCollectorVersion = "1.0.0"
+	dhsDataServiceBoundary         = "dhs-sovereign-data-service"
+)
+
+type dhsDataServiceExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	Action                  string
+	RecordID                string
+	Detail                  string
+	OperationFound          bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type dhsDataServiceObservation struct {
+	Action             string `json:"action"`
+	Detail             string `json:"detail"`
+	ObservedAt         string `json:"observed_at"`
+	OperationFound     bool   `json:"operation_found"`
+	OperationTimestamp string `json:"operation_timestamp"`
+	RecordID           string `json:"record_id"`
+	RunID              string `json:"run_id"`
+	ScenarioID         string `json:"scenario_id"`
+}
+
+type dhsDataServiceCollection struct {
+	CollectorID             string                    `json:"collector_id"`
+	CollectorVersion        string                    `json:"collector_version"`
+	Boundary                string                    `json:"boundary"`
+	InitialStateFixtureRef  string                    `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                  `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                 `json:"collected_at"`
+	Observation             dhsDataServiceObservation `json:"observation"`
+}
+
+type dhsDataServiceObservationWire struct {
+	Action             string `json:"action"`
+	Detail             string `json:"detail"`
+	ObservedAt         string `json:"observed_at"`
+	OperationFound     *bool  `json:"operation_found"`
+	OperationTimestamp string `json:"operation_timestamp"`
+	RecordID           string `json:"record_id"`
+	RunID              string `json:"run_id"`
+	ScenarioID         string `json:"scenario_id"`
+}
+
+func decodeDHSDataServiceObservation(raw []byte, expected dhsDataServiceExpectation, collectedAt time.Time) (*dhsDataServiceCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: DHS data-service collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire dhsDataServiceObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode DHS data-service observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: DHS data-service observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.OperationFound == nil {
+		return nil, fmt.Errorf("%w: DHS data-service observation omits operation presence", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := dhsDataServiceObservation{
+		Action: wire.Action, Detail: wire.Detail, ObservedAt: wire.ObservedAt, OperationFound: *wire.OperationFound,
+		OperationTimestamp: wire.OperationTimestamp, RecordID: wire.RecordID, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS data-service observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	operationAt, err := time.Parse(time.RFC3339Nano, observed.OperationTimestamp)
+	if err != nil {
+		return nil, fmt.Errorf("%w: DHS data-service observation operation_timestamp: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) || operationAt.Before(expected.NotBefore) || operationAt.After(observedAt) {
+		return nil, fmt.Errorf("%w: DHS data-service observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID || observed.Action != expected.Action ||
+		observed.RecordID != expected.RecordID || observed.Detail != expected.Detail || observed.OperationFound != expected.OperationFound {
+		return nil, fmt.Errorf("%w: DHS data-service observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &dhsDataServiceCollection{
+		CollectorID: dhsDataServiceCollectorID, CollectorVersion: dhsDataServiceCollectorVersion, Boundary: dhsDataServiceBoundary,
+		InitialStateFixtureRef: expected.InitialStateFixtureRef, TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt: collectedAt, Observation: observed,
+	}, nil
+}
+
+func encodeDHSDataServiceCollection(collection *dhsDataServiceCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode DHS data-service collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectDHSDataServiceEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition, action, recordID, detail string) (string, string, error) {
+	command := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "datasvc", "python", constants.ContainerVerifyOpsPy,
+		result.GetRunId(), result.GetScenarioRef().GetId(), action, recordID, detail)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: DHS data-service collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeDHSDataServiceObservation(stdout.Bytes(), dhsDataServiceExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), Action: action, RecordID: recordID, Detail: detail,
+		OperationFound: true, InitialStateFixtureRef: definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeDHSDataServiceCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
 }
 
 func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
@@ -150,18 +283,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
 
 		step4Started := time.Now().UTC()
-		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the INGEST",
-			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "INGEST"})
-		step4Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
-			"dhs-ingest-step-4", "independent state observation: ingest recorded", step4Started, step4Completed,
-			step4OK, true, "datasvc verify_ops.py INGEST"))
-		if !step4OK {
+		protocolResult, evidenceRef, step4Err := collectDHSDataServiceEvidence(ctx, demoDir, result, definition, "INGEST", "TRK-CBP-0001", "NIPR")
+		step4Result := buildDemoStepResult(
+			"dhs-ingest-step-4", "independent state observation: ingest recorded", step4Started, time.Now().UTC(),
+			step4Err == nil, true, protocolResult)
+		if step4Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:datasvc-ingest-recorded")
+			step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 		}
+		result.StepResults = append(result.StepResults, step4Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest", "INGEST recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded INGEST — signed receipt in hash-chained ledger")
@@ -441,18 +573,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — cue admitted")
 
 		step3Started := time.Now().UTC()
-		step3OK := demoScenarioStep(ctx, demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
-			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "CUE"})
-		step3Completed := time.Now().UTC()
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
-			"dhs-cue-step-3", "independent state observation: cue recorded", step3Started, step3Completed,
-			step3OK, true, "datasvc verify_ops.py CUE"))
-		if !step3OK {
+		protocolResult, evidenceRef, step3Err := collectDHSDataServiceEvidence(ctx, demoDir, result, definition, "CUE", "TRK-CBP-0001", "TASKING-DHS-2026-077")
+		step3Result := buildDemoStepResult(
+			"dhs-cue-step-3", "independent state observation: cue recorded", step3Started, time.Now().UTC(),
+			step3Err == nil, true, protocolResult)
+		if step3Err != nil {
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:datasvc-cue-recorded")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded CUE — signed receipt in hash-chained ledger")
@@ -587,17 +718,17 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 		demoEmitter.Ledger(tui.LevelInfo, "L1+L2 admitted governed purge — L5 actuator recording PURGE with destruction receipt")
 
 		step4Started := time.Now().UTC()
-		step4OK := demoScenarioStep(ctx, demoDir, "Step 4: Verify the Sovereign Data Service recorded the PURGE",
-			[]string{"docker", "compose", "exec", "-T", "datasvc",
-				"python", constants.ContainerVerifyOpsPy, "PURGE"})
-		purgeResult.StepResults = append(purgeResult.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step4Err := collectDHSDataServiceEvidence(ctx, demoDir, purgeResult, purgeDefinition, "PURGE", "VPR-0001", "RETENTION-30D")
+		step4Result := buildDemoStepResult(
 			"dhs-destruction-purge-step-2", "independent state observation: purge recorded", step4Started, time.Now().UTC(),
-			step4OK, true, "datasvc verify_ops.py PURGE"))
-		if !step4OK {
+			step4Err == nil, true, protocolResult)
+		if step4Err != nil {
 			purgeHasErrors = true
 		} else {
-			purgeResult.StateObservationRefs = append(purgeResult.StateObservationRefs, "state-observation:datasvc-purge-recorded")
+			step4Result.EvidenceRefs = append(step4Result.EvidenceRefs, evidenceRef)
+			purgeResult.StateObservationRefs = append(purgeResult.StateObservationRefs, evidenceRef)
 		}
+		purgeResult.StepResults = append(purgeResult.StepResults, step4Result)
 		purgeResult.CompletedAt = timestamppb.New(time.Now().UTC())
 		if purgeHasErrors {
 			purgeResult.Status = demoStatusFailed

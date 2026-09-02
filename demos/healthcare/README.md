@@ -372,7 +372,7 @@ g8e demos run healthcare 4
 **Proves**: Two-layer defense — Layer 1: network isolation (bad-actor on `net_untrusted` has no route to `net_internal`/`net_secure`). Layer 2: doctrine enforcement (`phi_exfil_attempt` at confidence 0.95).
 
 The scenario runs a 2-layer test and persists the typed result under the runtime compliance evidence tree:
-1. **Network isolation** — fails closed unless the bad-actor container on `net_untrusted` cannot reach the gateway on `net_internal`, and records the result as an independent state observation
+1. **Network isolation** — the bad-actor boundary collector reports typed reachability independently of its process exit status; the runner fails closed unless the observation matches the canonical run, scenario, source and target boundaries, endpoint, collection window, initial fixture, and terminal assertions, then stores it as content-addressed state evidence
 2. **Doctrine enforcement** — submits a PHI exfiltration payload through the governed endpoint; the harness verifies that the gateway blocks it at confidence ≥ 0.95 and the result retains receipt and transaction references
 
 For manual exploration:

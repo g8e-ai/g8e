@@ -246,21 +246,23 @@ const (
 
 // Demos constants for organization names, doctrine files, and compose config.
 const (
-	DemosDirname             = "demos"
-	DemosComposeFile         = "compose.yml"
-	DemosBinDirname          = "bin"
-	DemosBinaryName          = "g8e"
-	DemosTargetDataDir       = "target-data"
-	DemosDoctrineDir         = "doctrine"
-	DemosPARequestsFile      = "pa_requests.json"
-	DemosHIPAADoctrineFile   = "phi_hipaa_doctrine.json"
-	DemosDHSDoctrineFile     = "dhs_sovereign_doctrine.json"
-	DemosFedRAMPDoctrineFile = "fedramp_doctrine.json"
-	DemosImagesManifestFile  = "images.json"
-	DemosOrgHealthcare       = "healthcare"
-	DemosOrgFinance          = "finance"
-	DemosOrgDHS              = "dhs"
-	DemosOrgFedRAMP          = "fedramp"
+	DemosDirname                    = "demos"
+	DemosComposeFile                = "compose.yml"
+	DemosBinDirname                 = "bin"
+	DemosBinaryName                 = "g8e"
+	DemosTargetDataDir              = "target-data"
+	DemosDoctrineDir                = "doctrine"
+	DemosPARequestsFile             = "pa_requests.json"
+	DemosHIPAADoctrineFile          = "phi_hipaa_doctrine.json"
+	DemosDHSDoctrineFile            = "dhs_sovereign_doctrine.json"
+	DemosFedRAMPDoctrineFile        = "fedramp_doctrine.json"
+	DemosFinanceStateCollectorFile  = "verify_trade_absence.sh"
+	DemosHealthcareNetCollectorFile = "collect_network_isolation.sh"
+	DemosImagesManifestFile         = "images.json"
+	DemosOrgHealthcare              = "healthcare"
+	DemosOrgFinance                 = "finance"
+	DemosOrgDHS                     = "dhs"
+	DemosOrgFedRAMP                 = "fedramp"
 
 	// DHS demo docker resource names. The compose project is named "dhs-demo"
 	// (see demos/dhs/compose.yml), so the perimeter network is prefixed with
@@ -282,17 +284,20 @@ const (
 	ContainerAuditVaultDB             = ContainerDataDir + "/" + DbFilename
 	ContainerExecutionVaultDB         = ContainerDataDir + "/" + ExecutionVaultDBFilename
 	ContainerLedgerFilesDir           = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
-	ContainerFinanceUnauthorizedTrade = "/var/g8e/target/unauthorized_trade_execution.log"
+	ContainerFinanceTargetDir         = "/var/g8e/target"
+	ContainerFinanceUnauthorizedTrade = ContainerFinanceTargetDir + "/unauthorized_trade_execution.log"
 	ContainerHealthcarePAOperations   = "/var/pa_operations.log"
 
-	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
-	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
-	ContainerVerifyOpsPy   = "/app/verify_ops.py"
-	ContainerVerifyPAPy    = "/app/verify_pa.py"
-	ContainerInspectRFPy   = "/app/inspect_rf.py"
-	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
-	ContainerVerifySlewsPy = "/app/verify_slews.py"
-	ContainerKSICatalog    = "/docs/reference/" + KSICatalogFilename
+	ContainerDoctrineDir                = "/etc/g8e/" + DemosDoctrineDir
+	ContainerFinanceStateCollectorFile  = ContainerFinanceTargetDir + "/" + DemosFinanceStateCollectorFile
+	ContainerHealthcareNetCollectorFile = "/app/" + DemosHealthcareNetCollectorFile
+	ContainerEnsembleSeed               = "/etc/g8e/ensemble-seed.hex"
+	ContainerVerifyOpsPy                = "/app/verify_ops.py"
+	ContainerVerifyPAPy                 = "/app/verify_pa.py"
+	ContainerInspectRFPy                = "/app/inspect_rf.py"
+	ContainerInspectPNTPy               = "/app/inspect_pnt.py"
+	ContainerVerifySlewsPy              = "/app/verify_slews.py"
+	ContainerKSICatalog                 = "/docs/reference/" + KSICatalogFilename
 
 	// FedRAMP cloudsvc operations log path inside the cloudsvc container.
 	// Used for independent prohibited-side-effect verification after blocked

@@ -191,6 +191,135 @@ func collectHealthcareStateEvidence(ctx context.Context, demoDir string, result 
 	return string(encoded), evidenceRef, nil
 }
 
+const (
+	healthcareNetworkCollectorID      = "healthcare-network-isolation"
+	healthcareNetworkCollectorVersion = "1.0.0"
+	healthcareNetworkBoundary         = "healthcare-network"
+	healthcareUntrustedBoundary       = "net_untrusted"
+	healthcareInternalBoundary        = "net_internal"
+	healthcareInternalGatewayEndpoint = "http://10.22.0.10:8080/"
+)
+
+type healthcareNetworkExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	SourceBoundary          string
+	TargetBoundary          string
+	TargetEndpoint          string
+	Reachable               bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type healthcareNetworkObservation struct {
+	ObservedAt     string `json:"observed_at"`
+	Reachable      bool   `json:"reachable"`
+	RunID          string `json:"run_id"`
+	ScenarioID     string `json:"scenario_id"`
+	SourceBoundary string `json:"source_boundary"`
+	TargetBoundary string `json:"target_boundary"`
+	TargetEndpoint string `json:"target_endpoint"`
+}
+
+type healthcareNetworkCollection struct {
+	CollectorID             string                       `json:"collector_id"`
+	CollectorVersion        string                       `json:"collector_version"`
+	Boundary                string                       `json:"boundary"`
+	InitialStateFixtureRef  string                       `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                     `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                    `json:"collected_at"`
+	Observation             healthcareNetworkObservation `json:"observation"`
+}
+
+type healthcareNetworkObservationWire struct {
+	ObservedAt     string `json:"observed_at"`
+	Reachable      *bool  `json:"reachable"`
+	RunID          string `json:"run_id"`
+	ScenarioID     string `json:"scenario_id"`
+	SourceBoundary string `json:"source_boundary"`
+	TargetBoundary string `json:"target_boundary"`
+	TargetEndpoint string `json:"target_endpoint"`
+}
+
+func decodeHealthcareNetworkObservation(raw []byte, expected healthcareNetworkExpectation, collectedAt time.Time) (*healthcareNetworkCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: healthcare network collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire healthcareNetworkObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode healthcare network observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: healthcare network observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.Reachable == nil {
+		return nil, fmt.Errorf("%w: healthcare network observation omits reachability", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := healthcareNetworkObservation{
+		ObservedAt: wire.ObservedAt, Reachable: *wire.Reachable, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+		SourceBoundary: wire.SourceBoundary, TargetBoundary: wire.TargetBoundary, TargetEndpoint: wire.TargetEndpoint,
+	}
+	observedAt, err := time.Parse(time.RFC3339Nano, observed.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: healthcare network observation observed_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if observedAt.Before(expected.NotBefore) || observedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: healthcare network observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID || observed.SourceBoundary != expected.SourceBoundary ||
+		observed.TargetBoundary != expected.TargetBoundary || observed.TargetEndpoint != expected.TargetEndpoint || observed.Reachable != expected.Reachable {
+		return nil, fmt.Errorf("%w: healthcare network observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &healthcareNetworkCollection{
+		CollectorID:             healthcareNetworkCollectorID,
+		CollectorVersion:        healthcareNetworkCollectorVersion,
+		Boundary:                healthcareNetworkBoundary,
+		InitialStateFixtureRef:  expected.InitialStateFixtureRef,
+		TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt:             collectedAt,
+		Observation:             observed,
+	}, nil
+}
+
+func encodeHealthcareNetworkCollection(collection *healthcareNetworkCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode healthcare network collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectHealthcareNetworkEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition) (string, string, error) {
+	command := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "bad-actor", "sh", constants.ContainerHealthcareNetCollectorFile,
+		result.GetRunId(), result.GetScenarioRef().GetId(), healthcareUntrustedBoundary, healthcareInternalBoundary, healthcareInternalGatewayEndpoint)
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: healthcare network collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeHealthcareNetworkObservation(stdout.Bytes(), healthcareNetworkExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), SourceBoundary: healthcareUntrustedBoundary,
+		TargetBoundary: healthcareInternalBoundary, TargetEndpoint: healthcareInternalGatewayEndpoint, Reachable: false,
+		InitialStateFixtureRef: definition.GetInitialStateFixtureRef(), TerminalStateAssertions: definition.GetTerminalStateAssertions(),
+		NotBefore: result.GetStartedAt().AsTime().Truncate(time.Second),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeHealthcareNetworkCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
+}
+
 func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
 	var result *compliancev1.DemoScenarioResult
 
@@ -492,18 +621,18 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 		demoPrintln("  bad-actor (net_untrusted) → gateway (net_internal) — should timeout")
 		demoPrintln()
 		step1Started := time.Now().UTC()
-		step1Err := demoStep(ctx, demoDir, "network isolation", false,
-			"docker", "compose", "exec", "-T", "bad-actor",
-			"sh", "-c", "! wget -qO- -T 5 http://10.22.0.10:8080/ >/dev/null 2>&1")
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step1Err := collectHealthcareNetworkEvidence(ctx, demoDir, result, definition)
+		step1Result := buildDemoStepResult(
 			"healthcare-phi-blocked-step-1", "independent state observation: untrusted network isolated", step1Started, time.Now().UTC(),
-			step1Err == nil, true, "net_untrusted cannot route to the net_internal gateway"))
+			step1Err == nil, true, protocolResult)
 		if step1Err != nil {
 			fmt.Println("  (network isolation check failed)")
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-untrusted-network-isolated")
+			step1Result.EvidenceRefs = append(step1Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 		}
+		result.StepResults = append(result.StepResults, step1Result)
 
 		demoPrintln("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
 		demoPrintln("  Submit a PHI exfiltration attempt through the production-ready")
