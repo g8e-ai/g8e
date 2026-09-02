@@ -170,6 +170,16 @@ func TestValidateDemoScenarioResultRejectsDuplicateAttemptIDs(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
+func TestValidateDemoScenarioResultRejectsDuplicateInvestigationIDs(t *testing.T) {
+	result := validDemoScenarioResult()
+	result.InvestigationIds = []string{"investigation-1", "investigation-1"}
+
+	err := catalog.ValidateDemoScenarioResult(result, validDemoScenarioDefinition(), "scope-1")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
 func TestValidateDemoScenarioResultFailsClosedOnMissingRequiredEvidence(t *testing.T) {
 	tests := []struct {
 		name   string

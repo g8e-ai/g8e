@@ -44,23 +44,24 @@ const (
 
 // Result is the detailed, auditable record of one scenario run.
 type Result struct {
-	Name            string               `json:"name"`
-	Title           string               `json:"title"`
-	Persona         string               `json:"persona"`
-	RequiresPosture Posture              `json:"requires_posture"`
-	StartedAt       time.Time            `json:"started_at"`
-	DurationMS      int64                `json:"duration_ms"`
-	RunID           string               `json:"run_id,omitempty"`
-	ScenarioID      string               `json:"scenario_id,omitempty"`
-	Exchanges       []clientpkg.Exchange `json:"exchanges"`
-	TxHashes        []string             `json:"tx_hashes,omitempty"`
-	AttemptIDs      []string             `json:"attempt_ids,omitempty"`
-	ExecutionIDs    []string             `json:"execution_ids,omitempty"`
-	TransactionIDs  []string             `json:"transaction_ids,omitempty"`
-	Receipts        []clientpkg.Receipt  `json:"receipts,omitempty"`
-	Notes           []string             `json:"notes,omitempty"`
-	OK              bool                 `json:"ok"`
-	Err             string               `json:"error,omitempty"`
+	Name             string               `json:"name"`
+	Title            string               `json:"title"`
+	Persona          string               `json:"persona"`
+	RequiresPosture  Posture              `json:"requires_posture"`
+	StartedAt        time.Time            `json:"started_at"`
+	DurationMS       int64                `json:"duration_ms"`
+	RunID            string               `json:"run_id,omitempty"`
+	ScenarioID       string               `json:"scenario_id,omitempty"`
+	Exchanges        []clientpkg.Exchange `json:"exchanges"`
+	TxHashes         []string             `json:"tx_hashes,omitempty"`
+	AttemptIDs       []string             `json:"attempt_ids,omitempty"`
+	ExecutionIDs     []string             `json:"execution_ids,omitempty"`
+	TransactionIDs   []string             `json:"transaction_ids,omitempty"`
+	InvestigationIDs []string             `json:"investigation_ids,omitempty"`
+	Receipts         []clientpkg.Receipt  `json:"receipts,omitempty"`
+	Notes            []string             `json:"notes,omitempty"`
+	OK               bool                 `json:"ok"`
+	Err              string               `json:"error,omitempty"`
 }
 
 func (r *Result) note(f string, a ...any) { r.Notes = append(r.Notes, fmt.Sprintf(f, a...)) }
@@ -83,11 +84,12 @@ func (r *Result) retainToolReceipt(resp *clientpkg.JSONRPCResponse) error {
 	if result.Receipt == nil {
 		return constants.ErrHarnessReceiptReferenceMissing
 	}
-	if result.Receipt.ExecutionID == "" || result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" {
+	if result.Receipt.ExecutionID == "" || result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" || result.Receipt.InvestigationID == "" {
 		return constants.ErrHarnessReceiptReferenceInvalid
 	}
 	r.ExecutionIDs = append(r.ExecutionIDs, result.Receipt.ExecutionID)
 	r.TransactionIDs = append(r.TransactionIDs, result.Receipt.TransactionID)
+	r.InvestigationIDs = append(r.InvestigationIDs, result.Receipt.InvestigationID)
 	r.Receipts = append(r.Receipts, *result.Receipt)
 	return nil
 }

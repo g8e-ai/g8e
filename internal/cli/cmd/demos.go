@@ -1520,21 +1520,22 @@ func demoStep(ctx context.Context, demoDir, label string, fatal bool, args ...st
 // The parent demo runner parses this to extract authoritative attempt, execution,
 // transaction, and receipt identities retained by the child harness inside the container.
 type harnessResult struct {
-	Name            string           `json:"name"`
-	Title           string           `json:"title"`
-	Persona         string           `json:"persona"`
-	RequiresPosture string           `json:"requires_posture"`
-	StartedAt       time.Time        `json:"started_at"`
-	DurationMS      int64            `json:"duration_ms"`
-	RunID           string           `json:"run_id,omitempty"`
-	ScenarioID      string           `json:"scenario_id,omitempty"`
-	AttemptIDs      []string         `json:"attempt_ids,omitempty"`
-	ExecutionIDs    []string         `json:"execution_ids,omitempty"`
-	TransactionIDs  []string         `json:"transaction_ids,omitempty"`
-	Receipts        []harnessReceipt `json:"receipts,omitempty"`
-	Notes           []string         `json:"notes,omitempty"`
-	OK              bool             `json:"ok"`
-	Err             string           `json:"error,omitempty"`
+	Name             string           `json:"name"`
+	Title            string           `json:"title"`
+	Persona          string           `json:"persona"`
+	RequiresPosture  string           `json:"requires_posture"`
+	StartedAt        time.Time        `json:"started_at"`
+	DurationMS       int64            `json:"duration_ms"`
+	RunID            string           `json:"run_id,omitempty"`
+	ScenarioID       string           `json:"scenario_id,omitempty"`
+	AttemptIDs       []string         `json:"attempt_ids,omitempty"`
+	ExecutionIDs     []string         `json:"execution_ids,omitempty"`
+	TransactionIDs   []string         `json:"transaction_ids,omitempty"`
+	InvestigationIDs []string         `json:"investigation_ids,omitempty"`
+	Receipts         []harnessReceipt `json:"receipts,omitempty"`
+	Notes            []string         `json:"notes,omitempty"`
+	OK               bool             `json:"ok"`
+	Err              string           `json:"error,omitempty"`
 }
 
 type harnessReceipt struct {
@@ -1543,6 +1544,7 @@ type harnessReceipt struct {
 	TransactionHash string `json:"transaction_hash"`
 	SignerKeyID     string `json:"signer_key_id"`
 	Signature       string `json:"signature"`
+	InvestigationID string `json:"investigation_id"`
 }
 
 // runHarnessWithJSON runs the harness command with --json and parses the typed
@@ -1583,12 +1585,13 @@ func runHarnessWithJSON(ctx context.Context, demoDir, label string, args []strin
 // IDs or receipts, the result keeps its existing references and the caller is
 // expected to mark the step as failed.
 func applyHarnessAuthoritativeIdentity(result *compliancev1.DemoScenarioResult, hr *harnessResult) bool {
-	if hr == nil || len(hr.AttemptIDs) == 0 || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.Receipts) == 0 {
+	if hr == nil || len(hr.AttemptIDs) == 0 || len(hr.ExecutionIDs) == 0 || len(hr.TransactionIDs) == 0 || len(hr.InvestigationIDs) == 0 || len(hr.Receipts) == 0 {
 		return false
 	}
 	result.AttemptIds = append(result.AttemptIds, hr.AttemptIDs...)
 	result.ExecutionIds = append(result.ExecutionIds, hr.ExecutionIDs...)
 	result.TransactionIds = append(result.TransactionIds, hr.TransactionIDs...)
+	result.InvestigationIds = append(result.InvestigationIds, hr.InvestigationIDs...)
 	for _, rcpt := range hr.Receipts {
 		result.ReceiptRefs = append(result.ReceiptRefs, "action-receipt:"+rcpt.TransactionID)
 	}

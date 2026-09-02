@@ -489,6 +489,10 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	if executionID == "" {
 		executionID = uuid.NewString()
 	}
+	investigationID := callParams.InvestigationID
+	if investigationID == "" {
+		investigationID = uuid.NewString()
+	}
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
 		ArgumentsJson: argumentsJSON,
@@ -500,9 +504,10 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 
 	hash, envelopeBytes, stateRoot, err := g.processGatewayTransaction(ctx, processGatewayOptions{
-		actionType:     constants.ActionTypeMcpCall,
-		targetResource: callParams.Name,
-		payloadBytes:   payloadBytes,
+		actionType:      constants.ActionTypeMcpCall,
+		targetResource:  callParams.Name,
+		payloadBytes:    payloadBytes,
+		investigationID: investigationID,
 	})
 	if err != nil {
 		return nil, err
@@ -547,6 +552,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 			TransactionHash: receipt.TransactionHash,
 			SignerKeyID:     receipt.SignerKeyId,
 			Signature:       receipt.Signature,
+			InvestigationID: investigationID,
 		},
 	}
 	if receipt.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
@@ -763,9 +769,10 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 }
 
 type processGatewayOptions struct {
-	actionType     constants.ActionType
-	targetResource string
-	payloadBytes   []byte
+	actionType      constants.ActionType
+	targetResource  string
+	payloadBytes    []byte
+	investigationID string
 }
 
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, stateRoot string, err error) {
@@ -791,6 +798,9 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		StateMerkleRoot: stateRoot,
 		Posture:         g.posture,
 		Governance:      &commonv1.GovernanceMetadata{},
+	}
+	if opts.investigationID != "" {
+		env.InvestigationId = opts.investigationID
 	}
 
 	// Enrich from context if present

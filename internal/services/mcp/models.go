@@ -27,9 +27,10 @@ type JSONRPCError = response.JSONRPCError
 
 // CallToolRequest is the params for the "tools/call" method.
 type CallToolRequest struct {
-	Name        string          `json:"name"`
-	Arguments   json.RawMessage `json:"arguments,omitempty"`
-	ExecutionID string          `json:"execution_id,omitempty"`
+	Name            string          `json:"name"`
+	Arguments       json.RawMessage `json:"arguments,omitempty"`
+	ExecutionID     string          `json:"execution_id,omitempty"`
+	InvestigationID string          `json:"investigation_id,omitempty"`
 }
 
 // CallToolResult is the result for the "tools/call" method.
@@ -45,6 +46,7 @@ type toolReceiptReference struct {
 	TransactionHash string `json:"transaction_hash"`
 	SignerKeyID     string `json:"signer_key_id"`
 	Signature       string `json:"signature"`
+	InvestigationID string `json:"investigation_id"`
 }
 
 // TextContent represents a text part of a tool response.

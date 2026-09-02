@@ -36,6 +36,7 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type fakeEnvelopeProcessor struct {
@@ -134,13 +135,65 @@ func TestGatewayService_HandleToolsCall_ReturnsAuthoritativeReceiptReference(t *
 		Signature:       "signature-1",
 	}
 	g := newTestGatewayService(t, withEnvProc(&fakeEnvelopeProcessor{receipt: receipt}))
-	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{},"execution_id":"execution-1"}}`))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{},"execution_id":"execution-1","investigation_id":"investigation-1"}}`))
 	w := httptest.NewRecorder()
 
 	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}}}`, w.Body.String())
+	require.JSONEq(t, `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"tool result"}],"receipt":{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}}}`, w.Body.String())
+}
+
+func TestGatewayService_HandleToolsCall_GeneratesInvestigationIDWhenOmitted(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:   "tx-2",
+		TransactionHash: "hash-2",
+		SignerKeyId:     "warden-key-2",
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:   "tool result",
+		Signature:       "signature-2",
+	}
+	proc := &fakeEnvelopeProcessor{receipt: receipt}
+	g := newTestGatewayService(t, withEnvProc(proc))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{},"execution_id":"execution-2"}}`))
+	w := httptest.NewRecorder()
+
+	g.HandleMCP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Result struct {
+			Receipt *struct {
+				InvestigationID string `json:"investigation_id"`
+			} `json:"receipt"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Result.Receipt, "receipt projection must be present")
+	assert.NotEmpty(t, resp.Result.Receipt.InvestigationID, "gateway must generate an investigation ID when the client omits one")
+}
+
+func TestGatewayService_HandleToolsCall_BindsInvestigationIDIntoGovernanceEnvelope(t *testing.T) {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:   "tx-3",
+		TransactionHash: "hash-3",
+		SignerKeyId:     "warden-key-3",
+		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		ResultSummary:   "tool result",
+		Signature:       "signature-3",
+	}
+	proc := &fakeEnvelopeProcessor{receipt: receipt}
+	g := newTestGatewayService(t, withEnvProc(proc))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{},"execution_id":"execution-3","investigation_id":"investigation-3"}}`))
+	w := httptest.NewRecorder()
+
+	g.HandleMCP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, proc.gotPayload, "envelope payload must be captured")
+	var env commonv1.GovernanceEnvelope
+	require.NoError(t, protojson.Unmarshal(proc.gotPayload, &env), "payload must be a GovernanceEnvelope")
+	assert.Equal(t, "investigation-3", env.GetInvestigationId(), "gateway must bind the authoritative investigation ID into the governance envelope")
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
