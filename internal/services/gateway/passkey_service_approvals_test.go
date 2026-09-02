@@ -179,6 +179,87 @@ func TestPasskeyService_HandleApprovalVerify(t *testing.T) {
 	})
 }
 
+func TestApprovalReceiptReference_FailsClosedOnMalformedOrIncompleteIdentity(t *testing.T) {
+	validSuspended := func(t *testing.T) *models.SuspendedTransaction {
+		payload, err := proto.Marshal(&operatorv1.McpCallRequested{ExecutionId: "execution-approval-reference-1"})
+		require.NoError(t, err)
+		envelope, err := protojson.Marshal(&commonv1.GovernanceEnvelope{Payload: payload, InvestigationId: "investigation-approval-reference-1"})
+		require.NoError(t, err)
+		return &models.SuspendedTransaction{TransactionHash: "hash-approval-reference-1", Envelope: envelope}
+	}
+	validReceipt := func() *operatorv1.ActionReceipt {
+		return &operatorv1.ActionReceipt{
+			TransactionId:   "transaction-approval-reference-1",
+			TransactionHash: "hash-approval-reference-1",
+			SignerKeyId:     "warden-key-approval-reference-1",
+			Signature:       "signature-approval-reference-1",
+		}
+	}
+
+	tests := []struct {
+		name       string
+		mutate     func(*models.SuspendedTransaction, *operatorv1.ActionReceipt)
+		nilSource  bool
+		nilReceipt bool
+		wantTyped  bool
+	}{
+		{name: "nil suspended transaction", nilSource: true, wantTyped: true},
+		{name: "nil resumed receipt", nilReceipt: true, wantTyped: true},
+		{name: "malformed suspended envelope", mutate: func(tx *models.SuspendedTransaction, _ *operatorv1.ActionReceipt) {
+			tx.Envelope = []byte(`{not valid json`)
+		}},
+		{name: "malformed suspended payload", mutate: func(tx *models.SuspendedTransaction, _ *operatorv1.ActionReceipt) {
+			tx.Envelope = mustCanonicalEnvelope(t, &commonv1.GovernanceEnvelope{Payload: []byte{0xff}, InvestigationId: "investigation-approval-reference-1"})
+		}},
+		{name: "missing execution ID", mutate: func(tx *models.SuspendedTransaction, _ *operatorv1.ActionReceipt) {
+			tx.Envelope = mustCanonicalEnvelope(t, &commonv1.GovernanceEnvelope{InvestigationId: "investigation-approval-reference-1"})
+		}, wantTyped: true},
+		{name: "missing investigation ID", mutate: func(tx *models.SuspendedTransaction, _ *operatorv1.ActionReceipt) {
+			payload, err := proto.Marshal(&operatorv1.McpCallRequested{ExecutionId: "execution-approval-reference-1"})
+			require.NoError(t, err)
+			tx.Envelope = mustCanonicalEnvelope(t, &commonv1.GovernanceEnvelope{Payload: payload})
+		}, wantTyped: true},
+		{name: "missing transaction ID", mutate: func(_ *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) { receipt.TransactionId = "" }, wantTyped: true},
+		{name: "missing transaction hash", mutate: func(_ *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) { receipt.TransactionHash = "" }, wantTyped: true},
+		{name: "mismatched transaction hash", mutate: func(_ *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) {
+			receipt.TransactionHash = "different-hash"
+		}, wantTyped: true},
+		{name: "missing signer key ID", mutate: func(_ *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) { receipt.SignerKeyId = "" }, wantTyped: true},
+		{name: "missing signature", mutate: func(_ *models.SuspendedTransaction, receipt *operatorv1.ActionReceipt) { receipt.Signature = "" }, wantTyped: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			suspendedTx := validSuspended(t)
+			receipt := validReceipt()
+			if tt.mutate != nil {
+				tt.mutate(suspendedTx, receipt)
+			}
+			if tt.nilSource {
+				suspendedTx = nil
+			}
+			if tt.nilReceipt {
+				receipt = nil
+			}
+
+			ref, err := approvalReceiptReference(suspendedTx, receipt)
+
+			require.Error(t, err)
+			assert.Nil(t, ref)
+			if tt.wantTyped {
+				assert.ErrorIs(t, err, constants.ErrApprovalReceiptReferenceInvalid)
+			}
+		})
+	}
+}
+
+func mustCanonicalEnvelope(t *testing.T, envelope *commonv1.GovernanceEnvelope) []byte {
+	t.Helper()
+	encoded, err := protojson.Marshal(envelope)
+	require.NoError(t, err)
+	return encoded
+}
+
 func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
 		s, _, _ := setupTestPasskeyService(t)

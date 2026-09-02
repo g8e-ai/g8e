@@ -403,7 +403,7 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 		return 0, nil, constants.ErrApprovalSSETimeout
 	}
 
-	if approvalReceipt == nil || approvalReceipt.ExecutionID == "" || approvalReceipt.TransactionID == "" || approvalReceipt.TransactionHash == "" || approvalReceipt.SignerKeyID == "" || approvalReceipt.Signature == "" || approvalReceipt.InvestigationID == "" {
+	if approvalReceipt == nil || approvalReceipt.ExecutionID == "" || approvalReceipt.TransactionID == "" || approvalReceipt.TransactionHash != txHash || approvalReceipt.SignerKeyID == "" || approvalReceipt.Signature == "" || approvalReceipt.InvestigationID == "" {
 		return 0, nil, constants.ErrApprovalReceiptReferenceInvalid
 	}
 	body, err := json.Marshal(approvalReceipt)

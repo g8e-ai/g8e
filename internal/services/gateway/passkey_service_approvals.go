@@ -200,7 +200,7 @@ func approvalReceiptReference(suspendedTx *models.SuspendedTransaction, receipt 
 		Status:          int32(receipt.Status),
 		ResultSummary:   receipt.ResultSummary,
 	}
-	if ref.ExecutionID == "" || ref.TransactionID == "" || ref.TransactionHash == "" || ref.SignerKeyID == "" || ref.Signature == "" || ref.InvestigationID == "" {
+	if ref.ExecutionID == "" || ref.TransactionID == "" || ref.TransactionHash == "" || ref.TransactionHash != suspendedTx.TransactionHash || ref.SignerKeyID == "" || ref.Signature == "" || ref.InvestigationID == "" {
 		return nil, constants.ErrApprovalReceiptReferenceInvalid
 	}
 	return ref, nil

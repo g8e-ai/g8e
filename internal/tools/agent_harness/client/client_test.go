@@ -874,6 +874,42 @@ func TestClient_WaitForHumanApproval_ReturnsResumedReceiptFromCompletionEvent(t 
 	assert.Equal(t, expectedReceipt.Signature, receipt.Signature)
 }
 
+func TestClient_WaitForHumanApproval_FailsClosedWhenReceiptTransactionDoesNotMatchEvent(t *testing.T) {
+	const userID = "test-user-mismatched-receipt"
+	const txHash = "tx-matched-event-001"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+			Type:   constants.SSEEventTypeApprovalCompleted,
+			UserID: userID,
+			TxHash: txHash,
+			Receipt: &models.ApprovalReceiptReference{
+				ExecutionID: "execution-mismatched-receipt-1", TransactionID: "transaction-mismatched-receipt-1", TransactionHash: "different-transaction-hash",
+				SignerKeyID: "warden-key-mismatched-receipt-1", Signature: "signature-mismatched-receipt-1", InvestigationID: "investigation-mismatched-receipt-1",
+			},
+		})
+		require.NoError(t, err)
+		envelopeJSON, err := json.Marshal(models.SSEPushPayload{UserID: userID, Event: eventPayload})
+		require.NoError(t, err)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := New(config.Config{PublicBaseURL: srv.URL, MTLSBaseURL: srv.URL, Auth: config.Auth{}})
+	require.NoError(t, err)
+
+	status, body, err := client.WaitForHumanApproval(context.Background(), Persona{ID: "test"}, txHash, userID)
+
+	require.ErrorIs(t, err, constants.ErrApprovalReceiptReferenceInvalid)
+	assert.Zero(t, status)
+	assert.Empty(t, body)
+}
+
 func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	const userID = "test-user-timeout"
 	const sentTxHash = "tx-wrong-999"

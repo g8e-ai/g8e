@@ -103,7 +103,7 @@ func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 
 func TestResultRetainResumedReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 	r := &Result{}
-	body := []byte(`{"execution_id":"execution-resumed-1","transaction_id":"tx-resumed-1","transaction_hash":"hash-resumed-1","signer_key_id":"warden-key-resumed-1","signature":"signature-resumed-1","investigation_id":"investigation-resumed-1"}`)
+	body := []byte(`{"execution_id":"execution-resumed-1","transaction_id":"tx-resumed-1","transaction_hash":"hash-resumed-1","signer_key_id":"warden-key-resumed-1","signature":"signature-resumed-1","investigation_id":"investigation-resumed-1","status":2,"result_summary":"completed"}`)
 
 	err := r.retainResumedReceipt(body)
 

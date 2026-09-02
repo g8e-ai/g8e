@@ -8,8 +8,15 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +45,150 @@ func newHealthcareGoldCardScenarioResult(startedAt time.Time, definition *compli
 func newHealthcareSLABreachScenarioResult(startedAt time.Time, definition *compliancev1.DemoScenarioDefinition) *compliancev1.DemoScenarioResult {
 	return newDemoEvidenceScenarioResult(startedAt, definition, constants.DemosOrgHealthcare, "healthcare-demo-scope",
 		"10 elapsed days evaluated against 7-day SLA // SLA_BREACHED // OHA reportable")
+}
+
+const (
+	healthcareStateCollectorID      = "healthcare-actuator-state"
+	healthcareStateCollectorVersion = "1.0.0"
+	healthcareActuatorBoundary      = "healthcare-actuator"
+)
+
+type healthcareStateExpectation struct {
+	RunID                   string
+	ScenarioID              string
+	RequestID               string
+	Action                  string
+	ResourceType            string
+	Subject                 string
+	Status                  string
+	MeasuredValue           int
+	ThresholdValue          int
+	AutoApproved            bool
+	ReportableToOHA         bool
+	InitialStateFixtureRef  string
+	TerminalStateAssertions []string
+	NotBefore               time.Time
+}
+
+type healthcareStateObservation struct {
+	Action          string `json:"action"`
+	RequestID       string `json:"request_id"`
+	ResourceType    string `json:"resource_type"`
+	Subject         string `json:"subject"`
+	MeasuredValue   int    `json:"measured_value"`
+	ThresholdValue  int    `json:"threshold_value"`
+	RunID           string `json:"run_id"`
+	ScenarioID      string `json:"scenario_id"`
+	Status          string `json:"status"`
+	AutoApproved    bool   `json:"auto_approved"`
+	ReportableToOHA bool   `json:"reportable_to_oha"`
+	EvaluatedAt     string `json:"evaluated_at"`
+}
+
+type healthcareStateCollection struct {
+	CollectorID             string                     `json:"collector_id"`
+	CollectorVersion        string                     `json:"collector_version"`
+	Boundary                string                     `json:"boundary"`
+	InitialStateFixtureRef  string                     `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                   `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                  `json:"collected_at"`
+	Observation             healthcareStateObservation `json:"observation"`
+}
+
+type healthcareStateObservationWire struct {
+	Action          string `json:"action"`
+	RequestID       string `json:"request_id"`
+	ResourceType    string `json:"resource_type"`
+	Subject         string `json:"subject"`
+	MeasuredValue   *int   `json:"measured_value"`
+	ThresholdValue  *int   `json:"threshold_value"`
+	RunID           string `json:"run_id"`
+	ScenarioID      string `json:"scenario_id"`
+	Status          string `json:"status"`
+	AutoApproved    *bool  `json:"auto_approved"`
+	ReportableToOHA *bool  `json:"reportable_to_oha"`
+	EvaluatedAt     string `json:"evaluated_at"`
+}
+
+func decodeHealthcareStateObservation(raw []byte, expected healthcareStateExpectation, collectedAt time.Time) (*healthcareStateCollection, error) {
+	if expected.InitialStateFixtureRef == "" || len(expected.TerminalStateAssertions) == 0 {
+		return nil, fmt.Errorf("%w: healthcare state collector lacks canonical fixture binding", constants.ErrInvalidEvidenceGraph)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var wire healthcareStateObservationWire
+	if err := decoder.Decode(&wire); err != nil {
+		return nil, fmt.Errorf("%w: decode healthcare state observation: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("%w: healthcare state observation contains trailing JSON", constants.ErrInvalidEvidenceGraph)
+	}
+	if wire.MeasuredValue == nil || wire.ThresholdValue == nil || wire.AutoApproved == nil || wire.ReportableToOHA == nil {
+		return nil, fmt.Errorf("%w: healthcare state observation omits required typed fields", constants.ErrInvalidEvidenceGraph)
+	}
+	observed := healthcareStateObservation{
+		Action: wire.Action, RequestID: wire.RequestID, ResourceType: wire.ResourceType, Subject: wire.Subject,
+		MeasuredValue: *wire.MeasuredValue, ThresholdValue: *wire.ThresholdValue, RunID: wire.RunID, ScenarioID: wire.ScenarioID,
+		Status: wire.Status, AutoApproved: *wire.AutoApproved, ReportableToOHA: *wire.ReportableToOHA, EvaluatedAt: wire.EvaluatedAt,
+	}
+	evaluatedAt, err := time.Parse(time.RFC3339Nano, observed.EvaluatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("%w: healthcare state observation evaluated_at: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if evaluatedAt.Before(expected.NotBefore) || evaluatedAt.After(collectedAt) {
+		return nil, fmt.Errorf("%w: healthcare state observation timestamp is outside the scenario collection window", constants.ErrInvalidEvidenceGraph)
+	}
+	if observed.RunID != expected.RunID || observed.ScenarioID != expected.ScenarioID || observed.RequestID != expected.RequestID ||
+		observed.Action != expected.Action || observed.ResourceType != expected.ResourceType || observed.Subject != expected.Subject ||
+		observed.Status != expected.Status || observed.MeasuredValue != expected.MeasuredValue || observed.ThresholdValue != expected.ThresholdValue ||
+		observed.AutoApproved != expected.AutoApproved || observed.ReportableToOHA != expected.ReportableToOHA {
+		return nil, fmt.Errorf("%w: healthcare state observation does not match the canonical terminal fixture", constants.ErrInvalidEvidenceGraph)
+	}
+	return &healthcareStateCollection{
+		CollectorID:             healthcareStateCollectorID,
+		CollectorVersion:        healthcareStateCollectorVersion,
+		Boundary:                healthcareActuatorBoundary,
+		InitialStateFixtureRef:  expected.InitialStateFixtureRef,
+		TerminalStateAssertions: append([]string(nil), expected.TerminalStateAssertions...),
+		CollectedAt:             collectedAt,
+		Observation:             observed,
+	}, nil
+}
+
+func encodeHealthcareStateCollection(collection *healthcareStateCollection) ([]byte, string, error) {
+	encoded, err := json.Marshal(collection)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: encode healthcare state collection: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	digest := sha256.Sum256(encoded)
+	return encoded, "state-observation:sha256:" + hex.EncodeToString(digest[:]), nil
+}
+
+func collectHealthcareStateEvidence(ctx context.Context, demoDir string, result *compliancev1.DemoScenarioResult, definition *compliancev1.DemoScenarioDefinition, requestID, action, resourceType, subject, status string, measuredValue, thresholdValue int, autoApproved, reportableToOHA bool) (string, string, error) {
+	command := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
+		result.GetRunId(), result.GetScenarioRef().GetId(), requestID, action, status, strconv.Itoa(measuredValue), strconv.Itoa(thresholdValue))
+	command.Dir = demoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		return "", "", fmt.Errorf("%w: healthcare state collector: %v: %s", constants.ErrInvalidEvidenceGraph, err, strings.TrimSpace(stderr.String()))
+	}
+	collection, err := decodeHealthcareStateObservation(stdout.Bytes(), healthcareStateExpectation{
+		RunID: result.GetRunId(), ScenarioID: result.GetScenarioRef().GetId(), RequestID: requestID, Action: action,
+		ResourceType: resourceType, Subject: subject, Status: status, MeasuredValue: measuredValue, ThresholdValue: thresholdValue,
+		AutoApproved: autoApproved, ReportableToOHA: reportableToOHA, InitialStateFixtureRef: definition.GetInitialStateFixtureRef(),
+		TerminalStateAssertions: definition.GetTerminalStateAssertions(), NotBefore: result.GetStartedAt().AsTime(),
+	}, time.Now().UTC())
+	if err != nil {
+		return "", "", err
+	}
+	encoded, evidenceRef, err := encodeHealthcareStateCollection(collection)
+	if err != nil {
+		return "", "", err
+	}
+	return string(encoded), evidenceRef, nil
 }
 
 func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*compliancev1.DemoScenarioResult, error) {
@@ -101,18 +252,19 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 
 		demoPrintln("  ── Step 3: Independently verify the PA submission record ────")
 		step3Started := time.Now().UTC()
-		step3Err := demoStep(ctx, demoDir, "PA submission observation", false,
-			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
-			result.RunId, "healthcare-success", "PA-2026-0045", "submit", "SUBMITTED", "0", "0")
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step3Err := collectHealthcareStateEvidence(ctx, demoDir, result, definition,
+			"PA-2026-0045", "submit", "ClaimResponse", "preauthorization", "SUBMITTED", 0, 0, false, false)
+		step3Result := buildDemoStepResult(
 			"healthcare-success-step-3", "independent state observation: PA submission recorded", step3Started, time.Now().UTC(),
-			step3Err == nil, true, "healthcare actuator observation matches the run and scenario"))
+			step3Err == nil, true, protocolResult)
 		if step3Err != nil {
 			fmt.Println("  (PA submission state observation failed)")
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-pa-2026-0045-submitted")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		demoPrintln("  ── Step 4: View g8e enforcement audit ───────────────────────")
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
@@ -199,19 +351,20 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 
 		demoPrintln("  ── Step 3: Collect the run-bound AUTO_APPROVED state ────────")
 		step3Started := time.Now().UTC()
-		step3Err := demoStep(ctx, demoDir, "gold-card state observation", false,
-			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
-			result.RunId, "healthcare-gold-card", "PA-2026-0043", "gold-card", "AUTO_APPROVED", "96", "90")
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step3Err := collectHealthcareStateEvidence(ctx, demoDir, result, definition,
+			"PA-2026-0043", "gold-card", "ClaimResponse", "Dr. Priya Nair", "AUTO_APPROVED", 96, 90, true, false)
+		step3Result := buildDemoStepResult(
 			"healthcare-gold-card-step-3", "independent state observation: gold-card auto-approved", step3Started, time.Now().UTC(),
-			step3Err == nil, true, "actuator observation matches run, scenario, request, threshold, and terminal state"))
+			step3Err == nil, true, protocolResult)
 		if step3Err != nil {
 			fmt.Println("  (gold-card state observation failed)")
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-gold-card-auto-approved")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-provider-approval-rate:96", "metric:healthcare-gold-card-threshold:90")
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
@@ -285,19 +438,20 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 
 		demoPrintln("  ── Step 3: Collect the run-bound SLA_BREACHED state ─────────")
 		step3Started := time.Now().UTC()
-		step3Err := demoStep(ctx, demoDir, "SLA breach state observation", false,
-			"docker", "compose", "exec", "-T", "healthcare-actuator", "python", constants.ContainerVerifyPAPy,
-			result.RunId, "healthcare-sla-breach", "PA-2026-0044", "sla-check", "SLA_BREACHED", "10", "7")
-		result.StepResults = append(result.StepResults, buildDemoStepResult(
+		protocolResult, evidenceRef, step3Err := collectHealthcareStateEvidence(ctx, demoDir, result, definition,
+			"PA-2026-0044", "sla-check", "ClaimResponse", "Dr. James O'Brien", "SLA_BREACHED", 10, 7, false, true)
+		step3Result := buildDemoStepResult(
 			"healthcare-sla-breach-step-3", "independent state observation: SLA breached and reportable", step3Started, time.Now().UTC(),
-			step3Err == nil, true, "actuator observation matches run, scenario, request, SLA threshold, and terminal state"))
+			step3Err == nil, true, protocolResult)
 		if step3Err != nil {
 			fmt.Println("  (SLA breach state observation failed)")
 			hasErrors = true
 		} else {
-			result.StateObservationRefs = append(result.StateObservationRefs, "state-observation:healthcare-sla-breach-reportable")
+			step3Result.EvidenceRefs = append(step3Result.EvidenceRefs, evidenceRef)
+			result.StateObservationRefs = append(result.StateObservationRefs, evidenceRef)
 			result.MetricRefs = append(result.MetricRefs, "metric:healthcare-sla-elapsed-days:10", "metric:healthcare-sla-threshold-days:7")
 		}
+		result.StepResults = append(result.StepResults, step3Result)
 
 		result.CompletedAt = timestamppb.New(time.Now().UTC())
 		if hasErrors {
