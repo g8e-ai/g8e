@@ -26,6 +26,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/tui"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
@@ -627,6 +628,65 @@ func TestRunAllScenarios_CancelledContextStopsBeforeScenarioLookup(t *testing.T)
 
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.NotErrorIs(t, err, constants.ErrNotFound)
+}
+
+func TestRunAllScenariosWithRunner_PreservesResultsAfterScenarioError(t *testing.T) {
+	scenarioErr := errors.New("persistence failure")
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		result := newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")
+		if scenario == "2" {
+			return []*compliancev1.DemoScenarioResult{result}, scenarioErr
+		}
+		return []*compliancev1.DemoScenarioResult{result}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	assert.ErrorIs(t, err, scenarioErr)
+	assert.Equal(t, 4, callCount, "all scenarios should run even when one errors")
+	for i := 1; i <= 4; i++ {
+		assert.Contains(t, output.String(), fmt.Sprintf("scenario %d", i))
+	}
+}
+
+func TestRunAllScenariosWithRunner_ContextCancellationStopsLoop(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		callCount++
+		if scenario == "2" {
+			cancel()
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	err := runAllScenariosWithRunner(ctx, nil, &cobra.Command{}, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 2, callCount, "loop should stop after context cancellation")
+}
+
+func TestRunAllScenariosWithRunner_FiltersNilResultsFromErroredScenarios(t *testing.T) {
+	runner := func(_ context.Context, _ fs.RuntimeFileService, _, _, _, scenario string) ([]*compliancev1.DemoScenarioResult, error) {
+		if scenario == "2" {
+			return nil, errors.New("validation failure")
+		}
+		return []*compliancev1.DemoScenarioResult{newDemoScenarioResult(scenario, fmt.Sprintf("scenario %s", scenario), demoStatusPassed, "")}, nil
+	}
+
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	err := runAllScenariosWithRunner(context.Background(), nil, cmd, constants.DemosOrgHealthcare, "", demoTestRunID, runner)
+	require.Error(t, err)
+	assert.NotContains(t, output.String(), "scenario 2")
+	assert.Contains(t, output.String(), "scenario 1")
+	assert.Contains(t, output.String(), "scenario 3")
+	assert.Contains(t, output.String(), "scenario 4")
 }
 
 func TestRunDemosRun_NoArgsReturnsMissingRequiredField(t *testing.T) {

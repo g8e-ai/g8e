@@ -1287,7 +1287,18 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string) error {
+// scenarioRunnerFunc is the signature of runScenarioWithResults, extracted as a
+// function type so the all-scenarios loop can be tested with a stub runner.
+type scenarioRunnerFunc func(ctx context.Context, fileSvc fs.RuntimeFileService, org, demoDir, runID, scenario string) ([]*compliancev1.DemoScenarioResult, error)
+
+// runAllScenariosWithRunner runs every scenario for the given org through the
+// provided runner function, preserving all results even when individual
+// scenarios error. Context cancellation stops the loop immediately; all other
+// errors are accumulated and returned after every scenario has been attempted
+// so partial-failure results remain in the printed table and the summary
+// banner. Non-nil results from errored scenarios are retained so persistence
+// failures and validation errors do not discard evidence that was collected.
+func runAllScenariosWithRunner(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string, runner scenarioRunnerFunc) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1300,14 +1311,22 @@ func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *co
 		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 
 	results := make([]*compliancev1.DemoScenarioResult, 0, count)
+	var runErr error
 
 	for i := 1; i <= count; i++ {
-		scenarioNum := fmt.Sprintf("%d", i)
-		scenarioResults, err := runScenarioWithResults(ctx, fileSvc, org, demoDir, runID, scenarioNum)
-		if err != nil {
-			return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return errors.Join(runErr, ctxErr)
 		}
-		results = append(results, scenarioResults...)
+		scenarioNum := fmt.Sprintf("%d", i)
+		scenarioResults, err := runner(ctx, fileSvc, org, demoDir, runID, scenarioNum)
+		if err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+		for _, r := range scenarioResults {
+			if r != nil {
+				results = append(results, r)
+			}
+		}
 	}
 
 	if org == constants.DemosOrgFedRAMP {
@@ -1318,12 +1337,19 @@ func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *co
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return errors.Join(runErr, err)
 	}
 
 	printResultsTable(cmd, org, results)
 
-	return summarizeScenarioResults(cmd, org, results)
+	if summaryErr := summarizeScenarioResults(cmd, org, results); summaryErr != nil {
+		return errors.Join(runErr, summaryErr)
+	}
+	return runErr
+}
+
+func runAllScenarios(ctx context.Context, fileSvc fs.RuntimeFileService, cmd *cobra.Command, org, demoDir, runID string) error {
+	return runAllScenariosWithRunner(ctx, fileSvc, cmd, org, demoDir, runID, runScenarioWithResults)
 }
 
 // summarizeScenarioResults prints the pass/fail/skip summary banner for a demo
