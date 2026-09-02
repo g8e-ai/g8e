@@ -156,9 +156,9 @@ func validateReleaseVersion(v string) error {
 // (markdown and CSV) consume; neither renderer recomputes an assessment.
 type releaseEvidenceReport struct {
 	ReleaseVersion string
-	GeneratedAt   time.Time
-	CertClass     string
-	CatalogPath   string
+	GeneratedAt    time.Time
+	CertClass      string
+	CatalogPath    string
 
 	// KSI evaluation. KSISet is nil when the runtime stores are unavailable;
 	// KSIUnavailable records the reason so the report can surface the gap.

@@ -232,7 +232,7 @@ generate: proto
 # Note: buf has its own built-in compiler (protocompile) and invokes the
 # protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
 .PHONY: proto
-proto: buf-install
+proto: buf-install proto-python proto-lockfiles
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
@@ -258,6 +258,22 @@ proto-python:
 		protocol/proto/g8e/operator/v1/operator.proto \
 		protocol/proto/g8e/pubsub/v1/pubsub.proto
 	@echo "Python Protobuf generation complete."
+
+# Regenerate downstream uv.lock files that depend on the protocol/python
+# package via directory dependencies. The g8e version in protocol/python is
+# the source of truth; any bump propagates into ensemble/ and ensemble/evals/.
+# Without this, `uv sync --locked` (used by CI and local dev) fails because the
+# locked g8e version no longer matches the directory source.
+.PHONY: proto-lockfiles
+proto-lockfiles:
+	@echo "Regenerating downstream uv.lock files..."
+	@if ! command -v $(EVALS_UV) &> /dev/null; then \
+		echo "Error: uv not found. Install with: pip install uv" >&2; \
+		exit 1; \
+	fi
+	@cd ensemble/evals && $(EVALS_UV) lock --quiet
+	@cd ensemble && $(EVALS_UV) lock --quiet
+	@echo "Downstream uv.lock files regenerated."
 
 .PHONY: proto-force
 proto-force: buf-install
