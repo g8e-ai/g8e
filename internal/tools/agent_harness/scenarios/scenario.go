@@ -81,17 +81,49 @@ func (r *Result) retainToolReceipt(resp *clientpkg.JSONRPCResponse) error {
 	if err := json.Unmarshal(resp.Result, &result); err != nil {
 		return fmt.Errorf("agent harness: decode tool receipt reference: %w", err)
 	}
-	if result.Receipt == nil {
+	return r.retainReceipt(result.Receipt)
+}
+
+func (r *Result) retainResumedReceipt(body []byte) error {
+	if len(body) == 0 {
 		return constants.ErrHarnessReceiptReferenceMissing
 	}
-	if result.Receipt.ExecutionID == "" || result.Receipt.TransactionID == "" || result.Receipt.TransactionHash == "" || result.Receipt.SignerKeyID == "" || result.Receipt.Signature == "" || result.Receipt.InvestigationID == "" {
+	var receipt clientpkg.Receipt
+	if err := json.Unmarshal(body, &receipt); err != nil {
+		return fmt.Errorf("agent harness: decode resumed receipt reference: %w", err)
+	}
+	return r.retainReceipt(&receipt)
+}
+
+func (r *Result) retainReceipt(receipt *clientpkg.Receipt) error {
+	if receipt == nil {
+		return constants.ErrHarnessReceiptReferenceMissing
+	}
+	if receipt.ExecutionID == "" || receipt.TransactionID == "" || receipt.TransactionHash == "" || receipt.SignerKeyID == "" || receipt.Signature == "" || receipt.InvestigationID == "" {
 		return constants.ErrHarnessReceiptReferenceInvalid
 	}
-	r.ExecutionIDs = append(r.ExecutionIDs, result.Receipt.ExecutionID)
-	r.TransactionIDs = append(r.TransactionIDs, result.Receipt.TransactionID)
-	r.InvestigationIDs = append(r.InvestigationIDs, result.Receipt.InvestigationID)
-	r.Receipts = append(r.Receipts, *result.Receipt)
+	r.ExecutionIDs = append(r.ExecutionIDs, receipt.ExecutionID)
+	r.TransactionIDs = append(r.TransactionIDs, receipt.TransactionID)
+	r.InvestigationIDs = append(r.InvestigationIDs, receipt.InvestigationID)
+	r.Receipts = append(r.Receipts, *receipt)
 	return nil
+}
+
+// retainFailedStageReceipt parses the JSON-RPC error Data field of a governed
+// L1/L2 rejection and retains the authoritative execution, transaction, and
+// investigation identity from the signed failed-stage receipt reference. It
+// fails closed when the response, error, or data is missing, malformed, or
+// incomplete so the parent demo runner never falls back to synthetic
+// references when the gateway actually produced a signed receipt.
+func (r *Result) retainFailedStageReceipt(resp *clientpkg.JSONRPCResponse) error {
+	if resp == nil || resp.Error == nil || len(resp.Error.Data) == 0 {
+		return constants.ErrHarnessReceiptReferenceMissing
+	}
+	var rcpt clientpkg.Receipt
+	if err := json.Unmarshal(resp.Error.Data, &rcpt); err != nil {
+		return fmt.Errorf("agent harness: decode failed-stage receipt reference: %w", err)
+	}
+	return r.retainReceipt(&rcpt)
 }
 
 // Scenario is one impersonation. Run does the work; the runner handles

@@ -299,9 +299,9 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 // WaitForHumanApproval drives the real out-of-band L3 notary flow for human
 // approval: it prints the approval URL, subscribes to the gateway's SSE stream
 // for the approval.completed event matching txHash, and blocks until the human
-// completes the WebAuthn ceremony in their browser. After the SSE event fires,
-// it verifies the approval status via the mTLS status endpoint and returns the
-// response body (an ActionReceipt JSON) on success.
+// completes the WebAuthn ceremony in their browser. The completion event carries
+// the authoritative resumed-receipt reference, which this method validates and
+// returns on success.
 //
 // SSE routing is via the X-G8E-CLI-Session-ID header set from Persona.CLISessionID;
 // user_id is bound by the mTLS cert and stamped into context by the auth
@@ -361,6 +361,7 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 
 	approved := make(chan struct{}, 1)
 	var once sync.Once
+	var approvalReceipt *models.ApprovalReceiptReference
 	done := make(chan struct{})
 
 	go func() {
@@ -383,10 +384,13 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 			if innerType != constants.SSEEventTypeApprovalCompleted {
 				return
 			}
-			if event.TxHash != txHash {
+			if event.TxHash != txHash || event.UserID != userID {
 				return
 			}
-			once.Do(func() { close(approved) })
+			once.Do(func() {
+				approvalReceipt = event.Receipt
+				close(approved)
+			})
 		})
 	}()
 
@@ -399,27 +403,14 @@ func (c *Client) WaitForHumanApproval(ctx context.Context, p Persona, txHash, us
 		return 0, nil, constants.ErrApprovalSSETimeout
 	}
 
-	// Verify approval status via the CLI-cert client when available so the
-	// status check is authenticated with the same identity as the submit.
-	statusPersona := p
-	statusPersona.UserID = userID
-	statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
-	status, body, err := c.doWithCLI(ctx, statusPersona, http.MethodGet, c.cfg.PublicBaseURL+statusPath, nil)
+	if approvalReceipt == nil || approvalReceipt.ExecutionID == "" || approvalReceipt.TransactionID == "" || approvalReceipt.TransactionHash == "" || approvalReceipt.SignerKeyID == "" || approvalReceipt.Signature == "" || approvalReceipt.InvestigationID == "" {
+		return 0, nil, constants.ErrApprovalReceiptReferenceInvalid
+	}
+	body, err := json.Marshal(approvalReceipt)
 	if err != nil {
-		return 0, nil, fmt.Errorf("human approval: verify status: %w", err)
-	}
-	if status >= 400 {
-		return status, body, fmt.Errorf("human approval: status check returned %d", status)
-	}
-
-	var approvalStatus models.ApprovalStatusResponse
-	if err := json.Unmarshal(body, &approvalStatus); err != nil {
-		return status, body, fmt.Errorf("human approval: parse status: %w", err)
-	}
-	if approvalStatus.Status != string(constants.SuspendedTxStatusApproved) {
-		return status, body, fmt.Errorf("human approval: unexpected status %q", approvalStatus.Status)
+		return 0, nil, fmt.Errorf("human approval: encode receipt reference: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "  ✓ Human approval confirmed for transaction %s\n\n", txHash)
-	return status, body, nil
+	return http.StatusOK, body, nil
 }

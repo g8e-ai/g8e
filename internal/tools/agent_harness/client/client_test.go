@@ -758,6 +758,10 @@ func TestClient_WaitForHumanApproval_Success(t *testing.T) {
 				Type:   constants.SSEEventTypeApprovalCompleted,
 				UserID: userID,
 				TxHash: txHash,
+				Receipt: &models.ApprovalReceiptReference{
+					ExecutionID: "execution-success-001", TransactionID: "transaction-success-001", TransactionHash: txHash,
+					SignerKeyID: "warden-key-success-001", Signature: "signature-success-001", InvestigationID: "investigation-success-001",
+				},
 			})
 			if err != nil {
 				t.Fatalf("marshal event: %v", err)
@@ -807,6 +811,67 @@ func TestClient_WaitForHumanApproval_Success(t *testing.T) {
 	if len(body) == 0 {
 		t.Error("expected non-empty body")
 	}
+}
+
+func TestClient_WaitForHumanApproval_ReturnsResumedReceiptFromCompletionEvent(t *testing.T) {
+	const userID = "test-user-resumed-receipt"
+	const txHash = "tx-resumed-receipt-001"
+
+	expectedReceipt := models.ApprovalReceiptReference{
+		ExecutionID:     "execution-resumed-1",
+		TransactionID:   "transaction-resumed-1",
+		TransactionHash: txHash,
+		InvestigationID: "investigation-resumed-1",
+		SignerKeyID:     "warden-key-resumed-1",
+		Signature:       "signature-resumed-1",
+	}
+	type completionEvent struct {
+		Type    string                          `json:"type"`
+		UserID  string                          `json:"user_id"`
+		TxHash  string                          `json:"tx_hash"`
+		Receipt models.ApprovalReceiptReference `json:"receipt"`
+	}
+
+	statusRequests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
+			w.Header().Set("Content-Type", "text/event-stream")
+			eventPayload, err := json.Marshal(completionEvent{
+				Type: constants.SSEEventTypeApprovalCompleted, UserID: userID, TxHash: txHash, Receipt: expectedReceipt,
+			})
+			require.NoError(t, err)
+			envelopeJSON, err := json.Marshal(models.SSEPushPayload{UserID: userID, Event: eventPayload})
+			require.NoError(t, err)
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
+		case strings.HasPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus):
+			statusRequests++
+			w.Header().Set("Content-Type", "application/json")
+			require.NoError(t, json.NewEncoder(w).Encode(models.ApprovalStatusResponse{
+				Status: string(constants.SuspendedTxStatusExpiredOrNotFound),
+			}))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := New(config.Config{PublicBaseURL: srv.URL, MTLSBaseURL: srv.URL, Auth: config.Auth{}})
+	require.NoError(t, err)
+
+	status, body, err := client.WaitForHumanApproval(context.Background(), Persona{ID: "test"}, txHash, userID)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Zero(t, statusRequests)
+
+	var receipt Receipt
+	require.NoError(t, json.Unmarshal(body, &receipt))
+	assert.Equal(t, expectedReceipt.ExecutionID, receipt.ExecutionID)
+	assert.Equal(t, expectedReceipt.TransactionID, receipt.TransactionID)
+	assert.Equal(t, expectedReceipt.TransactionHash, receipt.TransactionHash)
+	assert.Equal(t, expectedReceipt.InvestigationID, receipt.InvestigationID)
+	assert.Equal(t, expectedReceipt.SignerKeyID, receipt.SignerKeyID)
+	assert.Equal(t, expectedReceipt.Signature, receipt.Signature)
 }
 
 func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
@@ -875,10 +940,11 @@ func TestClient_WaitForHumanApproval_TimeoutNoMatchingEvent(t *testing.T) {
 	}
 }
 
-func TestClient_WaitForHumanApproval_StatusEndpointError(t *testing.T) {
+func TestClient_WaitForHumanApproval_FailsClosedWhenCompletionEventOmitsReceipt(t *testing.T) {
 	const userID = "test-user-status-err"
 	const txHash = "tx-status-err-456"
 
+	statusRequests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, constants.APIPaths.SSEStream):
@@ -901,6 +967,7 @@ func TestClient_WaitForHumanApproval_StatusEndpointError(t *testing.T) {
 			}
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
 		case strings.HasPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus):
+			statusRequests++
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(models.ApprovalStatusResponse{
@@ -928,12 +995,9 @@ func TestClient_WaitForHumanApproval_StatusEndpointError(t *testing.T) {
 	defer cancel()
 
 	status, _, err := client.WaitForHumanApproval(ctx, Persona{ID: "test"}, txHash, userID)
-	if err == nil {
-		t.Fatal("expected error from status endpoint, got nil")
-	}
-	if status != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d", status)
-	}
+	require.ErrorIs(t, err, constants.ErrApprovalReceiptReferenceInvalid)
+	assert.Zero(t, status)
+	assert.Zero(t, statusRequests)
 }
 
 func TestPersona(t *testing.T) {

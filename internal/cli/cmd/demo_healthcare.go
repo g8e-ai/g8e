@@ -372,14 +372,8 @@ func runHealthcareScenario(ctx context.Context, demoDir, scenario string) (*comp
 			fmt.Println()
 			hasErrors = true
 		} else {
-			if len(harnessResults) > 0 {
-				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
-			}
-			if len(result.ReceiptRefs) == 0 {
-				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:healthcare-phi-blocked")
-			}
-			if len(result.TransactionIds) == 0 {
-				result.TransactionIds = append(result.TransactionIds, "healthcare-phi-blocked-tx")
+			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+				hasErrors = true
 			}
 		}
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")

@@ -101,6 +101,52 @@ func TestResultRetainToolReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
 	assert.Equal(t, "investigation-1", r.Receipts[0].InvestigationID)
 }
 
+func TestResultRetainResumedReceipt_RetainsAuthoritativeIdentity(t *testing.T) {
+	r := &Result{}
+	body := []byte(`{"execution_id":"execution-resumed-1","transaction_id":"tx-resumed-1","transaction_hash":"hash-resumed-1","signer_key_id":"warden-key-resumed-1","signature":"signature-resumed-1","investigation_id":"investigation-resumed-1"}`)
+
+	err := r.retainResumedReceipt(body)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"execution-resumed-1"}, r.ExecutionIDs)
+	assert.Equal(t, []string{"tx-resumed-1"}, r.TransactionIDs)
+	assert.Equal(t, []string{"investigation-resumed-1"}, r.InvestigationIDs)
+	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "hash-resumed-1", r.Receipts[0].TransactionHash)
+	assert.Equal(t, "warden-key-resumed-1", r.Receipts[0].SignerKeyID)
+	assert.Equal(t, "signature-resumed-1", r.Receipts[0].Signature)
+}
+
+func TestResultRetainResumedReceipt_FailsClosedOnMissingMalformedOrIncompleteMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    []byte
+		wantErr error
+	}{
+		{name: "missing body", body: nil, wantErr: constants.ErrHarnessReceiptReferenceMissing},
+		{name: "malformed body", body: []byte(`{not valid json`), wantErr: nil},
+		{name: "missing execution ID", body: []byte(`{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"key-1","signature":"signature-1","investigation_id":"investigation-1"}`), wantErr: constants.ErrHarnessReceiptReferenceInvalid},
+		{name: "missing investigation ID", body: []byte(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"key-1","signature":"signature-1"}`), wantErr: constants.ErrHarnessReceiptReferenceInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Result{}
+
+			err := r.retainResumedReceipt(tt.body)
+
+			require.Error(t, err)
+			assert.Empty(t, r.ExecutionIDs)
+			assert.Empty(t, r.TransactionIDs)
+			assert.Empty(t, r.InvestigationIDs)
+			assert.Empty(t, r.Receipts)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetadata(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -211,6 +257,139 @@ func TestResultRetainToolReceipt_FailsClosedOnMissingMalformedOrIncompleteMetada
 			err := r.retainToolReceipt(tt.resp)
 
 			require.Error(t, err, "retainToolReceipt must fail closed on %s", tt.name)
+			assert.Empty(t, r.ExecutionIDs, "no execution IDs should be retained on %s", tt.name)
+			assert.Empty(t, r.TransactionIDs, "no transaction IDs should be retained on %s", tt.name)
+			assert.Empty(t, r.InvestigationIDs, "no investigation IDs should be retained on %s", tt.name)
+			assert.Empty(t, r.Receipts, "no receipts should be retained on %s", tt.name)
+
+			if tt.wantErr != nil {
+				assert.True(t, errors.Is(err, tt.wantErr),
+					"expected error %v on %s, got %v", tt.wantErr, tt.name, err)
+			}
+		})
+	}
+}
+
+func TestResultRetainFailedStageReceipt_RetainsAuthoritativeIdentityFromErrorResponse(t *testing.T) {
+	r := &Result{}
+	resp := &clientpkg.JSONRPCResponse{
+		Error: &clientpkg.JSONRPCError{
+			Code:    -32001,
+			Message: "L1 doctrine rejected: audit integrity violation",
+			Data:    json.RawMessage(`{"execution_id":"execution-blocked","transaction_id":"tx-blocked","transaction_hash":"hash-blocked","signer_key_id":"warden-key-blocked","signature":"sig-blocked","investigation_id":"investigation-blocked"}`),
+		},
+	}
+
+	err := r.retainFailedStageReceipt(resp)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"execution-blocked"}, r.ExecutionIDs)
+	assert.Equal(t, []string{"tx-blocked"}, r.TransactionIDs)
+	assert.Equal(t, []string{"investigation-blocked"}, r.InvestigationIDs)
+	require.Len(t, r.Receipts, 1)
+	assert.Equal(t, "execution-blocked", r.Receipts[0].ExecutionID)
+	assert.Equal(t, "tx-blocked", r.Receipts[0].TransactionID)
+	assert.Equal(t, "hash-blocked", r.Receipts[0].TransactionHash)
+	assert.Equal(t, "warden-key-blocked", r.Receipts[0].SignerKeyID)
+	assert.Equal(t, "sig-blocked", r.Receipts[0].Signature)
+	assert.Equal(t, "investigation-blocked", r.Receipts[0].InvestigationID)
+}
+
+func TestResultRetainFailedStageReceipt_FailsClosedOnMissingOrIncompleteErrorData(t *testing.T) {
+	tests := []struct {
+		name    string
+		resp    *clientpkg.JSONRPCResponse
+		wantErr error
+	}{
+		{
+			name:    "nil response",
+			resp:    nil,
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "nil error",
+			resp:    &clientpkg.JSONRPCResponse{Error: nil},
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "empty data bytes",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked"}},
+			wantErr: constants.ErrHarnessReceiptReferenceMissing,
+		},
+		{
+			name:    "malformed JSON data",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{not valid json`)}},
+			wantErr: nil,
+		},
+		{
+			name:    "missing execution_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing transaction_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing transaction_hash",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing signer_key_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing signature",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "missing investigation_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string execution_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string transaction_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string transaction_hash",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string signer_key_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"","signature":"signature-1","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string signature",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"","investigation_id":"investigation-1"}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+		{
+			name:    "empty string investigation_id",
+			resp:    &clientpkg.JSONRPCResponse{Error: &clientpkg.JSONRPCError{Code: -32001, Message: "blocked", Data: json.RawMessage(`{"execution_id":"execution-1","transaction_id":"tx-1","transaction_hash":"hash-1","signer_key_id":"warden-key-1","signature":"signature-1","investigation_id":""}`)}},
+			wantErr: constants.ErrHarnessReceiptReferenceInvalid,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Result{}
+
+			err := r.retainFailedStageReceipt(tt.resp)
+
+			require.Error(t, err, "retainFailedStageReceipt must fail closed on %s", tt.name)
 			assert.Empty(t, r.ExecutionIDs, "no execution IDs should be retained on %s", tt.name)
 			assert.Empty(t, r.TransactionIDs, "no transaction IDs should be retained on %s", tt.name)
 			assert.Empty(t, r.InvestigationIDs, "no investigation IDs should be retained on %s", tt.name)

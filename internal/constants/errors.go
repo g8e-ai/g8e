@@ -1109,7 +1109,8 @@ var (
 	ErrGatewayStoresNil                = errors.New("gateway stores is nil")
 
 	// SSE approval errors
-	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
+	ErrApprovalSSETimeout              = errors.New("L3 approval: timed out waiting for SSE event")
+	ErrApprovalReceiptReferenceInvalid = errors.New("L3 approval completed without a valid receipt reference")
 
 	// Agent harness errors
 	ErrHarnessNoScenarios             = errors.New("no scenarios selected")

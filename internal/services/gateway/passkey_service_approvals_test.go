@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -440,7 +442,11 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		const userID = "u-approval-sse-1"
 		const txHash = "tx-approval-sse-1"
 
-		handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-approval-sse-1", txHash)
+		receipt := &models.ApprovalReceiptReference{
+			ExecutionID: "execution-approval-sse-1", TransactionID: "transaction-approval-sse-1", TransactionHash: txHash,
+			SignerKeyID: "warden-key-approval-sse-1", Signature: "signature-approval-sse-1", InvestigationID: "investigation-approval-sse-1",
+		}
+		handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-approval-sse-1", txHash, receipt)
 
 		route := SSERoute{UserID: userID, CLISessionID: "cli-approval-sse-1"}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
@@ -459,6 +465,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		assert.Equal(t, constants.SSEEventTypeApprovalCompleted, inner.Type)
 		assert.Equal(t, userID, inner.UserID)
 		assert.Equal(t, txHash, inner.TxHash)
+		assert.Equal(t, receipt, inner.Receipt)
 	})
 
 	t.Run("no-ops when SSE dependencies not set", func(t *testing.T) {
@@ -479,7 +486,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		const txHash = "tx-approval-no-sse-1"
 
 		if handler.orchestrator != nil {
-			handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-no-sse-1", txHash)
+			handler.orchestrator.EmitApprovalCompletedSSE(userID, "cli-no-sse-1", txHash, nil)
 		}
 
 		sseStore := stores.SSEStore
@@ -509,7 +516,7 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 			Orchestrator:  orchestrator,
 		})
 
-		handler.orchestrator.EmitApprovalCompletedSSE("", "cli-empty-user", "tx-empty-user")
+		handler.orchestrator.EmitApprovalCompletedSSE("", "cli-empty-user", "tx-empty-user", nil)
 
 		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: "", CLISessionID: "cli-empty-user"}, 0, 10)
 		require.Error(t, err)
@@ -531,18 +538,30 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	const approverUserID = "u-approver-sse-test"
 	const submitterCLISessionID = "cli-submitter-empty-userid"
 	const txHash = "tx-empty-suspended-userid"
+	const executionID = "execution-approval-sse-test"
+	const investigationID = "investigation-approval-sse-test"
+
+	requestPayload, err := proto.Marshal(&operatorv1.McpCallRequested{ExecutionId: executionID})
+	require.NoError(t, err)
+	envelope, err := protojson.Marshal(&commonv1.GovernanceEnvelope{Payload: requestPayload, InvestigationId: investigationID})
+	require.NoError(t, err)
 
 	mockMCP := &mockMCPServiceProvider{
 		suspendedTx: &models.SuspendedTransaction{
 			TransactionHash:       txHash,
+			Envelope:              envelope,
 			UserID:                "",
 			SubmitterCLISessionID: submitterCLISessionID,
 			ToolName:              "test-tool",
 			ToolArguments:         []byte("{}"),
 			ExpiresAt:             time.Now().Add(5 * time.Minute),
 		},
-		found:   true,
-		receipt: &operatorv1.ActionReceipt{TransactionHash: txHash, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
+		found: true,
+		receipt: &operatorv1.ActionReceipt{
+			TransactionId: "transaction-approval-sse-test", TransactionHash: txHash,
+			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+			SignerKeyId: "warden-key-approval-sse-test", Signature: "signature-approval-sse-test",
+		},
 	}
 
 	orchestrator, err := NewPasskeyOrchestrator(mockMCP, nil, sseStore, pubsub, logger)
@@ -579,6 +598,13 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	assert.Equal(t, constants.SSEEventTypeApprovalCompleted, inner.Type)
 	assert.Equal(t, approverUserID, inner.UserID)
 	assert.Equal(t, txHash, inner.TxHash)
+	require.NotNil(t, inner.Receipt)
+	assert.Equal(t, executionID, inner.Receipt.ExecutionID)
+	assert.Equal(t, "transaction-approval-sse-test", inner.Receipt.TransactionID)
+	assert.Equal(t, txHash, inner.Receipt.TransactionHash)
+	assert.Equal(t, investigationID, inner.Receipt.InvestigationID)
+	assert.Equal(t, "warden-key-approval-sse-test", inner.Receipt.SignerKeyID)
+	assert.Equal(t, "signature-approval-sse-test", inner.Receipt.Signature)
 }
 
 func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {

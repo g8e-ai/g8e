@@ -96,14 +96,8 @@ func runFinanceScenario(ctx context.Context, demoDir, scenario string) (*complia
 		fmt.Println()
 		hasErrors = true
 	} else {
-		if len(harnessResults) > 0 {
-			applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
-		}
-		if len(result.ReceiptRefs) == 0 {
-			result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:finance-unauthorized-trade")
-		}
-		if len(result.TransactionIds) == 0 {
-			result.TransactionIds = append(result.TransactionIds, "finance-unauthorized-trade-tx")
+		if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+			hasErrors = true
 		}
 	}
 

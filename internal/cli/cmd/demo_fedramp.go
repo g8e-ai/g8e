@@ -241,15 +241,10 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			"fedramp-deny-step-2", "fedramp-deny harness (L1 doctrine reject)", step2Started, step2Completed,
 			step2Verified, true, "agent harness fedramp-deny"))
 		if step2Verified {
-			// Record the failed-stage receipt reference produced by the L1 denial.
-			if len(harnessResults) > 0 {
-				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
-			}
-			if len(result.ReceiptRefs) == 0 {
-				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-deny")
-			}
-			if len(result.TransactionIds) == 0 {
-				result.TransactionIds = append(result.TransactionIds, "fedramp-deny-tx")
+			// The harness retained the authoritative failed-stage receipt from the
+			// gateway's JSON-RPC error data. Fail closed if it is missing.
+			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+				hasErrors = true
 			}
 		}
 
@@ -437,14 +432,8 @@ func runFedRAMPScenario(ctx context.Context, demoDir, scenario string) (*complia
 			fmt.Println()
 			hasErrors = true
 		} else {
-			if len(harnessResults) > 0 {
-				applyHarnessAuthoritativeIdentity(result, &harnessResults[0])
-			}
-			if len(result.ReceiptRefs) == 0 {
-				result.ReceiptRefs = append(result.ReceiptRefs, "failed-stage:fedramp-evidence-block")
-			}
-			if len(result.TransactionIds) == 0 {
-				result.TransactionIds = append(result.TransactionIds, "fedramp-evidence-block-tx")
+			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(result, &harnessResults[0]) {
+				hasErrors = true
 			}
 		}
 

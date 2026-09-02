@@ -68,16 +68,17 @@ func (o *PasskeyOrchestrator) ListSuspendedTransactions(ctx context.Context, use
 // EmitApprovalCompletedSSE publishes an approval.completed SSE event scoped to
 // the specific CLI session that submitted the transaction, so the waiting CLI
 // client receives real-time notification without polling.
-func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txHash string) {
+func (o *PasskeyOrchestrator) EmitApprovalCompletedSSE(userID, cliSessionID, txHash string, receipt *models.ApprovalReceiptReference) {
 	if userID == "" || cliSessionID == "" {
 		o.logger.Warn("approval: skipping SSE emission due to missing parameters", "user_id", userID, "cli_session_id", cliSessionID, "tx_hash", txHash)
 		return
 	}
 
 	eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
-		Type:   constants.SSEEventTypeApprovalCompleted,
-		UserID: userID,
-		TxHash: txHash,
+		Type:    constants.SSEEventTypeApprovalCompleted,
+		UserID:  userID,
+		TxHash:  txHash,
+		Receipt: receipt,
 	})
 	if err != nil {
 		o.logger.Error("approval: failed to marshal SSE event", "error", err)

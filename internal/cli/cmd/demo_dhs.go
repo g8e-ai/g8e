@@ -529,14 +529,8 @@ func runDHSScenario(ctx context.Context, demoDir, scenario string) ([]*complianc
 			fmt.Println()
 			blockHasErrors = true
 		} else {
-			if len(harnessResults) > 0 {
-				applyHarnessAuthoritativeIdentity(blockResult, &harnessResults[0])
-			}
-			if len(blockResult.ReceiptRefs) == 0 {
-				blockResult.ReceiptRefs = append(blockResult.ReceiptRefs, "failed-stage:dhs-evidence-block")
-			}
-			if len(blockResult.TransactionIds) == 0 {
-				blockResult.TransactionIds = append(blockResult.TransactionIds, "dhs-evidence-block-tx")
+			if len(harnessResults) == 0 || !applyHarnessAuthoritativeIdentity(blockResult, &harnessResults[0]) {
+				blockHasErrors = true
 			}
 		}
 

@@ -89,6 +89,9 @@ func mcpScenarios() []Scenario {
 				if resp == nil || resp.Error == nil {
 					return fmt.Errorf("PHI exfiltration was accepted — expected L1 rejection")
 				}
+				if err := r.retainFailedStageReceipt(resp); err != nil {
+					return fmt.Errorf("retain failed-stage receipt: %w", err)
+				}
 				r.note("L1 Doctrine blocked PHI exfiltration as expected: %s", resp.Error.Message)
 				return nil
 			},
