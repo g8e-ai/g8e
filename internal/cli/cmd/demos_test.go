@@ -354,6 +354,36 @@ func TestPrintDemoEndpoints(t *testing.T) {
 	})
 }
 
+func TestPrintPlatformEnrollmentInstructions_UsesSplitDemoPorts(t *testing.T) {
+	tests := []struct {
+		name      string
+		org       string
+		httpPort  string
+		httpsPort string
+	}{
+		{name: "healthcare", org: constants.DemosOrgHealthcare, httpPort: "8081", httpsPort: "8444"},
+		{name: "finance", org: constants.DemosOrgFinance, httpPort: "8082", httpsPort: "8445"},
+		{name: "dhs", org: constants.DemosOrgDHS, httpPort: "8087", httpsPort: "8450"},
+		{name: "fedramp", org: constants.DemosOrgFedRAMP, httpPort: "8088", httpsPort: "8451"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetOut(&buf)
+
+			printPlatformEnrollmentInstructions(cmd, tt.org)
+
+			output := buf.String()
+			endpointFlags := " -e localhost:" + tt.httpPort + " --port " + tt.httpsPort
+			assert.Contains(t, output, "./g8e auth enroll user"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth pending-platform-enrollments"+endpointFlags)
+			assert.Contains(t, output, "./g8e auth approve-platform-enrollment <request-id> --yes"+endpointFlags)
+		})
+	}
+}
+
 func TestRunScenario(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
 		err := runScenario(context.Background(), nil, "unknown-org", "/tmp", demoTestRunID, "1")

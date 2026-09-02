@@ -73,13 +73,13 @@ After `docker compose up -d --build`, the gateway is healthy but the operator an
 until curl -fsS http://localhost:8082/api/v1/health >/dev/null 2>&1; do sleep 2; done
 
 # 2. Enroll the first owner. This creates the first user and a usable CLI mTLS identity.
-./g8e auth enroll user -e https://localhost:8445
+./g8e auth enroll user -e localhost:8082 --port 8445
 
 # 3. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:8082 --port 8445
 
 # 4. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8082 --port 8445
 
 # 5. Wait for the operator and its dependents to become healthy.
 docker compose ps

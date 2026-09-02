@@ -167,13 +167,13 @@ Every demo boots the gateway with zero users. The operator (and any service that
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start <org>`).
-./g8e auth enroll user -e https://localhost:<demo-https-port>
+./g8e auth enroll user -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:<demo-http-port> --port <demo-https-port>
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status <org>
@@ -238,7 +238,7 @@ Ensemble scenarios require the **unified platform compose** (`docker-compose.yml
 docker compose up -d g8e-gateway
 
 # 2. Enroll the first owner.
-./g8e auth enroll user -e https://localhost:8443
+./g8e auth enroll user -e localhost
 
 # 3. Bring up the bootstrapped workloads (operator, ensemble, dashboard).
 docker compose --profile bootstrapped up -d

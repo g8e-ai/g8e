@@ -593,13 +593,18 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 	}
 }
 
-// demoGatewayHTTPPort maps each demo org to its gateway HTTP discovery port,
+// demoGatewayPort maps each demo org to its gateway HTTP discovery and HTTPS/mTLS ports,
 // used for the platform enrollment instructions.
-var demoGatewayHTTPPort = map[string]string{
-	constants.DemosOrgHealthcare: "8081",
-	constants.DemosOrgFinance:    "8082",
-	constants.DemosOrgDHS:        "8087",
-	constants.DemosOrgFedRAMP:    "8088",
+type demoGatewayPort struct {
+	http  string
+	https string
+}
+
+var demoGatewayPorts = map[string]demoGatewayPort{
+	constants.DemosOrgHealthcare: {http: "8081", https: "8444"},
+	constants.DemosOrgFinance:    {http: "8082", https: "8445"},
+	constants.DemosOrgDHS:        {http: "8087", https: "8450"},
+	constants.DemosOrgFedRAMP:    {http: "8088", https: "8451"},
 }
 
 // demoOperatorContainer maps each demo org to its operator container name,
@@ -616,7 +621,7 @@ var demoOperatorContainer = map[string]string{
 // users, so platform workloads (operator and its dependents) stay not-ready
 // until the owner enrolls and approves their platform enrollment requests.
 func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
-	port, ok := demoGatewayHTTPPort[org]
+	ports, ok := demoGatewayPorts[org]
 	if !ok {
 		return
 	}
@@ -627,13 +632,13 @@ func printPlatformEnrollmentInstructions(cmd *cobra.Command, org string) {
 	cmd.Println("  Complete the enrollment flow:")
 	cmd.Println()
 	cmd.Println("  1. Enroll the first owner (creates CLI mTLS credentials):")
-	cmd.Printf("     ./g8e auth enroll user -e localhost:%s\n", port)
+	cmd.Printf("     ./g8e auth enroll user -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  2. List pending platform enrollment requests:")
-	cmd.Println("     ./g8e auth pending-platform-enrollments")
+	cmd.Printf("     ./g8e auth pending-platform-enrollments -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  3. Approve each request by ID (operator first, then dependents):")
-	cmd.Println("     ./g8e auth approve-platform-enrollment <request-id> --yes")
+	cmd.Printf("     ./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:%s --port %s\n", ports.http, ports.https)
 	cmd.Println()
 	cmd.Println("  4. Wait for workload health:")
 	cmd.Printf("     g8e demos status %s\n", org)

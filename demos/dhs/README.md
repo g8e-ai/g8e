@@ -113,13 +113,13 @@ After `g8e demos start dhs`, the gateway is healthy but the operator and its dep
 
 ```bash
 # 1. Enroll the first owner (the demo gateway port is printed by `g8e demos start dhs`).
-./g8e auth enroll user -e https://localhost:<demo-https-port>
+./g8e auth enroll user -e localhost:8087 --port 8450
 
 # 2. List pending platform enrollment requests.
-./g8e auth pending-platform-enrollments
+./g8e auth pending-platform-enrollments -e localhost:8087 --port 8450
 
 # 3. Approve the operator's request by exact request ID.
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <operator-request-id> --yes -e localhost:8087 --port 8450
 
 # 4. Wait for the operator and its dependents to become healthy.
 g8e demos status dhs
