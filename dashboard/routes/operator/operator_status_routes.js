@@ -3,11 +3,9 @@
 
 import express from 'express';
 import { ErrorResponse } from '../../models/response_models.js';
-import { OperatorDocument } from '../../models/operator_model.js';
 import { VSOHttpContext } from '../../models/request_models.js';
 import { logger } from '../../utils/logger.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
-import { OperatorStatus } from '../../constants/operator.js';
 
 /**
  * @param {Object} options
@@ -20,7 +18,6 @@ import { OperatorStatus } from '../../constants/operator.js';
  */
 export function createOperatorStatusRouter({
     operatorService,
-    internalHttpClient,
     authMiddleware,
     authorizationMiddleware
 }) {

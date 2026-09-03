@@ -288,7 +288,7 @@ export class MockElement {
         if (selector.startsWith('.')) {
             const classes = selector.split('.').filter(Boolean);
             return classes.every(c => {
-                const [className, ...pseudos] = c.split(':');
+                const [className] = c.split(':');
                 return el.classList.contains(className);
             });
         }
@@ -617,7 +617,7 @@ export class MockWindow {
 /**
  * Create a complete mock browser environment for testing
  */
-export function createMockBrowserEnv(options = {}) {
+export function createMockBrowserEnv() {
     const eventBus = new MockEventBus();
     const authState = new MockAuthState();
     const serviceClient = new MockServiceClient();

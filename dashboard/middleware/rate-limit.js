@@ -55,11 +55,9 @@ function extractApiKeyForRateLimit(req) {
  * Rate limiting Middleware Factory
  * Protects against brute force and DoS attacks
  * 
- * @param {Object} options
- * @param {Object} [options.config] - Platform config
  * @returns {Object} Collection of rate limiter middleware
  */
-export function createRateLimiters({ config = {} } = {}) {
+export function createRateLimiters() {
     /**
      * Global rate limiter for ALL public API endpoints
      * Applied at the app level before route handlers

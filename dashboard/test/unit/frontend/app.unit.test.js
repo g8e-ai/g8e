@@ -4,7 +4,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MockEventBus, MockServiceClient, MockAuthState } from '@test/mocks/mock-browser-env.js';
+import { MockEventBus, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { CssClass } from '@g8ed/public/js/constants/ui-constants.js';
 
@@ -85,24 +85,16 @@ vi.mock('@g8ed/public/js/utils/operator-session-service.js', () => ({
 
 import G8eDashboardApp from '@g8ed/public/js/app.js';
 import { notificationService } from '@g8ed/public/js/utils/notification-service.js';
-import { AuthManager } from '@g8ed/public/js/components/auth.js';
-import { ChatComponent } from '@g8ed/public/js/components/chat.js';
-import { OperatorPanel } from '@g8ed/public/js/components/operator-panel.js';
-import { Header } from '@g8ed/public/js/components/header.js';
-import { Footer } from '@g8ed/public/js/components/footer.js';
-import { SSEConnectionManager } from '@g8ed/public/js/utils/sse-connection-manager.js';
 
 describe('G8eDashboardApp [FRONTEND - jsdom]', () => {
     let eventBus;
     let serviceClient;
-    let authState;
     let app;
     let app2;
 
     beforeEach(() => {
         eventBus = new MockEventBus();
         serviceClient = new MockServiceClient();
-        authState = new MockAuthState();
 
         window.serviceClient = serviceClient;
         window.sseConnectionManager = null;

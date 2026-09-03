@@ -102,10 +102,8 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
     let ChatComponent;
     let eventBus;
     let chat;
-    let terminalSpy;
     let authState;
     let serviceClient;
-    let notificationServiceSpy;
 
     beforeEach(async () => {
         vi.useFakeTimers();
@@ -732,7 +730,7 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         beforeEach(() => {
             chat.currentWebSessionId = WEB_SESSION_ID;
             chat.anchoredTerminal = makeAnchoredTerminalSpy();
-            const attemptReconnectSpy = vi.spyOn(chat, 'attemptReconnect');
+            vi.spyOn(chat, 'attemptReconnect');
         });
 
         it('returns early when data is null', () => {

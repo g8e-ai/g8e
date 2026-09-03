@@ -19,11 +19,7 @@
 
 import { logger } from '../../utils/logger.js';
 import {
-    OperatorSessionRegistrationRequest,
-    StopOperatorRequest,
     StopAIRequest,
-    ApprovalRespondRequest,
-    DirectCommandRequest,
     VSOHttpContext
 } from '../../models/request_models.js';
 import { SourceComponent } from '../../constants/ai.js';
@@ -34,7 +30,7 @@ import {
     INTERNAL_HTTP_CLIENT_USER_AGENT,
     NEW_CASE_ID
 } from '../../constants/http_client.js';
-import { ApiPaths, InternalApiPaths } from '../../constants/api_paths.js';
+import { ApiPaths } from '../../constants/api_paths.js';
 import { getInternalHttpClient } from '../initialization.js';
 
 class InternalHttpClient{

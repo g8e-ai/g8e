@@ -5,7 +5,7 @@ import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { OperatorAuthError, AuthError, BEARER_PREFIX } from '../../constants/auth.js';
-import { ErrorResponse, OperatorAuthResponse, OperatorSessionRefreshResponse } from '../../models/response_models.js';
+import { ErrorResponse, OperatorSessionRefreshResponse } from '../../models/response_models.js';
 import { AuthPaths } from '../../constants/api_paths.js';
 import { ApiKeyError } from '../../constants/auth.js';
 

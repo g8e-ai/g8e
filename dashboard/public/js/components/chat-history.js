@@ -30,7 +30,7 @@ export const ChatHistoryMixin = {
         }
     },
 
-    restoreConversationHistory(conversationHistory, investigationId = null) {
+    restoreConversationHistory(conversationHistory) {
         if (!this.messagesContainer || !conversationHistory) return;
 
         if (this.anchoredTerminal) {
@@ -159,7 +159,6 @@ export const ChatHistoryMixin = {
         operatorMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
         let approvalRequest = null;
-        let approvalDecision = null;
         const commandResults = [];
         let wasApproved = false;
 
@@ -170,10 +169,8 @@ export const ChatHistoryMixin = {
             if (eventType === EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED) {
                 approvalRequest = { ...metadata, timestamp: msg.timestamp, content: msg.content };
             } else if (eventType === EventType.OPERATOR_COMMAND_APPROVAL_GRANTED) {
-                approvalDecision = metadata;
                 wasApproved = true;
             } else if (eventType === EventType.OPERATOR_COMMAND_APPROVAL_REJECTED) {
-                approvalDecision = metadata;
                 wasApproved = false;
             } else if (eventType === EventType.OPERATOR_COMMAND_RESULT || eventType === EventType.OPERATOR_COMMAND_EXECUTION) {
                 commandResults.push({ ...metadata, content: msg.content, timestamp: msg.timestamp });
@@ -202,7 +199,7 @@ export const ChatHistoryMixin = {
         }
     },
 
-    addRestoredMessage(content, sender, originalTimestamp, contextInfo = null, groundingMetadata = null) {
+    addRestoredMessage(content, sender, originalTimestamp, _contextInfo = null, groundingMetadata = null) {
         if (!this.anchoredTerminal) return;
 
         const displayTime = originalTimestamp

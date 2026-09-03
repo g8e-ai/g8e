@@ -8,7 +8,7 @@ import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { ConversationStatus } from '../../constants/chat.js';
 import { SystemHealth } from '../../constants/ai.js';
 import { Collections } from '../../constants/collections.js';
-import { KVKey, KVScanPattern } from '../../constants/kv_keys.js';
+import { KVScanPattern } from '../../constants/kv_keys.js';
 import {
     CONSOLE_METRICS_CACHE_TTL_MS,
     CONSOLE_METRICS_WINDOW_1_DAY_SECONDS,

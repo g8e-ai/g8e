@@ -59,7 +59,7 @@ vi.mock('@g8ed/public/js/models/investigation-models.js', () => {
 });
 
 import { notificationService } from '@g8ed/public/js/utils/notification-service.js';
-import { InvestigationFactory, InvestigationHistoryEntry } from '@g8ed/public/js/models/investigation-models.js';
+import { InvestigationFactory } from '@g8ed/public/js/models/investigation-models.js';
 import { ChatHistoryMixin } from '@g8ed/public/js/components/chat-history.js';
 
 const INVESTIGATION_ID = 'inv-test-history123';

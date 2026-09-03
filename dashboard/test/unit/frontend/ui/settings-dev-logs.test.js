@@ -213,13 +213,11 @@ class MockResponse {
 describe('Settings Dev Logs Toggle [UNIT - jsdom]', () => {
     let dom;
     let window;
-    let document;
     let fetchMock;
 
     beforeEach(() => {
         dom = DevLogsTestUtils.createDOM();
         window = dom.window;
-        document = window.document;
         fetchMock = vi.fn();
         DevLogsTestUtils.injectScript(dom, fetchMock);
     });

@@ -7,7 +7,7 @@ import { OperatorDocument, HistoryEntry, SystemInfo, CertInfo, OperatorRefreshKe
 import { now } from '../../models/base.js';
 import { SourceComponent } from '../../constants/ai.js';
 import { ApiKeyStatus, ApiKeyClientName, ApiKeyPermission, DeviceLinkError } from '../../constants/auth.js';
-import { DEFAULT_OPERATOR_SLOTS, DEFAULT_SLOT_COST } from '../../constants/service_config.js';
+import { DEFAULT_OPERATOR_SLOTS } from '../../constants/service_config.js';
 import crypto from 'crypto';
 import { API_KEY_PREFIX } from '../../constants/operator_defaults.js';
 
@@ -89,7 +89,7 @@ export class OperatorSlotService {
             try {
                 const certData = await this.certificateService.generateOperatorCertificate(newOperatorId, userId, oldOperator.organization_id);
                 newCertInfo = CertInfo.fromCertData(certData);
-            } catch (e) {}
+            } catch {}
         }
 
         const newOperatorDoc = OperatorDocument.forRefresh({

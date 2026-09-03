@@ -22,7 +22,7 @@ let _sharedApiPaths = {};
 try {
     const apiPathsFile = path.join(_SHARED_DIR, 'api_paths.json');
     _sharedApiPaths = JSON.parse(fs.readFileSync(apiPathsFile, 'utf8'));
-} catch (err) {
+} catch {
     // Fallback for tests or environments where shared file isn't available
     _sharedApiPaths = {
         internal_prefix: '/api/internal',
@@ -421,10 +421,6 @@ export const MCPPaths = Object.freeze({
 });
 
 // --- SETUP domain ---
-const Setup = {
-    BASE:   BasePaths.SETUP,
-};
-
 export const SetupPaths = Object.freeze({
     WIZARD:  '/setup',
 });

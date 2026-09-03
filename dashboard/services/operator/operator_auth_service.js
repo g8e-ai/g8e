@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { now } from '../../models/base.js';
 import { OperatorAuthResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId, redactApiKey } from '../../utils/security.js';
@@ -11,7 +10,6 @@ import {
     OperatorAuthError,
     AuthError,
     BEARER_PREFIX,
-    OperatorSessionRole,
     AuthMode,
 } from '../../constants/auth.js';
 import { SessionType } from '../../constants/session.js';
@@ -281,7 +279,6 @@ export class OperatorAuthService {
         operator_id,
         operator,
         system_info,
-        runtime_config,
     }) {
         const sessionData = {
             user_id: user.id,

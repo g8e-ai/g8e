@@ -15,7 +15,6 @@
  */
 
 import { VSOBaseModel, F } from './base.js';
-import { SystemInfo } from './operator_model.js';
 
 // ---------------------------------------------------------------------------
 // VSOHttpContext

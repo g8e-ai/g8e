@@ -344,7 +344,6 @@ export class CitationsHandler {
     }
 
     _isPositionInHeading(containerDiv, plainText, targetPos) {
-        const headings = containerDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
         let currentPos = 0;
 
         const walker = document.createTreeWalker(
@@ -439,7 +438,7 @@ export class CitationsHandler {
         }
     }
 
-    _getCodeBlockRanges(container, plainText) {
+    _getCodeBlockRanges(container) {
         const ranges = [];
         const codeElements = container.querySelectorAll('pre, code');
 

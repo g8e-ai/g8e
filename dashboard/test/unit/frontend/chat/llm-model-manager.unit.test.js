@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MockEventBus, MockElement } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { LlmModelManager } from '@g8ed/public/js/components/llm-model-manager.js';

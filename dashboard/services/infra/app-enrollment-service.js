@@ -392,7 +392,6 @@ async function _writeCredentialsAtomic(certPem, certChainPem, keyPem, trustBundl
  * @returns {Promise<void>}
  */
 async function _atomicWriteFile(filePath, data, mode) {
-    const dir = path.dirname(filePath);
     const tmpPath = filePath + '.tmp.' + process.pid + '.' + Date.now();
     await fs.writeFile(tmpPath, data, { mode });
     await fs.chmod(tmpPath, mode);
@@ -561,7 +560,7 @@ async function _pollUntilApproved(baseUrl, token, deadline, signal) {
         } catch (err) {
             clearTimeout(timeoutId);
             if (signal.aborted) {
-                throw new ConfigurationError('AppEnrollmentService: polling cancelled');
+                throw new ConfigurationError('AppEnrollmentService: polling cancelled', { cause: err });
             }
             // Network error: back off and retry.
             await _sleep(delay, signal);
@@ -583,7 +582,8 @@ async function _pollUntilApproved(baseUrl, token, deadline, signal) {
             data = await resp.json();
         } catch (err) {
             throw new ConfigurationError(
-                `AppEnrollmentService: status response is not JSON (HTTP ${resp.status})`
+                `AppEnrollmentService: status response is not JSON (HTTP ${resp.status})`,
+                { cause: err }
             );
         }
 
@@ -791,7 +791,8 @@ async function _submitCompletion(baseUrl, token, proof, signal) {
         data = await resp.json();
     } catch (err) {
         throw new ConfigurationError(
-            `AppEnrollmentService: completion response is not JSON (HTTP ${resp.status})`
+            `AppEnrollmentService: completion response is not JSON (HTTP ${resp.status})`,
+            { cause: err }
         );
     }
     if (!resp.ok) {

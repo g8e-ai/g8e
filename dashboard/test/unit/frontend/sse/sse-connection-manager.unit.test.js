@@ -24,7 +24,7 @@
  * JSON.parse(event.data) would produce — no network, no HTTP, no server startup.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MockEventBus } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 

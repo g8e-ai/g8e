@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let OperatorDownloadMixin;
 let operatorPanelService;
-let webSessionService;
 
 const TEST_API_KEY = 'dak_abcdefghijklmnopqrstuvwxyz1234567890';
 
@@ -123,9 +122,6 @@ beforeEach(async () => {
 
     const opsMod = await import('@g8ed/public/js/utils/operator-panel-service.js');
     operatorPanelService = opsMod.operatorPanelService;
-
-    const wssMod = await import('@g8ed/public/js/utils/web-session-service.js');
-    webSessionService = wssMod.webSessionService;
 });
 
 afterEach(() => {

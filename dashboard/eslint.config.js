@@ -18,11 +18,17 @@ export default [
             globals: globals.node,
         },
         rules: {
-            'no-constant-condition': 'off',
+            'no-constant-condition': ['error', { checkLoops: false }],
             'no-empty': ['error', { allowEmptyCatch: true }],
-            'no-unused-vars': 'error',
-            'no-useless-assignment': 'off',
-            'preserve-caught-error': 'off',
+            'no-unused-vars': ['error', {
+                args: 'after-used',
+                argsIgnorePattern: '^(?:_|next$)',
+                varsIgnorePattern: '^_',
+                caughtErrorsIgnorePattern: '^_',
+                ignoreRestSiblings: true,
+            }],
+            'no-useless-assignment': 'error',
+            'preserve-caught-error': 'error',
         },
     },
     {

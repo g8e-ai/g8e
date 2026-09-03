@@ -15,9 +15,8 @@
  */
 
 import express from 'express';
-import { SourceComponent, SystemHealth } from '../../constants/ai.js';
-import { InternalApiPaths } from '../../constants/api_paths.js';
-import { ErrorResponse, InternalHealthResponse } from '../../models/response_models.js';
+import { SystemHealth } from '../../constants/ai.js';
+import { InternalHealthResponse } from '../../models/response_models.js';
 import { createInternalSSERouter } from './internal_sse_routes.js';
 import { createInternalOperatorRouter } from './internal_operator_routes.js';
 import { createInternalUserRouter } from './internal_user_routes.js';

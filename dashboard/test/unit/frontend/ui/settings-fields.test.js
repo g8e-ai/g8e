@@ -425,7 +425,6 @@ describe('Settings Field Rendering [UNIT - jsdom]', () => {
             const field = window.__fieldTest.buildField(setting);
             document.getElementById('test-container').appendChild(field);
 
-            const pwInput = field.querySelector('input[data-key="openai_api_key"]');
             const revealBtn = field.querySelector('.settings-reveal-btn');
 
             revealBtn.click();
@@ -437,7 +436,6 @@ describe('Settings Field Rendering [UNIT - jsdom]', () => {
             const field = window.__fieldTest.buildField(setting);
             document.getElementById('test-container').appendChild(field);
 
-            const pwInput = field.querySelector('input[data-key="openai_api_key"]');
             const revealBtn = field.querySelector('.settings-reveal-btn');
 
             revealBtn.click();

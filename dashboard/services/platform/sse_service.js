@@ -19,7 +19,6 @@ import { LLMConfigEvent, LLMConfigData, InvestigationListEvent, InvestigationLis
 import { USER_SETTINGS } from '../../models/settings_model.js';
 import { VSOHttpContext } from '../../models/request_models.js';
 import { EventType } from '../../constants/events.js';
-import { OperatorStatus } from '../../constants/operator.js';
 
 class SSEService {
     /**

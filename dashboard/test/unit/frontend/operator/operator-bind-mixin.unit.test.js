@@ -6,12 +6,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OperatorStatus } from '@g8ed/public/js/constants/operator-constants.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
-import { TEMPLATE_FIXTURES, seedTemplates } from '@test/fixtures/templates.fixture.js';
+import { seedTemplates } from '@test/fixtures/templates.fixture.js';
 
 let BindOperatorsMixin;
 let operatorPanelService;
 let templateLoader;
-let devLogger;
 
 const TEST_OPERATOR_ID = 'op_test_123';
 const TEST_OPERATOR_ID_2 = 'op_test_456';
@@ -101,9 +100,6 @@ beforeEach(async () => {
 
     const tlMod = await import('@g8ed/public/js/utils/template-loader.js');
     templateLoader = tlMod.templateLoader;
-
-    const dlMod = await import('@g8ed/public/js/utils/dev-logger.js');
-    devLogger = dlMod.devLogger;
 
     seedTemplates(templateLoader, [
         'bind-single-confirmation-overlay',

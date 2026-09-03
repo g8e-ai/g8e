@@ -14,11 +14,9 @@ import { logger } from '../../utils/logger.js';
 import { SessionEndReason } from '../../constants/session.js';
 import { ApiKeyError, UserRole } from '../../constants/auth.js';
 import { ErrorResponse, InternalUserListResponse, InternalUserResponse, PasskeyListResponse, PasskeyRevokeResponse, PasskeyRevokeAllResponse, UserDeleteResponse } from '../../models/response_models.js';
-import { 
-    AuthenticationError, 
-    AuthorizationError, 
-    ValidationError, 
-    ResourceNotFoundError, 
+import {
+    ValidationError,
+    ResourceNotFoundError,
     InternalServerError,
     BusinessLogicError
 } from '../../services/error_service.js';

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
-import { IntentRequest, VSOHttpContext } from '../../models/request_models.js';
+import { IntentRequest } from '../../models/request_models.js';
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus } from '../../constants/operator.js';
