@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/services/logging"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 )
 
 // ServeOperatorOptions holds the configuration for running the operator in standalone mode.
@@ -407,7 +408,9 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		logger.Info("Execution vault disabled (command output sent to cloud)")
 	}
 
-	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig, fileSvc)
+	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig, fileSvc, func(baseURL, serverName string, logger *slog.Logger, tlsConfig *certs.TLSConfig) (pubsub.PubSubClient, error) {
+		return pubsub.NewOperatorPubSubClient(baseURL, serverName, logger, tlsConfig)
+	})
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))

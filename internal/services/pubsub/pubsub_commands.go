@@ -15,7 +15,6 @@ import (
 	"log/slog"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/config"
@@ -67,11 +66,13 @@ type OperatorPubSubService struct {
 
 	handlers map[constants.EventType]func(context.Context, *PubSubCommandMessage)
 
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	running bool
-	mu      sync.RWMutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	running     bool
+	started     bool
+	gatewayMode bool
+	mu          sync.RWMutex
 
 	reconnectBaseDelay time.Duration
 
@@ -82,7 +83,8 @@ type OperatorPubSubService struct {
 	governedDocStore governance.GovernedDocumentStore
 
 	// MCP gateway for protocol translation egress
-	mcpGateway atomic.Pointer[mcp.GatewayService]
+	mcpGateway   *mcp.GatewayService
+	mcpGatewayMu sync.RWMutex
 
 	// platformEnrollment dispatches the five platform enrollment
 	// governance actions. Nil in outbound (operator) mode; the handlers
@@ -124,7 +126,7 @@ type GatewayCommandServiceConfig struct {
 	GovDeps *GatewayModeDeps
 }
 
-func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore, governedDocStore governance.GovernedDocumentStore) (*OperatorPubSubService, error) {
+func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCoreDeps, consensusPolicyStore governance.L2ConsensusPolicyStore, governedDocStore governance.GovernedDocumentStore, gatewayMode bool) (*OperatorPubSubService, error) {
 	client := c.PubSubClient
 	if client == nil {
 		return nil, fmt.Errorf("%w: PubSubClient is required", constants.ErrPubSubEmptyPayload)
@@ -141,6 +143,7 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 		cancel:             cancel,
 		ShutdownChan:       make(chan string, 1),
 		reconnectBaseDelay: 1 * time.Second,
+		gatewayMode:        gatewayMode,
 	}
 
 	rs.heartbeat = NewHeartbeatService(c.Config, c.Logger, &rs.wg)
@@ -176,6 +179,9 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	rs.history.auditStore = c.AuditStore
 
 	rs.buildHandlers()
+	if gatewayMode {
+		rs.buildGatewayHandlers()
+	}
 
 	rs.governedDocStore = governedDocStore
 
@@ -215,20 +221,37 @@ func newOperatorPubSubServiceInternal(c CommandServiceConfig, core GovernanceCor
 	return rs, nil
 }
 
-// SetMCPGateway sets the MCP gateway used for egress dispatch on verified MCP_CALL/A2A transactions.
-// Backed by atomic.Pointer, called once during boot before Start.
-func (rs *OperatorPubSubService) SetMCPGateway(gw *mcp.GatewayService) {
-	rs.mcpGateway.Store(gw)
+// BindMCPGateway completes the one-time construction cycle between the gateway and command services before either service starts processing requests.
+func (rs *OperatorPubSubService) BindMCPGateway(gw *mcp.GatewayService) error {
+	if gw == nil {
+		return constants.ErrPubSubMCPGatewayNil
+	}
+
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	if rs.started {
+		return constants.ErrPubSubMCPGatewayBindAfterStart
+	}
+
+	rs.mcpGatewayMu.Lock()
+	defer rs.mcpGatewayMu.Unlock()
+	if rs.mcpGateway != nil {
+		return constants.ErrPubSubMCPGatewayAlreadyBound
+	}
+	rs.mcpGateway = gw
+	return nil
 }
 
-// GetMCPGateway returns the MCP gateway for egress dispatch, or nil if not set.
+// GetMCPGateway returns the immutable MCP gateway binding used for egress dispatch, or nil if binding has not completed.
 func (rs *OperatorPubSubService) GetMCPGateway() *mcp.GatewayService {
-	return rs.mcpGateway.Load()
+	rs.mcpGatewayMu.RLock()
+	defer rs.mcpGatewayMu.RUnlock()
+	return rs.mcpGateway
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config for outbound mode.
 func NewOperatorPubSubService(c CommandServiceConfig, deps OutboundModeDeps) (*OperatorPubSubService, error) {
-	return newOperatorPubSubServiceInternal(c, deps.GovernanceCoreDeps, nil, nil)
+	return newOperatorPubSubServiceInternal(c, deps.GovernanceCoreDeps, nil, nil, false)
 }
 
 // NewGatewayOperatorPubSubService creates the dispatcher for gateway mode,
@@ -238,7 +261,7 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 		return nil, fmt.Errorf("%w: GovDeps is required for gateway mode", constants.ErrInternal)
 	}
 
-	rs, err := newOperatorPubSubServiceInternal(c.CommandServiceConfig, c.GovDeps.GovernanceCoreDeps, c.GovDeps.ConsensusPolicyStore, c.GovDeps.GovernedDocStore)
+	rs, err := newOperatorPubSubServiceInternal(c.CommandServiceConfig, c.GovDeps.GovernanceCoreDeps, c.GovDeps.ConsensusPolicyStore, c.GovDeps.GovernedDocStore, true)
 	if err != nil {
 		return nil, err
 	}
@@ -334,16 +357,6 @@ func (rs *OperatorPubSubService) buildHandlers() {
 			_ = rs.audit.HandleDirectCmdResultRequest(ctx, msg)
 		},
 		constants.Event.Operator.FetchFileDiff.Requested: rs.history.HandleFetchFileDiffRequest,
-		constants.Event.Operator.Mcp.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
-				rs.logger.Error("MCP call request handler failed", "error", err)
-			}
-		},
-		constants.Event.Operator.A2a.CallRequested: func(ctx context.Context, msg *PubSubCommandMessage) {
-			if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
-				rs.logger.Error("A2A call request handler failed", "error", err)
-			}
-		},
 		// Governed document mutations dispatch through the canonical
 		// document-request events. MapActionTypeToEventType resolves both
 		// DOCUMENT_UPDATE and DOCUMENT_DELETE deterministically to these two
@@ -363,6 +376,19 @@ func (rs *OperatorPubSubService) buildHandlers() {
 	}
 }
 
+func (rs *OperatorPubSubService) buildGatewayHandlers() {
+	rs.handlers[constants.Event.Operator.Mcp.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleMcpCallRequestSync(ctx, msg); err != nil {
+			rs.logger.Error("MCP call request handler failed", "error", err)
+		}
+	}
+	rs.handlers[constants.Event.Operator.A2a.CallRequested] = func(ctx context.Context, msg *PubSubCommandMessage) {
+		if _, err := rs.handleA2aCallRequestSync(ctx, msg); err != nil {
+			rs.logger.Error("A2A call request handler failed", "error", err)
+		}
+	}
+}
+
 func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
@@ -370,17 +396,20 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 	if rs.running {
 		return constants.ErrGatewayAlreadyRunning
 	}
+	if rs.gatewayMode && rs.GetMCPGateway() == nil {
+		return constants.ErrPubSubMCPGateway
+	}
 
 	rs.ctx, rs.cancel = context.WithCancel(ctx)
 	rs.running = true
+	rs.started = true
 
 	rs.heartbeat.ctx = rs.ctx
 
 	channelName := CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 
-	// Only subscribe to pub/sub channel when running as a traditional Operator (with identity)
-	// In gateway mode, commands arrive via HTTP/WebSocket endpoints directly
-	if rs.config.OperatorID != "" && rs.config.OperatorSessionId != "" {
+	// Outbound mode subscribes when an Operator identity is configured. Gateway mode receives commands through HTTP and WebSocket handlers instead.
+	if !rs.gatewayMode && rs.config.OperatorID != "" && rs.config.OperatorSessionId != "" {
 		rs.logger.Info("Command service subscribing to Operator channel",
 			"operator_id", rs.config.OperatorID,
 			"operator_session_id", rs.config.OperatorSessionId,
@@ -391,7 +420,7 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 			defer rs.wg.Done()
 			rs.listenForCommands(channelName)
 		}()
-	} else {
+	} else if rs.gatewayMode {
 		rs.logger.Info("Command service starting in Gateway mode (no pub/sub subscription)",
 			"mode", string(constants.GatewayModeGateway))
 	}

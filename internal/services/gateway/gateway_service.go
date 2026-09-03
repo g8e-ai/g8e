@@ -381,9 +381,9 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	// Wire egress via single atomic setter
-	if cmdSvc != nil {
-		cmdSvc.SetMCPGateway(mcpGateway)
+	// The command service processes MCP envelopes for the MCP gateway, while the MCP gateway performs verified command-service egress. Complete this unavoidable construction cycle exactly once before either service starts.
+	if err := cmdSvc.BindMCPGateway(mcpGateway); err != nil {
+		return nil, fmt.Errorf("gateway: bind MCP gateway to command service: %w", err)
 	}
 
 	// --- Passkey orchestrator and handler ---

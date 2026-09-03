@@ -39,7 +39,7 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 	fileSvc, err := fs.NewRuntimeFileService(testutil.TempDir(t), logger)
 	require.NoError(t, err)
 
-	service, err := NewG8eoService(cfg, logger, tlsCfg, fileSvc)
+	service, err := NewG8eoService(cfg, logger, tlsCfg, fileSvc, newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

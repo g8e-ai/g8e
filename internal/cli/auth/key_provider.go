@@ -12,13 +12,11 @@ import (
 	"crypto/ecdsa"
 )
 
-// FileKeyProvider is the default KeyProvider implementation for the
-// EnrollmentCoordinator. It generates file-backed ECDSA P-256 keys and
-// CSRs on all platforms. The --tpm flag and the runtime.GOOS branch were
-// removed in Section 7: every platform now uses exportable file-backed
-// software keys. Windows Certificate Store import of the signed cert is
-// handled separately by ImportCertificateToWindowsStore (build-tag
-// resolved) and is NOT part of key generation.
+// FileKeyProvider is the production KeyProvider implementation for the
+// EnrollmentCoordinator. It generates exportable file-backed ECDSA P-256
+// keys and CSRs on every platform. Windows Certificate Store import of the
+// signed certificate is handled separately by ImportCertificateToWindowsStore
+// (build-tag resolved) and is not part of key generation.
 type FileKeyProvider struct{}
 
 // GenerateCLIKeyAndCSR generates an ECDSA P-256 key pair and PEM-encoded
