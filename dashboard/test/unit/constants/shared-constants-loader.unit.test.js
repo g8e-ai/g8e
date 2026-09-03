@@ -9,10 +9,7 @@
  * (`protocol/constants/*.json`). No synthesized fallback values that
  * fabricate canonical wire values absent from the SSOT are permitted.
  *
- * This is the first unmocked import of `shared.js` in the test suite. The
- * g8eg client mTLS wiring test mocks `shared.js` to work around a
- * pre-existing load-time `assertPath` failure; this test exercises the
- * real import path.
+ * This test exercises the real import path independently of client mocks.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -22,7 +19,7 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const sharedDir = path.resolve(__dirname, '../../../protocol/constants');
+const sharedDir = path.resolve(__dirname, '../../../../protocol/constants');
 
 import {
     _EVENTS,
@@ -30,6 +27,8 @@ import {
     _MSG,
     _COLLECTIONS,
     _KV,
+    _CHANNELS,
+    _PUBSUB,
     _INTENTS,
     _PROMPTS,
     _TIMESTAMP,
@@ -59,6 +58,8 @@ const statusRaw = require(path.join(sharedDir, 'status.json'));
 const sendersRaw = require(path.join(sharedDir, 'senders.json'));
 const collectionsRaw = require(path.join(sharedDir, 'collections.json'));
 const kvKeysRaw = require(path.join(sharedDir, 'kv_keys.json'));
+const channelsRaw = require(path.join(sharedDir, 'channels.json'));
+const pubsubRaw = require(path.join(sharedDir, 'pubsub.json'));
 const intentsRaw = require(path.join(sharedDir, 'intents.json'));
 const promptsRaw = require(path.join(sharedDir, 'prompts.json'));
 const timestampRaw = require(path.join(sharedDir, 'timestamp.json'));
@@ -74,6 +75,8 @@ describe('shared.js unmocked import', () => {
         expect(_MSG).toBeDefined();
         expect(_COLLECTIONS).toBeDefined();
         expect(_KV).toBeDefined();
+        expect(_CHANNELS).toBeDefined();
+        expect(_PUBSUB).toBeDefined();
         expect(_INTENTS).toBeDefined();
         expect(_PROMPTS).toBeDefined();
         expect(_TIMESTAMP).toBeDefined();
@@ -147,10 +150,6 @@ describe('shared.js unmocked import', () => {
         expect(_STATUS['download.audit.event.type']['download.token.success']).toBe('download_token_success');
         expect(statusRaw.status.download_audit_event_type.download_token_success.value).toBe('download_token_success');
 
-        // auth_admin_audit_event_type → auth.admin.audit.event.type
-        expect(_STATUS['auth.admin.audit.event.type']['auth.admin.access']).toBe('auth_admin_access');
-        expect(statusRaw.status.auth_admin_audit_event_type.auth_admin_access.value).toBe('auth_admin_access');
-
         // session_end_reason → session.end.reason
         expect(_STATUS['session.end.reason']['user.logout']).toBe('user_logout');
         expect(statusRaw.status.session_end_reason.user_logout.value).toBe('user_logout');
@@ -163,6 +162,7 @@ describe('shared.js unmocked import', () => {
     it('does not fabricate absent _STATUS groups', () => {
         // These keys are absent from protocol status.json and must not be synthesized.
         expect(_STATUS['auth.mode']).toBeUndefined();
+        expect(_STATUS['auth.admin.audit.event.type']).toBeUndefined();
         expect(_STATUS['api.key.status']).toBeUndefined();
         expect(_STATUS['device.link.status']).toBeUndefined();
         expect(_STATUS['device.link.success']).toBeUndefined();
@@ -205,6 +205,20 @@ describe('shared.js unmocked import', () => {
         expect(kvKeysRaw.kv_keys.CachePrefix.value).toBe('g8e');
     });
 
+    it('exports _CHANNELS values that match protocol channels.json', () => {
+        expect(_CHANNELS.channels.Subscribe).toBe('subscribe');
+        expect(_CHANNELS.channels.PrefixCmd).toBe('cmd');
+        expect(_CHANNELS).toEqual(unwrapValue(channelsRaw));
+        expect(_CHANNELS.pubsub).toBeUndefined();
+    });
+
+    it('exports _PUBSUB values that match protocol pubsub.json', () => {
+        expect(_PUBSUB.pubsub.FieldAction).toBe('action');
+        expect(_PUBSUB.pubsub.FieldMessage).toBe('message');
+        expect(_PUBSUB).toEqual(unwrapValue(pubsubRaw));
+        expect(_PUBSUB.wire).toBeUndefined();
+    });
+
     it('exports _INTENTS values that match protocol intents.json', () => {
         const unwrapped = unwrapValue(intentsRaw);
         expect(_INTENTS.intents).toBeDefined();
@@ -213,7 +227,7 @@ describe('shared.js unmocked import', () => {
 
     it('exports _PROMPTS values that match protocol prompts.json', () => {
         const unwrapped = unwrapValue(promptsRaw);
-        expect(_INTENTS).toBeDefined();
+        expect(_PROMPTS).toBeDefined();
         // Verify structure matches
         expect(Object.keys(_PROMPTS)).toEqual(Object.keys(unwrapped));
     });
