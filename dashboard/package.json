@@ -24,10 +24,8 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0",
-    "undici": "^8.10.0",
     "uuid": "^13.0.0",
-    "winston": "^3.18.3",
-    "ws": "^8.18.0"
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

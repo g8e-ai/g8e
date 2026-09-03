@@ -42,7 +42,6 @@ export const HTTP_ACCESS_CONTROL_REQUEST_HEADERS = _HEADERS['http.access-control
 export const HTTP_ACCESS_CONTROL_REQUEST_METHOD  = _HEADERS['http.access-control-req-method'];
 export const HTTP_ACCESS_CONTROL_ALLOW_ORIGIN    = _HEADERS['http.access-control-allow-origin'];
 export const HTTP_ACCESS_CONTROL_ALLOW_CREDENTIALS = _HEADERS['http.access-control-allow-creds'];
-export const HTTP_CONTENT_TYPE_HEADER          = _HEADERS['http.content-type'];
 export const HTTP_API_KEY_HEADER               = 'X-API-Key';
 export const WEB_SESSION_ID_HEADER             = _HEADERS['x-vso.session-id'];
 export const HTTP_INTERNAL_AUTH_HEADER          = 'X-Internal-Auth';
