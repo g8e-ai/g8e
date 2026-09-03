@@ -438,8 +438,8 @@ GitHub Actions (`.github/workflows/build-and-test.yml` and `.github/workflows/bu
 - `smoke-test`: Clean-environment install verification for both Python and Go packages
 - `secret-scan`: gitleaks full-history secret scanning
 - `license-check`: go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
-- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12
-- `dashboard-tests`: Dashboard (g8ed) vitest suite on Node 22
+- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12. See [Ensemble Tests](../ensemble/tests.md) for the g8ee test framework and practices.
+- `dashboard-tests`: Dashboard (g8ed) vitest suite on Node 22. See [Dashboard Tests](../dashboard/tests.md) for the g8ed test layout, browser harness, and verification commands.
 
 **FIPS CI** (`.github/workflows/build-and-test-fips.yml`, `fips` job on `ubuntu-latest`):
 - FIPS 140-3 build and self-check (`make verify-fips`)

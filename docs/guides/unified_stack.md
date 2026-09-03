@@ -13,8 +13,8 @@ The repository root `docker-compose.yml` defines four services on a single `g8e-
 | --- | --- | --- | --- |
 | `g8e-gateway` | repo-root `Dockerfile` (Go, FIPS) | 8080 (HTTP), 8443 (HTTPS) | Policy Decision Point: admits transactions, manages PKI, enforces L1-L3 governance, brokers pub/sub, serves the console SPA and MCP/A2A endpoints. |
 | `g8e-operator` | repo-root `Dockerfile` (Go, FIPS) | — | Policy Execution Point: outbound-only mTLS to the gateway, pulls work from its pub/sub channel, re-verifies proofs, and executes L4-L5 actions. |
-| `ensemble` | `ensemble/Dockerfile` (Python/FastAPI) | 8000 | First-party agentic ensemble (g8ee): submits `GovernanceEnvelope` transactions directly to the privileged governance endpoint with the operator transport identity, publishes SSE events, and drives the AI reasoning loop. |
-| `dashboard` | `dashboard/Dockerfile` (Node.js/Express) | 3000 | Operator dashboard (g8ed): browser UI for chat, operator management, audit, and settings. |
+| `ensemble` | `ensemble/Dockerfile` (Python/FastAPI) | 8000 | First-party agentic ensemble (g8ee): submits `GovernanceEnvelope` transactions directly to the privileged governance endpoint with the operator transport identity, publishes SSE events, and drives the AI reasoning loop. See the [g8ee documentation](../ensemble/index.md). |
+| `dashboard` | `dashboard/Dockerfile` (Node.js/Express) | 3000 | Operator dashboard (g8ed): browser UI for chat, operator management, audit, and settings. See the [g8ed documentation](../dashboard/index.md). |
 
 The gateway and operator share the same Go binary (the repo-root `Dockerfile`), built with FIPS 140-3 approved mode enabled. The ensemble and dashboard each have their own Dockerfile rooted at the repository root so they can copy their source and the in-tree `protocol/python/` package.
 
@@ -208,6 +208,8 @@ Removing volumes destroys the gateway's PKI and audit state. The next startup re
 - [Platform Architecture Overview](../architecture/overview.md): The five-layer governance pipeline and component roles.
 - [Ensemble (g8ee)](../architecture/ensemble.md): The agentic ensemble architecture, agent models, and event streams.
 - [Dashboard (g8ed)](../architecture/dashboard.md): The operator dashboard architecture and UI surfaces.
+- [g8ee Documentation](../ensemble/index.md): Detailed g8ee component documentation — agents, governance, prompts, SSE, storage, and evals.
+- [g8ed Documentation](../dashboard/index.md): Detailed g8ed component documentation — architecture, auth, gateway integration, SSE, and operator surfaces.
 - [Gateway Architecture](../architecture/gateway.md): The gateway service stack, endpoints, and policy enforcement.
 - [Operator Architecture](../architecture/operator.md): The operator execution boundary and L4-L5 lifecycle.
 - [Docker Gateway Guide](./docker_gateway.md): Building and running the gateway image standalone and in demo environments.

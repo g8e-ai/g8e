@@ -77,7 +77,8 @@ Installed files use the dashboard runtime tree:
 
 ## Related
 
-- [Authentication & Authorization](../architecture/auth.md)
+- [Authentication & Authorization](../architecture/auth.md) — Platform-level mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
+- [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
 - [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md)
 - [Gateway Integration](gateway.md)

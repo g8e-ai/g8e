@@ -67,4 +67,6 @@ The browser-facing and container-facing gateway URLs are intentionally separate.
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
-- [Network Architecture](../architecture/network.md)
+- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts and Gateway API surfaces

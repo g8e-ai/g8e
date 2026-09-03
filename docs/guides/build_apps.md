@@ -370,7 +370,7 @@ Applications must validate the state root returned by the g8e Gateway before usi
 
 ## Reference Implementation
 
-The reference implementation of a maximal g8e-compatible agentic ensemble is **g8ee** (the "g8e Agentic Ensemble"), a first-party Python / FastAPI agentic ensemble located in-tree at `ensemble/` in the repository root. g8ee is a first-class g8e client: it holds no privileged Gateway role, authenticates over mTLS, and produces signed governance envelopes like any other L2 consensus producer. It includes an internal consensus mechanism for L2 signature generation, envelope construction and submission using the canonical hash algorithm, receipt verification, and MCP/A2A integration.
+The reference implementation of a maximal g8e-compatible agentic ensemble is **g8ee** (the "g8e Agentic Ensemble"), a first-party Python / FastAPI agentic ensemble located in-tree at `ensemble/` in the repository root. g8ee is a first-class g8e client: it holds no privileged Gateway role, authenticates over mTLS, and produces signed governance envelopes like any other L2 consensus producer. It includes an internal consensus mechanism for L2 signature generation, envelope construction and submission using the canonical hash algorithm, receipt verification, and MCP/A2A integration. See the [g8ee documentation](../ensemble/index.md) for the full component reference — agents, governance, prompts, thinking, SSE, storage, and evals.
 
 The design patterns documented in the [Building an Agentic System](#building-an-agentic-system) section below are derived from g8ee as the canonical worked example.
 
@@ -432,7 +432,7 @@ Scrubbing is the privacy-preserving default for cloud-model operation. Sensitive
 
 ### Building Your Own
 
-The **g8ee** reference app is the canonical, native implementation of everything above. Read it alongside this guide when building your own ensemble. The steps are language- and provider-agnostic; g8ee is one concrete realization of them.
+The **g8ee** reference app is the canonical, native implementation of everything above. Read it alongside this guide when building your own ensemble. The steps are language- and provider-agnostic; g8ee is one concrete realization of them. See the [g8ee documentation](../ensemble/index.md) for the component-level reference covering agents, prompts, governance, thinking, and evals.
 
 To build a g8e-compliant agentic system in any language:
 

@@ -14,7 +14,7 @@ The platform enforces cryptographic standards tailored to specific security laye
 
 ## Trust Hierarchy and Certificate Authorities
 
-The platform PKI is structured as a two-tier Certificate Authority hierarchy managed in-process by the Gateway's `PKIAuthority`:
+The platform PKI is structured as a two-tier Certificate Authority hierarchy managed in-process by the Gateway's `PKIAuthority` (see [Gateway Architecture](../architecture/gateway.md) and [Authentication & Authorization](../architecture/auth.md)):
 
 ```
                            ┌────────────────────────┐
@@ -181,6 +181,8 @@ The platform enforces strict isolation and file permissions for all PKI artifact
 
 ## Related
 
+- [Authentication & Authorization](../architecture/auth.md) — Platform-level mTLS, WebAuthn, SPIFFE workload identity, and trust bundle distribution
+- [Gateway Architecture](../architecture/gateway.md) — Gateway PKI authority, certificate lifecycle, and discovery endpoints
 - [Architecture](architecture.md) — Multi-tier system architecture and service topology
 - [Governance](governance.md) — Five-layer verification pipeline and consensus mechanics
 - [Protocol](protocol.md) — Canonical wire contracts, SPIFFE identifiers, and GovernanceEnvelope specification

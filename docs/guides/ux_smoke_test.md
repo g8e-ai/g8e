@@ -1,6 +1,6 @@
 # g8e Headless End-to-End UX Smoke Test
 
-This runbook walks a coding agent through the complete g8e user experience described in `README.md` and `docs/guides/getting_started.md`, using only CLI commands in a headless environment. It starts the unified Docker stack, performs a headless mTLS-only owner enrollment, brings up the operator, ensemble, and dashboard, approves the workload enrollments, and then drives a real AI call through the g8ee ensemble that produces a signed receipt in the audit vault.
+This runbook walks a coding agent through the complete g8e user experience described in `README.md` and `docs/guides/getting_started.md`, using only CLI commands in a headless environment. It starts the unified Docker stack, performs a headless mTLS-only owner enrollment, brings up the operator, ensemble, and dashboard, approves the workload enrollments, and then drives a real AI call through the g8ee ensemble that produces a signed receipt in the audit vault. See the [g8ee documentation](../ensemble/index.md) for the ensemble architecture and the [g8ed documentation](../dashboard/index.md) for the dashboard component.
 
 ## What this proves
 

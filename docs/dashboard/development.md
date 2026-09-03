@@ -80,4 +80,6 @@ Runtime dependencies are declared in `package.json` and locked in `package-lock.
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Testing](tests.md)
-- [Unified Docker Stack](../guides/unified_stack.md)
+- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
+- [Docker Gateway Guide](../guides/docker_gateway.md) — Gateway container deployment and configuration
+- [Platform Getting Started](../guides/getting_started.md) — Platform installation and quick start guide

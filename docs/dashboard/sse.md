@@ -54,7 +54,8 @@ The public web-session ID retained by the manager scopes local connection state;
 
 ## Related
 
-- [Gateway SSE Streaming](../architecture/sse.md)
+- [Gateway SSE Streaming](../architecture/sse.md) — Gateway-side SSE push ingestion, filtering, and consumer endpoints
+- [Ensemble SSE](../ensemble/sse.md) — Ensemble event production pipeline that feeds dashboard SSE consumers
 - [Authentication](auth.md)
 - [Gateway Integration](gateway.md)
 - [Testing](tests.md)

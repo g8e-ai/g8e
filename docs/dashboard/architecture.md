@@ -80,7 +80,7 @@ dashboard/
 - The container app private key remains in the dashboard runtime volume and is never exposed through `/g8e-config.js` or static assets.
 - CSP restricts browser connections to the dashboard and configured gateway origins and disables plugins, embedding, and framing.
 - The browser cannot use the gateway's mTLS WebSocket surface. Browser event delivery uses SSE.
-- g8ed does not bypass governance. UI requests that lead to host mutations remain gateway- and operator-governed.
+- g8ed does not bypass governance. UI requests that lead to host mutations remain gateway- and operator-governed through the [five-layer verification pipeline](../architecture/governance.md).
 
 ## Related
 
@@ -89,3 +89,6 @@ dashboard/
 - [Server-Sent Events](sse.md)
 - [Operator Surfaces](operators.md)
 - [Platform-level Dashboard Architecture](../architecture/dashboard.md)
+- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
+- [Ensemble SSE](../ensemble/sse.md) — Ensemble event production pipeline that feeds dashboard SSE consumers

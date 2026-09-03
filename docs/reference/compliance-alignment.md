@@ -666,7 +666,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Platform logging consolidation** under `internal/services/logging` with unified `g8e.log` file lifecycle, structured slog logging, and `RuntimeFileService` streaming append and read support (`OpenForAppend`/`OpenForRead`)
 - **Pub/sub `PSUBSCRIBE` glob-pattern subscriptions** on the gateway broker with Redis-compatible channel matching and fail-closed topic ACLs confining wildcards to subscriber-owned operator segments
 - **Typed MCP request and result structs** replacing ad-hoc JSON unmarshaling and generic maps across native tools
-- **Re-unified complete platform monorepo (v2.0.0)** shipping the Go gateway and operator platform, in-tree Python/FastAPI ensemble (`ensemble/` — g8ee), and Node.js/Express dashboard (`dashboard/` — g8ed) with unified end-to-end Docker Compose orchestration
+- **Re-unified complete platform monorepo (v2.0.0)** shipping the Go gateway and operator platform, in-tree Python/FastAPI ensemble (`ensemble/` — g8ee), and Node.js/Express dashboard (`dashboard/` — g8ed) with unified end-to-end Docker Compose orchestration. See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for the first-party component details.
 
 ### Planned Enhancements
 

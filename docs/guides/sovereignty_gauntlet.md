@@ -559,7 +559,7 @@ Do not use:
 - “The cloud can never see data.” State the tested provider boundary, declared synthetic canaries, detectors, and observed count.
 - “FedRAMP certified” or “FedRAMP authorized” for KSI or demo-evidence output.
 - “Independent proof” when the producer controls the verifier and trust root. Use “independently verifiable” only after another party can run complete verification against a published root.
-- “BFT multi-agent reasoning” for protocol L2. Describe distinct Ed25519 signers enforcing quorum over deterministic doctrine decisions. The g8ee Tribunal is a separate information-isolated command-generation mechanism.
+- "BFT multi-agent reasoning" for protocol L2. Describe distinct Ed25519 signers enforcing quorum over deterministic doctrine decisions. The g8ee Tribunal is a separate information-isolated command-generation mechanism; see [Ensemble Agents](../ensemble/agents.md) for the persona roster and Tribunal structure.
 - “100% benchmark performance” from a one-task or fake-provider run.
 - “No cloud dependency during disconnection” when a cloud-hosted model is still required during the disconnected interval.
 - “All integrity checks passed” when any advertised check is `SKIPPED`.

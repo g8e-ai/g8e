@@ -51,7 +51,7 @@ Terminal actions do not execute commands locally in the browser. They produce HT
 
 Operator and terminal components consume typed browser events representing heartbeats, binding changes, approval requests, execution state, and results. `SSEConnectionManager` forwards gateway event envelopes into `EventBus`, and specialized component handlers update rendered state.
 
-The event channel is observational and interactive UI transport; it does not confer execution authority. Approval responses and mutations still require an authenticated gateway session and the platform's governance checks.
+The event channel is observational and interactive UI transport; it does not confer execution authority. Approval responses and mutations still require an authenticated gateway session and the platform's [governance checks](../architecture/governance.md).
 
 ## Tests
 
@@ -62,5 +62,6 @@ Operator tests cover panel service delegation, binding overlays, deployment stat
 - [Architecture](architecture.md)
 - [Gateway Integration](gateway.md)
 - [Server-Sent Events](sse.md)
-- [Operator Architecture](../architecture/operator.md)
-- [Governance](../architecture/governance.md)
+- [Operator Architecture](../architecture/operator.md) — Operator component design, L4 Warden, and L5 Actuator execution boundary
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing operator mutations
+- [Ensemble Agents](../ensemble/agents.md) — Ensemble agent hierarchy and Tribunal consensus that produces operator commands

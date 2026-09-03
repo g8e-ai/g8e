@@ -706,7 +706,7 @@ The following packages are test-only and are not part of the production dependen
 
 ## Python Protocol Package
 
-**`protocol/python/g8e/`** - Python SDK for g8e protocol consumers (g8ee, external integrations)
+**`protocol/python/g8e/`** - Python SDK for g8e protocol consumers (g8ee, external integrations). See the [g8ee documentation](../ensemble/index.md) for the canonical consumer of this package.
 
 - **`constants.py`**: Protocol constants loader. Loads all JSON files from `protocol/constants/` (or bundled `_data/` in PyPI installs). Exports typed dicts (`EVENTS`, `STATUS`, `COLLECTIONS`, `KV`, `CHANNELS`, `INTENTS`, `PROMPTS`, etc.) and accessor functions: `collection`, `channel`, `intent`, `prompt`, `kv_key` (with dotted-placeholder support via regex substitution), `kv_session_type`. Also exports `ComponentName` enum and HTTP header constants.
 - **`enums.py`**: Dynamic enum generation from protocol JSON. Internal builders generate `StrEnum`/`IntEnum` from `status.json` categories, and a registry generates enums from channels, intents, prompts, collections, kv_keys, and session_types. Access via `g8e.enums.Channel`, `g8e.enums.Intent`, etc. using attribute access with `lru_cache`.
@@ -788,7 +788,7 @@ The following packages are test-only and are not part of the production dependen
 
 ## Dashboard (g8ed)
 
-**`dashboard/`** - Node.js/Express operator dashboard (browser SPA host + server-to-server mTLS app identity)
+**`dashboard/`** - Node.js/Express operator dashboard (browser SPA host + server-to-server mTLS app identity). See the [g8ed documentation](../dashboard/index.md) for the full component reference — architecture, auth, gateway integration, SSE, operator surfaces, development, and tests.
 
 The dashboard is a polyglot component (Node.js, not Go) and is documented here for cross-reference with the Go gateway services it consumes. The browser SPA authenticates via WebAuthn passkeys (see [Build a g8e-Compatible Frontend](../guides/build_frontend.md)); the container holds its own mTLS app identity for prepared server-to-server gateway clients, mirroring the ensemble's enrollment model. `server.js` does not currently construct those clients.
 

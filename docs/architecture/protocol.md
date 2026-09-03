@@ -91,7 +91,7 @@ Workload identity helpers manage SPIFFE identity generation and validation for t
 
 - **Operator**: Identifies target execution node instances (`spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`).
 - **CLI**: Identifies authenticated command line interface sessions (`spiffe://g8e.local/cli/<user_id>/<session_id>`).
-- **App**: Identifies external application and agent integrations (`spiffe://g8e.local/app/<operator_id>`), including the centralized ensemble broker identity `spiffe://g8e.local/app/g8ee` (`EnsembleAppID`).
+- **App**: Identifies external application and agent integrations (`spiffe://g8e.local/app/<operator_id>`), including the centralized ensemble broker identity `spiffe://g8e.local/app/g8ee` (`EnsembleAppID`). See [Ensemble PKI & Trust](../ensemble/pki.md) for how g8ee uses this identity.
 - **User**: Identifies human user sessions (`spiffe://g8e.local/user/<user_id>`).
 - **Hub**: Identifies central gateway listener endpoints (`spiffe://g8e.local/hub/operator-listen`).
 - **GatewayPeer**: Identifies peer gateway nodes in distributed setups (`spiffe://g8e.local/gateway/<gateway_id>`).

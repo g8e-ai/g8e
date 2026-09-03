@@ -89,3 +89,4 @@ Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
+- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands

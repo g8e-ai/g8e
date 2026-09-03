@@ -32,6 +32,9 @@ The Express host does not currently mount `dashboard/routes/` or instantiate the
 - [Dashboard (g8ed)](../architecture/dashboard.md)
 - [Authentication & Authorization](../architecture/auth.md)
 - [SSE Streaming](../architecture/sse.md)
+- [Gateway Architecture](../architecture/gateway.md)
+- [Governance Pipeline](../architecture/governance.md)
+- [Ensemble (g8ee)](../ensemble/index.md) — Agentic ensemble that produces SSE events consumed by the dashboard
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
 - [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md)
 - [Unified Docker Stack](../guides/unified_stack.md)

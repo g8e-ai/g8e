@@ -84,6 +84,7 @@ Thinking content represents intermediate model scratchpad deliberation and is st
 
 ## Related
 
+- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [LLM Providers](llm-providers.md) — Provider implementations, capacity tiers, and error translation
 - [Agents](agents.md) — Agent persona definitions, capacity tiers, and Tribunal consensus
