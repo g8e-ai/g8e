@@ -45,7 +45,7 @@ The terminal is a browser interaction surface assembled from separate controller
 
 The application event bus opens, minimizes, and maximizes the terminal without coupling the page shell to execution details. Approval cards and execution indicators are loaded from static component templates.
 
-Terminal actions do not execute commands locally in the browser. They produce HTTP requests and await platform events. When the relevant API path is activated, the gateway and bound operator remain responsible for governance and host execution.
+Terminal actions do not execute commands locally in the browser. They produce HTTP requests and await platform events. When the relevant API path is activated, the gateway and bound operator remain responsible for [governance](../architecture/governance.md) and host execution.
 
 ## Event Inputs
 
@@ -64,4 +64,7 @@ Operator tests cover panel service delegation, binding overlays, deployment stat
 - [Server-Sent Events](sse.md)
 - [Operator Architecture](../architecture/operator.md) — Operator component design, L4 Warden, and L5 Actuator execution boundary
 - [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing operator mutations
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts for operator and approval endpoints
+- [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md) — Workload enrollment and in-tree component onboarding
 - [Ensemble Agents](../ensemble/agents.md) — Ensemble agent hierarchy and Tribunal consensus that produces operator commands
+- [Ensemble Governance](../ensemble/governance.md) — Tribunal consensus and governance envelope that authorizes operator commands

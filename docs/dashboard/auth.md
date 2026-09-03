@@ -7,7 +7,7 @@ g8ed uses separate identities for browser users and the dashboard container. The
 | Surface | Credential | Issuer and verifier | Purpose |
 | --- | --- | --- | --- |
 | Browser | WebAuthn passkey plus HttpOnly `g8e_web_session_cookie` | g8e Gateway | User authentication and browser API authorization |
-| Container | ECDSA P-256 app certificate and private key with `spiffe://g8e.local/app/g8ed` | g8e Gateway PKI | Prepared server-to-server mTLS clients |
+| Container | ECDSA P-256 app certificate and private key with `spiffe://g8e.local/app/g8ed` | [g8e Gateway PKI](../ensemble/pki.md) | Prepared server-to-server mTLS clients |
 
 The browser never receives the container certificate or private key. The container does not receive or forward the browser's session cookie.
 
@@ -28,7 +28,7 @@ The cookie is HttpOnly. `ServiceClient` cannot read it and deliberately returns 
 5. Submit the attestation and gateway-provided user ID to `/api/v1/auth/passkeys/console/register/verify`.
 6. Parse the returned user session and request its public web-session ID.
 
-The gateway owns challenge generation, relying-party policy, credential verification, user creation, and session issuance. g8ed only translates between JSON and the browser WebAuthn API.
+The gateway owns challenge generation, relying-party policy, credential verification, user creation, and session issuance; see [Authentication & Authorization](../architecture/auth.md) for the platform-level WebAuthn and session model. g8ed only translates between JSON and the browser WebAuthn API.
 
 ## Passkey Authentication
 
@@ -54,7 +54,7 @@ The dashboard also treats terminal SSE failure after authentication as session e
 `AppEnrollmentService` resolves configuration from `G8E_GATEWAY_HTTP_URL` and `G8E_RUNTIME_DIR`. It exposes two explicit paths:
 
 - `loadIdentity()` reads and validates installed material without network access. It rejects missing files, unparsable certificates, missing SPIFFE URI identity, expired certificates, and certificates within the seven-day renewal threshold.
-- `enroll()` contacts the gateway's plain-HTTP owner-approved enrollment surface. It resumes persisted pending state when present or generates a P-256 key and CSR, fetches trust material, submits an enrollment request, polls for approval, signs the completion transcript, validates the returned certificate, and installs the identity atomically.
+- `enroll()` contacts the gateway's plain-HTTP owner-approved enrollment surface. It resumes persisted pending state when present or generates a P-256 key and CSR, fetches trust material, submits an enrollment request, polls for approval, signs the completion transcript, validates the returned certificate, and installs the identity atomically. The platform PKI hierarchy and certificate lifecycle that back this flow are documented in [PKI & Trust](../ensemble/pki.md).
 
 Installed files use the dashboard runtime tree:
 
@@ -78,6 +78,8 @@ Installed files use the dashboard runtime tree:
 ## Related
 
 - [Authentication & Authorization](../architecture/auth.md) — Platform-level mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts for auth and session endpoints
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
 - [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
 - [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md)

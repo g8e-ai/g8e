@@ -81,7 +81,7 @@ Startup tests inject an enrollment service and fatal callback, allowing fail-clo
 
 ## Verification Scope
 
-Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are mounted. The current runtime mounts no API routers, and component tests use doubles for those calls. End-to-end deployment verification must separately confirm browser CORS and WebAuthn configuration, owner-approved app enrollment, gateway session cookies, and any feature path expected to be live.
+Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are mounted. The current runtime mounts no API routers, and component tests use doubles for those calls. End-to-end deployment verification must separately confirm browser CORS and WebAuthn configuration, owner-approved app enrollment, gateway session cookies, and any feature path expected to be live; see the [UX Smoke Test](../guides/ux_smoke_test.md) guide for the platform's end-to-end verification procedure.
 
 ## Related
 
@@ -90,3 +90,5 @@ Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
 - [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands
+- [UX Smoke Test](../guides/ux_smoke_test.md) — Platform end-to-end deployment verification procedure
+- [Code Map](../devs/codemap.md) — Platform source-tree map and component boundaries

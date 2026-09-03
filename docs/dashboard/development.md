@@ -4,7 +4,7 @@
 
 - Node.js 22 or newer
 - npm 11 or newer
-- A reachable g8e Gateway
+- A reachable [g8e Gateway](../architecture/gateway.md)
 - A browser that supports WebAuthn for authentication testing
 
 ## Install and Run
@@ -58,7 +58,7 @@ The repository-root build context is required:
 docker build -f dashboard/Dockerfile -t g8e-dashboard .
 ```
 
-The image installs production dependencies, runs as the non-root `g8e` user with UID 1001, and uses `/data` for the writable runtime volume. `entrypoint.sh` waits for gateway health before starting Node. In `docker-compose.yml`, the browser gateway URL uses the externally reachable hostname and HTTPS port, while enrollment and health use the internal `g8eg` alias over plain HTTP.
+The image installs production dependencies, runs as the non-root `g8e` user with UID 1001, and uses `/data` for the writable runtime volume. `entrypoint.sh` waits for gateway health before starting Node. In `docker-compose.yml`, the browser gateway URL uses the externally reachable hostname and HTTPS port, while enrollment and health use the internal `g8eg` alias over plain HTTP (see [Network Architecture](../architecture/network.md) for the gateway's protocol surfaces and topology).
 
 ## Environment Variables
 
@@ -83,3 +83,5 @@ Runtime dependencies are declared in `package.json` and locked in `package-lock.
 - [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
 - [Docker Gateway Guide](../guides/docker_gateway.md) — Gateway container deployment and configuration
 - [Platform Getting Started](../guides/getting_started.md) — Platform installation and quick start guide
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands

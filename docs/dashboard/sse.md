@@ -4,7 +4,7 @@
 
 g8ed uses Server-Sent Events for browser-visible platform activity. `SSEConnectionManager` owns the browser `EventSource`; `EventBus` distributes decoded application events to authentication, chat, operator, approval, and status components.
 
-The browser does not connect to the gateway's mTLS WebSocket pub/sub endpoint. Web browsers cannot present the dashboard container's app certificate, and the static host does not proxy WebSockets.
+The browser does not connect to the gateway's mTLS WebSocket pub/sub endpoint (see [SSE Streaming](../architecture/sse.md) for the gateway-side event surfaces). Web browsers cannot present the dashboard container's app certificate, and the static host does not proxy WebSockets.
 
 ## Connection Lifecycle
 
@@ -55,6 +55,7 @@ The public web-session ID retained by the manager scopes local connection state;
 ## Related
 
 - [Gateway SSE Streaming](../architecture/sse.md) — Gateway-side SSE push ingestion, filtering, and consumer endpoints
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
 - [Ensemble SSE](../ensemble/sse.md) — Ensemble event production pipeline that feeds dashboard SSE consumers
 - [Authentication](auth.md)
 - [Gateway Integration](gateway.md)
