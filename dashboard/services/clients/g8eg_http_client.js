@@ -148,7 +148,7 @@ class g8egHttpClient {
 
             if (error.name === 'AbortError') {
                 logger.error(`[${this.component}] ${method} ${path} timeout after ${g8eg_HTTP_TIMEOUT_MS}ms`);
-                throw new Error(`g8eg request timeout: ${method} ${path} after ${g8eg_HTTP_TIMEOUT_MS}ms`);
+                throw new Error(`g8eg request timeout: ${method} ${path} after ${g8eg_HTTP_TIMEOUT_MS}ms`, { cause: error });
             }
 
             logger.error(`[${this.component}] ${method} ${path} failed`, {

@@ -93,7 +93,7 @@ export function createOperatorStatusRouter({
                     error: vseError.message,
                     operator_id: operatorId
                 });
-                throw new Error(`Failed to relay stop command: ${vseError.message}`);
+                throw new Error(`Failed to relay stop command: ${vseError.message}`, { cause: vseError });
             }
 
         } catch (error) {

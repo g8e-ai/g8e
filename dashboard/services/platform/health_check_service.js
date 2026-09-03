@@ -149,7 +149,7 @@ export class HealthCheckService {
             };
         } catch (error) {
             logger.error('Cache stats failed:', error);
-            throw new Error('Failed to retrieve cache statistics');
+            throw new Error('Failed to retrieve cache statistics', { cause: error });
         }
     }
 

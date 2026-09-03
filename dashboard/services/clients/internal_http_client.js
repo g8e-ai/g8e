@@ -234,7 +234,7 @@ class InternalHttpClient{
                     path,
                     timeout: this.timeout
                 });
-                throw new Error(`Request timeout after ${this.timeout}ms`);
+                throw new Error(`Request timeout after ${this.timeout}ms`, { cause: error });
             }
 
             logger.error('[HTTP-INTERNAL] Request failed', {
