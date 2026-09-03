@@ -4,6 +4,7 @@
 import express from 'express';
 import {
     BindOperatorsResponse,
+    ErrorResponse,
     UnbindOperatorsResponse,
 } from '../../models/response_models.js';
 import { BindOperatorsRequest, UnbindOperatorsRequest } from '../../models/request_models.js';

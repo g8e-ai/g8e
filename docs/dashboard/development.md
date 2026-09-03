@@ -27,12 +27,13 @@ Available scripts are:
 | --- | --- |
 | `npm start` | Run `node server.js` |
 | `npm run dev` | Run with nodemon file watching |
+| `npm run lint` | Run ESLint across dashboard JavaScript |
 | `npm test` | Run Vitest once |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run test:ui` | Open the Vitest UI |
 | `npm run test:coverage` | Produce text, HTML, and LCOV V8 coverage |
 
-From the repository root, `make dashboard-test` runs the dashboard suite and `make build-dashboard` builds the image.
+From the repository root, `make dashboard-lint` runs ESLint, `make dashboard-test` runs the dashboard suite, and `make build-dashboard` builds the image.
 
 ## No Frontend Build Step
 

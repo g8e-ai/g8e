@@ -76,8 +76,10 @@ The dashboard has no frontend compilation step. Node serves the checked-in asset
 
 - `npm start` — runs `node server.js`.
 - `npm run dev` — runs the server through nodemon.
+- `npm run lint` — runs ESLint across dashboard JavaScript.
 - `npm test` — runs the Vitest suite once.
 - `npm run test:coverage` — runs Vitest with V8 coverage over `public/js/**/*.js` and `services/**/*.js`.
+- `make dashboard-lint` — runs the repository-level dashboard lint target.
 - `make dashboard-test` — runs the repository-level dashboard test target.
 - `make build-dashboard` — builds the dashboard image from the repository root.
 

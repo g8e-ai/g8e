@@ -63,6 +63,9 @@ export function createInternalSSERouter({ sseService, authorizationMiddleware, o
             const targetWebSessionId = pushReq.web_session_id;
 
             let finalEvent;
+            const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
+                ? normalizeCitationNums(pushReq.event)
+                : pushReq.event;
             
             // Special handling for OPERATOR_PANEL_LIST_UPDATED: replace VSE's single-operator payload
             // with g8ed's full operator list for the frontend
@@ -83,9 +86,6 @@ export function createInternalSSERouter({ sseService, authorizationMiddleware, o
                     finalEvent = new VSEPassthroughEvent({ _payload: normalizedEvent });
                 }
             } else {
-                const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
-                    ? normalizeCitationNums(pushReq.event)
-                    : pushReq.event;
                 finalEvent = new VSEPassthroughEvent({ _payload: normalizedEvent });
             }
 

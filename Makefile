@@ -647,6 +647,11 @@ build-ensemble:
 # The dashboard requires node_modules installed first:
 #   cd dashboard && npm ci
 
+.PHONY: dashboard-lint
+dashboard-lint:
+	@echo "Running dashboard (g8ed) ESLint checks..."
+	@cd dashboard && npm run lint
+
 .PHONY: dashboard-test
 dashboard-test:
 	@echo "Running dashboard (g8ed) vitest suite..."
@@ -810,7 +815,7 @@ ci-ensemble: ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-dashboard
-ci-dashboard: dashboard-test
+ci-dashboard: dashboard-lint dashboard-test
 	@echo "Dashboard CI complete."
 
 .PHONY: _ci-verify-proto

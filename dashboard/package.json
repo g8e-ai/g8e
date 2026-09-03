@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
@@ -29,10 +30,13 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.1.10",
     "dompurify": "^3.4.14",
+    "eslint": "10.9.1",
     "eventsource": "^4.1.0",
+    "globals": "17.11.0",
     "highlight.js": "^11.11.1",
     "jsdom": "^26.0.0",
     "license-checker": "^25.0.1",

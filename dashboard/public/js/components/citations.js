@@ -355,7 +355,7 @@ export class CitationsHandler {
         );
 
         let textNode;
-        while (textNode = walker.nextNode()) {
+        while ((textNode = walker.nextNode())) {
             const nodeLength = textNode.textContent.length;
             const nodeStart = currentPos;
             const nodeEnd = currentPos + nodeLength;
@@ -403,7 +403,7 @@ export class CitationsHandler {
         );
 
         let textNode;
-        while (textNode = walker.nextNode()) {
+        while ((textNode = walker.nextNode())) {
             const nodeLength = textNode.textContent.length;
 
             if (currentIndex + nodeLength >= targetIndex) {
@@ -456,7 +456,7 @@ export class CitationsHandler {
             );
 
             let textNode;
-            while (textNode = walker.nextNode()) {
+            while ((textNode = walker.nextNode())) {
                 if (codeEl.contains(textNode)) {
                     const startPos = currentIndex;
                     const endPos = currentIndex + textNode.textContent.length;

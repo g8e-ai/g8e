@@ -380,6 +380,10 @@ jobs:
         working-directory: dashboard
         run: npm ci
 
+      - name: Run ESLint
+        working-directory: dashboard
+        run: npm run lint
+
       - name: Run vitest suite
         working-directory: dashboard
         run: npm test

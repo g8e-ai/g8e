@@ -171,12 +171,12 @@ class ConsoleMetricsService {
 
             for (const op of operators) {
                 const status = op.status || OperatorStatus.OFFLINE;
-                if (statusDistribution.hasOwnProperty(status)) {
+                if (Object.prototype.hasOwnProperty.call(statusDistribution, status)) {
                     statusDistribution[status]++;
                 }
 
                 const type = op.operator_type || OperatorType.SYSTEM;
-                if (typeDistribution.hasOwnProperty(type)) {
+                if (Object.prototype.hasOwnProperty.call(typeDistribution, type)) {
                     typeDistribution[type]++;
                 }
 

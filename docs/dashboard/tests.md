@@ -4,9 +4,10 @@
 
 The dashboard uses Vitest 4. Tests run in a single fork because parts of the retained service suite historically share gateway key-value state. The default environment is Node; browser-focused tests construct a jsdom-based environment through helpers under `test/mocks/`.
 
-Run the suite from `dashboard/`:
+Run linting and the suite from `dashboard/`:
 
 ```bash
+npm run lint
 npm test
 ```
 
@@ -16,9 +17,10 @@ Run coverage with:
 npm run test:coverage
 ```
 
-The repository-level equivalent is:
+The repository-level equivalents are:
 
 ```bash
+make dashboard-lint
 make dashboard-test
 ```
 
