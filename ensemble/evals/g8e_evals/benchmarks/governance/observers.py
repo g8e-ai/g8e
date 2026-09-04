@@ -17,7 +17,9 @@ The observers produce two kinds of evidence:
 1. ``ReceiptObservation`` records from the simulator's signed receipts, with
    deterministic stage evidence showing the rejection at the declared layer.
 2. Typed security observations (``ReplayAttemptObservation``,
-   ``SignedFieldTamperingObservation``, ``NonceExpirationObservation``) that
+   ``SignedFieldTamperingObservation``, ``NonceExpirationObservation``,
+   ``StaleStateRootObservation``, ``SignerDefectObservation``,
+   ``L3ProofTransplantObservation``, ``RevokedCredentialObservation``) that
    record whether the prohibited terminal state materialized at the declared
    collection boundary.
 """
@@ -29,10 +31,14 @@ from datetime import UTC, datetime
 from g8e_evals.benchmarks.governance.simulator import GovernanceActionResult, LocalGovernanceSimulator
 from g8e_evals.schema import (
     AttemptRecord,
+    L3ProofTransplantObservation,
     NonceExpirationObservation,
     ReceiptObservation,
     ReplayAttemptObservation,
+    RevokedCredentialObservation,
     SignedFieldTamperingObservation,
+    SignerDefectObservation,
+    StaleStateRootObservation,
     StateEvidenceKind,
     StateValue,
     TaskDefinition,
@@ -245,3 +251,252 @@ class NonceExpirationObserverImpl:
             ))
 
         return receipt_observations[0], nonce_observations
+
+
+class StaleStateRootObserverImpl:
+    """Observes stale-state-root replay governance actions and produces typed observations.
+
+    The observer processes each stale-state-root assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces a ``StaleStateRootObservation`` recording whether
+    the stale root was accepted as the current root at the declared
+    collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[StaleStateRootObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        stale_root_observations: list[StaleStateRootObservation] = []
+
+        for assertion in task.stale_state_root_assertions:
+            result = self._simulator.process_stale_state_root(
+                action_type=assertion.action_type,
+                declared_current_root=assertion.declared_current_root,
+                stale_root_replayed=assertion.stale_root_replayed,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+            )
+
+            stale_accepted = self._simulator.is_stale_root_accepted_as_current(
+                assertion.stale_root_replayed
+            )
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=stale_accepted,
+            )
+
+            stale_root_observations.append(StaleStateRootObservation(
+                observation_id=f"{attempt.attempt_id}:stale-root:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                declared_current_root=assertion.declared_current_root,
+                stale_root_replayed=assertion.stale_root_replayed,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return receipt_observations[0], stale_root_observations
+
+
+class SignerDefectObserverImpl:
+    """Observes signer-set defect governance actions and produces typed observations.
+
+    The observer processes each signer-defect assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces a ``SignerDefectObservation`` recording whether
+    the defective signer set was accepted as authoritative at the declared
+    collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[SignerDefectObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        signer_defect_observations: list[SignerDefectObservation] = []
+
+        for assertion in task.signer_defect_assertions:
+            result = self._simulator.process_signer_defect(
+                action_type=assertion.action_type,
+                defect_type=assertion.defect_type.value,
+                declared_required_quorum=assertion.declared_required_quorum,
+                duplicate_signer_key_id=assertion.duplicate_signer_key_id,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+            )
+
+            defect_key = assertion.duplicate_signer_key_id or f"quorum-{assertion.declared_required_quorum}"
+            defective_accepted = self._simulator.is_defective_signer_accepted(defect_key)
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=defective_accepted,
+            )
+
+            signer_defect_observations.append(SignerDefectObservation(
+                observation_id=f"{attempt.attempt_id}:signer-defect:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                defect_type=assertion.defect_type,
+                declared_required_quorum=assertion.declared_required_quorum,
+                duplicate_signer_key_id=assertion.duplicate_signer_key_id,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return receipt_observations[0], signer_defect_observations
+
+
+class L3ProofTransplantObserverImpl:
+    """Observes transplanted-L3-proof reuse governance actions and produces typed observations.
+
+    The observer processes each L3-proof-transplant assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces an ``L3ProofTransplantObservation`` recording
+    whether the transplanted proof was accepted as valid at the declared
+    collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[L3ProofTransplantObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        l3_proof_observations: list[L3ProofTransplantObservation] = []
+
+        for assertion in task.l3_proof_transplant_assertions:
+            result = self._simulator.process_l3_proof_transplant(
+                action_type=assertion.action_type,
+                original_transaction_id=assertion.original_transaction_id,
+                original_l3_proof_hash=assertion.original_l3_proof_hash,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+            )
+
+            proof_accepted = self._simulator.is_transplanted_l3_proof_accepted(
+                assertion.original_l3_proof_hash
+            )
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=proof_accepted,
+            )
+
+            l3_proof_observations.append(L3ProofTransplantObservation(
+                observation_id=f"{attempt.attempt_id}:l3-proof:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                original_transaction_id=assertion.original_transaction_id,
+                original_l3_proof_hash=assertion.original_l3_proof_hash,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return receipt_observations[0], l3_proof_observations
+
+
+class RevokedCredentialObserverImpl:
+    """Observes revoked-credential reuse governance actions and produces typed observations.
+
+    The observer processes each revoked-credential assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces a ``RevokedCredentialObservation`` recording
+    whether the revoked credential was accepted as valid at the declared
+    collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[RevokedCredentialObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        revoked_credential_observations: list[RevokedCredentialObservation] = []
+
+        for assertion in task.revoked_credential_assertions:
+            result = self._simulator.process_revoked_credential(
+                action_type=assertion.action_type,
+                credential_key_id=assertion.credential_key_id,
+                declared_revocation_timestamp=assertion.declared_revocation_timestamp,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+            )
+
+            credential_accepted = self._simulator.is_revoked_credential_accepted(
+                assertion.credential_key_id
+            )
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=credential_accepted,
+            )
+
+            revoked_credential_observations.append(RevokedCredentialObservation(
+                observation_id=f"{attempt.attempt_id}:revoked-cred:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                credential_key_id=assertion.credential_key_id,
+                declared_revocation_timestamp=assertion.declared_revocation_timestamp,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return receipt_observations[0], revoked_credential_observations

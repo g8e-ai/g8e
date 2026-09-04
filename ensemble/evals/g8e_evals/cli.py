@@ -102,9 +102,13 @@ from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synt
 from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore
 from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
 from g8e_evals.benchmarks.governance.observers import (
+    L3ProofTransplantObserverImpl,
     NonceExpirationObserverImpl,
     ReplayAttemptObserverImpl,
+    RevokedCredentialObserverImpl,
     SignedFieldTamperingObserverImpl,
+    SignerDefectObserverImpl,
+    StaleStateRootObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
 from g8e_evals.receipts.collector import ReceiptCollector
@@ -2480,6 +2484,10 @@ async def _run_synthetic_suite(
             replay_attempt_assertions=task.metadata.replay_attempt_assertions,
             signed_field_tampering_assertions=task.metadata.signed_field_tampering_assertions,
             nonce_expiration_assertions=task.metadata.nonce_expiration_assertions,
+            stale_state_root_assertions=task.metadata.stale_state_root_assertions,
+            signer_defect_assertions=task.metadata.signer_defect_assertions,
+            l3_proof_transplant_assertions=task.metadata.l3_proof_transplant_assertions,
+            revoked_credential_assertions=task.metadata.revoked_credential_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2495,6 +2503,10 @@ async def _run_synthetic_suite(
     replay_attempt_records: list[ReplayAttemptObservation] = []
     signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
     nonce_expiration_records: list[NonceExpirationObservation] = []
+    stale_state_root_records: list[StaleStateRootObservation] = []
+    signer_defect_records: list[SignerDefectObservation] = []
+    l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
+    revoked_credential_records: list[RevokedCredentialObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
@@ -2606,6 +2618,10 @@ async def _run_synthetic_suite(
         replay_observations: list[ReplayAttemptObservation] = []
         signed_field_observations: list[SignedFieldTamperingObservation] = []
         nonce_observations: list[NonceExpirationObservation] = []
+        stale_state_root_observations: list[StaleStateRootObservation] = []
+        signer_defect_observations: list[SignerDefectObservation] = []
+        l3_proof_transplant_observations: list[L3ProofTransplantObservation] = []
+        revoked_credential_observations: list[RevokedCredentialObservation] = []
         governance_receipt: ReceiptObservation | None = None
 
         if task.metadata.replay_attempt_assertions:
@@ -2645,6 +2661,58 @@ async def _run_synthetic_suite(
             governance_receipt_records.append(governance_receipt)
             attempt.nonce_expiration_observation_refs = [
                 obs.observation_id for obs in nonce_observations
+            ]
+
+        if task.metadata.stale_state_root_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:stale-root:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = StaleStateRootObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, stale_state_root_observations = await observer.observe(task_def, attempt)
+            stale_state_root_records.extend(stale_state_root_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.stale_state_root_observation_refs = [
+                obs.observation_id for obs in stale_state_root_observations
+            ]
+
+        if task.metadata.signer_defect_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:signer-defect:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = SignerDefectObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, signer_defect_observations = await observer.observe(task_def, attempt)
+            signer_defect_records.extend(signer_defect_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.signer_defect_observation_refs = [
+                obs.observation_id for obs in signer_defect_observations
+            ]
+
+        if task.metadata.l3_proof_transplant_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:l3-proof:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = L3ProofTransplantObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, l3_proof_transplant_observations = await observer.observe(task_def, attempt)
+            l3_proof_transplant_records.extend(l3_proof_transplant_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.l3_proof_transplant_observation_refs = [
+                obs.observation_id for obs in l3_proof_transplant_observations
+            ]
+
+        if task.metadata.revoked_credential_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:revoked-cred:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = RevokedCredentialObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, revoked_credential_observations = await observer.observe(task_def, attempt)
+            revoked_credential_records.extend(revoked_credential_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.revoked_credential_observation_refs = [
+                obs.observation_id for obs in revoked_credential_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -2807,6 +2875,110 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.stale_state_root_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _STALE_STATE_ROOT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    stale_state_root_observations=stale_state_root_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_STALE_STATE_ROOT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.signer_defect_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _SIGNER_DEFECT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    signer_defect_observations=signer_defect_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_SIGNER_DEFECT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.l3_proof_transplant_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _L3_PROOF_TRANSPLANT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    l3_proof_transplant_observations=l3_proof_transplant_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_L3_PROOF_TRANSPLANT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.revoked_credential_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _REVOKED_CREDENTIAL_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    revoked_credential_observations=revoked_credential_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_REVOKED_CREDENTIAL_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -2838,6 +3010,18 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
         for obs in nonce_expiration_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
+        for obs in stale_state_root_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
+        for obs in signer_defect_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "l3-proof-transplant-observations.jsonl", "w") as f:
+        for obs in l3_proof_transplant_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
+        for obs in revoked_credential_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

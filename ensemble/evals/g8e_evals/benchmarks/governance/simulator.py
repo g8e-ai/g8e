@@ -11,8 +11,10 @@ The simulator is a production-shaped system under test that processes
 governance actions through deterministic stages (L1 doctrine, L2 consensus,
 L3 notary, L4 verification), produces signed ``ActionReceipt`` objects with
 deterministic stage evidence, and tracks terminal state so observers can
-prove absence of duplicate-acceptance, tampered-value acceptance, and
-expired-nonce acceptance.
+prove absence of duplicate-acceptance, tampered-value acceptance,
+expired-nonce acceptance, stale-root acceptance, defective-signer
+acceptance, transplanted-proof acceptance, and revoked-credential
+acceptance.
 
 The simulator uses Ed25519 signing keys (``nacl.signing``) to produce real
 cryptographic signatures on receipts, so the receipt verification path is
@@ -20,6 +22,13 @@ exercised end-to-end.  When an action is rejected at a declared layer, the
 stages before that layer succeed, the declared layer fails, and L4
 verification fails.  When an action is allowed, all stages succeed and L4
 verifies.
+
+The simulator supports seven governance-adversarial attack scenarios:
+replay, signed-field tampering, nonce expiration, stale-state-root replay,
+signer-set defects (duplicate signer or insufficient quorum), L3-proof
+transplantation, and revoked-credential reuse.  Each scenario has a
+dedicated ``process_*`` method and an ``is_*`` check that observers use to
+prove absence of the prohibited terminal state.
 """
 
 from __future__ import annotations
@@ -97,6 +106,9 @@ class LocalGovernanceSimulator:
         self._accepted_transaction_ids: set[str] = set()
         self._accepted_field_values: dict[str, str] = {}
         self._accepted_nonces: dict[str, datetime] = {}
+        self._accepted_signer_defects: dict[str, str] = {}
+        self._accepted_l3_proofs: dict[str, str] = {}
+        self._accepted_revoked_credentials: dict[str, datetime] = {}
         self._state_root = "root-0"
         self._tx_counter = 0
 
@@ -330,3 +342,181 @@ class LocalGovernanceSimulator:
     def is_expired_nonce_accepted(self, nonce_value: str) -> bool:
         """Check whether an expired nonce has been accepted as valid."""
         return nonce_value in self._accepted_nonces
+
+    def process_stale_state_root(
+        self,
+        action_type: str,
+        declared_current_root: str,
+        stale_root_replayed: str,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a stale-state-root replay attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the stale-root replay is rejected
+        at the declared layer and the stale root is not accepted as the
+        current root.  When ``allow_bypass`` is ``True``, the stale root is
+        accepted as the current root despite the rejection, simulating a
+        governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:{stale_root_replayed}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._state_root = stale_root_replayed
+            bad_state = True
+        elif rejection_layer is None:
+            self._state_root = stale_root_replayed
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_stale_root_accepted_as_current(self, stale_root: str) -> bool:
+        """Check whether a stale root has been accepted as the current root."""
+        return self._state_root == stale_root
+
+    def process_signer_defect(
+        self,
+        action_type: str,
+        defect_type: str,
+        declared_required_quorum: int,
+        duplicate_signer_key_id: str | None,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a signer-set defect attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the defective-signer action is
+        rejected at the declared layer and the defective signer set is not
+        accepted as authoritative.  When ``allow_bypass`` is ``True``, the
+        defective signer set is accepted as authoritative despite the
+        rejection, simulating a governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        defect_key = duplicate_signer_key_id or f"quorum-{declared_required_quorum}"
+        tx_hash = hashlib.sha256(f"{tx_id}:{defect_type}:{defect_key}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_signer_defects[defect_key] = defect_type
+            bad_state = True
+        elif rejection_layer is None:
+            self._accepted_signer_defects[defect_key] = defect_type
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_defective_signer_accepted(self, defect_key: str) -> bool:
+        """Check whether a defective signer set has been accepted as authoritative."""
+        return defect_key in self._accepted_signer_defects
+
+    def process_l3_proof_transplant(
+        self,
+        action_type: str,
+        original_transaction_id: str,
+        original_l3_proof_hash: str,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a transplanted-L3-proof reuse attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the transplanted-proof action is
+        rejected at the declared layer and the transplanted proof is not
+        accepted as valid.  When ``allow_bypass`` is ``True``, the
+        transplanted proof is accepted as valid despite the rejection,
+        simulating a governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:{original_l3_proof_hash}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_l3_proofs[original_l3_proof_hash] = original_transaction_id
+            bad_state = True
+        elif rejection_layer is None:
+            self._accepted_l3_proofs[original_l3_proof_hash] = original_transaction_id
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_transplanted_l3_proof_accepted(self, original_l3_proof_hash: str) -> bool:
+        """Check whether a transplanted L3 proof has been accepted as valid."""
+        return original_l3_proof_hash in self._accepted_l3_proofs
+
+    def process_revoked_credential(
+        self,
+        action_type: str,
+        credential_key_id: str,
+        declared_revocation_timestamp: datetime,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a revoked-credential reuse attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the revoked-credential action is
+        rejected at the declared layer and the revoked credential is not
+        accepted as valid.  When ``allow_bypass`` is ``True``, the revoked
+        credential is accepted as valid despite the rejection, simulating a
+        governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:{credential_key_id}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_revoked_credentials[credential_key_id] = declared_revocation_timestamp
+            bad_state = True
+        elif rejection_layer is None:
+            self._accepted_revoked_credentials[credential_key_id] = declared_revocation_timestamp
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_revoked_credential_accepted(self, credential_key_id: str) -> bool:
+        """Check whether a revoked credential has been accepted as valid."""
+        return credential_key_id in self._accepted_revoked_credentials

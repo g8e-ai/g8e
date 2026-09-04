@@ -29,11 +29,16 @@ from g8e_evals.benchmarks.privacy.provenance import load_provenance, validate_da
 from g8e_evals.harness import Task
 from g8e_evals.models import TaskMetadata
 from g8e_evals.schema import (
+    L3ProofTransplantAssertion,
     NonceExpirationAssertion,
     RejectionLayer,
     ReplayAttemptAssertion,
+    RevokedCredentialAssertion,
+    SignerDefect,
+    SignerDefectAssertion,
     SignedField,
     SignedFieldTamperingAssertion,
+    StaleStateRootAssertion,
     StateCollectionBoundary,
     StateEvidenceKind,
     StateValue,
@@ -124,6 +129,65 @@ class GovernanceAdversarialLoader:
                             expected_absence=_parse_absence(a.get("expected_absence", {})),
                         )
                         for a in data.get("nonce_expiration_assertions", [])
+                    ],
+                    stale_state_root_assertions=[
+                        StaleStateRootAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            declared_current_root=a["declared_current_root"],
+                            stale_root_replayed=a["stale_root_replayed"],
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("stale_state_root_assertions", [])
+                    ],
+                    signer_defect_assertions=[
+                        SignerDefectAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            defect_type=SignerDefect(a["defect_type"]),
+                            declared_required_quorum=a["declared_required_quorum"],
+                            duplicate_signer_key_id=a.get("duplicate_signer_key_id"),
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("signer_defect_assertions", [])
+                    ],
+                    l3_proof_transplant_assertions=[
+                        L3ProofTransplantAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            original_transaction_id=a["original_transaction_id"],
+                            original_l3_proof_hash=a["original_l3_proof_hash"],
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("l3_proof_transplant_assertions", [])
+                    ],
+                    revoked_credential_assertions=[
+                        RevokedCredentialAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            credential_key_id=a["credential_key_id"],
+                            declared_revocation_timestamp=datetime.fromisoformat(
+                                a["declared_revocation_timestamp"]
+                            ),
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("revoked_credential_assertions", [])
                     ],
                     benchmark_specific=data.get("scenario_params", {}),
                 ),

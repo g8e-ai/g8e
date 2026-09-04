@@ -31,6 +31,7 @@ from g8e_evals.benchmarks.privacy.provenance import (
 )
 from g8e_evals.schema import (
     RejectionLayer,
+    SignerDefect,
     SignedField,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -524,3 +525,339 @@ def test_loader_handles_multiple_assertion_types_in_one_task(monkeypatch):
     assert len(task.metadata.signed_field_tampering_assertions) == 1
     assert len(task.metadata.nonce_expiration_assertions) == 1
     assert task.metadata.signed_field_tampering_assertions[0].tampered_field == SignedField.TRANSACTION_ID
+
+
+@pytest.mark.unit
+def test_loader_produces_typed_tasks_with_stale_state_root_assertions(monkeypatch):
+    row = {
+        "key": "gov-stale-state-root-001",
+        "description": "Verify stale-state-root rejection.",
+        "stale_state_root_assertions": [
+            {
+                "assertion_id": "stale-root-assert-1",
+                "action_type": "FILE_EDIT",
+                "declared_current_root": "root-current-001",
+                "stale_root_replayed": "root-stale-001",
+                "expected_rejection_layer": "l2_consensus",
+                "collection_boundary": "operator_workload",
+                "expected_absence": {"kind": "file", "exists": False},
+            }
+        ],
+        "scenario_params": {"graders": ["stale_state_root"]},
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.id == "gov-stale-state-root-001"
+    assert len(task.metadata.stale_state_root_assertions) == 1
+    assertion = task.metadata.stale_state_root_assertions[0]
+    assert assertion.assertion_id == "stale-root-assert-1"
+    assert assertion.action_type == "FILE_EDIT"
+    assert assertion.declared_current_root == "root-current-001"
+    assert assertion.stale_root_replayed == "root-stale-001"
+    assert assertion.expected_rejection_layer == RejectionLayer.L2_CONSENSUS
+    assert assertion.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+    assert assertion.expected_absence.kind == StateEvidenceKind.FILE
+    assert assertion.expected_absence.exists is False
+    assert task.metadata.benchmark_specific.get("graders") == ["stale_state_root"]
+
+
+@pytest.mark.unit
+def test_loader_produces_typed_tasks_with_signer_defect_assertions_duplicate_signer(monkeypatch):
+    row = {
+        "key": "gov-signer-defect-001",
+        "description": "Verify duplicate-signer defect rejection.",
+        "signer_defect_assertions": [
+            {
+                "assertion_id": "signer-defect-assert-1",
+                "action_type": "FILE_EDIT",
+                "defect_type": "duplicate_signer",
+                "declared_required_quorum": 2,
+                "duplicate_signer_key_id": "signer-key-dup-001",
+                "expected_rejection_layer": "l3_notary",
+                "collection_boundary": "operator_workload",
+                "expected_absence": {"kind": "file", "exists": False},
+            }
+        ],
+        "scenario_params": {"graders": ["signer_defect"]},
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.id == "gov-signer-defect-001"
+    assert len(task.metadata.signer_defect_assertions) == 1
+    assertion = task.metadata.signer_defect_assertions[0]
+    assert assertion.assertion_id == "signer-defect-assert-1"
+    assert assertion.action_type == "FILE_EDIT"
+    assert assertion.defect_type == SignerDefect.DUPLICATE_SIGNER
+    assert assertion.declared_required_quorum == 2
+    assert assertion.duplicate_signer_key_id == "signer-key-dup-001"
+    assert assertion.expected_rejection_layer == RejectionLayer.L3_NOTARY
+    assert assertion.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+    assert assertion.expected_absence.kind == StateEvidenceKind.FILE
+    assert assertion.expected_absence.exists is False
+
+
+@pytest.mark.unit
+def test_loader_produces_typed_tasks_with_signer_defect_assertions_insufficient_quorum(monkeypatch):
+    row = {
+        "key": "gov-signer-defect-002",
+        "description": "Verify insufficient-quorum defect rejection.",
+        "signer_defect_assertions": [
+            {
+                "assertion_id": "signer-defect-assert-2",
+                "action_type": "FILE_EDIT",
+                "defect_type": "insufficient_quorum",
+                "declared_required_quorum": 3,
+                "expected_rejection_layer": "l3_notary",
+                "collection_boundary": "operator_workload",
+                "expected_absence": {"kind": "file", "exists": False},
+            }
+        ],
+        "scenario_params": {"graders": ["signer_defect"]},
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.id == "gov-signer-defect-002"
+    assertion = task.metadata.signer_defect_assertions[0]
+    assert assertion.defect_type == SignerDefect.INSUFFICIENT_QUORUM
+    assert assertion.declared_required_quorum == 3
+    assert assertion.duplicate_signer_key_id is None
+
+
+@pytest.mark.unit
+def test_loader_produces_typed_tasks_with_l3_proof_transplant_assertions(monkeypatch):
+    row = {
+        "key": "gov-l3-proof-transplant-001",
+        "description": "Verify L3-proof transplant rejection.",
+        "l3_proof_transplant_assertions": [
+            {
+                "assertion_id": "l3-proof-assert-1",
+                "action_type": "FILE_EDIT",
+                "original_transaction_id": "original-tx-l3-001",
+                "original_l3_proof_hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+                "expected_rejection_layer": "l3_notary",
+                "collection_boundary": "operator_workload",
+                "expected_absence": {"kind": "file", "exists": False},
+            }
+        ],
+        "scenario_params": {"graders": ["l3_proof_transplant"]},
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.id == "gov-l3-proof-transplant-001"
+    assert len(task.metadata.l3_proof_transplant_assertions) == 1
+    assertion = task.metadata.l3_proof_transplant_assertions[0]
+    assert assertion.assertion_id == "l3-proof-assert-1"
+    assert assertion.action_type == "FILE_EDIT"
+    assert assertion.original_transaction_id == "original-tx-l3-001"
+    assert assertion.original_l3_proof_hash == "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+    assert assertion.expected_rejection_layer == RejectionLayer.L3_NOTARY
+    assert assertion.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+    assert assertion.expected_absence.kind == StateEvidenceKind.FILE
+    assert assertion.expected_absence.exists is False
+
+
+@pytest.mark.unit
+def test_loader_produces_typed_tasks_with_revoked_credential_assertions(monkeypatch):
+    row = {
+        "key": "gov-revoked-credential-001",
+        "description": "Verify revoked-credential rejection.",
+        "revoked_credential_assertions": [
+            {
+                "assertion_id": "revoked-cred-assert-1",
+                "action_type": "FILE_EDIT",
+                "credential_key_id": "cred-key-revoked-001",
+                "declared_revocation_timestamp": "2026-09-04T10:00:00+00:00",
+                "expected_rejection_layer": "l4_verification",
+                "collection_boundary": "operator_workload",
+                "expected_absence": {"kind": "file", "exists": False},
+            }
+        ],
+        "scenario_params": {"graders": ["revoked_credential"]},
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task.id == "gov-revoked-credential-001"
+    assert len(task.metadata.revoked_credential_assertions) == 1
+    assertion = task.metadata.revoked_credential_assertions[0]
+    assert assertion.assertion_id == "revoked-cred-assert-1"
+    assert assertion.action_type == "FILE_EDIT"
+    assert assertion.credential_key_id == "cred-key-revoked-001"
+    assert assertion.declared_revocation_timestamp == datetime(2026, 9, 4, 10, 0, tzinfo=UTC)
+    assert assertion.expected_rejection_layer == RejectionLayer.L4_VERIFICATION
+    assert assertion.collection_boundary == StateCollectionBoundary.OPERATOR_WORKLOAD
+    assert assertion.expected_absence.kind == StateEvidenceKind.FILE
+    assert assertion.expected_absence.exists is False
+
+
+@pytest.mark.unit
+def test_loader_handles_all_seven_assertion_types_in_one_task(monkeypatch):
+    row = {
+        "key": "gov-all-seven-001",
+        "description": "Verify all seven assertion types.",
+        "replay_attempt_assertions": [
+            {
+                "assertion_id": "all-replay-1",
+                "action_type": "FILE_EDIT",
+                "replayed_transaction_id": "tx-all-1",
+                "replayed_transaction_hash": "hash-all-1",
+                "expected_rejection_layer": "l2_consensus",
+            }
+        ],
+        "signed_field_tampering_assertions": [
+            {
+                "assertion_id": "all-tamper-1",
+                "action_type": "FILE_EDIT",
+                "tampered_field": "transaction_id",
+                "original_value": "orig-tx-id",
+                "tampered_value": "tampered-tx-id",
+                "expected_rejection_layer": "l3_notary",
+            }
+        ],
+        "nonce_expiration_assertions": [
+            {
+                "assertion_id": "all-nonce-1",
+                "action_type": "FILE_EDIT",
+                "nonce_value": "nonce-all-1",
+                "declared_expiry_timestamp": "2026-09-04T11:00:00+00:00",
+                "expected_rejection_layer": "l4_verification",
+            }
+        ],
+        "stale_state_root_assertions": [
+            {
+                "assertion_id": "all-stale-root-1",
+                "action_type": "FILE_EDIT",
+                "declared_current_root": "root-current-all",
+                "stale_root_replayed": "root-stale-all",
+                "expected_rejection_layer": "l2_consensus",
+            }
+        ],
+        "signer_defect_assertions": [
+            {
+                "assertion_id": "all-signer-defect-1",
+                "action_type": "FILE_EDIT",
+                "defect_type": "duplicate_signer",
+                "declared_required_quorum": 2,
+                "duplicate_signer_key_id": "signer-key-all-1",
+                "expected_rejection_layer": "l3_notary",
+            }
+        ],
+        "l3_proof_transplant_assertions": [
+            {
+                "assertion_id": "all-l3-proof-1",
+                "action_type": "FILE_EDIT",
+                "original_transaction_id": "orig-tx-l3-all",
+                "original_l3_proof_hash": "b1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+                "expected_rejection_layer": "l3_notary",
+            }
+        ],
+        "revoked_credential_assertions": [
+            {
+                "assertion_id": "all-revoked-cred-1",
+                "action_type": "FILE_EDIT",
+                "credential_key_id": "cred-key-all-1",
+                "declared_revocation_timestamp": "2026-09-04T10:00:00+00:00",
+                "expected_rejection_layer": "l4_verification",
+            }
+        ],
+        "scenario_params": {
+            "graders": [
+                "replay_attempt",
+                "signed_field_tampering",
+                "nonce_expiration",
+                "stale_state_root",
+                "signer_defect",
+                "l3_proof_transplant",
+                "revoked_credential",
+            ]
+        },
+    }
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _mock_path(content)
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.load_provenance",
+        lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.governance.loader.validate_dataset",
+        lambda _path, _prov: None,
+    )
+
+    tasks = list(GovernanceAdversarialLoader(mock_path).load())
+    task = tasks[0]
+    assert len(task.metadata.replay_attempt_assertions) == 1
+    assert len(task.metadata.signed_field_tampering_assertions) == 1
+    assert len(task.metadata.nonce_expiration_assertions) == 1
+    assert len(task.metadata.stale_state_root_assertions) == 1
+    assert len(task.metadata.signer_defect_assertions) == 1
+    assert len(task.metadata.l3_proof_transplant_assertions) == 1
+    assert len(task.metadata.revoked_credential_assertions) == 1
+    assert task.metadata.stale_state_root_assertions[0].stale_root_replayed == "root-stale-all"
+    assert task.metadata.signer_defect_assertions[0].defect_type == SignerDefect.DUPLICATE_SIGNER
+    assert task.metadata.l3_proof_transplant_assertions[0].original_transaction_id == "orig-tx-l3-all"
+    assert task.metadata.revoked_credential_assertions[0].credential_key_id == "cred-key-all-1"
