@@ -41,6 +41,9 @@ from g8e_evals.schema import (
     EvidencePreservationPath,
     ExfiltrationAttemptAssertion,
     ExfiltrationAttemptObservation,
+    ExclusionScope,
+    GraderClass,
+    GraderReference,
     IdentityBinding,
     IdentityMismatchAssertion,
     IdentityMismatchObservation,
@@ -98,13 +101,14 @@ from g8e_evals.schema import (
     TokenPersistenceFailureOutcome,
     UsageReconciliation,
     VerificationStatus,
+    UnsupportedExclusion,
 )
 
 pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.31.0"
+    assert SCHEMA_VERSION == "1.32.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2741,3 +2745,163 @@ def test_attempt_record_links_evidence_preservation_observations():
     )
 
     assert attempt.evidence_preservation_observation_refs == ["observation-1", "observation-2"]
+
+
+def test_unsupported_exclusion_round_trip():
+    exclusion = UnsupportedExclusion(
+        exclusion_id="exclude-replay-1",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        grader_class=GraderClass.DETERMINISTIC,
+        scope=ExclusionScope.NOT_APPLICABLE,
+        reason="read-only query has no replayable transaction",
+    )
+    restored = UnsupportedExclusion.model_validate_json(exclusion.model_dump_json())
+    assert restored == exclusion
+
+
+def test_unsupported_exclusion_rejects_empty_exclusion_id():
+    with pytest.raises(ValidationError, match="exclusion_id"):
+        UnsupportedExclusion(
+            exclusion_id="",
+            grader_id="replay_attempt",
+            grader_version="1.0.0",
+            scope=ExclusionScope.NOT_APPLICABLE,
+            reason="no replay target",
+        )
+
+
+def test_unsupported_exclusion_rejects_empty_grader_id():
+    with pytest.raises(ValidationError, match="grader_id"):
+        UnsupportedExclusion(
+            exclusion_id="exclude-1",
+            grader_id="",
+            grader_version="1.0.0",
+            scope=ExclusionScope.NOT_APPLICABLE,
+            reason="no replay target",
+        )
+
+
+def test_unsupported_exclusion_rejects_empty_reason():
+    with pytest.raises(ValidationError, match="reason"):
+        UnsupportedExclusion(
+            exclusion_id="exclude-1",
+            grader_id="replay_attempt",
+            grader_version="1.0.0",
+            scope=ExclusionScope.NOT_APPLICABLE,
+            reason="",
+        )
+
+
+def test_unsupported_exclusion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        UnsupportedExclusion.model_validate({
+            "exclusion_id": "exclude-1",
+            "grader_id": "replay_attempt",
+            "grader_version": "1.0.0",
+            "scope": "not_applicable",
+            "reason": "no replay target",
+            "unexpected_field": "value",
+        })
+
+
+def test_task_definition_accepts_unsupported_exclusions():
+    exclusion = UnsupportedExclusion(
+        exclusion_id="exclude-replay-1",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        scope=ExclusionScope.NOT_APPLICABLE,
+        reason="read-only query has no replayable transaction",
+    )
+    task_def = TaskDefinition(
+        task_id="task-1",
+        suite_id="suite-1",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        unsupported_exclusions=[exclusion],
+    )
+    assert task_def.unsupported_exclusions == [exclusion]
+
+
+def test_task_definition_rejects_duplicate_exclusion_ids():
+    exclusion = UnsupportedExclusion(
+        exclusion_id="duplicate",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        scope=ExclusionScope.NOT_APPLICABLE,
+        reason="no replay target",
+    )
+    with pytest.raises(ValidationError, match="unsupported exclusion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            unsupported_exclusions=[exclusion, exclusion],
+        )
+
+
+def test_task_definition_rejects_duplicate_excluded_grader_references():
+    exclusion_a = UnsupportedExclusion(
+        exclusion_id="exclude-replay-a",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        scope=ExclusionScope.NOT_APPLICABLE,
+        reason="no replay target",
+    )
+    exclusion_b = UnsupportedExclusion(
+        exclusion_id="exclude-replay-b",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        scope=ExclusionScope.PLANNED,
+        reason="grader not yet implemented",
+    )
+    with pytest.raises(
+        ValidationError,
+        match="unsupported exclusion grader references must be unique",
+    ):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            unsupported_exclusions=[exclusion_a, exclusion_b],
+        )
+
+
+def test_task_definition_rejects_grader_that_is_both_declared_and_excluded():
+    exclusion = UnsupportedExclusion(
+        exclusion_id="exclude-replay-1",
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        scope=ExclusionScope.NOT_APPLICABLE,
+        reason="no replay target",
+    )
+    grader_ref = GraderReference(
+        grader_id="replay_attempt",
+        grader_version="1.0.0",
+        grader_class=GraderClass.DETERMINISTIC,
+    )
+    with pytest.raises(
+        ValidationError,
+        match="grader cannot be both declared and excluded",
+    ):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            graders=[grader_ref],
+            unsupported_exclusions=[exclusion],
+        )
+
+
+def test_attempt_record_links_unsupported_exclusion_refs():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        unsupported_exclusion_refs=["exclude-1", "exclude-2"],
+    )
+    assert attempt.unsupported_exclusion_refs == ["exclude-1", "exclude-2"]

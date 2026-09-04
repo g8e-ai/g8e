@@ -644,6 +644,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             l3_proof_transplant_assertions=t.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=t.metadata.revoked_credential_assertions,
             evidence_preservation_assertions=t.metadata.evidence_preservation_assertions,
+            unsupported_exclusions=t.metadata.unsupported_exclusions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -1997,10 +1998,35 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=evidence_preservation_grade.evidence_refs,
             ))
+        for exclusion in task_defs_by_id[task.id].unsupported_exclusions:
+            if DEFAULT_METRIC_REGISTRY.is_registered(
+                exclusion.grader_id, exclusion.grader_version,
+            ):
+                grade_metrics.append(MetricObservation(
+                    metric_id=exclusion.grader_id,
+                    metric_version=exclusion.grader_version,
+                    attempt_id=attempt_id,
+                    run_id=run_id,
+                    arm_id=arm_def.arm_id,
+                    task_id=task.id,
+                    value=None,
+                    unit=DEFAULT_METRIC_REGISTRY.get(
+                        exclusion.grader_id, exclusion.grader_version,
+                    ).unit,
+                    eligible=False,
+                    denominator_contribution=0,
+                    verification_status=VerificationStatus.NOT_APPLICABLE,
+                    grader_class=exclusion.grader_class,
+                    evidence_refs=[],
+                ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        attempt.unsupported_exclusion_refs = [
+            exclusion.exclusion_id
+            for exclusion in task_defs_by_id[task.id].unsupported_exclusions
+        ]
         attempt_records.append(attempt)
 
         status_color = "green" if score.passed else "red"

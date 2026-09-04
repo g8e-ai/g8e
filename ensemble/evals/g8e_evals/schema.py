@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.31.0"
+SCHEMA_VERSION = "1.32.0"
 
 
 class TerminalStatus(StrEnum):
@@ -1814,6 +1814,46 @@ class EvidencePreservationObservation(BaseModel):
         return self
 
 
+class ExclusionScope(StrEnum):
+    """Why a grader is deliberately not assessed for a task.
+
+    ``not_applicable`` means the claim has no meaningful target for this
+    task (for example, a replay grader on a read-only query). ``external``
+    means the claim requires a real provider, credential, or human
+    ceremony that is not available in the current lane. ``planned`` means
+    the grader exists in the roadmap but has no production implementation
+    yet. ``out_of_scope`` means the claim is deliberately outside the
+    assessment scope for this suite.
+    """
+
+    NOT_APPLICABLE = "not_applicable"
+    EXTERNAL = "external"
+    PLANNED = "planned"
+    OUT_OF_SCOPE = "out_of_scope"
+
+
+class UnsupportedExclusion(BaseModel):
+    """Declares that a grader is deliberately not assessed for a task.
+
+    Every planned privacy or security claim that is not implemented for a
+    task must be explicitly excluded. An absent grader without an
+    exclusion record is treated as a missing assessment, not an implied
+    pass. The exclusion binds the grader ID, version, and class together
+    so that the excluded claim is unambiguous. The reason field carries a
+    human-readable justification; the scope field classifies the
+    exclusion type for downstream analysis and release gates.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    exclusion_id: str = Field(min_length=1)
+    grader_id: str = Field(min_length=1)
+    grader_version: str = Field(min_length=1)
+    grader_class: GraderClass = GraderClass.DETERMINISTIC
+    scope: ExclusionScope
+    reason: str = Field(min_length=1)
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1866,6 +1906,7 @@ class TaskDefinition(BaseModel):
     evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
+    unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -1974,6 +2015,23 @@ class TaskDefinition(BaseModel):
         ]
         if len(grader_keys) != len(set(grader_keys)):
             raise ValueError("grader references must be unique")
+        exclusion_ids = [
+            exclusion.exclusion_id for exclusion in self.unsupported_exclusions
+        ]
+        if len(exclusion_ids) != len(set(exclusion_ids)):
+            raise ValueError("unsupported exclusion IDs must be unique")
+        excluded_grader_keys = [
+            (exclusion.grader_id, exclusion.grader_version)
+            for exclusion in self.unsupported_exclusions
+        ]
+        if len(excluded_grader_keys) != len(set(excluded_grader_keys)):
+            raise ValueError("unsupported exclusion grader references must be unique")
+        overlapping = set(grader_keys) & set(excluded_grader_keys)
+        if overlapping:
+            raise ValueError(
+                "grader cannot be both declared and excluded: "
+                f"{sorted(overlapping)[0]}"
+            )
         if self.state_fixture is not None:
             if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
                 raise ValueError("state fixture hash does not match the initial-state fixture hash")
@@ -2106,6 +2164,7 @@ class AttemptRecord(BaseModel):
     evidence_preservation_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
+    unsupported_exclusion_refs: list[str] = Field(default_factory=list)
 
     missingness_or_failure: str | None = None
     usage_reconciliation: UsageReconciliation | None = None
