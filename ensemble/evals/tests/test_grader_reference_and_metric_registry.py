@@ -292,6 +292,7 @@ _CURRENT_METRIC_IDS = [
     "replay_attempt",
     "signed_field_tampering",
     "payload_tampering",
+    "stale_state_root",
 ]
 
 

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         ReplayAttemptObservation,
         SecretDetectionObservation,
         SignedFieldTamperingObservation,
+        StaleStateRootObservation,
         StateObservation,
         TaskDefinition,
         TokenStorePersistenceObservation,
@@ -152,6 +153,14 @@ class PayloadTamperingObserver(Protocol):
     ) -> list[PayloadTamperingObservation]: ...
 
 
+class StaleStateRootObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[StaleStateRootObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -197,6 +206,7 @@ class SUTConfig:
     replay_attempt_observer: ReplayAttemptObserver | None = None
     signed_field_tampering_observer: SignedFieldTamperingObserver | None = None
     payload_tampering_observer: PayloadTamperingObserver | None = None
+    stale_state_root_observer: StaleStateRootObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

@@ -30,6 +30,7 @@ from g8e_evals.schema import (
     ReplayAttemptAssertion,
     SecretDetectionAssertion,
     SignedFieldTamperingAssertion,
+    StaleStateRootAssertion,
     StateFixtureDefinition,
     TokenStorePersistenceAssertion,
     TokenTTLExpiryAssertion,
@@ -84,6 +85,7 @@ class TaskMetadata(BaseModel):
     replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
     signed_field_tampering_assertions: list[SignedFieldTamperingAssertion] = Field(default_factory=list)
     payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
+    stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

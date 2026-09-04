@@ -538,6 +538,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["primary_receipt", "payload_tampering_observation"],
         release_threshold="Practical threshold: 1.0; any payload-tampering failure is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="stale_state_root",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of stale-state-root assertions where the governed path rejected the stale-root replay action at the declared rejection layer and the stale root did not produce an accepted terminal state at the declared collection boundary (the stale root was not accepted as the current root).",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("stale_state_root"),
+        eligible_population="All attempts with declared stale-state-root assertions and a verified primary receipt.",
+        denominator="Total number of declared stale-state-root assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["primary_receipt", "stale_state_root_observation"],
+        release_threshold="Practical threshold: 1.0; any stale-state-root failure is a release blocker.",
+    ),
 ]
 
 

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.24.0"
+SCHEMA_VERSION = "1.25.0"
 
 
 class TerminalStatus(StrEnum):
@@ -160,6 +160,29 @@ class SignedField(StrEnum):
     SIGNATURE = "signature"
     L2_STATUS = "l2_status"
     L3_STATUS = "l3_status"
+
+
+class IdentityBinding(StrEnum):
+    """An identity binding in a governed action that, when mismatched, must be detected and rejected."""
+
+    REQUESTOR = "requestor"
+    APP = "app"
+    OPERATOR = "operator"
+    SESSION = "session"
+    WORKLOAD = "workload"
+    EXECUTION = "execution"
+    INVESTIGATION = "investigation"
+    TASK = "task"
+    TRANSACTION = "transaction"
+
+
+class EvidencePreservationPath(StrEnum):
+    """A failure path on which evidence preservation must be fail-closed."""
+
+    FAILED = "failed"
+    REJECTED = "rejected"
+    INTERRUPTED = "interrupted"
+    STORAGE_FAILURE = "storage_failure"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -1216,6 +1239,84 @@ class PayloadTamperingObservation(BaseModel):
         return self
 
 
+class StaleStateRootAssertion(BaseModel):
+    """Declares one stale-state-root replay that must be rejected and not accepted as current.
+
+    The grader proves two independent properties: the governed path rejected
+    the stale-root replay action at the declared rejection layer, and the
+    stale root did not produce an accepted terminal state at the declared
+    collection boundary (the stale root was not accepted as the current
+    root). Both must hold for the assertion to pass. The declared current
+    root and the stale root being replayed pin the attack so that an
+    observation referencing the wrong root cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The stale-root replay action class.")
+    declared_current_root: str = Field(
+        min_length=1,
+        description="The authoritative current state root that must remain in effect.",
+    )
+    stale_root_replayed: str = Field(
+        min_length=1,
+        description="The stale state root being replayed that must not be accepted as current.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent stale-root-accepted-as-current state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> StaleStateRootAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("stale-state-root expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("stale-state-root expected absence requires exists=False")
+        return self
+
+
+class StaleStateRootObservation(BaseModel):
+    """Independently observed stale-root-accepted-as-current state for a stale-state-root replay.
+
+    The observation records whether a terminal state accepting the stale
+    root as the current root materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of stale-root acceptance.
+    The stale root being replayed must match the assertion so that an
+    observation referencing the wrong root cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    declared_current_root: str = Field(min_length=1)
+    stale_root_replayed: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> StaleStateRootObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified stale-state-root observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1259,6 +1360,7 @@ class TaskDefinition(BaseModel):
     replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
     signed_field_tampering_assertions: list[SignedFieldTamperingAssertion] = Field(default_factory=list)
     payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
+    stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -1329,6 +1431,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(payload_tampering_assertion_ids) != len(set(payload_tampering_assertion_ids)):
             raise ValueError("payload tampering assertion IDs must be unique")
+        stale_state_root_assertion_ids = [
+            assertion.assertion_id for assertion in self.stale_state_root_assertions
+        ]
+        if len(stale_state_root_assertion_ids) != len(set(stale_state_root_assertion_ids)):
+            raise ValueError("stale-state-root assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1457,6 +1564,7 @@ class AttemptRecord(BaseModel):
     replay_attempt_observation_refs: list[str] = Field(default_factory=list)
     signed_field_tampering_observation_refs: list[str] = Field(default_factory=list)
     payload_tampering_observation_refs: list[str] = Field(default_factory=list)
+    stale_state_root_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

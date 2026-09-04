@@ -65,6 +65,7 @@ from g8e_evals.schema import (
     RunManifest,
     SecretDetectionObservation,
     SignedFieldTamperingObservation,
+    StaleStateRootObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -119,6 +120,7 @@ _ARTIFACT_LEAKAGE_GRADER_ID = "artifact_leakage"
 _REPLAY_ATTEMPT_GRADER_ID = "replay_attempt"
 _SIGNED_FIELD_TAMPERING_GRADER_ID = "signed_field_tampering"
 _PAYLOAD_TAMPERING_GRADER_ID = "payload_tampering"
+_STALE_STATE_ROOT_GRADER_ID = "stale_state_root"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -592,6 +594,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.replay_attempt_assertions
                     or t.metadata.signed_field_tampering_assertions
                     or t.metadata.payload_tampering_assertions
+                    or t.metadata.stale_state_root_assertions
                 )
                 else ALL_ARMS
             ),
@@ -616,6 +619,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             replay_attempt_assertions=t.metadata.replay_attempt_assertions,
             signed_field_tampering_assertions=t.metadata.signed_field_tampering_assertions,
             payload_tampering_assertions=t.metadata.payload_tampering_assertions,
+            stale_state_root_assertions=t.metadata.stale_state_root_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -762,6 +766,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.payload_tampering_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_STALE_STATE_ROOT_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.stale_state_root_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -790,6 +801,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     replay_attempt_records: list[ReplayAttemptObservation] = []
     signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
     payload_tampering_records: list[PayloadTamperingObservation] = []
+    stale_state_root_records: list[StaleStateRootObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1170,6 +1182,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         payload_tampering_records.extend(payload_tampering_observations)
         attempt.payload_tampering_observation_refs = [
             observation.observation_id for observation in payload_tampering_observations
+        ]
+        stale_state_root_observations = (
+            await config.stale_state_root_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.stale_state_root_assertions and config.stale_state_root_observer is not None
+            else []
+        )
+        stale_state_root_records.extend(stale_state_root_observations)
+        attempt.stale_state_root_observation_refs = [
+            observation.observation_id for observation in stale_state_root_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1668,6 +1689,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=payload_tampering_grade.evidence_refs,
             ))
+        if task.metadata.stale_state_root_assertions:
+            stale_state_root_grade = grade_deterministically(
+                _STALE_STATE_ROOT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    stale_state_root_observations=stale_state_root_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_STALE_STATE_ROOT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=stale_state_root_grade.value,
+                unit="proportion",
+                eligible=stale_state_root_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=stale_state_root_grade.denominator_contribution,
+                verification_status=stale_state_root_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=stale_state_root_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1751,6 +1798,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
         for observation in payload_tampering_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
+        for observation in stale_state_root_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:
