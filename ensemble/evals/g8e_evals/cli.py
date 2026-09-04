@@ -14,8 +14,9 @@ import os
 import platform
 import sys
 import uuid
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, UTC
 
 import click
 from rich.console import Console
@@ -153,6 +154,35 @@ _L3_PROOF_TRANSPLANT_GRADER_ID = "l3_proof_transplant"
 _REVOKED_CREDENTIAL_GRADER_ID = "revoked_credential"
 _EVIDENCE_PRESERVATION_GRADER_ID = "evidence_preservation"
 _GRADER_VERSION = "1.0.0"
+_RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
+_RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
+_RECEIPT_VERIFICATION_SCOPE = "canonical receipt signatures and final-persistence attestations"
+_RECEIPT_FINGERPRINT_SAMPLE_LIMIT = 3
+
+
+@dataclass(frozen=True)
+class ReceiptFingerprint:
+    receipt_id: str
+    signature_digest: str
+    artifact_ref: str
+
+
+@dataclass(frozen=True)
+class ReceiptVerificationResult:
+    schema_version: str
+    run_id: str
+    verified_at: str
+    verifier_version: str
+    scope: str
+    total_receipts: int
+    verified_signatures: int
+    verified_persistence: int
+    failed_signatures: int
+    failed_persistence: int
+    missing_keys: int
+    distinct_signer_key_ids: tuple[str, ...]
+    receipt_bound_eligible_attempts: int
+    sample_receipt_fingerprints: tuple[ReceiptFingerprint, ...]
 
 
 class EvaluationRunError(Exception):
@@ -187,7 +217,6 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    logger.info("evals CLI initialized")
 
 @main.command()
 @click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
@@ -2274,7 +2303,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 @main.command()
 @click.argument("report_dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--pki-dir", type=click.Path(exists=True, path_type=Path))
-def verify_receipts(report_dir, pki_dir):
+@click.option("--json", "json_output", is_flag=True, help="Emit a machine-readable verification result")
+def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
     """Re-verify all receipts in a report directory offline.
 
     Loads every ``*Actuator_pub.pem`` file in the PKI directory, derives the
@@ -2291,9 +2321,10 @@ def verify_receipts(report_dir, pki_dir):
         pem = pem_path.read_text()
         key_id = binascii.hexlify(decode_ed25519_public_key(pem)).decode()
         keys[key_id] = pem
-        console.print(f"  loaded key {key_id[:16]}... from {pem_path.name}")
+        if not json_output:
+            console.print(f"  loaded key {key_id[:16]}... from {pem_path.name}")
 
-    if not keys:
+    if not keys and not json_output:
         console.print(
             f"[bold red]Error:[/bold red] No actuator public keys "
             f"(*Actuator_pub.pem) found in {pki_dir}"
@@ -2302,61 +2333,118 @@ def verify_receipts(report_dir, pki_dir):
 
     receipts_path = report_dir / "receipts.jsonl"
     if not receipts_path.exists():
-        console.print(f"[bold red]Error:[/bold red] receipts.jsonl not found in {report_dir}")
-        return
+        raise click.ClickException(f"receipts.jsonl not found in {report_dir}")
 
-    console.print(f"[bold blue]Verifying receipts in {report_dir}...[/bold blue]")
+    run_id = ""
+    if json_output:
+        manifest_path = report_dir / "manifest.json"
+        if not manifest_path.exists():
+            raise click.ClickException(f"manifest.json not found in {report_dir}")
+        try:
+            run_id = RunManifest.model_validate_json(manifest_path.read_text()).run_id
+        except ValueError as exc:
+            raise click.ClickException(f"invalid manifest.json in {report_dir}: {exc}") from exc
+    else:
+        console.print(f"[bold blue]Verifying receipts in {report_dir}...[/bold blue]")
 
     total = 0
-    verified = 0
-    failed = 0
-    no_key = 0
+    verified_signatures = 0
+    verified_persistence = 0
+    failed_signatures = 0
+    failed_persistence = 0
+    missing_keys = 0
+    failed_receipts = 0
+    signer_key_ids: set[str] = set()
+    receipt_bound_attempt_ids: set[str] = set()
+    sample_fingerprints: list[ReceiptFingerprint] = []
 
-    with open(receipts_path) as f:
-        for line in f:
+    with receipts_path.open() as receipts_file:
+        for line in receipts_file:
             total += 1
             try:
                 observation = ReceiptObservation.model_validate_json(line)
             except ValueError:
-                failed += 1
-                console.print("  [red]FAILED:[/red] Could not parse typed receipt observation")
+                failed_signatures += 1
+                failed_persistence += 1
+                failed_receipts += 1
+                if not json_output:
+                    console.print("  [red]FAILED:[/red] Could not parse typed receipt observation")
                 continue
+
             receipt = observation.action_receipt
+            signer_key_ids.add(receipt.signer_key_id)
+            if observation.primary:
+                receipt_bound_attempt_ids.add(observation.attempt_id)
             public_key = keys.get(receipt.signer_key_id)
             if public_key is None:
-                no_key += 1
-                failed += 1
-                console.print(
-                    f"  [red]FAILED:[/red] No key for signer_key_id "
-                    f"{receipt.signer_key_id[:16]}... "
-                    f"(attempt {observation.attempt_id}, TX: {observation.transaction_id})"
-                )
+                missing_keys += 1
+                failed_receipts += 1
+                if not json_output:
+                    console.print(
+                        f"  [red]FAILED:[/red] No key for signer_key_id "
+                        f"{receipt.signer_key_id[:16]}... "
+                        f"(attempt {observation.attempt_id}, TX: {observation.transaction_id})"
+                    )
                 continue
-            if (
-                verify_action_receipt_signature(receipt, public_key)
-                and verify_receipt_persistence_attestation(receipt, public_key)
-            ):
-                verified += 1
-            else:
-                failed += 1
-                console.print(
-                    f"  [red]FAILED:[/red] Receipt for attempt {observation.attempt_id} "
-                    f"(TX: {observation.transaction_id})"
+
+            signature_valid = verify_action_receipt_signature(receipt, public_key)
+            persistence_valid = verify_receipt_persistence_attestation(receipt, public_key)
+            verified_signatures += int(signature_valid)
+            verified_persistence += int(persistence_valid)
+            failed_signatures += int(not signature_valid)
+            failed_persistence += int(not persistence_valid)
+            if not signature_valid or not persistence_valid:
+                failed_receipts += 1
+                if not json_output:
+                    console.print(
+                        f"  [red]FAILED:[/red] Receipt for attempt {observation.attempt_id} "
+                        f"(TX: {observation.transaction_id})"
+                    )
+            elif len(sample_fingerprints) < _RECEIPT_FINGERPRINT_SAMPLE_LIMIT:
+                sample_fingerprints.append(
+                    ReceiptFingerprint(
+                        receipt_id=observation.receipt_id,
+                        signature_digest=hashlib.sha256(receipt.signature.encode()).hexdigest(),
+                        artifact_ref="receipts.jsonl",
+                    )
                 )
+
+    if json_output:
+        result = ReceiptVerificationResult(
+            schema_version=_RECEIPT_VERIFICATION_SCHEMA_VERSION,
+            run_id=run_id,
+            verified_at=datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            verifier_version=_RECEIPT_VERIFIER_VERSION,
+            scope=_RECEIPT_VERIFICATION_SCOPE,
+            total_receipts=total,
+            verified_signatures=verified_signatures,
+            verified_persistence=verified_persistence,
+            failed_signatures=failed_signatures,
+            failed_persistence=failed_persistence,
+            missing_keys=missing_keys,
+            distinct_signer_key_ids=tuple(sorted(signer_key_ids)),
+            receipt_bound_eligible_attempts=len(receipt_bound_attempt_ids),
+            sample_receipt_fingerprints=tuple(sample_fingerprints),
+        )
+        click.echo(json.dumps(asdict(result), sort_keys=True))
+        if failed_signatures or failed_persistence or missing_keys:
+            raise click.exceptions.Exit(1)
+        return
 
     if total == 0:
         console.print("[yellow]No bound receipts found in report.[/yellow]")
-    else:
-        status = "green" if failed == 0 else "red"
-        console.print(f"\n[{status}]Re-verification complete:[/{status}]")
-        console.print(f"  Total receipts: {total}")
-        console.print(f"  Verified: {verified}")
-        console.print(f"  Failed: {failed}")
-        console.print(f"  Keys loaded: {len(keys)}")
-        console.print(f"  No-key receipts: {no_key}")
+        return
 
-        if failed > 0:
-            sys.exit(1)
+    status = "green" if failed_receipts == 0 else "red"
+    jointly_verified = total - failed_receipts
+    console.print(f"\n[{status}]Re-verification complete:[/{status}]")
+    console.print(f"  Total receipts: {total}")
+    console.print(f"  Verified: {jointly_verified}")
+    console.print(f"  Failed: {failed_receipts}")
+    console.print(f"  Keys loaded: {len(keys)}")
+    console.print(f"  No-key receipts: {missing_keys}")
+    if failed_receipts > 0:
+        sys.exit(1)
 
 
 _SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial"]

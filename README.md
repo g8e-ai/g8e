@@ -271,20 +271,20 @@ The following sections present bounded, verifiable evidence that g8e operates as
 
 | Property | Value |
 | --- | --- |
-| Evidence cutoff | 2026-09-01T14:00:00Z |
+| Evidence cutoff | 2026-09-04T21:39:14Z |
 | Platform version | 2.1.3 |
 | Publication schema | 1.0.0 |
 | README evidence version | 1.0.0 |
 | Eval schema version | 1.33.0 |
-| Suite version | g8e-evals-0.4.0 |
-| Selected eval runs | run-2026-09-01-synthetic-a |
-| Selected demo runs | demo-allow-001 |
-| Source revision | synthetic-fixture-rev-001 |
-| Source tree hash | 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 |
-| Dataset hash | a665a45920422f9d417e4837efefc59c5c78b1f0c3a8b4f3e1d9e6c8b7a6f5e4 |
-| Grader hash | b3d2c1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2 |
-| Prompt hash | c1b2a3f4e5d6c7b8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2 |
-| Model cohort | baseline=synthetic-model-baseline-v1; governed=synthetic-model-governed-v1 |
+| Suite version | 5eee4bb14500 |
+| Selected eval runs | a4a5e9ac-ca27-4f52-874f-46a19f3442da, d395af9e-bb88-4cda-9629-aa1bf7ee5df4 |
+| Selected demo runs | healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 |
+| Source revision | (not populated) |
+| Source tree hash | (not populated) |
+| Dataset hash | 5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37 |
+| Grader hash | 901fea8aa86ff16ccf9cc5be70ffc4e5392e6d69f9a74b39c5a9785947c3985a |
+| Prompt hash | bb1e3aa6ac6d43703b765ba67975a30c7124232cee0105d90e0b4f5c5d3ff62d |
+| Model cohort | assistant=fake/fake-model; judge=fake/fake-model; lite=fake/fake-model; primary=fake/fake-model |
 | Receipt verifier scope | canonical receipt signatures and final-persistence attestations |
 
 ### Eval Metrics
@@ -293,22 +293,20 @@ Metrics aggregate eligible, verified observations from the selected eval runs. V
 
 | Metric | Version | Arm | Unit | Value | Denominator | Rate | Status | Tasks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [canary_scrubbing](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.0.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
-| [final_state_accuracy](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.0.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
-| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.2.0 | baseline | pass_fail | 3 | 5 | 60.0% | verified | 5 |
-| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.2.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
-| [policy_outcome](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.0.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
-| [protocol_chain](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.0.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
-| [receipt_integrity](docs/evidence/readme/current/eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl) | 1.0.0 | governed | pass_fail | 4 | 4 | 100.0% | verified | 4 |
+| [eval_judge](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | score_1_to_5 | 25.000 | 5 | 5.000 | verified | 5 |
+| [eval_judge](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | score_1_to_5 | 25.000 | 5 | 5.000 | verified | 5 |
+| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | boolean | 1 | 5 | 20.0% | verified | 5 |
+| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | boolean | 1 | 5 | 20.0% | verified | 5 |
+| [stage_usage_reconciled](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | boolean | 5 | 5 | 100.0% | verified | 5 |
+| [stage_usage_reconciled](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | boolean | 5 | 5 | 100.0% | verified | 5 |
 
-The following candidate metrics are absent from the selected evidence and are omitted: independent_state_accuracy, model_boundary_raw_secret_rate, exact_local_rehydration, secret_detection_precision, secret_detection_recall, unauthorized_mutation.
+The following candidate metrics are absent from the selected evidence and are omitted: receipt_integrity, protocol_chain, policy_outcome, final_state_accuracy, canary_scrubbing, independent_state_accuracy, model_boundary_raw_secret_rate, exact_local_rehydration, secret_detection_precision, secret_detection_recall, unauthorized_mutation.
 
 #### Attempt Outcomes
 
 | Status | Count |
 | --- | --- |
-| completed | 9 |
-| infrastructure_failure | 1 |
+| completed | 10 |
 
 ### Receipt Verification
 
@@ -316,41 +314,28 @@ Receipt verification is bounded to canonical receipt signatures and final-persis
 
 | Property | Value |
 | --- | --- |
-| Total receipts | 9 |
-| Verified signatures | 9 |
-| Verified persistence | 9 |
+| Total receipts | 0 |
+| Verified signatures | 0 |
+| Verified persistence | 0 |
 | Failed signatures | 0 |
 | Failed persistence | 0 |
 | Missing keys | 0 |
-| Distinct signer key IDs | actuator-key-synthetic-001 |
-| Receipt-bound eligible attempts | 9 |
-| Pass | yes |
-
-#### Sample Receipt Fingerprints
-
-| Receipt ID | Signature Digest | Artifact |
-| --- | --- | --- |
-| rec-006 | `f6a1b2c3d4e5f6a1...` | eval/runs/run-2026-09-01-synthetic-a/receipts.jsonl |
+| Distinct signer key IDs |  |
+| Receipt-bound eligible attempts | 0 |
+| Pass | no |
 
 ### Governance and State Proof
 
 | Metric | Version | Arm | Denominator | Rate | Status |
 | --- | --- | --- | --- | --- | --- |
-| canary_scrubbing | 1.0.0 | governed | 4 | 100.0% | verified |
-| final_state_accuracy | 1.0.0 | governed | 4 | 100.0% | verified |
-| policy_outcome | 1.0.0 | governed | 4 | 100.0% | verified |
-| protocol_chain | 1.0.0 | governed | 4 | 100.0% | verified |
-| receipt_integrity | 1.0.0 | governed | 4 | 100.0% | verified |
-
-Observed L2 posture: deterministic_replicated_doctrine.
 
 ### Independently Verified Demonstrations
 
 The following scenarios are backed by canonical `ComplianceVerificationReport` records. All resources and data are synthetic or simulated.
 
-| Run ID | Environment | Scenario | Expected | Observed | Rejection Layer | Receipt | Persistence | Protocol | State | Metric | Valid |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| demo-allow-001 | synthetic | scenario-allow-doctrine-query | allow | allow | — | yes | yes | pass | match | match | yes |
+| Run ID | Environment | Scenario | Verifier | Version | Valid | Failures |
+| --- | --- | --- | --- | --- | --- | --- |
+| healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 | healthcare-synthetic | healthcare-demo | g8e-demo-run-verifier | 1.0.0 | yes | 0 |
 
 ### CI and Reproducibility
 
@@ -387,6 +372,7 @@ make lint
 - ifeval_subset_verifier is a curated subset, not full IFEval.
 - L2 Consensus is labeled deterministic_replicated_doctrine; heterogeneous independent model consensus is not claimed.
 - Repository publication of actuator verification keys does not independently establish an external trust root.
+- The ifeval_subset fake provider produces zero receipts for text-generation tasks; receipt-bound proof comes from verified demo scenarios.
 
 ## Contributing
 

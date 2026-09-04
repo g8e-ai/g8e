@@ -1,35 +1,48 @@
 {
   "publication_schema_version": "1.0.0",
   "readme_evidence_version": "1.0.0",
-  "evidence_cutoff": "2026-09-01T14:00:00Z",
+  "evidence_cutoff": "2026-09-04T21:39:14Z",
   "platform_version": "2.1.3",
   "eval_runs": [
     {
-      "run_id": "run-2026-09-01-synthetic-a",
-      "manifest_path": "eval/runs/run-2026-09-01-synthetic-a/manifest.json",
-      "manifest_sha256": "43dea644e1e07766ecd9201e3840a78fd3f2432297be916400e0107f10ba717e",
-      "attempts_path": "eval/runs/run-2026-09-01-synthetic-a/attempts.jsonl",
-      "attempts_sha256": "e5f303d2141d0f76a3e5d27ba530925efa0077f44ff4baba44aa0a4b869632ce",
-      "metrics_path": "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl",
-      "metrics_sha256": "b15da748c93afc82b7311887d66d5e00c5bc9ee28832762f7048a9fd786530e7",
-      "receipts_path": "eval/runs/run-2026-09-01-synthetic-a/receipts.jsonl",
-      "receipts_sha256": "8d610316e9ca5ec63625ac341ab09c7dd88d05ae9aa392315ace509a6877def0",
-      "stages_path": "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl",
-      "stages_sha256": "a0e56db882c376e993c6f6fcf5859e3739d4fe86b6b26f6b142e5768cb03e3cf"
+      "run_id": "a4a5e9ac-ca27-4f52-874f-46a19f3442da",
+      "manifest_path": "eval/runs/ifeval_subset-20260904-201912/manifest.json",
+      "manifest_sha256": "f02f93f6f9984a0a42c05e4ca8217837e1da127afbcd94f63ac85cab49d82af2",
+      "attempts_path": "eval/runs/ifeval_subset-20260904-201912/attempts.jsonl",
+      "attempts_sha256": "5ff9ae84e735e3d23c9d58ac8ea405fca96ea4f73f3159b5d41478a9c0cc6a51",
+      "metrics_path": "eval/runs/ifeval_subset-20260904-201912/metrics.jsonl",
+      "metrics_sha256": "ab1490c54570fa23c421b6b990c4d71ecf2aa377c05d265422feff30abdcca4c",
+      "receipts_path": "eval/runs/ifeval_subset-20260904-201912/receipts.jsonl",
+      "receipts_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stages_path": "eval/runs/ifeval_subset-20260904-201912/stages.jsonl",
+      "stages_sha256": "bb7fbcc95879293c26aae399b7e38467eb2beb25010a7c6b8ae6153c3f274023"
+    },
+    {
+      "run_id": "d395af9e-bb88-4cda-9629-aa1bf7ee5df4",
+      "manifest_path": "eval/runs/ifeval_subset-20260904-202827/manifest.json",
+      "manifest_sha256": "6d812da2e59f4cbc394180d710842ee3451d2e4d61d6272f4ab0b9b7b8de131f",
+      "attempts_path": "eval/runs/ifeval_subset-20260904-202827/attempts.jsonl",
+      "attempts_sha256": "0bc04a9682887e6be51c742cd5a7aeccb041bab18a8a3d3c1ebf56d50b47f035",
+      "metrics_path": "eval/runs/ifeval_subset-20260904-202827/metrics.jsonl",
+      "metrics_sha256": "a18222e44c1fdc2b868756d73310584cf2a68b35b3712625cc8161448e7fbce7",
+      "receipts_path": "eval/runs/ifeval_subset-20260904-202827/receipts.jsonl",
+      "receipts_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stages_path": "eval/runs/ifeval_subset-20260904-202827/stages.jsonl",
+      "stages_sha256": "a2a8085550d470c3c2a19987be0715374333f13aba1a526c45705ce5e5c75d95"
     }
   ],
   "receipt_verification": {
     "result_path": "eval/receipt-verification.json",
-    "result_sha256": "e5db270c0923f71b214a0ff2388f41a7d98dd6dd0f11a6050057bf162053a2d9",
+    "result_sha256": "a6637b9d87e447e8ba0fc1e4469c3f224af73d1065f6ec824713c030f348a54a",
     "scope": "canonical receipt signatures and final-persistence attestations"
   },
   "demo_reports": [
     {
-      "run_id": "demo-allow-001",
-      "environment": "synthetic",
-      "scenario_id": "scenario-allow-doctrine-query",
-      "report_path": "demo/demo-allow-001/compliance-report.json",
-      "report_sha256": "22dfd05536cf346836082743945db6087a961a619472cc47ad775bb3badd883f"
+      "run_id": "healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425",
+      "environment": "healthcare-synthetic",
+      "scenario_id": "healthcare-demo",
+      "report_path": "demo/healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425/compliance-report.json",
+      "report_sha256": "0cc22f16df45082096bb886d306c92b604c1e2ff5d81ab203bc862220effde3f"
     }
   ],
   "ci_links": [
@@ -48,12 +61,16 @@
     "bounded_receipt_verification",
     "verified_metric_outcomes",
     "synthetic_demo_data",
-    "curated_ifeval_subset"
+    "curated_ifeval_subset",
+    "deterministic_governance_chain",
+    "live_ci_status",
+    "reproducible_local_verification"
   ],
   "caveats": [
     "Receipt verification covers canonical receipt signatures and final-persistence attestations only; it does not constitute complete eval-bundle verification.",
     "ifeval_subset_verifier is a curated subset, not full IFEval.",
     "L2 Consensus is labeled deterministic_replicated_doctrine; heterogeneous independent model consensus is not claimed.",
-    "Repository publication of actuator verification keys does not independently establish an external trust root."
+    "Repository publication of actuator verification keys does not independently establish an external trust root.",
+    "The ifeval_subset fake provider produces zero receipts for text-generation tasks; receipt-bound proof comes from verified demo scenarios."
   ]
 }

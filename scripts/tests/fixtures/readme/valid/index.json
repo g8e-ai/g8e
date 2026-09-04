@@ -29,7 +29,7 @@
       "environment": "synthetic",
       "scenario_id": "scenario-allow-doctrine-query",
       "report_path": "demo/demo-allow-001/compliance-report.json",
-      "report_sha256": "22dfd05536cf346836082743945db6087a961a619472cc47ad775bb3badd883f"
+      "report_sha256": "838b196dc4e99c7e6cc954fed4aa4bc67915c4a98eb766a163a894dfbc89c244"
     }
   ],
   "ci_links": [

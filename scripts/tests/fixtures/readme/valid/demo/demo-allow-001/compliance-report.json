@@ -1,19 +1,7 @@
 {
-  "schema_version": "1.0.0",
-  "run_id": "demo-allow-001",
-  "verified_at": "2026-09-01T14:00:00Z",
-  "verifier_version": "g8e-compliance-demo-verify-0.4.0",
-  "valid": true,
-  "environment": "synthetic",
-  "scenario_id": "scenario-allow-doctrine-query",
-  "expected_outcome": "allow",
-  "observed_result": "allow",
-  "rejection_layer": null,
-  "receipt_verification": {"verified": true, "failures": 0},
-  "persistence_verification": {"verified": true, "failures": 0},
-  "protocol_chain_grade": "pass",
-  "state_observation_result": "match",
-  "metric_reproduction_result": "match",
-  "artifact_directory_integrity": true,
-  "failures": []
+    "report_id": "demo-allow-001",
+    "valid": true,
+    "verified_at": "2026-09-01T14:00:00Z",
+    "verifier_id": "g8e-demo-run-verifier",
+    "verifier_version": "1.0.0"
 }

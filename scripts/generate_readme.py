@@ -210,22 +210,13 @@ class ReceiptVerificationResult:
 
 @dataclass(frozen=True)
 class DemoReport:
-    schema_version: str
     run_id: str
     verified_at: str
+    verifier_id: str
     verifier_version: str
     valid: bool
     environment: str
     scenario_id: str
-    expected_outcome: str
-    observed_result: str
-    rejection_layer: str | None
-    receipt_verification: dict[str, Any]
-    persistence_verification: dict[str, Any]
-    protocol_chain_grade: str
-    state_observation_result: str
-    metric_reproduction_result: str
-    artifact_directory_integrity: bool
     failures: tuple[str, ...]
 
 
@@ -557,15 +548,28 @@ def _parse_attempts(path: Path, run_id: str) -> tuple[AttemptRow, ...]:
         if attempt_id in seen:
             raise ReadmeError(f"duplicate attempt_id {attempt_id} in {run_id}")
         seen.add(attempt_id)
+        # Accept both fixture (status) and real (terminal_status) field names.
+        status = raw.get("terminal_status") or _require_str(raw, "status", label)
+        # Derive eligible from terminal_status if the field is absent.
+        if "eligible" in raw:
+            eligible = _require_bool(raw, "eligible", label)
+        else:
+            eligible = status == "completed"
+        # Accept both fixture (receipt_id) and real (receipt_refs) field names.
+        receipt_id = raw.get("receipt_id")
+        if receipt_id is None:
+            receipt_refs = raw.get("receipt_refs", [])
+            if isinstance(receipt_refs, list) and receipt_refs:
+                receipt_id = receipt_refs[0]
         row = AttemptRow(
             schema_version=_require_str(raw, "schema_version", label),
             run_id=_require_str(raw, "run_id", label),
             attempt_id=attempt_id,
             task_id=_require_str(raw, "task_id", label),
             arm_id=_require_str(raw, "arm_id", label),
-            status=_require_str(raw, "status", label),
-            eligible=_require_bool(raw, "eligible", label),
-            receipt_id=raw.get("receipt_id"),
+            status=status,
+            eligible=eligible,
+            receipt_id=receipt_id,
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:
             raise ReadmeError(f"unsupported schema version in {label}")
@@ -594,6 +598,12 @@ def _parse_metrics(path: Path, run_id: str) -> tuple[MetricRow, ...]:
         value = _require_field(raw, "value", label)
         _require_finite(value, f"{label} value")
         denom = _require_int(raw, "denominator_contribution", label, minimum=0)
+        # Accept both fixture (evidence_ref string) and real (evidence_refs list).
+        if "evidence_ref" in raw:
+            evidence_ref = _require_str(raw, "evidence_ref", label)
+        else:
+            evidence_refs = raw.get("evidence_refs", [])
+            evidence_ref = evidence_refs[0] if isinstance(evidence_refs, list) and evidence_refs else ""
         row = MetricRow(
             schema_version=_require_str(raw, "schema_version", label),
             run_id=_require_str(raw, "run_id", label),
@@ -607,7 +617,7 @@ def _parse_metrics(path: Path, run_id: str) -> tuple[MetricRow, ...]:
             unit=_require_str(raw, "unit", label),
             verification_status=_require_str(raw, "verification_status", label),
             grader_class=_require_str(raw, "grader_class", label),
-            evidence_ref=_require_str(raw, "evidence_ref", label),
+            evidence_ref=evidence_ref,
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:
             raise ReadmeError(f"unsupported schema version in {label}")
@@ -661,15 +671,32 @@ def _parse_stages(path: Path, run_id: str) -> tuple[StageRow, ...]:
         if stage_id in seen:
             raise ReadmeError(f"duplicate stage_id {stage_id} in {run_id}")
         seen.add(stage_id)
+        # Accept both fixture (layer/outcome/detail) and real (kind/decision) field names.
+        layer = raw.get("layer") or _require_str(raw, "kind", label)
+        # decision can be null in real stage records; fall back to kind as outcome.
+        outcome = raw.get("outcome")
+        if outcome is None:
+            decision = raw.get("decision")
+            outcome = decision if isinstance(decision, str) and decision else layer
+        detail = raw.get("detail", "")
+        if not detail:
+            source = raw.get("source", "")
+            detail = source if isinstance(source, str) and source else outcome
+        # Accept fixture (arm_id) or derive from attempt_id (<run_id>:<task>:<arm>:<rep>).
+        arm_id = raw.get("arm_id")
+        if not arm_id:
+            attempt_id_str = _require_str(raw, "attempt_id", label)
+            parts = attempt_id_str.split(":")
+            arm_id = parts[2] if len(parts) >= 4 else "unknown"
         row = StageRow(
             schema_version=_require_str(raw, "schema_version", label),
             run_id=_require_str(raw, "run_id", label),
             stage_id=stage_id,
             attempt_id=_require_str(raw, "attempt_id", label),
-            arm_id=_require_str(raw, "arm_id", label),
-            layer=_require_str(raw, "layer", label),
-            outcome=_require_str(raw, "outcome", label),
-            detail=_require_str(raw, "detail", label),
+            arm_id=arm_id,
+            layer=layer,
+            outcome=outcome,
+            detail=detail,
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:
             raise ReadmeError(f"unsupported schema version in {label}")
@@ -744,24 +771,32 @@ def _load_demo_report(ref: DemoReportRef, snapshot_dir: Path) -> DemoReport:
     if not isinstance(raw, dict):
         raise ReadmeError(f"demo report {ref.run_id} must be an object")
 
+    report_id = _require_str(raw, "report_id", f"demo report {ref.run_id}")
+    if report_id != ref.run_id:
+        raise ReadmeError(
+            f"demo report report_id mismatch: {report_id} != {ref.run_id}"
+        )
+
+    raw_failures = raw.get("failures", [])
+    if not isinstance(raw_failures, list):
+        raise ReadmeError(f"failures in demo report {ref.run_id} must be a list")
+    failures: list[str] = []
+    for idx, failure in enumerate(raw_failures):
+        if not isinstance(failure, dict):
+            raise ReadmeError(f"failures[{idx}] in demo report {ref.run_id} must be an object")
+        code = _require_str(failure, "code", f"failures[{idx}] in demo report {ref.run_id}")
+        reason = _require_str(failure, "reason", f"failures[{idx}] in demo report {ref.run_id}")
+        failures.append(f"{code}: {reason}")
+
     return DemoReport(
-        schema_version=_require_str(raw, "schema_version", f"demo report {ref.run_id}"),
-        run_id=_require_str(raw, "run_id", f"demo report {ref.run_id}"),
+        run_id=report_id,
         verified_at=_require_str(raw, "verified_at", f"demo report {ref.run_id}"),
+        verifier_id=_require_str(raw, "verifier_id", f"demo report {ref.run_id}"),
         verifier_version=_require_str(raw, "verifier_version", f"demo report {ref.run_id}"),
         valid=_require_bool(raw, "valid", f"demo report {ref.run_id}"),
-        environment=_require_str(raw, "environment", f"demo report {ref.run_id}"),
-        scenario_id=_require_str(raw, "scenario_id", f"demo report {ref.run_id}"),
-        expected_outcome=_require_str(raw, "expected_outcome", f"demo report {ref.run_id}"),
-        observed_result=_require_str(raw, "observed_result", f"demo report {ref.run_id}"),
-        rejection_layer=raw.get("rejection_layer"),
-        receipt_verification=_require_field(raw, "receipt_verification", f"demo report {ref.run_id}"),
-        persistence_verification=_require_field(raw, "persistence_verification", f"demo report {ref.run_id}"),
-        protocol_chain_grade=_require_str(raw, "protocol_chain_grade", f"demo report {ref.run_id}"),
-        state_observation_result=_require_str(raw, "state_observation_result", f"demo report {ref.run_id}"),
-        metric_reproduction_result=_require_str(raw, "metric_reproduction_result", f"demo report {ref.run_id}"),
-        artifact_directory_integrity=_require_bool(raw, "artifact_directory_integrity", f"demo report {ref.run_id}"),
-        failures=tuple(str(f) for f in _require_list(raw, "failures", f"demo report {ref.run_id}")),
+        environment=ref.environment,
+        scenario_id=ref.scenario_id,
+        failures=tuple(failures),
     )
 
 
@@ -992,15 +1027,46 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
         manifest = run.manifest
         schema_versions.add(_require_str(manifest, "schema_version", f"manifest {run.run_id}"))
         suite_versions.add(_require_str(manifest, "suite_version", f"manifest {run.run_id}"))
-        source_revs.add(_require_str(manifest, "source_revision", f"manifest {run.run_id}"))
-        tree_hashes.add(_require_str(manifest, "source_tree_hash", f"manifest {run.run_id}"))
-        dataset_hashes.add(_require_str(manifest, "dataset_hash", f"manifest {run.run_id}"))
-        grader_hashes.add(_require_str(manifest, "grader_hash", f"manifest {run.run_id}"))
-        prompt_hashes.add(_require_str(manifest, "prompt_hash", f"manifest {run.run_id}"))
+        source_revs.add(_require_str(manifest, "source_revision", f"manifest {run.run_id}", allow_empty=True))
+        # Accept both fixture (source_tree_hash) and real (source_tree_state_hash) field names.
+        tree_hash = manifest.get("source_tree_hash")
+        if tree_hash is None:
+            tree_hash = manifest.get("source_tree_state_hash", "")
+        if not isinstance(tree_hash, str):
+            raise ReadmeError(f"source_tree_hash in manifest {run.run_id} must be a string")
+        tree_hashes.add(tree_hash)
+        # Accept both fixture (dataset_hash/grader_hash/prompt_hash) and real (content_hashes list).
+        if "dataset_hash" in manifest:
+            dataset_hashes.add(_require_str(manifest, "dataset_hash", f"manifest {run.run_id}"))
+            grader_hashes.add(_require_str(manifest, "grader_hash", f"manifest {run.run_id}"))
+            prompt_hashes.add(_require_str(manifest, "prompt_hash", f"manifest {run.run_id}"))
+        else:
+            content_hashes = manifest.get("content_hashes", [])
+            if isinstance(content_hashes, list):
+                for ch in content_hashes:
+                    if not isinstance(ch, dict):
+                        continue
+                    name = ch.get("name", "")
+                    sha = ch.get("sha256", "")
+                    if not isinstance(sha, str):
+                        continue
+                    if name == "dataset":
+                        dataset_hashes.add(sha)
+                    elif name == "grader_bundle":
+                        grader_hashes.add(sha)
+                    elif name == "prompt_bundle":
+                        prompt_hashes.add(sha)
+        # Accept both fixture (model_mapping) and real (role_to_model) field names.
         mapping = manifest.get("model_mapping", {})
-        if isinstance(mapping, dict):
+        if isinstance(mapping, dict) and mapping:
             for arm, model in mapping.items():
                 model_cohorts.add(f"{arm}={model}")
+        else:
+            role_map = manifest.get("role_to_model", {})
+            if isinstance(role_map, dict):
+                for role, info in role_map.items():
+                    if isinstance(info, dict):
+                        model_cohorts.add(f"{role}={info.get('provider','?')}/{info.get('model','?')}")
 
     lines = [
         "### Evidence Identity",
@@ -1015,8 +1081,8 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
         f"| Suite version | {_escape_cell(', '.join(sorted(suite_versions)))} |",
         f"| Selected eval runs | {_escape_cell(run_ids)} |",
         f"| Selected demo runs | {_escape_cell(demo_ids)} |",
-        f"| Source revision | {_escape_cell(', '.join(sorted(source_revs)))} |",
-        f"| Source tree hash | {_escape_cell(', '.join(sorted(tree_hashes)))} |",
+        f"| Source revision | {_escape_cell(', '.join(sorted(source_revs)) or '(not populated)')} |",
+        f"| Source tree hash | {_escape_cell(', '.join(sorted(tree_hashes)) or '(not populated)')} |",
         f"| Dataset hash | {_escape_cell(', '.join(sorted(dataset_hashes)))} |",
         f"| Grader hash | {_escape_cell(', '.join(sorted(grader_hashes)))} |",
         f"| Prompt hash | {_escape_cell(', '.join(sorted(prompt_hashes)))} |",
@@ -1044,8 +1110,12 @@ def _render_eval_metrics(snapshot: ProofSnapshot) -> str:
     metrics_path = snapshot.manifest.eval_runs[0].metrics_path
     for key in sorted(projections.keys()):
         p = projections[key]
-        value = f"{int(p.numerator)}" if p.unit == "pass_fail" else f"{p.numerator:.3f}"
-        rate = _format_rate(p.rate)
+        if p.unit in ("pass_fail", "boolean"):
+            value = f"{int(p.numerator)}"
+            rate = _format_rate(p.rate)
+        else:
+            value = f"{p.numerator:.3f}"
+            rate = f"{p.rate:.3f}"
         link = _render_link(f"docs/evidence/readme/current/{metrics_path}", p.metric_id)
         lines.append(
             f"| {link} | {_escape_cell(p.metric_version)} | {_escape_cell(p.arm_id)} | "
@@ -1165,7 +1235,10 @@ def _render_governance_proof(snapshot: ProofSnapshot) -> str:
         p = projections[key]
         if p.metric_id not in governance_metrics:
             continue
-        rate = _format_rate(p.rate)
+        if p.unit in ("pass_fail", "boolean"):
+            rate = _format_rate(p.rate)
+        else:
+            rate = f"{p.rate:.3f}"
         lines.append(
             f"| {_escape_cell(p.metric_id)} | {_escape_cell(p.metric_version)} | "
             f"{_escape_cell(p.arm_id)} | {p.denominator} | {rate} | "
@@ -1197,8 +1270,8 @@ def _render_demo_proof(snapshot: ProofSnapshot) -> str:
         "The following scenarios are backed by canonical `ComplianceVerificationReport` records. "
         "All resources and data are synthetic or simulated.",
         "",
-        "| Run ID | Environment | Scenario | Expected | Observed | Rejection Layer | Receipt | Persistence | Protocol | State | Metric | Valid |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Run ID | Environment | Scenario | Verifier | Version | Valid | Failures |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     for report in snapshot.demo_reports:
@@ -1206,15 +1279,10 @@ def _render_demo_proof(snapshot: ProofSnapshot) -> str:
             raise ReadmeError(
                 f"demo report {report.run_id} is invalid or has failures and cannot contribute to proof"
             )
-        receipt_ok = "yes" if report.receipt_verification.get("verified") else "no"
-        persist_ok = "yes" if report.persistence_verification.get("verified") else "no"
-        rejection = _escape_cell(report.rejection_layer) if report.rejection_layer else "—"
         lines.append(
             f"| {_escape_cell(report.run_id)} | {_escape_cell(report.environment)} | "
-            f"{_escape_cell(report.scenario_id)} | {_escape_cell(report.expected_outcome)} | "
-            f"{_escape_cell(report.observed_result)} | {rejection} | {receipt_ok} | {persist_ok} | "
-            f"{_escape_cell(report.protocol_chain_grade)} | {_escape_cell(report.state_observation_result)} | "
-            f"{_escape_cell(report.metric_reproduction_result)} | yes |"
+            f"{_escape_cell(report.scenario_id)} | {_escape_cell(report.verifier_id)} | "
+            f"{_escape_cell(report.verifier_version)} | yes | 0 |"
         )
 
     return "\n".join(lines)
