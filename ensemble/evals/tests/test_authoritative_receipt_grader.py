@@ -69,6 +69,7 @@ from g8e_evals.schema import (
     StageObservation,
     TaskDefinition,
     VerificationStatus,
+    GraderReference,
 )
 
 pytestmark = pytest.mark.unit
@@ -110,8 +111,7 @@ def _context(
             prompt_hash="prompt-hash",
             expected_action_class="FILE_EDIT",
             compatible_arms=[Arm.DOCTRINE],
-            grader_ids=["receipt_integrity"],
-            grader_versions=["1.0.0"],
+            graders=[GraderReference(grader_id="receipt_integrity", grader_version="1.0.0")],
         ),
         attempt=AttemptRecord(
             attempt_id="attempt-1",
@@ -191,8 +191,7 @@ def _canary_context(
                 expected_occurrences=1,
             )
         ],
-        "grader_ids": ["canary_scrubbing"],
-        "grader_versions": ["1.0.0"],
+        "graders": [{"grader_id": "canary_scrubbing", "grader_version": "1.0.0"}],
     })
     return DeterministicGradingContext(
         task=task,
@@ -267,8 +266,7 @@ def _model_boundary_context(
     )
     return DeterministicGradingContext(
         task=context.task.model_copy(update={
-            "grader_ids": ["model_boundary_raw_secret_rate"],
-            "grader_versions": ["1.0.0"],
+            "graders": [GraderReference(grader_id="model_boundary_raw_secret_rate", grader_version="1.0.0")],
         }),
         attempt=context.attempt,
         receipts=context.receipts,
@@ -367,8 +365,10 @@ def _secret_detection_context(
     return DeterministicGradingContext(
         task=context.task.model_copy(update={
             "secret_detection_assertions": [assertion],
-            "grader_ids": ["secret_detection_precision", "secret_detection_recall"],
-            "grader_versions": ["1.0.0", "1.0.0"],
+            "graders": [
+                {"grader_id": "secret_detection_precision", "grader_version": "1.0.0"},
+                {"grader_id": "secret_detection_recall", "grader_version": "1.0.0"},
+            ],
         }),
         attempt=context.attempt,
         receipts=context.receipts,
@@ -552,8 +552,7 @@ def _rehydration_context(
     return DeterministicGradingContext(
         task=context.task.model_copy(update={
             "rehydration_assertions": [assertion],
-            "grader_ids": ["exact_local_rehydration"],
-            "grader_versions": ["1.0.0"],
+            "graders": [{"grader_id": "exact_local_rehydration", "grader_version": "1.0.0"}],
         }),
         attempt=context.attempt,
         receipts=context.receipts,
@@ -762,8 +761,7 @@ def _policy_context(
     task = context.task.model_copy(update={
         "expected_allow_block_outcome": expected_outcome,
         "expected_rejection_layer": expected_rejection_layer,
-        "grader_ids": ["policy_outcome"],
-        "grader_versions": ["1.0.0"],
+        "graders": [{"grader_id": "policy_outcome", "grader_version": "1.0.0"}],
     })
     return DeterministicGradingContext(
         task=task,
@@ -924,8 +922,7 @@ def _protocol_context(
             stage.state_root_before = "root-before"
             stage.state_root_after = "root-after"
     task = context.task.model_copy(update={
-        "grader_ids": ["protocol_chain"],
-        "grader_versions": ["1.0.0"],
+        "graders": [GraderReference(grader_id="protocol_chain", grader_version="1.0.0")],
     })
     attempt = context.attempt.model_copy(update={
         "posture": PostureObservation(
@@ -1150,8 +1147,7 @@ def _state_context(
     )
     task = context.task.model_copy(update={
         "expected_final_state_assertions": [assertion],
-        "grader_ids": ["final_state_assertions"],
-        "grader_versions": ["1.0.0"],
+        "graders": [{"grader_id": "final_state_assertions", "grader_version": "1.0.0"}],
     })
     observation = FinalStateObservation(
         observation_id="final-state-1",
@@ -1226,8 +1222,7 @@ def _independent_state_context(
     task = context.task.model_copy(update={
         "initial_state_fixture_hash": fixture.fixture_sha256,
         "state_fixture": fixture,
-        "grader_ids": ["independent_state"],
-        "grader_versions": ["1.0.0"],
+        "graders": [{"grader_id": "independent_state", "grader_version": "1.0.0"}],
     })
     observation = StateObservation(
         observation_id="state-observation-1",

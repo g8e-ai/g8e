@@ -50,6 +50,7 @@ from g8e_evals.schema import (
     ContentHash,
     FinalStateObservation,
     GraderClass,
+    GraderReference,
     MetricObservation,
     ModelIdentity,
     PolicyOutcome,
@@ -66,6 +67,7 @@ from g8e_evals.schema import (
     TerminalStatus,
     VerificationStatus,
 )
+from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.sut.direct_provider import DirectProviderSUT
 from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt, G8eeChatSUT, AuthenticationError
 from g8e_evals.posture import observe_gateway_posture
@@ -578,33 +580,89 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
             rehydration_assertions=t.metadata.rehydration_assertions,
             secret_detection_assertions=t.metadata.secret_detection_assertions,
-            grader_ids=[
-                _IFEVAL_GRADER_ID,
-                *([_EVAL_JUDGE_GRADER_ID] if eval_judge else []),
-                *([_RECEIPT_INTEGRITY_GRADER_ID] if t.metadata.expected_action_class else []),
-                *([_PROTOCOL_CHAIN_GRADER_ID] if t.metadata.expected_action_class else []),
-                *([_CANARY_SCRUBBING_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
-                *([_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID] if t.metadata.sensitive_canary_annotations else []),
-                *([_EXACT_LOCAL_REHYDRATION_GRADER_ID] if t.metadata.rehydration_assertions else []),
-                *([_SECRET_DETECTION_PRECISION_GRADER_ID] if t.metadata.secret_detection_assertions else []),
-                *([_SECRET_DETECTION_RECALL_GRADER_ID] if t.metadata.secret_detection_assertions else []),
-                *([_FINAL_STATE_GRADER_ID] if t.metadata.expected_final_state_assertions else []),
-                *([_INDEPENDENT_STATE_GRADER_ID] if t.metadata.state_fixture else []),
-                *([_POLICY_OUTCOME_GRADER_ID] if t.metadata.expected_allow_block_outcome else []),
-            ],
-            grader_versions=[
-                _GRADER_VERSION,
-                *([_GRADER_VERSION] if eval_judge else []),
-                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
-                *([_GRADER_VERSION] if t.metadata.expected_action_class else []),
-                *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
-                *([_GRADER_VERSION] if t.metadata.sensitive_canary_annotations else []),
-                *([_GRADER_VERSION] if t.metadata.rehydration_assertions else []),
-                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
-                *([_GRADER_VERSION] if t.metadata.secret_detection_assertions else []),
-                *([_GRADER_VERSION] if t.metadata.expected_final_state_assertions else []),
-                *([_GRADER_VERSION] if t.metadata.state_fixture else []),
-                *([_GRADER_VERSION] if t.metadata.expected_allow_block_outcome else []),
+            graders=[
+                GraderReference(
+                    grader_id=_IFEVAL_GRADER_ID,
+                    grader_version=_GRADER_VERSION,
+                    grader_class=GraderClass.DETERMINISTIC,
+                ),
+                *([
+                    GraderReference(
+                        grader_id=_EVAL_JUDGE_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.LLM_JUDGE,
+                    )
+                ] if eval_judge else []),
+                *([
+                    GraderReference(
+                        grader_id=_RECEIPT_INTEGRITY_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.expected_action_class else []),
+                *([
+                    GraderReference(
+                        grader_id=_PROTOCOL_CHAIN_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.expected_action_class else []),
+                *([
+                    GraderReference(
+                        grader_id=_CANARY_SCRUBBING_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.sensitive_canary_annotations else []),
+                *([
+                    GraderReference(
+                        grader_id=_MODEL_BOUNDARY_RAW_SECRET_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.sensitive_canary_annotations else []),
+                *([
+                    GraderReference(
+                        grader_id=_EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.rehydration_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_SECRET_DETECTION_PRECISION_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.secret_detection_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_SECRET_DETECTION_RECALL_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.secret_detection_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_FINAL_STATE_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.expected_final_state_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_INDEPENDENT_STATE_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.state_fixture else []),
+                *([
+                    GraderReference(
+                        grader_id=_POLICY_OUTCOME_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.expected_allow_block_outcome else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -837,7 +895,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             if normalized.raw_evidence:
                 evidence_artifacts.append(normalized.raw_evidence)
                 evidence_refs.append(normalized.raw_evidence.index.artifact_id)
-            metric_records.append(MetricObservation(
+            usage_metric = MetricObservation(
                 metric_id="stage_usage_reconciled",
                 attempt_id=attempt_id,
                 run_id=run_id,
@@ -847,7 +905,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 unit="boolean",
                 verification_status=VerificationStatus.VERIFIED,
                 evidence_refs=evidence_refs,
-            ))
+            )
+            DEFAULT_METRIC_REGISTRY.validate(usage_metric)
+            metric_records.append(usage_metric)
 
         primary_receipt = next(
             (receipt for receipt in attempt_receipts if receipt.primary),
@@ -1185,6 +1245,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=policy_grade.evidence_refs,
             ))
+        for metric in grade_metrics:
+            DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
         attempt_records.append(attempt)

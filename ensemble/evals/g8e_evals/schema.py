@@ -78,6 +78,21 @@ class GraderClass(StrEnum):
     LLM_JUDGE = "llm_judge"
 
 
+class GraderReference(BaseModel):
+    """Typed reference to a registered grader by ID, version, and class.
+
+    Replaces the parallel ``grader_ids``/``grader_versions`` string lists.
+    Every task declares its graders as typed references so that identity,
+    version, and class are bound together and cannot drift out of sync.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    grader_id: str = Field(min_length=1)
+    grader_version: str = Field(min_length=1)
+    grader_class: GraderClass = GraderClass.DETERMINISTIC
+
+
 class VerificationStatus(StrEnum):
     PENDING = "pending"
     VERIFIED = "verified"
@@ -543,8 +558,7 @@ class TaskDefinition(BaseModel):
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
 
-    grader_ids: list[str] = Field(default_factory=list)
-    grader_versions: list[str] = Field(default_factory=list)
+    graders: list[GraderReference] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -568,6 +582,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(secret_detection_assertion_ids) != len(set(secret_detection_assertion_ids)):
             raise ValueError("secret-detection assertion IDs must be unique")
+        grader_keys = [
+            (grader.grader_id, grader.grader_version) for grader in self.graders
+        ]
+        if len(grader_keys) != len(set(grader_keys)):
+            raise ValueError("grader references must be unique")
         if self.state_fixture is not None:
             if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
                 raise ValueError("state fixture hash does not match the initial-state fixture hash")
