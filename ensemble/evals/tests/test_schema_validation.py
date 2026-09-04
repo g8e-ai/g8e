@@ -32,6 +32,8 @@ from g8e_evals.schema import (
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
+    ExfiltrationAttemptAssertion,
+    ExfiltrationAttemptObservation,
     FinalStateAssertion,
     FinalStateObservation,
     MetricObservation,
@@ -73,7 +75,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.20.0"
+    assert SCHEMA_VERSION == "1.21.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -1159,3 +1161,121 @@ def test_attempt_record_links_token_persistence_failure_observations():
     )
 
     assert attempt.token_persistence_failure_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# ExfiltrationAttemptAssertion / ExfiltrationAttemptObservation
+# ---------------------------------------------------------------------------
+
+
+def test_exfiltration_attempt_assertion_and_observation_round_trip():
+    assertion = ExfiltrationAttemptAssertion(
+        assertion_id="exfil-1",
+        action_type="DATA_EXFIL",
+        source="conversation_history:user",
+        destination="model_boundary:provider",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    observation = ExfiltrationAttemptObservation(
+        observation_id="exfil-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="DATA_EXFIL",
+        source="conversation_history:user",
+        destination="model_boundary:provider",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+        source_evidence_refs=["restricted-exfil-evidence"],
+        source_evidence_sha256="e" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = ExfiltrationAttemptAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = ExfiltrationAttemptObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_exfiltration_attempt_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="exfiltration expected absence requires exists=False"):
+        ExfiltrationAttemptAssertion(
+            assertion_id="exfil-1",
+            action_type="DATA_EXFIL",
+            source="conversation_history:user",
+            destination="model_boundary:provider",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_exfiltration_attempt_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="exfiltration expected absence requires consistent=False for ledger state"):
+        ExfiltrationAttemptAssertion(
+            assertion_id="exfil-1",
+            action_type="DATA_EXFIL",
+            source="conversation_history:user",
+            destination="ledger://restricted",
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_exfiltration_attempt_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified exfiltration observation requires source evidence",
+    ):
+        ExfiltrationAttemptObservation(
+            observation_id="exfil-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="exfil-1",
+            action_type="DATA_EXFIL",
+            source="conversation_history:user",
+            destination="model_boundary:provider",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_exfiltration_attempt_assertion_ids():
+    assertion = ExfiltrationAttemptAssertion(
+        assertion_id="duplicate",
+        action_type="DATA_EXFIL",
+        source="conversation_history:user",
+        destination="model_boundary:provider",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="exfiltration attempt assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            exfiltration_attempt_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_exfiltration_attempt_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        exfiltration_attempt_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.exfiltration_attempt_observation_refs == ["observation-1", "observation-2"]

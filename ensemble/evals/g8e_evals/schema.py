@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.20.0"
+SCHEMA_VERSION = "1.21.0"
 
 
 class TerminalStatus(StrEnum):
@@ -799,6 +799,84 @@ class TokenPersistenceFailureObservation(BaseModel):
         return self
 
 
+class ExfiltrationAttemptAssertion(BaseModel):
+    """Declares one cross-boundary exfiltration attempt that must be blocked.
+
+    The grader proves two independent properties: the governed path blocked
+    the exfiltration action at the declared rejection layer, and the
+    sensitive value did not materialize at the declared destination
+    boundary. Both must hold for the assertion to pass. The source and
+    destination bindings pin the cross-boundary path under test so that an
+    observation collected at the wrong boundary or referencing the wrong
+    destination cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The exfiltration action class.")
+    source: str = Field(
+        min_length=1,
+        description="Where the sensitive value originates (e.g., conversation_history:user).",
+    )
+    destination: str = Field(
+        min_length=1,
+        description="Where the sensitive value must not end up (e.g., model_boundary:provider).",
+    )
+    collection_boundary: StateCollectionBoundary
+    expected_rejection_layer: RejectionLayer
+    expected_absence: StateValue = Field(
+        description="Expected absent state at the destination (exists=False).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> ExfiltrationAttemptAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("exfiltration expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("exfiltration expected absence requires exists=False")
+        return self
+
+
+class ExfiltrationAttemptObservation(BaseModel):
+    """Independently observed terminal state at the destination boundary.
+
+    The observation records whether the sensitive value materialized at the
+    destination. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence. The source and destination
+    bindings must match the assertion so that an observation collected at
+    the wrong boundary or referencing the wrong destination cannot satisfy
+    the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    destination: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ExfiltrationAttemptObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified exfiltration observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -837,6 +915,7 @@ class TaskDefinition(BaseModel):
     token_store_persistence_assertions: list[TokenStorePersistenceAssertion] = Field(default_factory=list)
     token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
     token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
+    exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -882,6 +961,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(token_persistence_failure_assertion_ids) != len(set(token_persistence_failure_assertion_ids)):
             raise ValueError("token persistence failure assertion IDs must be unique")
+        exfiltration_attempt_assertion_ids = [
+            assertion.assertion_id for assertion in self.exfiltration_attempt_assertions
+        ]
+        if len(exfiltration_attempt_assertion_ids) != len(set(exfiltration_attempt_assertion_ids)):
+            raise ValueError("exfiltration attempt assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1005,6 +1089,7 @@ class AttemptRecord(BaseModel):
     token_store_persistence_observation_refs: list[str] = Field(default_factory=list)
     token_ttl_expiry_observation_refs: list[str] = Field(default_factory=list)
     token_persistence_failure_observation_refs: list[str] = Field(default_factory=list)
+    exfiltration_attempt_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

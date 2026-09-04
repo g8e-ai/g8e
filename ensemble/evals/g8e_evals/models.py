@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from g8e_evals.schema import (
     CanaryScrubbingAssertion,
+    ExfiltrationAttemptAssertion,
     FinalStateAssertion,
     PolicyOutcome,
     RehydrationAssertion,
@@ -74,6 +75,7 @@ class TaskMetadata(BaseModel):
     token_store_persistence_assertions: list[TokenStorePersistenceAssertion] = Field(default_factory=list)
     token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
     token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
+    exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)
