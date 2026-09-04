@@ -65,6 +65,7 @@ from g8e_evals.schema import (
     StageObservation,
     TaskDefinition,
     TerminalStatus,
+    UnauthorizedMutationObservation,
     VerificationStatus,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
@@ -101,6 +102,7 @@ _FINAL_STATE_METRIC_ID = "final_state_accuracy"
 _INDEPENDENT_STATE_GRADER_ID = "independent_state"
 _INDEPENDENT_STATE_METRIC_ID = "independent_state_accuracy"
 _POLICY_OUTCOME_GRADER_ID = "policy_outcome"
+_UNAUTHORIZED_MUTATION_GRADER_ID = "unauthorized_mutation"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -565,6 +567,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.state_fixture
                     or t.metadata.expected_final_state_assertions
                     or t.metadata.expected_allow_block_outcome
+                    or t.metadata.unauthorized_mutation_assertions
                 )
                 else ALL_ARMS
             ),
@@ -580,6 +583,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             sensitive_canary_annotations=t.metadata.sensitive_canary_annotations,
             rehydration_assertions=t.metadata.rehydration_assertions,
             secret_detection_assertions=t.metadata.secret_detection_assertions,
+            unauthorized_mutation_assertions=t.metadata.unauthorized_mutation_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -663,6 +667,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.expected_allow_block_outcome else []),
+                *([
+                    GraderReference(
+                        grader_id=_UNAUTHORIZED_MUTATION_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.unauthorized_mutation_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -682,6 +693,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     state_records: list[StateObservation] = []
     rehydration_records: list[RehydrationObservation] = []
     secret_detection_records: list[SecretDetectionObservation] = []
+    unauthorized_mutation_records: list[UnauthorizedMutationObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -982,6 +994,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         attempt.secret_detection_observation_refs = [
             observation.observation_id for observation in secret_detection_observations
         ]
+        unauthorized_mutation_observations = (
+            await config.unauthorized_mutation_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.unauthorized_mutation_assertions and config.unauthorized_mutation_observer is not None
+            else []
+        )
+        unauthorized_mutation_records.extend(unauthorized_mutation_observations)
+        attempt.unauthorized_mutation_observation_refs = [
+            observation.observation_id for observation in unauthorized_mutation_observations
+        ]
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -1245,6 +1266,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=policy_grade.evidence_refs,
             ))
+        if task.metadata.unauthorized_mutation_assertions:
+            unauthorized_mutation_grade = grade_deterministically(
+                _UNAUTHORIZED_MUTATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    unauthorized_mutation_observations=unauthorized_mutation_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_UNAUTHORIZED_MUTATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=unauthorized_mutation_grade.value,
+                unit="proportion",
+                eligible=unauthorized_mutation_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=unauthorized_mutation_grade.denominator_contribution,
+                verification_status=unauthorized_mutation_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=unauthorized_mutation_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1292,6 +1339,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "secret-detection-observations.jsonl", "w") as f:
         for observation in secret_detection_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "unauthorized-mutation-observations.jsonl", "w") as f:
+        for observation in unauthorized_mutation_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         SecretDetectionObservation,
         StateObservation,
         TaskDefinition,
+        UnauthorizedMutationObservation,
     )
 
 
@@ -71,6 +72,14 @@ class SecretDetectionObserver(Protocol):
     ) -> list[SecretDetectionObservation]: ...
 
 
+class UnauthorizedMutationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[UnauthorizedMutationObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -107,6 +116,7 @@ class SUTConfig:
     state_observer: StateObserver | None = None
     rehydration_observer: RehydrationObserver | None = None
     secret_detection_observer: SecretDetectionObserver | None = None
+    unauthorized_mutation_observer: UnauthorizedMutationObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

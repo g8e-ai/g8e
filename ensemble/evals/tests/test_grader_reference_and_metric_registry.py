@@ -283,6 +283,7 @@ _CURRENT_METRIC_IDS = [
     "independent_state_accuracy",
     "policy_outcome",
     "stage_usage_reconciled",
+    "unauthorized_mutation",
 ]
 
 

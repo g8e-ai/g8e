@@ -26,6 +26,7 @@ from g8e_evals.schema import (
     RejectionLayer,
     SecretDetectionAssertion,
     StateFixtureDefinition,
+    UnauthorizedMutationAssertion,
 )
 
 
@@ -66,6 +67,7 @@ class TaskMetadata(BaseModel):
     sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
+    unauthorized_mutation_assertions: list[UnauthorizedMutationAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

@@ -523,6 +523,70 @@ class SecretDetectionObservation(BaseModel):
         return self
 
 
+class UnauthorizedMutationAssertion(BaseModel):
+    """Declares one prohibited mutation that must be rejected and absent.
+
+    The grader proves two independent properties: the governed path rejected
+    the prohibited action at the declared rejection layer, and the prohibited
+    terminal state did not materialize at the declared collection boundary.
+    Both must hold for the assertion to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The prohibited mutation action class.")
+    expected_rejection_layer: RejectionLayer
+    prohibited_target: str = Field(min_length=1, description="State target that must not be mutated or created.")
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent state for the prohibited target (exists=False).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> UnauthorizedMutationAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("unauthorized-mutation expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("unauthorized-mutation expected absence requires exists=False")
+        return self
+
+
+class UnauthorizedMutationObservation(BaseModel):
+    """Independently observed state of a prohibited target after a rejected mutation.
+
+    The observation records whether the prohibited terminal state materialized
+    at the declared collection boundary. ``observed.exists is False`` (or
+    ``observed.consistent is False`` for ledger state) proves absence.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    prohibited_target: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> UnauthorizedMutationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified unauthorized-mutation observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -557,6 +621,7 @@ class TaskDefinition(BaseModel):
     sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
+    unauthorized_mutation_assertions: list[UnauthorizedMutationAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -582,6 +647,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(secret_detection_assertion_ids) != len(set(secret_detection_assertion_ids)):
             raise ValueError("secret-detection assertion IDs must be unique")
+        unauthorized_mutation_assertion_ids = [
+            assertion.assertion_id for assertion in self.unauthorized_mutation_assertions
+        ]
+        if len(unauthorized_mutation_assertion_ids) != len(set(unauthorized_mutation_assertion_ids)):
+            raise ValueError("unauthorized-mutation assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -701,6 +771,7 @@ class AttemptRecord(BaseModel):
     state_observation_refs: list[str] = Field(default_factory=list)
     rehydration_observation_refs: list[str] = Field(default_factory=list)
     secret_detection_observation_refs: list[str] = Field(default_factory=list)
+    unauthorized_mutation_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 
