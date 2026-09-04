@@ -28,6 +28,9 @@ if TYPE_CHECKING:
         IdentityMismatchObservation,
         NonceExpirationObservation,
         PayloadTamperingObservation,
+        SignerDefectObservation,
+        L3ProofTransplantObservation,
+        RevokedCredentialObservation,
         RehydrationObservation,
         ReplayAttemptObservation,
         SecretDetectionObservation,
@@ -179,6 +182,30 @@ class NonceExpirationObserver(Protocol):
     ) -> list[NonceExpirationObservation]: ...
 
 
+class SignerDefectObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[SignerDefectObservation]: ...
+
+
+class L3ProofTransplantObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[L3ProofTransplantObservation]: ...
+
+
+class RevokedCredentialObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[RevokedCredentialObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -227,6 +254,9 @@ class SUTConfig:
     stale_state_root_observer: StaleStateRootObserver | None = None
     identity_mismatch_observer: IdentityMismatchObserver | None = None
     nonce_expiration_observer: NonceExpirationObserver | None = None
+    signer_defect_observer: SignerDefectObserver | None = None
+    l3_proof_transplant_observer: L3ProofTransplantObserver | None = None
+    revoked_credential_observer: RevokedCredentialObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

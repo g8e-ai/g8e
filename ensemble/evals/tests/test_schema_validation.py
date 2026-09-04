@@ -42,6 +42,13 @@ from g8e_evals.schema import (
     IdentityMismatchObservation,
     NonceExpirationAssertion,
     NonceExpirationObservation,
+    SignerDefect,
+    SignerDefectAssertion,
+    SignerDefectObservation,
+    L3ProofTransplantAssertion,
+    L3ProofTransplantObservation,
+    RevokedCredentialAssertion,
+    RevokedCredentialObservation,
     FinalStateAssertion,
     FinalStateObservation,
     MetricObservation,
@@ -93,7 +100,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.27.0"
+    assert SCHEMA_VERSION == "1.30.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2209,3 +2216,433 @@ def test_attempt_record_links_nonce_expiration_observations():
     )
 
     assert attempt.nonce_expiration_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# SignerDefect assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+
+_SIGNER_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+
+
+def test_duplicate_signer_assertion_and_observation_round_trip():
+    assertion = SignerDefectAssertion(
+        assertion_id="signer-1",
+        action_type="FILE_EDIT",
+        defect_type=SignerDefect.DUPLICATE_SIGNER,
+        declared_required_quorum=2,
+        duplicate_signer_key_id="signer-key-dup",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = SignerDefectObservation(
+        observation_id="signer-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        defect_type=SignerDefect.DUPLICATE_SIGNER,
+        declared_required_quorum=2,
+        duplicate_signer_key_id="signer-key-dup",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=_SIGNER_COLLECTED,
+        source_evidence_refs=["restricted-signer-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = SignerDefectAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = SignerDefectObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_insufficient_quorum_assertion_and_observation_round_trip():
+    assertion = SignerDefectAssertion(
+        assertion_id="signer-2",
+        action_type="FILE_EDIT",
+        defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+        declared_required_quorum=3,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    observation = SignerDefectObservation(
+        observation_id="signer-observation-2",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+        declared_required_quorum=3,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        collected_at=_SIGNER_COLLECTED,
+        source_evidence_refs=["restricted-signer-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = SignerDefectAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = SignerDefectObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_duplicate_signer_assertion_requires_duplicate_signer_key_id():
+    with pytest.raises(ValidationError, match="duplicate_signer defect requires duplicate_signer_key_id"):
+        SignerDefectAssertion(
+            assertion_id="signer-1",
+            action_type="FILE_EDIT",
+            defect_type=SignerDefect.DUPLICATE_SIGNER,
+            declared_required_quorum=2,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        )
+
+
+def test_insufficient_quorum_assertion_rejects_duplicate_signer_key_id():
+    with pytest.raises(ValidationError, match="insufficient_quorum defect must not set duplicate_signer_key_id"):
+        SignerDefectAssertion(
+            assertion_id="signer-1",
+            action_type="FILE_EDIT",
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=3,
+            duplicate_signer_key_id="signer-key-dup",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        )
+
+
+def test_signer_defect_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="signer-defect expected absence requires exists=False"):
+        SignerDefectAssertion(
+            assertion_id="signer-1",
+            action_type="FILE_EDIT",
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=2,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_signer_defect_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="signer-defect expected absence requires consistent=False for ledger state"):
+        SignerDefectAssertion(
+            assertion_id="signer-1",
+            action_type="FILE_EDIT",
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=2,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_signer_defect_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified signer-defect observation requires source evidence",
+    ):
+        SignerDefectObservation(
+            observation_id="signer-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="signer-1",
+            action_type="FILE_EDIT",
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=2,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=_SIGNER_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_signer_defect_assertion_ids():
+    assertion = SignerDefectAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+        declared_required_quorum=2,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="signer-defect assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            signer_defect_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_signer_defect_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        signer_defect_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.signer_defect_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# L3ProofTransplant assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+
+_L3_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_L3_ORIGINAL_TX_ID = "tx-original-123"
+_L3_ORIGINAL_PROOF_HASH = "a" * 64
+
+
+def test_l3_proof_transplant_assertion_and_observation_round_trip():
+    assertion = L3ProofTransplantAssertion(
+        assertion_id="l3-1",
+        action_type="FILE_EDIT",
+        original_transaction_id=_L3_ORIGINAL_TX_ID,
+        original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = L3ProofTransplantObservation(
+        observation_id="l3-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        original_transaction_id=_L3_ORIGINAL_TX_ID,
+        original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=_L3_COLLECTED,
+        source_evidence_refs=["restricted-l3-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = L3ProofTransplantAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = L3ProofTransplantObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_l3_proof_transplant_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="l3-proof-transplant expected absence requires exists=False"):
+        L3ProofTransplantAssertion(
+            assertion_id="l3-1",
+            action_type="FILE_EDIT",
+            original_transaction_id=_L3_ORIGINAL_TX_ID,
+            original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_l3_proof_transplant_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="l3-proof-transplant expected absence requires consistent=False for ledger state"):
+        L3ProofTransplantAssertion(
+            assertion_id="l3-1",
+            action_type="FILE_EDIT",
+            original_transaction_id=_L3_ORIGINAL_TX_ID,
+            original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_l3_proof_transplant_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified l3-proof-transplant observation requires source evidence",
+    ):
+        L3ProofTransplantObservation(
+            observation_id="l3-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="l3-1",
+            action_type="FILE_EDIT",
+            original_transaction_id=_L3_ORIGINAL_TX_ID,
+            original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=_L3_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_l3_proof_transplant_assertion_ids():
+    assertion = L3ProofTransplantAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        original_transaction_id=_L3_ORIGINAL_TX_ID,
+        original_l3_proof_hash=_L3_ORIGINAL_PROOF_HASH,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="l3-proof-transplant assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            l3_proof_transplant_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_l3_proof_transplant_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        l3_proof_transplant_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.l3_proof_transplant_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# RevokedCredential assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+
+_REVOKED_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_REVOKED_TIMESTAMP = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+_REVOKED_CREDENTIAL_KEY_ID = "cred-key-revoked-123"
+
+
+def test_revoked_credential_assertion_and_observation_round_trip():
+    assertion = RevokedCredentialAssertion(
+        assertion_id="revoked-1",
+        action_type="FILE_EDIT",
+        credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+        declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = RevokedCredentialObservation(
+        observation_id="revoked-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+        declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=_REVOKED_COLLECTED,
+        source_evidence_refs=["restricted-revoked-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = RevokedCredentialAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = RevokedCredentialObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_revoked_credential_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="revoked-credential expected absence requires exists=False"):
+        RevokedCredentialAssertion(
+            assertion_id="revoked-1",
+            action_type="FILE_EDIT",
+            credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+            declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_revoked_credential_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="revoked-credential expected absence requires consistent=False for ledger state"):
+        RevokedCredentialAssertion(
+            assertion_id="revoked-1",
+            action_type="FILE_EDIT",
+            credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+            declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_revoked_credential_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified revoked-credential observation requires source evidence",
+    ):
+        RevokedCredentialObservation(
+            observation_id="revoked-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="revoked-1",
+            action_type="FILE_EDIT",
+            credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+            declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=_REVOKED_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_revoked_credential_assertion_ids():
+    assertion = RevokedCredentialAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        credential_key_id=_REVOKED_CREDENTIAL_KEY_ID,
+        declared_revocation_timestamp=_REVOKED_TIMESTAMP,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="revoked-credential assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            revoked_credential_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_revoked_credential_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        revoked_credential_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.revoked_credential_observation_refs == ["observation-1", "observation-2"]

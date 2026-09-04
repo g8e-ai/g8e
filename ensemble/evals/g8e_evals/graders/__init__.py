@@ -55,6 +55,17 @@ from g8e_evals.schema import (
     IdentityBinding,
     NonceExpirationAssertion,
     NonceExpirationObservation,
+    SignerDefectAssertion,
+    SignerDefectObservation,
+    SignerDefect,
+    L3ProofTransplantAssertion,
+    L3ProofTransplantObservation,
+    RevokedCredentialAssertion,
+    RevokedCredentialObservation,
+    EvidencePreservationAssertion,
+    EvidencePreservationObservation,
+    EvidencePreservationOutcome,
+    EvidencePreservationPath,
     StateAssertionPredicate,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -97,6 +108,10 @@ class DeterministicGradingContext:
     stale_state_root_observations: list[StaleStateRootObservation] = field(default_factory=list)
     identity_mismatch_observations: list[IdentityMismatchObservation] = field(default_factory=list)
     nonce_expiration_observations: list[NonceExpirationObservation] = field(default_factory=list)
+    signer_defect_observations: list[SignerDefectObservation] = field(default_factory=list)
+    l3_proof_transplant_observations: list[L3ProofTransplantObservation] = field(default_factory=list)
+    revoked_credential_observations: list[RevokedCredentialObservation] = field(default_factory=list)
+    evidence_preservation_observations: list[EvidencePreservationObservation] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -2684,6 +2699,582 @@ class NonceExpirationGrader:
         )
 
 
+class SignerDefectGrader:
+    """Proves both rejection and absence of defective-signer acceptance for a signer-set defect.
+
+    For each assertion the grader verifies two independent properties:
+
+    1. The governed path rejected the defective-signer action at the
+       declared rejection layer. The primary receipt must be verified, its
+       action type must match the defective-signer action class, the L4
+       stage must have failed, and the failed prerequisite layer must match
+       the declared expected rejection layer (or L4 itself when no
+       prerequisite failed).
+    2. The defective signer set did not produce an accepted terminal state
+       at the declared collection boundary (the defective signer set was
+       not accepted as authoritative). Exactly one independently collected
+       observation must confirm absence of defective-signer acceptance for
+       the declared defect type, required quorum, and duplicate signer key
+       ID.
+
+    Both properties must hold for the assertion to pass. A rejected action
+    whose defective signer set is still accepted as authoritative is a
+    measured failure, not a pass. An allowed defective-signer action is
+    also a measured failure.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.signer_defect_assertions
+        if not assertions:
+            return self._failed("signer-defect assertions are missing")
+
+        primary_receipts = [receipt for receipt in context.receipts if receipt.primary]
+        if len(primary_receipts) != 1:
+            return self._failed("exactly one primary receipt is required")
+        primary = primary_receipts[0]
+        if not primary.verified:
+            return self._failed("primary receipt signature verification failed", [primary.receipt_id])
+
+        observations_by_assertion: dict[str, list[SignerDefectObservation]] = {}
+        for observation in context.signer_defect_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"signer-defect observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        receipt_stages = primary.action_receipt.deterministic_stage_evidence
+        l4_stages = [
+            stage for stage in receipt_stages
+            if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION
+        ]
+        if len(l4_stages) != 1:
+            return self._failed("exactly one L4 verification stage is required", [primary.receipt_id])
+
+        failed_layer_by_kind = {
+            DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: RejectionLayer.L1_DOCTRINE,
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: RejectionLayer.L2_CONSENSUS,
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY: RejectionLayer.L3_NOTARY,
+        }
+        failed_layers = [
+            failed_layer_by_kind[stage.kind]
+            for stage in receipt_stages
+            if stage.kind in failed_layer_by_kind
+            and stage.outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED
+        ]
+        if len(failed_layers) > 1:
+            return self._failed("receipt contains ambiguous failed governance stages", [primary.receipt_id])
+
+        l4_outcome = l4_stages[0].outcome
+        if l4_outcome == DETERMINISTIC_STAGE_OUTCOME_VERIFIED:
+            observed_outcome = PolicyOutcome.ALLOW
+            observed_rejection_layer = None
+        elif l4_outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED:
+            observed_outcome = PolicyOutcome.BLOCK
+            observed_rejection_layer = (
+                failed_layers[0] if failed_layers else RejectionLayer.L4_VERIFICATION
+            )
+        else:
+            return self._failed("L4 verification stage has an invalid outcome", [primary.receipt_id])
+
+        evidence_refs: list[str] = [primary.receipt_id]
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            if primary.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            if observed_outcome != PolicyOutcome.BLOCK:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observed_rejection_layer != assertion.expected_rejection_layer:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.defect_type != assertion.defect_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.declared_required_quorum != assertion.declared_required_quorum:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.duplicate_signer_key_id != assertion.duplicate_signer_key_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            observed = observation.observed
+            if assertion.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+                absent = observed.kind == StateEvidenceKind.LEDGER_CONSISTENCY and observed.consistent is False
+            else:
+                absent = observed.exists is False
+            if not absent:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"signer-defect assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class L3ProofTransplantGrader:
+    """Proves both rejection and absence of transplanted-L3-proof acceptance for an L3-proof transplant.
+
+    For each assertion the grader verifies two independent properties:
+
+    1. The governed path rejected the transplanted-L3-proof action at the
+       declared rejection layer. The primary receipt must be verified, its
+       action type must match the transplanted-L3-proof action class, the
+       L4 stage must have failed, and the failed prerequisite layer must
+       match the declared expected rejection layer (or L4 itself when no
+       prerequisite failed).
+    2. The transplanted L3 proof did not produce an accepted terminal state
+       at the declared collection boundary (the transplanted proof was not
+       accepted as valid). Exactly one independently collected observation
+       must confirm absence of transplanted-proof acceptance for the
+       declared original transaction ID and original L3 proof hash.
+
+    Both properties must hold for the assertion to pass. A rejected action
+    whose transplanted proof is still accepted as valid is a measured
+    failure, not a pass. An allowed transplanted-L3-proof reuse is also a
+    measured failure.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.l3_proof_transplant_assertions
+        if not assertions:
+            return self._failed("l3-proof-transplant assertions are missing")
+
+        primary_receipts = [receipt for receipt in context.receipts if receipt.primary]
+        if len(primary_receipts) != 1:
+            return self._failed("exactly one primary receipt is required")
+        primary = primary_receipts[0]
+        if not primary.verified:
+            return self._failed("primary receipt signature verification failed", [primary.receipt_id])
+
+        observations_by_assertion: dict[str, list[L3ProofTransplantObservation]] = {}
+        for observation in context.l3_proof_transplant_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"l3-proof-transplant observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        receipt_stages = primary.action_receipt.deterministic_stage_evidence
+        l4_stages = [
+            stage for stage in receipt_stages
+            if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION
+        ]
+        if len(l4_stages) != 1:
+            return self._failed("exactly one L4 verification stage is required", [primary.receipt_id])
+
+        failed_layer_by_kind = {
+            DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: RejectionLayer.L1_DOCTRINE,
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: RejectionLayer.L2_CONSENSUS,
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY: RejectionLayer.L3_NOTARY,
+        }
+        failed_layers = [
+            failed_layer_by_kind[stage.kind]
+            for stage in receipt_stages
+            if stage.kind in failed_layer_by_kind
+            and stage.outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED
+        ]
+        if len(failed_layers) > 1:
+            return self._failed("receipt contains ambiguous failed governance stages", [primary.receipt_id])
+
+        l4_outcome = l4_stages[0].outcome
+        if l4_outcome == DETERMINISTIC_STAGE_OUTCOME_VERIFIED:
+            observed_outcome = PolicyOutcome.ALLOW
+            observed_rejection_layer = None
+        elif l4_outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED:
+            observed_outcome = PolicyOutcome.BLOCK
+            observed_rejection_layer = (
+                failed_layers[0] if failed_layers else RejectionLayer.L4_VERIFICATION
+            )
+        else:
+            return self._failed("L4 verification stage has an invalid outcome", [primary.receipt_id])
+
+        evidence_refs: list[str] = [primary.receipt_id]
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            if primary.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            if observed_outcome != PolicyOutcome.BLOCK:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observed_rejection_layer != assertion.expected_rejection_layer:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.original_transaction_id != assertion.original_transaction_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.original_l3_proof_hash != assertion.original_l3_proof_hash:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            observed = observation.observed
+            if assertion.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+                absent = observed.kind == StateEvidenceKind.LEDGER_CONSISTENCY and observed.consistent is False
+            else:
+                absent = observed.exists is False
+            if not absent:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"l3-proof-transplant assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class RevokedCredentialGrader:
+    """Proves both rejection and absence of revoked-credential acceptance for a revoked-credential reuse.
+
+    For each assertion the grader verifies two independent properties:
+
+    1. The governed path rejected the revoked-credential action at the
+       declared rejection layer. The primary receipt must be verified, its
+       action type must match the revoked-credential action class, the L4
+       stage must have failed, and the failed prerequisite layer must match
+       the declared expected rejection layer (or L4 itself when no
+       prerequisite failed).
+    2. The revoked credential did not produce an accepted terminal state at
+       the declared collection boundary (the revoked credential was not
+       accepted as valid). Exactly one independently collected observation
+       must confirm absence of revoked-credential acceptance for the
+       declared credential key ID and the declared revocation timestamp.
+
+    Both properties must hold for the assertion to pass. A rejected action
+    whose revoked credential is still accepted as valid is a measured
+    failure, not a pass. An allowed revoked-credential reuse is also a
+    measured failure.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.revoked_credential_assertions
+        if not assertions:
+            return self._failed("revoked-credential assertions are missing")
+
+        primary_receipts = [receipt for receipt in context.receipts if receipt.primary]
+        if len(primary_receipts) != 1:
+            return self._failed("exactly one primary receipt is required")
+        primary = primary_receipts[0]
+        if not primary.verified:
+            return self._failed("primary receipt signature verification failed", [primary.receipt_id])
+
+        observations_by_assertion: dict[str, list[RevokedCredentialObservation]] = {}
+        for observation in context.revoked_credential_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"revoked-credential observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        receipt_stages = primary.action_receipt.deterministic_stage_evidence
+        l4_stages = [
+            stage for stage in receipt_stages
+            if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION
+        ]
+        if len(l4_stages) != 1:
+            return self._failed("exactly one L4 verification stage is required", [primary.receipt_id])
+
+        failed_layer_by_kind = {
+            DETERMINISTIC_STAGE_KIND_L1_DOCTRINE: RejectionLayer.L1_DOCTRINE,
+            DETERMINISTIC_STAGE_KIND_PROTOCOL_L2: RejectionLayer.L2_CONSENSUS,
+            DETERMINISTIC_STAGE_KIND_L3_NOTARY: RejectionLayer.L3_NOTARY,
+        }
+        failed_layers = [
+            failed_layer_by_kind[stage.kind]
+            for stage in receipt_stages
+            if stage.kind in failed_layer_by_kind
+            and stage.outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED
+        ]
+        if len(failed_layers) > 1:
+            return self._failed("receipt contains ambiguous failed governance stages", [primary.receipt_id])
+
+        l4_outcome = l4_stages[0].outcome
+        if l4_outcome == DETERMINISTIC_STAGE_OUTCOME_VERIFIED:
+            observed_outcome = PolicyOutcome.ALLOW
+            observed_rejection_layer = None
+        elif l4_outcome == DETERMINISTIC_STAGE_OUTCOME_FAILED:
+            observed_outcome = PolicyOutcome.BLOCK
+            observed_rejection_layer = (
+                failed_layers[0] if failed_layers else RejectionLayer.L4_VERIFICATION
+            )
+        else:
+            return self._failed("L4 verification stage has an invalid outcome", [primary.receipt_id])
+
+        evidence_refs: list[str] = [primary.receipt_id]
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            if primary.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            if observed_outcome != PolicyOutcome.BLOCK:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observed_rejection_layer != assertion.expected_rejection_layer:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.credential_key_id != assertion.credential_key_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.declared_revocation_timestamp != assertion.declared_revocation_timestamp:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            observed = observation.observed
+            if assertion.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+                absent = observed.kind == StateEvidenceKind.LEDGER_CONSISTENCY and observed.consistent is False
+            else:
+                absent = observed.exists is False
+            if not absent:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"revoked-credential assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class EvidencePreservationGrader:
+    """Proves fail-closed behavior on evidence-preservation failure paths.
+
+    For each assertion the grader verifies that an evidence-preservation
+    failure is distinguished from evidence loss, the operation fails closed
+    (no evidence silently dropped), no unsafe continuation occurs, and the
+    measured outcome matches the declared outcome (evidence preserved, not
+    evidence lost). The observation must be verified, context-bound to the
+    attempt/run/task, collected at the declared collection boundary, carry
+    source evidence, and reference the declared preservation path.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.evidence_preservation_assertions
+        if not assertions:
+            return self._failed("evidence-preservation assertions are missing")
+
+        observations_by_assertion: dict[str, list[EvidencePreservationObservation]] = {}
+        for observation in context.evidence_preservation_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"evidence-preservation observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.preservation_path != assertion.preservation_path:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if assertion.expected_fail_closed and not observation.operation_refused:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_no_unsafe_continuation and observation.unsafe_continuation_detected:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.measured_outcome != assertion.expected_outcome:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"evidence-preservation assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
     ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
@@ -2707,6 +3298,10 @@ _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("stale_state_root", "1.0.0"): StaleStateRootGrader(),
     ("identity_mismatch", "1.0.0"): IdentityMismatchGrader(),
     ("nonce_expiration", "1.0.0"): NonceExpirationGrader(),
+    ("signer_defect", "1.0.0"): SignerDefectGrader(),
+    ("l3_proof_transplant", "1.0.0"): L3ProofTransplantGrader(),
+    ("revoked_credential", "1.0.0"): RevokedCredentialGrader(),
+    ("evidence_preservation", "1.0.0"): EvidencePreservationGrader(),
 }
 
 

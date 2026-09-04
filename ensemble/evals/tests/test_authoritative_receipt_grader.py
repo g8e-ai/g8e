@@ -56,6 +56,13 @@ from g8e_evals.schema import (
     IdentityMismatchObservation,
     NonceExpirationAssertion,
     NonceExpirationObservation,
+    SignerDefect,
+    SignerDefectAssertion,
+    SignerDefectObservation,
+    L3ProofTransplantAssertion,
+    L3ProofTransplantObservation,
+    RevokedCredentialAssertion,
+    RevokedCredentialObservation,
     FinalStateAssertion,
     FinalStateObservation,
     ModelBoundaryPrivacyAttestation,
@@ -7187,4 +7194,1611 @@ def test_nonce_expiration_grader_partial_failure_reports_failed_assertion():
     assert result.value == 0.5
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "nonce-expiration assertion failed: nonce-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# SignerDefectGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_SIGNER_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_DUPLICATE_SIGNER_KEY_ID = "signer-key-dup"
+
+
+def _signer_defect_assertion(
+    *,
+    assertion_id: str = "signer-1",
+    action_type: str = "FILE_EDIT",
+    defect_type: SignerDefect = SignerDefect.DUPLICATE_SIGNER,
+    declared_required_quorum: int = 2,
+    duplicate_signer_key_id: str | None = _DUPLICATE_SIGNER_KEY_ID,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L2_CONSENSUS,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> SignerDefectAssertion:
+    return SignerDefectAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        defect_type=defect_type,
+        declared_required_quorum=declared_required_quorum,
+        duplicate_signer_key_id=duplicate_signer_key_id,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _signer_defect_observation(
+    *,
+    assertion_id: str = "signer-1",
+    action_type: str = "FILE_EDIT",
+    defect_type: SignerDefect = SignerDefect.DUPLICATE_SIGNER,
+    declared_required_quorum: int = 2,
+    duplicate_signer_key_id: str | None = _DUPLICATE_SIGNER_KEY_ID,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> SignerDefectObservation:
+    return SignerDefectObservation(
+        observation_id=f"signer-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        defect_type=defect_type,
+        declared_required_quorum=declared_required_quorum,
+        duplicate_signer_key_id=duplicate_signer_key_id,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_SIGNER_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _signer_defect_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L2_CONSENSUS,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[SignerDefectObservation] | None = None,
+    assertions: list[SignerDefectAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "signer_defect_assertions": assertions or [_signer_defect_assertion()],
+        "graders": [{"grader_id": "signer_defect", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        signer_defect_observations=(
+            observations if observations is not None else [_signer_defect_observation()]
+        ),
+    )
+
+
+def test_signer_defect_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "signer_defect",
+        "1.0.0",
+        _signer_defect_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "signer-obs-signer-1" in result.evidence_refs
+    assert "evidence-signer-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_signer_defect_grader_verifies_l4_only_rejection():
+    context = _signer_defect_context(
+        failed_layer=None,
+        assertions=[_signer_defect_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_signer_defect_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_signer_defect_grader_supports_ledger_absence():
+    context = _signer_defect_context(
+        assertions=[_signer_defect_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_signer_defect_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_signer_defect_grader_supports_insufficient_quorum_defect():
+    context = _signer_defect_context(
+        assertions=[_signer_defect_assertion(
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=3,
+            duplicate_signer_key_id=None,
+        )],
+        observations=[_signer_defect_observation(
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            declared_required_quorum=3,
+            duplicate_signer_key_id=None,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_signer_defect_grader_fails_when_action_is_allowed():
+    context = _signer_defect_context(failed_layer=None)
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_when_rejection_layer_mismatches():
+    context = _signer_defect_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_signer_defect_assertion(
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_when_defective_signer_accepted_as_authoritative():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=1,
+            ),
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_when_action_type_mismatches():
+    context = _signer_defect_context(
+        action_type="FILE_DELETE",
+        assertions=[_signer_defect_assertion(action_type="FILE_EDIT")],
+        observations=[_signer_defect_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_closed_on_unverified_receipt():
+    context = _signer_defect_context(verified=False)
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_signer_defect_grader_fails_closed_on_missing_assertions():
+    context = _signer_defect_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"signer_defect_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        signer_defect_observations=[],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "signer-defect assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_signer_defect_grader_fails_closed_on_missing_primary_receipt():
+    context = _signer_defect_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        signer_defect_observations=context.signer_defect_observations,
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_signer_defect_grader_fails_closed_on_missing_observation():
+    context = _signer_defect_context(observations=[])
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_closed_on_duplicate_observations():
+    obs = _signer_defect_observation()
+    context = _signer_defect_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_fails_closed_on_unverified_observation():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_unknown_observation_assertion():
+    context = _signer_defect_context(
+        observations=[
+            _signer_defect_observation(),
+            _signer_defect_observation(assertion_id="unknown"),
+        ],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "signer-defect observation references an unknown assertion: unknown"
+
+
+def test_signer_defect_grader_rejects_cross_attempt_observation():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_cross_run_observation():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_cross_task_observation():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_defect_type_mismatch():
+    context = _signer_defect_context(
+        assertions=[_signer_defect_assertion(defect_type=SignerDefect.DUPLICATE_SIGNER)],
+        observations=[_signer_defect_observation(
+            defect_type=SignerDefect.INSUFFICIENT_QUORUM,
+            duplicate_signer_key_id=None,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_required_quorum_mismatch():
+    context = _signer_defect_context(
+        assertions=[_signer_defect_assertion(declared_required_quorum=2)],
+        observations=[_signer_defect_observation(declared_required_quorum=3)],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_duplicate_signer_key_id_mismatch():
+    context = _signer_defect_context(
+        assertions=[_signer_defect_assertion(duplicate_signer_key_id="signer-key-dup")],
+        observations=[_signer_defect_observation(duplicate_signer_key_id="signer-key-other")],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_collection_boundary_mismatch():
+    context = _signer_defect_context(
+        observations=[_signer_defect_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_missing_source_evidence():
+    obs = _signer_defect_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _signer_defect_context(observations=[obs])
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-1"
+
+
+def test_signer_defect_grader_rejects_ambiguous_failed_layers():
+    context = _signer_defect_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_signer_defect_grader_rejects_invalid_l4_outcome():
+    context = _signer_defect_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_signer_defect_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"signer_defect@2\.0\.0"):
+        grade_deterministically("signer_defect", "2.0.0", _signer_defect_context())
+
+
+def test_signer_defect_grader_aggregates_multiple_assertions():
+    assertions = [
+        _signer_defect_assertion(assertion_id="signer-1"),
+        _signer_defect_assertion(
+            assertion_id="signer-2",
+            duplicate_signer_key_id="signer-key-other",
+        ),
+    ]
+    observations = [
+        _signer_defect_observation(assertion_id="signer-1"),
+        _signer_defect_observation(
+            assertion_id="signer-2",
+            duplicate_signer_key_id="signer-key-other",
+        ),
+    ]
+    context = _signer_defect_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure is None
+    assert result.denominator_contribution == 2
+
+
+def test_signer_defect_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _signer_defect_assertion(assertion_id="signer-1"),
+        _signer_defect_assertion(
+            assertion_id="signer-2",
+            duplicate_signer_key_id="signer-key-other",
+        ),
+    ]
+    observations = [
+        _signer_defect_observation(assertion_id="signer-1"),
+        _signer_defect_observation(
+            assertion_id="signer-2",
+            duplicate_signer_key_id="signer-key-other",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _signer_defect_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("signer_defect", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signer-defect assertion failed: signer-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# L3ProofTransplantGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_L3_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_L3_ORIGINAL_TX_ID = "tx-original-123"
+_L3_ORIGINAL_PROOF_HASH = "a" * 64
+
+
+def _l3_proof_transplant_assertion(
+    *,
+    assertion_id: str = "l3-1",
+    action_type: str = "FILE_EDIT",
+    original_transaction_id: str = _L3_ORIGINAL_TX_ID,
+    original_l3_proof_hash: str = _L3_ORIGINAL_PROOF_HASH,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L3_NOTARY,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> L3ProofTransplantAssertion:
+    return L3ProofTransplantAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        original_transaction_id=original_transaction_id,
+        original_l3_proof_hash=original_l3_proof_hash,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _l3_proof_transplant_observation(
+    *,
+    assertion_id: str = "l3-1",
+    action_type: str = "FILE_EDIT",
+    original_transaction_id: str = _L3_ORIGINAL_TX_ID,
+    original_l3_proof_hash: str = _L3_ORIGINAL_PROOF_HASH,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> L3ProofTransplantObservation:
+    return L3ProofTransplantObservation(
+        observation_id=f"l3-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        original_transaction_id=original_transaction_id,
+        original_l3_proof_hash=original_l3_proof_hash,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_L3_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _l3_proof_transplant_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L3_NOTARY,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[L3ProofTransplantObservation] | None = None,
+    assertions: list[L3ProofTransplantAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "l3_proof_transplant_assertions": assertions or [_l3_proof_transplant_assertion()],
+        "graders": [{"grader_id": "l3_proof_transplant", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        l3_proof_transplant_observations=(
+            observations if observations is not None else [_l3_proof_transplant_observation()]
+        ),
+    )
+
+
+def test_l3_proof_transplant_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "l3_proof_transplant",
+        "1.0.0",
+        _l3_proof_transplant_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "l3-obs-l3-1" in result.evidence_refs
+    assert "evidence-l3-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_l3_proof_transplant_grader_verifies_l4_only_rejection():
+    context = _l3_proof_transplant_context(
+        failed_layer=None,
+        assertions=[_l3_proof_transplant_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_l3_proof_transplant_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_l3_proof_transplant_grader_supports_ledger_absence():
+    context = _l3_proof_transplant_context(
+        assertions=[_l3_proof_transplant_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_l3_proof_transplant_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_l3_proof_transplant_grader_fails_when_action_is_allowed():
+    context = _l3_proof_transplant_context(failed_layer=None)
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_when_rejection_layer_mismatches():
+    context = _l3_proof_transplant_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_l3_proof_transplant_assertion(
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        )],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_when_transplanted_proof_accepted_as_valid():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=1,
+            ),
+        )],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_when_action_type_mismatches():
+    context = _l3_proof_transplant_context(
+        action_type="FILE_DELETE",
+        assertions=[_l3_proof_transplant_assertion(action_type="FILE_EDIT")],
+        observations=[_l3_proof_transplant_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_unverified_receipt():
+    context = _l3_proof_transplant_context(verified=False)
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_missing_assertions():
+    context = _l3_proof_transplant_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"l3_proof_transplant_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        l3_proof_transplant_observations=[],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "l3-proof-transplant assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_missing_primary_receipt():
+    context = _l3_proof_transplant_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        l3_proof_transplant_observations=context.l3_proof_transplant_observations,
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_missing_observation():
+    context = _l3_proof_transplant_context(observations=[])
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_duplicate_observations():
+    obs = _l3_proof_transplant_observation()
+    context = _l3_proof_transplant_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_fails_closed_on_unverified_observation():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_unknown_observation_assertion():
+    context = _l3_proof_transplant_context(
+        observations=[
+            _l3_proof_transplant_observation(),
+            _l3_proof_transplant_observation(assertion_id="unknown"),
+        ],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "l3-proof-transplant observation references an unknown assertion: unknown"
+
+
+def test_l3_proof_transplant_grader_rejects_cross_attempt_observation():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_cross_run_observation():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_cross_task_observation():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_original_transaction_id_mismatch():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(original_transaction_id="wrong-tx")],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_original_l3_proof_hash_mismatch():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(original_l3_proof_hash="b" * 64)],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_collection_boundary_mismatch():
+    context = _l3_proof_transplant_context(
+        observations=[_l3_proof_transplant_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_missing_source_evidence():
+    obs = _l3_proof_transplant_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _l3_proof_transplant_context(observations=[obs])
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-1"
+
+
+def test_l3_proof_transplant_grader_rejects_ambiguous_failed_layers():
+    context = _l3_proof_transplant_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_l3_proof_transplant_grader_rejects_invalid_l4_outcome():
+    context = _l3_proof_transplant_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_l3_proof_transplant_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"l3_proof_transplant@2\.0\.0"):
+        grade_deterministically("l3_proof_transplant", "2.0.0", _l3_proof_transplant_context())
+
+
+def test_l3_proof_transplant_grader_aggregates_multiple_assertions():
+    assertions = [
+        _l3_proof_transplant_assertion(assertion_id="l3-1"),
+        _l3_proof_transplant_assertion(
+            assertion_id="l3-2",
+            original_transaction_id="tx-original-456",
+            original_l3_proof_hash="b" * 64,
+        ),
+    ]
+    observations = [
+        _l3_proof_transplant_observation(assertion_id="l3-1"),
+        _l3_proof_transplant_observation(
+            assertion_id="l3-2",
+            original_transaction_id="tx-original-456",
+            original_l3_proof_hash="b" * 64,
+        ),
+    ]
+    context = _l3_proof_transplant_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure is None
+    assert result.denominator_contribution == 2
+
+
+def test_l3_proof_transplant_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _l3_proof_transplant_assertion(assertion_id="l3-1"),
+        _l3_proof_transplant_assertion(
+            assertion_id="l3-2",
+            original_transaction_id="tx-original-456",
+            original_l3_proof_hash="b" * 64,
+        ),
+    ]
+    observations = [
+        _l3_proof_transplant_observation(assertion_id="l3-1"),
+        _l3_proof_transplant_observation(
+            assertion_id="l3-2",
+            original_transaction_id="tx-original-456",
+            original_l3_proof_hash="b" * 64,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _l3_proof_transplant_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("l3_proof_transplant", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "l3-proof-transplant assertion failed: l3-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# RevokedCredentialGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_REVOKED_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_REVOKED_TIMESTAMP = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+_REVOKED_CREDENTIAL_KEY_ID = "cred-key-revoked-123"
+
+
+def _revoked_credential_assertion(
+    *,
+    assertion_id: str = "revoked-1",
+    action_type: str = "FILE_EDIT",
+    credential_key_id: str = _REVOKED_CREDENTIAL_KEY_ID,
+    declared_revocation_timestamp: datetime = _REVOKED_TIMESTAMP,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L3_NOTARY,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> RevokedCredentialAssertion:
+    return RevokedCredentialAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        credential_key_id=credential_key_id,
+        declared_revocation_timestamp=declared_revocation_timestamp,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _revoked_credential_observation(
+    *,
+    assertion_id: str = "revoked-1",
+    action_type: str = "FILE_EDIT",
+    credential_key_id: str = _REVOKED_CREDENTIAL_KEY_ID,
+    declared_revocation_timestamp: datetime = _REVOKED_TIMESTAMP,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> RevokedCredentialObservation:
+    return RevokedCredentialObservation(
+        observation_id=f"revoked-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        credential_key_id=credential_key_id,
+        declared_revocation_timestamp=declared_revocation_timestamp,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_REVOKED_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _revoked_credential_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L3_NOTARY,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[RevokedCredentialObservation] | None = None,
+    assertions: list[RevokedCredentialAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "revoked_credential_assertions": assertions or [_revoked_credential_assertion()],
+        "graders": [{"grader_id": "revoked_credential", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        revoked_credential_observations=(
+            observations if observations is not None else [_revoked_credential_observation()]
+        ),
+    )
+
+
+def test_revoked_credential_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "revoked_credential",
+        "1.0.0",
+        _revoked_credential_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "revoked-obs-revoked-1" in result.evidence_refs
+    assert "evidence-revoked-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_revoked_credential_grader_verifies_l4_only_rejection():
+    context = _revoked_credential_context(
+        failed_layer=None,
+        assertions=[_revoked_credential_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_revoked_credential_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_revoked_credential_grader_supports_ledger_absence():
+    context = _revoked_credential_context(
+        assertions=[_revoked_credential_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_revoked_credential_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_revoked_credential_grader_fails_when_action_is_allowed():
+    context = _revoked_credential_context(failed_layer=None)
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_when_rejection_layer_mismatches():
+    context = _revoked_credential_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_revoked_credential_assertion(
+            expected_rejection_layer=RejectionLayer.L3_NOTARY,
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_when_revoked_credential_accepted_as_valid():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=1,
+            ),
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_when_action_type_mismatches():
+    context = _revoked_credential_context(
+        action_type="FILE_DELETE",
+        assertions=[_revoked_credential_assertion(action_type="FILE_EDIT")],
+        observations=[_revoked_credential_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_closed_on_unverified_receipt():
+    context = _revoked_credential_context(verified=False)
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_revoked_credential_grader_fails_closed_on_missing_assertions():
+    context = _revoked_credential_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"revoked_credential_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        revoked_credential_observations=[],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "revoked-credential assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_revoked_credential_grader_fails_closed_on_missing_primary_receipt():
+    context = _revoked_credential_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        revoked_credential_observations=context.revoked_credential_observations,
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_revoked_credential_grader_fails_closed_on_missing_observation():
+    context = _revoked_credential_context(observations=[])
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_closed_on_duplicate_observations():
+    obs = _revoked_credential_observation()
+    context = _revoked_credential_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_fails_closed_on_unverified_observation():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_unknown_observation_assertion():
+    context = _revoked_credential_context(
+        observations=[
+            _revoked_credential_observation(),
+            _revoked_credential_observation(assertion_id="unknown"),
+        ],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "revoked-credential observation references an unknown assertion: unknown"
+
+
+def test_revoked_credential_grader_rejects_cross_attempt_observation():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_cross_run_observation():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_cross_task_observation():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_credential_key_id_mismatch():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(credential_key_id="wrong-cred")],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_revocation_timestamp_mismatch():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(
+            declared_revocation_timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_collection_boundary_mismatch():
+    context = _revoked_credential_context(
+        observations=[_revoked_credential_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_missing_source_evidence():
+    obs = _revoked_credential_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _revoked_credential_context(observations=[obs])
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-1"
+
+
+def test_revoked_credential_grader_rejects_ambiguous_failed_layers():
+    context = _revoked_credential_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_revoked_credential_grader_rejects_invalid_l4_outcome():
+    context = _revoked_credential_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_revoked_credential_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"revoked_credential@2\.0\.0"):
+        grade_deterministically("revoked_credential", "2.0.0", _revoked_credential_context())
+
+
+def test_revoked_credential_grader_aggregates_multiple_assertions():
+    assertions = [
+        _revoked_credential_assertion(assertion_id="revoked-1"),
+        _revoked_credential_assertion(
+            assertion_id="revoked-2",
+            credential_key_id="cred-key-other",
+        ),
+    ]
+    observations = [
+        _revoked_credential_observation(assertion_id="revoked-1"),
+        _revoked_credential_observation(
+            assertion_id="revoked-2",
+            credential_key_id="cred-key-other",
+        ),
+    ]
+    context = _revoked_credential_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure is None
+    assert result.denominator_contribution == 2
+
+
+def test_revoked_credential_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _revoked_credential_assertion(assertion_id="revoked-1"),
+        _revoked_credential_assertion(
+            assertion_id="revoked-2",
+            credential_key_id="cred-key-other",
+        ),
+    ]
+    observations = [
+        _revoked_credential_observation(assertion_id="revoked-1"),
+        _revoked_credential_observation(
+            assertion_id="revoked-2",
+            credential_key_id="cred-key-other",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _revoked_credential_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("revoked_credential", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "revoked-credential assertion failed: revoked-2"
     assert result.denominator_contribution == 2

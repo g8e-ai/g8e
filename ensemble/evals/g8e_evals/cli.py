@@ -68,6 +68,9 @@ from g8e_evals.schema import (
     StaleStateRootObservation,
     IdentityMismatchObservation,
     NonceExpirationObservation,
+    SignerDefectObservation,
+    L3ProofTransplantObservation,
+    RevokedCredentialObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -125,6 +128,9 @@ _PAYLOAD_TAMPERING_GRADER_ID = "payload_tampering"
 _STALE_STATE_ROOT_GRADER_ID = "stale_state_root"
 _IDENTITY_MISMATCH_GRADER_ID = "identity_mismatch"
 _NONCE_EXPIRATION_GRADER_ID = "nonce_expiration"
+_SIGNER_DEFECT_GRADER_ID = "signer_defect"
+_L3_PROOF_TRANSPLANT_GRADER_ID = "l3_proof_transplant"
+_REVOKED_CREDENTIAL_GRADER_ID = "revoked_credential"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -601,6 +607,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.stale_state_root_assertions
                     or t.metadata.identity_mismatch_assertions
                     or t.metadata.nonce_expiration_assertions
+                    or t.metadata.signer_defect_assertions
+                    or t.metadata.l3_proof_transplant_assertions
+                    or t.metadata.revoked_credential_assertions
                 )
                 else ALL_ARMS
             ),
@@ -628,6 +637,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             stale_state_root_assertions=t.metadata.stale_state_root_assertions,
             identity_mismatch_assertions=t.metadata.identity_mismatch_assertions,
             nonce_expiration_assertions=t.metadata.nonce_expiration_assertions,
+            signer_defect_assertions=t.metadata.signer_defect_assertions,
+            l3_proof_transplant_assertions=t.metadata.l3_proof_transplant_assertions,
+            revoked_credential_assertions=t.metadata.revoked_credential_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -795,6 +807,27 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.nonce_expiration_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_SIGNER_DEFECT_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.signer_defect_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_L3_PROOF_TRANSPLANT_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.l3_proof_transplant_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_REVOKED_CREDENTIAL_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.revoked_credential_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -826,6 +859,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     stale_state_root_records: list[StaleStateRootObservation] = []
     identity_mismatch_records: list[IdentityMismatchObservation] = []
     nonce_expiration_records: list[NonceExpirationObservation] = []
+    signer_defect_records: list[SignerDefectObservation] = []
+    l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
+    revoked_credential_records: list[RevokedCredentialObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1233,6 +1269,33 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         nonce_expiration_records.extend(nonce_expiration_observations)
         attempt.nonce_expiration_observation_refs = [
             observation.observation_id for observation in nonce_expiration_observations
+        ]
+        signer_defect_observations = (
+            await config.signer_defect_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.signer_defect_assertions and config.signer_defect_observer is not None
+            else []
+        )
+        signer_defect_records.extend(signer_defect_observations)
+        attempt.signer_defect_observation_refs = [
+            observation.observation_id for observation in signer_defect_observations
+        ]
+        l3_proof_transplant_observations = (
+            await config.l3_proof_transplant_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.l3_proof_transplant_assertions and config.l3_proof_transplant_observer is not None
+            else []
+        )
+        l3_proof_transplant_records.extend(l3_proof_transplant_observations)
+        attempt.l3_proof_transplant_observation_refs = [
+            observation.observation_id for observation in l3_proof_transplant_observations
+        ]
+        revoked_credential_observations = (
+            await config.revoked_credential_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.revoked_credential_assertions and config.revoked_credential_observer is not None
+            else []
+        )
+        revoked_credential_records.extend(revoked_credential_observations)
+        attempt.revoked_credential_observation_refs = [
+            observation.observation_id for observation in revoked_credential_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1809,6 +1872,84 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=nonce_expiration_grade.evidence_refs,
             ))
+        if task.metadata.signer_defect_assertions:
+            signer_defect_grade = grade_deterministically(
+                _SIGNER_DEFECT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    signer_defect_observations=signer_defect_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_SIGNER_DEFECT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=signer_defect_grade.value,
+                unit="proportion",
+                eligible=signer_defect_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=signer_defect_grade.denominator_contribution,
+                verification_status=signer_defect_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=signer_defect_grade.evidence_refs,
+            ))
+        if task.metadata.l3_proof_transplant_assertions:
+            l3_proof_transplant_grade = grade_deterministically(
+                _L3_PROOF_TRANSPLANT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    l3_proof_transplant_observations=l3_proof_transplant_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_L3_PROOF_TRANSPLANT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=l3_proof_transplant_grade.value,
+                unit="proportion",
+                eligible=l3_proof_transplant_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=l3_proof_transplant_grade.denominator_contribution,
+                verification_status=l3_proof_transplant_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=l3_proof_transplant_grade.evidence_refs,
+            ))
+        if task.metadata.revoked_credential_assertions:
+            revoked_credential_grade = grade_deterministically(
+                _REVOKED_CREDENTIAL_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    revoked_credential_observations=revoked_credential_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_REVOKED_CREDENTIAL_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=revoked_credential_grade.value,
+                unit="proportion",
+                eligible=revoked_credential_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=revoked_credential_grade.denominator_contribution,
+                verification_status=revoked_credential_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=revoked_credential_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1904,6 +2045,18 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
         for observation in nonce_expiration_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
+        for observation in signer_defect_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "l3-proof-transplant-observations.jsonl", "w") as f:
+        for observation in l3_proof_transplant_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
+        for observation in revoked_credential_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

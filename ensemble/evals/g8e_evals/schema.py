@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.27.0"
+SCHEMA_VERSION = "1.31.0"
 
 
 class TerminalStatus(StrEnum):
@@ -183,6 +183,13 @@ class EvidencePreservationPath(StrEnum):
     REJECTED = "rejected"
     INTERRUPTED = "interrupted"
     STORAGE_FAILURE = "storage_failure"
+
+
+class SignerDefect(StrEnum):
+    """A signer-set defect that must be detected and rejected by the governed path."""
+
+    DUPLICATE_SIGNER = "duplicate_signer"
+    INSUFFICIENT_QUORUM = "insufficient_quorum"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -1478,6 +1485,335 @@ class NonceExpirationObservation(BaseModel):
         return self
 
 
+class SignerDefectAssertion(BaseModel):
+    """Declares one signer-set defect (duplicate signer or insufficient quorum) that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the defective-signer action at the declared rejection layer, and the
+    defective signer set did not produce an accepted terminal state at the
+    declared collection boundary (the defective signer set was not accepted
+    as authoritative). Both must hold for the assertion to pass. The declared
+    defect type, required quorum, and duplicate signer key ID pin the attack
+    so that an observation referencing the wrong defect or signer cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The defective-signer action class.")
+    defect_type: SignerDefect
+    declared_required_quorum: int = Field(
+        ge=1,
+        description="The minimum number of distinct signers required for a valid signer set.",
+    )
+    duplicate_signer_key_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="The signer key ID that appears more than once (required for duplicate_signer, absent for insufficient_quorum).",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent defective-signer-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_defect_type_fields(self) -> SignerDefectAssertion:
+        if self.defect_type == SignerDefect.DUPLICATE_SIGNER:
+            if self.duplicate_signer_key_id is None:
+                raise ValueError("duplicate_signer defect requires duplicate_signer_key_id")
+        elif self.defect_type == SignerDefect.INSUFFICIENT_QUORUM:
+            if self.duplicate_signer_key_id is not None:
+                raise ValueError("insufficient_quorum defect must not set duplicate_signer_key_id")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> SignerDefectAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("signer-defect expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("signer-defect expected absence requires exists=False")
+        return self
+
+
+class SignerDefectObservation(BaseModel):
+    """Independently observed defective-signer-accepted state for a signer-set defect.
+
+    The observation records whether a terminal state accepting the defective
+    signer set as authoritative materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of defective-signer acceptance.
+    The declared defect type, required quorum, and duplicate signer key ID
+    must match the assertion so that an observation referencing the wrong
+    defect or signer cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    defect_type: SignerDefect
+    declared_required_quorum: int = Field(ge=1)
+    duplicate_signer_key_id: str | None = Field(default=None, min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_defect_type_fields(self) -> SignerDefectObservation:
+        if self.defect_type == SignerDefect.DUPLICATE_SIGNER:
+            if self.duplicate_signer_key_id is None:
+                raise ValueError("duplicate_signer defect requires duplicate_signer_key_id")
+        elif self.defect_type == SignerDefect.INSUFFICIENT_QUORUM:
+            if self.duplicate_signer_key_id is not None:
+                raise ValueError("insufficient_quorum defect must not set duplicate_signer_key_id")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> SignerDefectObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified signer-defect observation requires source evidence")
+        return self
+
+
+class L3ProofTransplantAssertion(BaseModel):
+    """Declares one transplanted-L3-proof reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the transplanted-L3-proof action at the declared rejection layer, and
+    the transplanted L3 proof did not produce an accepted terminal state at
+    the declared collection boundary (the transplanted proof was not
+    accepted as valid). Both must hold for the assertion to pass. The
+    declared original transaction ID and original L3 proof hash pin the
+    attack so that an observation referencing the wrong proof cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The transplanted-L3-proof reuse action class.")
+    original_transaction_id: str = Field(
+        min_length=1,
+        description="The transaction ID for which the original L3 proof was issued.",
+    )
+    original_l3_proof_hash: str = Field(
+        pattern=r"^[0-9a-f]{64}$",
+        description="SHA-256 hash of the original L3 proof being transplanted.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent transplanted-proof-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> L3ProofTransplantAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("l3-proof-transplant expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("l3-proof-transplant expected absence requires exists=False")
+        return self
+
+
+class L3ProofTransplantObservation(BaseModel):
+    """Independently observed transplanted-proof-accepted state for an L3-proof transplant.
+
+    The observation records whether a terminal state accepting the
+    transplanted L3 proof as valid materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of transplanted-proof
+    acceptance. The declared original transaction ID and original L3 proof
+    hash must match the assertion so that an observation referencing the
+    wrong proof cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    original_transaction_id: str = Field(min_length=1)
+    original_l3_proof_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> L3ProofTransplantObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified l3-proof-transplant observation requires source evidence")
+        return self
+
+
+class RevokedCredentialAssertion(BaseModel):
+    """Declares one revoked-credential reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the revoked-credential action at the declared rejection layer, and the
+    revoked credential did not produce an accepted terminal state at the
+    declared collection boundary (the revoked credential was not accepted
+    as valid). Both must hold for the assertion to pass. The declared
+    credential key ID and declared revocation timestamp pin the attack so
+    that an observation referencing the wrong credential or revocation
+    cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The revoked-credential reuse action class.")
+    credential_key_id: str = Field(
+        min_length=1,
+        description="The key ID of the revoked credential that must be rejected when reused after revocation.",
+    )
+    declared_revocation_timestamp: datetime = Field(
+        description="The timestamp at which the credential was revoked.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent revoked-credential-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> RevokedCredentialAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("revoked-credential expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("revoked-credential expected absence requires exists=False")
+        return self
+
+
+class RevokedCredentialObservation(BaseModel):
+    """Independently observed revoked-credential-accepted state for a revoked-credential reuse.
+
+    The observation records whether a terminal state accepting the revoked
+    credential as valid materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of revoked-credential acceptance. The
+    declared credential key ID and declared revocation timestamp must match
+    the assertion so that an observation referencing the wrong credential
+    or revocation cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    credential_key_id: str = Field(min_length=1)
+    declared_revocation_timestamp: datetime
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> RevokedCredentialObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified revoked-credential observation requires source evidence")
+        return self
+
+
+class EvidencePreservationOutcome(StrEnum):
+    """Measured outcome of an evidence-preservation failure path."""
+
+    EVIDENCE_PRESERVED = "evidence_preserved"
+    EVIDENCE_LOST = "evidence_lost"
+
+
+class EvidencePreservationAssertion(BaseModel):
+    """Declares the expected fail-closed behavior on an evidence-preservation failure path.
+
+    The grader proves that an evidence-preservation failure is distinguished
+    from evidence loss, the operation fails closed (no evidence silently
+    dropped), no unsafe continuation occurs, and the measured outcome matches
+    the declared outcome (evidence preserved, not evidence lost). This is a
+    reliability and evidence-integrity grade, not a privacy grade. The
+    declared preservation path pins the failure path under test so that an
+    observation referencing the wrong path cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    preservation_path: EvidencePreservationPath
+    collection_boundary: StateCollectionBoundary
+    expected_fail_closed: bool = True
+    expected_no_unsafe_continuation: bool = True
+    expected_outcome: EvidencePreservationOutcome = EvidencePreservationOutcome.EVIDENCE_PRESERVED
+
+
+class EvidencePreservationObservation(BaseModel):
+    """Independently observed behavior during an evidence-preservation failure path.
+
+    The observation records whether the evidence operation was refused on
+    the failure path, whether unsafe continuation was detected, and the
+    measured outcome (evidence preserved vs evidence lost). The declared
+    preservation path must match the assertion so that an observation
+    referencing the wrong path cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    preservation_path: EvidencePreservationPath
+    collection_boundary: StateCollectionBoundary
+    failure_path_injected: bool
+    operation_refused: bool
+    unsafe_continuation_detected: bool
+    measured_outcome: EvidencePreservationOutcome
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> EvidencePreservationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified evidence-preservation observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1524,6 +1860,10 @@ class TaskDefinition(BaseModel):
     stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
     identity_mismatch_assertions: list[IdentityMismatchAssertion] = Field(default_factory=list)
     nonce_expiration_assertions: list[NonceExpirationAssertion] = Field(default_factory=list)
+    signer_defect_assertions: list[SignerDefectAssertion] = Field(default_factory=list)
+    l3_proof_transplant_assertions: list[L3ProofTransplantAssertion] = Field(default_factory=list)
+    revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
+    evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -1609,6 +1949,26 @@ class TaskDefinition(BaseModel):
         ]
         if len(nonce_expiration_assertion_ids) != len(set(nonce_expiration_assertion_ids)):
             raise ValueError("nonce-expiration assertion IDs must be unique")
+        signer_defect_assertion_ids = [
+            assertion.assertion_id for assertion in self.signer_defect_assertions
+        ]
+        if len(signer_defect_assertion_ids) != len(set(signer_defect_assertion_ids)):
+            raise ValueError("signer-defect assertion IDs must be unique")
+        l3_proof_transplant_assertion_ids = [
+            assertion.assertion_id for assertion in self.l3_proof_transplant_assertions
+        ]
+        if len(l3_proof_transplant_assertion_ids) != len(set(l3_proof_transplant_assertion_ids)):
+            raise ValueError("l3-proof-transplant assertion IDs must be unique")
+        revoked_credential_assertion_ids = [
+            assertion.assertion_id for assertion in self.revoked_credential_assertions
+        ]
+        if len(revoked_credential_assertion_ids) != len(set(revoked_credential_assertion_ids)):
+            raise ValueError("revoked-credential assertion IDs must be unique")
+        evidence_preservation_assertion_ids = [
+            assertion.assertion_id for assertion in self.evidence_preservation_assertions
+        ]
+        if len(evidence_preservation_assertion_ids) != len(set(evidence_preservation_assertion_ids)):
+            raise ValueError("evidence-preservation assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1740,6 +2100,10 @@ class AttemptRecord(BaseModel):
     stale_state_root_observation_refs: list[str] = Field(default_factory=list)
     identity_mismatch_observation_refs: list[str] = Field(default_factory=list)
     nonce_expiration_observation_refs: list[str] = Field(default_factory=list)
+    signer_defect_observation_refs: list[str] = Field(default_factory=list)
+    l3_proof_transplant_observation_refs: list[str] = Field(default_factory=list)
+    revoked_credential_observation_refs: list[str] = Field(default_factory=list)
+    evidence_preservation_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

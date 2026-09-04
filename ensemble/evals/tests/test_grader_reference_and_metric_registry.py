@@ -295,6 +295,9 @@ _CURRENT_METRIC_IDS = [
     "stale_state_root",
     "identity_mismatch",
     "nonce_expiration",
+    "signer_defect",
+    "l3_proof_transplant",
+    "revoked_credential",
 ]
 
 
