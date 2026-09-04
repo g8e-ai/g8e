@@ -286,6 +286,7 @@ _CURRENT_METRIC_IDS = [
     "unauthorized_mutation",
     "token_store_persistence",
     "token_ttl_expiry",
+    "token_persistence_failure",
 ]
 
 

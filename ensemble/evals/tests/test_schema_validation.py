@@ -62,6 +62,9 @@ from g8e_evals.schema import (
     TokenStorePersistenceObservation,
     TokenTTLExpiryAssertion,
     TokenTTLExpiryObservation,
+    TokenPersistenceFailureAssertion,
+    TokenPersistenceFailureObservation,
+    TokenPersistenceFailureOutcome,
     UsageReconciliation,
     VerificationStatus,
 )
@@ -1057,3 +1060,102 @@ def test_attempt_record_links_token_ttl_expiry_observations():
     )
 
     assert attempt.token_ttl_expiry_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# TokenPersistenceFailureAssertion / TokenPersistenceFailureObservation
+# ---------------------------------------------------------------------------
+
+
+def test_token_persistence_failure_assertion_and_observation_round_trip():
+    assertion = TokenPersistenceFailureAssertion(
+        assertion_id="token-persist-fail-1",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_fail_closed=True,
+        expected_rollback=True,
+        expected_no_sensitive_leak=True,
+        expected_no_unsafe_continuation=True,
+        expected_failure_outcome=TokenPersistenceFailureOutcome.STORAGE_FAILURE,
+    )
+    observation = TokenPersistenceFailureObservation(
+        observation_id="token-persist-fail-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        storage_failure_injected=True,
+        operation_refused=True,
+        in_memory_token_rolled_back=True,
+        sensitive_value_leaked=False,
+        unsafe_continuation_detected=False,
+        measured_failure_outcome=TokenPersistenceFailureOutcome.STORAGE_FAILURE,
+        collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+        source_evidence_refs=["restricted-persist-fail-evidence"],
+        source_evidence_sha256="d" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = TokenPersistenceFailureAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = TokenPersistenceFailureObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_token_persistence_failure_assertion_rejects_wrong_collection_boundary():
+    with pytest.raises(ValidationError, match="encrypted-token-store collection boundary"):
+        TokenPersistenceFailureAssertion(
+            assertion_id="token-persist-fail-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_verified_token_persistence_failure_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified token persistence failure observation requires source evidence",
+    ):
+        TokenPersistenceFailureObservation(
+            observation_id="token-persist-fail-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="token-persist-fail-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            storage_failure_injected=True,
+            operation_refused=True,
+            in_memory_token_rolled_back=True,
+            sensitive_value_leaked=False,
+            unsafe_continuation_detected=False,
+            measured_failure_outcome=TokenPersistenceFailureOutcome.STORAGE_FAILURE,
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_token_persistence_failure_assertion_ids():
+    assertion = TokenPersistenceFailureAssertion(
+        assertion_id="duplicate",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    )
+    with pytest.raises(ValidationError, match="token persistence failure assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            token_persistence_failure_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_token_persistence_failure_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        token_persistence_failure_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.token_persistence_failure_observation_refs == ["observation-1", "observation-2"]

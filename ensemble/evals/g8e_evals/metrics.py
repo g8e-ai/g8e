@@ -442,6 +442,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["token_ttl_expiry_observation", "token_ttl_expiry_assertion"],
         release_threshold="Practical threshold: 1.0; any token TTL expiry failure is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="token_persistence_failure",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of token persistence failure assertions where the independently observed behavior on an injected storage failure proves fail-closed handling: the operation is refused, in-memory state is rolled back, no sensitive value leaks, no unsafe continuation occurs, and the measured failure outcome is a storage failure rather than a measured privacy failure.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("token_persistence_failure"),
+        eligible_population="All attempts with declared token persistence failure assertions and a verified token persistence failure observation.",
+        denominator="Total number of declared token persistence failure assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["token_persistence_failure_observation", "token_persistence_failure_assertion"],
+        release_threshold="Practical threshold: 1.0; any token persistence failure handling that does not fail closed is a release blocker.",
+    ),
 ]
 
 

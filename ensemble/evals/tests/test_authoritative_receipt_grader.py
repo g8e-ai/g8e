@@ -74,6 +74,9 @@ from g8e_evals.schema import (
     TokenStorePersistenceObservation,
     TokenTTLExpiryAssertion,
     TokenTTLExpiryObservation,
+    TokenPersistenceFailureAssertion,
+    TokenPersistenceFailureObservation,
+    TokenPersistenceFailureOutcome,
     VerificationStatus,
     GraderReference,
 )
@@ -2733,6 +2736,396 @@ def test_token_ttl_expiry_grader_passes_when_invisibility_not_required():
     )
 
     result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+# ---------------------------------------------------------------------------
+# TokenPersistenceFailureGrader
+# ---------------------------------------------------------------------------
+
+
+_PERSIST_FAIL_COLLECTED = datetime(2026, 9, 3, 13, 6, tzinfo=UTC)
+
+
+def _token_persistence_failure_assertion(
+    *,
+    assertion_id: str = "token-persist-fail-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    expected_fail_closed: bool = True,
+    expected_rollback: bool = True,
+    expected_no_sensitive_leak: bool = True,
+    expected_no_unsafe_continuation: bool = True,
+    expected_failure_outcome: TokenPersistenceFailureOutcome = TokenPersistenceFailureOutcome.STORAGE_FAILURE,
+) -> TokenPersistenceFailureAssertion:
+    return TokenPersistenceFailureAssertion(
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        expected_fail_closed=expected_fail_closed,
+        expected_rollback=expected_rollback,
+        expected_no_sensitive_leak=expected_no_sensitive_leak,
+        expected_no_unsafe_continuation=expected_no_unsafe_continuation,
+        expected_failure_outcome=expected_failure_outcome,
+    )
+
+
+def _token_persistence_failure_observation(
+    *,
+    assertion_id: str = "token-persist-fail-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    storage_failure_injected: bool = True,
+    operation_refused: bool = True,
+    in_memory_token_rolled_back: bool = True,
+    sensitive_value_leaked: bool = False,
+    unsafe_continuation_detected: bool = False,
+    measured_failure_outcome: TokenPersistenceFailureOutcome = TokenPersistenceFailureOutcome.STORAGE_FAILURE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "e" * 64,
+) -> TokenPersistenceFailureObservation:
+    return TokenPersistenceFailureObservation(
+        observation_id=f"token-persist-fail-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        storage_failure_injected=storage_failure_injected,
+        operation_refused=operation_refused,
+        in_memory_token_rolled_back=in_memory_token_rolled_back,
+        sensitive_value_leaked=sensitive_value_leaked,
+        unsafe_continuation_detected=unsafe_continuation_detected,
+        measured_failure_outcome=measured_failure_outcome,
+        collected_at=_PERSIST_FAIL_COLLECTED,
+        source_evidence_refs=source_evidence_refs or ["evidence-persist-fail-1"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _token_persistence_failure_context(
+    *,
+    observations: list[TokenPersistenceFailureObservation] | None = None,
+    assertions: list[TokenPersistenceFailureAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context()
+    task = context.task.model_copy(update={
+        "token_persistence_failure_assertions": assertions or [_token_persistence_failure_assertion()],
+        "graders": [{"grader_id": "token_persistence_failure", "grader_version": "1.0.0"}],
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        token_persistence_failure_observations=(
+            observations if observations is not None else [_token_persistence_failure_observation()]
+        ),
+    )
+
+
+def test_token_persistence_failure_grader_verifies_fail_closed_behavior():
+    result = grade_deterministically(
+        "token_persistence_failure",
+        "1.0.0",
+        _token_persistence_failure_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "token-persist-fail-obs-token-persist-fail-1" in result.evidence_refs
+    assert "evidence-persist-fail-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_token_persistence_failure_grader_fails_when_operation_not_refused():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(operation_refused=False)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_when_rollback_missing():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(in_memory_token_rolled_back=False)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_when_sensitive_value_leaks():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(sensitive_value_leaked=True)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_when_unsafe_continuation_detected():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(unsafe_continuation_detected=True)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_when_measured_outcome_is_privacy_failure():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(
+            measured_failure_outcome=TokenPersistenceFailureOutcome.PRIVACY_FAILURE,
+        )],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_closed_on_missing_assertions():
+    context = _token_persistence_failure_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"token_persistence_failure_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token persistence failure assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_token_persistence_failure_grader_fails_closed_on_missing_observation():
+    context = _token_persistence_failure_context(observations=[])
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_closed_on_duplicate_observations():
+    obs = _token_persistence_failure_observation()
+    context = _token_persistence_failure_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_fails_closed_on_unverified_observation():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_unknown_observation_assertion():
+    context = _token_persistence_failure_context(
+        observations=[
+            _token_persistence_failure_observation(),
+            _token_persistence_failure_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token persistence failure observation references an unknown assertion: unknown"
+
+
+def test_token_persistence_failure_grader_rejects_cross_attempt_observation():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_cross_run_observation():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_cross_task_observation():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_collection_boundary_mismatch():
+    context = _token_persistence_failure_context(
+        observations=[_token_persistence_failure_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_missing_source_evidence():
+    obs = _token_persistence_failure_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _token_persistence_failure_context(observations=[obs])
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-1"
+
+
+def test_token_persistence_failure_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"token_persistence_failure@2\.0\.0"):
+        grade_deterministically("token_persistence_failure", "2.0.0", _token_persistence_failure_context())
+
+
+def test_token_persistence_failure_grader_aggregates_multiple_assertions():
+    assertions = [
+        _token_persistence_failure_assertion(assertion_id="token-persist-fail-1"),
+        _token_persistence_failure_assertion(assertion_id="token-persist-fail-2"),
+    ]
+    observations = [
+        _token_persistence_failure_observation(assertion_id="token-persist-fail-1"),
+        _token_persistence_failure_observation(assertion_id="token-persist-fail-2"),
+    ]
+    context = _token_persistence_failure_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_token_persistence_failure_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _token_persistence_failure_assertion(assertion_id="token-persist-fail-1"),
+        _token_persistence_failure_assertion(assertion_id="token-persist-fail-2"),
+    ]
+    observations = [
+        _token_persistence_failure_observation(assertion_id="token-persist-fail-1"),
+        _token_persistence_failure_observation(
+            assertion_id="token-persist-fail-2",
+            operation_refused=False,
+        ),
+    ]
+    context = _token_persistence_failure_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token persistence failure assertion failed: token-persist-fail-2"
+    assert result.denominator_contribution == 2
+
+
+def test_token_persistence_failure_grader_passes_when_fail_closed_not_required():
+    context = _token_persistence_failure_context(
+        assertions=[_token_persistence_failure_assertion(expected_fail_closed=False)],
+        observations=[_token_persistence_failure_observation(operation_refused=False)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_persistence_failure_grader_passes_when_rollback_not_required():
+    context = _token_persistence_failure_context(
+        assertions=[_token_persistence_failure_assertion(expected_rollback=False)],
+        observations=[_token_persistence_failure_observation(in_memory_token_rolled_back=False)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_persistence_failure_grader_passes_when_no_sensitive_leak_not_required():
+    context = _token_persistence_failure_context(
+        assertions=[_token_persistence_failure_assertion(expected_no_sensitive_leak=False)],
+        observations=[_token_persistence_failure_observation(sensitive_value_leaked=True)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_persistence_failure_grader_passes_when_no_unsafe_continuation_not_required():
+    context = _token_persistence_failure_context(
+        assertions=[_token_persistence_failure_assertion(expected_no_unsafe_continuation=False)],
+        observations=[_token_persistence_failure_observation(unsafe_continuation_detected=True)],
+    )
+
+    result = grade_deterministically("token_persistence_failure", "1.0.0", context)
 
     assert result.value == 1.0
     assert result.verification_status == VerificationStatus.VERIFIED
