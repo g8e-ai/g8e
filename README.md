@@ -271,14 +271,14 @@ The following sections present bounded, verifiable evidence that g8e operates as
 
 | Property | Value |
 | --- | --- |
-| Evidence cutoff | 2026-09-04T21:39:14Z |
+| Evidence cutoff | 2026-09-04T22:26:33Z |
 | Platform version | 2.1.3 |
 | Publication schema | 1.0.0 |
 | README evidence version | 1.0.0 |
 | Eval schema version | 1.33.0 |
 | Suite version | 5eee4bb14500 |
 | Selected eval runs | a4a5e9ac-ca27-4f52-874f-46a19f3442da, d395af9e-bb88-4cda-9629-aa1bf7ee5df4 |
-| Selected demo runs | healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 |
+| Selected demo runs | fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496, healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 |
 | Source revision | (not populated) |
 | Source tree hash | (not populated) |
 | Dataset hash | 5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37 |
@@ -336,6 +336,7 @@ The following scenarios are backed by canonical `ComplianceVerificationReport` r
 | Run ID | Environment | Scenario | Verifier | Version | Valid | Failures |
 | --- | --- | --- | --- | --- | --- | --- |
 | healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 | healthcare-synthetic | healthcare-demo | g8e-demo-run-verifier | 1.0.0 | yes | 0 |
+| fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496 | fedramp-synthetic | fedramp-demo | g8e-demo-run-verifier | 1.0.0 | yes | 0 |
 
 ### CI and Reproducibility
 

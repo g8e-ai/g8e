@@ -1,7 +1,7 @@
 {
   "publication_schema_version": "1.0.0",
   "readme_evidence_version": "1.0.0",
-  "evidence_cutoff": "2026-09-04T21:39:14Z",
+  "evidence_cutoff": "2026-09-04T22:26:33Z",
   "platform_version": "2.1.3",
   "eval_runs": [
     {
@@ -43,6 +43,13 @@
       "scenario_id": "healthcare-demo",
       "report_path": "demo/healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425/compliance-report.json",
       "report_sha256": "0cc22f16df45082096bb886d306c92b604c1e2ff5d81ab203bc862220effde3f"
+    },
+    {
+      "run_id": "fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496",
+      "environment": "fedramp-synthetic",
+      "scenario_id": "fedramp-demo",
+      "report_path": "demo/fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496/compliance-report.json",
+      "report_sha256": "8c9fc042932ae59e39913218eee5243a136e450d12ae51e9e08ab188f1730178"
     }
   ],
   "ci_links": [
