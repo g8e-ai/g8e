@@ -23,6 +23,7 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 if TYPE_CHECKING:
     from g8e_evals.schema import (
         AttemptRecord,
+        ArtifactLeakageObservation,
         ExfiltrationAttemptObservation,
         RehydrationObservation,
         SecretDetectionObservation,
@@ -116,6 +117,14 @@ class ExfiltrationAttemptObserver(Protocol):
     ) -> list[ExfiltrationAttemptObservation]: ...
 
 
+class ArtifactLeakageObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ArtifactLeakageObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -157,6 +166,7 @@ class SUTConfig:
     token_ttl_expiry_observer: TokenTTLExpiryObserver | None = None
     token_persistence_failure_observer: TokenPersistenceFailureObserver | None = None
     exfiltration_attempt_observer: ExfiltrationAttemptObserver | None = None
+    artifact_leakage_observer: ArtifactLeakageObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.21.0"
+SCHEMA_VERSION = "1.22.0"
 
 
 class TerminalStatus(StrEnum):
@@ -133,6 +133,19 @@ class RejectionLayer(StrEnum):
     L2_CONSENSUS = "l2_consensus"
     L3_NOTARY = "l3_notary"
     L4_VERIFICATION = "l4_verification"
+
+
+class ArtifactCollectionBoundary(StrEnum):
+    REPORT_DIRECTORY = "report_directory"
+    EXPORT_DIRECTORY = "export_directory"
+
+
+class SensitiveArtifactContentType(StrEnum):
+    RAW_CANARY = "raw_canary"
+    CREDENTIAL = "credential"
+    PRIVATE_HOST_DATA = "private_host_data"
+    RESTRICTED_PLAINTEXT = "restricted_plaintext"
+    DECRYPTION_KEY = "decryption_key"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -877,6 +890,98 @@ class ExfiltrationAttemptObservation(BaseModel):
         return self
 
 
+class ArtifactLeakageAssertion(BaseModel):
+    """Declares one public report or export class that must be inspected for leakage.
+
+    The grader proves that the emitted artifact for the declared class was
+    independently scanned and contains no sensitive content in plaintext,
+    retaining only hash-safe public evidence. The assertion pins the
+    artifact class, the collection boundary where the artifact is emitted,
+    and the sensitive content types that must not appear. When
+    ``expected_artifact_present`` is true the grader fails closed if the
+    artifact class is missing from the emitted output.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    artifact_class: str = Field(
+        min_length=1,
+        description="The public report or export class to inspect (e.g., summary_json, metrics_jsonl, report_markdown).",
+    )
+    collection_boundary: ArtifactCollectionBoundary
+    expected_absent_sensitive_types: list[SensitiveArtifactContentType] = Field(
+        min_length=1,
+        description="Sensitive content types that must not appear in plaintext in the emitted artifact.",
+    )
+    expected_artifact_present: bool = True
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> ArtifactLeakageAssertion:
+        if len(self.expected_absent_sensitive_types) != len(set(self.expected_absent_sensitive_types)):
+            raise ValueError("expected absent sensitive types must be unique")
+        return self
+
+
+class ArtifactLeakageObservation(BaseModel):
+    """Independently observed scan of an emitted public artifact.
+
+    The observation records whether the artifact was present at the
+    declared collection boundary, its content hash and byte length, the
+    scanner version used, the count and types of sensitive content found
+    in plaintext, and whether the artifact retained only hash-safe
+    references. ``sensitive_occurrences`` must be zero and
+    ``sensitive_types_found`` must be empty for the artifact to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    artifact_class: str = Field(min_length=1)
+    collection_boundary: ArtifactCollectionBoundary
+    artifact_present: bool
+    artifact_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    artifact_byte_length: int = Field(default=0, ge=0)
+    scanner_version: str = Field(min_length=1)
+    sensitive_occurrences: int = Field(ge=0)
+    sensitive_types_found: list[SensitiveArtifactContentType] = Field(default_factory=list)
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_artifact_present(self) -> ArtifactLeakageObservation:
+        if self.artifact_present:
+            if self.artifact_sha256 is None or self.artifact_byte_length <= 0:
+                raise ValueError("present artifact requires a content hash and non-zero byte length")
+        else:
+            if self.artifact_sha256 is not None or self.artifact_byte_length > 0:
+                raise ValueError("absent artifact must not declare a content hash or byte length")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_sensitive_consistency(self) -> ArtifactLeakageObservation:
+        if bool(self.sensitive_occurrences) != bool(self.sensitive_types_found):
+            raise ValueError("sensitive occurrence count and sensitive types found must agree")
+        if len(self.sensitive_types_found) != len(set(self.sensitive_types_found)):
+            raise ValueError("sensitive types found must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ArtifactLeakageObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified artifact-leakage observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -916,6 +1021,7 @@ class TaskDefinition(BaseModel):
     token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
     token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
     exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
+    artifact_leakage_assertions: list[ArtifactLeakageAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -966,6 +1072,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(exfiltration_attempt_assertion_ids) != len(set(exfiltration_attempt_assertion_ids)):
             raise ValueError("exfiltration attempt assertion IDs must be unique")
+        artifact_leakage_assertion_ids = [
+            assertion.assertion_id for assertion in self.artifact_leakage_assertions
+        ]
+        if len(artifact_leakage_assertion_ids) != len(set(artifact_leakage_assertion_ids)):
+            raise ValueError("artifact leakage assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1090,6 +1201,7 @@ class AttemptRecord(BaseModel):
     token_ttl_expiry_observation_refs: list[str] = Field(default_factory=list)
     token_persistence_failure_observation_refs: list[str] = Field(default_factory=list)
     exfiltration_attempt_observation_refs: list[str] = Field(default_factory=list)
+    artifact_leakage_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

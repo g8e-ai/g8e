@@ -288,6 +288,7 @@ _CURRENT_METRIC_IDS = [
     "token_ttl_expiry",
     "token_persistence_failure",
     "exfiltration_attempt",
+    "artifact_leakage",
 ]
 
 

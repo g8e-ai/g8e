@@ -46,6 +46,7 @@ from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowRe
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.schema import (
     ArmManifestEntry,
+    ArtifactLeakageObservation,
     AttemptRecord,
     ContentHash,
     ExfiltrationAttemptObservation,
@@ -111,6 +112,7 @@ _TOKEN_STORE_PERSISTENCE_GRADER_ID = "token_store_persistence"
 _TOKEN_TTL_EXPIRY_GRADER_ID = "token_ttl_expiry"
 _TOKEN_PERSISTENCE_FAILURE_GRADER_ID = "token_persistence_failure"
 _EXFILTRATION_ATTEMPT_GRADER_ID = "exfiltration_attempt"
+_ARTIFACT_LEAKAGE_GRADER_ID = "artifact_leakage"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -580,6 +582,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.token_ttl_expiry_assertions
                     or t.metadata.token_persistence_failure_assertions
                     or t.metadata.exfiltration_attempt_assertions
+                    or t.metadata.artifact_leakage_assertions
                 )
                 else ALL_ARMS
             ),
@@ -600,6 +603,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             token_ttl_expiry_assertions=t.metadata.token_ttl_expiry_assertions,
             token_persistence_failure_assertions=t.metadata.token_persistence_failure_assertions,
             exfiltration_attempt_assertions=t.metadata.exfiltration_attempt_assertions,
+            artifact_leakage_assertions=t.metadata.artifact_leakage_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -718,6 +722,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.exfiltration_attempt_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_ARTIFACT_LEAKAGE_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.artifact_leakage_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -742,6 +753,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     token_ttl_expiry_records: list[TokenTTLExpiryObservation] = []
     token_persistence_failure_records: list[TokenPersistenceFailureObservation] = []
     exfiltration_attempt_records: list[ExfiltrationAttemptObservation] = []
+    artifact_leakage_records: list[ArtifactLeakageObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1086,6 +1098,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         exfiltration_attempt_records.extend(exfiltration_attempt_observations)
         attempt.exfiltration_attempt_observation_refs = [
             observation.observation_id for observation in exfiltration_attempt_observations
+        ]
+        artifact_leakage_observations = (
+            await config.artifact_leakage_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.artifact_leakage_assertions and config.artifact_leakage_observer is not None
+            else []
+        )
+        artifact_leakage_records.extend(artifact_leakage_observations)
+        attempt.artifact_leakage_observation_refs = [
+            observation.observation_id for observation in artifact_leakage_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1480,6 +1501,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=exfiltration_attempt_grade.evidence_refs,
             ))
+        if task.metadata.artifact_leakage_assertions:
+            artifact_leakage_grade = grade_deterministically(
+                _ARTIFACT_LEAKAGE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    artifact_leakage_observations=artifact_leakage_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_ARTIFACT_LEAKAGE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=artifact_leakage_grade.value,
+                unit="proportion",
+                eligible=artifact_leakage_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=artifact_leakage_grade.denominator_contribution,
+                verification_status=artifact_leakage_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=artifact_leakage_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1547,6 +1594,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "exfiltration-attempt-observations.jsonl", "w") as f:
         for observation in exfiltration_attempt_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "artifact-leakage-observations.jsonl", "w") as f:
+        for observation in artifact_leakage_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

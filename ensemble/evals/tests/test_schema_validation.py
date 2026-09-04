@@ -28,6 +28,9 @@ from g8e_evals.schema import (
     SCHEMA_VERSION,
     AttemptRecord,
     ArmManifestEntry,
+    ArtifactCollectionBoundary,
+    ArtifactLeakageAssertion,
+    ArtifactLeakageObservation,
     CanaryScrubbingAssertion,
     ContentHash,
     EvidenceIndex,
@@ -49,6 +52,7 @@ from g8e_evals.schema import (
     RunManifest,
     SecretDetectionAssertion,
     SecretDetectionObservation,
+    SensitiveArtifactContentType,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -75,7 +79,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.21.0"
+    assert SCHEMA_VERSION == "1.22.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -1279,3 +1283,190 @@ def test_attempt_record_links_exfiltration_attempt_observations():
     )
 
     assert attempt.exfiltration_attempt_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# ArtifactLeakageAssertion / ArtifactLeakageObservation
+# ---------------------------------------------------------------------------
+
+
+def test_artifact_leakage_assertion_and_observation_round_trip():
+    assertion = ArtifactLeakageAssertion(
+        assertion_id="leak-1",
+        artifact_class="summary_json",
+        collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+        expected_absent_sensitive_types=[
+            SensitiveArtifactContentType.RAW_CANARY,
+            SensitiveArtifactContentType.CREDENTIAL,
+        ],
+    )
+    observation = ArtifactLeakageObservation(
+        observation_id="leak-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        artifact_class="summary_json",
+        collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+        artifact_present=True,
+        artifact_sha256="a" * 64,
+        artifact_byte_length=1024,
+        scanner_version="sentinel-leakage@1.0.0",
+        sensitive_occurrences=0,
+        sensitive_types_found=[],
+        collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+        source_evidence_refs=["restricted-leak-evidence"],
+        source_evidence_sha256="e" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = ArtifactLeakageAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = ArtifactLeakageObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_artifact_leakage_assertion_rejects_duplicate_sensitive_types():
+    with pytest.raises(ValidationError, match="expected absent sensitive types must be unique"):
+        ArtifactLeakageAssertion(
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            expected_absent_sensitive_types=[
+                SensitiveArtifactContentType.RAW_CANARY,
+                SensitiveArtifactContentType.RAW_CANARY,
+            ],
+        )
+
+
+def test_artifact_leakage_assertion_rejects_empty_sensitive_types():
+    with pytest.raises(ValidationError):
+        ArtifactLeakageAssertion(
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            expected_absent_sensitive_types=[],
+        )
+
+
+def test_artifact_leakage_observation_rejects_present_artifact_without_hash():
+    with pytest.raises(ValidationError, match="present artifact requires a content hash and non-zero byte length"):
+        ArtifactLeakageObservation(
+            observation_id="leak-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            artifact_present=True,
+            artifact_sha256=None,
+            artifact_byte_length=0,
+            scanner_version="sentinel-leakage@1.0.0",
+            sensitive_occurrences=0,
+            sensitive_types_found=[],
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            source_evidence_refs=["evidence-1"],
+            source_evidence_sha256="e" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_artifact_leakage_observation_rejects_absent_artifact_with_hash():
+    with pytest.raises(ValidationError, match="absent artifact must not declare a content hash or byte length"):
+        ArtifactLeakageObservation(
+            observation_id="leak-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            artifact_present=False,
+            artifact_sha256="a" * 64,
+            artifact_byte_length=1024,
+            scanner_version="sentinel-leakage@1.0.0",
+            sensitive_occurrences=0,
+            sensitive_types_found=[],
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            source_evidence_refs=["evidence-1"],
+            source_evidence_sha256="e" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_artifact_leakage_observation_rejects_sensitive_occurrence_type_mismatch():
+    with pytest.raises(ValidationError, match="sensitive occurrence count and sensitive types found must agree"):
+        ArtifactLeakageObservation(
+            observation_id="leak-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            artifact_present=True,
+            artifact_sha256="a" * 64,
+            artifact_byte_length=1024,
+            scanner_version="sentinel-leakage@1.0.0",
+            sensitive_occurrences=2,
+            sensitive_types_found=[SensitiveArtifactContentType.RAW_CANARY],
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            source_evidence_refs=["evidence-1"],
+            source_evidence_sha256="e" * 64,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_artifact_leakage_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified artifact-leakage observation requires source evidence",
+    ):
+        ArtifactLeakageObservation(
+            observation_id="leak-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="leak-1",
+            artifact_class="summary_json",
+            collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+            artifact_present=True,
+            artifact_sha256="a" * 64,
+            artifact_byte_length=1024,
+            scanner_version="sentinel-leakage@1.0.0",
+            sensitive_occurrences=0,
+            sensitive_types_found=[],
+            collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_artifact_leakage_assertion_ids():
+    assertion = ArtifactLeakageAssertion(
+        assertion_id="duplicate",
+        artifact_class="summary_json",
+        collection_boundary=ArtifactCollectionBoundary.REPORT_DIRECTORY,
+        expected_absent_sensitive_types=[SensitiveArtifactContentType.RAW_CANARY],
+    )
+    with pytest.raises(ValidationError, match="artifact leakage assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            artifact_leakage_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_artifact_leakage_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        artifact_leakage_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.artifact_leakage_observation_refs == ["observation-1", "observation-2"]
