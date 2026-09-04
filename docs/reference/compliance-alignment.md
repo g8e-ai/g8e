@@ -658,7 +658,7 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **Posture-aware passkey enrollment** requiring passkeys for ratify and notary postures (optional for doctrine and consensus)
 - **Audit store hard dependency** for the MCP gateway, making audit recording a construction-time requirement rather than a late-bound optional
 - **Passkey proof verification decoupling** from the L3 notary interface, separating proof verification from notary authorization logic
-- **Atomic pointer adoption** for the late-bound consensus service, replacing unsafe `**T` pointers with `atomic.Pointer` for thread-safe dependency wiring
+- **Construction-phase consensus wiring** eliminating late-bound `**T` pointers and `atomic.Pointer` cells — consensus is injected directly at construction via `GatewayModeDeps`, with no `SetConsensusService` mutator
 - **Typed audit response models** narrowing HTTP audit payload shapes to typed structs instead of raw maps
 - **RootCACommonName constant centralization** extracting the root-CA subject common name into a single typed constant across gateway certificate generation, OS trust-store installation, and stale-anchor enumeration
 - **Headless CLI enrollment** via `--headless` flag on `g8e auth enroll` enabling CLI-only identities (mTLS without browser or WebAuthn passkey ceremony) for automated CI and remote server environments
