@@ -67,6 +67,7 @@ from g8e_evals.schema import (
     SignedFieldTamperingObservation,
     StaleStateRootObservation,
     IdentityMismatchObservation,
+    NonceExpirationObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -123,6 +124,7 @@ _SIGNED_FIELD_TAMPERING_GRADER_ID = "signed_field_tampering"
 _PAYLOAD_TAMPERING_GRADER_ID = "payload_tampering"
 _STALE_STATE_ROOT_GRADER_ID = "stale_state_root"
 _IDENTITY_MISMATCH_GRADER_ID = "identity_mismatch"
+_NONCE_EXPIRATION_GRADER_ID = "nonce_expiration"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -598,6 +600,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.payload_tampering_assertions
                     or t.metadata.stale_state_root_assertions
                     or t.metadata.identity_mismatch_assertions
+                    or t.metadata.nonce_expiration_assertions
                 )
                 else ALL_ARMS
             ),
@@ -624,6 +627,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             payload_tampering_assertions=t.metadata.payload_tampering_assertions,
             stale_state_root_assertions=t.metadata.stale_state_root_assertions,
             identity_mismatch_assertions=t.metadata.identity_mismatch_assertions,
+            nonce_expiration_assertions=t.metadata.nonce_expiration_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -784,6 +788,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.identity_mismatch_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_NONCE_EXPIRATION_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.nonce_expiration_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -814,6 +825,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     payload_tampering_records: list[PayloadTamperingObservation] = []
     stale_state_root_records: list[StaleStateRootObservation] = []
     identity_mismatch_records: list[IdentityMismatchObservation] = []
+    nonce_expiration_records: list[NonceExpirationObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1212,6 +1224,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         identity_mismatch_records.extend(identity_mismatch_observations)
         attempt.identity_mismatch_observation_refs = [
             observation.observation_id for observation in identity_mismatch_observations
+        ]
+        nonce_expiration_observations = (
+            await config.nonce_expiration_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.nonce_expiration_assertions and config.nonce_expiration_observer is not None
+            else []
+        )
+        nonce_expiration_records.extend(nonce_expiration_observations)
+        attempt.nonce_expiration_observation_refs = [
+            observation.observation_id for observation in nonce_expiration_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1762,6 +1783,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=identity_mismatch_grade.evidence_refs,
             ))
+        if task.metadata.nonce_expiration_assertions:
+            nonce_expiration_grade = grade_deterministically(
+                _NONCE_EXPIRATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    nonce_expiration_observations=nonce_expiration_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_NONCE_EXPIRATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=nonce_expiration_grade.value,
+                unit="proportion",
+                eligible=nonce_expiration_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=nonce_expiration_grade.denominator_contribution,
+                verification_status=nonce_expiration_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=nonce_expiration_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1853,6 +1900,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "identity-mismatch-observations.jsonl", "w") as f:
         for observation in identity_mismatch_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
+        for observation in nonce_expiration_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

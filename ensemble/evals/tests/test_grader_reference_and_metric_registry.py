@@ -294,6 +294,7 @@ _CURRENT_METRIC_IDS = [
     "payload_tampering",
     "stale_state_root",
     "identity_mismatch",
+    "nonce_expiration",
 ]
 
 

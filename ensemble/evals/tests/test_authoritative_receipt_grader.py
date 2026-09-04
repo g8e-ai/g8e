@@ -54,6 +54,8 @@ from g8e_evals.schema import (
     IdentityBinding,
     IdentityMismatchAssertion,
     IdentityMismatchObservation,
+    NonceExpirationAssertion,
+    NonceExpirationObservation,
     FinalStateAssertion,
     FinalStateObservation,
     ModelBoundaryPrivacyAttestation,
@@ -6663,4 +6665,526 @@ def test_identity_mismatch_grader_partial_failure_reports_failed_assertion():
     assert result.value == 0.5
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "identity-mismatch assertion failed: identity-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# NonceExpirationGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_NONCE_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+_NONCE_EXPIRY = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+_NONCE_VALUE = "nonce-abc-123"
+
+
+def _nonce_expiration_assertion(
+    *,
+    assertion_id: str = "nonce-1",
+    action_type: str = "FILE_EDIT",
+    nonce_value: str = _NONCE_VALUE,
+    declared_expiry_timestamp: datetime = _NONCE_EXPIRY,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L2_CONSENSUS,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> NonceExpirationAssertion:
+    return NonceExpirationAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        nonce_value=nonce_value,
+        declared_expiry_timestamp=declared_expiry_timestamp,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _nonce_expiration_observation(
+    *,
+    assertion_id: str = "nonce-1",
+    action_type: str = "FILE_EDIT",
+    nonce_value: str = _NONCE_VALUE,
+    declared_expiry_timestamp: datetime = _NONCE_EXPIRY,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> NonceExpirationObservation:
+    return NonceExpirationObservation(
+        observation_id=f"nonce-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        nonce_value=nonce_value,
+        declared_expiry_timestamp=declared_expiry_timestamp,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_NONCE_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _nonce_expiration_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L2_CONSENSUS,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[NonceExpirationObservation] | None = None,
+    assertions: list[NonceExpirationAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "nonce_expiration_assertions": assertions or [_nonce_expiration_assertion()],
+        "graders": [{"grader_id": "nonce_expiration", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        nonce_expiration_observations=(
+            observations if observations is not None else [_nonce_expiration_observation()]
+        ),
+    )
+
+
+def test_nonce_expiration_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "nonce_expiration",
+        "1.0.0",
+        _nonce_expiration_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "nonce-obs-nonce-1" in result.evidence_refs
+    assert "evidence-nonce-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_nonce_expiration_grader_verifies_l4_only_rejection():
+    context = _nonce_expiration_context(
+        failed_layer=None,
+        assertions=[_nonce_expiration_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_nonce_expiration_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_nonce_expiration_grader_supports_ledger_absence():
+    context = _nonce_expiration_context(
+        assertions=[_nonce_expiration_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_nonce_expiration_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_nonce_expiration_grader_fails_when_action_is_allowed():
+    context = _nonce_expiration_context(failed_layer=None)
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_when_rejection_layer_mismatches():
+    context = _nonce_expiration_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_nonce_expiration_assertion(
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_when_expired_nonce_accepted_as_valid():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=1,
+            ),
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_when_action_type_mismatches():
+    context = _nonce_expiration_context(
+        action_type="FILE_DELETE",
+        assertions=[_nonce_expiration_assertion(action_type="FILE_EDIT")],
+        observations=[_nonce_expiration_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_closed_on_unverified_receipt():
+    context = _nonce_expiration_context(verified=False)
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_nonce_expiration_grader_fails_closed_on_missing_assertions():
+    context = _nonce_expiration_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"nonce_expiration_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        nonce_expiration_observations=[],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "nonce-expiration assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_nonce_expiration_grader_fails_closed_on_missing_primary_receipt():
+    context = _nonce_expiration_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        nonce_expiration_observations=context.nonce_expiration_observations,
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_nonce_expiration_grader_fails_closed_on_missing_observation():
+    context = _nonce_expiration_context(observations=[])
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_closed_on_duplicate_observations():
+    obs = _nonce_expiration_observation()
+    context = _nonce_expiration_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_fails_closed_on_unverified_observation():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_unknown_observation_assertion():
+    context = _nonce_expiration_context(
+        observations=[
+            _nonce_expiration_observation(),
+            _nonce_expiration_observation(assertion_id="unknown"),
+        ],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "nonce-expiration observation references an unknown assertion: unknown"
+
+
+def test_nonce_expiration_grader_rejects_cross_attempt_observation():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_cross_run_observation():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_cross_task_observation():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_nonce_value_mismatch():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(nonce_value="wrong-nonce")],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_declared_expiry_timestamp_mismatch():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(
+            declared_expiry_timestamp=datetime(2026, 1, 1, 0, 0, tzinfo=UTC),
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_collection_boundary_mismatch():
+    context = _nonce_expiration_context(
+        observations=[_nonce_expiration_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_missing_source_evidence():
+    obs = _nonce_expiration_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _nonce_expiration_context(observations=[obs])
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-1"
+
+
+def test_nonce_expiration_grader_rejects_ambiguous_failed_layers():
+    context = _nonce_expiration_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_nonce_expiration_grader_rejects_invalid_l4_outcome():
+    context = _nonce_expiration_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_nonce_expiration_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"nonce_expiration@2\.0\.0"):
+        grade_deterministically("nonce_expiration", "2.0.0", _nonce_expiration_context())
+
+
+def test_nonce_expiration_grader_aggregates_multiple_assertions():
+    assertions = [
+        _nonce_expiration_assertion(assertion_id="nonce-1"),
+        _nonce_expiration_assertion(
+            assertion_id="nonce-2",
+            nonce_value="nonce-def-456",
+        ),
+    ]
+    observations = [
+        _nonce_expiration_observation(assertion_id="nonce-1"),
+        _nonce_expiration_observation(
+            assertion_id="nonce-2",
+            nonce_value="nonce-def-456",
+        ),
+    ]
+    context = _nonce_expiration_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure is None
+    assert result.denominator_contribution == 2
+
+
+def test_nonce_expiration_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _nonce_expiration_assertion(assertion_id="nonce-1"),
+        _nonce_expiration_assertion(
+            assertion_id="nonce-2",
+            nonce_value="nonce-def-456",
+        ),
+    ]
+    observations = [
+        _nonce_expiration_observation(assertion_id="nonce-1"),
+        _nonce_expiration_observation(
+            assertion_id="nonce-2",
+            nonce_value="nonce-def-456",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _nonce_expiration_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("nonce_expiration", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "nonce-expiration assertion failed: nonce-2"
     assert result.denominator_contribution == 2

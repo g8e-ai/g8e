@@ -24,6 +24,7 @@ from g8e_evals.schema import (
     IdentityMismatchAssertion,
     ExfiltrationAttemptAssertion,
     FinalStateAssertion,
+    NonceExpirationAssertion,
     PayloadTamperingAssertion,
     PolicyOutcome,
     RehydrationAssertion,
@@ -88,6 +89,7 @@ class TaskMetadata(BaseModel):
     payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
     stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
     identity_mismatch_assertions: list[IdentityMismatchAssertion] = Field(default_factory=list)
+    nonce_expiration_assertions: list[NonceExpirationAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.26.0"
+SCHEMA_VERSION = "1.27.0"
 
 
 class TerminalStatus(StrEnum):
@@ -1400,6 +1400,84 @@ class IdentityMismatchObservation(BaseModel):
         return self
 
 
+class NonceExpirationAssertion(BaseModel):
+    """Declares one expired-nonce reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the expired-nonce action at the declared rejection layer, and the expired
+    nonce did not produce an accepted terminal state at the declared
+    collection boundary (the expired nonce was not accepted as valid). Both
+    must hold for the assertion to pass. The declared nonce value and the
+    declared expiry timestamp pin the attack so that an observation
+    referencing the wrong nonce or expiry cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The expired-nonce reuse action class.")
+    nonce_value: str = Field(
+        min_length=1,
+        description="The expired nonce value that must be rejected when reused after its validity window.",
+    )
+    declared_expiry_timestamp: datetime = Field(
+        description="The timestamp at which the nonce's validity window expired.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent expired-nonce-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> NonceExpirationAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("nonce-expiration expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("nonce-expiration expected absence requires exists=False")
+        return self
+
+
+class NonceExpirationObservation(BaseModel):
+    """Independently observed expired-nonce-accepted state for a nonce-expiration reuse.
+
+    The observation records whether a terminal state accepting the expired
+    nonce as valid materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of expired-nonce acceptance. The declared
+    nonce value and the declared expiry timestamp must match the assertion
+    so that an observation referencing the wrong nonce or expiry cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    nonce_value: str = Field(min_length=1)
+    declared_expiry_timestamp: datetime
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> NonceExpirationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified nonce-expiration observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1445,6 +1523,7 @@ class TaskDefinition(BaseModel):
     payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
     stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
     identity_mismatch_assertions: list[IdentityMismatchAssertion] = Field(default_factory=list)
+    nonce_expiration_assertions: list[NonceExpirationAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -1525,6 +1604,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(identity_mismatch_assertion_ids) != len(set(identity_mismatch_assertion_ids)):
             raise ValueError("identity-mismatch assertion IDs must be unique")
+        nonce_expiration_assertion_ids = [
+            assertion.assertion_id for assertion in self.nonce_expiration_assertions
+        ]
+        if len(nonce_expiration_assertion_ids) != len(set(nonce_expiration_assertion_ids)):
+            raise ValueError("nonce-expiration assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1655,6 +1739,7 @@ class AttemptRecord(BaseModel):
     payload_tampering_observation_refs: list[str] = Field(default_factory=list)
     stale_state_root_observation_refs: list[str] = Field(default_factory=list)
     identity_mismatch_observation_refs: list[str] = Field(default_factory=list)
+    nonce_expiration_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

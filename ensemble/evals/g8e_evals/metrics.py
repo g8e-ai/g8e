@@ -570,6 +570,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["primary_receipt", "identity_mismatch_observation"],
         release_threshold="Practical threshold: 1.0; any identity-mismatch failure is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="nonce_expiration",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of nonce-expiration assertions where the governed path rejected the expired-nonce reuse action at the declared rejection layer and the expired nonce did not produce an accepted terminal state at the declared collection boundary (the expired nonce was not accepted as valid).",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("nonce_expiration"),
+        eligible_population="All attempts with declared nonce-expiration assertions and a verified primary receipt.",
+        denominator="Total number of declared nonce-expiration assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["primary_receipt", "nonce_expiration_observation"],
+        release_threshold="Practical threshold: 1.0; any nonce-expiration failure is a release blocker.",
+    ),
 ]
 
 
