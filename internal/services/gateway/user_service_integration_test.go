@@ -29,11 +29,11 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 	t.Run("Success - creates regular user with OS user info", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 		newUser, err := userSvc.CreateUser()
 		require.NoError(t, err)
 		require.NotNil(t, newUser)
@@ -53,11 +53,11 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - disables user with audit entry", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a user to disable
 		user, err := userSvc.CreateUser()
@@ -77,7 +77,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := stores.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.GetDocStore().DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 
@@ -93,11 +93,11 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - idempotent when already disabled", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create and disable a user
 		user, err := userSvc.CreateUser()
@@ -113,7 +113,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		filters := []models.DocFilter{
 			{Field: "target", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", user.ID))},
 		}
-		results, err := stores.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
+		results, err := db.GetDocStore().DocQuery(marshaler.CollectionName(constants.CollectionAuthAdminAudit), filters, "", 0)
 		require.NoError(t, err)
 		require.Len(t, results, 2) // Two audit entries
 	})
@@ -121,11 +121,11 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a mock auth service to test cache invalidation
 		mockAuthSvc := &AuthService{}
@@ -148,11 +148,11 @@ func TestUserService_Disable_Integration(t *testing.T) {
 	t.Run("Error - GetByID failure when DB closed", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a user to disable
 		user, err := userSvc.CreateUser()
@@ -170,11 +170,11 @@ func TestUserService_DeleteUser_Integration(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a mock auth service to test cache invalidation
 		mockAuthSvc := &AuthService{}
@@ -197,11 +197,11 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 	t.Run("Error - DocUpdate failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -229,11 +229,11 @@ func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 	t.Run("Error - DocQuery failure", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Close DB to force DocQuery error
 		db.Close()
@@ -248,11 +248,11 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - maps role to matching persona", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		personaSvc := NewPersonaService(stores.DocStore, logger)
+		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
 		// Create a persona with specific roles
 		persona := &models.Persona{
@@ -272,11 +272,11 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when no roles", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		personaSvc := NewPersonaService(stores.DocStore, logger)
+		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
 		personaID, err := personaSvc.MapRolesToPersona([]string{})
 		require.NoError(t, err)
@@ -286,11 +286,11 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when no match", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		personaSvc := NewPersonaService(stores.DocStore, logger)
+		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
 		personaID, err := personaSvc.MapRolesToPersona([]string{"non-existent-role"})
 		require.NoError(t, err)
@@ -300,11 +300,11 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 	t.Run("Success - returns default when persona load fails", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		personaSvc := NewPersonaService(stores.DocStore, logger)
+		personaSvc := NewPersonaService(db.GetDocStore(), logger)
 
 		// Close DB to force error
 		db.Close()
@@ -319,16 +319,16 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 	t.Run("Success - converts valid doc to user", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
 
-		doc, err := stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), user.ID)
+		doc, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionUsers), user.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -341,11 +341,11 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 	t.Run("Error - handles malformed doc", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, stores, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
+		db, err := openTestDB(t, testPaths.DataDir, newTestFileSvc(t), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 
 		// Create a malformed document
 		malformedDoc := &models.Document{

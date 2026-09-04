@@ -32,7 +32,7 @@ func setupTestAuditController(t *testing.T) *AuditController {
 	return newAuditController(AuditControllerDeps{
 		Cfg:        infra.Cfg,
 		Logger:     infra.Logger,
-		AuditStore: infra.Stores.AuditStore,
+		AuditStore: infra.AuditStore,
 		Responder:  infra.Responder,
 	})
 }
@@ -43,7 +43,7 @@ func TestNewAuditController_AllDepsProvidedNoNilFields(t *testing.T) {
 	controller := newAuditController(AuditControllerDeps{
 		Cfg:        infra.Cfg,
 		Logger:     infra.Logger,
-		AuditStore: infra.Stores.AuditStore,
+		AuditStore: infra.AuditStore,
 		Responder:  infra.Responder,
 	})
 
@@ -54,7 +54,7 @@ func TestNewAuditController_AllDepsProvidedNoNilFields(t *testing.T) {
 
 	assert.Equal(t, infra.Cfg, controller.cfg)
 	assert.Equal(t, infra.Logger, controller.logger)
-	assert.Equal(t, infra.Stores.AuditStore, controller.auditStore)
+	assert.Equal(t, infra.AuditStore, controller.auditStore)
 	assert.Equal(t, infra.Responder, controller.responder)
 }
 

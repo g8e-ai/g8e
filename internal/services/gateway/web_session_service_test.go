@@ -38,7 +38,7 @@ func TestWebSessionService_CreateWebSession(t *testing.T) {
 		assert.True(t, session.ExpiresAtUnixMs > session.CreatedAtUnixMs)
 
 		// Verify it's actually in the DB
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), session.ID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), session.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -95,7 +95,7 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 
 		data, err := json.Marshal(expiredSession)
 		require.NoError(t, err)
-		err = infra.Stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, data)
+		err = infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, data)
 		require.NoError(t, err)
 
 		validated, err := svc.ValidateWebSession(sessionID)
@@ -106,7 +106,7 @@ func TestWebSessionService_ValidateWebSession(t *testing.T) {
 	t.Run("Malformed Data in DB", func(t *testing.T) {
 		sessionID := "malformed-session"
 		// Set some invalid data that cannot be unmarshaled into models.WebSession
-		err := infra.Stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, []byte(`{"expires_at_unix_ms": "invalid-type"}`))
+		err := infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), sessionID, []byte(`{"expires_at_unix_ms": "invalid-type"}`))
 		require.NoError(t, err)
 
 		validated, err := svc.ValidateWebSession(sessionID)

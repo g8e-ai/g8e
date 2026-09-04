@@ -67,7 +67,7 @@ func setupRefreshAuthTestInfra(t *testing.T, sessionID string, expired bool, cer
 		}
 		b, err := json.Marshal(doc)
 		require.NoError(t, err)
-		require.NoError(t, infra.Stores.DocStore.DocSet(
+		require.NoError(t, infra.DocStore.DocSet(
 			marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 		))
 	}
@@ -175,7 +175,7 @@ func TestHandleCLIRefreshAuth_UserDisabled_Rejected(t *testing.T) {
 	}
 	b, err := json.Marshal(doc)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b,
 	))
 

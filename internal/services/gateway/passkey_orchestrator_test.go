@@ -65,9 +65,9 @@ func (s *stubSuspendedTransactionStore) GetExpiredSuspendedTransactions(_ contex
 // no-op condition), so every test must wire real instances.
 func newTestOrchestratorDeps(t *testing.T) (*SSEEventService, *GatewayWebSocketHandler) {
 	t.Helper()
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	sseStore := stores.SSEStore
+	sseStore := db.GetSSEStore()
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 	return sseStore, pubsub
@@ -166,8 +166,8 @@ func TestPasskeyOrchestrator_ListSuspendedTransactions(t *testing.T) {
 
 func TestNewPasskeyOrchestrator_NilSSEDependencies_ReturnsError(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	_, stores := newTestDB(t)
-	sseStore := stores.SSEStore
+	db := newTestDB(t)
+	sseStore := db.GetSSEStore()
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
@@ -195,9 +195,9 @@ func TestNewPasskeyOrchestrator_NilSSEDependencies_ReturnsError(t *testing.T) {
 
 func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing.T) {
 	t.Run("no-ops when userID is empty", func(t *testing.T) {
-		_, stores := newTestDB(t)
+		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		sseStore := stores.SSEStore
+		sseStore := db.GetSSEStore()
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
@@ -211,9 +211,9 @@ func TestPasskeyOrchestrator_EmitApprovalCompletedSSE_ParameterGuards(t *testing
 	})
 
 	t.Run("no-ops when cliSessionID is empty", func(t *testing.T) {
-		_, stores := newTestDB(t)
+		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		sseStore := stores.SSEStore
+		sseStore := db.GetSSEStore()
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		o, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
