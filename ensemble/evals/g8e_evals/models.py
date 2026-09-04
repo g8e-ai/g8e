@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     ArtifactLeakageAssertion,
     EvidencePreservationAssertion,
+    FORBIDDEN_METADATA_KEYS,
     IdentityMismatchAssertion,
     ExfiltrationAttemptAssertion,
     FinalStateAssertion,
@@ -66,6 +67,16 @@ class ScoreDetails(BaseModel):
     # Benchmark-specific details can be added as extra fields
     benchmark_specific: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def _validate_benchmark_specific_keys(self) -> ScoreDetails:
+        forbidden = self.benchmark_specific.keys() & FORBIDDEN_METADATA_KEYS
+        if forbidden:
+            raise ValueError(
+                "benchmark_specific must not carry security- or privacy-critical known shapes: "
+                f"{sorted(forbidden)[0]}"
+            )
+        return self
+
 
 class TaskMetadata(BaseModel):
     """Typed metadata for Task objects."""
@@ -105,6 +116,28 @@ class TaskMetadata(BaseModel):
     kwargs: list[dict[str, Any]] = Field(default_factory=list)
     # Other benchmark-specific data
     benchmark_specific: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("kwargs", mode="after")
+    @classmethod
+    def _validate_kwargs_no_forbidden_keys(cls, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        for index, item in enumerate(value):
+            forbidden = item.keys() & FORBIDDEN_METADATA_KEYS
+            if forbidden:
+                raise ValueError(
+                    f"kwargs[{index}] must not carry security- or privacy-critical known shapes: "
+                    f"{sorted(forbidden)[0]}"
+                )
+        return value
+
+    @model_validator(mode="after")
+    def _validate_benchmark_specific_keys(self) -> TaskMetadata:
+        forbidden = self.benchmark_specific.keys() & FORBIDDEN_METADATA_KEYS
+        if forbidden:
+            raise ValueError(
+                "benchmark_specific must not carry security- or privacy-critical known shapes: "
+                f"{sorted(forbidden)[0]}"
+            )
+        return self
 
 
 class AggregateMetadata(BaseModel):

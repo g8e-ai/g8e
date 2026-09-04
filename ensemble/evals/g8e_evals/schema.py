@@ -31,7 +31,55 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.32.0"
+SCHEMA_VERSION = "1.33.0"
+
+FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
+    "state_fixture",
+    "expected_final_state_assertions",
+    "expected_allow_block_outcome",
+    "expected_rejection_layer",
+    "sensitive_canary_annotations",
+    "rehydration_assertions",
+    "secret_detection_assertions",
+    "unauthorized_mutation_assertions",
+    "token_store_persistence_assertions",
+    "token_ttl_expiry_assertions",
+    "token_persistence_failure_assertions",
+    "exfiltration_attempt_assertions",
+    "artifact_leakage_assertions",
+    "replay_attempt_assertions",
+    "signed_field_tampering_assertions",
+    "payload_tampering_assertions",
+    "stale_state_root_assertions",
+    "identity_mismatch_assertions",
+    "nonce_expiration_assertions",
+    "signer_defect_assertions",
+    "l3_proof_transplant_assertions",
+    "revoked_credential_assertions",
+    "evidence_preservation_assertions",
+    "unsupported_exclusions",
+    "state_observation_refs",
+    "final_state_observation_refs",
+    "rehydration_observation_refs",
+    "secret_detection_observation_refs",
+    "unauthorized_mutation_observation_refs",
+    "token_store_persistence_observation_refs",
+    "token_ttl_expiry_observation_refs",
+    "token_persistence_failure_observation_refs",
+    "exfiltration_attempt_observation_refs",
+    "artifact_leakage_observation_refs",
+    "replay_attempt_observation_refs",
+    "signed_field_tampering_observation_refs",
+    "payload_tampering_observation_refs",
+    "stale_state_root_observation_refs",
+    "identity_mismatch_observation_refs",
+    "nonce_expiration_observation_refs",
+    "signer_defect_observation_refs",
+    "l3_proof_transplant_observation_refs",
+    "revoked_credential_observation_refs",
+    "evidence_preservation_observation_refs",
+    "unsupported_exclusion_refs",
+})
 
 
 class TerminalStatus(StrEnum):
@@ -2041,6 +2089,12 @@ class TaskDefinition(BaseModel):
             raise ValueError("blocked policy outcome requires an expected rejection layer")
         if self.expected_allow_block_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
             raise ValueError("expected rejection layer requires a blocked policy outcome")
+        forbidden_in_metadata = self.metadata.keys() & FORBIDDEN_METADATA_KEYS
+        if forbidden_in_metadata:
+            raise ValueError(
+                "metadata must not carry security- or privacy-critical known shapes: "
+                f"{sorted(forbidden_in_metadata)[0]}"
+            )
         return self
 
 

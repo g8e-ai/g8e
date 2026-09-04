@@ -24,6 +24,7 @@ from g8e.operator.v1.operator_pb2 import (
 from pydantic import ValidationError
 
 from g8e_evals.arms import Arm, GovernancePosture
+from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.schema import (
     SCHEMA_VERSION,
     AttemptRecord,
@@ -42,6 +43,7 @@ from g8e_evals.schema import (
     ExfiltrationAttemptAssertion,
     ExfiltrationAttemptObservation,
     ExclusionScope,
+    FORBIDDEN_METADATA_KEYS,
     GraderClass,
     GraderReference,
     IdentityBinding,
@@ -108,7 +110,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.32.0"
+    assert SCHEMA_VERSION == "1.33.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2905,3 +2907,138 @@ def test_attempt_record_links_unsupported_exclusion_refs():
         unsupported_exclusion_refs=["exclude-1", "exclude-2"],
     )
     assert attempt.unsupported_exclusion_refs == ["exclude-1", "exclude-2"]
+
+
+def test_task_definition_rejects_forbidden_metadata_keys():
+    with pytest.raises(ValidationError, match="metadata must not carry security- or privacy-critical known shapes"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            metadata={"replay_attempt_assertions": [{"assertion_id": "sneaky"}]},
+        )
+
+
+def test_task_definition_rejects_observation_ref_metadata_keys():
+    with pytest.raises(ValidationError, match="metadata must not carry security- or privacy-critical known shapes"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            metadata={"state_observation_refs": ["obs-1"]},
+        )
+
+
+def test_task_definition_accepts_benign_metadata_keys():
+    task_def = TaskDefinition(
+        task_id="task-1",
+        suite_id="suite-1",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        metadata={"display_name": "IFEval task 42", "author": "eval-team"},
+    )
+    assert task_def.metadata["display_name"] == "IFEval task 42"
+
+
+def test_task_metadata_rejects_forbidden_benchmark_specific_keys():
+    with pytest.raises(ValidationError, match="benchmark_specific must not carry security- or privacy-critical known shapes"):
+        TaskMetadata(
+            benchmark="ifeval_subset",
+            benchmark_specific={"secret_detection_assertions": []},
+        )
+
+
+def test_task_metadata_accepts_benign_benchmark_specific_keys():
+    metadata = TaskMetadata(
+        benchmark="ifeval_subset",
+        benchmark_specific={"source_url": "https://example.com", "license": "CC-BY"},
+    )
+    assert metadata.benchmark_specific["source_url"] == "https://example.com"
+
+
+def test_task_metadata_rejects_forbidden_kwargs_keys():
+    with pytest.raises(ValidationError, match=r"kwargs\[0\] must not carry security- or privacy-critical known shapes"):
+        TaskMetadata(
+            benchmark="ifeval_subset",
+            instruction_id_list=["instr-1"],
+            kwargs=[{"token_store_persistence_assertions": []}],
+        )
+
+
+def test_task_metadata_accepts_benign_kwargs():
+    metadata = TaskMetadata(
+        benchmark="ifeval_subset",
+        instruction_id_list=["instr-1"],
+        kwargs=[{"language": "en", "num_sentences": 3}],
+    )
+    assert metadata.kwargs[0]["language"] == "en"
+
+
+def test_score_details_rejects_forbidden_benchmark_specific_keys():
+    with pytest.raises(ValidationError, match="benchmark_specific must not carry security- or privacy-critical known shapes"):
+        ScoreDetails(
+            benchmark_specific={"replay_attempt_observation_refs": ["obs-1"]},
+        )
+
+
+def test_score_details_accepts_benign_benchmark_specific_keys():
+    details = ScoreDetails(
+        benchmark_specific={"eval_judge": {"status": "completed", "score": 0.95}},
+    )
+    assert details.benchmark_specific["eval_judge"]["status"] == "completed"
+
+
+def test_forbidden_metadata_keys_covers_all_typed_assertion_fields():
+    typed_assertion_fields = {
+        "expected_final_state_assertions",
+        "sensitive_canary_annotations",
+        "rehydration_assertions",
+        "secret_detection_assertions",
+        "unauthorized_mutation_assertions",
+        "token_store_persistence_assertions",
+        "token_ttl_expiry_assertions",
+        "token_persistence_failure_assertions",
+        "exfiltration_attempt_assertions",
+        "artifact_leakage_assertions",
+        "replay_attempt_assertions",
+        "signed_field_tampering_assertions",
+        "payload_tampering_assertions",
+        "stale_state_root_assertions",
+        "identity_mismatch_assertions",
+        "nonce_expiration_assertions",
+        "signer_defect_assertions",
+        "l3_proof_transplant_assertions",
+        "revoked_credential_assertions",
+        "evidence_preservation_assertions",
+        "unsupported_exclusions",
+    }
+    assert typed_assertion_fields <= FORBIDDEN_METADATA_KEYS
+
+
+def test_forbidden_metadata_keys_covers_all_typed_observation_ref_fields():
+    typed_observation_ref_fields = {
+        "state_observation_refs",
+        "final_state_observation_refs",
+        "rehydration_observation_refs",
+        "secret_detection_observation_refs",
+        "unauthorized_mutation_observation_refs",
+        "token_store_persistence_observation_refs",
+        "token_ttl_expiry_observation_refs",
+        "token_persistence_failure_observation_refs",
+        "exfiltration_attempt_observation_refs",
+        "artifact_leakage_observation_refs",
+        "replay_attempt_observation_refs",
+        "signed_field_tampering_observation_refs",
+        "payload_tampering_observation_refs",
+        "stale_state_root_observation_refs",
+        "identity_mismatch_observation_refs",
+        "nonce_expiration_observation_refs",
+        "signer_defect_observation_refs",
+        "l3_proof_transplant_observation_refs",
+        "revoked_credential_observation_refs",
+        "evidence_preservation_observation_refs",
+        "unsupported_exclusion_refs",
+    }
+    assert typed_observation_ref_fields <= FORBIDDEN_METADATA_KEYS
