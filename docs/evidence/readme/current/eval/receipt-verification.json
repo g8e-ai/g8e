@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "run-2026-09-01-synthetic-a",
+  "verified_at": "2026-09-01T13:00:00Z",
+  "verifier_version": "g8e-evals-verify-receipts-0.4.0",
+  "scope": "canonical receipt signatures and final-persistence attestations",
+  "total_receipts": 9,
+  "verified_signatures": 9,
+  "verified_persistence": 9,
+  "failed_signatures": 0,
+  "failed_persistence": 0,
+  "missing_keys": 0,
+  "distinct_signer_key_ids": ["actuator-key-synthetic-001"],
+  "receipt_bound_eligible_attempts": 9,
+  "sample_receipt_fingerprints": [
+    {"receipt_id": "rec-006", "signature_digest": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1", "artifact_ref": "eval/runs/run-2026-09-01-synthetic-a/receipts.jsonl"}
+  ]
+}

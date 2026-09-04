@@ -1,0 +1,59 @@
+{
+  "publication_schema_version": "1.0.0",
+  "readme_evidence_version": "1.0.0",
+  "evidence_cutoff": "2026-09-01T14:00:00Z",
+  "platform_version": "2.1.3",
+  "eval_runs": [
+    {
+      "run_id": "run-2026-09-01-synthetic-a",
+      "manifest_path": "eval/runs/run-2026-09-01-synthetic-a/manifest.json",
+      "manifest_sha256": "43dea644e1e07766ecd9201e3840a78fd3f2432297be916400e0107f10ba717e",
+      "attempts_path": "eval/runs/run-2026-09-01-synthetic-a/attempts.jsonl",
+      "attempts_sha256": "e5f303d2141d0f76a3e5d27ba530925efa0077f44ff4baba44aa0a4b869632ce",
+      "metrics_path": "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl",
+      "metrics_sha256": "b15da748c93afc82b7311887d66d5e00c5bc9ee28832762f7048a9fd786530e7",
+      "receipts_path": "eval/runs/run-2026-09-01-synthetic-a/receipts.jsonl",
+      "receipts_sha256": "8d610316e9ca5ec63625ac341ab09c7dd88d05ae9aa392315ace509a6877def0",
+      "stages_path": "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl",
+      "stages_sha256": "a0e56db882c376e993c6f6fcf5859e3739d4fe86b6b26f6b142e5768cb03e3cf"
+    }
+  ],
+  "receipt_verification": {
+    "result_path": "eval/receipt-verification.json",
+    "result_sha256": "e5db270c0923f71b214a0ff2388f41a7d98dd6dd0f11a6050057bf162053a2d9",
+    "scope": "canonical receipt signatures and final-persistence attestations"
+  },
+  "demo_reports": [
+    {
+      "run_id": "demo-allow-001",
+      "environment": "synthetic",
+      "scenario_id": "scenario-allow-doctrine-query",
+      "report_path": "demo/demo-allow-001/compliance-report.json",
+      "report_sha256": "22dfd05536cf346836082743945db6087a961a619472cc47ad775bb3badd883f"
+    }
+  ],
+  "ci_links": [
+    {
+      "label": "CI",
+      "url": "https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml",
+      "kind": "workflow_status"
+    },
+    {
+      "label": "Latest Release",
+      "url": "https://github.com/g8e-ai/g8e/releases",
+      "kind": "release_link"
+    }
+  ],
+  "claim_labels": [
+    "bounded_receipt_verification",
+    "verified_metric_outcomes",
+    "synthetic_demo_data",
+    "curated_ifeval_subset"
+  ],
+  "caveats": [
+    "Receipt verification covers canonical receipt signatures and final-persistence attestations only; it does not constitute complete eval-bundle verification.",
+    "ifeval_subset_verifier is a curated subset, not full IFEval.",
+    "L2 Consensus is labeled deterministic_replicated_doctrine; heterogeneous independent model consensus is not claimed.",
+    "Repository publication of actuator verification keys does not independently establish an external trust root."
+  ]
+}

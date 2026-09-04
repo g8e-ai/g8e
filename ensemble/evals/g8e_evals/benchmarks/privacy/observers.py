@@ -5,10 +5,12 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Production observer implementations for the synthetic privacy token lifecycle suite.
+"""Production observer implementations for the synthetic privacy eval suites.
 
-These observers interact with a ``LocalEncryptedTokenStore`` to produce
-typed observations that the deterministic graders consume.  Each observer
+These observers interact with local production-shaped systems under test
+(``LocalEncryptedTokenStore``, ``LocalExfiltrationSimulator``,
+``LocalArtifactEmitter``, ``LocalRehydrationArtifact``) to produce typed
+observations that the deterministic graders consume.  Each observer
 implements the corresponding protocol from ``g8e_evals.harness`` and
 produces verified observations bound to source evidence.
 """
@@ -16,13 +18,28 @@ produces verified observations bound to source evidence.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
+from g8e_evals.benchmarks.privacy.exfiltration import (
+    ExfiltrationActionResult,
+    LocalExfiltrationSimulator,
+)
 from g8e_evals.benchmarks.privacy.token_store import (
     LocalEncryptedTokenStore,
+    LocalRehydrationArtifact,
+    TokenEntry,
     VaultLockedError,
 )
 from g8e_evals.schema import (
+    ArtifactLeakageObservation,
     AttemptRecord,
+    ExfiltrationAttemptObservation,
+    ReceiptObservation,
+    RehydrationBoundary,
+    RehydrationObservation,
+    StateEvidenceKind,
+    StateValue,
     TaskDefinition,
     TokenPersistenceFailureObservation,
     TokenPersistenceFailureOutcome,
@@ -187,4 +204,211 @@ class TokenPersistenceFailureObserverImpl:
                 source_evidence_sha256=self._evidence_sha,
                 verification_status=VerificationStatus.VERIFIED,
             ))
+        return observations
+
+
+def _make_receipt_observation(
+    result: ExfiltrationActionResult,
+    attempt: AttemptRecord,
+    action_type: str,
+) -> ReceiptObservation:
+    """Build a verified ``ReceiptObservation`` from an exfiltration action result."""
+    return ReceiptObservation(
+        receipt_id=f"{attempt.attempt_id}:receipt",
+        attempt_id=attempt.attempt_id,
+        run_id=attempt.run_id,
+        transaction_id=result.transaction_id,
+        action_type=action_type,
+        primary=True,
+        verified=True,
+        action_receipt=result.receipt,
+    )
+
+
+def _absent_file_state() -> StateValue:
+    return StateValue(kind=StateEvidenceKind.FILE, exists=False)
+
+
+class ExfiltrationAttemptObserverImpl:
+    """Observes cross-boundary exfiltration attempts and produces typed observations.
+
+    The observer processes each exfiltration assertion through the
+    exfiltration simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces an ``ExfiltrationAttemptObservation`` recording
+    whether the sensitive value materialized at the declared destination
+    boundary.
+    """
+
+    def __init__(self, simulator: LocalExfiltrationSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[ExfiltrationAttemptObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        exfil_observations: list[ExfiltrationAttemptObservation] = []
+
+        for assertion in task.exfiltration_attempt_assertions:
+            sensitive_value = f"sensitive-value-{assertion.assertion_id}"
+            result = self._simulator.process_exfiltration(
+                action_type=assertion.action_type,
+                source=assertion.source,
+                destination=assertion.destination,
+                sensitive_value=sensitive_value,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type)
+            )
+
+            materialized = self._simulator.is_value_at_destination(assertion.destination)
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=materialized,
+            )
+
+            exfil_observations.append(ExfiltrationAttemptObservation(
+                observation_id=f"{attempt.attempt_id}:exfiltration:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                source=assertion.source,
+                destination=assertion.destination,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        if not receipt_observations:
+            raise ValueError("exfiltration attempt observer produced no observations")
+        return receipt_observations[0], exfil_observations
+
+
+class ArtifactLeakageObserverImpl:
+    """Observes emitted public artifacts and produces typed leakage observations.
+
+    The observer emits an artifact for each assertion's declared class through
+    the artifact emitter, scans it for sensitive content, and produces an
+    ``ArtifactLeakageObservation`` recording whether the artifact was present,
+    its content hash and byte length, the scanner version, and the count and
+    types of sensitive content found.
+    """
+
+    def __init__(
+        self,
+        emitter: LocalArtifactEmitter,
+        evidence_sha: str,
+        evidence_ref: str,
+        *,
+        leak_types: list | None = None,
+    ) -> None:
+        self._emitter = emitter
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+        self._leak_types = leak_types or []
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ArtifactLeakageObservation]:
+        observations: list[ArtifactLeakageObservation] = []
+
+        for assertion in task.artifact_leakage_assertions:
+            safe_content = '{"summary": "all-clear", "hash": "abc123"}'
+            artifact_path = self._emitter.emit_artifact(
+                assertion.artifact_class,
+                safe_content,
+                leak_types=self._leak_types,
+            )
+            present, sha, byte_length, occurrences, types_found = self._emitter.scan_artifact(artifact_path)
+
+            observations.append(ArtifactLeakageObservation(
+                observation_id=f"{attempt.attempt_id}:artifact-leakage:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                artifact_class=assertion.artifact_class,
+                collection_boundary=assertion.collection_boundary,
+                artifact_present=present,
+                artifact_sha256=sha if present else None,
+                artifact_byte_length=byte_length if present else 0,
+                scanner_version=self._emitter.scanner_version,
+                sensitive_occurrences=occurrences,
+                sensitive_types_found=types_found,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return observations
+
+
+class RehydrationObserverImpl:
+    """Observes local rehydration artifacts and produces typed rehydration observations.
+
+    The observer serializes tokens to a rehydration artifact, rehydrates them,
+    and produces a ``RehydrationObservation`` recording the restored token
+    count, unresolved token count, restored and unresolved sensitive types,
+    and the input and output artifact hashes.
+    """
+
+    def __init__(
+        self,
+        artifact: LocalRehydrationArtifact,
+        tokens: list[TokenEntry],
+        evidence_sha: str,
+        evidence_ref: str,
+    ) -> None:
+        self._artifact = artifact
+        self._tokens = tokens
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[RehydrationObservation]:
+        observations: list[RehydrationObservation] = []
+
+        self._artifact.serialize(self._tokens)
+        input_sha = self._artifact.input_sha256()
+        restored, unresolved_types = self._artifact.rehydrate()
+        output_sha = self._artifact.output_sha256()
+
+        for assertion in task.rehydration_assertions:
+            restored_types = sorted({t.sensitive_type for t in restored})
+            observations.append(RehydrationObservation(
+                observation_id=f"{attempt.attempt_id}:rehydration:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                source=assertion.source,
+                input_artifact_sha256=input_sha,
+                output_artifact_sha256=output_sha,
+                rehydrator_version=self._artifact.REHYDRATOR_VERSION,
+                execution_boundary=RehydrationBoundary.LOCAL_RUNTIME,
+                collected_at=datetime.now(UTC),
+                restored_token_count=len(restored),
+                unresolved_token_count=len(unresolved_types),
+                restored_sensitive_types=restored_types,
+                unresolved_sensitive_types=unresolved_types,
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
         return observations

@@ -84,6 +84,11 @@ jobs:
           make swagger-generate
           git diff --exit-code internal/services/gateway/docs/
 
+      - name: README Generator Tests and Drift Check
+        run: |
+          make readme-test
+          make readme-check
+
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
