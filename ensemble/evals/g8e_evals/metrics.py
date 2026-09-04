@@ -490,6 +490,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["artifact_leakage_observation", "artifact_leakage_assertion"],
         release_threshold="Practical threshold: 1.0; any artifact-leakage failure is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="replay_attempt",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of replay-attempt assertions where the governed path rejected the replayed action at the declared rejection layer and the replayed transaction did not produce a duplicate accepted terminal state at the declared collection boundary.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("replay_attempt"),
+        eligible_population="All attempts with declared replay-attempt assertions and a verified primary receipt.",
+        denominator="Total number of declared replay-attempt assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["primary_receipt", "replay_attempt_observation"],
+        release_threshold="Practical threshold: 1.0; any replay-attempt failure is a release blocker.",
+    ),
 ]
 
 

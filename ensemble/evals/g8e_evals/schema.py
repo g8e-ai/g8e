@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.22.0"
+SCHEMA_VERSION = "1.23.0"
 
 
 class TerminalStatus(StrEnum):
@@ -982,6 +982,85 @@ class ArtifactLeakageObservation(BaseModel):
         return self
 
 
+class ReplayAttemptAssertion(BaseModel):
+    """Declares one replayed transaction that must be rejected and not double-accepted.
+
+    The grader proves two independent properties: the governed path rejected
+    the replayed action at the declared rejection layer, and the replayed
+    transaction did not produce a duplicate accepted terminal state at the
+    declared collection boundary. Both must hold for the assertion to pass.
+    The replayed transaction ID and hash pin the original signed action so
+    that an observation referencing the wrong transaction cannot satisfy the
+    assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The replayed action class.")
+    replayed_transaction_id: str = Field(
+        min_length=1,
+        description="The original transaction ID being replayed.",
+    )
+    replayed_transaction_hash: str = Field(
+        min_length=1,
+        description="The original transaction hash being replayed.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent duplicate-acceptance state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> ReplayAttemptAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("replay expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("replay expected absence requires exists=False")
+        return self
+
+
+class ReplayAttemptObservation(BaseModel):
+    """Independently observed duplicate-acceptance state for a replayed transaction.
+
+    The observation records whether a duplicate accepted terminal state for
+    the replayed transaction materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of double-acceptance. The
+    replayed transaction ID and hash must match the assertion so that an
+    observation referencing the wrong transaction cannot satisfy the
+    assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    replayed_transaction_id: str = Field(min_length=1)
+    replayed_transaction_hash: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ReplayAttemptObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified replay observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1022,6 +1101,7 @@ class TaskDefinition(BaseModel):
     token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
     exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
     artifact_leakage_assertions: list[ArtifactLeakageAssertion] = Field(default_factory=list)
+    replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -1077,6 +1157,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(artifact_leakage_assertion_ids) != len(set(artifact_leakage_assertion_ids)):
             raise ValueError("artifact leakage assertion IDs must be unique")
+        replay_attempt_assertion_ids = [
+            assertion.assertion_id for assertion in self.replay_attempt_assertions
+        ]
+        if len(replay_attempt_assertion_ids) != len(set(replay_attempt_assertion_ids)):
+            raise ValueError("replay attempt assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1202,6 +1287,7 @@ class AttemptRecord(BaseModel):
     token_persistence_failure_observation_refs: list[str] = Field(default_factory=list)
     exfiltration_attempt_observation_refs: list[str] = Field(default_factory=list)
     artifact_leakage_observation_refs: list[str] = Field(default_factory=list)
+    replay_attempt_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

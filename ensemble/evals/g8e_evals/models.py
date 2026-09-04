@@ -26,6 +26,7 @@ from g8e_evals.schema import (
     PolicyOutcome,
     RehydrationAssertion,
     RejectionLayer,
+    ReplayAttemptAssertion,
     SecretDetectionAssertion,
     StateFixtureDefinition,
     TokenStorePersistenceAssertion,
@@ -78,6 +79,7 @@ class TaskMetadata(BaseModel):
     token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
     exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
     artifact_leakage_assertions: list[ArtifactLeakageAssertion] = Field(default_factory=list)
+    replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

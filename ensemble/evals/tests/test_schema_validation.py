@@ -49,6 +49,8 @@ from g8e_evals.schema import (
     RehydrationBoundary,
     RehydrationObservation,
     RejectionLayer,
+    ReplayAttemptAssertion,
+    ReplayAttemptObservation,
     RunManifest,
     SecretDetectionAssertion,
     SecretDetectionObservation,
@@ -79,7 +81,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.22.0"
+    assert SCHEMA_VERSION == "1.23.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -1470,3 +1472,121 @@ def test_attempt_record_links_artifact_leakage_observations():
     )
 
     assert attempt.artifact_leakage_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# ReplayAttemptAssertion / ReplayAttemptObservation
+# ---------------------------------------------------------------------------
+
+
+def test_replay_attempt_assertion_and_observation_round_trip():
+    assertion = ReplayAttemptAssertion(
+        assertion_id="replay-1",
+        action_type="FILE_EDIT",
+        replayed_transaction_id="original-tx-1",
+        replayed_transaction_hash="original-hash-1",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = ReplayAttemptObservation(
+        observation_id="replay-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        replayed_transaction_id="original-tx-1",
+        replayed_transaction_hash="original-hash-1",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+        source_evidence_refs=["restricted-replay-evidence"],
+        source_evidence_sha256="e" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = ReplayAttemptAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = ReplayAttemptObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_replay_attempt_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="replay expected absence requires exists=False"):
+        ReplayAttemptAssertion(
+            assertion_id="replay-1",
+            action_type="FILE_EDIT",
+            replayed_transaction_id="original-tx-1",
+            replayed_transaction_hash="original-hash-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_replay_attempt_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="replay expected absence requires consistent=False for ledger state"):
+        ReplayAttemptAssertion(
+            assertion_id="replay-1",
+            action_type="FILE_EDIT",
+            replayed_transaction_id="original-tx-1",
+            replayed_transaction_hash="original-hash-1",
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_replay_attempt_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified replay observation requires source evidence",
+    ):
+        ReplayAttemptObservation(
+            observation_id="replay-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="replay-1",
+            action_type="FILE_EDIT",
+            replayed_transaction_id="original-tx-1",
+            replayed_transaction_hash="original-hash-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_replay_attempt_assertion_ids():
+    assertion = ReplayAttemptAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        replayed_transaction_id="original-tx-1",
+        replayed_transaction_hash="original-hash-1",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="replay attempt assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            replay_attempt_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_replay_attempt_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        replay_attempt_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.replay_attempt_observation_refs == ["observation-1", "observation-2"]

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         ArtifactLeakageObservation,
         ExfiltrationAttemptObservation,
         RehydrationObservation,
+        ReplayAttemptObservation,
         SecretDetectionObservation,
         StateObservation,
         TaskDefinition,
@@ -125,6 +126,14 @@ class ArtifactLeakageObserver(Protocol):
     ) -> list[ArtifactLeakageObservation]: ...
 
 
+class ReplayAttemptObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ReplayAttemptObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -167,6 +176,7 @@ class SUTConfig:
     token_persistence_failure_observer: TokenPersistenceFailureObserver | None = None
     exfiltration_attempt_observer: ExfiltrationAttemptObserver | None = None
     artifact_leakage_observer: ArtifactLeakageObserver | None = None
+    replay_attempt_observer: ReplayAttemptObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

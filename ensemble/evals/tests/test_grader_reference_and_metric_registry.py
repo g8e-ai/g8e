@@ -289,6 +289,7 @@ _CURRENT_METRIC_IDS = [
     "token_persistence_failure",
     "exfiltration_attempt",
     "artifact_leakage",
+    "replay_attempt",
 ]
 
 
