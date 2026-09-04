@@ -57,12 +57,14 @@ from g8e_evals.schema import (
     ModelIdentity,
     PolicyOutcome,
     PostureObservation,
+    PayloadTamperingObservation,
     ReceiptObservation,
     RehydrationObservation,
     ReplayAttemptObservation,
     RoleToModelMapping,
     RunManifest,
     SecretDetectionObservation,
+    SignedFieldTamperingObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -115,6 +117,8 @@ _TOKEN_PERSISTENCE_FAILURE_GRADER_ID = "token_persistence_failure"
 _EXFILTRATION_ATTEMPT_GRADER_ID = "exfiltration_attempt"
 _ARTIFACT_LEAKAGE_GRADER_ID = "artifact_leakage"
 _REPLAY_ATTEMPT_GRADER_ID = "replay_attempt"
+_SIGNED_FIELD_TAMPERING_GRADER_ID = "signed_field_tampering"
+_PAYLOAD_TAMPERING_GRADER_ID = "payload_tampering"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -586,6 +590,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.exfiltration_attempt_assertions
                     or t.metadata.artifact_leakage_assertions
                     or t.metadata.replay_attempt_assertions
+                    or t.metadata.signed_field_tampering_assertions
+                    or t.metadata.payload_tampering_assertions
                 )
                 else ALL_ARMS
             ),
@@ -608,6 +614,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             exfiltration_attempt_assertions=t.metadata.exfiltration_attempt_assertions,
             artifact_leakage_assertions=t.metadata.artifact_leakage_assertions,
             replay_attempt_assertions=t.metadata.replay_attempt_assertions,
+            signed_field_tampering_assertions=t.metadata.signed_field_tampering_assertions,
+            payload_tampering_assertions=t.metadata.payload_tampering_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -740,6 +748,20 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.replay_attempt_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_SIGNED_FIELD_TAMPERING_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.signed_field_tampering_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_PAYLOAD_TAMPERING_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.payload_tampering_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -766,6 +788,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     exfiltration_attempt_records: list[ExfiltrationAttemptObservation] = []
     artifact_leakage_records: list[ArtifactLeakageObservation] = []
     replay_attempt_records: list[ReplayAttemptObservation] = []
+    signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
+    payload_tampering_records: list[PayloadTamperingObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1128,6 +1152,24 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         replay_attempt_records.extend(replay_attempt_observations)
         attempt.replay_attempt_observation_refs = [
             observation.observation_id for observation in replay_attempt_observations
+        ]
+        signed_field_tampering_observations = (
+            await config.signed_field_tampering_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.signed_field_tampering_assertions and config.signed_field_tampering_observer is not None
+            else []
+        )
+        signed_field_tampering_records.extend(signed_field_tampering_observations)
+        attempt.signed_field_tampering_observation_refs = [
+            observation.observation_id for observation in signed_field_tampering_observations
+        ]
+        payload_tampering_observations = (
+            await config.payload_tampering_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.payload_tampering_assertions and config.payload_tampering_observer is not None
+            else []
+        )
+        payload_tampering_records.extend(payload_tampering_observations)
+        attempt.payload_tampering_observation_refs = [
+            observation.observation_id for observation in payload_tampering_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1574,6 +1616,58 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=replay_attempt_grade.evidence_refs,
             ))
+        if task.metadata.signed_field_tampering_assertions:
+            signed_field_tampering_grade = grade_deterministically(
+                _SIGNED_FIELD_TAMPERING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    signed_field_tampering_observations=signed_field_tampering_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_SIGNED_FIELD_TAMPERING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=signed_field_tampering_grade.value,
+                unit="proportion",
+                eligible=signed_field_tampering_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=signed_field_tampering_grade.denominator_contribution,
+                verification_status=signed_field_tampering_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=signed_field_tampering_grade.evidence_refs,
+            ))
+        if task.metadata.payload_tampering_assertions:
+            payload_tampering_grade = grade_deterministically(
+                _PAYLOAD_TAMPERING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    payload_tampering_observations=payload_tampering_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PAYLOAD_TAMPERING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=payload_tampering_grade.value,
+                unit="proportion",
+                eligible=payload_tampering_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=payload_tampering_grade.denominator_contribution,
+                verification_status=payload_tampering_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=payload_tampering_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1649,6 +1743,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
         for observation in replay_attempt_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
+        for observation in signed_field_tampering_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
+        for observation in payload_tampering_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

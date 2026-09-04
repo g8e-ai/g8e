@@ -44,6 +44,8 @@ from g8e_evals.schema import (
     ModelIdentity,
     PolicyOutcome,
     PostureObservation,
+    PayloadTamperingAssertion,
+    PayloadTamperingObservation,
     ReceiptObservation,
     RehydrationAssertion,
     RehydrationBoundary,
@@ -55,6 +57,9 @@ from g8e_evals.schema import (
     SecretDetectionAssertion,
     SecretDetectionObservation,
     SensitiveArtifactContentType,
+    SignedField,
+    SignedFieldTamperingAssertion,
+    SignedFieldTamperingObservation,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -81,7 +86,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.23.0"
+    assert SCHEMA_VERSION == "1.24.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -1590,3 +1595,247 @@ def test_attempt_record_links_replay_attempt_observations():
     )
 
     assert attempt.replay_attempt_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# SignedFieldTamperingAssertion / SignedFieldTamperingObservation
+# ---------------------------------------------------------------------------
+
+
+def test_signed_field_tampering_assertion_and_observation_round_trip():
+    assertion = SignedFieldTamperingAssertion(
+        assertion_id="tamper-1",
+        action_type="FILE_EDIT",
+        tampered_field=SignedField.TRANSACTION_HASH,
+        original_value="original-hash-1",
+        tampered_value="tampered-hash-1",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = SignedFieldTamperingObservation(
+        observation_id="tamper-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        tampered_field=SignedField.TRANSACTION_HASH,
+        tampered_value="tampered-hash-1",
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+        source_evidence_refs=["restricted-tamper-evidence"],
+        source_evidence_sha256="e" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = SignedFieldTamperingAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = SignedFieldTamperingObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_signed_field_tampering_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="signed-field tampering expected absence requires exists=False"):
+        SignedFieldTamperingAssertion(
+            assertion_id="tamper-1",
+            action_type="FILE_EDIT",
+            tampered_field=SignedField.TRANSACTION_HASH,
+            original_value="original-hash-1",
+            tampered_value="tampered-hash-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_signed_field_tampering_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(
+        ValidationError,
+        match="signed-field tampering expected absence requires consistent=False for ledger state",
+    ):
+        SignedFieldTamperingAssertion(
+            assertion_id="tamper-1",
+            action_type="FILE_EDIT",
+            tampered_field=SignedField.TRANSACTION_HASH,
+            original_value="original-hash-1",
+            tampered_value="tampered-hash-1",
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_signed_field_tampering_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified signed-field tampering observation requires source evidence",
+    ):
+        SignedFieldTamperingObservation(
+            observation_id="tamper-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="tamper-1",
+            action_type="FILE_EDIT",
+            tampered_field=SignedField.TRANSACTION_HASH,
+            tampered_value="tampered-hash-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_signed_field_tampering_assertion_ids():
+    assertion = SignedFieldTamperingAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        tampered_field=SignedField.TRANSACTION_HASH,
+        original_value="original-hash-1",
+        tampered_value="tampered-hash-1",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="signed-field tampering assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            signed_field_tampering_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_signed_field_tampering_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        signed_field_tampering_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.signed_field_tampering_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# PayloadTamperingAssertion / PayloadTamperingObservation
+# ---------------------------------------------------------------------------
+
+
+def test_payload_tampering_assertion_and_observation_round_trip():
+    assertion = PayloadTamperingAssertion(
+        assertion_id="payload-tamper-1",
+        action_type="FILE_EDIT",
+        original_payload_hash="a" * 64,
+        tampered_payload_hash="b" * 64,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+    )
+    observation = PayloadTamperingObservation(
+        observation_id="payload-tamper-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        action_type="FILE_EDIT",
+        tampered_payload_hash="b" * 64,
+        collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        observed=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=False),
+        collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+        source_evidence_refs=["restricted-payload-tamper-evidence"],
+        source_evidence_sha256="e" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = PayloadTamperingAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = PayloadTamperingObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_payload_tampering_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="payload tampering expected absence requires exists=False"):
+        PayloadTamperingAssertion(
+            assertion_id="payload-tamper-1",
+            action_type="FILE_EDIT",
+            original_payload_hash="a" * 64,
+            tampered_payload_hash="b" * 64,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_payload_tampering_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(
+        ValidationError,
+        match="payload tampering expected absence requires consistent=False for ledger state",
+    ):
+        PayloadTamperingAssertion(
+            assertion_id="payload-tamper-1",
+            action_type="FILE_EDIT",
+            original_payload_hash="a" * 64,
+            tampered_payload_hash="b" * 64,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_payload_tampering_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified payload tampering observation requires source evidence",
+    ):
+        PayloadTamperingObservation(
+            observation_id="payload-tamper-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="payload-tamper-1",
+            action_type="FILE_EDIT",
+            tampered_payload_hash="b" * 64,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=datetime(2026, 9, 4, 12, 0, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_payload_tampering_assertion_ids():
+    assertion = PayloadTamperingAssertion(
+        assertion_id="duplicate",
+        action_type="FILE_EDIT",
+        original_payload_hash="a" * 64,
+        tampered_payload_hash="b" * 64,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="payload tampering assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            payload_tampering_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_payload_tampering_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        payload_tampering_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.payload_tampering_observation_refs == ["observation-1", "observation-2"]

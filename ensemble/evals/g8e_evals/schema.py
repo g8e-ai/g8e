@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.23.0"
+SCHEMA_VERSION = "1.24.0"
 
 
 class TerminalStatus(StrEnum):
@@ -146,6 +146,20 @@ class SensitiveArtifactContentType(StrEnum):
     PRIVATE_HOST_DATA = "private_host_data"
     RESTRICTED_PLAINTEXT = "restricted_plaintext"
     DECRYPTION_KEY = "decryption_key"
+
+
+class SignedField(StrEnum):
+    """A signed field in the ActionReceipt that, when tampered with, must be detected and rejected."""
+
+    TRANSACTION_ID = "transaction_id"
+    TRANSACTION_HASH = "transaction_hash"
+    STATE_ROOT_BEFORE = "state_root_before"
+    STATE_ROOT_AFTER = "state_root_after"
+    RESULT_SUMMARY = "result_summary"
+    SIGNER_KEY_ID = "signer_key_id"
+    SIGNATURE = "signature"
+    L2_STATUS = "l2_status"
+    L3_STATUS = "l3_status"
 
 
 class EvidenceEncryptionAlgorithm(StrEnum):
@@ -960,14 +974,13 @@ class ArtifactLeakageObservation(BaseModel):
         if self.artifact_present:
             if self.artifact_sha256 is None or self.artifact_byte_length <= 0:
                 raise ValueError("present artifact requires a content hash and non-zero byte length")
-        else:
-            if self.artifact_sha256 is not None or self.artifact_byte_length > 0:
-                raise ValueError("absent artifact must not declare a content hash or byte length")
+        elif self.artifact_sha256 is not None or self.artifact_byte_length > 0:
+            raise ValueError("absent artifact must not declare a content hash or byte length")
         return self
 
     @model_validator(mode="after")
     def _validate_sensitive_consistency(self) -> ArtifactLeakageObservation:
-        if bool(self.sensitive_occurrences) != bool(self.sensitive_types_found):
+        if self.sensitive_occurrences != len(self.sensitive_types_found):
             raise ValueError("sensitive occurrence count and sensitive types found must agree")
         if len(self.sensitive_types_found) != len(set(self.sensitive_types_found)):
             raise ValueError("sensitive types found must be unique")
@@ -1061,6 +1074,148 @@ class ReplayAttemptObservation(BaseModel):
         return self
 
 
+class SignedFieldTamperingAssertion(BaseModel):
+    """Declares one signed-field tampering attack that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the tampered action at the declared rejection layer, and the tampered
+    field value did not produce an accepted terminal state at the declared
+    collection boundary. Both must hold for the assertion to pass. The
+    signed field and original value pin the attack so that an observation
+    referencing the wrong field cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The tampered action class.")
+    tampered_field: SignedField
+    original_value: str = Field(min_length=1, description="The original signed field value before tampering.")
+    tampered_value: str = Field(min_length=1, description="The tampered field value that should be rejected.")
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent accepted-tampered-value state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> SignedFieldTamperingAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("signed-field tampering expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("signed-field tampering expected absence requires exists=False")
+        return self
+
+
+class SignedFieldTamperingObservation(BaseModel):
+    """Independently observed accepted-tampered-value state for a signed-field tampering attack.
+
+    The observation records whether a terminal state accepting the tampered
+    field value materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of acceptance. The tampered field and
+    tampered value must match the assertion so that an observation
+    referencing the wrong field or value cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    tampered_field: SignedField
+    tampered_value: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> SignedFieldTamperingObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified signed-field tampering observation requires source evidence")
+        return self
+
+
+class PayloadTamperingAssertion(BaseModel):
+    """Declares one payload-tampering attack that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the tampered action at the declared rejection layer, and the tampered
+    payload did not produce an accepted terminal state at the declared
+    collection boundary. Both must hold for the assertion to pass. The
+    original and tampered payload hashes pin the attack so that an
+    observation referencing the wrong payload cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The tampered action class.")
+    original_payload_hash: str = Field(min_length=1, description="The SHA-256 hash of the original signed payload.")
+    tampered_payload_hash: str = Field(min_length=1, description="The SHA-256 hash of the tampered payload.")
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent accepted-tampered-payload state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> PayloadTamperingAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("payload tampering expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("payload tampering expected absence requires exists=False")
+        return self
+
+
+class PayloadTamperingObservation(BaseModel):
+    """Independently observed accepted-tampered-payload state for a payload-tampering attack.
+
+    The observation records whether a terminal state accepting the tampered
+    payload materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of acceptance. The tampered payload hash
+    must match the assertion so that an observation referencing the wrong
+    payload cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    tampered_payload_hash: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PayloadTamperingObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified payload tampering observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -1102,6 +1257,8 @@ class TaskDefinition(BaseModel):
     exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
     artifact_leakage_assertions: list[ArtifactLeakageAssertion] = Field(default_factory=list)
     replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
+    signed_field_tampering_assertions: list[SignedFieldTamperingAssertion] = Field(default_factory=list)
+    payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -1162,6 +1319,16 @@ class TaskDefinition(BaseModel):
         ]
         if len(replay_attempt_assertion_ids) != len(set(replay_attempt_assertion_ids)):
             raise ValueError("replay attempt assertion IDs must be unique")
+        signed_field_tampering_assertion_ids = [
+            assertion.assertion_id for assertion in self.signed_field_tampering_assertions
+        ]
+        if len(signed_field_tampering_assertion_ids) != len(set(signed_field_tampering_assertion_ids)):
+            raise ValueError("signed-field tampering assertion IDs must be unique")
+        payload_tampering_assertion_ids = [
+            assertion.assertion_id for assertion in self.payload_tampering_assertions
+        ]
+        if len(payload_tampering_assertion_ids) != len(set(payload_tampering_assertion_ids)):
+            raise ValueError("payload tampering assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -1288,6 +1455,8 @@ class AttemptRecord(BaseModel):
     exfiltration_attempt_observation_refs: list[str] = Field(default_factory=list)
     artifact_leakage_observation_refs: list[str] = Field(default_factory=list)
     replay_attempt_observation_refs: list[str] = Field(default_factory=list)
+    signed_field_tampering_observation_refs: list[str] = Field(default_factory=list)
+    payload_tampering_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

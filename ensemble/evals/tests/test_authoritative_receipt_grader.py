@@ -56,6 +56,8 @@ from g8e_evals.schema import (
     ModelBoundaryPrivacyAttestation,
     PolicyOutcome,
     PostureObservation,
+    PayloadTamperingAssertion,
+    PayloadTamperingObservation,
     ReceiptObservation,
     RehydrationAssertion,
     UnauthorizedMutationAssertion,
@@ -68,6 +70,9 @@ from g8e_evals.schema import (
     SecretDetectionAssertion,
     SecretDetectionObservation,
     SensitiveArtifactContentType,
+    SignedField,
+    SignedFieldTamperingAssertion,
+    SignedFieldTamperingObservation,
     StateAssertion,
     StateAssertionPredicate,
     StateCollectionBoundary,
@@ -4545,4 +4550,1044 @@ def test_replay_attempt_grader_partial_failure_reports_failed_assertion():
     assert result.value == 0.5
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "replay attempt assertion failed: replay-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# SignedFieldTamperingGrader
+# ---------------------------------------------------------------------------
+
+
+_TAMPER_COLLECTED = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+_TAMPER_FIELD = SignedField.TRANSACTION_HASH
+_TAMPER_ORIGINAL = "original-hash-1"
+_TAMPER_TAMPERED = "tampered-hash-1"
+
+
+def _signed_field_tampering_assertion(
+    *,
+    assertion_id: str = "tamper-1",
+    action_type: str = "FILE_EDIT",
+    tampered_field: SignedField = _TAMPER_FIELD,
+    original_value: str = _TAMPER_ORIGINAL,
+    tampered_value: str = _TAMPER_TAMPERED,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L2_CONSENSUS,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> SignedFieldTamperingAssertion:
+    return SignedFieldTamperingAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        tampered_field=tampered_field,
+        original_value=original_value,
+        tampered_value=tampered_value,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _signed_field_tampering_observation(
+    *,
+    assertion_id: str = "tamper-1",
+    action_type: str = "FILE_EDIT",
+    tampered_field: SignedField = _TAMPER_FIELD,
+    tampered_value: str = _TAMPER_TAMPERED,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> SignedFieldTamperingObservation:
+    return SignedFieldTamperingObservation(
+        observation_id=f"tamper-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        tampered_field=tampered_field,
+        tampered_value=tampered_value,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_TAMPER_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _signed_field_tampering_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L2_CONSENSUS,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[SignedFieldTamperingObservation] | None = None,
+    assertions: list[SignedFieldTamperingAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "signed_field_tampering_assertions": assertions or [_signed_field_tampering_assertion()],
+        "graders": [{"grader_id": "signed_field_tampering", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        signed_field_tampering_observations=(
+            observations if observations is not None else [_signed_field_tampering_observation()]
+        ),
+    )
+
+
+def test_signed_field_tampering_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "signed_field_tampering",
+        "1.0.0",
+        _signed_field_tampering_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "tamper-obs-tamper-1" in result.evidence_refs
+    assert "evidence-tamper-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_signed_field_tampering_grader_verifies_l4_only_rejection():
+    context = _signed_field_tampering_context(
+        failed_layer=None,
+        assertions=[_signed_field_tampering_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_signed_field_tampering_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_signed_field_tampering_grader_supports_ledger_absence():
+    context = _signed_field_tampering_context(
+        assertions=[_signed_field_tampering_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_signed_field_tampering_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_signed_field_tampering_grader_fails_when_action_is_allowed():
+    context = _signed_field_tampering_context(failed_layer=None)
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_when_rejection_layer_mismatches():
+    context = _signed_field_tampering_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_signed_field_tampering_assertion(
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        )],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_when_tampered_value_materializes():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=42,
+                mode="0640",
+            ),
+        )],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_when_action_type_mismatches():
+    context = _signed_field_tampering_context(
+        action_type="FILE_DELETE",
+        assertions=[_signed_field_tampering_assertion(action_type="FILE_EDIT")],
+        observations=[_signed_field_tampering_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_closed_on_unverified_receipt():
+    context = _signed_field_tampering_context(verified=False)
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_signed_field_tampering_grader_fails_closed_on_missing_assertions():
+    context = _signed_field_tampering_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"signed_field_tampering_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "signed-field tampering assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_signed_field_tampering_grader_fails_closed_on_missing_primary_receipt():
+    context = _signed_field_tampering_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        signed_field_tampering_observations=context.signed_field_tampering_observations,
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_signed_field_tampering_grader_fails_closed_on_missing_observation():
+    context = _signed_field_tampering_context(observations=[])
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_closed_on_duplicate_observations():
+    obs = _signed_field_tampering_observation()
+    context = _signed_field_tampering_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_fails_closed_on_unverified_observation():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_unknown_observation_assertion():
+    context = _signed_field_tampering_context(
+        observations=[
+            _signed_field_tampering_observation(),
+            _signed_field_tampering_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "signed-field tampering observation references an unknown assertion: unknown"
+
+
+def test_signed_field_tampering_grader_rejects_cross_attempt_observation():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_cross_run_observation():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_cross_task_observation():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_tampered_field_mismatch():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(tampered_field=SignedField.STATE_ROOT_BEFORE)],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_tampered_value_mismatch():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(tampered_value="wrong-value")],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_collection_boundary_mismatch():
+    context = _signed_field_tampering_context(
+        observations=[_signed_field_tampering_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_missing_source_evidence():
+    obs = _signed_field_tampering_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _signed_field_tampering_context(observations=[obs])
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-1"
+
+
+def test_signed_field_tampering_grader_rejects_ambiguous_failed_layers():
+    context = _signed_field_tampering_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_signed_field_tampering_grader_rejects_invalid_l4_outcome():
+    context = _signed_field_tampering_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_signed_field_tampering_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"signed_field_tampering@2\.0\.0"):
+        grade_deterministically("signed_field_tampering", "2.0.0", _signed_field_tampering_context())
+
+
+def test_signed_field_tampering_grader_aggregates_multiple_assertions():
+    assertions = [
+        _signed_field_tampering_assertion(assertion_id="tamper-1"),
+        _signed_field_tampering_assertion(
+            assertion_id="tamper-2",
+            tampered_field=SignedField.STATE_ROOT_BEFORE,
+            original_value="root-before",
+            tampered_value="tampered-root",
+        ),
+    ]
+    observations = [
+        _signed_field_tampering_observation(assertion_id="tamper-1"),
+        _signed_field_tampering_observation(
+            assertion_id="tamper-2",
+            tampered_field=SignedField.STATE_ROOT_BEFORE,
+            tampered_value="tampered-root",
+        ),
+    ]
+    context = _signed_field_tampering_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_signed_field_tampering_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _signed_field_tampering_assertion(assertion_id="tamper-1"),
+        _signed_field_tampering_assertion(
+            assertion_id="tamper-2",
+            tampered_field=SignedField.STATE_ROOT_BEFORE,
+            original_value="root-before",
+            tampered_value="tampered-root",
+        ),
+    ]
+    observations = [
+        _signed_field_tampering_observation(assertion_id="tamper-1"),
+        _signed_field_tampering_observation(
+            assertion_id="tamper-2",
+            tampered_field=SignedField.STATE_ROOT_BEFORE,
+            tampered_value="tampered-root",
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _signed_field_tampering_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("signed_field_tampering", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "signed-field tampering assertion failed: tamper-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# PayloadTamperingGrader
+# ---------------------------------------------------------------------------
+
+
+_PAYLOAD_TAMPER_ORIGINAL_HASH = "a" * 64
+_PAYLOAD_TAMPER_TAMPERED_HASH = "b" * 64
+
+
+def _payload_tampering_assertion(
+    *,
+    assertion_id: str = "payload-tamper-1",
+    action_type: str = "FILE_EDIT",
+    original_payload_hash: str = _PAYLOAD_TAMPER_ORIGINAL_HASH,
+    tampered_payload_hash: str = _PAYLOAD_TAMPER_TAMPERED_HASH,
+    expected_rejection_layer: RejectionLayer = RejectionLayer.L2_CONSENSUS,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    expected_absence: StateValue = _ABSENT_FILE,
+) -> PayloadTamperingAssertion:
+    return PayloadTamperingAssertion(
+        assertion_id=assertion_id,
+        action_type=action_type,
+        original_payload_hash=original_payload_hash,
+        tampered_payload_hash=tampered_payload_hash,
+        expected_rejection_layer=expected_rejection_layer,
+        collection_boundary=collection_boundary,
+        expected_absence=expected_absence,
+    )
+
+
+def _payload_tampering_observation(
+    *,
+    assertion_id: str = "payload-tamper-1",
+    action_type: str = "FILE_EDIT",
+    tampered_payload_hash: str = _PAYLOAD_TAMPER_TAMPERED_HASH,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    observed: StateValue = _ABSENT_FILE,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> PayloadTamperingObservation:
+    return PayloadTamperingObservation(
+        observation_id=f"payload-tamper-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        action_type=action_type,
+        tampered_payload_hash=tampered_payload_hash,
+        collection_boundary=collection_boundary,
+        observed=observed,
+        collected_at=_TAMPER_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _payload_tampering_context(
+    *,
+    failed_layer: RejectionLayer | None = RejectionLayer.L2_CONSENSUS,
+    verified: bool = True,
+    action_type: str = "FILE_EDIT",
+    observations: list[PayloadTamperingObservation] | None = None,
+    assertions: list[PayloadTamperingAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context(verified=verified)
+    receipt = context.receipts[0].action_receipt
+    del receipt.deterministic_stage_evidence[:]
+    if failed_layer == RejectionLayer.L1_DOCTRINE:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L2_CONSENSUS:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    elif failed_layer == RejectionLayer.L3_NOTARY:
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_PROTOCOL_L2,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
+            action_type=action_type,
+        )
+        receipt.deterministic_stage_evidence.add(
+            kind=DETERMINISTIC_STAGE_KIND_L3_NOTARY,
+            outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+            action_type=action_type,
+        )
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=(
+            DETERMINISTIC_STAGE_OUTCOME_FAILED
+            if failed_layer is not None
+            else DETERMINISTIC_STAGE_OUTCOME_VERIFIED
+        ),
+        action_type=action_type,
+    )
+    task = context.task.model_copy(update={
+        "expected_action_class": action_type,
+        "payload_tampering_assertions": assertions or [_payload_tampering_assertion()],
+        "graders": [{"grader_id": "payload_tampering", "grader_version": "1.0.0"}],
+    })
+    receipts = [
+        context.receipts[0].model_copy(update={"action_type": action_type})
+        if context.receipts
+        else context.receipts[0]
+    ]
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+        payload_tampering_observations=(
+            observations if observations is not None else [_payload_tampering_observation()]
+        ),
+    )
+
+
+def test_payload_tampering_grader_verifies_rejection_and_absence():
+    result = grade_deterministically(
+        "payload_tampering",
+        "1.0.0",
+        _payload_tampering_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "receipt-1" in result.evidence_refs
+    assert "payload-tamper-obs-payload-tamper-1" in result.evidence_refs
+    assert "evidence-payload-tamper-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_payload_tampering_grader_verifies_l4_only_rejection():
+    context = _payload_tampering_context(
+        failed_layer=None,
+        assertions=[_payload_tampering_assertion(
+            expected_rejection_layer=RejectionLayer.L4_VERIFICATION,
+        )],
+        observations=[_payload_tampering_observation()],
+    )
+    del context.receipts[0].action_receipt.deterministic_stage_evidence[:]
+    context.receipts[0].action_receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L4_VERIFICATION,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_payload_tampering_grader_supports_ledger_absence():
+    context = _payload_tampering_context(
+        assertions=[_payload_tampering_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=_ABSENT_LEDGER,
+        )],
+        observations=[_payload_tampering_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            observed=_ABSENT_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_payload_tampering_grader_fails_when_action_is_allowed():
+    context = _payload_tampering_context(failed_layer=None)
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_when_rejection_layer_mismatches():
+    context = _payload_tampering_context(
+        failed_layer=RejectionLayer.L1_DOCTRINE,
+        assertions=[_payload_tampering_assertion(
+            expected_rejection_layer=RejectionLayer.L2_CONSENSUS,
+        )],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_when_tampered_payload_materializes():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(
+            observed=StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=True,
+                content_sha256="a" * 64,
+                byte_length=42,
+                mode="0640",
+            ),
+        )],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_when_action_type_mismatches():
+    context = _payload_tampering_context(
+        action_type="FILE_DELETE",
+        assertions=[_payload_tampering_assertion(action_type="FILE_EDIT")],
+        observations=[_payload_tampering_observation(action_type="FILE_EDIT")],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_closed_on_unverified_receipt():
+    context = _payload_tampering_context(verified=False)
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt signature verification failed"
+    assert result.denominator_contribution == 0
+
+
+def test_payload_tampering_grader_fails_closed_on_missing_assertions():
+    context = _payload_tampering_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"payload_tampering_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "payload tampering assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_payload_tampering_grader_fails_closed_on_missing_primary_receipt():
+    context = _payload_tampering_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=[],
+        stages=context.stages,
+        payload_tampering_observations=context.payload_tampering_observations,
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one primary receipt is required"
+
+
+def test_payload_tampering_grader_fails_closed_on_missing_observation():
+    context = _payload_tampering_context(observations=[])
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_closed_on_duplicate_observations():
+    obs = _payload_tampering_observation()
+    context = _payload_tampering_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_fails_closed_on_unverified_observation():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_unknown_observation_assertion():
+    context = _payload_tampering_context(
+        observations=[
+            _payload_tampering_observation(),
+            _payload_tampering_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "payload tampering observation references an unknown assertion: unknown"
+
+
+def test_payload_tampering_grader_rejects_cross_attempt_observation():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_cross_run_observation():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_cross_task_observation():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_tampered_payload_hash_mismatch():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(tampered_payload_hash="c" * 64)],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_collection_boundary_mismatch():
+    context = _payload_tampering_context(
+        observations=[_payload_tampering_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_missing_source_evidence():
+    obs = _payload_tampering_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _payload_tampering_context(observations=[obs])
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-1"
+
+
+def test_payload_tampering_grader_rejects_ambiguous_failed_layers():
+    context = _payload_tampering_context()
+    receipt = context.receipts[0].action_receipt
+    receipt.deterministic_stage_evidence.add(
+        kind=DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
+        outcome=DETERMINISTIC_STAGE_OUTCOME_FAILED,
+        action_type="FILE_EDIT",
+    )
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "receipt contains ambiguous failed governance stages"
+
+
+def test_payload_tampering_grader_rejects_invalid_l4_outcome():
+    context = _payload_tampering_context()
+    receipt = context.receipts[0].action_receipt
+    for stage in receipt.deterministic_stage_evidence:
+        if stage.kind == DETERMINISTIC_STAGE_KIND_L4_VERIFICATION:
+            stage.outcome = DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "L4 verification stage has an invalid outcome"
+
+
+def test_payload_tampering_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"payload_tampering@2\.0\.0"):
+        grade_deterministically("payload_tampering", "2.0.0", _payload_tampering_context())
+
+
+def test_payload_tampering_grader_aggregates_multiple_assertions():
+    assertions = [
+        _payload_tampering_assertion(assertion_id="payload-tamper-1"),
+        _payload_tampering_assertion(
+            assertion_id="payload-tamper-2",
+            original_payload_hash="c" * 64,
+            tampered_payload_hash="d" * 64,
+        ),
+    ]
+    observations = [
+        _payload_tampering_observation(assertion_id="payload-tamper-1"),
+        _payload_tampering_observation(
+            assertion_id="payload-tamper-2",
+            tampered_payload_hash="d" * 64,
+        ),
+    ]
+    context = _payload_tampering_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_payload_tampering_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _payload_tampering_assertion(assertion_id="payload-tamper-1"),
+        _payload_tampering_assertion(
+            assertion_id="payload-tamper-2",
+            original_payload_hash="c" * 64,
+            tampered_payload_hash="d" * 64,
+        ),
+    ]
+    observations = [
+        _payload_tampering_observation(assertion_id="payload-tamper-1"),
+        _payload_tampering_observation(
+            assertion_id="payload-tamper-2",
+            tampered_payload_hash="d" * 64,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=True, content_sha256="b" * 64, byte_length=1),
+        ),
+    ]
+    context = _payload_tampering_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("payload_tampering", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "payload tampering assertion failed: payload-tamper-2"
     assert result.denominator_contribution == 2

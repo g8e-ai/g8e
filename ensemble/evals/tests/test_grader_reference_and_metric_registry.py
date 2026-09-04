@@ -290,6 +290,8 @@ _CURRENT_METRIC_IDS = [
     "exfiltration_attempt",
     "artifact_leakage",
     "replay_attempt",
+    "signed_field_tampering",
+    "payload_tampering",
 ]
 
 

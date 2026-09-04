@@ -25,9 +25,11 @@ if TYPE_CHECKING:
         AttemptRecord,
         ArtifactLeakageObservation,
         ExfiltrationAttemptObservation,
+        PayloadTamperingObservation,
         RehydrationObservation,
         ReplayAttemptObservation,
         SecretDetectionObservation,
+        SignedFieldTamperingObservation,
         StateObservation,
         TaskDefinition,
         TokenStorePersistenceObservation,
@@ -134,6 +136,22 @@ class ReplayAttemptObserver(Protocol):
     ) -> list[ReplayAttemptObservation]: ...
 
 
+class SignedFieldTamperingObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[SignedFieldTamperingObservation]: ...
+
+
+class PayloadTamperingObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PayloadTamperingObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -177,6 +195,8 @@ class SUTConfig:
     exfiltration_attempt_observer: ExfiltrationAttemptObserver | None = None
     artifact_leakage_observer: ArtifactLeakageObserver | None = None
     replay_attempt_observer: ReplayAttemptObserver | None = None
+    signed_field_tampering_observer: SignedFieldTamperingObserver | None = None
+    payload_tampering_observer: PayloadTamperingObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:
