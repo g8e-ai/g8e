@@ -284,6 +284,8 @@ _CURRENT_METRIC_IDS = [
     "policy_outcome",
     "stage_usage_reconciled",
     "unauthorized_mutation",
+    "token_store_persistence",
+    "token_ttl_expiry",
 ]
 
 

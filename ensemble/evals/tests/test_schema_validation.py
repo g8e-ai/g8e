@@ -58,6 +58,10 @@ from g8e_evals.schema import (
     StageObservation,
     TaskDefinition,
     TerminalStatus,
+    TokenStorePersistenceAssertion,
+    TokenStorePersistenceObservation,
+    TokenTTLExpiryAssertion,
+    TokenTTLExpiryObservation,
     UsageReconciliation,
     VerificationStatus,
 )
@@ -66,7 +70,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.17.0"
+    assert SCHEMA_VERSION == "1.20.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -806,3 +810,250 @@ def test_attempt_record_with_infrastructure_retry_linkage():
     assert child.parent_attempt_id == "a1"
     assert parent.terminal_status == TerminalStatus.INFRASTRUCTURE_FAILED
     assert parent.parent_attempt_id is None
+
+
+def test_token_store_persistence_assertion_and_observation_round_trip():
+    assertion = TokenStorePersistenceAssertion(
+        assertion_id="token-store-1",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_encryption_at_rest=True,
+        expected_fail_closed_on_lock=True,
+        expected_persistence_across_restart=True,
+        expected_ttl_seconds=86400,
+        expected_restored_token_count=3,
+    )
+    observation = TokenStorePersistenceObservation(
+        observation_id="token-store-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        vault_algorithm="aes-256-gcm",
+        stored_ciphertext_sha256="a" * 64,
+        plaintext_in_store=False,
+        vault_locked_write_refused=True,
+        vault_locked_read_refused=True,
+        restored_token_count=3,
+        expired_token_invisible=True,
+        collected_at=datetime(2026, 9, 3, 12, tzinfo=UTC),
+        source_evidence_refs=["restricted-token-store-evidence"],
+        source_evidence_sha256="b" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = TokenStorePersistenceAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = TokenStorePersistenceObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_token_store_persistence_assertion_rejects_wrong_collection_boundary():
+    with pytest.raises(ValidationError, match="encrypted-token-store collection boundary"):
+        TokenStorePersistenceAssertion(
+            assertion_id="token-store-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_ttl_seconds=86400,
+            expected_restored_token_count=1,
+        )
+
+
+def test_token_store_persistence_assertion_rejects_zero_ttl():
+    with pytest.raises(ValidationError):
+        TokenStorePersistenceAssertion(
+            assertion_id="token-store-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            expected_ttl_seconds=0,
+            expected_restored_token_count=1,
+        )
+
+
+def test_verified_token_store_persistence_observation_requires_source_evidence():
+    with pytest.raises(ValidationError, match="verified token-store persistence observation requires source evidence"):
+        TokenStorePersistenceObservation(
+            observation_id="token-store-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="token-store-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            vault_algorithm="aes-256-gcm",
+            stored_ciphertext_sha256="a" * 64,
+            plaintext_in_store=False,
+            vault_locked_write_refused=True,
+            vault_locked_read_refused=True,
+            restored_token_count=1,
+            expired_token_invisible=True,
+            collected_at=datetime(2026, 9, 3, 12, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_token_store_persistence_observation_rejects_invalid_ciphertext_hash():
+    with pytest.raises(ValidationError):
+        TokenStorePersistenceObservation(
+            observation_id="token-store-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="token-store-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            vault_algorithm="aes-256-gcm",
+            stored_ciphertext_sha256="not-a-sha256",
+            plaintext_in_store=False,
+            vault_locked_write_refused=True,
+            vault_locked_read_refused=True,
+            restored_token_count=1,
+            expired_token_invisible=True,
+            collected_at=datetime(2026, 9, 3, 12, tzinfo=UTC),
+        )
+
+
+def test_task_definition_rejects_duplicate_token_store_persistence_assertion_ids():
+    assertion = TokenStorePersistenceAssertion(
+        assertion_id="duplicate",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_ttl_seconds=86400,
+        expected_restored_token_count=1,
+    )
+    with pytest.raises(ValidationError, match="token-store persistence assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            token_store_persistence_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_token_store_persistence_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        token_store_persistence_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.token_store_persistence_observation_refs == ["observation-1", "observation-2"]
+
+
+def test_token_ttl_expiry_assertion_and_observation_round_trip():
+    assertion = TokenTTLExpiryAssertion(
+        assertion_id="token-ttl-1",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_ttl_seconds=3600,
+        expected_visible_before_expiry=True,
+        expected_invisible_after_expiry=True,
+        expected_expiry_tolerance_seconds=5,
+    )
+    observation = TokenTTLExpiryObservation(
+        observation_id="token-ttl-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        token_visible_before_expiry=True,
+        token_invisible_after_expiry=True,
+        measured_ttl_seconds=3602,
+        pre_expiry_collection_time=datetime(2026, 9, 3, 12, tzinfo=UTC),
+        post_expiry_collection_time=datetime(2026, 9, 3, 13, 5, tzinfo=UTC),
+        measured_expiry_timestamp=datetime(2026, 9, 3, 13, tzinfo=UTC),
+        collected_at=datetime(2026, 9, 3, 13, 6, tzinfo=UTC),
+        source_evidence_refs=["restricted-ttl-evidence"],
+        source_evidence_sha256="c" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = TokenTTLExpiryAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = TokenTTLExpiryObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_token_ttl_expiry_assertion_rejects_wrong_collection_boundary():
+    with pytest.raises(ValidationError, match="encrypted-token-store collection boundary"):
+        TokenTTLExpiryAssertion(
+            assertion_id="token-ttl-1",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_ttl_seconds=3600,
+        )
+
+
+def test_token_ttl_expiry_assertion_rejects_zero_ttl():
+    with pytest.raises(ValidationError):
+        TokenTTLExpiryAssertion(
+            assertion_id="token-ttl-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            expected_ttl_seconds=0,
+        )
+
+
+def test_verified_token_ttl_expiry_observation_requires_source_evidence():
+    with pytest.raises(ValidationError, match="verified token TTL expiry observation requires source evidence"):
+        TokenTTLExpiryObservation(
+            observation_id="token-ttl-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="token-ttl-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            token_visible_before_expiry=True,
+            token_invisible_after_expiry=True,
+            measured_ttl_seconds=3600,
+            pre_expiry_collection_time=datetime(2026, 9, 3, 12, tzinfo=UTC),
+            post_expiry_collection_time=datetime(2026, 9, 3, 13, tzinfo=UTC),
+            measured_expiry_timestamp=datetime(2026, 9, 3, 13, tzinfo=UTC),
+            collected_at=datetime(2026, 9, 3, 13, 1, tzinfo=UTC),
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_token_ttl_expiry_observation_rejects_unordered_collection_times():
+    with pytest.raises(ValidationError, match="post-expiry collection time must be after pre-expiry collection time"):
+        TokenTTLExpiryObservation(
+            observation_id="token-ttl-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="token-ttl-1",
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            token_visible_before_expiry=True,
+            token_invisible_after_expiry=True,
+            measured_ttl_seconds=3600,
+            pre_expiry_collection_time=datetime(2026, 9, 3, 13, tzinfo=UTC),
+            post_expiry_collection_time=datetime(2026, 9, 3, 12, tzinfo=UTC),
+            measured_expiry_timestamp=datetime(2026, 9, 3, 13, tzinfo=UTC),
+            collected_at=datetime(2026, 9, 3, 13, 1, tzinfo=UTC),
+        )
+
+
+def test_task_definition_rejects_duplicate_token_ttl_expiry_assertion_ids():
+    assertion = TokenTTLExpiryAssertion(
+        assertion_id="duplicate",
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_ttl_seconds=3600,
+    )
+    with pytest.raises(ValidationError, match="token TTL expiry assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            token_ttl_expiry_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_token_ttl_expiry_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        token_ttl_expiry_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.token_ttl_expiry_observation_refs == ["observation-1", "observation-2"]

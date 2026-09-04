@@ -27,6 +27,9 @@ if TYPE_CHECKING:
         SecretDetectionObservation,
         StateObservation,
         TaskDefinition,
+        TokenStorePersistenceObservation,
+        TokenTTLExpiryObservation,
+        TokenPersistenceFailureObservation,
         UnauthorizedMutationObservation,
     )
 
@@ -80,6 +83,30 @@ class UnauthorizedMutationObserver(Protocol):
     ) -> list[UnauthorizedMutationObservation]: ...
 
 
+class TokenStorePersistenceObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenStorePersistenceObservation]: ...
+
+
+class TokenTTLExpiryObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenTTLExpiryObservation]: ...
+
+
+class TokenPersistenceFailureObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenPersistenceFailureObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -117,6 +144,9 @@ class SUTConfig:
     rehydration_observer: RehydrationObserver | None = None
     secret_detection_observer: SecretDetectionObserver | None = None
     unauthorized_mutation_observer: UnauthorizedMutationObserver | None = None
+    token_store_persistence_observer: TokenStorePersistenceObserver | None = None
+    token_ttl_expiry_observer: TokenTTLExpiryObserver | None = None
+    token_persistence_failure_observer: TokenPersistenceFailureObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

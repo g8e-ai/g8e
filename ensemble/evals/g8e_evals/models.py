@@ -26,6 +26,9 @@ from g8e_evals.schema import (
     RejectionLayer,
     SecretDetectionAssertion,
     StateFixtureDefinition,
+    TokenStorePersistenceAssertion,
+    TokenTTLExpiryAssertion,
+    TokenPersistenceFailureAssertion,
     UnauthorizedMutationAssertion,
 )
 
@@ -68,6 +71,9 @@ class TaskMetadata(BaseModel):
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
     unauthorized_mutation_assertions: list[UnauthorizedMutationAssertion] = Field(default_factory=list)
+    token_store_persistence_assertions: list[TokenStorePersistenceAssertion] = Field(default_factory=list)
+    token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
+    token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

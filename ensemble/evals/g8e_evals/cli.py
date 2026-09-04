@@ -66,6 +66,8 @@ from g8e_evals.schema import (
     TaskDefinition,
     TerminalStatus,
     UnauthorizedMutationObservation,
+    TokenStorePersistenceObservation,
+    TokenTTLExpiryObservation,
     VerificationStatus,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
@@ -103,6 +105,8 @@ _INDEPENDENT_STATE_GRADER_ID = "independent_state"
 _INDEPENDENT_STATE_METRIC_ID = "independent_state_accuracy"
 _POLICY_OUTCOME_GRADER_ID = "policy_outcome"
 _UNAUTHORIZED_MUTATION_GRADER_ID = "unauthorized_mutation"
+_TOKEN_STORE_PERSISTENCE_GRADER_ID = "token_store_persistence"
+_TOKEN_TTL_EXPIRY_GRADER_ID = "token_ttl_expiry"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -568,6 +572,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.expected_final_state_assertions
                     or t.metadata.expected_allow_block_outcome
                     or t.metadata.unauthorized_mutation_assertions
+                    or t.metadata.token_store_persistence_assertions
+                    or t.metadata.token_ttl_expiry_assertions
                 )
                 else ALL_ARMS
             ),
@@ -584,6 +590,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             rehydration_assertions=t.metadata.rehydration_assertions,
             secret_detection_assertions=t.metadata.secret_detection_assertions,
             unauthorized_mutation_assertions=t.metadata.unauthorized_mutation_assertions,
+            token_store_persistence_assertions=t.metadata.token_store_persistence_assertions,
+            token_ttl_expiry_assertions=t.metadata.token_ttl_expiry_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -674,6 +682,20 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.unauthorized_mutation_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_TOKEN_STORE_PERSISTENCE_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.token_store_persistence_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_TOKEN_TTL_EXPIRY_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.token_ttl_expiry_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -694,6 +716,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     rehydration_records: list[RehydrationObservation] = []
     secret_detection_records: list[SecretDetectionObservation] = []
     unauthorized_mutation_records: list[UnauthorizedMutationObservation] = []
+    token_store_persistence_records: list[TokenStorePersistenceObservation] = []
+    token_ttl_expiry_records: list[TokenTTLExpiryObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1003,6 +1027,24 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         attempt.unauthorized_mutation_observation_refs = [
             observation.observation_id for observation in unauthorized_mutation_observations
         ]
+        token_store_persistence_observations = (
+            await config.token_store_persistence_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.token_store_persistence_assertions and config.token_store_persistence_observer is not None
+            else []
+        )
+        token_store_persistence_records.extend(token_store_persistence_observations)
+        attempt.token_store_persistence_observation_refs = [
+            observation.observation_id for observation in token_store_persistence_observations
+        ]
+        token_ttl_expiry_observations = (
+            await config.token_ttl_expiry_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.token_ttl_expiry_assertions and config.token_ttl_expiry_observer is not None
+            else []
+        )
+        token_ttl_expiry_records.extend(token_ttl_expiry_observations)
+        attempt.token_ttl_expiry_observation_refs = [
+            observation.observation_id for observation in token_ttl_expiry_observations
+        ]
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -1292,6 +1334,58 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=unauthorized_mutation_grade.evidence_refs,
             ))
+        if task.metadata.token_store_persistence_assertions:
+            token_store_persistence_grade = grade_deterministically(
+                _TOKEN_STORE_PERSISTENCE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    token_store_persistence_observations=token_store_persistence_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOKEN_STORE_PERSISTENCE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=token_store_persistence_grade.value,
+                unit="proportion",
+                eligible=token_store_persistence_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=token_store_persistence_grade.denominator_contribution,
+                verification_status=token_store_persistence_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=token_store_persistence_grade.evidence_refs,
+            ))
+        if task.metadata.token_ttl_expiry_assertions:
+            token_ttl_expiry_grade = grade_deterministically(
+                _TOKEN_TTL_EXPIRY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    token_ttl_expiry_observations=token_ttl_expiry_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOKEN_TTL_EXPIRY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=token_ttl_expiry_grade.value,
+                unit="proportion",
+                eligible=token_ttl_expiry_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=token_ttl_expiry_grade.denominator_contribution,
+                verification_status=token_ttl_expiry_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=token_ttl_expiry_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -1343,6 +1437,14 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "unauthorized-mutation-observations.jsonl", "w") as f:
         for observation in unauthorized_mutation_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "token-store-persistence-observations.jsonl", "w") as f:
+        for observation in token_store_persistence_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "token-ttl-expiry-observations.jsonl", "w") as f:
+        for observation in token_ttl_expiry_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

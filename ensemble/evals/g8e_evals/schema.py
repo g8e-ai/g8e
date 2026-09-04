@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.17.0"
+SCHEMA_VERSION = "1.20.0"
 
 
 class TerminalStatus(StrEnum):
@@ -116,6 +116,7 @@ class StateCollectionBoundary(StrEnum):
     OPERATOR_WORKLOAD = "operator_workload"
     GOVERNED_DOCUMENT_STORE = "governed_document_store"
     GOVERNANCE_LEDGER = "governance_ledger"
+    ENCRYPTED_TOKEN_STORE = "encrypted_token_store"
 
 
 class RehydrationBoundary(StrEnum):
@@ -587,6 +588,217 @@ class UnauthorizedMutationObservation(BaseModel):
         return self
 
 
+class TokenStorePersistenceAssertion(BaseModel):
+    """Declares the expected encrypted token-store persistence privacy properties.
+
+    The grader proves that the UEI token store persists token mappings
+    encrypted at rest, fails closed when the vault is locked, restores
+    tokens across a restart, and keeps expired tokens invisible. Every
+    declared property must hold for the assertion to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_encryption_at_rest: bool = True
+    expected_fail_closed_on_lock: bool = True
+    expected_persistence_across_restart: bool = True
+    expected_ttl_seconds: int = Field(ge=1)
+    expected_restored_token_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenStorePersistenceAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token-store persistence assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenStorePersistenceObservation(BaseModel):
+    """Independently observed state of the encrypted token store.
+
+    The observation records the measured privacy properties of the token
+    store at the storage boundary: the ciphertext hash of the persisted
+    value, whether plaintext leaked into the store, whether the store
+    refused writes and reads while the vault was locked, how many tokens
+    were restored across a restart, and whether expired tokens were
+    invisible.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    vault_algorithm: str = Field(min_length=1)
+    stored_ciphertext_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plaintext_in_store: bool
+    vault_locked_write_refused: bool
+    vault_locked_read_refused: bool
+    restored_token_count: int = Field(ge=0)
+    expired_token_invisible: bool
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenStorePersistenceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token-store persistence observation requires source evidence")
+        return self
+
+
+class TokenTTLExpiryAssertion(BaseModel):
+    """Declares the expected token TTL and expiry privacy properties.
+
+    The grader proves that tokens are visible before their TTL expires,
+    invisible after their TTL expires, and that the measured expiry
+    boundary matches the declared TTL within the tolerance window.
+    Explicit pre-expiry and post-expiry collection times are required.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_ttl_seconds: int = Field(ge=1)
+    expected_visible_before_expiry: bool = True
+    expected_invisible_after_expiry: bool = True
+    expected_expiry_tolerance_seconds: int = Field(
+        default=0,
+        ge=0,
+        description="Maximum allowed deviation between measured and declared TTL in seconds.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenTTLExpiryAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token TTL expiry assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenTTLExpiryObservation(BaseModel):
+    """Independently observed token TTL and expiry behavior.
+
+    The observation records the measured visibility of a token before
+    and after its declared TTL boundary, with explicit collection times
+    for both checks and the measured expiry timestamp.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    token_visible_before_expiry: bool
+    token_invisible_after_expiry: bool
+    measured_ttl_seconds: int = Field(ge=0)
+    pre_expiry_collection_time: datetime
+    post_expiry_collection_time: datetime
+    measured_expiry_timestamp: datetime
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenTTLExpiryObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token TTL expiry observation requires source evidence")
+        if self.post_expiry_collection_time <= self.pre_expiry_collection_time:
+            raise ValueError("post-expiry collection time must be after pre-expiry collection time")
+        return self
+
+
+class TokenPersistenceFailureOutcome(StrEnum):
+    STORAGE_FAILURE = "storage_failure"
+    PRIVACY_FAILURE = "privacy_failure"
+
+
+class TokenPersistenceFailureAssertion(BaseModel):
+    """Declares the expected fail-closed behavior on token persistence failure.
+
+    The grader proves that a storage failure is distinguished from a
+    measured privacy failure, the operation fails closed (no token
+    returned), in-memory state is rolled back, no sensitive value leaks,
+    and no unsafe continuation occurs. This is a storage-infrastructure
+    failure grade, not a privacy grade.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_fail_closed: bool = True
+    expected_rollback: bool = True
+    expected_no_sensitive_leak: bool = True
+    expected_no_unsafe_continuation: bool = True
+    expected_failure_outcome: TokenPersistenceFailureOutcome = TokenPersistenceFailureOutcome.STORAGE_FAILURE
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenPersistenceFailureAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token persistence failure assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenPersistenceFailureObservation(BaseModel):
+    """Independently observed behavior during a token persistence failure.
+
+    The observation records whether the token operation was refused on
+    storage failure, whether in-memory state was rolled back, whether the
+    sensitive value leaked, whether unsafe continuation was detected, and
+    the measured failure outcome (storage failure vs privacy failure).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    storage_failure_injected: bool
+    operation_refused: bool
+    in_memory_token_rolled_back: bool
+    sensitive_value_leaked: bool
+    unsafe_continuation_detected: bool
+    measured_failure_outcome: TokenPersistenceFailureOutcome
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenPersistenceFailureObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token persistence failure observation requires source evidence")
+        return self
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -622,6 +834,9 @@ class TaskDefinition(BaseModel):
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
     unauthorized_mutation_assertions: list[UnauthorizedMutationAssertion] = Field(default_factory=list)
+    token_store_persistence_assertions: list[TokenStorePersistenceAssertion] = Field(default_factory=list)
+    token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
+    token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
 
@@ -652,6 +867,21 @@ class TaskDefinition(BaseModel):
         ]
         if len(unauthorized_mutation_assertion_ids) != len(set(unauthorized_mutation_assertion_ids)):
             raise ValueError("unauthorized-mutation assertion IDs must be unique")
+        token_store_persistence_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_store_persistence_assertions
+        ]
+        if len(token_store_persistence_assertion_ids) != len(set(token_store_persistence_assertion_ids)):
+            raise ValueError("token-store persistence assertion IDs must be unique")
+        token_ttl_expiry_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_ttl_expiry_assertions
+        ]
+        if len(token_ttl_expiry_assertion_ids) != len(set(token_ttl_expiry_assertion_ids)):
+            raise ValueError("token TTL expiry assertion IDs must be unique")
+        token_persistence_failure_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_persistence_failure_assertions
+        ]
+        if len(token_persistence_failure_assertion_ids) != len(set(token_persistence_failure_assertion_ids)):
+            raise ValueError("token persistence failure assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -772,6 +1002,9 @@ class AttemptRecord(BaseModel):
     rehydration_observation_refs: list[str] = Field(default_factory=list)
     secret_detection_observation_refs: list[str] = Field(default_factory=list)
     unauthorized_mutation_observation_refs: list[str] = Field(default_factory=list)
+    token_store_persistence_observation_refs: list[str] = Field(default_factory=list)
+    token_ttl_expiry_observation_refs: list[str] = Field(default_factory=list)
+    token_persistence_failure_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
 

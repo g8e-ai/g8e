@@ -44,12 +44,17 @@ from g8e_evals.schema import (
     RejectionLayer,
     SecretDetectionObservation,
     StateAssertionPredicate,
+    StateCollectionBoundary,
     StateEvidenceKind,
     StateObservation,
     StageKind,
     StageObservation,
     TaskDefinition,
     UnauthorizedMutationObservation,
+    TokenStorePersistenceObservation,
+    TokenTTLExpiryObservation,
+    TokenPersistenceFailureObservation,
+    TokenPersistenceFailureOutcome,
     VerificationStatus,
 )
 
@@ -69,6 +74,9 @@ class DeterministicGradingContext:
     rehydration_observations: list[RehydrationObservation] = field(default_factory=list)
     secret_detection_observations: list[SecretDetectionObservation] = field(default_factory=list)
     unauthorized_mutation_observations: list[UnauthorizedMutationObservation] = field(default_factory=list)
+    token_store_persistence_observations: list[TokenStorePersistenceObservation] = field(default_factory=list)
+    token_ttl_expiry_observations: list[TokenTTLExpiryObservation] = field(default_factory=list)
+    token_persistence_failure_observations: list[TokenPersistenceFailureObservation] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -1166,6 +1174,290 @@ class UnauthorizedMutationGrader:
         )
 
 
+class TokenStorePersistenceGrader:
+    """Proves encrypted token-store persistence privacy properties.
+
+    For each assertion the grader verifies that the independently observed
+    token-store state satisfies every declared property: values are
+    encrypted at rest (no plaintext in the store), the store fails closed
+    when the vault is locked (writes and reads refused), tokens are
+    restored across a restart up to the expected count, and expired tokens
+    are invisible. The observation must be verified, context-bound to the
+    attempt/run/task, collected at the encrypted-token-store boundary, and
+    carry source evidence.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.token_store_persistence_assertions
+        if not assertions:
+            return self._failed("token-store persistence assertions are missing")
+
+        observations_by_assertion: dict[str, list[TokenStorePersistenceObservation]] = {}
+        for observation in context.token_store_persistence_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"token-store persistence observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if assertion.expected_encryption_at_rest and observation.plaintext_in_store:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_fail_closed_on_lock and (
+                not observation.vault_locked_write_refused or not observation.vault_locked_read_refused
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_persistence_across_restart and (
+                observation.restored_token_count != assertion.expected_restored_token_count
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.expired_token_invisible:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"token-store persistence assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class TokenTTLExpiryGrader:
+    """Proves token TTL and expiry privacy properties.
+
+    For each assertion the grader verifies that the independently observed
+    token TTL behavior satisfies every declared property: the token is
+    visible before its TTL expires, invisible after its TTL expires, and
+    the measured TTL matches the declared TTL within the tolerance window.
+    The observation must be verified, context-bound to the
+    attempt/run/task, collected at the encrypted-token-store boundary,
+    and carry source evidence. Explicit pre-expiry and post-expiry
+    collection times are required and must be ordered correctly.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.token_ttl_expiry_assertions
+        if not assertions:
+            return self._failed("token TTL expiry assertions are missing")
+
+        observations_by_assertion: dict[str, list[TokenTTLExpiryObservation]] = {}
+        for observation in context.token_ttl_expiry_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"token TTL expiry observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if assertion.expected_visible_before_expiry and not observation.token_visible_before_expiry:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_invisible_after_expiry and not observation.token_invisible_after_expiry:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            ttl_delta = abs(observation.measured_ttl_seconds - assertion.expected_ttl_seconds)
+            if ttl_delta > assertion.expected_expiry_tolerance_seconds:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"token TTL expiry assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class TokenPersistenceFailureGrader:
+    """Proves fail-closed behavior on token persistence failure.
+
+    For each assertion the grader verifies that a storage failure is
+    distinguished from a measured privacy failure, the operation fails
+    closed (refused), in-memory state is rolled back, no sensitive value
+    leaks, and no unsafe continuation occurs. The measured failure outcome
+    must match the declared outcome (storage failure, not privacy
+    failure). The observation must be verified, context-bound to the
+    attempt/run/task, collected at the encrypted-token-store boundary,
+    and carry source evidence.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.token_persistence_failure_assertions
+        if not assertions:
+            return self._failed("token persistence failure assertions are missing")
+
+        observations_by_assertion: dict[str, list[TokenPersistenceFailureObservation]] = {}
+        for observation in context.token_persistence_failure_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"token persistence failure observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if assertion.expected_fail_closed and not observation.operation_refused:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_rollback and not observation.in_memory_token_rolled_back:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_no_sensitive_leak and observation.sensitive_value_leaked:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_no_unsafe_continuation and observation.unsafe_continuation_detected:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.measured_failure_outcome != assertion.expected_failure_outcome:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"token persistence failure assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
     ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
@@ -1178,6 +1470,9 @@ _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("policy_outcome", "1.0.0"): PolicyOutcomeGrader(),
     ("protocol_chain", "1.0.0"): ProtocolChainGrader(),
     ("unauthorized_mutation", "1.0.0"): UnauthorizedMutationGrader(),
+    ("token_store_persistence", "1.0.0"): TokenStorePersistenceGrader(),
+    ("token_ttl_expiry", "1.0.0"): TokenTTLExpiryGrader(),
+    ("token_persistence_failure", "1.0.0"): TokenPersistenceFailureGrader(),
 }
 
 

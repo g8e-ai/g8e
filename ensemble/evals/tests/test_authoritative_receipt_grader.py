@@ -70,6 +70,10 @@ from g8e_evals.schema import (
     StageKind,
     StageObservation,
     TaskDefinition,
+    TokenStorePersistenceAssertion,
+    TokenStorePersistenceObservation,
+    TokenTTLExpiryAssertion,
+    TokenTTLExpiryObservation,
     VerificationStatus,
     GraderReference,
 )
@@ -2001,3 +2005,734 @@ def test_unauthorized_mutation_grader_partial_failure_reports_failed_assertion()
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "unauthorized-mutation assertion failed: unauth-2"
     assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# TokenStorePersistenceGrader
+# ---------------------------------------------------------------------------
+
+
+def _token_store_persistence_assertion(
+    *,
+    assertion_id: str = "token-store-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    expected_encryption_at_rest: bool = True,
+    expected_fail_closed_on_lock: bool = True,
+    expected_persistence_across_restart: bool = True,
+    expected_ttl_seconds: int = 86400,
+    expected_restored_token_count: int = 3,
+) -> TokenStorePersistenceAssertion:
+    return TokenStorePersistenceAssertion(
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        expected_encryption_at_rest=expected_encryption_at_rest,
+        expected_fail_closed_on_lock=expected_fail_closed_on_lock,
+        expected_persistence_across_restart=expected_persistence_across_restart,
+        expected_ttl_seconds=expected_ttl_seconds,
+        expected_restored_token_count=expected_restored_token_count,
+    )
+
+
+def _token_store_persistence_observation(
+    *,
+    assertion_id: str = "token-store-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    vault_algorithm: str = "aes-256-gcm",
+    stored_ciphertext_sha256: str = "a" * 64,
+    plaintext_in_store: bool = False,
+    vault_locked_write_refused: bool = True,
+    vault_locked_read_refused: bool = True,
+    restored_token_count: int = 3,
+    expired_token_invisible: bool = True,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> TokenStorePersistenceObservation:
+    return TokenStorePersistenceObservation(
+        observation_id=f"token-store-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        vault_algorithm=vault_algorithm,
+        stored_ciphertext_sha256=stored_ciphertext_sha256,
+        plaintext_in_store=plaintext_in_store,
+        vault_locked_write_refused=vault_locked_write_refused,
+        vault_locked_read_refused=vault_locked_read_refused,
+        restored_token_count=restored_token_count,
+        expired_token_invisible=expired_token_invisible,
+        collected_at=datetime.now(UTC),
+        source_evidence_refs=source_evidence_refs or ["evidence-token-store-1"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _token_store_persistence_context(
+    *,
+    observations: list[TokenStorePersistenceObservation] | None = None,
+    assertions: list[TokenStorePersistenceAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context()
+    task = context.task.model_copy(update={
+        "token_store_persistence_assertions": assertions or [_token_store_persistence_assertion()],
+        "graders": [{"grader_id": "token_store_persistence", "grader_version": "1.0.0"}],
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        token_store_persistence_observations=(
+            observations if observations is not None else [_token_store_persistence_observation()]
+        ),
+    )
+
+
+def test_token_store_persistence_grader_verifies_all_declared_properties():
+    result = grade_deterministically(
+        "token_store_persistence",
+        "1.0.0",
+        _token_store_persistence_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "token-store-obs-token-store-1" in result.evidence_refs
+    assert "evidence-token-store-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_token_store_persistence_grader_fails_when_plaintext_in_store():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(plaintext_in_store=True)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_when_vault_locked_write_not_refused():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(vault_locked_write_refused=False)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_when_vault_locked_read_not_refused():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(vault_locked_read_refused=False)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_when_restored_token_count_mismatches():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(restored_token_count=2)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_when_expired_token_visible():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(expired_token_invisible=False)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_closed_on_missing_assertions():
+    context = _token_store_persistence_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"token_store_persistence_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token-store persistence assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_token_store_persistence_grader_fails_closed_on_missing_observation():
+    context = _token_store_persistence_context(observations=[])
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_closed_on_duplicate_observations():
+    obs = _token_store_persistence_observation()
+    context = _token_store_persistence_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_fails_closed_on_unverified_observation():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_unknown_observation_assertion():
+    context = _token_store_persistence_context(
+        observations=[
+            _token_store_persistence_observation(),
+            _token_store_persistence_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token-store persistence observation references an unknown assertion: unknown"
+
+
+def test_token_store_persistence_grader_rejects_cross_attempt_observation():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_cross_run_observation():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_cross_task_observation():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_collection_boundary_mismatch():
+    context = _token_store_persistence_context(
+        observations=[_token_store_persistence_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_missing_source_evidence():
+    obs = _token_store_persistence_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _token_store_persistence_context(observations=[obs])
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-1"
+
+
+def test_token_store_persistence_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"token_store_persistence@2\.0\.0"):
+        grade_deterministically("token_store_persistence", "2.0.0", _token_store_persistence_context())
+
+
+def test_token_store_persistence_grader_aggregates_multiple_assertions():
+    assertions = [
+        _token_store_persistence_assertion(assertion_id="token-store-1"),
+        _token_store_persistence_assertion(assertion_id="token-store-2", expected_restored_token_count=5),
+    ]
+    observations = [
+        _token_store_persistence_observation(assertion_id="token-store-1"),
+        _token_store_persistence_observation(assertion_id="token-store-2", restored_token_count=5),
+    ]
+    context = _token_store_persistence_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_token_store_persistence_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _token_store_persistence_assertion(assertion_id="token-store-1"),
+        _token_store_persistence_assertion(assertion_id="token-store-2", expected_restored_token_count=5),
+    ]
+    observations = [
+        _token_store_persistence_observation(assertion_id="token-store-1"),
+        _token_store_persistence_observation(assertion_id="token-store-2", restored_token_count=3),
+    ]
+    context = _token_store_persistence_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token-store persistence assertion failed: token-store-2"
+    assert result.denominator_contribution == 2
+
+
+def test_token_store_persistence_grader_passes_when_encryption_not_required():
+    context = _token_store_persistence_context(
+        assertions=[_token_store_persistence_assertion(expected_encryption_at_rest=False)],
+        observations=[_token_store_persistence_observation(plaintext_in_store=True)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_store_persistence_grader_passes_when_fail_closed_not_required():
+    context = _token_store_persistence_context(
+        assertions=[_token_store_persistence_assertion(expected_fail_closed_on_lock=False)],
+        observations=[_token_store_persistence_observation(
+            vault_locked_write_refused=False,
+            vault_locked_read_refused=False,
+        )],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_store_persistence_grader_passes_when_persistence_not_required():
+    context = _token_store_persistence_context(
+        assertions=[_token_store_persistence_assertion(
+            expected_persistence_across_restart=False,
+        )],
+        observations=[_token_store_persistence_observation(restored_token_count=0)],
+    )
+
+    result = grade_deterministically("token_store_persistence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+# ---------------------------------------------------------------------------
+# TokenTTLExpiryGrader
+# ---------------------------------------------------------------------------
+
+
+_TTL_PRE = datetime(2026, 9, 3, 12, tzinfo=UTC)
+_TTL_POST = datetime(2026, 9, 3, 13, 5, tzinfo=UTC)
+_TTL_EXPIRY = datetime(2026, 9, 3, 13, tzinfo=UTC)
+_TTL_COLLECTED = datetime(2026, 9, 3, 13, 6, tzinfo=UTC)
+
+
+def _token_ttl_expiry_assertion(
+    *,
+    assertion_id: str = "token-ttl-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    expected_ttl_seconds: int = 3600,
+    expected_visible_before_expiry: bool = True,
+    expected_invisible_after_expiry: bool = True,
+    expected_expiry_tolerance_seconds: int = 5,
+) -> TokenTTLExpiryAssertion:
+    return TokenTTLExpiryAssertion(
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        expected_ttl_seconds=expected_ttl_seconds,
+        expected_visible_before_expiry=expected_visible_before_expiry,
+        expected_invisible_after_expiry=expected_invisible_after_expiry,
+        expected_expiry_tolerance_seconds=expected_expiry_tolerance_seconds,
+    )
+
+
+def _token_ttl_expiry_observation(
+    *,
+    assertion_id: str = "token-ttl-1",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    token_visible_before_expiry: bool = True,
+    token_invisible_after_expiry: bool = True,
+    measured_ttl_seconds: int = 3602,
+    pre_expiry_collection_time: datetime = _TTL_PRE,
+    post_expiry_collection_time: datetime = _TTL_POST,
+    measured_expiry_timestamp: datetime = _TTL_EXPIRY,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "f" * 64,
+) -> TokenTTLExpiryObservation:
+    return TokenTTLExpiryObservation(
+        observation_id=f"token-ttl-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        collection_boundary=collection_boundary,
+        token_visible_before_expiry=token_visible_before_expiry,
+        token_invisible_after_expiry=token_invisible_after_expiry,
+        measured_ttl_seconds=measured_ttl_seconds,
+        pre_expiry_collection_time=pre_expiry_collection_time,
+        post_expiry_collection_time=post_expiry_collection_time,
+        measured_expiry_timestamp=measured_expiry_timestamp,
+        collected_at=_TTL_COLLECTED,
+        source_evidence_refs=source_evidence_refs or ["evidence-ttl-1"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _token_ttl_expiry_context(
+    *,
+    observations: list[TokenTTLExpiryObservation] | None = None,
+    assertions: list[TokenTTLExpiryAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context()
+    task = context.task.model_copy(update={
+        "token_ttl_expiry_assertions": assertions or [_token_ttl_expiry_assertion()],
+        "graders": [{"grader_id": "token_ttl_expiry", "grader_version": "1.0.0"}],
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        token_ttl_expiry_observations=(
+            observations if observations is not None else [_token_ttl_expiry_observation()]
+        ),
+    )
+
+
+def test_token_ttl_expiry_grader_verifies_visibility_and_ttl_match():
+    result = grade_deterministically(
+        "token_ttl_expiry",
+        "1.0.0",
+        _token_ttl_expiry_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "token-ttl-obs-token-ttl-1" in result.evidence_refs
+    assert "evidence-ttl-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_token_ttl_expiry_grader_fails_when_token_not_visible_before_expiry():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(token_visible_before_expiry=False)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_fails_when_token_visible_after_expiry():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(token_invisible_after_expiry=False)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_fails_when_measured_ttl_exceeds_tolerance():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(measured_ttl_seconds=3700)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_passes_within_tolerance():
+    context = _token_ttl_expiry_context(
+        assertions=[_token_ttl_expiry_assertion(expected_expiry_tolerance_seconds=100)],
+        observations=[_token_ttl_expiry_observation(measured_ttl_seconds=3700)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_ttl_expiry_grader_fails_closed_on_missing_assertions():
+    context = _token_ttl_expiry_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"token_ttl_expiry_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token TTL expiry assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_token_ttl_expiry_grader_fails_closed_on_missing_observation():
+    context = _token_ttl_expiry_context(observations=[])
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_fails_closed_on_duplicate_observations():
+    obs = _token_ttl_expiry_observation()
+    context = _token_ttl_expiry_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_fails_closed_on_unverified_observation():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_unknown_observation_assertion():
+    context = _token_ttl_expiry_context(
+        observations=[
+            _token_ttl_expiry_observation(),
+            _token_ttl_expiry_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "token TTL expiry observation references an unknown assertion: unknown"
+
+
+def test_token_ttl_expiry_grader_rejects_cross_attempt_observation():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_cross_run_observation():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_cross_task_observation():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_collection_boundary_mismatch():
+    context = _token_ttl_expiry_context(
+        observations=[_token_ttl_expiry_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_missing_source_evidence():
+    obs = _token_ttl_expiry_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _token_ttl_expiry_context(observations=[obs])
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-1"
+
+
+def test_token_ttl_expiry_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"token_ttl_expiry@2\.0\.0"):
+        grade_deterministically("token_ttl_expiry", "2.0.0", _token_ttl_expiry_context())
+
+
+def test_token_ttl_expiry_grader_aggregates_multiple_assertions():
+    assertions = [
+        _token_ttl_expiry_assertion(assertion_id="token-ttl-1"),
+        _token_ttl_expiry_assertion(assertion_id="token-ttl-2", expected_ttl_seconds=7200),
+    ]
+    observations = [
+        _token_ttl_expiry_observation(assertion_id="token-ttl-1"),
+        _token_ttl_expiry_observation(assertion_id="token-ttl-2", measured_ttl_seconds=7203),
+    ]
+    context = _token_ttl_expiry_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_token_ttl_expiry_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _token_ttl_expiry_assertion(assertion_id="token-ttl-1"),
+        _token_ttl_expiry_assertion(assertion_id="token-ttl-2", expected_ttl_seconds=7200),
+    ]
+    observations = [
+        _token_ttl_expiry_observation(assertion_id="token-ttl-1"),
+        _token_ttl_expiry_observation(
+            assertion_id="token-ttl-2",
+            measured_ttl_seconds=7200,
+            token_invisible_after_expiry=False,
+        ),
+    ]
+    context = _token_ttl_expiry_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "token TTL expiry assertion failed: token-ttl-2"
+    assert result.denominator_contribution == 2
+
+
+def test_token_ttl_expiry_grader_passes_when_visibility_not_required():
+    context = _token_ttl_expiry_context(
+        assertions=[_token_ttl_expiry_assertion(expected_visible_before_expiry=False)],
+        observations=[_token_ttl_expiry_observation(token_visible_before_expiry=False)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_token_ttl_expiry_grader_passes_when_invisibility_not_required():
+    context = _token_ttl_expiry_context(
+        assertions=[_token_ttl_expiry_assertion(expected_invisible_after_expiry=False)],
+        observations=[_token_ttl_expiry_observation(token_invisible_after_expiry=False)],
+    )
+
+    result = grade_deterministically("token_ttl_expiry", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
