@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     ArtifactLeakageAssertion,
+    EvidencePreservationAssertion,
     IdentityMismatchAssertion,
     ExfiltrationAttemptAssertion,
     FinalStateAssertion,
@@ -96,6 +97,7 @@ class TaskMetadata(BaseModel):
     signer_defect_assertions: list[SignerDefectAssertion] = Field(default_factory=list)
     l3_proof_transplant_assertions: list[L3ProofTransplantAssertion] = Field(default_factory=list)
     revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
+    evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)

@@ -63,6 +63,10 @@ from g8e_evals.schema import (
     L3ProofTransplantObservation,
     RevokedCredentialAssertion,
     RevokedCredentialObservation,
+    EvidencePreservationAssertion,
+    EvidencePreservationObservation,
+    EvidencePreservationOutcome,
+    EvidencePreservationPath,
     FinalStateAssertion,
     FinalStateObservation,
     ModelBoundaryPrivacyAttestation,
@@ -8802,3 +8806,408 @@ def test_revoked_credential_grader_partial_failure_reports_failed_assertion():
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "revoked-credential assertion failed: revoked-2"
     assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# EvidencePreservationGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_PRESERVE_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+
+
+def _evidence_preservation_assertion(
+    *,
+    assertion_id: str = "preserve-1",
+    preservation_path: EvidencePreservationPath = EvidencePreservationPath.STORAGE_FAILURE,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    expected_fail_closed: bool = True,
+    expected_no_unsafe_continuation: bool = True,
+    expected_outcome: EvidencePreservationOutcome = EvidencePreservationOutcome.EVIDENCE_PRESERVED,
+) -> EvidencePreservationAssertion:
+    return EvidencePreservationAssertion(
+        assertion_id=assertion_id,
+        preservation_path=preservation_path,
+        collection_boundary=collection_boundary,
+        expected_fail_closed=expected_fail_closed,
+        expected_no_unsafe_continuation=expected_no_unsafe_continuation,
+        expected_outcome=expected_outcome,
+    )
+
+
+def _evidence_preservation_observation(
+    *,
+    assertion_id: str = "preserve-1",
+    preservation_path: EvidencePreservationPath = EvidencePreservationPath.STORAGE_FAILURE,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    failure_path_injected: bool = True,
+    operation_refused: bool = True,
+    unsafe_continuation_detected: bool = False,
+    measured_outcome: EvidencePreservationOutcome = EvidencePreservationOutcome.EVIDENCE_PRESERVED,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "e" * 64,
+) -> EvidencePreservationObservation:
+    return EvidencePreservationObservation(
+        observation_id=f"preserve-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        preservation_path=preservation_path,
+        collection_boundary=collection_boundary,
+        failure_path_injected=failure_path_injected,
+        operation_refused=operation_refused,
+        unsafe_continuation_detected=unsafe_continuation_detected,
+        measured_outcome=measured_outcome,
+        collected_at=_PRESERVE_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _evidence_preservation_context(
+    *,
+    observations: list[EvidencePreservationObservation] | None = None,
+    assertions: list[EvidencePreservationAssertion] | None = None,
+) -> DeterministicGradingContext:
+    context = _context()
+    task = context.task.model_copy(update={
+        "evidence_preservation_assertions": assertions or [_evidence_preservation_assertion()],
+        "graders": [{"grader_id": "evidence_preservation", "grader_version": "1.0.0"}],
+    })
+    return DeterministicGradingContext(
+        task=task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        evidence_preservation_observations=(
+            observations if observations is not None else [_evidence_preservation_observation()]
+        ),
+    )
+
+
+def test_evidence_preservation_grader_verifies_fail_closed_behavior():
+    result = grade_deterministically(
+        "evidence_preservation",
+        "1.0.0",
+        _evidence_preservation_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "preserve-obs-preserve-1" in result.evidence_refs
+    assert "evidence-preserve-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_evidence_preservation_grader_fails_when_operation_not_refused():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(operation_refused=False)],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_fails_when_unsafe_continuation_detected():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(unsafe_continuation_detected=True)],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_fails_when_measured_outcome_is_evidence_lost():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(
+            measured_outcome=EvidencePreservationOutcome.EVIDENCE_LOST,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_fails_closed_on_missing_assertions():
+    context = _evidence_preservation_context()
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={"evidence_preservation_assertions": []}),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "evidence-preservation assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_evidence_preservation_grader_fails_closed_on_missing_observation():
+    context = _evidence_preservation_context(observations=[])
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_fails_closed_on_duplicate_observations():
+    obs = _evidence_preservation_observation()
+    context = _evidence_preservation_context(observations=[obs, obs.model_copy()])
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_fails_closed_on_unverified_observation():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(
+            verification_status=VerificationStatus.FAILED,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_unknown_observation_assertion():
+    context = _evidence_preservation_context(
+        observations=[
+            _evidence_preservation_observation(),
+            _evidence_preservation_observation(assertion_id="unknown").model_copy(
+                update={"observation_id": "unknown-obs"}
+            ),
+        ],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "evidence-preservation observation references an unknown assertion: unknown"
+
+
+def test_evidence_preservation_grader_rejects_cross_attempt_observation():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_cross_run_observation():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_cross_task_observation():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_preservation_path_mismatch():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(
+            preservation_path=EvidencePreservationPath.FAILED,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_collection_boundary_mismatch():
+    context = _evidence_preservation_context(
+        observations=[_evidence_preservation_observation(
+            collection_boundary=StateCollectionBoundary.GOVERNED_DOCUMENT_STORE,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_missing_source_evidence():
+    obs = _evidence_preservation_observation().model_copy(
+        update={"source_evidence_refs": [], "source_evidence_sha256": None}
+    )
+    context = _evidence_preservation_context(observations=[obs])
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-1"
+
+
+def test_evidence_preservation_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"evidence_preservation@2\.0\.0"):
+        grade_deterministically("evidence_preservation", "2.0.0", _evidence_preservation_context())
+
+
+def test_evidence_preservation_grader_aggregates_multiple_assertions():
+    assertions = [
+        _evidence_preservation_assertion(assertion_id="preserve-1"),
+        _evidence_preservation_assertion(assertion_id="preserve-2"),
+    ]
+    observations = [
+        _evidence_preservation_observation(assertion_id="preserve-1"),
+        _evidence_preservation_observation(assertion_id="preserve-2"),
+    ]
+    context = _evidence_preservation_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_evidence_preservation_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _evidence_preservation_assertion(assertion_id="preserve-1"),
+        _evidence_preservation_assertion(assertion_id="preserve-2"),
+    ]
+    observations = [
+        _evidence_preservation_observation(assertion_id="preserve-1"),
+        _evidence_preservation_observation(
+            assertion_id="preserve-2",
+            operation_refused=False,
+        ),
+    ]
+    context = _evidence_preservation_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "evidence-preservation assertion failed: preserve-2"
+    assert result.denominator_contribution == 2
+
+
+def test_evidence_preservation_grader_passes_when_fail_closed_not_required():
+    context = _evidence_preservation_context(
+        assertions=[_evidence_preservation_assertion(expected_fail_closed=False)],
+        observations=[_evidence_preservation_observation(operation_refused=False)],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_evidence_preservation_grader_passes_when_no_unsafe_continuation_not_required():
+    context = _evidence_preservation_context(
+        assertions=[_evidence_preservation_assertion(expected_no_unsafe_continuation=False)],
+        observations=[_evidence_preservation_observation(unsafe_continuation_detected=True)],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_evidence_preservation_grader_supports_failed_path():
+    context = _evidence_preservation_context(
+        assertions=[_evidence_preservation_assertion(
+            preservation_path=EvidencePreservationPath.FAILED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_evidence_preservation_observation(
+            preservation_path=EvidencePreservationPath.FAILED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_evidence_preservation_grader_supports_rejected_path():
+    context = _evidence_preservation_context(
+        assertions=[_evidence_preservation_assertion(
+            preservation_path=EvidencePreservationPath.REJECTED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_evidence_preservation_observation(
+            preservation_path=EvidencePreservationPath.REJECTED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_evidence_preservation_grader_supports_interrupted_path():
+    context = _evidence_preservation_context(
+        assertions=[_evidence_preservation_assertion(
+            preservation_path=EvidencePreservationPath.INTERRUPTED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_evidence_preservation_observation(
+            preservation_path=EvidencePreservationPath.INTERRUPTED,
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+    )
+
+    result = grade_deterministically("evidence_preservation", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED

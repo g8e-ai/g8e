@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from g8e_evals.schema import (
         AttemptRecord,
         ArtifactLeakageObservation,
+        EvidencePreservationObservation,
         ExfiltrationAttemptObservation,
         IdentityMismatchObservation,
         NonceExpirationObservation,
@@ -206,6 +207,14 @@ class RevokedCredentialObserver(Protocol):
     ) -> list[RevokedCredentialObservation]: ...
 
 
+class EvidencePreservationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[EvidencePreservationObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -257,6 +266,7 @@ class SUTConfig:
     signer_defect_observer: SignerDefectObserver | None = None
     l3_proof_transplant_observer: L3ProofTransplantObserver | None = None
     revoked_credential_observer: RevokedCredentialObserver | None = None
+    evidence_preservation_observer: EvidencePreservationObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

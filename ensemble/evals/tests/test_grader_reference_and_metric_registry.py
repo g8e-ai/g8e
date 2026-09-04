@@ -298,6 +298,7 @@ _CURRENT_METRIC_IDS = [
     "signer_defect",
     "l3_proof_transplant",
     "revoked_credential",
+    "evidence_preservation",
 ]
 
 

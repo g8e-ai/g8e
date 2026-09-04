@@ -71,6 +71,7 @@ from g8e_evals.schema import (
     SignerDefectObservation,
     L3ProofTransplantObservation,
     RevokedCredentialObservation,
+    EvidencePreservationObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -131,6 +132,7 @@ _NONCE_EXPIRATION_GRADER_ID = "nonce_expiration"
 _SIGNER_DEFECT_GRADER_ID = "signer_defect"
 _L3_PROOF_TRANSPLANT_GRADER_ID = "l3_proof_transplant"
 _REVOKED_CREDENTIAL_GRADER_ID = "revoked_credential"
+_EVIDENCE_PRESERVATION_GRADER_ID = "evidence_preservation"
 _GRADER_VERSION = "1.0.0"
 
 
@@ -610,6 +612,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                     or t.metadata.signer_defect_assertions
                     or t.metadata.l3_proof_transplant_assertions
                     or t.metadata.revoked_credential_assertions
+                    or t.metadata.evidence_preservation_assertions
                 )
                 else ALL_ARMS
             ),
@@ -640,6 +643,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             signer_defect_assertions=t.metadata.signer_defect_assertions,
             l3_proof_transplant_assertions=t.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=t.metadata.revoked_credential_assertions,
+            evidence_preservation_assertions=t.metadata.evidence_preservation_assertions,
             graders=[
                 GraderReference(
                     grader_id=_IFEVAL_GRADER_ID,
@@ -828,6 +832,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                         grader_class=GraderClass.DETERMINISTIC,
                     )
                 ] if t.metadata.revoked_credential_assertions else []),
+                *([
+                    GraderReference(
+                        grader_id=_EVIDENCE_PRESERVATION_GRADER_ID,
+                        grader_version=_GRADER_VERSION,
+                        grader_class=GraderClass.DETERMINISTIC,
+                    )
+                ] if t.metadata.evidence_preservation_assertions else []),
             ],
             metadata={"instruction_id_list": t.metadata.instruction_id_list},
         )
@@ -862,6 +873,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     signer_defect_records: list[SignerDefectObservation] = []
     l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
     revoked_credential_records: list[RevokedCredentialObservation] = []
+    evidence_preservation_records: list[EvidencePreservationObservation] = []
     evidence_artifacts: list[EvidenceArtifact] = []
     for task in tasks:
         intent = ""
@@ -1296,6 +1308,15 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         revoked_credential_records.extend(revoked_credential_observations)
         attempt.revoked_credential_observation_refs = [
             observation.observation_id for observation in revoked_credential_observations
+        ]
+        evidence_preservation_observations = (
+            await config.evidence_preservation_observer.observe(task_defs_by_id[task.id], attempt)
+            if task.metadata.evidence_preservation_assertions and config.evidence_preservation_observer is not None
+            else []
+        )
+        evidence_preservation_records.extend(evidence_preservation_observations)
+        attempt.evidence_preservation_observation_refs = [
+            observation.observation_id for observation in evidence_preservation_observations
         ]
         grade_metrics = [
             MetricObservation(
@@ -1950,6 +1971,32 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=revoked_credential_grade.evidence_refs,
             ))
+        if task.metadata.evidence_preservation_assertions:
+            evidence_preservation_grade = grade_deterministically(
+                _EVIDENCE_PRESERVATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_defs_by_id[task.id],
+                    attempt=attempt,
+                    receipts=attempt_receipts,
+                    stages=attempt_stages,
+                    evidence_preservation_observations=evidence_preservation_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EVIDENCE_PRESERVATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=arm_def.arm_id,
+                task_id=task.id,
+                value=evidence_preservation_grade.value,
+                unit="proportion",
+                eligible=evidence_preservation_grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=evidence_preservation_grade.denominator_contribution,
+                verification_status=evidence_preservation_grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=evidence_preservation_grade.evidence_refs,
+            ))
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -2057,6 +2104,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
         for observation in revoked_credential_records:
+            f.write(observation.model_dump_json() + "\n")
+
+    with open(report_dir / "evidence-preservation-observations.jsonl", "w") as f:
+        for observation in evidence_preservation_records:
             f.write(observation.model_dump_json() + "\n")
 
     with open(report_dir / "stages.jsonl", "w") as f:

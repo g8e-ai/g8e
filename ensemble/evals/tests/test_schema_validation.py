@@ -35,6 +35,10 @@ from g8e_evals.schema import (
     ContentHash,
     EvidenceIndex,
     EvidenceMediaType,
+    EvidencePreservationAssertion,
+    EvidencePreservationObservation,
+    EvidencePreservationOutcome,
+    EvidencePreservationPath,
     ExfiltrationAttemptAssertion,
     ExfiltrationAttemptObservation,
     IdentityBinding,
@@ -100,7 +104,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.30.0"
+    assert SCHEMA_VERSION == "1.31.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2646,3 +2650,94 @@ def test_attempt_record_links_revoked_credential_observations():
     )
 
     assert attempt.revoked_credential_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# EvidencePreservation assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+_PRESERVE_COLLECTED = datetime(2026, 9, 4, 12, 30, tzinfo=UTC)
+
+
+def test_evidence_preservation_assertion_and_observation_round_trip():
+    assertion = EvidencePreservationAssertion(
+        assertion_id="preserve-1",
+        preservation_path=EvidencePreservationPath.STORAGE_FAILURE,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        expected_fail_closed=True,
+        expected_no_unsafe_continuation=True,
+        expected_outcome=EvidencePreservationOutcome.EVIDENCE_PRESERVED,
+    )
+    observation = EvidencePreservationObservation(
+        observation_id="preserve-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        preservation_path=EvidencePreservationPath.STORAGE_FAILURE,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+        failure_path_injected=True,
+        operation_refused=True,
+        unsafe_continuation_detected=False,
+        measured_outcome=EvidencePreservationOutcome.EVIDENCE_PRESERVED,
+        collected_at=_PRESERVE_COLLECTED,
+        source_evidence_refs=["restricted-preserve-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = EvidencePreservationAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = EvidencePreservationObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_verified_evidence_preservation_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified evidence-preservation observation requires source evidence",
+    ):
+        EvidencePreservationObservation(
+            observation_id="preserve-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="preserve-1",
+            preservation_path=EvidencePreservationPath.STORAGE_FAILURE,
+            collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+            failure_path_injected=True,
+            operation_refused=True,
+            unsafe_continuation_detected=False,
+            measured_outcome=EvidencePreservationOutcome.EVIDENCE_PRESERVED,
+            collected_at=_PRESERVE_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_evidence_preservation_assertion_ids():
+    assertion = EvidencePreservationAssertion(
+        assertion_id="duplicate",
+        preservation_path=EvidencePreservationPath.STORAGE_FAILURE,
+        collection_boundary=StateCollectionBoundary.ENCRYPTED_TOKEN_STORE,
+    )
+    with pytest.raises(ValidationError, match="evidence-preservation assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            evidence_preservation_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_evidence_preservation_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        evidence_preservation_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.evidence_preservation_observation_refs == ["observation-1", "observation-2"]
