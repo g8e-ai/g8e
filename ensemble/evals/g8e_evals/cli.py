@@ -100,6 +100,13 @@ from g8e_evals.benchmarks.privacy.observers import (
 )
 from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synthetic_provenance
 from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore
+from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
+from g8e_evals.benchmarks.governance.observers import (
+    NonceExpirationObserverImpl,
+    ReplayAttemptObserverImpl,
+    SignedFieldTamperingObserverImpl,
+)
+from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
@@ -2348,7 +2355,7 @@ def verify_receipts(report_dir, pki_dir):
             sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2384,6 +2391,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/privacy_token_lifecycle/input_data.jsonl")
         loader = PrivacyTokenLifecycleLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "governance_adversarial":
+        if gold_set is None:
+            gold_set = Path("gold_sets/governance_adversarial/input_data.jsonl")
+        loader = GovernanceAdversarialLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2464,6 +2477,9 @@ async def _run_synthetic_suite(
             token_store_persistence_assertions=task.metadata.token_store_persistence_assertions,
             token_ttl_expiry_assertions=task.metadata.token_ttl_expiry_assertions,
             token_persistence_failure_assertions=task.metadata.token_persistence_failure_assertions,
+            replay_attempt_assertions=task.metadata.replay_attempt_assertions,
+            signed_field_tampering_assertions=task.metadata.signed_field_tampering_assertions,
+            nonce_expiration_assertions=task.metadata.nonce_expiration_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2476,6 +2492,10 @@ async def _run_synthetic_suite(
     token_store_persistence_records: list[TokenStorePersistenceObservation] = []
     token_ttl_expiry_records: list[TokenTTLExpiryObservation] = []
     token_persistence_failure_records: list[TokenPersistenceFailureObservation] = []
+    replay_attempt_records: list[ReplayAttemptObservation] = []
+    signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
+    nonce_expiration_records: list[NonceExpirationObservation] = []
+    governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
 
@@ -2583,6 +2603,50 @@ async def _run_synthetic_suite(
                 obs.observation_id for obs in failure_observations
             ]
 
+        replay_observations: list[ReplayAttemptObservation] = []
+        signed_field_observations: list[SignedFieldTamperingObservation] = []
+        nonce_observations: list[NonceExpirationObservation] = []
+        governance_receipt: ReceiptObservation | None = None
+
+        if task.metadata.replay_attempt_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:replay:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = ReplayAttemptObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, replay_observations = await observer.observe(task_def, attempt)
+            replay_attempt_records.extend(replay_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.replay_attempt_observation_refs = [
+                obs.observation_id for obs in replay_observations
+            ]
+
+        if task.metadata.signed_field_tampering_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:signed-field:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = SignedFieldTamperingObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, signed_field_observations = await observer.observe(task_def, attempt)
+            signed_field_tampering_records.extend(signed_field_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.signed_field_tampering_observation_refs = [
+                obs.observation_id for obs in signed_field_observations
+            ]
+
+        if task.metadata.nonce_expiration_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:nonce:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = NonceExpirationObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, nonce_observations = await observer.observe(task_def, attempt)
+            nonce_expiration_records.extend(nonce_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.nonce_expiration_observation_refs = [
+                obs.observation_id for obs in nonce_observations
+            ]
+
         attempt.ended_at = datetime.now(UTC)
 
         grade_metrics: list[MetricObservation] = []
@@ -2665,6 +2729,85 @@ async def _run_synthetic_suite(
                 evidence_refs=grade.evidence_refs,
             ))
 
+        if task.metadata.replay_attempt_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _REPLAY_ATTEMPT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    replay_attempt_observations=replay_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_REPLAY_ATTEMPT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.signed_field_tampering_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _SIGNED_FIELD_TAMPERING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    signed_field_tampering_observations=signed_field_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_SIGNED_FIELD_TAMPERING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.nonce_expiration_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _NONCE_EXPIRATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    nonce_expiration_observations=nonce_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_NONCE_EXPIRATION_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
@@ -2686,6 +2829,18 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "token-persistence-failure-observations.jsonl", "w") as f:
         for obs in token_persistence_failure_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
+        for obs in replay_attempt_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
+        for obs in signed_field_tampering_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
+        for obs in nonce_expiration_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "governance-receipts.jsonl", "w") as f:
+        for obs in governance_receipt_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "metrics.jsonl", "w") as f:
         for metric in metric_records:

@@ -17,19 +17,40 @@ from __future__ import annotations
 import hashlib
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from g8e_evals.benchmarks.privacy.loader import PrivacyTokenLifecycleLoader
 from g8e_evals.benchmarks.privacy.provenance import (
+    SyntheticSuiteOutput,
     SyntheticSuiteProvenance,
+    SyntheticSuiteSource,
     validate_dataset,
 )
 from g8e_evals.schema import (
     StateCollectionBoundary,
     TokenPersistenceFailureOutcome,
 )
+
+
+def _make_source() -> SyntheticSuiteSource:
+    return SyntheticSuiteSource(
+        repository="https://example.com/repo",
+        revision="abc123",
+        license_spdx="Apache-2.0",
+        code_path="g8e_evals/benchmarks/privacy/loader.py",
+        code_sha256="b" * 64,
+    )
+
+
+def _make_output(
+    *,
+    path: str = "input_data.jsonl",
+    rows: int = 1,
+    sha256: str = "a" * 64,
+) -> SyntheticSuiteOutput:
+    return SyntheticSuiteOutput(path=path, rows=rows, sha256=sha256)
 
 
 def _make_provenance(
@@ -41,18 +62,8 @@ def _make_provenance(
     return SyntheticSuiteProvenance(
         schema_version=1,
         benchmark="privacy_token_lifecycle",
-        source={
-            "repository": "https://example.com/repo",
-            "revision": "abc123",
-            "license_spdx": "Apache-2.0",
-            "code_path": "g8e_evals/benchmarks/privacy/loader.py",
-            "code_sha256": "b" * 64,
-        },
-        output={
-            "path": path,
-            "rows": rows,
-            "sha256": sha256,
-        },
+        source=_make_source(),
+        output=_make_output(path=path, rows=rows, sha256=sha256),
     )
 
 
@@ -87,17 +98,16 @@ def test_synthetic_suite_provenance_rejects_missing_source_fields():
         SyntheticSuiteProvenance(
             schema_version=1,
             benchmark="privacy_token_lifecycle",
-            source={
-                "repository": "https://example.com/repo",
-                "revision": "abc123",
-                "license_spdx": "Apache-2.0",
-                "code_path": "g8e_evals/benchmarks/privacy/loader.py",
-            },
-            output={
-                "path": "input_data.jsonl",
-                "rows": 1,
-                "sha256": "a" * 64,
-            },
+            source=cast(
+                SyntheticSuiteSource,
+                {
+                    "repository": "https://example.com/repo",
+                    "revision": "abc123",
+                    "license_spdx": "Apache-2.0",
+                    "code_path": "g8e_evals/benchmarks/privacy/loader.py",
+                },
+            ),
+            output=_make_output(),
         )
 
 
@@ -107,17 +117,14 @@ def test_synthetic_suite_provenance_rejects_missing_output_fields():
         SyntheticSuiteProvenance(
             schema_version=1,
             benchmark="privacy_token_lifecycle",
-            source={
-                "repository": "https://example.com/repo",
-                "revision": "abc123",
-                "license_spdx": "Apache-2.0",
-                "code_path": "g8e_evals/benchmarks/privacy/loader.py",
-                "code_sha256": "b" * 64,
-            },
-            output={
-                "path": "input_data.jsonl",
-                "rows": 1,
-            },
+            source=_make_source(),
+            output=cast(
+                SyntheticSuiteOutput,
+                {
+                    "path": "input_data.jsonl",
+                    "rows": 1,
+                },
+            ),
         )
 
 
@@ -295,7 +302,7 @@ def test_loader_produces_typed_tasks_with_persistence_failure_assertions(monkeyp
 
 @pytest.mark.unit
 def test_loader_raises_file_not_found_for_missing_gold_set(monkeypatch):
-    mock_path = SimpleNamespace(
+    mock_path: Any = SimpleNamespace(
         name="input_data.jsonl",
         exists=lambda: False,
     )
