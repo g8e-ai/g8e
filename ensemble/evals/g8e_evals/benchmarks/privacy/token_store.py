@@ -5,15 +5,15 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Real local encrypted token store for Tier 2 integration tests.
+"""Local encrypted token store for synthetic privacy eval suites.
 
 This module provides a production-shaped encrypted token store that uses
 AES-256-GCM to encrypt token mappings at rest on the local filesystem.
 It supports vault lock/unlock, persistence across restarts, token TTL
-expiry, and storage failure injection.  The store is used by Tier 2
-integration tests to produce real typed observations that the deterministic
-graders consume, closing the gap between synthetic Tier 1 conformance
-matrices and the full evidence round trip.
+expiry, and storage failure injection.  The store is the system under
+test for the synthetic privacy token lifecycle suite: the suite's
+observers interact with the store to produce typed observations that
+the deterministic graders consume.
 """
 
 from __future__ import annotations

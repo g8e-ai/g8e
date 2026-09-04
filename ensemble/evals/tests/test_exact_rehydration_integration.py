@@ -37,7 +37,7 @@ from g8e_evals.schema import (
     TaskDefinition,
     VerificationStatus,
 )
-from local_encrypted_token_store import LocalRehydrationArtifact, TokenEntry
+from g8e_evals.benchmarks.privacy.token_store import LocalRehydrationArtifact, TokenEntry
 
 pytestmark = pytest.mark.integration
 

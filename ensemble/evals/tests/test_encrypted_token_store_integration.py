@@ -50,7 +50,7 @@ from g8e_evals.schema import (
     TokenTTLExpiryObservation,
     VerificationStatus,
 )
-from local_encrypted_token_store import (
+from g8e_evals.benchmarks.privacy.token_store import (
     LocalEncryptedTokenStore,
     VaultLockedError,
 )

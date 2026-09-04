@@ -92,6 +92,14 @@ from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
+from g8e_evals.benchmarks.privacy.loader import PrivacyTokenLifecycleLoader
+from g8e_evals.benchmarks.privacy.observers import (
+    TokenPersistenceFailureObserverImpl,
+    TokenStorePersistenceObserverImpl,
+    TokenTTLExpiryObserverImpl,
+)
+from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synthetic_provenance
+from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
@@ -2338,6 +2346,353 @@ def verify_receipts(report_dir, pki_dir):
 
         if failed > 0:
             sys.exit(1)
+
+
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle"]
+_SYNTHETIC_STORE_KEY = b"s" * 32
+
+
+@main.command(name="bench-synthetic")
+@click.option("--suite", type=click.Choice(_SYNTHETIC_SUITE_CHOICES), required=True)
+@click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
+@click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
+@click.option("--limit", type=int, help="Limit number of tasks to run")
+def bench_synthetic(suite: str, gold_set: Path | None, output_dir: Path, limit: int | None):
+    """Run a synthetic deterministic suite without a real LLM provider.
+
+    Synthetic suites exercise the observer and grader pipeline against
+    local production-shaped systems under test (e.g. an encrypted token
+    store on disk).  No LLM provider, g8ee, operator, or auth context is
+    required.  The command wires boundary-specific observers into the
+    grading pipeline, collects typed observations, runs deterministic
+    graders, validates every metric against the registry, and writes
+    per-attempt evidence to a report directory.
+    """
+    try:
+        asyncio.run(_run_synthetic_suite(suite, gold_set, output_dir, limit))
+    except EvaluationRunError as error:
+        raise click.ClickException(str(error)) from error
+
+
+async def _run_synthetic_suite(
+    suite: str,
+    gold_set: Path | None,
+    output_dir: Path,
+    limit: int | None,
+) -> None:
+    if suite == "privacy_token_lifecycle":
+        if gold_set is None:
+            gold_set = Path("gold_sets/privacy_token_lifecycle/input_data.jsonl")
+        loader = PrivacyTokenLifecycleLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    else:
+        raise EvaluationRunError(f"unknown synthetic suite: {suite}")
+
+    if limit:
+        tasks = tasks[:limit]
+
+    suite_id = provenance.benchmark
+    suite_version = provenance.output.sha256[:12]
+    dataset_hash = provenance.output.sha256
+
+    run_id = str(uuid.uuid4())
+    prompt_bundle_content = "\n".join(t.prompt for t in tasks).encode()
+    prompt_bundle_hash = hashlib.sha256(prompt_bundle_content).hexdigest()
+
+    grader_bundle_parts: list[str] = [f"{suite}:{suite_version}"]
+    for task in tasks:
+        params = task.metadata.benchmark_specific
+        for grader_id in params.get("graders", []):
+            grader_bundle_parts.append(f"{grader_id}@{_GRADER_VERSION}")
+    grader_bundle_content = ":".join(grader_bundle_parts).encode()
+    grader_bundle_hash = hashlib.sha256(grader_bundle_content).hexdigest()
+
+    content_hashes = [
+        ContentHash(name="dataset", sha256=dataset_hash, byte_length=gold_set.stat().st_size),
+        ContentHash(name="prompt_bundle", sha256=prompt_bundle_hash, byte_length=len(prompt_bundle_content)),
+        ContentHash(name="grader_bundle", sha256=grader_bundle_hash, byte_length=len(grader_bundle_content)),
+    ]
+
+    arm_entry = ArmManifestEntry(
+        arm_id=Arm.DIRECT,
+        requested_posture=GovernancePosture.NONE,
+        uses_g8ee=False,
+        uses_gateway=False,
+        receipt_binding=False,
+        is_production_posture=False,
+    )
+
+    manifest = RunManifest(
+        run_id=run_id,
+        suite_id=suite_id,
+        suite_version=suite_version,
+        arms=[arm_entry],
+        content_hashes=content_hashes,
+        role_to_model=RoleToModelMapping(),
+        stack_environment=StackEnvironment(
+            os=platform.platform(),
+            arch=platform.machine(),
+            runtime_version=platform.python_version(),
+        ),
+    )
+
+    ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    report_dir = output_dir / f"{suite}-synthetic-{ts}"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))
+
+    task_defs: list[TaskDefinition] = []
+    for task in tasks:
+        params = task.metadata.benchmark_specific
+        grader_refs: list[GraderReference] = []
+        for grader_id in params.get("graders", []):
+            grader_refs.append(GraderReference(
+                grader_id=grader_id,
+                grader_version=_GRADER_VERSION,
+                grader_class=GraderClass.DETERMINISTIC,
+            ))
+        task_defs.append(TaskDefinition(
+            task_id=task.id,
+            suite_id=suite_id,
+            suite_version=suite_version,
+            category=task.metadata.category or "privacy",
+            expected_action_class=task.metadata.expected_action_class,
+            compatible_arms=list(GOVERNED_ARMS),
+            prompt_hash=hashlib.sha256(task.prompt.encode()).hexdigest(),
+            prompt_length=len(task.prompt),
+            token_store_persistence_assertions=task.metadata.token_store_persistence_assertions,
+            token_ttl_expiry_assertions=task.metadata.token_ttl_expiry_assertions,
+            token_persistence_failure_assertions=task.metadata.token_persistence_failure_assertions,
+            graders=grader_refs,
+        ))
+    task_defs_by_id = {td.task_id: td for td in task_defs}
+    with open(report_dir / "tasks.jsonl", "w") as f:
+        for td in task_defs:
+            f.write(td.model_dump_json() + "\n")
+
+    attempt_records: list[AttemptRecord] = []
+    metric_records: list[MetricObservation] = []
+    token_store_persistence_records: list[TokenStorePersistenceObservation] = []
+    token_ttl_expiry_records: list[TokenTTLExpiryObservation] = []
+    token_persistence_failure_records: list[TokenPersistenceFailureObservation] = []
+
+    console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
+
+    for task in tasks:
+        task_def = task_defs_by_id[task.id]
+        params = task.metadata.benchmark_specific
+        attempt_id = f"{run_id}:{task.id}:synthetic:1"
+        started_at = datetime.now(UTC)
+
+        attempt = AttemptRecord(
+            attempt_id=attempt_id,
+            run_id=run_id,
+            task_id=task.id,
+            arm_id=Arm.DIRECT,
+            state_snapshot_hash=dataset_hash,
+            replicate_id="1",
+            assignment_order=len(attempt_records),
+            started_at=started_at,
+            terminal_status=TerminalStatus.COMPLETED,
+        )
+
+        store_dir = report_dir / "stores" / task.id
+        store_dir.mkdir(parents=True, exist_ok=True)
+        store_path = store_dir / "store.json"
+        store = LocalEncryptedTokenStore(store_path, _SYNTHETIC_STORE_KEY)
+
+        evidence_ref = f"synthetic:{task.id}:token-store"
+
+        token_store_observations: list[TokenStorePersistenceObservation] = []
+        ttl_observations: list[TokenTTLExpiryObservation] = []
+        failure_observations: list[TokenPersistenceFailureObservation] = []
+
+        if task.metadata.token_store_persistence_assertions:
+            for token_spec in params.get("tokens", []):
+                store.store(
+                    token_spec["token_id"],
+                    token_spec["value"],
+                    token_spec["sensitive_type"],
+                    token_spec["ttl_seconds"],
+                )
+            expired = params.get("expired_token")
+            if expired:
+                store.store(
+                    expired["token_id"],
+                    expired["value"],
+                    expired["sensitive_type"],
+                    expired["ttl_seconds"],
+                )
+            store.persist()
+            evidence_sha = store.stored_ciphertext_sha256()
+            observer = TokenStorePersistenceObserverImpl(store, evidence_sha, evidence_ref)
+            token_store_observations = await observer.observe(task_def, attempt)
+            token_store_persistence_records.extend(token_store_observations)
+            attempt.token_store_persistence_observation_refs = [
+                obs.observation_id for obs in token_store_observations
+            ]
+
+        if task.metadata.token_ttl_expiry_assertions:
+            ttl_token = params.get("ttl_token")
+            if ttl_token:
+                store.store(
+                    ttl_token["token_id"],
+                    ttl_token["value"],
+                    ttl_token["sensitive_type"],
+                    ttl_token["ttl_seconds"],
+                )
+            store.persist()
+            evidence_sha = store.stored_ciphertext_sha256()
+            observer = TokenTTLExpiryObserverImpl(
+                store,
+                evidence_sha,
+                evidence_ref,
+                visible_before_expiry=params.get("visible_before_expiry", True),
+                invisible_after_expiry=params.get("invisible_after_expiry", True),
+            )
+            ttl_observations = await observer.observe(task_def, attempt)
+            token_ttl_expiry_records.extend(ttl_observations)
+            attempt.token_ttl_expiry_observation_refs = [
+                obs.observation_id for obs in ttl_observations
+            ]
+
+        if task.metadata.token_persistence_failure_assertions:
+            for token_spec in params.get("tokens", []):
+                store.store(
+                    token_spec["token_id"],
+                    token_spec["value"],
+                    token_spec["sensitive_type"],
+                    token_spec["ttl_seconds"],
+                )
+            store = LocalEncryptedTokenStore(
+                store_path, _SYNTHETIC_STORE_KEY, fail_persist=True,
+            )
+            for token_spec in params.get("tokens", []):
+                store.store(
+                    token_spec["token_id"],
+                    token_spec["value"],
+                    token_spec["sensitive_type"],
+                    token_spec["ttl_seconds"],
+                )
+            evidence_sha = hashlib.sha256(str(store_path).encode()).hexdigest()
+            observer = TokenPersistenceFailureObserverImpl(store, evidence_sha, evidence_ref)
+            failure_observations = await observer.observe(task_def, attempt)
+            token_persistence_failure_records.extend(failure_observations)
+            attempt.token_persistence_failure_observation_refs = [
+                obs.observation_id for obs in failure_observations
+            ]
+
+        attempt.ended_at = datetime.now(UTC)
+
+        grade_metrics: list[MetricObservation] = []
+        if task.metadata.token_store_persistence_assertions:
+            grade = grade_deterministically(
+                _TOKEN_STORE_PERSISTENCE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    token_store_persistence_observations=token_store_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOKEN_STORE_PERSISTENCE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.token_ttl_expiry_assertions:
+            grade = grade_deterministically(
+                _TOKEN_TTL_EXPIRY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    token_ttl_expiry_observations=ttl_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOKEN_TTL_EXPIRY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.token_persistence_failure_assertions:
+            grade = grade_deterministically(
+                _TOKEN_PERSISTENCE_FAILURE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    token_persistence_failure_observations=failure_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOKEN_PERSISTENCE_FAILURE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+
+        for metric in grade_metrics:
+            DEFAULT_METRIC_REGISTRY.validate(metric)
+        metric_records.extend(grade_metrics)
+        attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        attempt_records.append(attempt)
+
+        status = "PASS" if all(m.value == 1.0 for m in grade_metrics) else "FAIL"
+        color = "green" if status == "PASS" else "red"
+        console.print(f"  [cyan]{task.id}[/cyan] [{color}]{status}[/{color}]")
+
+    with open(report_dir / "attempts.jsonl", "w") as f:
+        for ar in attempt_records:
+            f.write(ar.model_dump_json() + "\n")
+    with open(report_dir / "token-store-persistence-observations.jsonl", "w") as f:
+        for obs in token_store_persistence_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "token-ttl-expiry-observations.jsonl", "w") as f:
+        for obs in token_ttl_expiry_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "token-persistence-failure-observations.jsonl", "w") as f:
+        for obs in token_persistence_failure_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "metrics.jsonl", "w") as f:
+        for metric in metric_records:
+            f.write(metric.model_dump_json() + "\n")
+
+    console.print(f"\n[bold green]Synthetic report saved to {report_dir}[/bold green]")
+
 
 if __name__ == "__main__":
     main()
