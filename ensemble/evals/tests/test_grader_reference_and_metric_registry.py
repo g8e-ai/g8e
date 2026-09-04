@@ -293,6 +293,7 @@ _CURRENT_METRIC_IDS = [
     "signed_field_tampering",
     "payload_tampering",
     "stale_state_root",
+    "identity_mismatch",
 ]
 
 

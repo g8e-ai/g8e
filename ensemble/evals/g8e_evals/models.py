@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     ArtifactLeakageAssertion,
+    IdentityMismatchAssertion,
     ExfiltrationAttemptAssertion,
     FinalStateAssertion,
     PayloadTamperingAssertion,
@@ -86,6 +87,7 @@ class TaskMetadata(BaseModel):
     signed_field_tampering_assertions: list[SignedFieldTamperingAssertion] = Field(default_factory=list)
     payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
     stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
+    identity_mismatch_assertions: list[IdentityMismatchAssertion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
     kwargs: list[dict[str, Any]] = Field(default_factory=list)
