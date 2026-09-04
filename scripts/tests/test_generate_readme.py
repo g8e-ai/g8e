@@ -12,8 +12,11 @@ Tests run with the standard library only and exercise validation, aggregation,
 rendering, safety, and drift behavior using synthetic fixtures.
 """
 
+import hashlib
 import json
+import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,7 +29,25 @@ import generate_readme as gr
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "readme"
 VALID = FIXTURES / "valid"
+INVALID = FIXTURES / "invalid"
+SCRIPT = Path(__file__).resolve().parent.parent / "generate_readme.py"
 TEMPLATE = VALID.parent.parent.parent.parent.parent / "docs" / "templates" / "README.md.tmpl"
+
+
+def _update_sha_in_index(index: dict, rel: str, new_sha: str) -> None:
+    """Recursively find a *_sha256 field whose corresponding *_path field matches rel and update it."""
+    for key, value in index.items():
+        if key.endswith("_sha256") and isinstance(value, str):
+            path_key = key.replace("_sha256", "_path")
+            if path_key in index and index[path_key] == rel:
+                index[key] = new_sha
+                return
+        if isinstance(value, dict):
+            _update_sha_in_index(value, rel, new_sha)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    _update_sha_in_index(item, rel, new_sha)
 
 
 class TestLoadSnapshot(unittest.TestCase):
@@ -49,6 +70,11 @@ class TestLoadSnapshot(unittest.TestCase):
             index.write_text(json.dumps({"publication_schema_version": "9.9.9"}))
             with self.assertRaises(gr.ReadmeError) as ctx:
                 gr.load_snapshot(Path(tmp))
+        self.assertIn("unsupported publication_schema_version", str(ctx.exception))
+
+    def test_invalid_fixture_unsupported_publication_schema(self) -> None:
+        with self.assertRaises(gr.ReadmeError) as ctx:
+            gr.load_snapshot(INVALID / "unsupported_schema")
         self.assertIn("unsupported publication_schema_version", str(ctx.exception))
 
     def test_path_traversal_blocked(self) -> None:
@@ -398,12 +424,136 @@ class TestSafetyScans(unittest.TestCase):
                 gr.load_snapshot(Path(tmp) / "snap")
         self.assertIn("absolute path", str(ctx.exception))
 
+    def _corrupt_declared_artifact(self, tmp: str, rel: str, new_content: str) -> None:
+        """Overwrite a declared artifact and update its checksum in index.json."""
+        snap = Path(tmp) / "snap"
+        artifact = snap / rel
+        artifact.write_text(new_content)
+        import hashlib
+        new_sha = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        index_path = snap / "index.json"
+        index = json.loads(index_path.read_text())
+        _update_sha_in_index(index, rel, new_sha)
+        index_path.write_text(json.dumps(index))
+
+    def test_private_key_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["note"] = "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----\n"
+            self._corrupt_declared_artifact(
+                tmp,
+                "eval/receipt-verification.json",
+                json.dumps(base),
+            )
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("forbidden private key material", str(ctx.exception))
+
+    def test_credential_field_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["api_key"] = "leaked-key-value"
+            self._corrupt_declared_artifact(
+                tmp,
+                "eval/receipt-verification.json",
+                json.dumps(base),
+            )
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("forbidden credential field", str(ctx.exception))
+
+    def test_raw_canary_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["note"] = "CANARY-abc123def456"
+            self._corrupt_declared_artifact(
+                tmp,
+                "eval/receipt-verification.json",
+                json.dumps(base),
+            )
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("forbidden raw canary value", str(ctx.exception))
+
+    def test_canary_metric_id_not_flagged(self) -> None:
+        """The metric ID canary_scrubbing is not a raw canary value and must not be flagged."""
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            snapshot = gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("canary_scrubbing", {m.metric_id for run in snapshot.eval_runs.values() for m in run.metrics})
+
 
 class TestFormatRate(unittest.TestCase):
     def test_format_rate(self) -> None:
         self.assertEqual(gr._format_rate(1.0), "100.0%")
         self.assertEqual(gr._format_rate(0.0), "0.0%")
         self.assertEqual(gr._format_rate(0.5), "50.0%")
+
+
+class TestStability(unittest.TestCase):
+    """Generated output must be byte-identical across working directories, locales, and hash-randomization seeds."""
+
+    def _render_via_subprocess(
+        self, cwd: Path, env: dict[str, str], snapshot_dir: Path, template: Path, output: Path
+    ) -> str:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--snapshot-dir", str(snapshot_dir), "--template", str(template), "--output", str(output)],
+            cwd=str(cwd),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"generator failed (rc={result.returncode}): {result.stderr}")
+        return output.read_text()
+
+    def test_stable_across_cwd_locale_and_hash_seed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            baseline_output = tmp_path / "baseline.md"
+            baseline_env = os.environ.copy()
+            baseline_env["PYTHONHASHSEED"] = "0"
+            baseline_env["LC_ALL"] = "C"
+            baseline_env["LANG"] = "C"
+            baseline = self._render_via_subprocess(
+                tmp_path, baseline_env, VALID, TEMPLATE, baseline_output
+            )
+
+            for i, (hashseed, locale) in enumerate(
+                [("1", "C"), ("0", "en_US.UTF-8"), ("42", "C"), ("random", "C")]
+            ):
+                output = tmp_path / f"variant_{i}.md"
+                env = os.environ.copy()
+                env["PYTHONHASHSEED"] = hashseed
+                env["LC_ALL"] = locale
+                env["LANG"] = locale
+                cwd = tmp_path / "subdir" if i == 0 else tmp_path
+                cwd.mkdir(exist_ok=True)
+                variant = self._render_via_subprocess(
+                    cwd,
+                    env,
+                    VALID,
+                    TEMPLATE,
+                    output,
+                )
+                self.assertEqual(
+                    baseline,
+                    variant,
+                    f"output differs with PYTHONHASHSEED={hashseed}, LC_ALL={locale}, cwd variant={i}",
+                )
+
+    def test_stable_across_hash_seed_values(self) -> None:
+        """Direct in-process rendering must not depend on dict iteration order affected by hash randomization."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "README.md"
+            gr.generate(TEMPLATE, VALID, out)
+            first = out.read_text()
+            gr.generate(TEMPLATE, VALID, out)
+            second = out.read_text()
+            self.assertEqual(first, second)
 
 
 if __name__ == "__main__":

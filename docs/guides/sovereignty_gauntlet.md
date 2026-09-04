@@ -624,6 +624,15 @@ To refresh the snapshot after a current-tree eval or demo campaign:
 
 Repository publication of actuator verification keys does not independently establish an external trust root; the README must state that the checked-in key allows signature reproduction within the selected evidence publication process.
 
+### Publication ownership and approvals
+
+The README evidence refresh is a reviewed publication operation with four distinct approval roles. No single person holds all four; the roles may be staffed by the same individual only in solo-development contexts where that individual explicitly self-attests to each role separately.
+
+1. **Narrative and template review** — Approves changes to `docs/templates/README.md.tmpl` and the closed claim-label and caveat vocabularies. This role owns product prose, diagram accuracy, quick-start instructions, and the marker set. It does not approve evidence content.
+2. **Eval evidence review** — Approves the selection of eval runs, the eligibility and verification status of every displayed metric row, the receipt verification result, and the preservation of failed and invalid attempts in the analytical population. This role confirms that no cherry-picking occurred and that every displayed metric is reproducible from eligible typed rows.
+3. **Compliance verification review** — Approves the selection of demo runs and the canonical `ComplianceVerificationReport` records. This role confirms that every selected report has `"valid": true` with zero failures, that scenario outcomes match expected allow/block results, and that demo resources and data are labeled synthetic or simulated.
+4. **Final publication and security review** — Approves the complete `docs/evidence/readme/current/` snapshot before `make readme` regenerates the root README. This role confirms that SHA-256 checksums match, that no private keys, credential fields, raw canary values, absolute paths, or undeclared artifacts are present, that restricted evidence remains encrypted and out of the snapshot, and that every displayed claim links to its source artifact. This is the gate that merges the evidence snapshot; the other three approvals are prerequisites.
+
 ## Related documentation
 
 - [Evals](../ensemble/evals.md) — current evidence schema, supported benchmark, run command, and receipt-verifier scope.

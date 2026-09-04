@@ -696,6 +696,17 @@ def _load_receipt_verification(
     missing = _require_int(raw, "missing_keys", "receipt-verification.json", minimum=0)
     bound = _require_int(raw, "receipt_bound_eligible_attempts", "receipt-verification.json", minimum=0)
 
+    if verified > total:
+        raise ReadmeError("verified_signatures exceeds total_receipts")
+    if persistence > total:
+        raise ReadmeError("verified_persistence exceeds total_receipts")
+    if failed_sig > total:
+        raise ReadmeError("failed_signatures exceeds total_receipts")
+    if failed_persist > total:
+        raise ReadmeError("failed_persistence exceeds total_receipts")
+    if missing > total:
+        raise ReadmeError("missing_keys exceeds total_receipts")
+
     raw_keys = _require_list(raw, "distinct_signer_key_ids", "receipt-verification.json")
     for key in raw_keys:
         if not isinstance(key, str):
@@ -788,6 +799,8 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
 
     # Verify no extra files in snapshot directory that are not declared.
     _scan_for_undeclared_artifacts(snapshot_dir, artifact_paths)
+    # Scan declared artifact content for forbidden private keys, credential fields, and raw canaries.
+    _scan_artifact_content(snapshot_dir, artifact_paths)
 
     return ProofSnapshot(
         manifest=manifest,
@@ -805,6 +818,76 @@ def _scan_for_undeclared_artifacts(snapshot_dir: Path, declared: set[str]) -> No
         rel = path.relative_to(snapshot_dir).as_posix()
         if rel not in declared:
             raise ReadmeError(f"undeclared artifact in public snapshot: {rel}")
+
+
+_PRIVATE_KEY_MARKERS = (
+    b"-----BEGIN PRIVATE KEY-----",
+    b"-----BEGIN RSA PRIVATE KEY-----",
+    b"-----BEGIN EC PRIVATE KEY-----",
+    b"-----BEGIN OPENSSH PRIVATE KEY-----",
+    b"-----BEGIN PGP PRIVATE KEY BLOCK-----",
+)
+
+_CREDENTIAL_FIELD_NAMES = (
+    "api_key",
+    "apikey",
+    "secret_key",
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "private_key",
+    "password",
+)
+
+_CANARY_MARKERS = (
+    "CANARY-",
+    "RAW-CANARY-",
+)
+
+
+def _scan_artifact_content(snapshot_dir: Path, declared: set[str]) -> None:
+    """Scan declared artifacts for forbidden private keys, credential fields, and raw canary values."""
+    for rel in sorted(declared):
+        if rel == "index.json":
+            continue
+        path = _safe_relative_path(snapshot_dir, rel)
+        if not path.is_file():
+            continue
+        _scan_file_for_private_keys(path, rel)
+        _scan_file_for_credential_fields(path, rel)
+        _scan_file_for_canaries(path, rel)
+
+
+def _scan_file_for_private_keys(path: Path, rel: str) -> None:
+    data = path.read_bytes()
+    for marker in _PRIVATE_KEY_MARKERS:
+        if marker in data:
+            raise ReadmeError(
+                f"forbidden private key material in public snapshot artifact {rel}: "
+                f"found {marker.decode()}"
+            )
+
+
+def _scan_file_for_credential_fields(path: Path, rel: str) -> None:
+    text = path.read_text(errors="replace")
+    lowered = text.lower()
+    for field in _CREDENTIAL_FIELD_NAMES:
+        needle = f'"{field}"'
+        if needle in lowered:
+            raise ReadmeError(
+                f"forbidden credential field in public snapshot artifact {rel}: "
+                f"found {field}"
+            )
+
+
+def _scan_file_for_canaries(path: Path, rel: str) -> None:
+    text = path.read_text(errors="replace")
+    for marker in _CANARY_MARKERS:
+        if marker in text:
+            raise ReadmeError(
+                f"forbidden raw canary value in public snapshot artifact {rel}: "
+                f"found marker {marker!r}"
+            )
 
 
 def _project_metrics(runs: dict[str, LoadedEvalRun]) -> dict[str, MetricProjection]:
