@@ -50,8 +50,6 @@ def _make_receipt_observation(
     result: GovernanceActionResult,
     attempt: AttemptRecord,
     action_type: str,
-    evidence_sha: str,
-    evidence_ref: str,
 ) -> ReceiptObservation:
     """Build a verified ``ReceiptObservation`` from a governance action result."""
     return ReceiptObservation(
@@ -64,10 +62,6 @@ def _make_receipt_observation(
         verified=True,
         action_receipt=result.receipt,
     )
-
-
-def _absent_file_state() -> StateValue:
-    return StateValue(kind=StateEvidenceKind.FILE, exists=False)
 
 
 class ReplayAttemptObserverImpl:
@@ -100,7 +94,7 @@ class ReplayAttemptObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             double_accepted = self._simulator.is_transaction_double_accepted(
@@ -162,7 +156,7 @@ class SignedFieldTamperingObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             tampered_accepted = self._simulator.is_tampered_field_accepted(
@@ -224,7 +218,7 @@ class NonceExpirationObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             nonce_accepted = self._simulator.is_expired_nonce_accepted(assertion.nonce_value)
@@ -284,7 +278,7 @@ class StaleStateRootObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             stale_accepted = self._simulator.is_stale_root_accepted_as_current(
@@ -347,7 +341,7 @@ class SignerDefectObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             defect_key = assertion.duplicate_signer_key_id or f"quorum-{assertion.declared_required_quorum}"
@@ -409,7 +403,7 @@ class L3ProofTransplantObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             proof_accepted = self._simulator.is_transplanted_l3_proof_accepted(
@@ -471,7 +465,7 @@ class RevokedCredentialObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type, self._evidence_sha, self._evidence_ref)
+                _make_receipt_observation(result, attempt, assertion.action_type)
             )
 
             credential_accepted = self._simulator.is_revoked_credential_accepted(

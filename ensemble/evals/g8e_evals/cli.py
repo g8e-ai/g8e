@@ -93,14 +93,19 @@ from g8e_evals.agent_trail_renderer import TurnRenderer
 from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
 from g8e_evals.benchmarks.ifeval.provenance import load_provenance
 from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
-from g8e_evals.benchmarks.privacy.loader import PrivacyTokenLifecycleLoader
+from g8e_evals.benchmarks.privacy.loader import PrivacyBoundaryLeakageLoader, PrivacyTokenLifecycleLoader
 from g8e_evals.benchmarks.privacy.observers import (
+    ArtifactLeakageObserverImpl,
+    ExfiltrationAttemptObserverImpl,
+    RehydrationObserverImpl,
     TokenPersistenceFailureObserverImpl,
     TokenStorePersistenceObserverImpl,
     TokenTTLExpiryObserverImpl,
 )
 from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synthetic_provenance
-from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore
+from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore, LocalRehydrationArtifact, TokenEntry
+from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
+from g8e_evals.benchmarks.privacy.exfiltration import LocalExfiltrationSimulator
 from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
 from g8e_evals.benchmarks.governance.observers import (
     L3ProofTransplantObserverImpl,
@@ -2447,7 +2452,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2489,6 +2494,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/governance_adversarial/input_data.jsonl")
         loader = GovernanceAdversarialLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "privacy_boundary_leakage":
+        if gold_set is None:
+            gold_set = Path("gold_sets/privacy_boundary_leakage/input_data.jsonl")
+        loader = PrivacyBoundaryLeakageLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2569,6 +2580,9 @@ async def _run_synthetic_suite(
             token_store_persistence_assertions=task.metadata.token_store_persistence_assertions,
             token_ttl_expiry_assertions=task.metadata.token_ttl_expiry_assertions,
             token_persistence_failure_assertions=task.metadata.token_persistence_failure_assertions,
+            exfiltration_attempt_assertions=task.metadata.exfiltration_attempt_assertions,
+            artifact_leakage_assertions=task.metadata.artifact_leakage_assertions,
+            rehydration_assertions=task.metadata.rehydration_assertions,
             replay_attempt_assertions=task.metadata.replay_attempt_assertions,
             signed_field_tampering_assertions=task.metadata.signed_field_tampering_assertions,
             nonce_expiration_assertions=task.metadata.nonce_expiration_assertions,
@@ -2588,6 +2602,10 @@ async def _run_synthetic_suite(
     token_store_persistence_records: list[TokenStorePersistenceObservation] = []
     token_ttl_expiry_records: list[TokenTTLExpiryObservation] = []
     token_persistence_failure_records: list[TokenPersistenceFailureObservation] = []
+    exfiltration_attempt_records: list[ExfiltrationAttemptObservation] = []
+    artifact_leakage_records: list[ArtifactLeakageObservation] = []
+    rehydration_records: list[RehydrationObservation] = []
+    privacy_receipt_records: list[ReceiptObservation] = []
     replay_attempt_records: list[ReplayAttemptObservation] = []
     signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
     nonce_expiration_records: list[NonceExpirationObservation] = []
@@ -2701,6 +2719,65 @@ async def _run_synthetic_suite(
             token_persistence_failure_records.extend(failure_observations)
             attempt.token_persistence_failure_observation_refs = [
                 obs.observation_id for obs in failure_observations
+            ]
+
+        exfiltration_observations: list[ExfiltrationAttemptObservation] = []
+        artifact_leakage_observations: list[ArtifactLeakageObservation] = []
+        rehydration_observations: list[RehydrationObservation] = []
+        privacy_receipt: ReceiptObservation | None = None
+
+        if task.metadata.exfiltration_attempt_assertions:
+            simulator = LocalExfiltrationSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:exfiltration:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = ExfiltrationAttemptObserverImpl(simulator, evidence_sha, evidence_ref)
+            privacy_receipt, exfiltration_observations = await observer.observe(task_def, attempt)
+            exfiltration_attempt_records.extend(exfiltration_observations)
+            privacy_receipt_records.append(privacy_receipt)
+            attempt.exfiltration_attempt_observation_refs = [
+                obs.observation_id for obs in exfiltration_observations
+            ]
+
+        if task.metadata.artifact_leakage_assertions:
+            artifact_dir = report_dir / "artifacts" / task.id
+            emitter = LocalArtifactEmitter(artifact_dir)
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:artifact-leakage:{emitter.scanner_version}".encode()
+            ).hexdigest()
+            leak_types = list(params.get("leak_types", []))
+            observer = ArtifactLeakageObserverImpl(
+                emitter, evidence_sha, evidence_ref, leak_types=leak_types,
+            )
+            artifact_leakage_observations = await observer.observe(task_def, attempt)
+            artifact_leakage_records.extend(artifact_leakage_observations)
+            attempt.artifact_leakage_observation_refs = [
+                obs.observation_id for obs in artifact_leakage_observations
+            ]
+
+        if task.metadata.rehydration_assertions:
+            rehydration_artifact_path = store_dir / "rehydration.json"
+            artifact = LocalRehydrationArtifact(rehydration_artifact_path)
+            rehydration_token_specs = params.get("rehydration_tokens", [])
+            rehydration_tokens: list[TokenEntry] = []
+            for token_spec in rehydration_token_specs:
+                rehydration_tokens.append(TokenEntry(
+                    token_id=token_spec["token_id"],
+                    value=token_spec["value"],
+                    sensitive_type=token_spec["sensitive_type"],
+                    created_at=datetime.fromisoformat(token_spec["created_at"]),
+                    expires_at=datetime.fromisoformat(token_spec["expires_at"]),
+                ))
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:rehydration:{artifact.REHYDRATOR_VERSION}".encode()
+            ).hexdigest()
+            observer = RehydrationObserverImpl(
+                artifact, rehydration_tokens, evidence_sha, evidence_ref,
+            )
+            rehydration_observations = await observer.observe(task_def, attempt)
+            rehydration_records.extend(rehydration_observations)
+            attempt.rehydration_observation_refs = [
+                obs.observation_id for obs in rehydration_observations
             ]
 
         replay_observations: list[ReplayAttemptObservation] = []
@@ -2872,6 +2949,85 @@ async def _run_synthetic_suite(
             )
             grade_metrics.append(MetricObservation(
                 metric_id=_TOKEN_PERSISTENCE_FAILURE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+
+        if task.metadata.exfiltration_attempt_assertions and privacy_receipt is not None:
+            grade = grade_deterministically(
+                _EXFILTRATION_ATTEMPT_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[privacy_receipt],
+                    stages=[],
+                    exfiltration_attempt_observations=exfiltration_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EXFILTRATION_ATTEMPT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.artifact_leakage_assertions:
+            grade = grade_deterministically(
+                _ARTIFACT_LEAKAGE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    artifact_leakage_observations=artifact_leakage_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_ARTIFACT_LEAKAGE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.rehydration_assertions:
+            grade = grade_deterministically(
+                _EXACT_LOCAL_REHYDRATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    rehydration_observations=rehydration_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EXACT_LOCAL_REHYDRATION_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=Arm.DIRECT,
@@ -3089,6 +3245,18 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "token-persistence-failure-observations.jsonl", "w") as f:
         for obs in token_persistence_failure_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "exfiltration-attempt-observations.jsonl", "w") as f:
+        for obs in exfiltration_attempt_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "artifact-leakage-observations.jsonl", "w") as f:
+        for obs in artifact_leakage_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "rehydration-observations.jsonl", "w") as f:
+        for obs in rehydration_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "privacy-receipts.jsonl", "w") as f:
+        for obs in privacy_receipt_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
         for obs in replay_attempt_records:

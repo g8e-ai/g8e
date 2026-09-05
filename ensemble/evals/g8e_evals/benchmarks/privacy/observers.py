@@ -18,7 +18,6 @@ produces verified observations bound to source evidence.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
 from g8e_evals.benchmarks.privacy.exfiltration import (
@@ -223,10 +222,6 @@ def _make_receipt_observation(
         verified=True,
         action_receipt=result.receipt,
     )
-
-
-def _absent_file_state() -> StateValue:
-    return StateValue(kind=StateEvidenceKind.FILE, exists=False)
 
 
 class ExfiltrationAttemptObserverImpl:

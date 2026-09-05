@@ -78,7 +78,7 @@ class LocalArtifactEmitter:
             for leak_type in leak_types:
                 marker = _SENSITIVE_MARKERS[leak_type]
                 parts.append(f'"{marker}leaked-{leak_type.value}-value"')
-            artifact_content = "{\n  \"content\": " + ", ".join(parts) + "\n}"
+            artifact_content = '{\n  "content": ' + ", ".join(parts) + "\n}"
         else:
             artifact_content = content
 
