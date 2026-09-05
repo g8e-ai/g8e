@@ -108,6 +108,9 @@ from g8e_evals.schema import (
     ToolSequenceAssertion,
     ToolSequenceObservation,
     ToolSequenceOutcome,
+    FactualQAAssertion,
+    FactualQAObservation,
+    FactualQAMatchType,
     UsageReconciliation,
     VerificationStatus,
     UnsupportedExclusion,
@@ -117,7 +120,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.35.0"
+    assert SCHEMA_VERSION == "1.36.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -3064,6 +3067,156 @@ def test_attempt_record_links_tool_sequence_observations():
     )
 
     assert attempt.tool_sequence_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# FactualQA assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+_FACTUAL_QA_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def test_factual_qa_assertion_and_observation_round_trip():
+    assertion = FactualQAAssertion(
+        assertion_id="factual-qa-1",
+        expected_answer="Paris",
+        match_type=FactualQAMatchType.EXACT_MATCH,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    observation = FactualQAObservation(
+        observation_id="factual-qa-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        observed_answer="Paris",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_FACTUAL_QA_COLLECTED,
+        source_evidence_refs=["restricted-factual-qa-evidence"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = FactualQAAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = FactualQAObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_factual_qa_assertion_rejects_empty_assertion_id():
+    with pytest.raises(ValidationError):
+        FactualQAAssertion(
+            assertion_id="",
+            expected_answer="Paris",
+            match_type=FactualQAMatchType.EXACT_MATCH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_factual_qa_assertion_rejects_empty_expected_answer():
+    with pytest.raises(ValidationError):
+        FactualQAAssertion(
+            assertion_id="factual-qa-1",
+            expected_answer="",
+            match_type=FactualQAMatchType.EXACT_MATCH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_factual_qa_assertion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        FactualQAAssertion.model_validate({
+            "assertion_id": "factual-qa-1",
+            "expected_answer": "Paris",
+            "match_type": FactualQAMatchType.EXACT_MATCH,
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "unexpected_field": "bad",
+        })
+
+
+def test_factual_qa_observation_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        FactualQAObservation.model_validate({
+            "observation_id": "factual-qa-obs-1",
+            "attempt_id": "attempt-1",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "assertion_id": "factual-qa-1",
+            "observed_answer": "Paris",
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "collected_at": _FACTUAL_QA_COLLECTED.isoformat(),
+            "source_evidence_refs": ["evidence-1"],
+            "source_evidence_sha256": "a" * 64,
+            "verification_status": VerificationStatus.VERIFIED,
+            "unexpected_field": "bad",
+        })
+
+
+def test_verified_factual_qa_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified factual-qa observation requires source evidence",
+    ):
+        FactualQAObservation(
+            observation_id="factual-qa-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="factual-qa-1",
+            observed_answer="Paris",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_FACTUAL_QA_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_factual_qa_observation_requires_source_evidence_sha256():
+    with pytest.raises(
+        ValidationError,
+        match="verified factual-qa observation requires source evidence",
+    ):
+        FactualQAObservation(
+            observation_id="factual-qa-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="factual-qa-1",
+            observed_answer="Paris",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_FACTUAL_QA_COLLECTED,
+            source_evidence_refs=["evidence-1"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_factual_qa_assertion_ids():
+    assertion = FactualQAAssertion(
+        assertion_id="duplicate",
+        expected_answer="Paris",
+        match_type=FactualQAMatchType.EXACT_MATCH,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    with pytest.raises(ValidationError, match="factual-qa assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            factual_qa_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_factual_qa_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        factual_qa_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.factual_qa_observation_refs == ["observation-1", "observation-2"]
 
 
 def test_unsupported_exclusion_round_trip():

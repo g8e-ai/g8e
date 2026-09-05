@@ -682,6 +682,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["tool_sequence_observation"],
         release_threshold="Practical threshold: 1.0; any tool-sequence mismatch is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="factual_qa",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of factual-QA assertions where the independently observed answer satisfies the declared match type against the expected answer. For exact_match the observed answer must exactly equal the expected answer. For normalized_match the observed answer must equal the expected answer after whitespace normalization. For contains the expected answer must appear as a contiguous substring within the observed answer.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("factual_qa"),
+        eligible_population="All attempts with declared factual-QA assertions.",
+        denominator="Total number of declared factual-QA assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["factual_qa_observation"],
+        release_threshold="Practical threshold: 1.0; any factual-QA mismatch is a release blocker.",
+    ),
 ]
 
 

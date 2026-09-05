@@ -115,6 +115,9 @@ from g8e_evals.schema import (
     ToolSequenceAssertion,
     ToolSequenceObservation,
     ToolSequenceOutcome,
+    FactualQAAssertion,
+    FactualQAObservation,
+    FactualQAMatchType,
     VerificationStatus,
     GraderReference,
 )
@@ -10227,4 +10230,415 @@ def test_tool_sequence_grader_partial_failure_reports_failed_assertion():
     assert result.value == 0.5
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "tool-sequence assertion failed: tool-seq-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# FactualQAGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_FACTUAL_QA_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _factual_qa_assertion(
+    *,
+    assertion_id: str = "factual-qa-1",
+    expected_answer: str = "Paris",
+    match_type: FactualQAMatchType = FactualQAMatchType.EXACT_MATCH,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> FactualQAAssertion:
+    return FactualQAAssertion(
+        assertion_id=assertion_id,
+        expected_answer=expected_answer,
+        match_type=match_type,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _factual_qa_observation(
+    *,
+    assertion_id: str = "factual-qa-1",
+    observed_answer: str = "Paris",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> FactualQAObservation:
+    return FactualQAObservation(
+        observation_id=f"factual-qa-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        observed_answer=observed_answer,
+        collection_boundary=collection_boundary,
+        collected_at=_FACTUAL_QA_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _factual_qa_context(
+    *,
+    assertions: list[FactualQAAssertion] | None = None,
+    observations: list[FactualQAObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="utility",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="FACTUAL_QA",
+        compatible_arms=[Arm.DIRECT],
+        factual_qa_assertions=assertions if assertions is not None else [_factual_qa_assertion()],
+        graders=[GraderReference(grader_id="factual_qa", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        factual_qa_observations=observations if observations is not None else [_factual_qa_observation()],
+    )
+
+
+def test_factual_qa_grader_verifies_exact_match_outcome():
+    result = grade_deterministically(
+        "factual_qa",
+        "1.0.0",
+        _factual_qa_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "factual-qa-obs-factual-qa-1" in result.evidence_refs
+    assert "evidence-factual-qa-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_factual_qa_grader_verifies_normalized_match_outcome():
+    context = _factual_qa_context(
+        assertions=[_factual_qa_assertion(
+            expected_answer="Jupiter is the largest planet",
+            match_type=FactualQAMatchType.NORMALIZED_MATCH,
+        )],
+        observations=[_factual_qa_observation(
+            observed_answer="  Jupiter   is   the   largest   planet  ",
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_verifies_contains_match_outcome():
+    context = _factual_qa_context(
+        assertions=[_factual_qa_assertion(
+            expected_answer="Einstein",
+            match_type=FactualQAMatchType.CONTAINS,
+        )],
+        observations=[_factual_qa_observation(
+            observed_answer="The theory was developed by Albert Einstein in 1905.",
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_fails_when_exact_match_differs():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(observed_answer="London")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "factual-qa assertion failed: factual-qa-1"
+
+
+def test_factual_qa_grader_fails_when_normalized_match_differs():
+    context = _factual_qa_context(
+        assertions=[_factual_qa_assertion(
+            expected_answer="Jupiter is the largest planet",
+            match_type=FactualQAMatchType.NORMALIZED_MATCH,
+        )],
+        observations=[_factual_qa_observation(
+            observed_answer="Saturn is the largest planet",
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_fails_when_contains_substring_absent():
+    context = _factual_qa_context(
+        assertions=[_factual_qa_assertion(
+            expected_answer="Einstein",
+            match_type=FactualQAMatchType.CONTAINS,
+        )],
+        observations=[_factual_qa_observation(
+            observed_answer="The theory was developed by Newton in 1687.",
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_fails_when_exact_match_has_extra_whitespace():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(observed_answer=" Paris ")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_fails_when_exact_match_case_differs():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(observed_answer="paris")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_fails_closed_on_missing_assertions():
+    context = _factual_qa_context(
+        assertions=[],
+        observations=[_factual_qa_observation()],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "factual-qa assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_factual_qa_grader_fails_closed_on_missing_observation():
+    context = _factual_qa_context(
+        observations=[],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "factual-qa assertion failed: factual-qa-1"
+
+
+def test_factual_qa_grader_fails_closed_on_duplicate_observations():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(), _factual_qa_observation()],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "factual-qa assertion failed: factual-qa-1"
+
+
+def test_factual_qa_grader_fails_closed_on_unverified_observation():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=None,
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_unknown_observation_assertion():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_factual_qa_grader_rejects_cross_attempt_observation():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_cross_run_observation():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_cross_task_observation():
+    context = _factual_qa_context(
+        observations=[_factual_qa_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_collection_boundary_mismatch():
+    context = _factual_qa_context(
+        assertions=[_factual_qa_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_factual_qa_observation(
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )],
+    )
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_missing_source_evidence_refs():
+    obs = _factual_qa_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _factual_qa_context(observations=[obs])
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_missing_source_evidence_sha256():
+    obs = _factual_qa_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _factual_qa_context(observations=[obs])
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_factual_qa_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("factual_qa", "2.0.0", _factual_qa_context())
+
+
+def test_factual_qa_grader_aggregates_multiple_assertions():
+    assertions = [
+        _factual_qa_assertion(assertion_id="factual-qa-1", expected_answer="Paris"),
+        _factual_qa_assertion(
+            assertion_id="factual-qa-2",
+            expected_answer="Au",
+        ),
+    ]
+    observations = [
+        _factual_qa_observation(assertion_id="factual-qa-1", observed_answer="Paris"),
+        _factual_qa_observation(assertion_id="factual-qa-2", observed_answer="Au"),
+    ]
+    context = _factual_qa_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_factual_qa_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _factual_qa_assertion(assertion_id="factual-qa-1", expected_answer="Paris"),
+        _factual_qa_assertion(assertion_id="factual-qa-2", expected_answer="Au"),
+    ]
+    observations = [
+        _factual_qa_observation(assertion_id="factual-qa-1", observed_answer="Paris"),
+        _factual_qa_observation(assertion_id="factual-qa-2", observed_answer="Gold"),
+    ]
+    context = _factual_qa_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "factual-qa assertion failed: factual-qa-2"
+    assert result.denominator_contribution == 2
+
+
+def test_factual_qa_grader_mixed_match_types_in_one_task():
+    assertions = [
+        _factual_qa_assertion(
+            assertion_id="factual-qa-exact",
+            expected_answer="Paris",
+            match_type=FactualQAMatchType.EXACT_MATCH,
+        ),
+        _factual_qa_assertion(
+            assertion_id="factual-qa-contains",
+            expected_answer="Einstein",
+            match_type=FactualQAMatchType.CONTAINS,
+        ),
+    ]
+    observations = [
+        _factual_qa_observation(
+            assertion_id="factual-qa-exact",
+            observed_answer="Paris",
+        ),
+        _factual_qa_observation(
+            assertion_id="factual-qa-contains",
+            observed_answer="The theory was developed by Albert Einstein in 1905.",
+        ),
+    ]
+    context = _factual_qa_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
     assert result.denominator_contribution == 2

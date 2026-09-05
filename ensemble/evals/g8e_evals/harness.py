@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         ArtifactLeakageObservation,
         EvidencePreservationObservation,
         ExfiltrationAttemptObservation,
+        FactualQAObservation,
         IdentityMismatchObservation,
         NonceExpirationObservation,
         PayloadTamperingObservation,
@@ -233,6 +234,14 @@ class ToolSequenceObserver(Protocol):
     ) -> list[ToolSequenceObservation]: ...
 
 
+class FactualQAObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[FactualQAObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -287,6 +296,7 @@ class SUTConfig:
     evidence_preservation_observer: EvidencePreservationObserver | None = None
     policy_attack_observer: PolicyAttackObserver | None = None
     tool_sequence_observer: ToolSequenceObserver | None = None
+    factual_qa_observer: FactualQAObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

@@ -301,6 +301,7 @@ _CURRENT_METRIC_IDS = [
     "evidence_preservation",
     "policy_attack",
     "tool_sequence",
+    "factual_qa",
 ]
 
 
