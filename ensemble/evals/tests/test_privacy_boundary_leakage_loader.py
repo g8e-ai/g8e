@@ -688,8 +688,6 @@ def test_loader_round_trips_real_gold_set_dataset_rows(tmp_path, monkeypatch):
 
     gold_set_root = Path(gold_set).parent / "gold_sets" / "privacy_boundary_leakage"
     input_path = gold_set_root / "input_data.jsonl"
-    if not input_path.exists():
-        pytest.skip("privacy_boundary_leakage gold set not available in this environment")
 
     loader = PrivacyBoundaryLeakageLoader(input_path)
     tasks = list(loader.load())

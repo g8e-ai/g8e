@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "privacy_boundary_leakage",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/privacy/loader.py",
+    "code_sha256": "d9935c694eb9f0725a045b47820a0f01f8233e587bf2e6ef6be9843aba9b5e8f"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 3,
+    "sha256": "bcdd019a6c622b86c37bf4ab9f89c9b096c4f27c715c6a89f77263df84b976d6"
+  },
+  "partition": "development",
+  "domain_strata": ["privacy"]
+}
