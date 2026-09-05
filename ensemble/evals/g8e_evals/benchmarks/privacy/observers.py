@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from g8e.receipts import verify_action_receipt_signature
 from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
 from g8e_evals.benchmarks.privacy.exfiltration import (
     ExfiltrationActionResult,
@@ -48,6 +49,19 @@ from g8e_evals.schema import (
 )
 
 
+def _evidence_binding(evidence_sha: str) -> tuple[str | None, VerificationStatus]:
+    """Return (source_evidence_sha256, verification_status) based on whether
+    the evidence SHA is known at observation time.
+
+    When the evidence SHA is not yet known (empty string), observations are
+    created in PENDING state with no SHA.  The caller updates them to VERIFIED
+    after persisting the evidence artifact and computing its digest.
+    """
+    if evidence_sha:
+        return evidence_sha, VerificationStatus.VERIFIED
+    return None, VerificationStatus.PENDING
+
+
 class TokenStorePersistenceObserverImpl:
     """Observes a local encrypted token store and produces typed persistence observations.
 
@@ -67,6 +81,7 @@ class TokenStorePersistenceObserverImpl:
         attempt: AttemptRecord,
     ) -> list[TokenStorePersistenceObservation]:
         observations: list[TokenStorePersistenceObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
         for assertion in task.token_store_persistence_assertions:
             self._store.lock()
             write_refused = True
@@ -99,8 +114,8 @@ class TokenStorePersistenceObserverImpl:
                 expired_token_invisible=not self._store.is_visible("expired-test-token"),
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
         return observations
 
@@ -136,6 +151,7 @@ class TokenTTLExpiryObserverImpl:
         attempt: AttemptRecord,
     ) -> list[TokenTTLExpiryObservation]:
         observations: list[TokenTTLExpiryObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
         for assertion in task.token_ttl_expiry_assertions:
             token_id = f"ttl-test-{assertion.assertion_id}"
             created_at = self._store.token_created_at(token_id)
@@ -158,8 +174,8 @@ class TokenTTLExpiryObserverImpl:
                 measured_expiry_timestamp=expires_at,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
         return observations
 
@@ -183,6 +199,7 @@ class TokenPersistenceFailureObserverImpl:
         attempt: AttemptRecord,
     ) -> list[TokenPersistenceFailureObservation]:
         observations: list[TokenPersistenceFailureObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
         for assertion in task.token_persistence_failure_assertions:
             result = self._store.persist()
             observations.append(TokenPersistenceFailureObservation(
@@ -200,8 +217,8 @@ class TokenPersistenceFailureObserverImpl:
                 measured_failure_outcome=TokenPersistenceFailureOutcome.STORAGE_FAILURE,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
         return observations
 
@@ -210,8 +227,16 @@ def _make_receipt_observation(
     result: ExfiltrationActionResult,
     attempt: AttemptRecord,
     action_type: str,
+    public_key_hex: str,
 ) -> ReceiptObservation:
-    """Build a verified ``ReceiptObservation`` from an exfiltration action result."""
+    """Build a ``ReceiptObservation`` from an exfiltration action result.
+
+    The receipt signature is verified against the simulator's assessed public
+    key before setting ``verified``.  A receipt that fails signature
+    verification is recorded with ``verified=False`` so downstream graders
+    fail closed on unverified evidence.
+    """
+    verified = verify_action_receipt_signature(result.receipt, public_key_hex)
     return ReceiptObservation(
         receipt_id=f"{attempt.attempt_id}:receipt",
         attempt_id=attempt.attempt_id,
@@ -219,7 +244,7 @@ def _make_receipt_observation(
         transaction_id=result.transaction_id,
         action_type=action_type,
         primary=True,
-        verified=True,
+        verified=verified,
         action_receipt=result.receipt,
     )
 
@@ -246,6 +271,7 @@ class ExfiltrationAttemptObserverImpl:
     ) -> tuple[ReceiptObservation, list[ExfiltrationAttemptObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         exfil_observations: list[ExfiltrationAttemptObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.exfiltration_attempt_assertions:
             sensitive_value = f"sensitive-value-{assertion.assertion_id}"
@@ -257,7 +283,9 @@ class ExfiltrationAttemptObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             materialized = self._simulator.is_value_at_destination(assertion.destination)
@@ -279,8 +307,8 @@ class ExfiltrationAttemptObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         if not receipt_observations:
@@ -317,6 +345,7 @@ class ArtifactLeakageObserverImpl:
         attempt: AttemptRecord,
     ) -> list[ArtifactLeakageObservation]:
         observations: list[ArtifactLeakageObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.artifact_leakage_assertions:
             safe_content = '{"summary": "all-clear", "hash": "abc123"}'
@@ -343,8 +372,8 @@ class ArtifactLeakageObserverImpl:
                 sensitive_types_found=types_found,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations
@@ -377,6 +406,7 @@ class RehydrationObserverImpl:
         attempt: AttemptRecord,
     ) -> list[RehydrationObservation]:
         observations: list[RehydrationObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         self._artifact.serialize(self._tokens)
         input_sha = self._artifact.input_sha256()
@@ -402,8 +432,8 @@ class RehydrationObserverImpl:
                 restored_sensitive_types=restored_types,
                 unresolved_sensitive_types=unresolved_types,
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations

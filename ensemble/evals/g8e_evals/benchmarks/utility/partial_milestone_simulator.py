@@ -22,7 +22,7 @@ that skips, reorders, or misses milestones.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

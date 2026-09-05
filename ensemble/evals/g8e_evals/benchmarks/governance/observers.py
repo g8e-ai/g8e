@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from g8e.receipts import verify_action_receipt_signature
 from g8e_evals.benchmarks.governance.simulator import GovernanceActionResult, LocalGovernanceSimulator
 from g8e_evals.schema import (
     AttemptRecord,
@@ -47,12 +48,33 @@ from g8e_evals.schema import (
 )
 
 
+def _evidence_binding(evidence_sha: str) -> tuple[str | None, VerificationStatus]:
+    """Return (source_evidence_sha256, verification_status) based on whether
+    the evidence SHA is known at observation time.
+
+    When the evidence SHA is not yet known (empty string), observations are
+    created in PENDING state with no SHA.  The caller updates them to VERIFIED
+    after persisting the evidence artifact and computing its digest.
+    """
+    if evidence_sha:
+        return evidence_sha, VerificationStatus.VERIFIED
+    return None, VerificationStatus.PENDING
+
+
 def _make_receipt_observation(
     result: GovernanceActionResult,
     attempt: AttemptRecord,
     action_type: str,
+    public_key_hex: str,
 ) -> ReceiptObservation:
-    """Build a verified ``ReceiptObservation`` from a governance action result."""
+    """Build a ``ReceiptObservation`` from a governance action result.
+
+    The receipt signature is verified against the simulator's assessed public
+    key before setting ``verified``.  A receipt that fails signature
+    verification is recorded with ``verified=False`` so downstream graders
+    fail closed on unverified evidence.
+    """
+    verified = verify_action_receipt_signature(result.receipt, public_key_hex)
     return ReceiptObservation(
         receipt_id=f"{attempt.attempt_id}:receipt",
         attempt_id=attempt.attempt_id,
@@ -60,7 +82,7 @@ def _make_receipt_observation(
         transaction_id=result.transaction_id,
         action_type=action_type,
         primary=True,
-        verified=True,
+        verified=verified,
         action_receipt=result.receipt,
     )
 
@@ -86,6 +108,7 @@ class ReplayAttemptObserverImpl:
     ) -> tuple[ReceiptObservation, list[ReplayAttemptObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         replay_observations: list[ReplayAttemptObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.replay_attempt_assertions:
             result = self._simulator.process_replay(
@@ -95,7 +118,9 @@ class ReplayAttemptObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             double_accepted = self._simulator.is_transaction_double_accepted(
@@ -119,8 +144,8 @@ class ReplayAttemptObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], replay_observations
@@ -148,6 +173,7 @@ class SignedFieldTamperingObserverImpl:
     ) -> tuple[ReceiptObservation, list[SignedFieldTamperingObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         tampering_observations: list[SignedFieldTamperingObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.signed_field_tampering_assertions:
             result = self._simulator.process_signed_field_tampering(
@@ -157,7 +183,9 @@ class SignedFieldTamperingObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             tampered_accepted = self._simulator.is_tampered_field_accepted(
@@ -181,8 +209,8 @@ class SignedFieldTamperingObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], tampering_observations
@@ -210,6 +238,7 @@ class NonceExpirationObserverImpl:
     ) -> tuple[ReceiptObservation, list[NonceExpirationObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         nonce_observations: list[NonceExpirationObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.nonce_expiration_assertions:
             result = self._simulator.process_nonce_expiration(
@@ -219,7 +248,9 @@ class NonceExpirationObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             nonce_accepted = self._simulator.is_expired_nonce_accepted(assertion.nonce_value)
@@ -241,8 +272,8 @@ class NonceExpirationObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], nonce_observations
@@ -270,6 +301,7 @@ class StaleStateRootObserverImpl:
     ) -> tuple[ReceiptObservation, list[StaleStateRootObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         stale_root_observations: list[StaleStateRootObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.stale_state_root_assertions:
             result = self._simulator.process_stale_state_root(
@@ -279,7 +311,9 @@ class StaleStateRootObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             stale_accepted = self._simulator.is_stale_root_accepted_as_current(
@@ -303,8 +337,8 @@ class StaleStateRootObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], stale_root_observations
@@ -332,6 +366,7 @@ class SignerDefectObserverImpl:
     ) -> tuple[ReceiptObservation, list[SignerDefectObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         signer_defect_observations: list[SignerDefectObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.signer_defect_assertions:
             result = self._simulator.process_signer_defect(
@@ -342,7 +377,9 @@ class SignerDefectObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             defect_key = assertion.duplicate_signer_key_id or f"quorum-{assertion.declared_required_quorum}"
@@ -366,8 +403,8 @@ class SignerDefectObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], signer_defect_observations
@@ -395,6 +432,7 @@ class L3ProofTransplantObserverImpl:
     ) -> tuple[ReceiptObservation, list[L3ProofTransplantObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         l3_proof_observations: list[L3ProofTransplantObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.l3_proof_transplant_assertions:
             result = self._simulator.process_l3_proof_transplant(
@@ -404,7 +442,9 @@ class L3ProofTransplantObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             proof_accepted = self._simulator.is_transplanted_l3_proof_accepted(
@@ -428,8 +468,8 @@ class L3ProofTransplantObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], l3_proof_observations
@@ -457,6 +497,7 @@ class RevokedCredentialObserverImpl:
     ) -> tuple[ReceiptObservation, list[RevokedCredentialObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         revoked_credential_observations: list[RevokedCredentialObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.revoked_credential_assertions:
             result = self._simulator.process_revoked_credential(
@@ -466,7 +507,9 @@ class RevokedCredentialObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             credential_accepted = self._simulator.is_revoked_credential_accepted(
@@ -490,8 +533,8 @@ class RevokedCredentialObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], revoked_credential_observations
@@ -521,6 +564,7 @@ class PolicyAttackObserverImpl:
     ) -> tuple[ReceiptObservation, list[PolicyAttackObservation]]:
         receipt_observations: list[ReceiptObservation] = []
         policy_attack_observations: list[PolicyAttackObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.policy_attack_assertions:
             attack_key = f"{assertion.attack_type.value}:{assertion.assertion_id}"
@@ -530,7 +574,9 @@ class PolicyAttackObserverImpl:
                 rejection_layer=assertion.expected_rejection_layer,
             )
             receipt_observations.append(
-                _make_receipt_observation(result, attempt, assertion.action_type)
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
             )
 
             if assertion.expected_outcome.value == "block":
@@ -557,8 +603,8 @@ class PolicyAttackObserverImpl:
                 observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return receipt_observations[0], policy_attack_observations

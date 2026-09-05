@@ -123,7 +123,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.37.0"
+    assert SCHEMA_VERSION == "1.38.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():

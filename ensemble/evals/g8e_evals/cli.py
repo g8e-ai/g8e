@@ -31,6 +31,7 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_FAILED,
 )
 from g8e.receipts import (
+    action_receipt_to_dict,
     decode_ed25519_public_key,
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
@@ -50,6 +51,8 @@ from g8e_evals.schema import (
     ArtifactLeakageObservation,
     AttemptRecord,
     ContentHash,
+    EvidenceIndex,
+    EvidenceMediaType,
     ExfiltrationAttemptObservation,
     FinalStateObservation,
     GraderClass,
@@ -59,6 +62,7 @@ from g8e_evals.schema import (
     PolicyOutcome,
     PostureObservation,
     PayloadTamperingObservation,
+    PrivacyClassification,
     ReceiptObservation,
     RehydrationObservation,
     ReplayAttemptObservation,
@@ -143,7 +147,7 @@ from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
 from g8e_evals.report.cli_renderer import render_summary
-from g8e_evals.models import ScoreDetails
+from g8e_evals.models import ScoreDetails, TaskMetadata
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -190,6 +194,142 @@ _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
 _RECEIPT_VERIFICATION_SCOPE = "canonical receipt signatures and final-persistence attestations"
 _RECEIPT_FINGERPRINT_SAMPLE_LIMIT = 3
+
+# Maps typed assertion-list field names on TaskDefinition/TaskMetadata to the
+# grader ID that grades assertions of that type.  Used to derive grader
+# references from typed assertions rather than free-form benchmark_specific
+# metadata.
+_ASSERTION_FIELD_TO_GRADER_ID: list[tuple[str, str]] = [
+    ("token_store_persistence_assertions", _TOKEN_STORE_PERSISTENCE_GRADER_ID),
+    ("token_ttl_expiry_assertions", _TOKEN_TTL_EXPIRY_GRADER_ID),
+    ("token_persistence_failure_assertions", _TOKEN_PERSISTENCE_FAILURE_GRADER_ID),
+    ("exfiltration_attempt_assertions", _EXFILTRATION_ATTEMPT_GRADER_ID),
+    ("artifact_leakage_assertions", _ARTIFACT_LEAKAGE_GRADER_ID),
+    ("rehydration_assertions", _EXACT_LOCAL_REHYDRATION_GRADER_ID),
+    ("replay_attempt_assertions", _REPLAY_ATTEMPT_GRADER_ID),
+    ("signed_field_tampering_assertions", _SIGNED_FIELD_TAMPERING_GRADER_ID),
+    ("nonce_expiration_assertions", _NONCE_EXPIRATION_GRADER_ID),
+    ("stale_state_root_assertions", _STALE_STATE_ROOT_GRADER_ID),
+    ("signer_defect_assertions", _SIGNER_DEFECT_GRADER_ID),
+    ("l3_proof_transplant_assertions", _L3_PROOF_TRANSPLANT_GRADER_ID),
+    ("revoked_credential_assertions", _REVOKED_CREDENTIAL_GRADER_ID),
+    ("policy_attack_assertions", _POLICY_ATTACK_GRADER_ID),
+    ("tool_sequence_assertions", _TOOL_SEQUENCE_GRADER_ID),
+    ("factual_qa_assertions", _FACTUAL_QA_GRADER_ID),
+    ("citation_backed_assertions", _CITATION_BACKED_GRADER_ID),
+    ("partial_milestone_assertions", _PARTIAL_MILESTONE_GRADER_ID),
+]
+
+
+def _derive_grader_refs_from_assertions(task_metadata: TaskMetadata) -> list[GraderReference]:
+    """Derive grader references from typed assertion lists on task metadata.
+
+    Replaces the old approach of reading grader IDs from the untyped
+    ``benchmark_specific`` dict.  Each non-empty typed assertion list maps
+    to exactly one deterministic grader reference.
+    """
+    refs: list[GraderReference] = []
+    for field_name, grader_id in _ASSERTION_FIELD_TO_GRADER_ID:
+        assertions = getattr(task_metadata, field_name, None)
+        if assertions:
+            refs.append(GraderReference(
+                grader_id=grader_id,
+                grader_version=_GRADER_VERSION,
+                grader_class=GraderClass.DETERMINISTIC,
+            ))
+    return refs
+
+
+def _persist_evidence_artifact(
+    content: str,
+    *,
+    run_id: str,
+    attempt_id: str,
+    artifact_id: str,
+    schema_ref: str,
+    report_dir: Path,
+) -> EvidenceIndex:
+    """Persist content as a content-addressed evidence artifact.
+
+    Writes the content to ``evidence/<sha256>.json`` and returns the
+    ``EvidenceIndex`` entry.  The SHA-256 and byte length in the index
+    are computed from the actual persisted bytes, not from a descriptive
+    string.
+    """
+    content_bytes = content.encode()
+    digest = hashlib.sha256(content_bytes).hexdigest()
+    storage_location = f"evidence/{digest}.json"
+    index = EvidenceIndex(
+        artifact_id=artifact_id,
+        run_id=run_id,
+        attempt_id=attempt_id,
+        media_type=EvidenceMediaType.APPLICATION_JSON,
+        schema_ref=schema_ref,
+        byte_length=len(content_bytes),
+        sha256=digest,
+        producer_identity="g8e-evals-synthetic",
+        privacy_classification=PrivacyClassification.INTERNAL,
+        storage_location=storage_location,
+    )
+    artifact_path = report_dir / storage_location
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(content)
+    return index
+
+
+def _resolve_and_digest_check(
+    evidence_index: dict[str, EvidenceIndex],
+    refs: list[str],
+    expected_sha256: str,
+    report_dir: Path,
+) -> bool:
+    """Resolve evidence references and verify their digests.
+
+    Returns ``True`` only if every reference resolves to an EvidenceIndex
+    entry whose persisted content matches the declared SHA-256 and the
+    expected SHA-256 on the observation.
+    """
+    if not refs:
+        return False
+    for ref in refs:
+        index = evidence_index.get(ref)
+        if index is None:
+            return False
+        if index.sha256 != expected_sha256:
+            return False
+        artifact_path = report_dir / index.storage_location
+        if not artifact_path.is_file():
+            return False
+        content_bytes = artifact_path.read_bytes()
+        if hashlib.sha256(content_bytes).hexdigest() != index.sha256:
+            return False
+        if len(content_bytes) != index.byte_length:
+            return False
+    return True
+
+
+def _persist_receipt_evidence(
+    receipt_obs: ReceiptObservation,
+    *,
+    run_id: str,
+    attempt_id: str,
+    artifact_id: str,
+    report_dir: Path,
+) -> tuple[EvidenceIndex, str]:
+    """Persist a receipt as a content-addressed artifact and return its index and SHA-256."""
+    receipt_content = json.dumps(
+        action_receipt_to_dict(receipt_obs.action_receipt),
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    )
+    index = _persist_evidence_artifact(
+        receipt_content,
+        run_id=run_id,
+        attempt_id=attempt_id,
+        artifact_id=artifact_id,
+        schema_ref="g8e.operator.v1.ActionReceipt",
+        report_dir=report_dir,
+    )
+    return index, index.sha256
 
 
 @dataclass(frozen=True)
@@ -2581,9 +2721,8 @@ async def _run_synthetic_suite(
 
     grader_bundle_parts: list[str] = [f"{suite}:{suite_version}"]
     for task in tasks:
-        params = task.metadata.benchmark_specific
-        for grader_id in params.get("graders", []):
-            grader_bundle_parts.append(f"{grader_id}@{_GRADER_VERSION}")
+        for ref in _derive_grader_refs_from_assertions(task.metadata):
+            grader_bundle_parts.append(f"{ref.grader_id}@{ref.grader_version}")
     grader_bundle_content = ":".join(grader_bundle_parts).encode()
     grader_bundle_hash = hashlib.sha256(grader_bundle_content).hexdigest()
 
@@ -2623,21 +2762,18 @@ async def _run_synthetic_suite(
 
     task_defs: list[TaskDefinition] = []
     for task in tasks:
-        params = task.metadata.benchmark_specific
-        grader_refs: list[GraderReference] = []
-        for grader_id in params.get("graders", []):
-            grader_refs.append(GraderReference(
-                grader_id=grader_id,
-                grader_version=_GRADER_VERSION,
-                grader_class=GraderClass.DETERMINISTIC,
-            ))
+        grader_refs = _derive_grader_refs_from_assertions(task.metadata)
+        if not grader_refs:
+            raise EvaluationRunError(
+                f"task {task.id} has no applicable grader: no typed assertions declared"
+            )
         task_defs.append(TaskDefinition(
             task_id=task.id,
             suite_id=suite_id,
             suite_version=suite_version,
             category=task.metadata.category or "privacy",
             expected_action_class=task.metadata.expected_action_class,
-            compatible_arms=list(GOVERNED_ARMS),
+            compatible_arms=[Arm.DIRECT, *GOVERNED_ARMS],
             prompt_hash=hashlib.sha256(task.prompt.encode()).hexdigest(),
             prompt_length=len(task.prompt),
             token_store_persistence_assertions=task.metadata.token_store_persistence_assertions,
@@ -2687,6 +2823,7 @@ async def _run_synthetic_suite(
     citation_backed_records: list[CitationBackedObservation] = []
     partial_milestone_records: list[PartialMilestoneObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
+    evidence_index_records: list[EvidenceIndex] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
 
@@ -2713,7 +2850,8 @@ async def _run_synthetic_suite(
         store_path = store_dir / "store.json"
         store = LocalEncryptedTokenStore(store_path, _SYNTHETIC_STORE_KEY)
 
-        evidence_ref = f"synthetic:{task.id}:evidence"
+        task_evidence_indices: list[EvidenceIndex] = []
+        task_receipt_ids: list[str] = []
 
         token_store_observations: list[TokenStorePersistenceObservation] = []
         ttl_observations: list[TokenTTLExpiryObservation] = []
@@ -2736,8 +2874,19 @@ async def _run_synthetic_suite(
                     expired["ttl_seconds"],
                 )
             store.persist()
-            evidence_sha = store.stored_ciphertext_sha256()
-            observer = TokenStorePersistenceObserverImpl(store, evidence_sha, evidence_ref)
+            store_ciphertext = store_path.read_bytes()
+            store_sha = hashlib.sha256(store_ciphertext).hexdigest()
+            store_artifact_id = f"{attempt_id}:token-store"
+            store_index = _persist_evidence_artifact(
+                store_ciphertext.decode(errors="replace"),
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_id=store_artifact_id,
+                schema_ref="g8e_evals.benchmarks.privacy.LocalEncryptedTokenStore",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(store_index)
+            observer = TokenStorePersistenceObserverImpl(store, store_sha, store_artifact_id)
             token_store_observations = await observer.observe(task_def, attempt)
             token_store_persistence_records.extend(token_store_observations)
             attempt.token_store_persistence_observation_refs = [
@@ -2754,11 +2903,22 @@ async def _run_synthetic_suite(
                     ttl_token["ttl_seconds"],
                 )
             store.persist()
-            evidence_sha = store.stored_ciphertext_sha256()
+            store_ciphertext = store_path.read_bytes()
+            store_sha = hashlib.sha256(store_ciphertext).hexdigest()
+            store_artifact_id = f"{attempt_id}:token-ttl-store"
+            store_index = _persist_evidence_artifact(
+                store_ciphertext.decode(errors="replace"),
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_id=store_artifact_id,
+                schema_ref="g8e_evals.benchmarks.privacy.LocalEncryptedTokenStore",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(store_index)
             observer = TokenTTLExpiryObserverImpl(
                 store,
-                evidence_sha,
-                evidence_ref,
+                store_sha,
+                store_artifact_id,
                 visible_before_expiry=params.get("visible_before_expiry", True),
                 invisible_after_expiry=params.get("invisible_after_expiry", True),
             )
@@ -2786,8 +2946,19 @@ async def _run_synthetic_suite(
                     token_spec["sensitive_type"],
                     token_spec["ttl_seconds"],
                 )
-            evidence_sha = hashlib.sha256(str(store_path).encode()).hexdigest()
-            observer = TokenPersistenceFailureObserverImpl(store, evidence_sha, evidence_ref)
+            store_ciphertext = store_path.read_bytes() if store_path.exists() else b""
+            store_sha = hashlib.sha256(store_ciphertext).hexdigest()
+            store_artifact_id = f"{attempt_id}:token-persist-fail-store"
+            store_index = _persist_evidence_artifact(
+                store_ciphertext.decode(errors="replace"),
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_id=store_artifact_id,
+                schema_ref="g8e_evals.benchmarks.privacy.LocalEncryptedTokenStore",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(store_index)
+            observer = TokenPersistenceFailureObserverImpl(store, store_sha, store_artifact_id)
             failure_observations = await observer.observe(task_def, attempt)
             token_persistence_failure_records.extend(failure_observations)
             attempt.token_persistence_failure_observation_refs = [
@@ -2801,13 +2972,37 @@ async def _run_synthetic_suite(
 
         if task.metadata.exfiltration_attempt_assertions:
             simulator = LocalExfiltrationSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:exfiltration:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = ExfiltrationAttemptObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:exfiltration-receipt"
+            observer = ExfiltrationAttemptObserverImpl(
+                simulator, "", receipt_artifact_id,
+            )
             privacy_receipt, exfiltration_observations = await observer.observe(task_def, attempt)
+            receipt_content = json.dumps(
+                action_receipt_to_dict(privacy_receipt.action_receipt),
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            receipt_index = _persist_evidence_artifact(
+                receipt_content,
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id,
+                schema_ref="g8e.operator.v1.ActionReceipt",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            receipt_sha = receipt_index.sha256
+            privacy_receipt = privacy_receipt.model_copy(update={"verified": privacy_receipt.verified})
+            exfiltration_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in exfiltration_observations
+            ]
             exfiltration_attempt_records.extend(exfiltration_observations)
             privacy_receipt_records.append(privacy_receipt)
+            task_receipt_ids.append(privacy_receipt.receipt_id)
             attempt.exfiltration_attempt_observation_refs = [
                 obs.observation_id for obs in exfiltration_observations
             ]
@@ -2815,17 +3010,33 @@ async def _run_synthetic_suite(
         if task.metadata.artifact_leakage_assertions:
             artifact_dir = report_dir / "artifacts" / task.id
             emitter = LocalArtifactEmitter(artifact_dir)
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:artifact-leakage:{emitter.scanner_version}".encode()
-            ).hexdigest()
             leak_types = list(params.get("leak_types", []))
             observer = ArtifactLeakageObserverImpl(
-                emitter, evidence_sha, evidence_ref, leak_types=leak_types,
+                emitter, "", "", leak_types=leak_types,
             )
             artifact_leakage_observations = await observer.observe(task_def, attempt)
-            artifact_leakage_records.extend(artifact_leakage_observations)
+            updated_artifact_obs: list[ArtifactLeakageObservation] = []
+            for obs in artifact_leakage_observations:
+                obs_content = obs.model_dump_json(indent=2)
+                obs_artifact_id = f"{obs.observation_id}:source"
+                obs_index = _persist_evidence_artifact(
+                    obs_content,
+                    run_id=run_id,
+                    attempt_id=attempt_id,
+                    artifact_id=obs_artifact_id,
+                    schema_ref="g8e_evals.ArtifactLeakageObservation",
+                    report_dir=report_dir,
+                )
+                task_evidence_indices.append(obs_index)
+                updated_artifact_obs.append(obs.model_copy(update={
+                    "source_evidence_refs": [obs_artifact_id],
+                    "source_evidence_sha256": obs_index.sha256,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            artifact_leakage_records.extend(updated_artifact_obs)
+            artifact_leakage_observations = updated_artifact_obs
             attempt.artifact_leakage_observation_refs = [
-                obs.observation_id for obs in artifact_leakage_observations
+                obs.observation_id for obs in updated_artifact_obs
             ]
 
         if task.metadata.rehydration_assertions:
@@ -2841,13 +3052,29 @@ async def _run_synthetic_suite(
                     created_at=datetime.fromisoformat(token_spec["created_at"]),
                     expires_at=datetime.fromisoformat(token_spec["expires_at"]),
                 ))
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:rehydration:{artifact.REHYDRATOR_VERSION}".encode()
-            ).hexdigest()
+            rehydration_artifact_id = f"{attempt_id}:rehydration-artifact"
             observer = RehydrationObserverImpl(
-                artifact, rehydration_tokens, evidence_sha, evidence_ref,
+                artifact, rehydration_tokens, "", rehydration_artifact_id,
             )
             rehydration_observations = await observer.observe(task_def, attempt)
+            rehydration_content = rehydration_artifact_path.read_text() if rehydration_artifact_path.exists() else ""
+            rehydration_index = _persist_evidence_artifact(
+                rehydration_content,
+                run_id=run_id,
+                attempt_id=attempt_id,
+                artifact_id=rehydration_artifact_id,
+                schema_ref="g8e_evals.benchmarks.privacy.LocalRehydrationArtifact",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(rehydration_index)
+            rehydration_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [rehydration_artifact_id],
+                    "source_evidence_sha256": rehydration_index.sha256,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in rehydration_observations
+            ]
             rehydration_records.extend(rehydration_observations)
             attempt.rehydration_observation_refs = [
                 obs.observation_id for obs in rehydration_observations
@@ -2865,104 +3092,208 @@ async def _run_synthetic_suite(
 
         if task.metadata.replay_attempt_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:replay:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = ReplayAttemptObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:replay-receipt"
+            observer = ReplayAttemptObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, replay_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            replay_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in replay_observations
+            ]
             replay_attempt_records.extend(replay_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.replay_attempt_observation_refs = [
                 obs.observation_id for obs in replay_observations
             ]
 
         if task.metadata.signed_field_tampering_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:signed-field:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = SignedFieldTamperingObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:signed-field-receipt"
+            observer = SignedFieldTamperingObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, signed_field_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            signed_field_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in signed_field_observations
+            ]
             signed_field_tampering_records.extend(signed_field_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.signed_field_tampering_observation_refs = [
                 obs.observation_id for obs in signed_field_observations
             ]
 
         if task.metadata.nonce_expiration_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:nonce:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = NonceExpirationObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:nonce-receipt"
+            observer = NonceExpirationObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, nonce_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            nonce_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in nonce_observations
+            ]
             nonce_expiration_records.extend(nonce_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.nonce_expiration_observation_refs = [
                 obs.observation_id for obs in nonce_observations
             ]
 
         if task.metadata.stale_state_root_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:stale-root:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = StaleStateRootObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:stale-root-receipt"
+            observer = StaleStateRootObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, stale_state_root_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            stale_state_root_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in stale_state_root_observations
+            ]
             stale_state_root_records.extend(stale_state_root_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.stale_state_root_observation_refs = [
                 obs.observation_id for obs in stale_state_root_observations
             ]
 
         if task.metadata.signer_defect_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:signer-defect:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = SignerDefectObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:signer-defect-receipt"
+            observer = SignerDefectObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, signer_defect_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            signer_defect_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in signer_defect_observations
+            ]
             signer_defect_records.extend(signer_defect_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.signer_defect_observation_refs = [
                 obs.observation_id for obs in signer_defect_observations
             ]
 
         if task.metadata.l3_proof_transplant_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:l3-proof:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = L3ProofTransplantObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:l3-proof-receipt"
+            observer = L3ProofTransplantObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, l3_proof_transplant_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            l3_proof_transplant_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in l3_proof_transplant_observations
+            ]
             l3_proof_transplant_records.extend(l3_proof_transplant_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.l3_proof_transplant_observation_refs = [
                 obs.observation_id for obs in l3_proof_transplant_observations
             ]
 
         if task.metadata.revoked_credential_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:revoked-cred:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = RevokedCredentialObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:revoked-cred-receipt"
+            observer = RevokedCredentialObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, revoked_credential_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            revoked_credential_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in revoked_credential_observations
+            ]
             revoked_credential_records.extend(revoked_credential_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.revoked_credential_observation_refs = [
                 obs.observation_id for obs in revoked_credential_observations
             ]
 
         if task.metadata.policy_attack_assertions:
             simulator = LocalGovernanceSimulator()
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:policy-attack:{simulator.public_key_hex}".encode()
-            ).hexdigest()
-            observer = PolicyAttackObserverImpl(simulator, evidence_sha, evidence_ref)
+            receipt_artifact_id = f"{attempt_id}:policy-attack-receipt"
+            observer = PolicyAttackObserverImpl(simulator, "", receipt_artifact_id)
             governance_receipt, policy_attack_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            policy_attack_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in policy_attack_observations
+            ]
             policy_attack_records.extend(policy_attack_observations)
             governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
             attempt.policy_attack_observation_refs = [
                 obs.observation_id for obs in policy_attack_observations
             ]
@@ -2972,10 +3303,20 @@ async def _run_synthetic_suite(
             tool_sim = LocalToolUseSimulator()
             observed_seq = params.get("observed_sequence", [])
             tool_sim.invoke_sequence(observed_seq)
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:tool-sequence:{tool_sim.finish().sequence_hash}".encode()
-            ).hexdigest()
-            observer = ToolSequenceObserverImpl(tool_sim, evidence_sha, evidence_ref)
+            tool_artifact_id = f"{attempt_id}:tool-sequence-source"
+            tool_content = json.dumps(
+                {"sequence": observed_seq, "hash": tool_sim.finish().sequence_hash},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            tool_index = _persist_evidence_artifact(
+                tool_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=tool_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalToolUseSimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(tool_index)
+            observer = ToolSequenceObserverImpl(tool_sim, tool_index.sha256, tool_artifact_id)
             tool_sequence_observations = await observer.observe(task_def, attempt)
             tool_sequence_records.extend(tool_sequence_observations)
             attempt.tool_sequence_observation_refs = [
@@ -2987,10 +3328,20 @@ async def _run_synthetic_suite(
             qa_sim = LocalFactualQASimulator()
             observed_answer = params.get("observed_answer", "")
             qa_sim.set_answer(observed_answer)
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:factual-qa:{qa_sim.finish().answer_hash}".encode()
-            ).hexdigest()
-            observer = FactualQAObserverImpl(qa_sim, evidence_sha, evidence_ref)
+            qa_artifact_id = f"{attempt_id}:factual-qa-source"
+            qa_content = json.dumps(
+                {"answer": observed_answer, "hash": qa_sim.finish().answer_hash},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            qa_index = _persist_evidence_artifact(
+                qa_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=qa_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalFactualQASimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(qa_index)
+            observer = FactualQAObserverImpl(qa_sim, qa_index.sha256, qa_artifact_id)
             factual_qa_observations = await observer.observe(task_def, attempt)
             factual_qa_records.extend(factual_qa_observations)
             attempt.factual_qa_observation_refs = [
@@ -3002,10 +3353,20 @@ async def _run_synthetic_suite(
             citation_sim = LocalCitationBackedSimulator()
             observed_citation = params.get("observed_citation", "")
             citation_sim.set_citation(observed_citation)
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:citation-backed:{citation_sim.finish().citation_hash}".encode()
-            ).hexdigest()
-            observer = CitationBackedObserverImpl(citation_sim, evidence_sha, evidence_ref)
+            citation_artifact_id = f"{attempt_id}:citation-backed-source"
+            citation_content = json.dumps(
+                {"citation": observed_citation, "hash": citation_sim.finish().citation_hash},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            citation_index = _persist_evidence_artifact(
+                citation_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=citation_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalCitationBackedSimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(citation_index)
+            observer = CitationBackedObserverImpl(citation_sim, citation_index.sha256, citation_artifact_id)
             citation_backed_observations = await observer.observe(task_def, attempt)
             citation_backed_records.extend(citation_backed_observations)
             attempt.citation_backed_observation_refs = [
@@ -3021,10 +3382,20 @@ async def _run_synthetic_suite(
                 MilestoneRecord(label=m["label"], order=m["order"])
                 for m in observed_milestones
             ])
-            evidence_sha = hashlib.sha256(
-                f"{task.id}:partial-milestone:{milestone_sim.finish().milestone_hash}".encode()
-            ).hexdigest()
-            observer = PartialMilestoneObserverImpl(milestone_sim, evidence_sha, evidence_ref)
+            milestone_artifact_id = f"{attempt_id}:partial-milestone-source"
+            milestone_content = json.dumps(
+                {"milestones": observed_milestones, "hash": milestone_sim.finish().milestone_hash},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            milestone_index = _persist_evidence_artifact(
+                milestone_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=milestone_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalPartialMilestoneSimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(milestone_index)
+            observer = PartialMilestoneObserverImpl(milestone_sim, milestone_index.sha256, milestone_artifact_id)
             partial_milestone_observations = await observer.observe(task_def, attempt)
             partial_milestone_records.extend(partial_milestone_observations)
             attempt.partial_milestone_observation_refs = [
@@ -3507,8 +3878,16 @@ async def _run_synthetic_suite(
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
+
+        if not grade_metrics:
+            raise EvaluationRunError(
+                f"task {task.id} produced no graded metrics: empty metric set is invalid evidence"
+            )
+
+        attempt.receipt_refs = task_receipt_ids
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        evidence_index_records.extend(task_evidence_indices)
         attempt_records.append(attempt)
 
         status = "PASS" if all(m.value == 1.0 for m in grade_metrics) else "FAIL"
@@ -3581,6 +3960,9 @@ async def _run_synthetic_suite(
     with open(report_dir / "metrics.jsonl", "w") as f:
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")
+    with open(report_dir / "evidence-index.jsonl", "w") as f:
+        for index in evidence_index_records:
+            f.write(index.model_dump_json() + "\n")
 
     console.print(f"\n[bold green]Synthetic report saved to {report_dir}[/bold green]")
 

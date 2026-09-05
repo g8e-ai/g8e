@@ -34,6 +34,19 @@ from g8e_evals.schema import (
 )
 
 
+def _evidence_binding(evidence_sha: str) -> tuple[str | None, VerificationStatus]:
+    """Return (source_evidence_sha256, verification_status) based on whether
+    the evidence SHA is known at observation time.
+
+    When the evidence SHA is not yet known (empty string), observations are
+    created in PENDING state with no SHA.  The caller updates them to VERIFIED
+    after persisting the evidence artifact and computing its digest.
+    """
+    if evidence_sha:
+        return evidence_sha, VerificationStatus.VERIFIED
+    return None, VerificationStatus.PENDING
+
+
 class ToolSequenceObserverImpl:
     """Observes tool-use sequences and produces typed observations.
 
@@ -60,6 +73,7 @@ class ToolSequenceObserverImpl:
     ) -> list[ToolSequenceObservation]:
         result = self._simulator.finish()
         observations: list[ToolSequenceObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.tool_sequence_assertions:
             observations.append(ToolSequenceObservation(
@@ -72,8 +86,8 @@ class ToolSequenceObserverImpl:
                 collection_boundary=assertion.collection_boundary,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations
@@ -105,6 +119,7 @@ class FactualQAObserverImpl:
     ) -> list[FactualQAObservation]:
         result = self._simulator.finish()
         observations: list[FactualQAObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.factual_qa_assertions:
             observations.append(FactualQAObservation(
@@ -117,8 +132,8 @@ class FactualQAObserverImpl:
                 collection_boundary=assertion.collection_boundary,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations
@@ -150,6 +165,7 @@ class CitationBackedObserverImpl:
     ) -> list[CitationBackedObservation]:
         result = self._simulator.finish()
         observations: list[CitationBackedObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.citation_backed_assertions:
             observations.append(CitationBackedObservation(
@@ -162,8 +178,8 @@ class CitationBackedObserverImpl:
                 collection_boundary=assertion.collection_boundary,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations
@@ -196,6 +212,7 @@ class PartialMilestoneObserverImpl:
         result = self._simulator.finish()
         reached_by_order = {m.order: m for m in result.milestones}
         observations: list[PartialMilestoneObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
 
         for assertion in task.partial_milestone_assertions:
             reached_milestone = reached_by_order.get(assertion.expected_order)
@@ -214,8 +231,8 @@ class PartialMilestoneObserverImpl:
                 collection_boundary=assertion.collection_boundary,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
-                source_evidence_sha256=self._evidence_sha,
-                verification_status=VerificationStatus.VERIFIED,
+                source_evidence_sha256=_sha,
+                verification_status=_status,
             ))
 
         return observations
