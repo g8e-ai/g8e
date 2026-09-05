@@ -2003,7 +2003,7 @@ class ToolSequenceAssertion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     assertion_id: str = Field(min_length=1)
-    expected_sequence: list[str] = Field(min_length=1)
+    expected_sequence: list[str] = Field(default_factory=list)
     expected_outcome: ToolSequenceOutcome
     collection_boundary: StateCollectionBoundary
 

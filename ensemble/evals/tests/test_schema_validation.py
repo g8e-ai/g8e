@@ -105,6 +105,9 @@ from g8e_evals.schema import (
     TokenPersistenceFailureAssertion,
     TokenPersistenceFailureObservation,
     TokenPersistenceFailureOutcome,
+    ToolSequenceAssertion,
+    ToolSequenceObservation,
+    ToolSequenceOutcome,
     UsageReconciliation,
     VerificationStatus,
     UnsupportedExclusion,
@@ -114,7 +117,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.34.0"
+    assert SCHEMA_VERSION == "1.35.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2903,6 +2906,166 @@ def test_attempt_record_links_policy_attack_observations():
     assert attempt.policy_attack_observation_refs == ["observation-1", "observation-2"]
 
 
+# ---------------------------------------------------------------------------
+# ToolSequence assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+_TOOL_SEQ_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def test_tool_sequence_assertion_and_observation_round_trip():
+    assertion = ToolSequenceAssertion(
+        assertion_id="tool-seq-1",
+        expected_sequence=["search", "read", "summarize"],
+        expected_outcome=ToolSequenceOutcome.MATCH,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    observation = ToolSequenceObservation(
+        observation_id="tool-seq-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        observed_sequence=["search", "read", "summarize"],
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_TOOL_SEQ_COLLECTED,
+        source_evidence_refs=["restricted-tool-seq-evidence"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = ToolSequenceAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = ToolSequenceObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_tool_sequence_assertion_rejects_empty_expected_sequence():
+    with pytest.raises(ValidationError, match="expected_sequence must not be empty"):
+        ToolSequenceAssertion(
+            assertion_id="tool-seq-1",
+            expected_sequence=[],
+            expected_outcome=ToolSequenceOutcome.MATCH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_tool_sequence_assertion_rejects_empty_tool_name_in_sequence():
+    with pytest.raises(ValidationError, match="expected_sequence entries must not be empty"):
+        ToolSequenceAssertion(
+            assertion_id="tool-seq-1",
+            expected_sequence=["search", ""],
+            expected_outcome=ToolSequenceOutcome.MATCH,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_tool_sequence_assertion_rejects_whitespace_only_tool_name():
+    with pytest.raises(ValidationError, match="expected_sequence entries must not be empty"):
+        ToolSequenceAssertion(
+            assertion_id="tool-seq-1",
+            expected_sequence=["search", "   "],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_tool_sequence_assertion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        ToolSequenceAssertion.model_validate({
+            "assertion_id": "tool-seq-1",
+            "expected_sequence": ["search"],
+            "expected_outcome": ToolSequenceOutcome.MATCH,
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "unexpected_field": "bad",
+        })
+
+
+def test_tool_sequence_observation_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        ToolSequenceObservation.model_validate({
+            "observation_id": "tool-seq-obs-1",
+            "attempt_id": "attempt-1",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "assertion_id": "tool-seq-1",
+            "observed_sequence": ["search"],
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "collected_at": _TOOL_SEQ_COLLECTED.isoformat(),
+            "source_evidence_refs": ["evidence-1"],
+            "source_evidence_sha256": "a" * 64,
+            "verification_status": VerificationStatus.VERIFIED,
+            "unexpected_field": "bad",
+        })
+
+
+def test_verified_tool_sequence_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified tool-sequence observation requires source evidence",
+    ):
+        ToolSequenceObservation(
+            observation_id="tool-seq-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="tool-seq-1",
+            observed_sequence=["search"],
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_TOOL_SEQ_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_tool_sequence_observation_requires_source_evidence_sha256():
+    with pytest.raises(
+        ValidationError,
+        match="verified tool-sequence observation requires source evidence",
+    ):
+        ToolSequenceObservation(
+            observation_id="tool-seq-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="tool-seq-1",
+            observed_sequence=["search"],
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_TOOL_SEQ_COLLECTED,
+            source_evidence_refs=["evidence-1"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_tool_sequence_assertion_ids():
+    assertion = ToolSequenceAssertion(
+        assertion_id="duplicate",
+        expected_sequence=["search"],
+        expected_outcome=ToolSequenceOutcome.MATCH,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    with pytest.raises(ValidationError, match="tool-sequence assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            tool_sequence_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_tool_sequence_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        tool_sequence_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.tool_sequence_observation_refs == ["observation-1", "observation-2"]
+
+
 def test_unsupported_exclusion_round_trip():
     exclusion = UnsupportedExclusion(
         exclusion_id="exclude-replay-1",
@@ -3167,6 +3330,7 @@ def test_forbidden_metadata_keys_covers_all_typed_assertion_fields():
         "revoked_credential_assertions",
         "evidence_preservation_assertions",
         "policy_attack_assertions",
+        "tool_sequence_assertions",
         "unsupported_exclusions",
     }
     assert typed_assertion_fields <= FORBIDDEN_METADATA_KEYS
@@ -3195,6 +3359,7 @@ def test_forbidden_metadata_keys_covers_all_typed_observation_ref_fields():
         "revoked_credential_observation_refs",
         "evidence_preservation_observation_refs",
         "policy_attack_observation_refs",
+        "tool_sequence_observation_refs",
         "unsupported_exclusion_refs",
     }
     assert typed_observation_ref_fields <= FORBIDDEN_METADATA_KEYS

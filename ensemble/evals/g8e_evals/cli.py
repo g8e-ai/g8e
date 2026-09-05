@@ -75,6 +75,7 @@ from g8e_evals.schema import (
     EvidencePreservationObservation,
     PolicyAttackObservation,
     StackEnvironment,
+    ToolSequenceObservation,
     StateObservation,
     StageObservation,
     TaskDefinition,
@@ -121,6 +122,9 @@ from g8e_evals.benchmarks.governance.observers import (
     StaleStateRootObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
+from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
+from g8e_evals.benchmarks.utility.observers import ToolSequenceObserverImpl
+from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
@@ -163,6 +167,7 @@ _L3_PROOF_TRANSPLANT_GRADER_ID = "l3_proof_transplant"
 _REVOKED_CREDENTIAL_GRADER_ID = "revoked_credential"
 _EVIDENCE_PRESERVATION_GRADER_ID = "evidence_preservation"
 _POLICY_ATTACK_GRADER_ID = "policy_attack"
+_TOOL_SEQUENCE_GRADER_ID = "tool_sequence"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -2457,7 +2462,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2517,6 +2522,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/benign_overblock/input_data.jsonl")
         loader = BenignOverblockLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "tool_sequence":
+        if gold_set is None:
+            gold_set = Path("gold_sets/utility/input_data.jsonl")
+        loader = ToolSequenceLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2608,6 +2619,7 @@ async def _run_synthetic_suite(
             l3_proof_transplant_assertions=task.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=task.metadata.revoked_credential_assertions,
             policy_attack_assertions=task.metadata.policy_attack_assertions,
+            tool_sequence_assertions=task.metadata.tool_sequence_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2632,6 +2644,7 @@ async def _run_synthetic_suite(
     l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
     revoked_credential_records: list[RevokedCredentialObservation] = []
     policy_attack_records: list[PolicyAttackObservation] = []
+    tool_sequence_records: list[ToolSequenceObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
@@ -2659,7 +2672,7 @@ async def _run_synthetic_suite(
         store_path = store_dir / "store.json"
         store = LocalEncryptedTokenStore(store_path, _SYNTHETIC_STORE_KEY)
 
-        evidence_ref = f"synthetic:{task.id}:token-store"
+        evidence_ref = f"synthetic:{task.id}:evidence"
 
         token_store_observations: list[TokenStorePersistenceObservation] = []
         ttl_observations: list[TokenTTLExpiryObservation] = []
@@ -2911,6 +2924,21 @@ async def _run_synthetic_suite(
             governance_receipt_records.append(governance_receipt)
             attempt.policy_attack_observation_refs = [
                 obs.observation_id for obs in policy_attack_observations
+            ]
+
+        tool_sequence_observations: list[ToolSequenceObservation] = []
+        if task.metadata.tool_sequence_assertions:
+            tool_sim = LocalToolUseSimulator()
+            observed_seq = params.get("observed_sequence", [])
+            tool_sim.invoke_sequence(observed_seq)
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:tool-sequence:{tool_sim.finish().sequence_hash}".encode()
+            ).hexdigest()
+            observer = ToolSequenceObserverImpl(tool_sim, evidence_sha, evidence_ref)
+            tool_sequence_observations = await observer.observe(task_def, attempt)
+            tool_sequence_records.extend(tool_sequence_observations)
+            attempt.tool_sequence_observation_refs = [
+                obs.observation_id for obs in tool_sequence_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -3282,6 +3310,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.tool_sequence_assertions:
+            grade = grade_deterministically(
+                _TOOL_SEQUENCE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    tool_sequence_observations=tool_sequence_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_TOOL_SEQUENCE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -3340,6 +3394,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "policy-attack-observations.jsonl", "w") as f:
         for obs in policy_attack_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "tool-sequence-observations.jsonl", "w") as f:
+        for obs in tool_sequence_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

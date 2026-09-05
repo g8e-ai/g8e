@@ -300,6 +300,7 @@ _CURRENT_METRIC_IDS = [
     "revoked_credential",
     "evidence_preservation",
     "policy_attack",
+    "tool_sequence",
 ]
 
 

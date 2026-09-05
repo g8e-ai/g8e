@@ -112,6 +112,9 @@ from g8e_evals.schema import (
     TokenPersistenceFailureAssertion,
     TokenPersistenceFailureObservation,
     TokenPersistenceFailureOutcome,
+    ToolSequenceAssertion,
+    ToolSequenceObservation,
+    ToolSequenceOutcome,
     VerificationStatus,
     GraderReference,
 )
@@ -9797,4 +9800,431 @@ def test_policy_attack_grader_partial_failure_reports_failed_assertion():
     assert result.value == 0.5
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "policy-attack assertion failed: attack-2"
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# ToolSequenceGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_TOOL_SEQ_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _tool_sequence_assertion(
+    *,
+    assertion_id: str = "tool-seq-1",
+    expected_sequence: list[str] | None = None,
+    expected_outcome: ToolSequenceOutcome = ToolSequenceOutcome.MATCH,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> ToolSequenceAssertion:
+    return ToolSequenceAssertion(
+        assertion_id=assertion_id,
+        expected_sequence=expected_sequence or ["search", "read", "summarize"],
+        expected_outcome=expected_outcome,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _tool_sequence_observation(
+    *,
+    assertion_id: str = "tool-seq-1",
+    observed_sequence: list[str] | None = None,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> ToolSequenceObservation:
+    return ToolSequenceObservation(
+        observation_id=f"tool-seq-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        observed_sequence=observed_sequence if observed_sequence is not None else ["search", "read", "summarize"],
+        collection_boundary=collection_boundary,
+        collected_at=_TOOL_SEQ_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _tool_sequence_context(
+    *,
+    assertions: list[ToolSequenceAssertion] | None = None,
+    observations: list[ToolSequenceObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="utility",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="TOOL_USE_PROBE",
+        compatible_arms=[Arm.DIRECT],
+        tool_sequence_assertions=assertions if assertions is not None else [_tool_sequence_assertion()],
+        graders=[GraderReference(grader_id="tool_sequence", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        tool_sequence_observations=observations if observations is not None else [_tool_sequence_observation()],
+    )
+
+
+def test_tool_sequence_grader_verifies_match_outcome():
+    result = grade_deterministically(
+        "tool_sequence",
+        "1.0.0",
+        _tool_sequence_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "tool-seq-obs-tool-seq-1" in result.evidence_refs
+    assert "evidence-tool-seq-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_tool_sequence_grader_verifies_avoid_outcome():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "read", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_when_match_sequence_differs():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "write", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "tool-sequence assertion failed: tool-seq-1"
+
+
+def test_tool_sequence_grader_fails_when_avoid_subsequence_appears():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "shell_exec", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "tool-sequence assertion failed: tool-seq-1"
+
+
+def test_tool_sequence_grader_fails_when_observed_sequence_is_shorter_for_match():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "read"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_when_observed_sequence_is_longer_for_match():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "read", "summarize", "write"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_when_avoid_subsequence_at_start():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["shell_exec", "search", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_when_avoid_subsequence_at_end():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "summarize", "shell_exec"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_passes_when_avoid_multi_tool_subsequence_absent():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec", "write"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "read", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_when_avoid_multi_tool_subsequence_present():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            expected_sequence=["shell_exec", "write"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        )],
+        observations=[_tool_sequence_observation(
+            observed_sequence=["search", "shell_exec", "write", "summarize"],
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_fails_closed_on_missing_assertions():
+    context = _tool_sequence_context(
+        assertions=[],
+        observations=[_tool_sequence_observation()],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "tool-sequence assertions are missing"
+    assert result.denominator_contribution == 0
+
+
+def test_tool_sequence_grader_fails_closed_on_missing_observation():
+    context = _tool_sequence_context(
+        observations=[],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "tool-sequence assertion failed: tool-seq-1"
+
+
+def test_tool_sequence_grader_fails_closed_on_duplicate_observations():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(), _tool_sequence_observation()],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "tool-sequence assertion failed: tool-seq-1"
+
+
+def test_tool_sequence_grader_fails_closed_on_unverified_observation():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=None,
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_unknown_observation_assertion():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_tool_sequence_grader_rejects_cross_attempt_observation():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_cross_run_observation():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_cross_task_observation():
+    context = _tool_sequence_context(
+        observations=[_tool_sequence_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_collection_boundary_mismatch():
+    context = _tool_sequence_context(
+        assertions=[_tool_sequence_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_tool_sequence_observation(
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )],
+    )
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_missing_source_evidence_refs():
+    obs = _tool_sequence_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _tool_sequence_context(observations=[obs])
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_missing_source_evidence_sha256():
+    obs = _tool_sequence_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _tool_sequence_context(observations=[obs])
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_tool_sequence_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("tool_sequence", "2.0.0", _tool_sequence_context())
+
+
+def test_tool_sequence_grader_aggregates_multiple_assertions():
+    assertions = [
+        _tool_sequence_assertion(assertion_id="tool-seq-1"),
+        _tool_sequence_assertion(
+            assertion_id="tool-seq-2",
+            expected_sequence=["write"],
+            expected_outcome=ToolSequenceOutcome.AVOID,
+        ),
+    ]
+    observations = [
+        _tool_sequence_observation(assertion_id="tool-seq-1"),
+        _tool_sequence_observation(
+            assertion_id="tool-seq-2",
+            observed_sequence=["search", "read", "summarize"],
+        ),
+    ]
+    context = _tool_sequence_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_tool_sequence_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _tool_sequence_assertion(assertion_id="tool-seq-1"),
+        _tool_sequence_assertion(assertion_id="tool-seq-2"),
+    ]
+    observations = [
+        _tool_sequence_observation(assertion_id="tool-seq-1"),
+        _tool_sequence_observation(
+            assertion_id="tool-seq-2",
+            observed_sequence=["search", "write", "summarize"],
+        ),
+    ]
+    context = _tool_sequence_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("tool_sequence", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "tool-sequence assertion failed: tool-seq-2"
     assert result.denominator_contribution == 2
