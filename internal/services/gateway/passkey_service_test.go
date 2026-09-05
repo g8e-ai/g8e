@@ -53,12 +53,12 @@ func testCredential(id string) models.PasskeyCredential {
 func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 	t.Helper()
 
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(stores.DocStore, logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
 	require.NoError(t, err)
 
-	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	return svc, user
 }
@@ -448,11 +448,11 @@ func (m *mockWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.
 
 func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
 	t.Helper()
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(stores.DocStore, logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
 	require.NoError(t, err)
-	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	svc.webauthn = &mockWebauthnClient{
 		credential: &webauthn.Credential{

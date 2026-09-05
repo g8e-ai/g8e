@@ -1,7 +1,7 @@
 # Consensus
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 ## Overview
 
@@ -61,7 +61,7 @@ Deliberation proceeds as follows. The envelope's message ID is recomputed and co
 
 **Local (in-process):** In single-binary gateway deployments, deliberation runs in-process through the local deliberator, without an HTTP round-trip. This is the default for the g8e gateway.
 
-**Remote (HTTP):** The Consensus also exposes an mTLS-guarded `POST /consensus/v1/deliberate` endpoint. The endpoint accepts a canonical protojson governance envelope with a 1 MiB body limit and returns the envelope with L2 votes populated. If the consensus service is not configured for the current posture, the endpoint returns `503 Service Unavailable`.
+**Remote (HTTP):** The Consensus also exposes an mTLS-guarded `POST /consensus/v1/deliberate` endpoint. The endpoint accepts a canonical protojson governance envelope with a 1 MiB body limit and returns the envelope with L2 votes populated. The route is registered only in `consensus` and `notary` postures; `doctrine` and `ratify` postures do not register the route, so requests return `404 Not Found` (there is no 503-on-nil guard — the handler is only reachable when consensus is non-nil).
 
 **MCP Gateway Integration:** Under `consensus` and `notary` postures, the MCP gateway automatically sends the envelope to the L2 deliberator before dispatch. If the deliberator is not configured, the envelope proceeds without L2 votes and fails closed at L4 verification under enforced postures.
 
@@ -115,7 +115,7 @@ The consensus bootstrap sequence at gateway startup is:
 
 Bootstrap platform enrollment actions (operator, dashboard, ensemble) no longer require an L2 tribunal that does not yet exist at first-boot. Supplied votes on bootstrap enrollment envelopes are still verified and audited, but the L2 quorum gate is not enforced for bootstrap enrollment actions. Non-bootstrap mutations continue to enforce the configured posture. This allows a fresh gateway under `consensus` or `notary` posture to accept its first platform enrollment requests before any consensus members are enrolled.
 
-The `POST /consensus/v1/deliberate` route is registered at startup. It returns `503 Service Unavailable` when consensus is not configured for the current posture.
+The `POST /consensus/v1/deliberate` route is registered at startup only in `consensus` and `notary` postures. `doctrine` and `ratify` postures do not register the route, so requests return `404 Not Found`.
 
 ---
 

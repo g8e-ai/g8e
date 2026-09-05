@@ -23,7 +23,7 @@ import (
 
 func TestConsensusStoreService_AddConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	// Generate test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -53,17 +53,17 @@ func TestConsensusStoreService_AddConsensus(t *testing.T) {
 	}
 
 	// Register signers
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer1)
+	err = infra.SignerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("member-1") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("member-1") })
 
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer2)
+	err = infra.SignerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("member-2") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("member-2") })
 
-	err = infra.Stores.SignerStore.AddTrustedSigner(disabledSigner)
+	err = infra.SignerStore.AddTrustedSigner(disabledSigner)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("disabled-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("disabled-member") })
 
 	tests := []struct {
 		name        string
@@ -247,7 +247,7 @@ func TestConsensusStoreService_AddConsensus(t *testing.T) {
 
 func TestConsensusStoreService_GetConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -258,9 +258,9 @@ func TestConsensusStoreService_GetConsensus(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	err = infra.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("test-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("test-member") })
 
 	// Create a test consensus
 	policy := models.ConsensusPolicy{
@@ -292,7 +292,7 @@ func TestConsensusStoreService_GetConsensus(t *testing.T) {
 
 func TestConsensusStoreService_ListConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -313,13 +313,13 @@ func TestConsensusStoreService_ListConsensus(t *testing.T) {
 		Enabled:   true,
 	}
 
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer1)
+	err = infra.SignerStore.AddTrustedSigner(signer1)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("list-member-1") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("list-member-1") })
 
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer2)
+	err = infra.SignerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("list-member-2") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("list-member-2") })
 
 	// Create test consensus
 	policy1 := models.ConsensusPolicy{
@@ -360,7 +360,7 @@ func TestConsensusStoreService_ListConsensus(t *testing.T) {
 
 func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -371,9 +371,9 @@ func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	err = infra.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("delete-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("delete-member") })
 
 	// Create a test consensus
 	policy := models.ConsensusPolicy{
@@ -404,7 +404,7 @@ func TestConsensusStoreService_DeleteConsensus(t *testing.T) {
 
 func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -414,9 +414,9 @@ func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	err = infra.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("update-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("update-member") })
 
 	// Create enabled consensus
 	policy := models.ConsensusPolicy{
@@ -444,7 +444,7 @@ func TestConsensusStoreService_UpdateDisableConsensus(t *testing.T) {
 
 func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -454,9 +454,9 @@ func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	err = infra.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("exists-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("exists-member") })
 
 	policy := models.ConsensusPolicy{
 		ID:              "exists-consensus",
@@ -477,7 +477,7 @@ func TestConsensusStoreService_AddConsensus_AlreadyExists(t *testing.T) {
 
 func TestConsensusStoreService_GetConsensusPolicy(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	consensusSvc := infra.Stores.ConsensusStore
+	consensusSvc := infra.ConsensusStore
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -487,9 +487,9 @@ func TestConsensusStoreService_GetConsensusPolicy(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
-	err = infra.Stores.SignerStore.AddTrustedSigner(signer)
+	err = infra.SignerStore.AddTrustedSigner(signer)
 	require.NoError(t, err)
-	t.Cleanup(func() { infra.Stores.SignerStore.DeleteTrustedSigner("consensus-member") })
+	t.Cleanup(func() { infra.SignerStore.DeleteTrustedSigner("consensus-member") })
 
 	policy := models.ConsensusPolicy{
 		ID:              "consensus-test-consensus",

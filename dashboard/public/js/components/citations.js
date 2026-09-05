@@ -344,7 +344,6 @@ export class CitationsHandler {
     }
 
     _isPositionInHeading(containerDiv, plainText, targetPos) {
-        const headings = containerDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
         let currentPos = 0;
 
         const walker = document.createTreeWalker(
@@ -355,7 +354,7 @@ export class CitationsHandler {
         );
 
         let textNode;
-        while (textNode = walker.nextNode()) {
+        while ((textNode = walker.nextNode())) {
             const nodeLength = textNode.textContent.length;
             const nodeStart = currentPos;
             const nodeEnd = currentPos + nodeLength;
@@ -403,7 +402,7 @@ export class CitationsHandler {
         );
 
         let textNode;
-        while (textNode = walker.nextNode()) {
+        while ((textNode = walker.nextNode())) {
             const nodeLength = textNode.textContent.length;
 
             if (currentIndex + nodeLength >= targetIndex) {
@@ -439,7 +438,7 @@ export class CitationsHandler {
         }
     }
 
-    _getCodeBlockRanges(container, plainText) {
+    _getCodeBlockRanges(container) {
         const ranges = [];
         const codeElements = container.querySelectorAll('pre, code');
 
@@ -456,7 +455,7 @@ export class CitationsHandler {
             );
 
             let textNode;
-            while (textNode = walker.nextNode()) {
+            while ((textNode = walker.nextNode())) {
                 if (codeEl.contains(textNode)) {
                     const startPos = currentIndex;
                     const endPos = currentIndex + textNode.textContent.length;

@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 ---
 
@@ -373,7 +373,7 @@ Applications connecting to the g8e Gateway can use the g8e Protocol Library to c
 ### Go Module
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.3
+go get github.com/g8e-ai/g8e/v2@v2.1.4
 ```
 
 The Go module provides types for envelope construction, receipt parsing, and SPIFFE workload identity.
@@ -381,7 +381,7 @@ The Go module provides types for envelope construction, receipt parsing, and SPI
 ### Python Package
 
 ```bash
-pip install g8e==2.1.3
+pip install g8e==2.1.4
 ```
 
 The Python package provides constants and models for gateway communication. Requires Python 3.10+.
@@ -452,8 +452,8 @@ Applications enroll via the owner-approved platform enrollment protocol to obtai
 
 Two in-tree components enroll via this protocol at startup using the same nine-step resumable sequence (load-or-validate installed identity, load persisted pending attempt, generate keys and submit request if no resumable attempt exists, print approval instructions, poll status with bounded backoff, sign the canonical completion transcript, validate the response, write credentials atomically, and start the main service only after the active identity loads):
 
-- **Ensemble (g8ee)** — `ensemble/app/services/infra/app_enrollment_service.py` enrolls as app name `g8ee` to obtain `spiffe://g8e.local/app/g8ee`. Runs as Phase 0.25 of the FastAPI lifespan. Pending state persists to `pki/pending-enrollment/g8ee.json` with 0600 permissions; enrolled credentials persist in the `g8e-ensemble-data` volume. See [Ensemble (g8ee)](../architecture/ensemble.md).
-- **Dashboard (g8ed)** — `dashboard/services/infra/app-enrollment-service.js` enrolls as app name `g8ed` to obtain `spiffe://g8e.local/app/g8ed`. Runs as an async startup phase before `app.listen()`. Pending state persists to `pki/pending-enrollment/g8ed.json` with 0600 permissions; enrolled credentials persist in the `g8e-dashboard-data` volume. The dashboard's browser SPA still authenticates via WebAuthn passkeys; the container's mTLS identity is available to prepared server-to-server gateway clients, which the current static host does not construct. See [Dashboard (g8ed)](../architecture/dashboard.md) and [Build a g8e-Compatible Frontend](./build_frontend.md) § In-Tree Dashboard Server-to-Server mTLS Enrollment.
+- **Ensemble (g8ee)** — `ensemble/app/services/infra/app_enrollment_service.py` enrolls as app name `g8ee` to obtain `spiffe://g8e.local/app/g8ee`. Runs as Phase 0.25 of the FastAPI lifespan. Pending state persists to `pki/pending-enrollment/g8ee.json` with 0600 permissions; enrolled credentials persist in the `g8e-ensemble-data` volume. See [Ensemble (g8ee)](../architecture/ensemble.md) and the [g8ee documentation](../ensemble/index.md) for the component-level enrollment and runtime details.
+- **Dashboard (g8ed)** — `dashboard/services/infra/app-enrollment-service.js` enrolls as app name `g8ed` to obtain `spiffe://g8e.local/app/g8ed`. Runs as an async startup phase before `app.listen()`. Pending state persists to `pki/pending-enrollment/g8ed.json` with 0600 permissions; enrolled credentials persist in the `g8e-dashboard-data` volume. The dashboard's browser SPA still authenticates via WebAuthn passkeys; the container's mTLS identity is available to prepared server-to-server gateway clients, which the current static host does not construct. See [Dashboard (g8ed)](../architecture/dashboard.md), the [g8ed documentation](../dashboard/index.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) § In-Tree Dashboard Server-to-Server mTLS Enrollment.
 
 Both consume the same owner-approved platform enrollment contract: submit a platform enrollment request (with a P-256 CSR and system fingerprint) to the gateway's plain-HTTP discovery surface, wait for the owner to approve the request by exact request ID via authenticated mTLS, sign the canonical completion transcript, validate the response, and write the returned app cert, cert chain, private key, and trust bundle to the app's own runtime tree under `pki/issued/apps/<name>.crt`, `<name>.key`, and `pki/trust/hub-bundle.pem`. See [auth.md](../architecture/auth.md) §1.5 for the full protocol.
 

@@ -163,7 +163,7 @@ export const OllamaModel = Object.freeze({
  * Canonical values from protocol/constants/status.json component.name.
  */
 export const SourceComponent = Object.freeze({
-    VSE:  _STATUS['component.name']['vse'],
-    VSA:  _STATUS['component.name']['vsa'],
-    g8ed: _STATUS['component.name']['g8ed'],
+    VSE:  _STATUS['component.name']['g8eo-gateway'],
+    VSA:  _STATUS['component.name']['g8eo'],
+    g8ed: _STATUS['component.name']['client'],
 });

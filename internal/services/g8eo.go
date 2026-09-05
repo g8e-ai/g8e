@@ -51,9 +51,10 @@ type G8eoService struct {
 	suspendedTxStore *storage.SuspendedTransactionService
 	gatewayDB        *gateway.CanonicalDBService
 
-	pubSubClient pubsub.PubSubClient
-	tlsConfig    *certs.TLSConfig
-	keystore     *keystore.Keystore
+	pubSubClientFactory PubSubClientFactory
+	pubSubClient        pubsub.PubSubClient
+	tlsConfig           *certs.TLSConfig
+	keystore            *keystore.Keystore
 
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
@@ -72,16 +73,23 @@ type G8eoService struct {
 	wg        sync.WaitGroup
 }
 
+type PubSubClientFactory func(baseURL, serverName string, logger *slog.Logger, tlsConfig *certs.TLSConfig) (pubsub.PubSubClient, error)
+
 // NewG8eoService creates a new Operator service in Outbound Mode.
 // In this mode, the Operator initiates all connections to the platform
 // on port 443 and performs command execution on the local host.
-func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig, fileSvc fs.RuntimeFileService) (*G8eoService, error) {
+func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig, fileSvc fs.RuntimeFileService, pubSubClientFactory PubSubClientFactory) (*G8eoService, error) {
+	if pubSubClientFactory == nil {
+		return nil, fmt.Errorf("%w: pub/sub client factory is required", constants.ErrInternal)
+	}
+
 	service := &G8eoService{
-		config:    cfg,
-		logger:    logger,
-		startTime: time.Now().UTC(),
-		tlsConfig: tlsConfig,
-		fileSvc:   fileSvc,
+		config:              cfg,
+		logger:              logger,
+		startTime:           time.Now().UTC(),
+		tlsConfig:           tlsConfig,
+		fileSvc:             fileSvc,
+		pubSubClientFactory: pubSubClientFactory,
 	}
 
 	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
@@ -118,6 +126,12 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
+	vs.logger.Info("Establishing g8e connectivity...")
+	vs.pubSubClient, err = vs.pubSubClientFactory(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger, vs.tlsConfig)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
 	vs.fileEdit = execution.NewFileEditService(vs.config, vs.logger)
 
@@ -131,7 +145,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath == "" {
 		vaultKeyPath = paths.Infra.VaultKeyPath
 	}
-	gatewayDB, _, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, vs.config.VaultDir, vs.logger, vaultKeyPath, vs.keystore, vs.fileSvc)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
@@ -239,15 +253,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("Replay store initialized for transaction verification")
 
 	// Initialize PubSub Layer
-	vs.logger.Info("Establishing g8e connectivity...")
-
-	if vs.pubSubClient == nil {
-		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger, vs.tlsConfig)
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-		}
-	}
-
 	vs.pubSubResults, err = pubsub.NewPubSubResultsService(vs.config, vs.logger, vs.pubSubClient)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)

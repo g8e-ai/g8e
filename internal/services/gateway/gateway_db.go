@@ -42,11 +42,12 @@ import (
 //go:embed db/schema.sql
 var gatewaySchema string
 
-// Stores holds the extracted single-responsibility store services.
-// It is returned by OpenCanonicalDBService and passed to consumers that
-// need specific stores. CanonicalDBService retains a private reference for
-// lifecycle management (maintenance, close).
-type Stores struct {
+// stores holds the extracted single-responsibility store services.
+// CanonicalDBService privately owns this aggregate for lifecycle management
+// (maintenance, close). Consumers retrieve only the narrow typed services they
+// use through the Get*Store accessors on CanonicalDBService; the aggregate
+// itself never crosses the package boundary.
+type stores struct {
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
@@ -62,8 +63,8 @@ type Stores struct {
 // CanonicalDBService manages the lifecycle of the unified SQLite persistence
 // layer for gateway mode. It owns the database connection, vault, secret
 // manager, and background maintenance. Domain logic is delegated to the
-// extracted store services in Stores, which are returned separately by
-// OpenCanonicalDBService for injection into consumers.
+// extracted store services held in the private stores aggregate, which
+// consumers reach only through narrow typed accessors.
 //
 // This service is used in both gateway mode (full database service) and
 // outbound mode (state root calculation only).
@@ -74,7 +75,7 @@ type CanonicalDBService struct {
 	sm     *SecretManager
 
 	// stores holds the extracted services for lifecycle management (maintenance, close).
-	stores *Stores
+	stores *stores
 
 	// Shutdown tracking
 	mu      sync.Mutex
@@ -88,13 +89,13 @@ type CanonicalDBService struct {
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // ks is an optional pre-initialized keystore (non-nil for tests to bypass OS keychain,
 // nil for production which creates via OS keychain).
-func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, *Stores, error) {
+func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger, vaultKeyPath string, ks *keystore.Keystore, fileSvc fs.RuntimeFileService) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrDatabaseLocked, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDatabaseLocked, err)
 	}
 
 	vaultConfig := &vault.VaultConfig{
@@ -104,7 +105,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	encryptionVault, err := vault.NewVault(vaultConfig)
 	if err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
 	// Resolve vault key path.
@@ -124,30 +125,30 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		relVaultDir, err := fileSvc.Rel(vaultDir)
 		if err != nil {
 			db.Close()
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 		}
 		if err := fileSvc.MkdirAll(context.Background(), relVaultDir, constants.PermDirPrivate); err != nil {
 			db.Close()
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 
 		initKey := make([]byte, vault.KeySize)
 		if _, err := rand.Read(initKey); err != nil {
 			db.Close()
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyGenerateFailed, err)
 		}
 
 		header, _, err := vault.NewVaultHeader(initKey)
 		if err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderCreateFailed, err)
 		}
 
 		if err := header.Save(vaultDir); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultHeaderSaveFailed, err)
 		}
 
 		keyData := []byte(hex.EncodeToString(initKey) + "\n")
@@ -155,12 +156,12 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		if err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 		}
 		if err := fileSvc.WriteFile(context.Background(), relVaultKeyPath, keyData, constants.PermFilePrivate); err != nil {
 			db.Close()
 			vault.SecureZero(initKey)
-			return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 		}
 
 		vault.SecureZero(initKey)
@@ -173,19 +174,19 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	privateKey, err := vault.ReadVaultKey(vaultKeyPath)
 	if err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
 	}
 	defer vault.SecureZero(privateKey)
 
 	if err := encryptionVault.Unlock(privateKey); err != nil {
 		db.Close()
 		if errors.Is(err, constants.ErrVaultNotInitialized) {
-			return nil, nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
 		}
 		if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
-			return nil, nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
+			return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
 		}
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 	}
 	logger.Info("Vault unlocked successfully", "vault_dir", vaultDir)
 
@@ -195,7 +196,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger, fileSvc)
 	if err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBAuditStoreInit, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBAuditStoreInit, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -209,7 +210,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	}
 
 	// Initialize extracted services with the same db connection
-	stores := &Stores{
+	s := &stores{
 		DocStore:     NewDocumentStoreService(db, logger),
 		StateRootSvc: NewStateRootService(db, logger),
 		ReplayStore:  NewReplayStoreService(db, logger),
@@ -218,20 +219,20 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 		BlobStore:    NewBlobStoreService(db, logger),
 		AuditStore:   auditStore,
 	}
-	stores.AppPolicyStore = NewAppPolicyStoreService(db, logger, stores.DocStore)
-	stores.SignerStore = NewSignerStoreService(db, logger, stores.DocStore)
-	stores.ConsensusStore = NewConsensusStoreService(db, logger, stores.DocStore, stores.SignerStore)
-	svc.stores = stores
+	s.AppPolicyStore = NewAppPolicyStoreService(db, logger, s.DocStore)
+	s.SignerStore = NewSignerStoreService(db, logger, s.DocStore)
+	s.ConsensusStore = NewConsensusStoreService(db, logger, s.DocStore, s.SignerStore)
+	svc.stores = s
 
 	if err := svc.initSchema(fileSvc, ks); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBSchemaInit, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBSchemaInit, err)
 	}
 
 	// Initialize state root if missing
 	if err := svc.initStateRoot(); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBStateRootInit, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrGatewayDBStateRootInit, err)
 	}
 
 	// Start background maintenance
@@ -239,7 +240,7 @@ func OpenCanonicalDBService(dataDir string, vaultDir string, logger *slog.Logger
 	go svc.RunMaintenance(svc.ctx)
 
 	logger.Info("Gateway database initialized", "path", dbPath)
-	return svc, stores, nil
+	return svc, nil
 }
 
 func (s *CanonicalDBService) initStateRoot() error {
@@ -377,11 +378,6 @@ func (s *CanonicalDBService) GetBlobStore() *BlobStoreService {
 // GetAuditStore returns the audit store service.
 func (s *CanonicalDBService) GetAuditStore() *storage.SQLAuditStore {
 	return s.stores.AuditStore
-}
-
-// GetStores returns the internal Stores aggregation struct for HTTPHandler construction.
-func (s *CanonicalDBService) GetStores() *Stores {
-	return s.stores
 }
 
 // Close closes the database connection and waits for background workers.

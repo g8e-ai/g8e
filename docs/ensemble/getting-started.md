@@ -48,3 +48,5 @@ The application starts on port 8443 (HTTPS), connects to operator services on st
 - [Architecture](architecture.md) — Understand the system design
 - [Governance](governance.md) — Five-layer verification pipeline and governance postures
 - [Development](devs.md) — Set up your development environment
+- [Platform Getting Started](../guides/getting_started.md) — Platform installation, quick start, and unified stack deployment
+- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard

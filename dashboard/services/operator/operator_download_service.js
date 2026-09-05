@@ -76,7 +76,7 @@ class OperatorDownloadService {
                 throw error;
             }
             logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Failed to fetch binary from g8eg blob store`, { platform, error: error.message });
-            throw new Error(`Operator binary not available for platform: ${platform}`);
+            throw new Error(`Operator binary not available for platform: ${platform}`, { cause: error });
         }
     }
 

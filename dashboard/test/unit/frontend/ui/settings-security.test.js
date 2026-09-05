@@ -476,7 +476,7 @@ describe('Settings Security [UNIT - jsdom]', () => {
                 { ...MOCK_SETTINGS[1], label: '<script>window.__xss2=2</script>', value: 'value2' },
             ];
             
-            settings.forEach((setting, index) => {
+            settings.forEach((setting) => {
                 const field = window.__securityTest.buildField(setting);
                 document.body.appendChild(field);
                 

@@ -1102,7 +1102,7 @@ func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
 		"consensusPolicyBootstrap with nil stores should return ErrGatewayStoresNil")
@@ -1111,7 +1111,7 @@ func TestBootstrapConsensusPolicy_NilStoresReturnsError(t *testing.T) {
 func TestBootstrapConsensusPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	err := consensusPolicyBootstrap(nil, constants.TestPathNonexistentConsensus, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, nil, constants.TestPathNonexistentConsensus, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig))
 }
@@ -1124,7 +1124,7 @@ func TestBootstrapConsensusPolicy_MalformedJSON(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
 }
@@ -1157,7 +1157,7 @@ func TestBootstrapConsensusPolicy_InvalidConfig(t *testing.T) {
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+			err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapMissingFields))
 		})

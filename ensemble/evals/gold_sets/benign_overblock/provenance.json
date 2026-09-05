@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "benign_overblock",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/governance/benign_overblock_loader.py",
+    "code_sha256": "bb5e68fa676ebe31930e081e78a9992f4be0e5479135d685517b1070ab2e6437"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 7,
+    "sha256": "8ff79dde6f9f2afaa771cca37d8e15aea95e0662ac0ce2e77bc252d56f106c3b"
+  },
+  "partition": "development",
+  "domain_strata": ["security", "policy"]
+}

@@ -10,10 +10,12 @@ package cmd
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,8 +138,11 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 	return cmd
 }
 
+var releaseVersionRegexp = regexp.MustCompile(`^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
+
 // validateReleaseVersion checks that the version flag is a non-empty string
-// beginning with the 'v' prefix used by VERSION and git tags.
+// beginning with the 'v' prefix and matching the semantic versioning contract.
+// It explicitly rejects path separators and parent directory references.
 func validateReleaseVersion(v string) error {
 	if v == "" {
 		return fmt.Errorf("%w: --version is required", constants.ErrValidationFailed)
@@ -145,8 +150,11 @@ func validateReleaseVersion(v string) error {
 	if !strings.HasPrefix(v, "v") {
 		return fmt.Errorf("%w: --version must begin with 'v' (got %q)", constants.ErrValidationFailed, v)
 	}
-	if len(v) < 2 {
-		return fmt.Errorf("%w: --version must include a version number after 'v'", constants.ErrValidationFailed)
+	if strings.ContainsAny(v, `/\`) || strings.Contains(v, "..") {
+		return fmt.Errorf("%w: --version must not contain path separators or parent directory references", constants.ErrValidationFailed)
+	}
+	if !releaseVersionRegexp.MatchString(v) {
+		return fmt.Errorf("%w: --version must be a valid semantic version starting with 'v' (e.g. v2.1.3): %q", constants.ErrValidationFailed, v)
 	}
 	return nil
 }
@@ -168,8 +176,14 @@ type releaseEvidenceReport struct {
 	// KSI history snapshots (chronological, oldest first).
 	KSIHistory []compliance.KSIResultSet
 
+	// KSIHistoryErr records any error reading history snapshots.
+	KSIHistoryErr error
+
 	// Demo-run verification reports, one per run ID, in input order.
 	DemoReports []*demoRunSummary
+
+	// DemoEnumerationErr records any error enumerating persisted demo runs.
+	DemoEnumerationErr error
 }
 
 // demoRunSummary pairs a run ID with its verification report and any error
@@ -186,7 +200,10 @@ type demoRunSummary struct {
 // not applicable, and every demo run verification report is valid. An empty
 // report (no KSI set, no demo runs) is not passing.
 func (r *releaseEvidenceReport) OverallPassing() bool {
-	if r.KSISet == nil {
+	if r.KSISet == nil || r.KSIHistoryErr != nil || r.DemoEnumerationErr != nil {
+		return false
+	}
+	if len(r.KSISet.Results) == 0 && len(r.DemoReports) == 0 {
 		return false
 	}
 	for _, ksi := range r.KSISet.Results {
@@ -205,6 +222,12 @@ func (r *releaseEvidenceReport) OverallPassing() bool {
 // FailClosedReason returns a human-readable summary of the first non-passing
 // condition, for use in --fail-closed error messages.
 func (r *releaseEvidenceReport) FailClosedReason() string {
+	if r.DemoEnumerationErr != nil {
+		return fmt.Sprintf("failed to enumerate demo runs: %v", r.DemoEnumerationErr)
+	}
+	if r.KSIHistoryErr != nil {
+		return fmt.Sprintf("failed to read KSI history: %v", r.KSIHistoryErr)
+	}
 	if r.KSISet == nil {
 		if r.KSIUnavailable != "" {
 			return "KSI evaluation unavailable: " + r.KSIUnavailable
@@ -212,8 +235,13 @@ func (r *releaseEvidenceReport) FailClosedReason() string {
 		return "KSI evaluation unavailable"
 	}
 	for _, ksi := range r.KSISet.Results {
-		if ksi.Status == compliance.KSIStatusNotSatisfied {
+		switch ksi.Status {
+		case compliance.KSIStatusSatisfied, compliance.KSIStatusNotApplicable:
+			// passing
+		case compliance.KSIStatusNotSatisfied:
 			return fmt.Sprintf("KSI %s is not satisfied", ksi.ID)
+		default:
+			return fmt.Sprintf("KSI %s has non-passing status: %s", ksi.ID, ksi.Status)
 		}
 	}
 	for _, dr := range r.DemoReports {
@@ -224,6 +252,9 @@ func (r *releaseEvidenceReport) FailClosedReason() string {
 			return fmt.Sprintf("demo run %s is invalid (%d failure(s))", dr.RunID, len(dr.Report.GetFailures()))
 		}
 	}
+	if len(r.KSISet.Results) == 0 && len(r.DemoReports) == 0 {
+		return "no evidence collected: KSI results and demo runs are both empty"
+	}
 	return "no evidence collected"
 }
 
@@ -231,6 +262,7 @@ func (r *releaseEvidenceReport) FailClosedReason() string {
 // verification into a single releaseEvidenceReport. KSI evaluation failure
 // (nil result) is recorded as an unavailable gap rather than aborting the
 // report, so the release record honestly reflects the evidence state.
+// This function performs read-only aggregation: snapshots are not persisted here.
 func collectReleaseEvidence(
 	ctx context.Context,
 	fileSvc fs.RuntimeFileService,
@@ -249,18 +281,16 @@ func collectReleaseEvidence(
 		report.KSIUnavailable = "audit store, ledger, or commitment store unavailable"
 	} else {
 		report.KSISet = ksiSet
-		historyStore := newKSIHistoryStore(fileSvc)
-		if err := saveKSIHistorySnapshot(ctx, historyStore, ksiSet); err != nil {
-			slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
-		}
 	}
 
-	// KSI history snapshots (independent of whether this evaluation
-	// persisted a new snapshot).
+	// KSI history snapshots (read-only aggregation).
 	historyStore := newKSIHistoryStore(fileSvc)
 	snapshots, err := historyStore.ListSnapshots(ctx)
 	if err != nil {
-		slog.Default().Warn("compliance: failed to read KSI history", "error", err)
+		if !errors.Is(err, constants.ErrNotFound) {
+			slog.Default().Warn("compliance: failed to read KSI history", "error", err)
+			report.KSIHistoryErr = err
+		}
 	}
 	report.KSIHistory = snapshots
 
@@ -268,9 +298,11 @@ func collectReleaseEvidence(
 	// are supplied.
 	effectiveRunIDs := runIDs
 	if len(effectiveRunIDs) == 0 {
-		effectiveRunIDs, err = enumerateDemoRunIDs(ctx, fileSvc)
-		if err != nil {
-			slog.Default().Warn("compliance: failed to enumerate demo runs", "error", err)
+		var enumErr error
+		effectiveRunIDs, enumErr = enumerateDemoRunIDs(ctx, fileSvc)
+		if enumErr != nil {
+			slog.Default().Warn("compliance: failed to enumerate demo runs", "error", enumErr)
+			report.DemoEnumerationErr = enumErr
 		}
 	} else {
 		sort.Strings(effectiveRunIDs)
@@ -295,7 +327,10 @@ func enumerateDemoRunIDs(ctx context.Context, fileSvc fs.RuntimeFileService) ([]
 	demoDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname)
 	entries, err := fileSvc.ReadDir(ctx, demoDir)
 	if err != nil {
-		return nil, nil // missing dir is not an error: no runs persisted
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, nil // missing dir is not an error: no runs persisted
+		}
+		return nil, fmt.Errorf("compliance: enumerate demo runs: %w", err)
 	}
 	var runIDs []string
 	for _, entry := range entries {
@@ -313,18 +348,30 @@ func writeReleaseEvidenceArtifacts(report *releaseEvidenceReport, outDir string)
 	if outDir == "" {
 		return fmt.Errorf("%w: --out is required", constants.ErrValidationFailed)
 	}
-	if err := os.MkdirAll(outDir, constants.PermDirStandard); err != nil {
+	cleanOutDir := filepath.Clean(outDir)
+	if err := os.MkdirAll(cleanOutDir, constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrReportOutputDirFailed, err)
 	}
 
 	md := renderReleaseEvidenceMarkdown(report)
-	mdPath := filepath.Join(outDir, report.ReleaseVersion+constants.ReleaseEvidenceMarkdownSuffix)
+	mdPath := filepath.Join(cleanOutDir, report.ReleaseVersion+constants.ReleaseEvidenceMarkdownSuffix)
+	relMD, err := filepath.Rel(cleanOutDir, mdPath)
+	if err != nil || strings.HasPrefix(relMD, "..") || filepath.IsAbs(relMD) {
+		return fmt.Errorf("%w: markdown output path escapes output directory", constants.ErrPathValidation)
+	}
 	if err := os.WriteFile(mdPath, []byte(md), constants.PermFileReadOnly); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrReportWriteFailed, err)
 	}
 
-	csvBytes := renderReleaseEvidenceCSV(report)
-	csvPath := filepath.Join(outDir, report.ReleaseVersion+constants.ReleaseEvidenceCSVSuffix)
+	csvBytes, err := renderReleaseEvidenceCSV(report)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrComplianceReleaseEvidence, err)
+	}
+	csvPath := filepath.Join(cleanOutDir, report.ReleaseVersion+constants.ReleaseEvidenceCSVSuffix)
+	relCSV, err := filepath.Rel(cleanOutDir, csvPath)
+	if err != nil || strings.HasPrefix(relCSV, "..") || filepath.IsAbs(relCSV) {
+		return fmt.Errorf("%w: csv output path escapes output directory", constants.ErrPathValidation)
+	}
 	if err := os.WriteFile(csvPath, csvBytes, constants.PermFileReadOnly); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrReportWriteFailed, err)
 	}
@@ -456,24 +503,30 @@ func renderReleaseEvidenceMarkdown(report *releaseEvidenceReport) string {
 // renderReleaseEvidenceCSV produces a CSV with one row per evidence item
 // (KSI results and demo-run verifications). The header row documents the
 // columns; empty cells indicate non-applicable fields for that evidence type.
-func renderReleaseEvidenceCSV(report *releaseEvidenceReport) []byte {
+func renderReleaseEvidenceCSV(report *releaseEvidenceReport) ([]byte, error) {
 	var sb strings.Builder
 	w := csv.NewWriter(&sb)
 
-	_ = w.Write([]string{"evidence_type", "identifier", "status", "valid", "method_count", "last_validated", "failure_count", "verifier_id", "verifier_version", "checksum_root", "evaluated_at"})
+	if err := w.Write([]string{"evidence_type", "identifier", "status", "valid", "method_count", "last_validated", "failure_count", "verifier_id", "verifier_version", "checksum_root", "evaluated_at"}); err != nil {
+		return nil, fmt.Errorf("compliance: write csv header: %w", err)
+	}
 
 	if report.KSISet != nil {
 		evalAt := msToRFC3339(report.KSISet.EvaluatedAtMs)
 		results := append([]compliance.KSIResult(nil), report.KSISet.Results...)
 		sort.Slice(results, func(i, j int) bool { return results[i].ID < results[j].ID })
 		for _, r := range results {
-			_ = w.Write([]string{
+			if err := w.Write([]string{
 				"ksi", r.ID, string(r.Status), "", strconv.Itoa(r.MethodCount),
 				msToRFC3339OrEmpty(r.LastValidatedUnixMs), "", "", "", "", evalAt,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("compliance: write ksi csv row: %w", err)
+			}
 		}
 	} else {
-		_ = w.Write([]string{"ksi", "", "unavailable", "", "", "", "", "", "", "", report.GeneratedAt.UTC().Format(time.RFC3339)})
+		if err := w.Write([]string{"ksi", "", "unavailable", "", "", "", "", "", "", "", report.GeneratedAt.UTC().Format(time.RFC3339)}); err != nil {
+			return nil, fmt.Errorf("compliance: write ksi unavailable csv row: %w", err)
+		}
 	}
 
 	for _, dr := range report.DemoReports {
@@ -482,7 +535,9 @@ func renderReleaseEvidenceCSV(report *releaseEvidenceReport) []byte {
 			if dr.Err != nil {
 				errMsg = dr.Err.Error()
 			}
-			_ = w.Write([]string{"demo-run", dr.RunID, "error", "", "", "", "", "", "", "", errMsg})
+			if err := w.Write([]string{"demo-run", dr.RunID, "error", "", "", "", "", "", "", "", errMsg}); err != nil {
+				return nil, fmt.Errorf("compliance: write demo run error csv row: %w", err)
+			}
 			continue
 		}
 		r := dr.Report
@@ -494,14 +549,19 @@ func renderReleaseEvidenceCSV(report *releaseEvidenceReport) []byte {
 		if r.GetValid() {
 			valid = "true"
 		}
-		_ = w.Write([]string{
+		if err := w.Write([]string{
 			"demo-run", dr.RunID, "", valid, "", "", strconv.Itoa(len(r.GetFailures())),
 			r.GetVerifierId(), r.GetVerifierVersion(), r.GetReproducedChecksumRoot(), verifiedAt,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("compliance: write demo run csv row: %w", err)
+		}
 	}
 
 	w.Flush()
-	return []byte(sb.String())
+	if err := w.Error(); err != nil {
+		return nil, fmt.Errorf("compliance: flush csv: %w", err)
+	}
+	return []byte(sb.String()), nil
 }
 
 // historySnapshotSummary renders a compact description of the snapshot series.

@@ -143,7 +143,7 @@ export const OperatorDownloadMixin = {
         }
     },
 
-    _bindDeviceLinkGeneration(container, apiKey) {
+    _bindDeviceLinkGeneration(container) {
         const countInput = container.querySelector('#device-link-cmd-count');
         const ttlInput = container.querySelector('#device-link-cmd-ttl');
         const generateBtn = container.querySelector('#device-link-generate-btn');
@@ -230,7 +230,7 @@ export const OperatorDownloadMixin = {
         this.expandDownloadSection();
     },
 
-    populateDownloadDetails(overlay, os, arch, cloudMode = false) {
+    populateDownloadDetails(overlay, os, arch) {
         const apiKey = webSessionService.getApiKey();
 
         const downloadUrl = `${window.location.origin}/operator/download/${os}/${arch}`;
@@ -393,9 +393,6 @@ export const OperatorDownloadMixin = {
             devLogger.error(`[OPERATOR] No platform options found for ${os}`);
             return;
         }
-
-        const osNames = { mac: 'macOS', linux: 'Linux' };
-        const osName = osNames[os] || os;
 
         const overlay = document.createElement('div');
         overlay.className = 'download-menu-overlay';

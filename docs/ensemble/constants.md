@@ -4,7 +4,7 @@
 
 g8ee uses a structured constants system for configuration, action type mappings, agent definitions, and protocol values. Constants are defined in `app/constants/` and serve as the single source of truth for configurable values.
 
-Protocol constants and enums are sourced directly from the `g8e` package (`g8e>=1.5.6`) via `g8e.constants` accessors and `g8e.enums` re-exports. g8ee-specific constants and enums that have no g8e equivalent are defined locally.
+Protocol constants and enums are sourced directly from the `g8e` package (`g8e>=1.5.6`) via `g8e.constants` accessors and `g8e.enums` re-exports. g8ee-specific constants and enums that have no g8e equivalent are defined locally. See [Protocol Reference](../architecture/protocol.md) for the platform-level protocol constant registry.
 
 ## g8e-Sourced Constants and Enums
 
@@ -36,6 +36,7 @@ Constants are imported directly from `app.constants` and used throughout the cod
 
 ## Related
 
+- [Protocol Reference](../architecture/protocol.md) — Platform-level protocol constant registry and protobuf schema definitions
 - [Protocol](protocol.md) — Protocol constants and action types
 - [Agents](agents.md) — Agent definitions and persona models
 - [LLM Providers](llm-providers.md) — Provider configuration constants

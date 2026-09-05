@@ -5,8 +5,7 @@ import { _COLLECTIONS } from './shared.js';
 
 /**
  * DB Collection Names
- * Canonical values loaded from protocol/constants/collections.json.
- * That file is the single source of truth shared across g8ed and VSE.
+ * Shared values load from protocol/constants/collections.json. Dashboard-only collections remain local.
  *
  * IMPORTANT: When renaming collections, update:
  * 1. protocol/constants/collections.json
@@ -19,11 +18,11 @@ export const Collections = Object.freeze({
     USERS:                c['users'],
     WEB_SESSIONS:         c['web.sessions'],
     OPERATOR_SESSIONS:    c['operator.sessions'],
-    SESSION_AUDIT_LOGS:   c['session.audit.logs'],
+    SESSION_AUDIT_LOGS:   'session_audit_logs',
     LOGIN_AUDIT:          c['login.audit'],
     AUTH_ADMIN_AUDIT:     c['auth.admin.audit'],
     ACCOUNT_LOCKS:        c['account.locks'],
-    API_KEYS:             c['api.keys'],
+    API_KEYS:             'api_keys',
     ORGANIZATIONS:        c['organizations'],
     OPERATORS:            c['operators'],
     OPERATOR_USAGE:       c['operator.usage'],

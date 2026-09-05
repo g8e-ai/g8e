@@ -4,9 +4,10 @@
 
 The dashboard uses Vitest 4. Tests run in a single fork because parts of the retained service suite historically share gateway key-value state. The default environment is Node; browser-focused tests construct a jsdom-based environment through helpers under `test/mocks/`.
 
-Run the suite from `dashboard/`:
+Run linting and the suite from `dashboard/`:
 
 ```bash
+npm run lint
 npm test
 ```
 
@@ -16,9 +17,10 @@ Run coverage with:
 npm run test:coverage
 ```
 
-The repository-level equivalent is:
+The repository-level equivalents are:
 
 ```bash
+make dashboard-lint
 make dashboard-test
 ```
 
@@ -74,14 +76,13 @@ Infrastructure tests cover:
 - New and resumed owner-approved enrollment attempts.
 - Required gateway and runtime configuration.
 - Startup load, enrollment fallback, and fail-closed fatal paths.
-- HTTP `undici.Agent` construction from certificate paths.
-- Pub/sub TLS option construction and preservation during client duplication.
+- Native `fetch` interception for platform enrollment request, status, and completion calls.
 
 Startup tests inject an enrollment service and fatal callback, allowing fail-closed behavior to be asserted without invoking `process.exit()`.
 
 ## Verification Scope
 
-Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are mounted. The current runtime mounts no API routers, and component tests use doubles for those calls. End-to-end deployment verification must separately confirm browser CORS and WebAuthn configuration, owner-approved app enrollment, gateway session cookies, and any feature path expected to be live.
+Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are mounted. The current runtime mounts no API routers, and component tests use doubles for those calls. End-to-end deployment verification must separately confirm browser CORS and WebAuthn configuration, owner-approved app enrollment, gateway session cookies, and any feature path expected to be live; see the [UX Smoke Test](../guides/ux_smoke_test.md) guide for the platform's end-to-end verification procedure.
 
 ## Related
 
@@ -89,3 +90,6 @@ Dashboard unit tests do not prove that retained `ServiceName.g8ed` API paths are
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
+- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands
+- [UX Smoke Test](../guides/ux_smoke_test.md) — Platform end-to-end deployment verification procedure
+- [Code Map](../devs/codemap.md) — Platform source-tree map and component boundaries

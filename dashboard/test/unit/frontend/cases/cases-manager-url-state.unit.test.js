@@ -196,7 +196,7 @@ describe('CasesManager URL State [UNIT]', () => {
 
             serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
 
-            const manager = makeManager();
+            makeManager();
 
             triggerSSEInvestigationList([
                 { case_id: 'case_url_1', case_title: 'URL Case', id: 'inv_u1', created_at: now() }
@@ -264,7 +264,7 @@ describe('CasesManager URL State [UNIT]', () => {
 
             serviceClient.setResponse(ServiceName.g8ed, '/api/chat/investigations?case_id=case_url_1', makeSwitchToCaseResponse('case_url_1'));
 
-            const manager = makeManager();
+            makeManager();
 
             triggerSSEInvestigationList([
                 { case_id: 'case_url_1', case_title: 'URL Case', id: 'inv_u1', created_at: now() }

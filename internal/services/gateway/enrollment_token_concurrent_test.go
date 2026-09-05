@@ -76,9 +76,9 @@ func TestEnrollmentToken_ConcurrentValidateAndConsume(t *testing.T) {
 // returns ErrEnrollmentTokenPersistenceFailed rather than panicking or
 // returning a nil token.
 func TestEnrollmentToken_PersistenceFailureDuringGenerate(t *testing.T) {
-	db, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	svc := NewEnrollmentTokenService(stores.DocStore, logger)
+	svc := NewEnrollmentTokenService(db.GetDocStore(), logger)
 
 	// Close the DB to simulate a persistence failure.
 	db.Close()

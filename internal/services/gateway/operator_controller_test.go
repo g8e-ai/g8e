@@ -53,12 +53,12 @@ func TestNewOperatorController(t *testing.T) {
 
 func TestHandleReauth_MalformedJSON(t *testing.T) {
 
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024}}
 	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
@@ -74,7 +74,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet("operators", "op-123", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -444,12 +444,12 @@ func TestOperatorController_HandleReauth(t *testing.T) {
 // has no posture of its own and must receive the gateway's posture at reauth to
 // run L4 posture-gated checks against the gateway's policy decision.
 func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	reg := &RegistrationService{}
 	cfg := &config.Config{Gateway: config.GatewayConfig{MaxPayloadBytes: 1024, Posture: config.PostureDoctrine}}
 	controller := newOperatorController(OperatorControllerDeps{Cfg: cfg, Logger: logger, Reg: reg, Auth: auth, Responder: res})
@@ -464,7 +464,7 @@ func TestHandleReauth_ResponseContainsGatewayPosture(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("operators", "op-posture", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet("operators", "op-posture", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
@@ -538,7 +538,7 @@ func TestOperatorController_HandleGetOperatorBySession(t *testing.T) {
 		}
 		opBytes, err := json.Marshal(opDoc)
 		require.NoError(t, err)
-		require.NoError(t, infra.Stores.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
+		require.NoError(t, infra.DocStore.DocSet(string(constants.CollectionOperators), "op-456", opBytes))
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.OperatorsSession+operatorSessionID, nil)
 		w := httptest.NewRecorder()
@@ -579,7 +579,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
@@ -587,7 +587,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	cliSession := models.CLISession{
@@ -601,7 +601,7 @@ func TestOperatorController_HandleValidateOperatorSession(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
@@ -688,7 +688,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	}
 	policyBytes, err := json.Marshal(policy)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionAppPolicies), appID, policyBytes))
 
 	// Seed a valid operator+CLI binding so the handler can return 200.
@@ -699,7 +699,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
@@ -707,7 +707,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	cliSession := models.CLISession{
@@ -721,7 +721,7 @@ func TestOperatorController_ValidateOperatorSession_AppMTLSReach(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	controller := newOperatorController(OperatorControllerDeps{

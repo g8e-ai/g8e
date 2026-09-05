@@ -28,22 +28,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDataController(t *testing.T) (*DataController, *Stores) {
+func setupTestDataController(t *testing.T) (*DataController, *TestInfrastructure) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
 	dataController := newDataController(DataControllerDeps{
 		Cfg:       infra.Cfg,
 		Logger:    infra.Logger,
-		DocStore:  infra.Stores.DocStore,
-		KVStore:   infra.Stores.KVStore,
-		SSEStore:  infra.Stores.SSEStore,
-		BlobStore: infra.Stores.BlobStore,
+		DocStore:  infra.DocStore,
+		KVStore:   infra.KVStore,
+		SSEStore:  infra.SSEStore,
+		BlobStore: infra.BlobStore,
 		Pubsub:    infra.Pubsub,
 		Responder: infra.Responder,
 	})
 
-	return dataController, infra.Stores
+	return dataController, infra
 }
 
 func TestNewDataController_AllDepsProvidedNoNilFields(t *testing.T) {
@@ -52,10 +52,10 @@ func TestNewDataController_AllDepsProvidedNoNilFields(t *testing.T) {
 	controller := newDataController(DataControllerDeps{
 		Cfg:       infra.Cfg,
 		Logger:    infra.Logger,
-		DocStore:  infra.Stores.DocStore,
-		KVStore:   infra.Stores.KVStore,
-		SSEStore:  infra.Stores.SSEStore,
-		BlobStore: infra.Stores.BlobStore,
+		DocStore:  infra.DocStore,
+		KVStore:   infra.KVStore,
+		SSEStore:  infra.SSEStore,
+		BlobStore: infra.BlobStore,
 		Pubsub:    infra.Pubsub,
 		Responder: infra.Responder,
 	})
@@ -71,16 +71,16 @@ func TestNewDataController_AllDepsProvidedNoNilFields(t *testing.T) {
 
 	assert.Equal(t, infra.Cfg, controller.cfg)
 	assert.Equal(t, infra.Logger, controller.logger)
-	assert.Equal(t, infra.Stores.DocStore, controller.docStore)
-	assert.Equal(t, infra.Stores.KVStore, controller.kvStore)
-	assert.Equal(t, infra.Stores.SSEStore, controller.sseStore)
-	assert.Equal(t, infra.Stores.BlobStore, controller.blobStore)
+	assert.Equal(t, infra.DocStore, controller.docStore)
+	assert.Equal(t, infra.KVStore, controller.kvStore)
+	assert.Equal(t, infra.SSEStore, controller.sseStore)
+	assert.Equal(t, infra.BlobStore, controller.blobStore)
 	assert.Equal(t, infra.Pubsub, controller.pubsub)
 	assert.Equal(t, infra.Responder, controller.responder)
 }
 
 func TestDataControllerHandleDB(t *testing.T) {
-	dataController, stores := setupTestDataController(t)
+	dataController, infra := setupTestDataController(t)
 
 	t.Run("BadRequest - no collection", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/", nil)
@@ -153,8 +153,8 @@ func TestDataControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		stores.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
-		stores.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
+		infra.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
+		infra.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
 		query := models.DocQueryRequest{
 			Limit: 1,
@@ -230,7 +230,7 @@ func TestDataControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events count", func(t *testing.T) {
-		stores.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
+		infra.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
 		dataController.handleSSEEvents(rr, req, "count")
@@ -253,7 +253,7 @@ func TestDataControllerHandleDB(t *testing.T) {
 }
 
 func TestDataControllerHandleKV(t *testing.T) {
-	dataController, stores := setupTestDataController(t)
+	dataController, infra := setupTestDataController(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1", bytes.NewReader(mustDocJSON(t, models.KVSetRequest{Value: "g8e"})))
@@ -281,8 +281,8 @@ func TestDataControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
-		stores.KVStore.KVSet("pref:1", "a", 0)
-		stores.KVStore.KVSet("pref:2", "b", 0)
+		infra.KVStore.KVSet("pref:1", "a", 0)
+		infra.KVStore.KVSet("pref:2", "b", 0)
 
 		reqScan := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "pref:*"})))
 		rrScan := httptest.NewRecorder()
@@ -312,7 +312,7 @@ func TestDataControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys", func(t *testing.T) {
-		stores.KVStore.KVSet("key1", "val1", 0)
+		infra.KVStore.KVSet("key1", "val1", 0)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
 		rr := httptest.NewRecorder()
 		dataController.handleKVKeys(rr, req)
@@ -581,24 +581,24 @@ func TestDataControllerHandlePubSubPublish(t *testing.T) {
 }
 
 func TestDataControllerHandleRevokeApp(t *testing.T) {
-	_, stores := setupTestDataController(t)
-	userSvc := NewUserService(stores.DocStore, testutil.NewTestLogger())
+	_, infra := setupTestDataController(t)
+	userSvc := NewUserService(infra.DocStore, testutil.NewTestLogger())
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
 	resp := response.NewWriter(logger)
-	adminController := newAdminController(AdminControllerDeps{Cfg: cfg, Logger: logger, DocStore: stores.DocStore, SignerStore: stores.SignerStore, ConsensusStore: stores.ConsensusStore, UserSvc: userSvc, Responder: resp})
+	adminController := newAdminController(AdminControllerDeps{Cfg: cfg, Logger: logger, DocStore: infra.DocStore, SignerStore: infra.SignerStore, ConsensusStore: infra.ConsensusStore, UserSvc: userSvc, Responder: resp})
 
 	// The first user created is the gateway admin (IsFirstUser). The second
 	// user is a non-admin regular user.
 	adminUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, adminUser)
-	t.Cleanup(func() { stores.DocStore.DocDelete("users", adminUser.ID) })
+	t.Cleanup(func() { infra.DocStore.DocDelete("users", adminUser.ID) })
 
 	regularUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { stores.DocStore.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { infra.DocStore.DocDelete("users", regularUser.ID) })
 
 	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
 		appID := "spiffe://g8e.local/app/test-no-auth"
@@ -611,9 +611,9 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { stores.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { infra.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -638,9 +638,9 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { stores.DocStore.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { infra.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -677,10 +677,10 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
@@ -694,7 +694,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = stores.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = infra.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 	})
@@ -710,7 +710,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -720,14 +720,14 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = stores.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = infra.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
-		signerDoc, err := stores.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := infra.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 
@@ -741,11 +741,11 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = stores.DocStore.DocGet("app_policies", appID)
+		policyDoc, err = infra.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err = stores.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err = infra.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -761,7 +761,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := stores.DocStore.DocSet("app_policies", appID, policyBytes)
+		err := infra.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -771,7 +771,7 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = stores.DocStore.DocSet("trusted_signers", appID, signerBytes)
+		err = infra.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
 		reqBody := map[string]string{"app_id": appID}
@@ -784,11 +784,11 @@ func TestDataControllerHandleRevokeApp(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err := stores.DocStore.DocGet("app_policies", appID)
+		policyDoc, err := infra.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err := stores.DocStore.DocGet("trusted_signers", appID)
+		signerDoc, err := infra.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -864,13 +864,13 @@ func TestDataController_BlobNamespaceAllowlist(t *testing.T) {
 }
 
 func TestDataControllerHandleDataSettings(t *testing.T) {
-	dataController, stores := setupTestDataController(t)
+	dataController, infra := setupTestDataController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
 		settings := map[string]string{"mode": "test"}
-		err := stores.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := infra.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
-		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/settings", nil)
 		rr := httptest.NewRecorder()
@@ -885,12 +885,12 @@ func TestDataControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dataController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("PATCH - success", func(t *testing.T) {
 		settings := map[string]string{"mode": "test"}
-		err := stores.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := infra.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
 
 		patch := map[string]string{"mode": "production"}
@@ -898,7 +898,7 @@ func TestDataControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dataController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { stores.DocStore.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { infra.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {

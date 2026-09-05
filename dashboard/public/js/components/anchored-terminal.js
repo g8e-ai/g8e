@@ -295,7 +295,7 @@ export class AnchoredOperatorTerminal {
         this.outputContainer.appendChild(welcome);
 
         this._deploymentComponent = new OperatorDeployment({
-            onCommandReady: (cmd) => {}
+            onCommandReady: () => {}
         });
         await this._deploymentComponent.mount(welcome, this.currentUser);
     }

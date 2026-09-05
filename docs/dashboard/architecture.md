@@ -18,7 +18,7 @@ flowchart LR
 
 ### Container Entrypoint
 
-`dashboard/entrypoint.sh` polls `GATEWAY_HEALTH_URL` plus `GATEWAY_HEALTH_PATH` before starting Node. This is a reachability gate against the gateway's plain-HTTP health surface; it does not authenticate the browser or establish the dashboard app identity.
+`dashboard/entrypoint.sh` polls `GATEWAY_HEALTH_URL` plus `GATEWAY_HEALTH_PATH` before starting Node. This is a reachability gate against the gateway's [plain-HTTP health surface](../architecture/network.md); it does not authenticate the browser or establish the dashboard app identity.
 
 ### Express Static Host
 
@@ -28,9 +28,7 @@ The host has no TLS terminator, session store, browser authentication middleware
 
 ### Startup Enrollment
 
-Before `app.listen()`, `runStartupEnrollment()` loads an installed `g8ed` app identity or invokes `AppEnrollmentService.enroll()`. Expected configuration failures such as a missing or expired identity enter enrollment. Unexpected identity-read failures and enrollment failures invoke the fatal callback and prevent startup. The resulting `AppIdentity` is stored in `services/infra/app-identity.js` for server-side consumers.
-
-No live server-side consumer currently reads that identity. `services/clients/g8eg_http_client.js` and `services/clients/g8eg_pubsub_client.js` support certificate paths, but `server.js` does not construct them.
+Before `app.listen()`, `runStartupEnrollment()` loads an installed `g8ed` app identity or invokes `AppEnrollmentService.enroll()`. Expected configuration failures such as a missing or expired identity enter enrollment. Unexpected identity-read failures and enrollment failures invoke the fatal callback and prevent startup. The resolved `AppIdentity` is returned to the caller; `server.js` does not store it in a module-global holder. The platform PKI hierarchy and workload enrollment flow are documented in [PKI & Trust](../ensemble/pki.md).
 
 ### Browser Application
 
@@ -66,8 +64,8 @@ dashboard/
 │       ├── constants/                # Browser constants and API path builders
 │       ├── models/                   # Browser-side typed model classes
 │       └── utils/                    # HTTP, SSE, events, rendering, and session helpers
-├── services/infra/                   # App enrollment and identity holder
-├── services/clients/                 # Prepared g8eg HTTP and pub/sub clients
+├── services/infra/                   # App enrollment
+├── services/clients/                 # Internal HTTP client
 ├── routes/, middleware/, models/     # Retained server-side migration surface
 ├── test/                             # Vitest suite and browser harness
 ├── Dockerfile                        # Node 22 non-root runtime image
@@ -80,7 +78,7 @@ dashboard/
 - The container app private key remains in the dashboard runtime volume and is never exposed through `/g8e-config.js` or static assets.
 - CSP restricts browser connections to the dashboard and configured gateway origins and disables plugins, embedding, and framing.
 - The browser cannot use the gateway's mTLS WebSocket surface. Browser event delivery uses SSE.
-- g8ed does not bypass governance. UI requests that lead to host mutations remain gateway- and operator-governed.
+- g8ed does not bypass governance. UI requests that lead to host mutations remain gateway- and operator-governed through the [five-layer verification pipeline](../architecture/governance.md).
 
 ## Related
 
@@ -89,3 +87,11 @@ dashboard/
 - [Server-Sent Events](sse.md)
 - [Operator Surfaces](operators.md)
 - [Platform-level Dashboard Architecture](../architecture/dashboard.md)
+- [Platform Overview](../core/about.md) — What g8e is, the application layer, and component boundaries
+- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts and Gateway API surfaces
+- [Authentication & Authorization](../architecture/auth.md) — Platform-level mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
+- [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment
+- [Ensemble SSE](../ensemble/sse.md) — Ensemble event production pipeline that feeds dashboard SSE consumers

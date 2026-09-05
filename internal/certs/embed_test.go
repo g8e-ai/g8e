@@ -202,3 +202,25 @@ func TestFIPSCurvePreferences_ExcludesX25519(t *testing.T) {
 	assert.Contains(t, curves, tls.CurveP384)
 	assert.Contains(t, curves, tls.CurveP256)
 }
+
+// TestFIPSCurvePreferences_ReturnsCallerOwnedSlice verifies that each call
+// returns a fresh, caller-owned slice: two calls produce distinct backing
+// arrays and mutating one returned slice does not affect slices from other
+// calls. This guards against replacing the fresh-slice implementation with
+// shared package-level mutable storage.
+func TestFIPSCurvePreferences_ReturnsCallerOwnedSlice(t *testing.T) {
+	first := FIPSCurvePreferences()
+	require.NotEmpty(t, first)
+	second := FIPSCurvePreferences()
+	require.NotEmpty(t, second)
+
+	// Distinct backing arrays: the two slices must not share storage.
+	require.NotSame(t, &first[0], &second[0],
+		"FIPSCurvePreferences must return a fresh slice per call, not shared package-level storage")
+
+	// Mutating one returned slice must not affect the other.
+	originalSecond := append([]tls.CurveID(nil), second...)
+	first[0] = tls.X25519
+	assert.Equal(t, originalSecond, second,
+		"mutating one returned slice must not affect slices from other calls")
+}

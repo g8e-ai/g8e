@@ -32,36 +32,36 @@ import (
 )
 
 func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("")
 	require.Error(t, err)
 }
 
 func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
 	require.Error(t, err)
 }
 
 func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an Operator session with terminated status
 	operatorSessionID := "terminated-session"
@@ -75,19 +75,19 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
 }
 
 func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-456"
@@ -97,7 +97,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session with old timestamp using the test hook
 	operatorSessionID := "expired-session"
@@ -112,19 +112,19 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
+	require.NoError(t, db.GetDocStore().DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
 }
 
 func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an inactive user
 	userID := "inactive-user"
@@ -134,7 +134,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session linked to the inactive user
 	operatorSessionID := "session-with-inactive-user"
@@ -148,32 +148,32 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-789", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-789", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
 }
 
 func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	userID := "authoritative-user"
 	operatorSessionID := "authoritative-operator-session"
 	cliSessionID := "authoritative-cli-session"
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	opBytes, err := json.Marshal(&models.OperatorDocumentGo{
 		ID: "authoritative-operator", UserID: userID, OperatorSessionID: operatorSessionID,
 		Status: constants.OperatorStatusActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	})
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "authoritative-operator", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "authoritative-operator", opBytes))
 
 	tests := []struct {
 		name        string
@@ -190,7 +190,7 @@ func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sessionBytes, err := json.Marshal(tt.session)
 			require.NoError(t, err)
-			require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, sessionBytes))
+			require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, sessionBytes))
 			_, err = auth.ValidateOperatorCLISessionBinding(operatorSessionID, cliSessionID, tt.claimedUser)
 			if tt.wantError {
 				require.Error(t, err)
@@ -202,21 +202,21 @@ func TestAuthService_ValidateOperatorCLISessionBinding(t *testing.T) {
 }
 
 func TestAuthService_ValidateOperatorSession_RejectsDuplicateRecords(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	userID := "duplicate-user"
 	userBytes, err := json.Marshal(&models.User{ID: userID, Status: constants.UserStatusActive})
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 	for _, operatorID := range []string{"duplicate-operator-one", "duplicate-operator-two"} {
 		opBytes, err := json.Marshal(&models.OperatorDocumentGo{ID: operatorID, UserID: userID, OperatorSessionID: "duplicate-session", Status: constants.OperatorStatusActive})
 		require.NoError(t, err)
-		require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 	}
 
 	_, err = auth.ValidateOperatorSession("duplicate-session")
@@ -485,12 +485,12 @@ func TestRouteAuthRegistry_RotationAndRemovedEnroll(t *testing.T) {
 }
 
 func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	t.Run("dual auth falls back to web session when no mTLS cert", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -517,7 +517,7 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -525,18 +525,18 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	appID := "spiffe://g8e.local/app/test-app-no-policy"
 
 	// Try to get AppPolicy for this app - should return nil (deny-by-default)
-	policy, err := stores.AppPolicyStore.GetAppPolicy(appID)
+	policy, err := db.GetAppPolicyStore().GetAppPolicy(appID)
 	require.NoError(t, err)
 	assert.Nil(t, policy, "App without policy should have nil policy (deny-by-default)")
 }
 
 func TestAuthService_Middleware_PublicBypass(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -556,12 +556,12 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 }
 
 func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -592,12 +592,12 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 }
 
 func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -616,12 +616,12 @@ func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -640,12 +640,12 @@ func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -664,12 +664,12 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -688,12 +688,12 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an expired web session
 	webSessionID := "expired-web-session"
@@ -705,7 +705,7 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet("web_sessions", webSessionID, webSessionBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -724,12 +724,12 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an inactive user
 	userID := "inactive-web-user"
@@ -739,7 +739,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a valid web session for the inactive user
 	webSessionID := "web-session-inactive-user"
@@ -751,7 +751,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet("web_sessions", webSessionID, webSessionBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -770,12 +770,12 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_Success(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "active-web-user"
@@ -785,7 +785,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a valid web session
 	webSessionID := "valid-web-session"
@@ -797,7 +797,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet("web_sessions", webSessionID, webSessionBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify user_id is stamped in context
@@ -818,29 +818,29 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HasJWKS(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
 
 	// Without JWKS
-	authWithout := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	authWithout := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 	assert.False(t, authWithout.HasJWKS())
 
 	// With JWKS (mock)
 	jwks := &JWKSProvider{}
-	authWith := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
+	authWith := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 	assert.True(t, authWith.HasJWKS())
 }
 
 func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -858,13 +858,13 @@ func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -882,13 +882,13 @@ func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -907,13 +907,13 @@ func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
 	jwks := &JWKSProvider{}
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, jwks, "", "", "")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -932,12 +932,12 @@ func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-123"
@@ -947,7 +947,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-123"
@@ -962,7 +962,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-123", opBytes))
 
 	// Test ValidateOperatorSession directly (the core validation logic)
 	op, err := auth.ValidateOperatorSession(operatorSessionID)
@@ -973,12 +973,12 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Test with invalid session
 	_, err := auth.ValidateOperatorSession("invalid-session")
@@ -986,12 +986,12 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a terminated Operator session
 	operatorSessionID := "terminated-session"
@@ -1005,14 +1005,14 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-terminated", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-terminated", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
 }
 
 func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 
 	// Create an active user
 	userID := "user-456"
@@ -1022,7 +1022,7 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-123"
@@ -1035,10 +1035,10 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Test CLI session retrieval and validation
-	cliDocResult, err := stores.DocStore.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.GetDocStore().DocGet("cli_sessions", cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -1051,16 +1051,16 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_SessionNotFound(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 
 	// Test with non-existent CLI session
-	cliDoc, err := stores.DocStore.DocGet("cli_sessions", "nonexistent-cli-session")
+	cliDoc, err := db.GetDocStore().DocGet("cli_sessions", "nonexistent-cli-session")
 	require.NoError(t, err)
 	assert.Nil(t, cliDoc)
 }
 
 func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 
 	// Create an expired CLI session
 	cliSessionID := "expired-cli-session"
@@ -1073,10 +1073,10 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Verify the session is stored with expired timestamp
-	cliDocResult, err := stores.DocStore.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.GetDocStore().DocGet("cli_sessions", cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -1088,9 +1088,9 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
 
 	// Create an inactive user
 	userID := "inactive-user"
@@ -1100,7 +1100,7 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Verify user is inactive
 	user, err := userSvc.GetByID(userID)
@@ -1110,12 +1110,12 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 }
 
 func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 
@@ -1129,12 +1129,12 @@ func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
 }
 
 func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 
@@ -1145,12 +1145,12 @@ func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
 }
 
 func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a policy with rate limit
 	policy := &models.AppPolicy{
@@ -1173,12 +1173,12 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 }
 
 func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a policy with max payload size
 	policy := &models.AppPolicy{
@@ -1193,7 +1193,7 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 
 	// Create a CLI session linked to Operator session
 	cliSessionID := "cli-session-bound"
@@ -1210,10 +1210,10 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	// Test that CLI session can be retrieved and has correct operator_session_id
-	cliDocResult, err := stores.DocStore.DocGet("cli_sessions", cliSessionID)
+	cliDocResult, err := db.GetDocStore().DocGet("cli_sessions", cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
@@ -1226,12 +1226,12 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create a CLI session with different Operator session
 	cliSessionID := "cli-session-mismatch"
@@ -1248,7 +1248,7 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
 	require.NoError(t, err)
@@ -1256,12 +1256,12 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an expired CLI session
 	cliSessionID := "cli-session-expired"
@@ -1278,7 +1278,7 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	bound, err := auth.cliCertBoundToOperator(nil, cliSessionID, userID, operatorSessionID)
 	require.NoError(t, err)
@@ -1288,12 +1288,12 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 // TestAuthService_HandleOperatorAuth_Integration tests the handleOperatorAuth path
 // through the middleware to ensure mTLS URI SAN validation works correctly.
 func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-op-auth"
@@ -1303,7 +1303,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create an Operator session
 	operatorSessionID := "op-session-auth-test"
@@ -1319,7 +1319,7 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-auth-test", opBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionOperators), "op-auth-test", opBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1370,12 +1370,12 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 // TestAuthService_HandleCLIAuth_Integration tests the CLI auth path
 // through the middleware to ensure CLI session validation works correctly.
 func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an active user
 	userID := "user-cli-auth"
@@ -1385,7 +1385,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session
 	cliSessionID := "cli-session-auth-test"
@@ -1400,7 +1400,7 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+	require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1451,12 +1451,12 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 // TestAuthService_HandleAppAuth_Integration tests the app auth path
 // through the middleware to ensure app policy validation works correctly.
 func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	res := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, userSvc, personaSvc, res, nil, "", "", "")
+	auth := NewAuthService(db.GetDocStore(), nil, logger, userSvc, personaSvc, res, nil, "", "", "")
 
 	// Create an app policy
 	operatorID := "test-operator"
@@ -1471,7 +1471,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	}
 	policyBytes, err := json.Marshal(policyDoc)
 	require.NoError(t, err)
-	require.NoError(t, stores.DocStore.DocSet("app_policies", appID, policyBytes))
+	require.NoError(t, db.GetDocStore().DocSet("app_policies", appID, policyBytes))
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1548,7 +1548,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			ExpiresAt:         time.Now().Add(1 * time.Hour),
 		}
 		cliBytes, _ := json.Marshal(cliDoc)
-		require.NoError(t, stores.DocStore.DocSet("cli_sessions", cliSessionID, cliBytes))
+		require.NoError(t, db.GetDocStore().DocSet("cli_sessions", cliSessionID, cliBytes))
 
 		// Mock user in DB
 		userDoc := &models.User{
@@ -1556,7 +1556,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 			Status: constants.UserStatusActive,
 		}
 		userBytes, _ := json.Marshal(userDoc)
-		require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+		require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, _ := wid.CLISPIFFEURL(userID, cliSessionID)

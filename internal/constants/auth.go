@@ -11,6 +11,8 @@ package constants
 
 import "time"
 
+const JWTClockSkew time.Duration = time.Minute
+
 // Passkey purpose constants define the intended use of a passkey credential.
 const (
 	// PasskeyPurposeRegister indicates the passkey is being created/registered.

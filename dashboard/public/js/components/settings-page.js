@@ -181,18 +181,9 @@ export class SettingsPage {
 
         const envHint = '';
 
-        let inputHtml = '';
+        let inputHtml;
 
-        if (false) {
-            const displayVal = setting.secret
-                ? `<span class="locked-secret">••••••••  (set via environment variable)</span>`
-                : escHtml(setting.value || '(empty)');
-            inputHtml = `
-                <div class="settings-locked-value">
-                    <span class="material-symbols-outlined lock-icon">lock</span>
-                    <span class="locked-text">${displayVal}</span>
-                </div>`;
-        } else if (setting.type === 'select' && setting.options) {
+        if (setting.type === 'select' && setting.options) {
             const opts = setting.options.map(opt =>
                 `<option value="${escAttr(String(opt.value))}" ${setting.value === opt.value ? 'selected' : ''}>${escHtml(opt.label)}</option>`
             ).join('');
@@ -229,32 +220,30 @@ export class SettingsPage {
             ${inputHtml}
         `;
 
-        if (true) {
-            const input = wrap.querySelector('[data-key]');
-            if (input) {
-                const resolveValue = () => {
-                    const raw = input.value;
-                    if (setting.type === 'select' && setting.options) {
-                        const match = setting.options.find(o => String(o.value) === raw);
-                        return match ? match.value : raw;
-                    }
-                    return raw;
-                };
-                input.addEventListener('input',  () => this._markDirty(setting.key, resolveValue()));
-                input.addEventListener('change', () => this._markDirty(setting.key, resolveValue()));
-            }
+        const input = wrap.querySelector('[data-key]');
+        if (input) {
+            const resolveValue = () => {
+                const raw = input.value;
+                if (setting.type === 'select' && setting.options) {
+                    const match = setting.options.find(o => String(o.value) === raw);
+                    return match ? match.value : raw;
+                }
+                return raw;
+            };
+            input.addEventListener('input',  () => this._markDirty(setting.key, resolveValue()));
+            input.addEventListener('change', () => this._markDirty(setting.key, resolveValue()));
+        }
 
-            const revealBtn = wrap.querySelector('.settings-reveal-btn');
-            if (revealBtn) {
-                revealBtn.addEventListener('click', () => {
-                    const inp = wrap.querySelector('.settings-input');
-                    if (!inp) return;
-                    const isHidden = inp.type === 'password';
-                    inp.type = isHidden ? 'text' : 'password';
-                    revealBtn.querySelector('.material-symbols-outlined').textContent =
-                        isHidden ? 'visibility_off' : 'visibility';
-                });
-            }
+        const revealBtn = wrap.querySelector('.settings-reveal-btn');
+        if (revealBtn) {
+            revealBtn.addEventListener('click', () => {
+                const inp = wrap.querySelector('.settings-input');
+                if (!inp) return;
+                const isHidden = inp.type === 'password';
+                inp.type = isHidden ? 'text' : 'password';
+                revealBtn.querySelector('.material-symbols-outlined').textContent =
+                    isHidden ? 'visibility_off' : 'visibility';
+            });
         }
 
         return wrap;

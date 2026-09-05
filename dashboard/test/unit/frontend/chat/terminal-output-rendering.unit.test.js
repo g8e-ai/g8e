@@ -7,8 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockTemplateLoader } from '@test/mocks/mock-browser-env.js';
-import { TEMPLATE_FIXTURES, seedTemplates } from '@test/fixtures/templates.fixture.js';
-import { TribunalOutcome } from '@g8ed/public/js/constants/events.js';
+import { seedTemplates } from '@test/fixtures/templates.fixture.js';
 
 const WEB_SESSION_ID = 'session-output-abc';
 

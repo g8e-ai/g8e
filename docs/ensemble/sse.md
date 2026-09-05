@@ -233,3 +233,4 @@ Tests verify required routing dimensions, payload type safety, error event suppr
 - [Protocol](protocol.md) — Canonical wire contracts and GovernanceEnvelope schemas.
 - [Constants](constants.md) — Application constants and event type registries.
 - [Gateway SSE Streaming](../architecture/sse.md) — Gateway-side SSE push ingestion, filtering, and consumer endpoints.
+- [Dashboard SSE](../dashboard/sse.md) — Browser EventSource lifecycle, event dispatch, and reconnect behavior for dashboard consumers.

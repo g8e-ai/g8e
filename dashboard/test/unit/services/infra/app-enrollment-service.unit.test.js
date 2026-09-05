@@ -24,7 +24,6 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { AppEnrollmentService, ConfigurationError, _buildCompletionTranscript } from '../../../../services/infra/app-enrollment-service.js';
 
 // ---------------------------------------------------------------------------
@@ -116,9 +115,8 @@ async function _writeExistingIdentity(certPem, keyPem, appName = 'g8ed') {
  * @returns {vi.Spy} fetch spy.
  */
 function _mockEnrollmentFetch(opts) {
-    let requestSubmitted = false;
     let pollCount = 0;
-    return vi.spyOn(global, 'fetch').mockImplementation(async (url, init) => {
+    return vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
         const urlStr = String(url);
         // CA bundle fetch
         if (urlStr.includes('/.well-known/g8e/pki/ca-bundle')) {
@@ -131,7 +129,6 @@ function _mockEnrollmentFetch(opts) {
         }
         // Enrollment request
         if (urlStr.includes('/platform-enrollments/request')) {
-            requestSubmitted = true;
             return {
                 ok: true,
                 status: 201,
@@ -366,7 +363,7 @@ describe('AppEnrollmentService', () => {
             await fs.writeFile(pendingPath, JSON.stringify(pendingState), { mode: 0o600 });
 
             let requestSubmitted = false;
-            const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+            vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
                 const urlStr = String(url);
                 if (urlStr.includes('/.well-known/g8e/pki/ca-bundle')) {
                     return { ok: true, status: 200, text: async () => 'CA-BUNDLE', headers: new Map() };
@@ -445,7 +442,7 @@ describe('AppEnrollmentService', () => {
         });
 
         it('throws ConfigurationError when polling reaches denial', async () => {
-            const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+            vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
                 const urlStr = String(url);
                 if (urlStr.includes('/.well-known/g8e/pki/ca-bundle')) {
                     return { ok: true, status: 200, text: async () => 'CA-BUNDLE', headers: new Map() };

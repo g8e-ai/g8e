@@ -225,12 +225,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.CreateRuntimeTree(context.Background()))
 
-	// C2 inverted construction order: open DB + stores first, seed consensus
+	// C2 inverted construction order: open DB first, seed consensus
 	// policy into the DB before NewGatewayModeServiceWithDB (build() reads the
 	// policy from the DB and wires the ConsensusService at construction via
 	// GatewayModeDeps — no SetConsensusService, no second pubsub construction,
 	// no adapter wiring).
-	db, stores, err := gateway.OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
+	db, err := gateway.OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, testutil.NewTestLogger(), cfg.Gateway.VaultKeyPath, nil, fileSvc)
 	require.NoError(t, err)
 
 	var consensusSvc *consensus.ConsensusService
@@ -252,7 +252,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if nServiceMembers == 0 {
 			nServiceMembers = 1
 		}
-		cs := SetupConsensus(t, stores, consensusID, nMembers, quorum, nServiceMembers)
+		cs := SetupConsensus(t, db.GetConsensusStore(), db.GetSignerStore(), consensusID, nMembers, quorum, nServiceMembers)
 		consensusSvc = cs.Service
 		l2Deliberator = cs.Deliberator
 	}
@@ -623,18 +623,19 @@ type ConsensusSetup struct {
 
 // SetupConsensus seeds a real ConsensusService for consensus/notary posture
 // integration tests. It generates nMembers Ed25519 key pairs, registers each
-// member's public key as a TrustedSigner in the raw stores, creates a
-// ConsensusPolicy in the ConsensusStore, constructs a ConsensusService via the
+// member's public key as a TrustedSigner via the signerStore, creates a
+// ConsensusPolicy in the consensusStore, constructs a ConsensusService via the
 // shared consensus.NewConsensusFromPolicy factory, and returns a
 // LocalDeliberator via ConsensusSetup.Deliberator. The caller passes the
 // returned ConsensusService and Deliberator to NewGatewayModeServiceWithDB so
 // they are wired at construction via the builder's withConsensus path (no
 // SetConsensusService, no second pubsub construction).
 //
-// SetupConsensus operates against the raw *gateway.Stores so it can run BEFORE
-// NewGatewayModeServiceWithDB — the consensus policy must be seeded into the DB
-// before build() reads it, and the consensus service must be constructed before
-// build() wires it into GatewayModeDeps and mcp.GatewayService.
+// SetupConsensus operates against the narrow consensus and signer stores so it
+// can run BEFORE NewGatewayModeServiceWithDB — the consensus policy must be
+// seeded into the DB before build() reads it, and the consensus service must be
+// constructed before build() wires it into GatewayModeDeps and
+// mcp.GatewayService.
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
 // — the remaining policy members exist in the store but cannot vote (their keys resolve
@@ -643,7 +644,7 @@ type ConsensusSetup struct {
 //
 // This uses the same consensus.NewConsensusFromPolicy factory as production ConsensusBootstrap
 // in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
-func SetupConsensus(t *testing.T, stores *gateway.Stores, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
+func SetupConsensus(t *testing.T, consensusStore *gateway.ConsensusStoreService, signerStore *gateway.SignerStoreService, consensusID string, nMembers, quorum, nServiceMembers int) *ConsensusSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
@@ -657,7 +658,7 @@ func SetupConsensus(t *testing.T, stores *gateway.Stores, consensusID string, nM
 		pub, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 
-		err = stores.SignerStore.AddTrustedSigner(models.TrustedSigner{
+		err = signerStore.AddTrustedSigner(models.TrustedSigner{
 			ID:        appID,
 			PublicKey: hex.EncodeToString(pub),
 			AddedAt:   time.Now().UTC(),
@@ -681,7 +682,7 @@ func SetupConsensus(t *testing.T, stores *gateway.Stores, consensusID string, nM
 		RequireDistinct: true,
 		Enabled:         true,
 	}
-	err := stores.ConsensusStore.AddConsensus(policy)
+	err := consensusStore.AddConsensus(policy)
 	require.NoError(t, err)
 
 	keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {

@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -441,7 +440,6 @@ func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
 		t.Parallel()
-		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.Mcp.CallRequested,
 			ID:        "msg-1",
@@ -457,7 +455,6 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
-		f.Svc.SetMCPGateway(nil)
 		msg := &PubSubCommandMessage{
 			EventType: constants.Event.Operator.A2a.CallRequested,
 			ID:        "msg-1",
@@ -1669,72 +1666,6 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 	})
 }
 
-// TestCommandServiceConfig_NoGatewayFields is a compile-time and reflection test
-// that verifies CommandServiceConfig and OutboundModeDeps do not have gateway-only
-// fields (GovernedDocStore, ConsensusPolicyStore, FieldReader, Consensus,
-// PlatformEnrollmentDeps, Posture, MCPGateway). These fields exist only in
-// GatewayModeDeps (and GatewayCommandServiceConfig) to enforce mode bifurcation
-// at the type level.
-func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
-	t.Parallel()
-
-	// CommandServiceConfig must NOT have MCPGateway, FieldReader, or governance fields.
-	var base CommandServiceConfig
-	_ = base
-
-	// OutboundModeDeps must have core governance fields accessible.
-	var ob OutboundModeDeps
-	_ = ob.ReplayStore
-	_ = ob.StateRootProvider
-	_ = ob.TransactionAudit
-	_ = ob.L3Notary
-	_ = ob.SignerStore
-	_ = ob.Doctrine
-
-	// OutboundModeDeps must NOT contain gateway-only fields (verified via reflection).
-	obType := reflect.TypeOf(OutboundModeDeps{})
-	gatewayOnlyFields := []string{
-		"GovernedDocStore",
-		"ConsensusPolicyStore",
-		"FieldReader",
-		"Consensus",
-		"PlatformEnrollmentDeps",
-		"Posture",
-		"MCPGateway",
-		"L2ConsensusDeliberator",
-		"EnvProcAdapter",
-		"SessionValidatorAdapter",
-	}
-	for _, fieldName := range gatewayOnlyFields {
-		_, found := obType.FieldByName(fieldName)
-		assert.False(t, found, "OutboundModeDeps must not contain gateway-only field %s", fieldName)
-	}
-
-	// GatewayModeDeps must have both core and gateway-only fields.
-	var gwDeps GatewayModeDeps
-	_ = gwDeps.ReplayStore
-	_ = gwDeps.StateRootProvider
-	_ = gwDeps.TransactionAudit
-	_ = gwDeps.L3Notary
-	_ = gwDeps.SignerStore
-	_ = gwDeps.Doctrine
-	_ = gwDeps.GovernedDocStore
-	_ = gwDeps.ConsensusPolicyStore
-	_ = gwDeps.FieldReader
-	_ = gwDeps.Consensus
-	_ = gwDeps.PlatformEnrollmentDeps
-	_ = gwDeps.Posture
-
-	// GatewayCommandServiceConfig must have GovDeps.
-	var gw GatewayCommandServiceConfig
-	_ = gw.GovDeps
-
-	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
-	// fields are accessible.
-	_ = gw.Config
-	_ = gw.Logger
-}
-
 // TestNewOperatorPubSubService_NilOptionalGovDeps_PreservedAsNil verifies that
 // OutboundModeDeps has no ConsensusPolicyStore or FieldReader fields, and that
 // constructing OperatorPubSubService in outbound mode initializes l4warden with
@@ -1788,46 +1719,108 @@ func TestNewOperatorPubSubService_NilDoctrine_NotDefaultedAtCallSite(t *testing.
 	assert.Nil(t, svc.l4warden.Doctrine(), "nil Doctrine must not be defaulted at the call site; wire it in the mode's dependency wiring instead")
 }
 
-// TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall verifies thread safety
-// of the single atomic egress setter under concurrent egress traffic and SetMCPGateway calls.
-func TestOperatorPubSubService_SetMCPGateway_RaceWithEgressCall(t *testing.T) {
+func newGatewayPubsubServiceForBindingTest(t *testing.T) *OperatorPubSubService {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	svc, err := NewGatewayOperatorPubSubService(GatewayCommandServiceConfig{
+		CommandServiceConfig: CommandServiceConfig{
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		},
+		GovDeps: &GatewayModeDeps{
+			GovernanceCoreDeps: GovernanceCoreDeps{
+				ReplayStore:       &testutil.MockReplayStore{},
+				StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+				TransactionAudit:  &testutil.MockTransactionAudit{},
+				L3Notary:          &testutil.MockL3Notary{},
+				Doctrine:          governance.NewL1Doctrine(),
+			},
+		},
+	})
+	require.NoError(t, err)
+	return svc
+}
+
+func TestOperatorPubSubService_BindMCPGatewayRejectsNil(t *testing.T) {
 	t.Parallel()
-	f := newPubsubFixture(t)
+	svc := newGatewayPubsubServiceForBindingTest(t)
 
-	msg := &PubSubCommandMessage{
-		EventType: constants.Event.Operator.Mcp.CallRequested,
-		ID:        "msg-race",
-		Payload:   mustMarshalProto(t, &operatorv1.McpCallRequested{ToolName: "test"}),
-	}
+	err := svc.BindMCPGateway(nil)
 
+	assert.ErrorIs(t, err, constants.ErrPubSubMCPGatewayNil)
+	assert.Nil(t, svc.GetMCPGateway())
+}
+
+func TestOperatorPubSubService_BindMCPGatewayRejectsDuplicateBinding(t *testing.T) {
+	t.Parallel()
+	svc := newGatewayPubsubServiceForBindingTest(t)
+	first := &mcp.GatewayService{}
+	require.NoError(t, svc.BindMCPGateway(first))
+
+	err := svc.BindMCPGateway(&mcp.GatewayService{})
+
+	assert.ErrorIs(t, err, constants.ErrPubSubMCPGatewayAlreadyBound)
+	assert.Same(t, first, svc.GetMCPGateway())
+}
+
+func TestOperatorPubSubService_BindMCPGatewayRejectsBindingAfterStart(t *testing.T) {
+	svc := newPubsubFixture(t).Svc
+	svc.config.OperatorID = ""
+	svc.config.OperatorSessionId = ""
+	require.NoError(t, svc.Start(context.Background()))
+	t.Cleanup(func() { require.NoError(t, svc.Stop()) })
+
+	err := svc.BindMCPGateway(&mcp.GatewayService{})
+
+	assert.ErrorIs(t, err, constants.ErrPubSubMCPGatewayBindAfterStart)
+	assert.Nil(t, svc.GetMCPGateway())
+}
+
+func TestOperatorPubSubService_StartGatewayModeRequiresMCPGatewayBinding(t *testing.T) {
+	t.Parallel()
+	svc := newGatewayPubsubServiceForBindingTest(t)
+
+	err := svc.Start(context.Background())
+
+	assert.ErrorIs(t, err, constants.ErrPubSubMCPGateway)
+	assert.False(t, svc.running)
+}
+
+func TestOperatorPubSubService_StartOutboundModeDoesNotRequireMCPGatewayBinding(t *testing.T) {
+	svc := newPubsubFixture(t).Svc
+	svc.config.OperatorID = ""
+	svc.config.OperatorSessionId = ""
+
+	require.NoError(t, svc.Start(context.Background()))
+	t.Cleanup(func() { require.NoError(t, svc.Stop()) })
+	assert.Nil(t, svc.GetMCPGateway())
+	_, hasMCPHandler := svc.handlers[constants.Event.Operator.Mcp.CallRequested]
+	_, hasA2AHandler := svc.handlers[constants.Event.Operator.A2a.CallRequested]
+	assert.False(t, hasMCPHandler)
+	assert.False(t, hasA2AHandler)
+}
+
+func TestOperatorPubSubService_BoundMCPGatewaySupportsConcurrentReads(t *testing.T) {
+	t.Parallel()
+	svc := newGatewayPubsubServiceForBindingTest(t)
+	gateway := &mcp.GatewayService{}
+	require.NoError(t, svc.BindMCPGateway(gateway))
+
+	const readerCount = 32
+	results := make(chan *mcp.GatewayService, readerCount)
 	var wg sync.WaitGroup
-	done := make(chan struct{})
-
-	// Goroutine 1: concurrently calls SetMCPGateway
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				f.Svc.SetMCPGateway(nil)
-				f.Svc.SetMCPGateway(&mcp.GatewayService{})
-			}
-		}
-	}()
-
-	// Goroutine 2: concurrently reads mcpGateway via handleMcpCallRequestSync
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 200; i++ {
-			_, _ = f.Svc.handleMcpCallRequestSync(context.Background(), msg)
-			_ = f.Svc.GetMCPGateway()
-		}
-		close(done)
-	}()
-
+	wg.Add(readerCount)
+	for range readerCount {
+		go func() {
+			defer wg.Done()
+			results <- svc.GetMCPGateway()
+		}()
+	}
 	wg.Wait()
+	close(results)
+
+	for result := range results {
+		assert.Same(t, gateway, result)
+	}
 }

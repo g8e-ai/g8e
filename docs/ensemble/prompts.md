@@ -64,13 +64,14 @@ Prompt loading is handled by `app.prompts_data.loader`:
 
 Prompt constants and identifiers are synchronized across the repository:
 
-- **Protocol SSOT (`protocol/constants/prompts.json`)** — Defines canonical strings for `AgentMode` (`g8e.bound`, `g8e.not.bound`, `g8e.cloud.bound`) and `PromptSection` (`safety`, `loyalty`, `dissent`, `capabilities`, `execution`, `tools`, `response_constraints`, `agent_persona`, `identity`, `system_context`, `sentinel_mode`, `triage_context`, `investigation_context`, `learned_context`).
+- **Protocol SSOT (`protocol/constants/prompts.json`)** — Defines canonical strings for `AgentMode` (`g8e.bound`, `g8e.not.bound`, `g8e.cloud.bound`) and `PromptSection` (`safety`, `loyalty`, `dissent`, `capabilities`, `execution`, `tools`, `response_constraints`, `agent_persona`, `identity`, `system_context`, `sentinel_mode`, `triage_context`, `investigation_context`, `learned_context`). See [Protocol Reference](../architecture/protocol.md) for the platform-level protocol constant registry.
 - **Go Constants (`internal/constants/prompts.go`)** — Mirrors protocol values for backend and gateway routing.
 - **Python Enums (`app.constants.prompts`)** — Re-exports protocol values via `g8e.constants.prompt()` for runtime typing, defining `AgentMode`, `PromptSection`, `PromptFile`, and `InvestigationContextLabel`.
 - **Drift Prevention Tests** — Unit test suites (`test_prompt_alignment.py`, `test_prompts.py`, `test_prompt_loader.py`, `test_prompts.py` in `tests/unit/constants/`) enforce that all active tools have prompt files, no format placeholders leak into personas, and prompt sections match protocol definitions.
 
 ## Related
 
+- [Protocol Reference](../architecture/protocol.md) — Platform-level protocol constant registry and protobuf schema definitions
 - [Agents](agents.md) — Agent personas, roles, and output contracts
 - [Architecture](architecture.md) — System architecture and execution pipelines
 - [Governance](governance.md) — Five-layer verification gauntlet and envelope lifecycle

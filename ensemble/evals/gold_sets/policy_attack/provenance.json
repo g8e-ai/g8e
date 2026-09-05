@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "policy_attack",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/governance/policy_attack_loader.py",
+    "code_sha256": "a2f86d8cb18c1a04b2e17571f4d079b4a785fe702290f5f3bea9394b2a45c5b4"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 3,
+    "sha256": "9b4fd00588ac646eeb681349b321ae61a4740151f1c1687927e141092ca9c578"
+  },
+  "partition": "development",
+  "domain_strata": ["security", "policy"]
+}

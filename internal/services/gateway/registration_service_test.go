@@ -57,12 +57,12 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	dataDir := testutil.TempDir(t)
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+	db, err := openTestDB(t, dataDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	sm := newTestSecretManager(t, db.db, fileSvc)
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
@@ -134,20 +134,20 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		// Generate only Operator CSR, no CLI CSR
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
@@ -341,7 +341,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify status was updated
-		doc, err := infra.Stores.DocStore.DocGet("operators", slot.ID)
+		doc, err := infra.DocStore.DocGet("operators", slot.ID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -361,7 +361,7 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet("operators", slot.ID)
+		doc, err := infra.DocStore.DocGet("operators", slot.ID)
 		require.NoError(t, err)
 
 		op, err := regSvc.toOperatorDoc(doc)
@@ -482,7 +482,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.Stores.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -511,7 +511,7 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.Stores.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
 		require.NoError(t, err)
 
 		req := models.BindOperatorsRequest{
@@ -595,7 +595,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.Stores.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
 		require.NoError(t, err)
 
 		// Create bound sessions document
@@ -611,7 +611,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		boundBytes, err := json.Marshal(boundDoc)
 		require.NoError(t, err)
-		err = infra.Stores.DocStore.DocSet("bound_sessions", "web-123", boundBytes)
+		err = infra.DocStore.DocSet("bound_sessions", "web-123", boundBytes)
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
@@ -641,7 +641,7 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 		}
 		updateBytes, err := json.Marshal(update)
 		require.NoError(t, err)
-		_, err = infra.Stores.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
+		_, err = infra.DocStore.DocUpdate("operators", slot1.ID, updateBytes)
 		require.NoError(t, err)
 
 		req := models.UnbindOperatorsRequest{
@@ -733,7 +733,7 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 	}
 	updateBytes, err := json.Marshal(update)
 	require.NoError(t, err)
-	_, err = infra.Stores.DocStore.DocUpdate("operators", slot.ID, updateBytes)
+	_, err = infra.DocStore.DocUpdate("operators", slot.ID, updateBytes)
 	require.NoError(t, err)
 
 	req := models.SetTargetContextRequest{
@@ -753,20 +753,20 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -784,20 +784,20 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -815,20 +815,20 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		req := models.OperatorRegistrationRequest{
 			SystemFingerprint: "test-fingerprint",
@@ -845,20 +845,20 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		opCSR := testutil.GenerateTestCSRP256(t, "test-operator")
 		req := models.OperatorRegistrationRequest{
@@ -879,20 +879,20 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -912,20 +912,20 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -950,20 +950,20 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		dataDir := testutil.TempDir(t)
 		logger := testutil.NewTestLogger()
 		fileSvc := newTestFileSvc(t)
-		db, stores, err := openTestDB(t, dataDir, fileSvc, logger)
+		db, err := openTestDB(t, dataDir, fileSvc, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		sm := newTestSecretManager(t, db.db, fileSvc)
 
-		pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+		pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 		err = pki.InitializePKI(nil)
 		require.NoError(t, err)
 
-		userSvc := NewUserService(stores.DocStore, logger)
-		cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-		operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
+		cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+		operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
 		cfg := &config.GatewayConfig{}
-		regSvc := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
+		regSvc := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, cfg)
 
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)

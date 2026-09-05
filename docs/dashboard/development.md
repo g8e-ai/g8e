@@ -4,7 +4,7 @@
 
 - Node.js 22 or newer
 - npm 11 or newer
-- A reachable g8e Gateway
+- A reachable [g8e Gateway](../architecture/gateway.md)
 - A browser that supports WebAuthn for authentication testing
 
 ## Install and Run
@@ -27,12 +27,13 @@ Available scripts are:
 | --- | --- |
 | `npm start` | Run `node server.js` |
 | `npm run dev` | Run with nodemon file watching |
+| `npm run lint` | Run ESLint across dashboard JavaScript |
 | `npm test` | Run Vitest once |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run test:ui` | Open the Vitest UI |
 | `npm run test:coverage` | Produce text, HTML, and LCOV V8 coverage |
 
-From the repository root, `make dashboard-test` runs the dashboard suite and `make build-dashboard` builds the image.
+From the repository root, `make dashboard-lint` runs ESLint, `make dashboard-test` runs the dashboard suite, and `make build-dashboard` builds the image.
 
 ## No Frontend Build Step
 
@@ -58,7 +59,7 @@ The repository-root build context is required:
 docker build -f dashboard/Dockerfile -t g8e-dashboard .
 ```
 
-The image installs production dependencies, runs as the non-root `g8e` user with UID 1001, and uses `/data` for the writable runtime volume. `entrypoint.sh` waits for gateway health before starting Node. In `docker-compose.yml`, the browser gateway URL uses the externally reachable hostname and HTTPS port, while enrollment and health use the internal `g8eg` alias over plain HTTP.
+The image installs production dependencies, runs as the non-root `g8e` user with UID 1001, and uses `/data` for the writable runtime volume. `entrypoint.sh` waits for gateway health before starting Node. In `docker-compose.yml`, the browser gateway URL uses the externally reachable hostname and HTTPS port, while enrollment and health use the internal `g8eg` alias over plain HTTP (see [Network Architecture](../architecture/network.md) for the gateway's protocol surfaces and topology).
 
 ## Environment Variables
 
@@ -73,11 +74,15 @@ The image installs production dependencies, runs as the non-root `g8e` user with
 
 ## Dependency Model
 
-Runtime dependencies are declared in `package.json` and locked in `package-lock.json`. Express and `express-rate-limit` serve the active host. `@peculiar/x509` supports CSR generation, Node's `X509Certificate` parses installed certificates, and `undici` supports the prepared mTLS HTTP client. Browser vendor libraries are checked into `public/js/vendor/`.
+Runtime dependencies are declared in `package.json` and locked in `package-lock.json`. Express and `express-rate-limit` serve the active host. `@peculiar/x509` supports CSR generation, Node's `X509Certificate` parses installed certificates, and Node's built-in `fetch` backs the internal HTTP client. Browser vendor libraries are checked into `public/js/vendor/`.
 
 ## Related
 
 - [Architecture](architecture.md)
 - [Authentication](auth.md)
 - [Testing](tests.md)
-- [Unified Docker Stack](../guides/unified_stack.md)
+- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
+- [Docker Gateway Guide](../guides/docker_gateway.md) — Gateway container deployment and configuration
+- [Platform Getting Started](../guides/getting_started.md) — Platform installation and quick start guide
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands

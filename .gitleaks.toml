@@ -15,6 +15,7 @@ description = "Skip test fixtures and demo data"
 paths = [
   '''internal/services/gateway/pki/issued/.*''',
   '''demos/.*/target-data/.*''',
+  '''ensemble/evals/gold_sets/.*''',
 ]
 
 [[allowlists]]

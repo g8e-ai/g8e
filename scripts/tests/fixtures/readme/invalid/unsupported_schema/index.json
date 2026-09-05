@@ -1,0 +1,16 @@
+{
+  "publication_schema_version": "9.9.9",
+  "readme_evidence_version": "1.0.0",
+  "evidence_cutoff": "2026-09-01T00:00:00Z",
+  "platform_version": "2.1.3",
+  "eval_runs": [],
+  "receipt_verification": {
+    "result_path": "eval/receipt-verification.json",
+    "result_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "scope": "test"
+  },
+  "demo_reports": [],
+  "ci_links": [],
+  "claim_labels": [],
+  "caveats": []
+}

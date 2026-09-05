@@ -75,6 +75,7 @@ Adapters do not infer or fabricate unavailable usage. A provider that omits a co
 
 ## Related
 
+- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Agents](agents.md) — Agent persona definitions, capacity tiers, and Tribunal consensus

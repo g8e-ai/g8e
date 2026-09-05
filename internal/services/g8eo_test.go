@@ -10,13 +10,17 @@ package services
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/certs"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
+	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -37,13 +41,19 @@ func newTestFileSvc(t *testing.T) fs.RuntimeFileService {
 	return fileSvc
 }
 
+func newTestPubSubClientFactory() PubSubClientFactory {
+	return func(string, string, *slog.Logger, *certs.TLSConfig) (pubsub.PubSubClient, error) {
+		return pubsubtest.NewMockOperatorPubSubClient(), nil
+	}
+}
+
 func TestNewG8eoService_InitialState(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
 	before := time.Now().UTC()
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	after := time.Now().UTC()
 
 	require.NoError(t, err)
@@ -72,6 +82,16 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Nil(t, service.historyHandler)
 }
 
+func TestNewG8eoService_RequiresPubSubClientFactory(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+
+	service, err := NewG8eoService(cfg, testutil.NewTestLogger(), newTestTLSConfig(t), newTestFileSvc(t), nil)
+
+	assert.Nil(t, service)
+	assert.ErrorIs(t, err, constants.ErrInternal)
+}
+
 func TestNewG8eoService_PreservesConfig(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
@@ -79,7 +99,7 @@ func TestNewG8eoService_PreservesConfig(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), fileSvc)
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), fileSvc, newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	assert.Equal(t, 42, service.config.MaxConcurrentTasks)
@@ -93,10 +113,10 @@ func TestNewG8eoService_IndependentInstances(t *testing.T) {
 	cfg2 := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc1, err := NewG8eoService(cfg1, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	svc1, err := NewG8eoService(cfg1, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
-	svc2, err := NewG8eoService(cfg2, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	svc2, err := NewG8eoService(cfg2, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	assert.NotEqual(t, svc1.config.OperatorID, svc2.config.OperatorID)
@@ -108,7 +128,7 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	service.mu.Lock()
@@ -125,7 +145,7 @@ func TestG8eoService_Stop(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	// Manually set running to true to test Stop()
@@ -147,7 +167,7 @@ func TestG8eoService_SuspendedTxStoreSingleField(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	// Create a real SuspendedTransactionService with a temp DB
@@ -190,7 +210,7 @@ func TestG8eoService_ConcurrentStateAccess(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t))
+	service, err := NewG8eoService(cfg, logger, newTestTLSConfig(t), newTestFileSvc(t), newTestPubSubClientFactory())
 	require.NoError(t, err)
 
 	done := make(chan struct{}, 20)

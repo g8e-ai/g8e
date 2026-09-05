@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol Library
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 The g8e Protocol Library is the canonical wire contract for all mutations in the g8e zero-trust execution platform. It provides schema definitions, JSON constant registries, JSON model schemas, Pydantic models, dynamic enum generation, SPIFFE workload identity helpers, and example programs for building compatible clients and services. Every mutation passing through the platform flows through a 5-layer interlock sequence:
 
@@ -59,7 +59,7 @@ The Go protocol package requires Go 1.26.6 or later. Direct dependencies include
 Install or update the Go module using standard Go tooling:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.3
+go get github.com/g8e-ai/g8e/v2@v2.1.4
 ```
 
 To fetch the latest release:
@@ -91,7 +91,7 @@ Workload identity helpers manage SPIFFE identity generation and validation for t
 
 - **Operator**: Identifies target execution node instances (`spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`).
 - **CLI**: Identifies authenticated command line interface sessions (`spiffe://g8e.local/cli/<user_id>/<session_id>`).
-- **App**: Identifies external application and agent integrations (`spiffe://g8e.local/app/<operator_id>`), including the centralized ensemble broker identity `spiffe://g8e.local/app/g8ee` (`EnsembleAppID`).
+- **App**: Identifies external application and agent integrations (`spiffe://g8e.local/app/<operator_id>`), including the centralized ensemble broker identity `spiffe://g8e.local/app/g8ee` (`EnsembleAppID`). See [Ensemble PKI & Trust](../ensemble/pki.md) for how g8ee uses this identity.
 - **User**: Identifies human user sessions (`spiffe://g8e.local/user/<user_id>`).
 - **Hub**: Identifies central gateway listener endpoints (`spiffe://g8e.local/hub/operator-listen`).
 - **GatewayPeer**: Identifies peer gateway nodes in distributed setups (`spiffe://g8e.local/gateway/<gateway_id>`).
@@ -125,7 +125,7 @@ pip install g8e
 To pin a specific release version:
 
 ```bash
-pip install g8e==2.1.3
+pip install g8e==2.1.4
 ```
 
 ### Python Package Overview

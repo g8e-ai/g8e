@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventType } from '@g8ed/public/js/constants/events.js';
-import { TEMPLATE_FIXTURES, seedTemplates } from '@test/fixtures/templates.fixture.js';
+import { seedTemplates } from '@test/fixtures/templates.fixture.js';
 import { MockTemplateLoader } from '@test/mocks/mock-browser-env.js';
 
 let TerminalExecutionMixin;
@@ -325,8 +325,8 @@ describe('TerminalExecutionMixin [UNIT - jsdom]', () => {
 
         it('removes all executing indicators if no id provided', () => {
             const ctx = createMixinContext();
-            const id1 = ctx.showExecutingIndicator('cmd1');
-            const id2 = ctx.showExecutingIndicator('cmd2');
+            ctx.showExecutingIndicator('cmd1');
+            ctx.showExecutingIndicator('cmd2');
             
             expect(ctx.outputContainer.querySelectorAll('.anchored-terminal__executing')).toHaveLength(2);
             ctx.hideExecutingIndicator();

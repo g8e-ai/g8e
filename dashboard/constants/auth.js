@@ -6,7 +6,7 @@ import { _STATUS, _HEADERS } from './shared.js';
 /**
  * Auth Constants
  * All identity, role, API key, and device link constants for the auth domain.
- * Wire-protocol values are sourced from protocol/constants/status.json.
+ * Shared wire-protocol values are sourced from protocol/constants/status.json.
  */
 
 // ---------------------------------------------------------------------------
@@ -61,9 +61,9 @@ export const CRL_SERIAL_MIN_LENGTH = 16;
  * Canonical values from protocol/constants/status.json user.role.
  */
 export const UserRole = Object.freeze({
-    USER:       _STATUS['user.role']['user'],
-    ADMIN:      _STATUS['user.role']['admin'],
-    SUPERADMIN: _STATUS['user.role']['superadmin'],
+    USER:  _STATUS['user.role']['user'],
+    ADMIN: _STATUS['user.role']['admin'],
+    OWNER: _STATUS['user.role']['owner'],
 });
 
 /**
@@ -98,24 +98,22 @@ export const ApiKeyClientName = Object.freeze({
 
 /**
  * API Key Status
- * Lifecycle states of an API key.
- * Canonical values from protocol/constants/status.json api.key.status.
+ * Lifecycle states stored in dashboard API key records.
  */
 export const ApiKeyStatus = Object.freeze({
-    ACTIVE:    _STATUS['api.key.status']['active'],
-    REVOKED:   _STATUS['api.key.status']['revoked'],
-    EXPIRED:   _STATUS['api.key.status']['expired'],
-    SUSPENDED: _STATUS['api.key.status']['suspended'],
+    ACTIVE:    'active',
+    REVOKED:   'revoked',
+    EXPIRED:   'expired',
+    SUSPENDED: 'suspended',
 });
 
 /**
  * Authentication Mode identifiers
- * Sent by VSA in the auth_mode field of POST /api/auth/operator.
- * Canonical values from protocol/constants/status.json auth.mode.
+ * Sent by the operator in the auth_mode field of POST /api/auth/operator.
  */
 export const AuthMode = Object.freeze({
-    API_KEY:          _STATUS['auth.mode']['api_key'],
-    OPERATOR_SESSION: _STATUS['auth.mode']['operator_session'],
+    API_KEY:          'api_key',
+    OPERATOR_SESSION: 'operator_session',
 });
 
 /**
@@ -153,11 +151,10 @@ export const AuthEventType = Object.freeze({
 
 /**
  * Auth Admin Audit Event Types
- * event_type values written to the auth admin audit trail.
- * Canonical values from protocol/constants/status.json auth.admin.audit.event.type.
+ * event_type values written to the dashboard auth admin audit trail.
  */
 export const AuthAdminEventType = Object.freeze({
-    AUTH_ADMIN_ACCESS: _STATUS['auth.admin.audit.event.type']['auth.admin.access'],
+    AUTH_ADMIN_ACCESS: 'auth_admin_access',
 });
 
 /**
@@ -183,16 +180,15 @@ export const AuthAuditResult = Object.freeze({
 
 /**
  * Device Link Status
- * Lifecycle states of a device link token.
- * Canonical values from protocol/constants/status.json device.link.status.
+ * Lifecycle states stored in dashboard device link records.
  */
 export const DeviceLinkStatus = Object.freeze({
-    ACTIVE:    _STATUS['device.link.status']['active'],
-    PENDING:   _STATUS['device.link.status']['pending'],
-    USED:      _STATUS['device.link.status']['used'],
-    EXHAUSTED: _STATUS['device.link.status']['exhausted'],
-    EXPIRED:   _STATUS['device.link.status']['expired'],
-    REVOKED:   _STATUS['device.link.status']['revoked'],
+    ACTIVE:    'active',
+    PENDING:   'pending',
+    USED:      'used',
+    EXHAUSTED: 'exhausted',
+    EXPIRED:   'expired',
+    REVOKED:   'revoked',
 });
 
 /**
@@ -225,13 +221,12 @@ export const TokenFormat = Object.freeze({
 
 /**
  * Device Link Success Messages
- * Canonical values from protocol/constants/status.json device.link.success.
  */
 export const DeviceLinkSuccess = Object.freeze({
-    LISTED:   _STATUS['device.link.success']['listed'],
-    CREATED:  _STATUS['device.link.success']['created'],
-    REVOKED:  _STATUS['device.link.success']['revoked'],
-    DELETED:  _STATUS['device.link.success']['deleted'],
+    LISTED:   'listed',
+    CREATED:  'created',
+    REVOKED:  'revoked',
+    DELETED:  'deleted',
 });
 
 /**
@@ -319,10 +314,10 @@ export const DeviceLinkError = Object.freeze({
  * Internal component-to-component auth header.
  * All internal endpoints require this token.
  */
-export const INTERNAL_AUTH_HEADER = _HEADERS['http.x-internal-auth'].toLowerCase();
+export const INTERNAL_AUTH_HEADER = 'x-internal-auth';
 
 /**
  * Web session ID header forwarded on internal requests.
  */
-export const WEB_SESSION_ID_HEADER = _HEADERS['http.x-session-id'].toLowerCase();
+export const WEB_SESSION_ID_HEADER = _HEADERS['x-vso.session-id'].toLowerCase();
 

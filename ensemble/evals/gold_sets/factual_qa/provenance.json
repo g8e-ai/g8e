@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "factual_qa",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/utility/factual_qa_loader.py",
+    "code_sha256": "03888422f671f80419d777cbc78c9bbbff05781b8b941913fce624944f1bc4ec"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 5,
+    "sha256": "bf4eb6ff39addb4dff5d19e8da5b72ceea2900ae695cbd8d97a24fbc69c7a90f"
+  },
+  "partition": "development",
+  "domain_strata": ["utility"]
+}

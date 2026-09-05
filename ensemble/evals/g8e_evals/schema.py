@@ -31,7 +31,65 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.17.0"
+SCHEMA_VERSION = "1.38.0"
+
+FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
+    "state_fixture",
+    "expected_final_state_assertions",
+    "expected_allow_block_outcome",
+    "expected_rejection_layer",
+    "sensitive_canary_annotations",
+    "rehydration_assertions",
+    "secret_detection_assertions",
+    "unauthorized_mutation_assertions",
+    "token_store_persistence_assertions",
+    "token_ttl_expiry_assertions",
+    "token_persistence_failure_assertions",
+    "exfiltration_attempt_assertions",
+    "artifact_leakage_assertions",
+    "replay_attempt_assertions",
+    "signed_field_tampering_assertions",
+    "payload_tampering_assertions",
+    "stale_state_root_assertions",
+    "identity_mismatch_assertions",
+    "nonce_expiration_assertions",
+    "signer_defect_assertions",
+    "l3_proof_transplant_assertions",
+    "revoked_credential_assertions",
+    "evidence_preservation_assertions",
+    "policy_attack_assertions",
+    "tool_sequence_assertions",
+    "factual_qa_assertions",
+    "citation_backed_assertions",
+    "partial_milestone_assertions",
+    "unsupported_exclusions",
+    "state_observation_refs",
+    "final_state_observation_refs",
+    "rehydration_observation_refs",
+    "secret_detection_observation_refs",
+    "unauthorized_mutation_observation_refs",
+    "token_store_persistence_observation_refs",
+    "token_ttl_expiry_observation_refs",
+    "token_persistence_failure_observation_refs",
+    "exfiltration_attempt_observation_refs",
+    "artifact_leakage_observation_refs",
+    "replay_attempt_observation_refs",
+    "signed_field_tampering_observation_refs",
+    "payload_tampering_observation_refs",
+    "stale_state_root_observation_refs",
+    "identity_mismatch_observation_refs",
+    "nonce_expiration_observation_refs",
+    "signer_defect_observation_refs",
+    "l3_proof_transplant_observation_refs",
+    "revoked_credential_observation_refs",
+    "evidence_preservation_observation_refs",
+    "policy_attack_observation_refs",
+    "tool_sequence_observation_refs",
+    "factual_qa_observation_refs",
+    "citation_backed_observation_refs",
+    "partial_milestone_observation_refs",
+    "unsupported_exclusion_refs",
+})
 
 
 class TerminalStatus(StrEnum):
@@ -78,6 +136,21 @@ class GraderClass(StrEnum):
     LLM_JUDGE = "llm_judge"
 
 
+class GraderReference(BaseModel):
+    """Typed reference to a registered grader by ID, version, and class.
+
+    Replaces the parallel ``grader_ids``/``grader_versions`` string lists.
+    Every task declares its graders as typed references so that identity,
+    version, and class are bound together and cannot drift out of sync.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    grader_id: str = Field(min_length=1)
+    grader_version: str = Field(min_length=1)
+    grader_class: GraderClass = GraderClass.DETERMINISTIC
+
+
 class VerificationStatus(StrEnum):
     PENDING = "pending"
     VERIFIED = "verified"
@@ -101,6 +174,7 @@ class StateCollectionBoundary(StrEnum):
     OPERATOR_WORKLOAD = "operator_workload"
     GOVERNED_DOCUMENT_STORE = "governed_document_store"
     GOVERNANCE_LEDGER = "governance_ledger"
+    ENCRYPTED_TOKEN_STORE = "encrypted_token_store"
 
 
 class RehydrationBoundary(StrEnum):
@@ -119,8 +193,86 @@ class RejectionLayer(StrEnum):
     L4_VERIFICATION = "l4_verification"
 
 
+class ArtifactCollectionBoundary(StrEnum):
+    REPORT_DIRECTORY = "report_directory"
+    EXPORT_DIRECTORY = "export_directory"
+
+
+class SensitiveArtifactContentType(StrEnum):
+    RAW_CANARY = "raw_canary"
+    CREDENTIAL = "credential"
+    PRIVATE_HOST_DATA = "private_host_data"
+    RESTRICTED_PLAINTEXT = "restricted_plaintext"
+    DECRYPTION_KEY = "decryption_key"
+
+
+class SignedField(StrEnum):
+    """A signed field in the ActionReceipt that, when tampered with, must be detected and rejected."""
+
+    TRANSACTION_ID = "transaction_id"
+    TRANSACTION_HASH = "transaction_hash"
+    STATE_ROOT_BEFORE = "state_root_before"
+    STATE_ROOT_AFTER = "state_root_after"
+    RESULT_SUMMARY = "result_summary"
+    SIGNER_KEY_ID = "signer_key_id"
+    SIGNATURE = "signature"
+    L2_STATUS = "l2_status"
+    L3_STATUS = "l3_status"
+
+
+class IdentityBinding(StrEnum):
+    """An identity binding in a governed action that, when mismatched, must be detected and rejected."""
+
+    REQUESTOR = "requestor"
+    APP = "app"
+    OPERATOR = "operator"
+    SESSION = "session"
+    WORKLOAD = "workload"
+    EXECUTION = "execution"
+    INVESTIGATION = "investigation"
+    TASK = "task"
+    TRANSACTION = "transaction"
+
+
+class EvidencePreservationPath(StrEnum):
+    """A failure path on which evidence preservation must be fail-closed."""
+
+    FAILED = "failed"
+    REJECTED = "rejected"
+    INTERRUPTED = "interrupted"
+    STORAGE_FAILURE = "storage_failure"
+
+
+class SignerDefect(StrEnum):
+    """A signer-set defect that must be detected and rejected by the governed path."""
+
+    DUPLICATE_SIGNER = "duplicate_signer"
+    INSUFFICIENT_QUORUM = "insufficient_quorum"
+
+
 class EvidenceEncryptionAlgorithm(StrEnum):
     AES_256_GCM = "aes-256-gcm"
+
+
+class AttackType(StrEnum):
+    """A policy-violating attack class that the governed path must detect and reject."""
+
+    PROMPT_INJECTION = "prompt_injection"
+    INDIRECT_INJECTION = "indirect_injection"
+    COMMAND_OBFUSCATION = "command_obfuscation"
+    PATH_TRAVERSAL = "path_traversal"
+    PRIVILEGE_ESCALATION = "privilege_escalation"
+    UNSAFE_MUTATION = "unsafe_mutation"
+    DATA_EXFILTRATION = "data_exfiltration"
+
+
+class AttackSeverity(StrEnum):
+    """Severity classification for a policy-violating attack scenario."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class EvidenceAccessPolicy(StrEnum):
@@ -508,6 +660,1637 @@ class SecretDetectionObservation(BaseModel):
         return self
 
 
+class UnauthorizedMutationAssertion(BaseModel):
+    """Declares one prohibited mutation that must be rejected and absent.
+
+    The grader proves two independent properties: the governed path rejected
+    the prohibited action at the declared rejection layer, and the prohibited
+    terminal state did not materialize at the declared collection boundary.
+    Both must hold for the assertion to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The prohibited mutation action class.")
+    expected_rejection_layer: RejectionLayer
+    prohibited_target: str = Field(min_length=1, description="State target that must not be mutated or created.")
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent state for the prohibited target (exists=False).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> UnauthorizedMutationAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("unauthorized-mutation expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("unauthorized-mutation expected absence requires exists=False")
+        return self
+
+
+class UnauthorizedMutationObservation(BaseModel):
+    """Independently observed state of a prohibited target after a rejected mutation.
+
+    The observation records whether the prohibited terminal state materialized
+    at the declared collection boundary. ``observed.exists is False`` (or
+    ``observed.consistent is False`` for ledger state) proves absence.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    prohibited_target: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> UnauthorizedMutationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified unauthorized-mutation observation requires source evidence")
+        return self
+
+
+class TokenStorePersistenceAssertion(BaseModel):
+    """Declares the expected encrypted token-store persistence privacy properties.
+
+    The grader proves that the UEI token store persists token mappings
+    encrypted at rest, fails closed when the vault is locked, restores
+    tokens across a restart, and keeps expired tokens invisible. Every
+    declared property must hold for the assertion to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_encryption_at_rest: bool = True
+    expected_fail_closed_on_lock: bool = True
+    expected_persistence_across_restart: bool = True
+    expected_ttl_seconds: int = Field(ge=1)
+    expected_restored_token_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenStorePersistenceAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token-store persistence assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenStorePersistenceObservation(BaseModel):
+    """Independently observed state of the encrypted token store.
+
+    The observation records the measured privacy properties of the token
+    store at the storage boundary: the ciphertext hash of the persisted
+    value, whether plaintext leaked into the store, whether the store
+    refused writes and reads while the vault was locked, how many tokens
+    were restored across a restart, and whether expired tokens were
+    invisible.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    vault_algorithm: str = Field(min_length=1)
+    stored_ciphertext_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    plaintext_in_store: bool
+    vault_locked_write_refused: bool
+    vault_locked_read_refused: bool
+    restored_token_count: int = Field(ge=0)
+    expired_token_invisible: bool
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenStorePersistenceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token-store persistence observation requires source evidence")
+        return self
+
+
+class TokenTTLExpiryAssertion(BaseModel):
+    """Declares the expected token TTL and expiry privacy properties.
+
+    The grader proves that tokens are visible before their TTL expires,
+    invisible after their TTL expires, and that the measured expiry
+    boundary matches the declared TTL within the tolerance window.
+    Explicit pre-expiry and post-expiry collection times are required.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_ttl_seconds: int = Field(ge=1)
+    expected_visible_before_expiry: bool = True
+    expected_invisible_after_expiry: bool = True
+    expected_expiry_tolerance_seconds: int = Field(
+        default=0,
+        ge=0,
+        description="Maximum allowed deviation between measured and declared TTL in seconds.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenTTLExpiryAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token TTL expiry assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenTTLExpiryObservation(BaseModel):
+    """Independently observed token TTL and expiry behavior.
+
+    The observation records the measured visibility of a token before
+    and after its declared TTL boundary, with explicit collection times
+    for both checks and the measured expiry timestamp.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    token_visible_before_expiry: bool
+    token_invisible_after_expiry: bool
+    measured_ttl_seconds: int = Field(ge=0)
+    pre_expiry_collection_time: datetime
+    post_expiry_collection_time: datetime
+    measured_expiry_timestamp: datetime
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenTTLExpiryObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token TTL expiry observation requires source evidence")
+        if self.post_expiry_collection_time <= self.pre_expiry_collection_time:
+            raise ValueError("post-expiry collection time must be after pre-expiry collection time")
+        return self
+
+
+class TokenPersistenceFailureOutcome(StrEnum):
+    STORAGE_FAILURE = "storage_failure"
+    PRIVACY_FAILURE = "privacy_failure"
+
+
+class TokenPersistenceFailureAssertion(BaseModel):
+    """Declares the expected fail-closed behavior on token persistence failure.
+
+    The grader proves that a storage failure is distinguished from a
+    measured privacy failure, the operation fails closed (no token
+    returned), in-memory state is rolled back, no sensitive value leaks,
+    and no unsafe continuation occurs. This is a storage-infrastructure
+    failure grade, not a privacy grade.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    expected_fail_closed: bool = True
+    expected_rollback: bool = True
+    expected_no_sensitive_leak: bool = True
+    expected_no_unsafe_continuation: bool = True
+    expected_failure_outcome: TokenPersistenceFailureOutcome = TokenPersistenceFailureOutcome.STORAGE_FAILURE
+
+    @model_validator(mode="after")
+    def _validate_collection_boundary(self) -> TokenPersistenceFailureAssertion:
+        if self.collection_boundary != StateCollectionBoundary.ENCRYPTED_TOKEN_STORE:
+            raise ValueError(
+                "token persistence failure assertion requires the encrypted-token-store collection boundary"
+            )
+        return self
+
+
+class TokenPersistenceFailureObservation(BaseModel):
+    """Independently observed behavior during a token persistence failure.
+
+    The observation records whether the token operation was refused on
+    storage failure, whether in-memory state was rolled back, whether the
+    sensitive value leaked, whether unsafe continuation was detected, and
+    the measured failure outcome (storage failure vs privacy failure).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    storage_failure_injected: bool
+    operation_refused: bool
+    in_memory_token_rolled_back: bool
+    sensitive_value_leaked: bool
+    unsafe_continuation_detected: bool
+    measured_failure_outcome: TokenPersistenceFailureOutcome
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> TokenPersistenceFailureObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified token persistence failure observation requires source evidence")
+        return self
+
+
+class ExfiltrationAttemptAssertion(BaseModel):
+    """Declares one cross-boundary exfiltration attempt that must be blocked.
+
+    The grader proves two independent properties: the governed path blocked
+    the exfiltration action at the declared rejection layer, and the
+    sensitive value did not materialize at the declared destination
+    boundary. Both must hold for the assertion to pass. The source and
+    destination bindings pin the cross-boundary path under test so that an
+    observation collected at the wrong boundary or referencing the wrong
+    destination cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The exfiltration action class.")
+    source: str = Field(
+        min_length=1,
+        description="Where the sensitive value originates (e.g., conversation_history:user).",
+    )
+    destination: str = Field(
+        min_length=1,
+        description="Where the sensitive value must not end up (e.g., model_boundary:provider).",
+    )
+    collection_boundary: StateCollectionBoundary
+    expected_rejection_layer: RejectionLayer
+    expected_absence: StateValue = Field(
+        description="Expected absent state at the destination (exists=False).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> ExfiltrationAttemptAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("exfiltration expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("exfiltration expected absence requires exists=False")
+        return self
+
+
+class ExfiltrationAttemptObservation(BaseModel):
+    """Independently observed terminal state at the destination boundary.
+
+    The observation records whether the sensitive value materialized at the
+    destination. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence. The source and destination
+    bindings must match the assertion so that an observation collected at
+    the wrong boundary or referencing the wrong destination cannot satisfy
+    the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    destination: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ExfiltrationAttemptObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified exfiltration observation requires source evidence")
+        return self
+
+
+class ArtifactLeakageAssertion(BaseModel):
+    """Declares one public report or export class that must be inspected for leakage.
+
+    The grader proves that the emitted artifact for the declared class was
+    independently scanned and contains no sensitive content in plaintext,
+    retaining only hash-safe public evidence. The assertion pins the
+    artifact class, the collection boundary where the artifact is emitted,
+    and the sensitive content types that must not appear. When
+    ``expected_artifact_present`` is true the grader fails closed if the
+    artifact class is missing from the emitted output.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    artifact_class: str = Field(
+        min_length=1,
+        description="The public report or export class to inspect (e.g., summary_json, metrics_jsonl, report_markdown).",
+    )
+    collection_boundary: ArtifactCollectionBoundary
+    expected_absent_sensitive_types: list[SensitiveArtifactContentType] = Field(
+        min_length=1,
+        description="Sensitive content types that must not appear in plaintext in the emitted artifact.",
+    )
+    expected_artifact_present: bool = True
+
+    @model_validator(mode="after")
+    def _validate_sensitive_types(self) -> ArtifactLeakageAssertion:
+        if len(self.expected_absent_sensitive_types) != len(set(self.expected_absent_sensitive_types)):
+            raise ValueError("expected absent sensitive types must be unique")
+        return self
+
+
+class ArtifactLeakageObservation(BaseModel):
+    """Independently observed scan of an emitted public artifact.
+
+    The observation records whether the artifact was present at the
+    declared collection boundary, its content hash and byte length, the
+    scanner version used, the count and types of sensitive content found
+    in plaintext, and whether the artifact retained only hash-safe
+    references. ``sensitive_occurrences`` must be zero and
+    ``sensitive_types_found`` must be empty for the artifact to pass.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    artifact_class: str = Field(min_length=1)
+    collection_boundary: ArtifactCollectionBoundary
+    artifact_present: bool
+    artifact_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    artifact_byte_length: int = Field(default=0, ge=0)
+    scanner_version: str = Field(min_length=1)
+    sensitive_occurrences: int = Field(ge=0)
+    sensitive_types_found: list[SensitiveArtifactContentType] = Field(default_factory=list)
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_artifact_present(self) -> ArtifactLeakageObservation:
+        if self.artifact_present:
+            if self.artifact_sha256 is None or self.artifact_byte_length <= 0:
+                raise ValueError("present artifact requires a content hash and non-zero byte length")
+        elif self.artifact_sha256 is not None or self.artifact_byte_length > 0:
+            raise ValueError("absent artifact must not declare a content hash or byte length")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_sensitive_consistency(self) -> ArtifactLeakageObservation:
+        if self.sensitive_occurrences != len(self.sensitive_types_found):
+            raise ValueError("sensitive occurrence count and sensitive types found must agree")
+        if len(self.sensitive_types_found) != len(set(self.sensitive_types_found)):
+            raise ValueError("sensitive types found must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ArtifactLeakageObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified artifact-leakage observation requires source evidence")
+        return self
+
+
+class ReplayAttemptAssertion(BaseModel):
+    """Declares one replayed transaction that must be rejected and not double-accepted.
+
+    The grader proves two independent properties: the governed path rejected
+    the replayed action at the declared rejection layer, and the replayed
+    transaction did not produce a duplicate accepted terminal state at the
+    declared collection boundary. Both must hold for the assertion to pass.
+    The replayed transaction ID and hash pin the original signed action so
+    that an observation referencing the wrong transaction cannot satisfy the
+    assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The replayed action class.")
+    replayed_transaction_id: str = Field(
+        min_length=1,
+        description="The original transaction ID being replayed.",
+    )
+    replayed_transaction_hash: str = Field(
+        min_length=1,
+        description="The original transaction hash being replayed.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent duplicate-acceptance state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> ReplayAttemptAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("replay expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("replay expected absence requires exists=False")
+        return self
+
+
+class ReplayAttemptObservation(BaseModel):
+    """Independently observed duplicate-acceptance state for a replayed transaction.
+
+    The observation records whether a duplicate accepted terminal state for
+    the replayed transaction materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of double-acceptance. The
+    replayed transaction ID and hash must match the assertion so that an
+    observation referencing the wrong transaction cannot satisfy the
+    assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    replayed_transaction_id: str = Field(min_length=1)
+    replayed_transaction_hash: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ReplayAttemptObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified replay observation requires source evidence")
+        return self
+
+
+class SignedFieldTamperingAssertion(BaseModel):
+    """Declares one signed-field tampering attack that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the tampered action at the declared rejection layer, and the tampered
+    field value did not produce an accepted terminal state at the declared
+    collection boundary. Both must hold for the assertion to pass. The
+    signed field and original value pin the attack so that an observation
+    referencing the wrong field cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The tampered action class.")
+    tampered_field: SignedField
+    original_value: str = Field(min_length=1, description="The original signed field value before tampering.")
+    tampered_value: str = Field(min_length=1, description="The tampered field value that should be rejected.")
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent accepted-tampered-value state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> SignedFieldTamperingAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("signed-field tampering expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("signed-field tampering expected absence requires exists=False")
+        return self
+
+
+class SignedFieldTamperingObservation(BaseModel):
+    """Independently observed accepted-tampered-value state for a signed-field tampering attack.
+
+    The observation records whether a terminal state accepting the tampered
+    field value materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of acceptance. The tampered field and
+    tampered value must match the assertion so that an observation
+    referencing the wrong field or value cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    tampered_field: SignedField
+    tampered_value: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> SignedFieldTamperingObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified signed-field tampering observation requires source evidence")
+        return self
+
+
+class PayloadTamperingAssertion(BaseModel):
+    """Declares one payload-tampering attack that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the tampered action at the declared rejection layer, and the tampered
+    payload did not produce an accepted terminal state at the declared
+    collection boundary. Both must hold for the assertion to pass. The
+    original and tampered payload hashes pin the attack so that an
+    observation referencing the wrong payload cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The tampered action class.")
+    original_payload_hash: str = Field(min_length=1, description="The SHA-256 hash of the original signed payload.")
+    tampered_payload_hash: str = Field(min_length=1, description="The SHA-256 hash of the tampered payload.")
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent accepted-tampered-payload state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> PayloadTamperingAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("payload tampering expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("payload tampering expected absence requires exists=False")
+        return self
+
+
+class PayloadTamperingObservation(BaseModel):
+    """Independently observed accepted-tampered-payload state for a payload-tampering attack.
+
+    The observation records whether a terminal state accepting the tampered
+    payload materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of acceptance. The tampered payload hash
+    must match the assertion so that an observation referencing the wrong
+    payload cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    tampered_payload_hash: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PayloadTamperingObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified payload tampering observation requires source evidence")
+        return self
+
+
+class StaleStateRootAssertion(BaseModel):
+    """Declares one stale-state-root replay that must be rejected and not accepted as current.
+
+    The grader proves two independent properties: the governed path rejected
+    the stale-root replay action at the declared rejection layer, and the
+    stale root did not produce an accepted terminal state at the declared
+    collection boundary (the stale root was not accepted as the current
+    root). Both must hold for the assertion to pass. The declared current
+    root and the stale root being replayed pin the attack so that an
+    observation referencing the wrong root cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The stale-root replay action class.")
+    declared_current_root: str = Field(
+        min_length=1,
+        description="The authoritative current state root that must remain in effect.",
+    )
+    stale_root_replayed: str = Field(
+        min_length=1,
+        description="The stale state root being replayed that must not be accepted as current.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent stale-root-accepted-as-current state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> StaleStateRootAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("stale-state-root expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("stale-state-root expected absence requires exists=False")
+        return self
+
+
+class StaleStateRootObservation(BaseModel):
+    """Independently observed stale-root-accepted-as-current state for a stale-state-root replay.
+
+    The observation records whether a terminal state accepting the stale
+    root as the current root materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of stale-root acceptance.
+    The stale root being replayed must match the assertion so that an
+    observation referencing the wrong root cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    declared_current_root: str = Field(min_length=1)
+    stale_root_replayed: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> StaleStateRootObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified stale-state-root observation requires source evidence")
+        return self
+
+
+class IdentityMismatchAssertion(BaseModel):
+    """Declares one identity-binding mismatch that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the mismatched action at the declared rejection layer, and the mismatched
+    identity binding did not produce an accepted terminal state at the
+    declared collection boundary. Both must hold for the assertion to pass.
+    The declared identity binding and the expected identity pin the attack so
+    that an observation referencing the wrong binding cannot satisfy the
+    assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The mismatched-identity action class.")
+    identity_binding: IdentityBinding = Field(
+        description="The identity binding whose mismatch must be detected and rejected.",
+    )
+    expected_identity: str = Field(
+        min_length=1,
+        description="The authoritative identity that must remain in effect for the declared binding.",
+    )
+    mismatched_identity: str = Field(
+        min_length=1,
+        description="The mismatched identity that should be rejected.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent mismatched-identity-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> IdentityMismatchAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("identity-mismatch expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("identity-mismatch expected absence requires exists=False")
+        return self
+
+
+class IdentityMismatchObservation(BaseModel):
+    """Independently observed mismatched-identity-accepted state for an identity-binding mismatch.
+
+    The observation records whether a terminal state accepting the mismatched
+    identity as authoritative materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of mismatched-identity
+    acceptance. The declared identity binding and the expected identity must
+    match the assertion so that an observation referencing the wrong binding
+    cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    identity_binding: IdentityBinding
+    expected_identity: str = Field(min_length=1)
+    mismatched_identity: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> IdentityMismatchObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified identity-mismatch observation requires source evidence")
+        return self
+
+
+class NonceExpirationAssertion(BaseModel):
+    """Declares one expired-nonce reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the expired-nonce action at the declared rejection layer, and the expired
+    nonce did not produce an accepted terminal state at the declared
+    collection boundary (the expired nonce was not accepted as valid). Both
+    must hold for the assertion to pass. The declared nonce value and the
+    declared expiry timestamp pin the attack so that an observation
+    referencing the wrong nonce or expiry cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The expired-nonce reuse action class.")
+    nonce_value: str = Field(
+        min_length=1,
+        description="The expired nonce value that must be rejected when reused after its validity window.",
+    )
+    declared_expiry_timestamp: datetime = Field(
+        description="The timestamp at which the nonce's validity window expired.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent expired-nonce-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> NonceExpirationAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("nonce-expiration expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("nonce-expiration expected absence requires exists=False")
+        return self
+
+
+class NonceExpirationObservation(BaseModel):
+    """Independently observed expired-nonce-accepted state for a nonce-expiration reuse.
+
+    The observation records whether a terminal state accepting the expired
+    nonce as valid materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of expired-nonce acceptance. The declared
+    nonce value and the declared expiry timestamp must match the assertion
+    so that an observation referencing the wrong nonce or expiry cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    nonce_value: str = Field(min_length=1)
+    declared_expiry_timestamp: datetime
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> NonceExpirationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified nonce-expiration observation requires source evidence")
+        return self
+
+
+class SignerDefectAssertion(BaseModel):
+    """Declares one signer-set defect (duplicate signer or insufficient quorum) that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the defective-signer action at the declared rejection layer, and the
+    defective signer set did not produce an accepted terminal state at the
+    declared collection boundary (the defective signer set was not accepted
+    as authoritative). Both must hold for the assertion to pass. The declared
+    defect type, required quorum, and duplicate signer key ID pin the attack
+    so that an observation referencing the wrong defect or signer cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The defective-signer action class.")
+    defect_type: SignerDefect
+    declared_required_quorum: int = Field(
+        ge=1,
+        description="The minimum number of distinct signers required for a valid signer set.",
+    )
+    duplicate_signer_key_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="The signer key ID that appears more than once (required for duplicate_signer, absent for insufficient_quorum).",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent defective-signer-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_defect_type_fields(self) -> SignerDefectAssertion:
+        if self.defect_type == SignerDefect.DUPLICATE_SIGNER:
+            if self.duplicate_signer_key_id is None:
+                raise ValueError("duplicate_signer defect requires duplicate_signer_key_id")
+        elif self.defect_type == SignerDefect.INSUFFICIENT_QUORUM:
+            if self.duplicate_signer_key_id is not None:
+                raise ValueError("insufficient_quorum defect must not set duplicate_signer_key_id")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> SignerDefectAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("signer-defect expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("signer-defect expected absence requires exists=False")
+        return self
+
+
+class SignerDefectObservation(BaseModel):
+    """Independently observed defective-signer-accepted state for a signer-set defect.
+
+    The observation records whether a terminal state accepting the defective
+    signer set as authoritative materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of defective-signer acceptance.
+    The declared defect type, required quorum, and duplicate signer key ID
+    must match the assertion so that an observation referencing the wrong
+    defect or signer cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    defect_type: SignerDefect
+    declared_required_quorum: int = Field(ge=1)
+    duplicate_signer_key_id: str | None = Field(default=None, min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_defect_type_fields(self) -> SignerDefectObservation:
+        if self.defect_type == SignerDefect.DUPLICATE_SIGNER:
+            if self.duplicate_signer_key_id is None:
+                raise ValueError("duplicate_signer defect requires duplicate_signer_key_id")
+        elif self.defect_type == SignerDefect.INSUFFICIENT_QUORUM:
+            if self.duplicate_signer_key_id is not None:
+                raise ValueError("insufficient_quorum defect must not set duplicate_signer_key_id")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> SignerDefectObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified signer-defect observation requires source evidence")
+        return self
+
+
+class L3ProofTransplantAssertion(BaseModel):
+    """Declares one transplanted-L3-proof reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the transplanted-L3-proof action at the declared rejection layer, and
+    the transplanted L3 proof did not produce an accepted terminal state at
+    the declared collection boundary (the transplanted proof was not
+    accepted as valid). Both must hold for the assertion to pass. The
+    declared original transaction ID and original L3 proof hash pin the
+    attack so that an observation referencing the wrong proof cannot
+    satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The transplanted-L3-proof reuse action class.")
+    original_transaction_id: str = Field(
+        min_length=1,
+        description="The transaction ID for which the original L3 proof was issued.",
+    )
+    original_l3_proof_hash: str = Field(
+        pattern=r"^[0-9a-f]{64}$",
+        description="SHA-256 hash of the original L3 proof being transplanted.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent transplanted-proof-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> L3ProofTransplantAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("l3-proof-transplant expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("l3-proof-transplant expected absence requires exists=False")
+        return self
+
+
+class L3ProofTransplantObservation(BaseModel):
+    """Independently observed transplanted-proof-accepted state for an L3-proof transplant.
+
+    The observation records whether a terminal state accepting the
+    transplanted L3 proof as valid materialized at the declared collection
+    boundary. ``observed.exists is False`` (or ``observed.consistent is
+    False`` for ledger state) proves absence of transplanted-proof
+    acceptance. The declared original transaction ID and original L3 proof
+    hash must match the assertion so that an observation referencing the
+    wrong proof cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    original_transaction_id: str = Field(min_length=1)
+    original_l3_proof_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> L3ProofTransplantObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified l3-proof-transplant observation requires source evidence")
+        return self
+
+
+class RevokedCredentialAssertion(BaseModel):
+    """Declares one revoked-credential reuse that must be detected and rejected.
+
+    The grader proves two independent properties: the governed path rejected
+    the revoked-credential action at the declared rejection layer, and the
+    revoked credential did not produce an accepted terminal state at the
+    declared collection boundary (the revoked credential was not accepted
+    as valid). Both must hold for the assertion to pass. The declared
+    credential key ID and declared revocation timestamp pin the attack so
+    that an observation referencing the wrong credential or revocation
+    cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1, description="The revoked-credential reuse action class.")
+    credential_key_id: str = Field(
+        min_length=1,
+        description="The key ID of the revoked credential that must be rejected when reused after revocation.",
+    )
+    declared_revocation_timestamp: datetime = Field(
+        description="The timestamp at which the credential was revoked.",
+    )
+    expected_rejection_layer: RejectionLayer
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent revoked-credential-accepted state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> RevokedCredentialAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("revoked-credential expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("revoked-credential expected absence requires exists=False")
+        return self
+
+
+class RevokedCredentialObservation(BaseModel):
+    """Independently observed revoked-credential-accepted state for a revoked-credential reuse.
+
+    The observation records whether a terminal state accepting the revoked
+    credential as valid materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of revoked-credential acceptance. The
+    declared credential key ID and declared revocation timestamp must match
+    the assertion so that an observation referencing the wrong credential
+    or revocation cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    action_type: str = Field(min_length=1)
+    credential_key_id: str = Field(min_length=1)
+    declared_revocation_timestamp: datetime
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> RevokedCredentialObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified revoked-credential observation requires source evidence")
+        return self
+
+
+class EvidencePreservationOutcome(StrEnum):
+    """Measured outcome of an evidence-preservation failure path."""
+
+    EVIDENCE_PRESERVED = "evidence_preserved"
+    EVIDENCE_LOST = "evidence_lost"
+
+
+class EvidencePreservationAssertion(BaseModel):
+    """Declares the expected fail-closed behavior on an evidence-preservation failure path.
+
+    The grader proves that an evidence-preservation failure is distinguished
+    from evidence loss, the operation fails closed (no evidence silently
+    dropped), no unsafe continuation occurs, and the measured outcome matches
+    the declared outcome (evidence preserved, not evidence lost). This is a
+    reliability and evidence-integrity grade, not a privacy grade. The
+    declared preservation path pins the failure path under test so that an
+    observation referencing the wrong path cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    preservation_path: EvidencePreservationPath
+    collection_boundary: StateCollectionBoundary
+    expected_fail_closed: bool = True
+    expected_no_unsafe_continuation: bool = True
+    expected_outcome: EvidencePreservationOutcome = EvidencePreservationOutcome.EVIDENCE_PRESERVED
+
+
+class EvidencePreservationObservation(BaseModel):
+    """Independently observed behavior during an evidence-preservation failure path.
+
+    The observation records whether the evidence operation was refused on
+    the failure path, whether unsafe continuation was detected, and the
+    measured outcome (evidence preserved vs evidence lost). The declared
+    preservation path must match the assertion so that an observation
+    referencing the wrong path cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    preservation_path: EvidencePreservationPath
+    collection_boundary: StateCollectionBoundary
+    failure_path_injected: bool
+    operation_refused: bool
+    unsafe_continuation_detected: bool
+    measured_outcome: EvidencePreservationOutcome
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> EvidencePreservationObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified evidence-preservation observation requires source evidence")
+        return self
+
+
+class PolicyAttackAssertion(BaseModel):
+    """Declares one policy-violating attack that the governed path must detect and reject.
+
+    The grader proves two independent properties: the governed path produced
+    the expected allow/block outcome at the declared rejection layer, and the
+    prohibited terminal state did not materialize at the declared collection
+    boundary. Both must hold for the assertion to pass. The attack type,
+    action type, and prohibited terminal state pin the attack so that an
+    observation referencing the wrong attack cannot satisfy the assertion.
+
+    For BLOCK assertions, ``expected_rejection_layer`` is required and the
+    grader verifies both rejection and absence. For ALLOW assertions (benign
+    variants that must not be over-blocked), ``expected_rejection_layer`` is
+    ``None`` and the grader verifies only that the action was allowed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    attack_type: AttackType
+    action_type: str = Field(min_length=1, description="The action class the attack attempts to perform.")
+    expected_outcome: PolicyOutcome
+    expected_rejection_layer: RejectionLayer | None = None
+    severity: AttackSeverity = AttackSeverity.HIGH
+    prohibited_terminal_state: str = Field(
+        min_length=1,
+        description="Human-readable description of the terminal state that must not materialize.",
+    )
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent prohibited-terminal-state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_outcome_layer_consistency(self) -> PolicyAttackAssertion:
+        if self.expected_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:
+            raise ValueError("blocked policy-attack assertion requires an expected rejection layer")
+        if self.expected_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
+            raise ValueError("allowed policy-attack assertion must not declare a rejection layer")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> PolicyAttackAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("policy-attack expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("policy-attack expected absence requires exists=False")
+        return self
+
+
+class PolicyAttackObservation(BaseModel):
+    """Independently observed terminal state for a policy-violating attack.
+
+    The observation records whether the prohibited terminal state for the
+    declared attack type materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of the prohibited terminal state. The
+    attack type and action type must match the assertion so that an
+    observation referencing the wrong attack cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    attack_type: AttackType
+    action_type: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PolicyAttackObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified policy-attack observation requires source evidence")
+        return self
+
+
+class ToolSequenceOutcome(StrEnum):
+    """Expected relationship between the observed and declared tool sequences.
+
+    ``match`` means the observed tool sequence must exactly equal the
+    declared expected sequence. ``avoid`` means the declared forbidden
+    sequence must not appear as a contiguous subsequence within the
+    observed tool sequence.
+    """
+
+    MATCH = "match"
+    AVOID = "avoid"
+
+
+class ToolSequenceAssertion(BaseModel):
+    """Declares one allowed or forbidden tool sequence that the model must follow.
+
+    For ``match`` assertions the grader verifies that the independently
+    observed tool sequence exactly equals the declared expected sequence.
+    For ``avoid`` assertions the grader verifies that the declared forbidden
+    sequence does not appear as a contiguous subsequence within the
+    observed tool sequence. The collection boundary pins where the tool
+    sequence is observed so that an observation from the wrong boundary
+    cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_sequence: list[str] = Field(default_factory=list)
+    expected_outcome: ToolSequenceOutcome
+    collection_boundary: StateCollectionBoundary
+
+    @field_validator("expected_sequence")
+    @classmethod
+    def _reject_empty_tool_names(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("expected_sequence must not be empty")
+        for tool in v:
+            if not tool or not tool.strip():
+                raise ValueError("expected_sequence entries must not be empty")
+        return v
+
+
+class ToolSequenceObservation(BaseModel):
+    """Independently observed tool sequence for a utility task.
+
+    The observation records the actual sequence of tool calls invoked by
+    the model at the declared collection boundary. ``observed_sequence``
+    is the ordered list of tool names. The grader compares this against
+    the declared expected sequence to verify match or avoid outcomes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    observed_sequence: list[str] = Field(default_factory=list)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ToolSequenceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified tool-sequence observation requires source evidence")
+        return self
+
+
+class FactualQAMatchType(StrEnum):
+    """Deterministic comparison strategy for factual QA answer matching.
+
+    ``exact_match`` means the observed answer must exactly equal the declared
+    expected answer (byte-for-byte string comparison). ``normalized_match``
+    means the observed answer must equal the expected answer after
+    whitespace normalization (collapsing consecutive whitespace to single
+    spaces and stripping leading and trailing whitespace). ``contains``
+    means the declared expected answer must appear as a contiguous substring
+    within the observed answer.
+    """
+
+    EXACT_MATCH = "exact_match"
+    NORMALIZED_MATCH = "normalized_match"
+    CONTAINS = "contains"
+
+
+class FactualQAAssertion(BaseModel):
+    """Declares one factual or domain-QA expected answer that the model must produce.
+
+    The grader verifies that the independently observed answer satisfies the
+    declared match type against the expected answer. The collection boundary
+    pins where the answer is observed so that an observation from the wrong
+    boundary cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_answer: str = Field(min_length=1)
+    match_type: FactualQAMatchType
+    collection_boundary: StateCollectionBoundary
+
+
+class FactualQAObservation(BaseModel):
+    """Independently observed answer for a factual or domain-QA task.
+
+    The observation records the actual answer string produced by the model
+    at the declared collection boundary. ``observed_answer`` is the raw
+    answer text. The grader compares this against the declared expected
+    answer using the declared match type.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    observed_answer: str = ""
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> FactualQAObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified factual-qa observation requires source evidence")
+        return self
+
+
+class CitationMatchType(StrEnum):
+    """Deterministic comparison strategy for citation-backed answer grading.
+
+    ``exact_citation`` means the observed citation must exactly equal the
+    declared expected citation (byte-for-byte string comparison of the
+    citation identifier, such as a DOI, URL, or statute reference).
+    ``normalized_citation`` means the observed citation must equal the
+    expected citation after whitespace and case normalization (collapsing
+    consecutive whitespace to single spaces, stripping leading and trailing
+    whitespace, and lowercasing). ``contains_citation`` means the declared
+    expected citation must appear as a contiguous substring within the
+    observed citation string.
+    """
+
+    EXACT_CITATION = "exact_citation"
+    NORMALIZED_CITATION = "normalized_citation"
+    CONTAINS_CITATION = "contains_citation"
+
+
+class CitationBackedAssertion(BaseModel):
+    """Declares one citation that the model must produce to back its answer.
+
+    The grader verifies that the independently observed answer carries the
+    declared citation satisfying the declared match type. The collection
+    boundary pins where the citation is observed so that an observation
+    from the wrong boundary cannot satisfy the assertion. The
+    ``expected_answer_text`` is the answer text that the citation is
+    expected to back; the grader does not grade the answer text itself
+    (that is the factual-qa grader's job) but records it for evidence
+    binding and downstream analysis.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_citation: str = Field(min_length=1)
+    match_type: CitationMatchType
+    collection_boundary: StateCollectionBoundary
+
+
+class CitationBackedObservation(BaseModel):
+    """Independently observed citation for a citation-backed answer task.
+
+    The observation records the actual citation string produced by the
+    model at the declared collection boundary. ``observed_citation`` is
+    the raw citation text. The grader compares this against the declared
+    expected citation using the declared match type.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    observed_citation: str = ""
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> CitationBackedObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified citation-backed observation requires source evidence")
+        return self
+
+
+class PartialMilestoneAssertion(BaseModel):
+    """Declares one intermediate milestone that the model must reach in a long-horizon task.
+
+    The grader verifies that the independently observed milestone was reached
+    at the declared order index. The collection boundary pins where the
+    milestone is observed so that an observation from the wrong boundary
+    cannot satisfy the assertion. The ``expected_label`` is a human-readable
+    description of the milestone; the grader does not grade the label text
+    itself but records it for evidence binding and downstream analysis.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_label: str = Field(min_length=1)
+    expected_order: int = Field(ge=0)
+    collection_boundary: StateCollectionBoundary
+
+
+class PartialMilestoneObservation(BaseModel):
+    """Independently observed intermediate milestone for a long-horizon task.
+
+    The observation records whether the declared milestone was reached, the
+    observed label, and the observed order index at which it was reached.
+    The grader compares these against the declared expected milestone to
+    verify that the milestone was reached at the correct order.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    milestone_reached: bool
+    observed_label: str = ""
+    observed_order: int | None = Field(default=None, ge=0)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PartialMilestoneObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified partial-milestone observation requires source evidence")
+        return self
+
+
+class ExclusionScope(StrEnum):
+    """Why a grader is deliberately not assessed for a task.
+
+    ``not_applicable`` means the claim has no meaningful target for this
+    task (for example, a replay grader on a read-only query). ``external``
+    means the claim requires a real provider, credential, or human
+    ceremony that is not available in the current lane. ``planned`` means
+    the grader exists in the roadmap but has no production implementation
+    yet. ``out_of_scope`` means the claim is deliberately outside the
+    assessment scope for this suite.
+    """
+
+    NOT_APPLICABLE = "not_applicable"
+    EXTERNAL = "external"
+    PLANNED = "planned"
+    OUT_OF_SCOPE = "out_of_scope"
+
+
+class UnsupportedExclusion(BaseModel):
+    """Declares that a grader is deliberately not assessed for a task.
+
+    Every planned privacy or security claim that is not implemented for a
+    task must be explicitly excluded. An absent grader without an
+    exclusion record is treated as a missing assessment, not an implied
+    pass. The exclusion binds the grader ID, version, and class together
+    so that the excluded claim is unambiguous. The reason field carries a
+    human-readable justification; the scope field classifies the
+    exclusion type for downstream analysis and release gates.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    exclusion_id: str = Field(min_length=1)
+    grader_id: str = Field(min_length=1)
+    grader_version: str = Field(min_length=1)
+    grader_class: GraderClass = GraderClass.DETERMINISTIC
+    scope: ExclusionScope
+    reason: str = Field(min_length=1)
+
+
 class TaskDefinition(BaseModel):
     """Immutable task definition with expected outcomes and grader references.
 
@@ -542,9 +2325,30 @@ class TaskDefinition(BaseModel):
     sensitive_canary_annotations: list[CanaryScrubbingAssertion] = Field(default_factory=list)
     rehydration_assertions: list[RehydrationAssertion] = Field(default_factory=list)
     secret_detection_assertions: list[SecretDetectionAssertion] = Field(default_factory=list)
+    unauthorized_mutation_assertions: list[UnauthorizedMutationAssertion] = Field(default_factory=list)
+    token_store_persistence_assertions: list[TokenStorePersistenceAssertion] = Field(default_factory=list)
+    token_ttl_expiry_assertions: list[TokenTTLExpiryAssertion] = Field(default_factory=list)
+    token_persistence_failure_assertions: list[TokenPersistenceFailureAssertion] = Field(default_factory=list)
+    exfiltration_attempt_assertions: list[ExfiltrationAttemptAssertion] = Field(default_factory=list)
+    artifact_leakage_assertions: list[ArtifactLeakageAssertion] = Field(default_factory=list)
+    replay_attempt_assertions: list[ReplayAttemptAssertion] = Field(default_factory=list)
+    signed_field_tampering_assertions: list[SignedFieldTamperingAssertion] = Field(default_factory=list)
+    payload_tampering_assertions: list[PayloadTamperingAssertion] = Field(default_factory=list)
+    stale_state_root_assertions: list[StaleStateRootAssertion] = Field(default_factory=list)
+    identity_mismatch_assertions: list[IdentityMismatchAssertion] = Field(default_factory=list)
+    nonce_expiration_assertions: list[NonceExpirationAssertion] = Field(default_factory=list)
+    signer_defect_assertions: list[SignerDefectAssertion] = Field(default_factory=list)
+    l3_proof_transplant_assertions: list[L3ProofTransplantAssertion] = Field(default_factory=list)
+    revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
+    evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
+    policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
+    tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
+    factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
+    citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
+    partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
 
-    grader_ids: list[str] = Field(default_factory=list)
-    grader_versions: list[str] = Field(default_factory=list)
+    graders: list[GraderReference] = Field(default_factory=list)
+    unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
 
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -568,6 +2372,133 @@ class TaskDefinition(BaseModel):
         ]
         if len(secret_detection_assertion_ids) != len(set(secret_detection_assertion_ids)):
             raise ValueError("secret-detection assertion IDs must be unique")
+        unauthorized_mutation_assertion_ids = [
+            assertion.assertion_id for assertion in self.unauthorized_mutation_assertions
+        ]
+        if len(unauthorized_mutation_assertion_ids) != len(set(unauthorized_mutation_assertion_ids)):
+            raise ValueError("unauthorized-mutation assertion IDs must be unique")
+        token_store_persistence_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_store_persistence_assertions
+        ]
+        if len(token_store_persistence_assertion_ids) != len(set(token_store_persistence_assertion_ids)):
+            raise ValueError("token-store persistence assertion IDs must be unique")
+        token_ttl_expiry_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_ttl_expiry_assertions
+        ]
+        if len(token_ttl_expiry_assertion_ids) != len(set(token_ttl_expiry_assertion_ids)):
+            raise ValueError("token TTL expiry assertion IDs must be unique")
+        token_persistence_failure_assertion_ids = [
+            assertion.assertion_id for assertion in self.token_persistence_failure_assertions
+        ]
+        if len(token_persistence_failure_assertion_ids) != len(set(token_persistence_failure_assertion_ids)):
+            raise ValueError("token persistence failure assertion IDs must be unique")
+        exfiltration_attempt_assertion_ids = [
+            assertion.assertion_id for assertion in self.exfiltration_attempt_assertions
+        ]
+        if len(exfiltration_attempt_assertion_ids) != len(set(exfiltration_attempt_assertion_ids)):
+            raise ValueError("exfiltration attempt assertion IDs must be unique")
+        artifact_leakage_assertion_ids = [
+            assertion.assertion_id for assertion in self.artifact_leakage_assertions
+        ]
+        if len(artifact_leakage_assertion_ids) != len(set(artifact_leakage_assertion_ids)):
+            raise ValueError("artifact leakage assertion IDs must be unique")
+        replay_attempt_assertion_ids = [
+            assertion.assertion_id for assertion in self.replay_attempt_assertions
+        ]
+        if len(replay_attempt_assertion_ids) != len(set(replay_attempt_assertion_ids)):
+            raise ValueError("replay attempt assertion IDs must be unique")
+        signed_field_tampering_assertion_ids = [
+            assertion.assertion_id for assertion in self.signed_field_tampering_assertions
+        ]
+        if len(signed_field_tampering_assertion_ids) != len(set(signed_field_tampering_assertion_ids)):
+            raise ValueError("signed-field tampering assertion IDs must be unique")
+        payload_tampering_assertion_ids = [
+            assertion.assertion_id for assertion in self.payload_tampering_assertions
+        ]
+        if len(payload_tampering_assertion_ids) != len(set(payload_tampering_assertion_ids)):
+            raise ValueError("payload tampering assertion IDs must be unique")
+        stale_state_root_assertion_ids = [
+            assertion.assertion_id for assertion in self.stale_state_root_assertions
+        ]
+        if len(stale_state_root_assertion_ids) != len(set(stale_state_root_assertion_ids)):
+            raise ValueError("stale-state-root assertion IDs must be unique")
+        identity_mismatch_assertion_ids = [
+            assertion.assertion_id for assertion in self.identity_mismatch_assertions
+        ]
+        if len(identity_mismatch_assertion_ids) != len(set(identity_mismatch_assertion_ids)):
+            raise ValueError("identity-mismatch assertion IDs must be unique")
+        nonce_expiration_assertion_ids = [
+            assertion.assertion_id for assertion in self.nonce_expiration_assertions
+        ]
+        if len(nonce_expiration_assertion_ids) != len(set(nonce_expiration_assertion_ids)):
+            raise ValueError("nonce-expiration assertion IDs must be unique")
+        signer_defect_assertion_ids = [
+            assertion.assertion_id for assertion in self.signer_defect_assertions
+        ]
+        if len(signer_defect_assertion_ids) != len(set(signer_defect_assertion_ids)):
+            raise ValueError("signer-defect assertion IDs must be unique")
+        l3_proof_transplant_assertion_ids = [
+            assertion.assertion_id for assertion in self.l3_proof_transplant_assertions
+        ]
+        if len(l3_proof_transplant_assertion_ids) != len(set(l3_proof_transplant_assertion_ids)):
+            raise ValueError("l3-proof-transplant assertion IDs must be unique")
+        revoked_credential_assertion_ids = [
+            assertion.assertion_id for assertion in self.revoked_credential_assertions
+        ]
+        if len(revoked_credential_assertion_ids) != len(set(revoked_credential_assertion_ids)):
+            raise ValueError("revoked-credential assertion IDs must be unique")
+        evidence_preservation_assertion_ids = [
+            assertion.assertion_id for assertion in self.evidence_preservation_assertions
+        ]
+        if len(evidence_preservation_assertion_ids) != len(set(evidence_preservation_assertion_ids)):
+            raise ValueError("evidence-preservation assertion IDs must be unique")
+        policy_attack_assertion_ids = [
+            assertion.assertion_id for assertion in self.policy_attack_assertions
+        ]
+        if len(policy_attack_assertion_ids) != len(set(policy_attack_assertion_ids)):
+            raise ValueError("policy-attack assertion IDs must be unique")
+        tool_sequence_assertion_ids = [
+            assertion.assertion_id for assertion in self.tool_sequence_assertions
+        ]
+        if len(tool_sequence_assertion_ids) != len(set(tool_sequence_assertion_ids)):
+            raise ValueError("tool-sequence assertion IDs must be unique")
+        factual_qa_assertion_ids = [
+            assertion.assertion_id for assertion in self.factual_qa_assertions
+        ]
+        if len(factual_qa_assertion_ids) != len(set(factual_qa_assertion_ids)):
+            raise ValueError("factual-qa assertion IDs must be unique")
+        citation_backed_assertion_ids = [
+            assertion.assertion_id for assertion in self.citation_backed_assertions
+        ]
+        if len(citation_backed_assertion_ids) != len(set(citation_backed_assertion_ids)):
+            raise ValueError("citation-backed assertion IDs must be unique")
+        partial_milestone_assertion_ids = [
+            assertion.assertion_id for assertion in self.partial_milestone_assertions
+        ]
+        if len(partial_milestone_assertion_ids) != len(set(partial_milestone_assertion_ids)):
+            raise ValueError("partial-milestone assertion IDs must be unique")
+        grader_keys = [
+            (grader.grader_id, grader.grader_version) for grader in self.graders
+        ]
+        if len(grader_keys) != len(set(grader_keys)):
+            raise ValueError("grader references must be unique")
+        exclusion_ids = [
+            exclusion.exclusion_id for exclusion in self.unsupported_exclusions
+        ]
+        if len(exclusion_ids) != len(set(exclusion_ids)):
+            raise ValueError("unsupported exclusion IDs must be unique")
+        excluded_grader_keys = [
+            (exclusion.grader_id, exclusion.grader_version)
+            for exclusion in self.unsupported_exclusions
+        ]
+        if len(excluded_grader_keys) != len(set(excluded_grader_keys)):
+            raise ValueError("unsupported exclusion grader references must be unique")
+        overlapping = set(grader_keys) & set(excluded_grader_keys)
+        if overlapping:
+            raise ValueError(
+                "grader cannot be both declared and excluded: "
+                f"{sorted(overlapping)[0]}"
+            )
         if self.state_fixture is not None:
             if self.initial_state_fixture_hash != self.state_fixture.fixture_sha256:
                 raise ValueError("state fixture hash does not match the initial-state fixture hash")
@@ -577,6 +2508,12 @@ class TaskDefinition(BaseModel):
             raise ValueError("blocked policy outcome requires an expected rejection layer")
         if self.expected_allow_block_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
             raise ValueError("expected rejection layer requires a blocked policy outcome")
+        forbidden_in_metadata = self.metadata.keys() & FORBIDDEN_METADATA_KEYS
+        if forbidden_in_metadata:
+            raise ValueError(
+                "metadata must not carry security- or privacy-critical known shapes: "
+                f"{sorted(forbidden_in_metadata)[0]}"
+            )
         return self
 
 
@@ -682,8 +2619,30 @@ class AttemptRecord(BaseModel):
     state_observation_refs: list[str] = Field(default_factory=list)
     rehydration_observation_refs: list[str] = Field(default_factory=list)
     secret_detection_observation_refs: list[str] = Field(default_factory=list)
+    unauthorized_mutation_observation_refs: list[str] = Field(default_factory=list)
+    token_store_persistence_observation_refs: list[str] = Field(default_factory=list)
+    token_ttl_expiry_observation_refs: list[str] = Field(default_factory=list)
+    token_persistence_failure_observation_refs: list[str] = Field(default_factory=list)
+    exfiltration_attempt_observation_refs: list[str] = Field(default_factory=list)
+    artifact_leakage_observation_refs: list[str] = Field(default_factory=list)
+    replay_attempt_observation_refs: list[str] = Field(default_factory=list)
+    signed_field_tampering_observation_refs: list[str] = Field(default_factory=list)
+    payload_tampering_observation_refs: list[str] = Field(default_factory=list)
+    stale_state_root_observation_refs: list[str] = Field(default_factory=list)
+    identity_mismatch_observation_refs: list[str] = Field(default_factory=list)
+    nonce_expiration_observation_refs: list[str] = Field(default_factory=list)
+    signer_defect_observation_refs: list[str] = Field(default_factory=list)
+    l3_proof_transplant_observation_refs: list[str] = Field(default_factory=list)
+    revoked_credential_observation_refs: list[str] = Field(default_factory=list)
+    evidence_preservation_observation_refs: list[str] = Field(default_factory=list)
+    policy_attack_observation_refs: list[str] = Field(default_factory=list)
+    tool_sequence_observation_refs: list[str] = Field(default_factory=list)
+    factual_qa_observation_refs: list[str] = Field(default_factory=list)
+    citation_backed_observation_refs: list[str] = Field(default_factory=list)
+    partial_milestone_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
+    unsupported_exclusion_refs: list[str] = Field(default_factory=list)
 
     missingness_or_failure: str | None = None
     usage_reconciliation: UsageReconciliation | None = None

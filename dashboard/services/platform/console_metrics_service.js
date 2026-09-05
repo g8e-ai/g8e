@@ -8,7 +8,7 @@ import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { ConversationStatus } from '../../constants/chat.js';
 import { SystemHealth } from '../../constants/ai.js';
 import { Collections } from '../../constants/collections.js';
-import { KVKey, KVScanPattern } from '../../constants/kv_keys.js';
+import { KVScanPattern } from '../../constants/kv_keys.js';
 import {
     CONSOLE_METRICS_CACHE_TTL_MS,
     CONSOLE_METRICS_WINDOW_1_DAY_SECONDS,
@@ -171,12 +171,12 @@ class ConsoleMetricsService {
 
             for (const op of operators) {
                 const status = op.status || OperatorStatus.OFFLINE;
-                if (statusDistribution.hasOwnProperty(status)) {
+                if (Object.prototype.hasOwnProperty.call(statusDistribution, status)) {
                     statusDistribution[status]++;
                 }
 
                 const type = op.operator_type || OperatorType.SYSTEM;
-                if (typeDistribution.hasOwnProperty(type)) {
+                if (Object.prototype.hasOwnProperty.call(typeDistribution, type)) {
                     typeDistribution[type]++;
                 }
 

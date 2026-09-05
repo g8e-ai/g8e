@@ -18,7 +18,6 @@ import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { isValidTokenFormat } from '../../services/auth/device_link_service.js';
 import { ErrorResponse, DeviceLinkResponse, DeviceLinkListResponse, SimpleSuccessResponse } from '../../models/response_models.js';
-import { AuthPaths, DeviceLinkPaths } from '../../constants/api_paths.js';
 import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess } from '../../constants/auth.js';
 import { DEFAULT_DEVICE_LINK_MAX_USES } from '../../constants/service_config.js';
 

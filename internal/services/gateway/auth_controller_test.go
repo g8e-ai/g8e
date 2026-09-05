@@ -34,7 +34,7 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 	return newBootstrapController(BootstrapControllerDeps{
 		Cfg:                infra.Cfg,
 		Logger:             infra.Logger,
-		DocStore:           infra.Stores.DocStore,
+		DocStore:           infra.DocStore,
 		UserSvc:            infra.UserSvc,
 		PKI:                infra.PKI,
 		CLISessionSvc:      infra.CLISessionSvc,
@@ -47,7 +47,7 @@ func setupTestBootstrapController(t *testing.T) (*BootstrapController, *config.C
 func setupTestEnrollmentTokenController(t *testing.T) (*EnrollmentTokenController, *config.Config) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	enrollmentTokenSvc := NewEnrollmentTokenService(infra.Stores.DocStore, infra.Logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(infra.DocStore, infra.Logger)
 	return newEnrollmentTokenController(EnrollmentTokenControllerDeps{
 		Cfg:                infra.Cfg,
 		Logger:             infra.Logger,
@@ -72,7 +72,7 @@ func setupTestSessionController(t *testing.T) (*SessionController, *config.Confi
 	infra := setupTestInfrastructure(t, false)
 	return newSessionController(SessionControllerDeps{
 		Logger:      infra.Logger,
-		DocStore:    infra.Stores.DocStore,
+		DocStore:    infra.DocStore,
 		Responder:   infra.Responder,
 		CrossOrigin: false,
 	}), infra.Cfg
@@ -86,14 +86,14 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
 	resp := response.NewWriter(logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	passkey, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
+	passkey, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -118,7 +118,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	})
 	require.NoError(t, err)
 
-	orchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, NewGatewayWebSocketHandler(logger), logger)
+	orchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, db.GetSSEStore(), NewGatewayWebSocketHandler(logger), logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,

@@ -9,7 +9,6 @@
  *   GET  /api/system/network-interfaces  - return IPv4 addresses of host network interfaces
  */
 
-import os from 'os';
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { ErrorResponse, SystemNetworkInterfacesResponse } from '../../models/response_models.js';

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-08-25
+Last Updated: 2026-09-05
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -253,6 +253,7 @@ make test-coverage     # Coverage with -coverprofile and -covermode=atomic
 make test-airgap       # Verify vendored build works without network access
 make ensemble-test     # Ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)
 make test-external     # Ensemble external test suite (Tier 4: real LLM/API calls)
+make dashboard-lint    # Dashboard ESLint checks
 make dashboard-test    # Dashboard vitest suite
 make verify-fips       # FIPS 140-3 build and self-check
 make ci                # Full CI pipeline (proto, swagger, lint, vulncheck, tests)
@@ -438,8 +439,8 @@ GitHub Actions (`.github/workflows/build-and-test.yml` and `.github/workflows/bu
 - `smoke-test`: Clean-environment install verification for both Python and Go packages
 - `secret-scan`: gitleaks full-history secret scanning
 - `license-check`: go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
-- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12
-- `dashboard-tests`: Dashboard (g8ed) vitest suite on Node 22
+- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12. See [Ensemble Tests](../ensemble/tests.md) for the g8ee test framework and practices.
+- `dashboard-tests`: Dashboard (g8ed) ESLint checks and Vitest suite on Node 22. See [Dashboard Tests](../dashboard/tests.md) for the g8ed test layout, browser harness, and verification commands.
 
 **FIPS CI** (`.github/workflows/build-and-test-fips.yml`, `fips` job on `ubuntu-latest`):
 - FIPS 140-3 build and self-check (`make verify-fips`)

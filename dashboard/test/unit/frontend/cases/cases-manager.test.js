@@ -688,7 +688,7 @@ describe('CasesManager [UNIT]', () => {
         });
 
         it('does nothing when case_id is missing from event', () => {
-            const manager = makeManager();
+            makeManager();
             triggerSSEInvestigationList(makeInvestigations(1));
 
             expect(() => {

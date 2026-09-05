@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 The g8e Protocol platform is implemented as a single static binary that operates in two modes:
 
@@ -309,7 +309,7 @@ The Governance Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT)
 ### 4-Step JWT Flow
 The JWT authentication logic is implemented in the gateway auth middleware.
 
-**Step 1: Inbound HTTP Handshake and JWT Verification** The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates `exp`, `nbf`, `iss`, and `aud` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
+**Step 1: Inbound HTTP Handshake and JWT Verification** The Governance Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS, validates the `exp`, `nbf`, `iat`, `iss`, and `aud` claims (temporal claims enforced with a centralized `JWTClockSkew` allowance, including rejection of tokens whose `iat` is more than the skew in the future), and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation and JIT Account Management** Following successful token validation, the Governance Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID). If the user does not exist, provisions the user account subject to platform owner authorization.

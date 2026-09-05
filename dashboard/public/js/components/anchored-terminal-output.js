@@ -414,7 +414,7 @@ export class TerminalOutputMixin {
         this.scrollToBottom();
     }
 
-    showTribunal({ id, model, numPasses, command }) {
+    showTribunal({ id, numPasses, command }) {
         if (!this.outputContainer) return null;
 
         this._removeWelcome();
