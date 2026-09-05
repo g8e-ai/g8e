@@ -74,7 +74,7 @@ The image installs production dependencies, runs as the non-root `g8e` user with
 
 ## Dependency Model
 
-Runtime dependencies are declared in `package.json` and locked in `package-lock.json`. Express and `express-rate-limit` serve the active host. `@peculiar/x509` supports CSR generation, Node's `X509Certificate` parses installed certificates, and `undici` supports the prepared mTLS HTTP client. Browser vendor libraries are checked into `public/js/vendor/`.
+Runtime dependencies are declared in `package.json` and locked in `package-lock.json`. Express and `express-rate-limit` serve the active host. `@peculiar/x509` supports CSR generation, Node's `X509Certificate` parses installed certificates, and Node's built-in `fetch` backs the internal HTTP client. Browser vendor libraries are checked into `public/js/vendor/`.
 
 ## Related
 

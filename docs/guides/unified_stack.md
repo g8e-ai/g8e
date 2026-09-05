@@ -1,7 +1,7 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 This guide describes how to bring up the complete g8e platform — gateway, operator, ensemble (g8ee), and dashboard (g8ed) — as a single Docker Compose stack from the repository root, using either Docker Compose directly or the first-class `./g8e docker` CLI management commands.
 

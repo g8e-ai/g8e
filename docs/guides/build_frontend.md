@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e-Compatible Frontend
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 ---
 

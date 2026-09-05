@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 2.1.3
-**Last Updated:** 2026-09-02
-**Platform:** g8e v2.1.3
+**Document Version:** 2.1.4
+**Last Updated:** 2026-09-05
+**Platform:** g8e v2.1.4
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -610,7 +610,6 @@ See [FedRAMP Demo](../../demos/fedramp/README.md) for the full demo documentatio
 - **JIT capability minting** with self-dissolving execution scopes
 - **One-time enrollment tokens** replacing raw session identifiers in browser enrollment URLs with cryptographically random, 5-minute-TTL tokens consumed on first use
 - **SSE-based L3 approval notifications** replacing polling with real-time event subscriptions for passkey approval delivery
-- **Thread-safe dependency wiring** via atomic pointers for late-bound gateway dependencies, eliminating data races in concurrent request handling
 - **Configurable CORS middleware** validating request origins against an allowlist for cross-origin browser access
 - **75.9% test coverage** (75% threshold enforced in CI/CD) across gateway, governance, storage, and CLI subsystems
 - **RuntimeFileService abstraction** (`internal/services/fs`) as canonical `.g8e/` file I/O layer, replacing direct `os.*` calls across gateway, keystore, PKI, and CLI subsystems
@@ -806,6 +805,7 @@ For specific compliance questions or audit support, contact:
 | 2.1.0 | 2026-08-30 | Lateralus Labs | Added deterministic stage-evidence receipt binding, signed durable-persistence attestations, atomic signed commitment chaining, full canonical receipt persistence and export, cross-language offline verification, and expanded code and test evidence |
 | 2.1.2 | 2026-08-31 | Lateralus Labs | Added ratify posture with L1/L3 enforcement and audited L2, clarified posture-required fail-closed verification, and reconciled posture-dependent passkey and consensus requirements |
 | 2.1.3 | 2026-09-02 | Lateralus Labs | Added protocol-owned compliance catalogs and records, persisted typed evidence across the healthcare, finance, DHS, and FedRAMP demos, and read-only fail-closed demo-run verification; reconciled OSCAL CLI availability and proof-backed bundle limitations |
+| 2.1.4 | 2026-09-05 | Lateralus Labs | Replaced late-bound `atomic.Pointer` consensus wiring with construction-phase injection via `GatewayModeDeps` (no `SetConsensusService` mutator); made the `Stores` aggregate unexported with narrow typed `Get*Store` accessors on `CanonicalDBService`; replaced `SetMCPGateway` with one-time `BindMCPGateway` construction binding; added JWT `iat` (issued-in-future) temporal validation with centralized `JWTClockSkew`; posture-gated the consensus deliberate route (404 in doctrine/ratify, no 503-on-nil guard); added ESLint to the dashboard CI gate; added the offline deterministic README generator with public proof snapshot and drift check; added governance, privacy, and utility evaluation benchmark suites with typed graders; hardened `compliance release-evidence` with semver validation, path-traversal rejection, and read-only evidence aggregation |
 
 ---
 

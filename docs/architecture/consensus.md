@@ -1,7 +1,7 @@
 # Consensus
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 ## Overview
 

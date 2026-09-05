@@ -76,8 +76,7 @@ Infrastructure tests cover:
 - New and resumed owner-approved enrollment attempts.
 - Required gateway and runtime configuration.
 - Startup load, enrollment fallback, and fail-closed fatal paths.
-- HTTP `undici.Agent` construction from certificate paths.
-- Pub/sub TLS option construction and preservation during client duplication.
+- Native `fetch` interception for platform enrollment request, status, and completion calls.
 
 Startup tests inject an enrollment service and fatal callback, allowing fail-closed behavior to be asserted without invoking `process.exit()`.
 
