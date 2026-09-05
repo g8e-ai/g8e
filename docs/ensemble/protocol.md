@@ -2,7 +2,7 @@
 
 ## Overview
 
-The g8e protocol is the canonical wire contract and governance specification governing all interactions between the Agentic Ensemble (`g8ee`), the Governance Gateway (`g8eg`), and the Governed Operator (`g8eo`). All mutations across the platform flow through typed, verifiable transactions encapsulated in canonical `GovernanceEnvelope` containers.
+The g8e protocol is the canonical wire contract and governance specification governing all interactions between the Agentic Ensemble (`g8ee`), the Governance Gateway (`g8eg`), and the Governed Operator (`g8eo`). All mutations across the platform flow through typed, verifiable transactions encapsulated in canonical `GovernanceEnvelope` containers. See [Protocol Reference](../architecture/protocol.md) for the platform-level protocol specification and [Network Architecture](../architecture/network.md) for gateway communication surfaces.
 
 The protocol provides schema definitions, JSON constant registries, Pydantic models, SPIFFE workload identity helpers, and deterministic transaction hashing to enforce fail-closed verification across the platform's 5-layer interlock sequence.
 
@@ -192,6 +192,9 @@ The protocol maps between internal protobuf event types and UAP action types:
 
 ## Related
 
+- [Protocol Reference](../architecture/protocol.md) — Platform-level canonical wire contracts, GovernanceEnvelope schema, and SPIFFE identifiers
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Gateway Architecture](../architecture/gateway.md) — Gateway communication surfaces and endpoint ownership
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Agents](agents.md) — Agent hierarchy, personas, and Tribunal consensus

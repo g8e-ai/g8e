@@ -26,9 +26,9 @@ import (
 
 func newTestEnrollmentTokenService(t *testing.T) *EnrollmentTokenService {
 	t.Helper()
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	return NewEnrollmentTokenService(stores.DocStore, logger)
+	return NewEnrollmentTokenService(db.GetDocStore(), logger)
 }
 
 func TestEnrollmentToken_GenerateAndValidateRoundTrip(t *testing.T) {

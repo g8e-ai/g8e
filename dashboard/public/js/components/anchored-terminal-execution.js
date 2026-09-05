@@ -359,7 +359,7 @@ export class TerminalExecutionMixin {
         const body = container.querySelector('.anchored-terminal__results-body');
         if (!body) return;
 
-        const { command, stdout, stderr, exitCode, status, timestamp, operatorId, hostname } = resultData;
+        const { command, stdout, stderr, exitCode, status, timestamp, hostname } = resultData;
 
         const isSuccess = status === EventType.OPERATOR_COMMAND_COMPLETED || status === EventType.OPERATOR_FILE_EDIT_COMPLETED || status === 'success';
         const statusClass = isSuccess ? 'success' : 'error';

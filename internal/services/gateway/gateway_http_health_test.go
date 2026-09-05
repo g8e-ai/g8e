@@ -62,7 +62,7 @@ func TestHandleHealth_GovernanceReadyTrueWhenCallbackTrue(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -90,7 +90,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackFalse(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -118,7 +118,7 @@ func TestHandleHealth_GovernanceReadyFalseWhenCallbackNil(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -147,7 +147,7 @@ func TestHandleHealth_VersionAndStateRootPopulated(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 		settingsBytes,
@@ -172,7 +172,7 @@ func TestHandleHealth_IsReadyNilProceedsToDBCheck(t *testing.T) {
 	h.healthController.isReady = nil
 
 	// Ensure platform_settings does not exist so we hit the 503 path
-	infra.Stores.DocStore.DocDelete(
+	infra.DocStore.DocDelete(
 		marshaler.CollectionName(constants.CollectionSettings),
 		marshaler.DocumentID(constants.DocIDPlatformSettings),
 	)

@@ -206,6 +206,8 @@ def _patch_provenance(monkeypatch) -> None:
             fixture_sha256="0" * 64,
         ),
         output=DatasetOutput(path="input_data.jsonl", rows=1, sha256="0" * 64),
+        partition="development",
+        domain_strata=["utility"],
     )
     monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
@@ -398,7 +400,7 @@ async def test_canary_task_emits_verified_scrubbing_metric_and_grade_reference(t
     )
 
     assert task_definition.sensitive_canary_annotations == [assertion]
-    assert task_definition.grader_ids == [
+    assert [g.grader_id for g in task_definition.graders] == [
         "ifeval_subset_verifier",
         "canary_scrubbing",
         "model_boundary_raw_secret_rate",
@@ -508,7 +510,7 @@ async def test_secret_detection_task_emits_typed_observations_and_precision_reca
     }
 
     assert task_definition.secret_detection_assertions == [assertion]
-    assert task_definition.grader_ids == [
+    assert [g.grader_id for g in task_definition.graders] == [
         "ifeval_subset_verifier",
         "secret_detection_precision",
         "secret_detection_recall",
@@ -614,7 +616,7 @@ async def test_rehydration_task_emits_typed_observation_and_exact_local_metric(
     }
 
     assert task_definition.rehydration_assertions == [assertion]
-    assert task_definition.grader_ids == [
+    assert [g.grader_id for g in task_definition.graders] == [
         "ifeval_subset_verifier",
         "exact_local_rehydration",
     ]
@@ -828,7 +830,7 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert task_definition.state_fixture == state_fixture
     assert task_definition.initial_state_fixture_hash == state_fixture.fixture_sha256
     assert task_definition.expected_final_state_assertions == task.metadata.expected_final_state_assertions
-    assert task_definition.grader_ids == [
+    assert [g.grader_id for g in task_definition.graders] == [
         "ifeval_subset_verifier",
         "receipt_integrity",
         "protocol_chain",
@@ -988,7 +990,7 @@ async def test_tasks_jsonl_written_with_schema_valid_records(tmp_path, monkeypat
     assert td.task_id == "1001"
     assert td.prompt_hash is not None
     assert len(td.prompt_hash) == 64
-    assert td.grader_ids == ["ifeval_subset_verifier"]
+    assert [g.grader_id for g in td.graders] == ["ifeval_subset_verifier"]
 
 
 @pytest.mark.asyncio

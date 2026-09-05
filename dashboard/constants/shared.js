@@ -60,15 +60,13 @@ function transformEvents(raw) {
 
 function transformStatus(raw) {
   const status = raw.status || raw;
-  const noDotTransformGroups = new Set(['auth_mode']);
   const result = {};
   for (const [snakeKey, group] of Object.entries(status)) {
     const dotKey = snakeToDot(snakeKey);
     const unwrapped = unwrapValue(group);
     const inner = {};
-    const skipDotTransform = noDotTransformGroups.has(snakeKey);
     for (const [innerKey, innerValue] of Object.entries(unwrapped)) {
-      inner[skipDotTransform ? innerKey : snakeToDot(innerKey)] = innerValue;
+      inner[snakeToDot(innerKey)] = innerValue;
     }
     result[dotKey] = inner;
   }
@@ -101,20 +99,6 @@ function transformStatus(raw) {
     delete result['command.error.type']['g8e.resolution.error'];
   }
 
-  // Fallback: add missing top-level groups if not in protocol JSON
-  if (!result['api.key.status']) result['api.key.status'] = { active: 'active', revoked: 'revoked', expired: 'expired', suspended: 'suspended' };
-  if (!result['auth.admin.audit.event.type']) result['auth.admin.audit.event.type'] = { 'auth.admin.access': 'auth.admin.access' };
-  if (!result['device.link.status']) result['device.link.status'] = { active: 'active', pending: 'pending', used: 'used', exhausted: 'exhausted', expired: 'expired', revoked: 'revoked' };
-  if (!result['device.link.success']) result['device.link.success'] = { listed: 'listed', created: 'created', revoked: 'revoked', deleted: 'deleted' };
-
-  // Fallback: add missing inner keys if not in protocol JSON
-  if (result['user.role'] && !result['user.role'].superadmin) result['user.role'].superadmin = 'superadmin';
-  if (result['component.name']) {
-    if (!result['component.name'].vse) result['component.name'].vse = 'vse';
-    if (!result['component.name'].vsa) result['component.name'].vsa = 'vsa';
-    if (!result['component.name'].g8ed) result['component.name'].g8ed = 'g8ed';
-  }
-
   return result;
 }
 
@@ -125,9 +109,6 @@ function transformCollections(raw) {
     const value = typeof entry === 'object' && entry !== null ? entry.value : entry;
     result[snakeToDot(snakeKey)] = value;
   }
-  // Fallback: add missing collections not in protocol
-  if (!result['session.audit.logs']) result['session.audit.logs'] = 'session_audit_logs';
-  if (!result['api.keys']) result['api.keys'] = 'api_keys';
   return { collections: result };
 }
 
@@ -141,29 +122,12 @@ function transformKvKeys(raw) {
   return result;
 }
 
-function transformChannels() {
-  return {
-    pubsub: {
-      separator: ':',
-      prefixes: { cmd: 'cmd', results: 'results', heartbeat: 'heartbeat' },
-      auth: {
-        'publish.prefix': 'auth.publish',
-        'publish.session.prefix': 'auth.publish:session',
-        'response.prefix': 'auth.response',
-        'response.session.prefix': 'auth.response:session',
-        'session.prefix': 'auth.session',
-      },
-    },
-  };
+function transformChannels(raw) {
+  return unwrapValue(raw);
 }
 
-function transformPubsub() {
-  return {
-    wire: {
-      actions: { subscribe: 'subscribe', psubscribe: 'psubscribe', unsubscribe: 'unsubscribe', publish: 'publish' },
-      event_types: { message: 'message', pmessage: 'pmessage', subscribed: 'subscribed' },
-    },
-  };
+function transformPubsub(raw) {
+  return unwrapValue(raw);
 }
 
 function transformSenders(raw) {
@@ -213,27 +177,6 @@ function transformHeaders(raw) {
   for (const [pascalKey, dotKey] of Object.entries(mapping)) {
     if (unwrapped[pascalKey]) result[dotKey] = unwrapped[pascalKey];
   }
-  // Map additional headers from protocol
-  const extraMapping = {
-    'InternalAuth': 'http.x-internal-auth',
-    'APIKey': 'http.api-key',
-    'SessionID': 'http.x-session-id',
-    'NewCase': 'x-vso.new-case',
-    'Service': 'x-vso.service',
-    'Client': 'x-vso.client',
-    'OperatorStatus': 'x-vso.operator-status',
-  };
-  for (const [pascalKey, dotKey] of Object.entries(extraMapping)) {
-    if (unwrapped[pascalKey]) result[dotKey] = unwrapped[pascalKey];
-  }
-  // Fallback: add missing headers not in protocol
-  if (!result['http.x-internal-auth']) result['http.x-internal-auth'] = 'X-Internal-Auth';
-  if (!result['http.api-key']) result['http.api-key'] = 'X-API-Key';
-  if (!result['http.x-session-id']) result['http.x-session-id'] = 'X-Session-ID';
-  if (!result['x-vso.new-case']) result['x-vso.new-case'] = 'X-G8E-New-Case';
-  if (!result['x-vso.service']) result['x-vso.service'] = 'X-G8E-Service';
-  if (!result['x-vso.client']) result['x-vso.client'] = 'X-G8E-Client';
-  if (!result['x-vso.operator-status']) result['x-vso.operator-status'] = 'X-G8E-Operator-Status';
   return result;
 }
 
@@ -271,9 +214,6 @@ assertPath(_EVENTS, ['app', 'case', 'created'], '_EVENTS.app.case.created');
 assertPath(_EVENTS, ['ai', 'llm', 'chat', 'iteration', 'started'], '_EVENTS.ai.llm.chat.iteration.started');
 assertPath(_STATUS, ['operator.status', 'available'], '_STATUS.operator.status.available');
 assertPath(_STATUS, ['user.role', 'user'], '_STATUS.user.role.user');
-assertPath(_STATUS, ['user.role', 'superadmin'], '_STATUS.user.role.superadmin');
-assertPath(_STATUS, ['api.key.status', 'active'], '_STATUS.api.key.status.active');
-assertPath(_STATUS, ['auth.mode', 'api_key'], '_STATUS.auth.mode.api_key');
 assertPath(_STATUS, ['auth.provider', 'local'], '_STATUS.auth.provider.local');
 assertPath(_STATUS, ['auth.method', 'kv.pubsub'], '_STATUS.auth.method.kv.pubsub');
 assertPath(_STATUS, ['session.type', 'web'], '_STATUS.session.type.web');
@@ -281,21 +221,15 @@ assertPath(_STATUS, ['session.key.prefix', 'web'], '_STATUS.session.key.prefix.w
 assertPath(_STATUS, ['session.event.type', 'operator.bound'], '_STATUS.session.event.type.operator.bound');
 assertPath(_STATUS, ['history.event.type', 'created'], '_STATUS.history.event.type.created');
 assertPath(_STATUS, ['command.error.type', 'operator.resolution.error'], '_STATUS.command.error.type.operator.resolution.error');
-assertPath(_STATUS, ['component.name', 'vse'], '_STATUS.component.name.vse');
-assertPath(_STATUS, ['device.link.status', 'active'], '_STATUS.device.link.status.active');
+assertPath(_STATUS, ['component.name', 'client'], '_STATUS.component.name.client');
 assertPath(_MSG, ['message', 'sender', 'user', 'chat'], '_MSG.message.sender.user.chat');
 assertPath(_MSG, ['message', 'sender', 'ai', 'assistant'], '_MSG.message.sender.ai.assistant');
 assertPath(_COLLECTIONS, ['collections', 'users'], '_COLLECTIONS.collections.users');
 assertPath(_COLLECTIONS, ['collections', 'bound.sessions'], '_COLLECTIONS.collections.bound.sessions');
-assertPath(_COLLECTIONS, ['collections', 'session.audit.logs'], '_COLLECTIONS.collections.session.audit.logs');
-assertPath(_COLLECTIONS, ['collections', 'api.keys'], '_COLLECTIONS.collections.api.keys');
 assertPath(_KV, ['cache.version'], '_KV.cache.version');
-assertPath(_CHANNELS, ['pubsub', 'separator'], '_CHANNELS.pubsub.separator');
-assertPath(_CHANNELS, ['pubsub', 'auth', 'publish.prefix'], '_CHANNELS.pubsub.auth.publish.prefix');
-assertPath(_PUBSUB, ['wire', 'actions', 'subscribe'], '_PUBSUB.wire.actions.subscribe');
-assertPath(_PUBSUB, ['wire', 'event_types', 'message'], '_PUBSUB.wire.event_types.message');
+assertPath(_CHANNELS, ['channels', 'Subscribe'], '_CHANNELS.channels.Subscribe');
+assertPath(_CHANNELS, ['channels', 'PrefixCmd'], '_CHANNELS.channels.PrefixCmd');
+assertPath(_PUBSUB, ['pubsub', 'FieldAction'], '_PUBSUB.pubsub.FieldAction');
+assertPath(_PUBSUB, ['pubsub', 'FieldMessage'], '_PUBSUB.pubsub.FieldMessage');
 assertPath(_HEADERS, ['x-vso.session-id'], '_HEADERS.x-vso.session-id');
-assertPath(_HEADERS, ['http.x-internal-auth'], '_HEADERS.http.x-internal-auth');
-assertPath(_HEADERS, ['http.api-key'], '_HEADERS.http.api-key');
-assertPath(_HEADERS, ['x-vso.new-case'], '_HEADERS.x-vso.new-case');
 assertPath(_DOCUMENT_IDS, ['document_ids', 'platform_settings'], '_DOCUMENT_IDS.document_ids.platform_settings');

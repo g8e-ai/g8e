@@ -5,7 +5,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MockEventBus } from '@test/mocks/mock-browser-env.js';
 import { EventType, ThinkingActionType } from '@g8ed/public/js/constants/events.js';
-import { ThinkingEvent } from '@g8ed/public/js/models/ai-event-models.js';
 
 async function loadThinkingManager() {
     const { ThinkingManager } = await import('@g8ed/public/js/components/thinking.js');
@@ -377,7 +376,7 @@ describe('ThinkingManager [UNIT]', () => {
         });
 
         it('handles END without throwing', () => {
-            const mgr = new ThinkingManager(eventBus, null, null);
+            new ThinkingManager(eventBus, null, null);
             eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.START, web_session_id: 'sess-n' });
             expect(() => {
                 eventBus.emit(EventType.LLM_CHAT_ITERATION_THINKING_STARTED, { action_type: ThinkingActionType.END, web_session_id: 'sess-n' });

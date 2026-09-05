@@ -71,16 +71,16 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	fileSvc := newTestFileSvc(t)
 
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	require.NoError(t, pki.InitializePKI(nil), "failed to ensure PKI")
 
-	appEnrollment := NewAppEnrollmentService(stores.DocStore, pki, logger)
+	appEnrollment := NewAppEnrollmentService(db.GetDocStore(), pki, logger)
 	resp := response.NewWriter(logger)
 
 	// Initialize script templates
@@ -89,10 +89,10 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	}
 
 	// Create minimal registration service for tests that need it
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	controller := newPKIController(PKIControllerDeps{Cfg: cfg, Logger: logger, PKI: pki, AppEnrollment: appEnrollment, Registration: reg, Responder: resp})
 	return controller, cfg, db

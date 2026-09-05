@@ -2,7 +2,7 @@
 
 ## Overview
 
-The g8e platform enforces strict data sovereignty across all storage tiers: raw command execution outputs, unscrubbed file contents, and host-level mutation records remain exclusively on the Governed Operator host under `.g8e/`, encrypted at rest via the local vault. The g8e Agentic Ensemble (`g8ee`) interacts with Gateway-hosted persistence services (Document Store, Blob Store, Key-Value Store) over mutual TLS (mTLS) on the HTTPS surface (port 8443) for structured workflow state, binary attachments, and ephemeral coordination data.
+The g8e platform enforces strict data sovereignty across all storage tiers: raw command execution outputs, unscrubbed file contents, and host-level mutation records remain exclusively on the Governed Operator host under `.g8e/`, encrypted at rest via the local vault. The g8e Agentic Ensemble (`g8ee`) interacts with Gateway-hosted persistence services (Document Store, Blob Store, Key-Value Store) over mutual TLS (mTLS) on the HTTPS surface (port 8443) for structured workflow state, binary attachments, and ephemeral coordination data. See [Storage Architecture](../architecture/storage.md) for the platform-level storage tiers and data sovereignty model.
 
 ## Storage Architecture and Tiers
 
@@ -62,6 +62,8 @@ The Governed Operator maintains local, sovereign storage under the `.g8e/` direc
 
 ## Related
 
+- [Storage Architecture](../architecture/storage.md) — Platform-level storage tiers, Document Store, Blob Store, and Key-Value Store
+- [Governance Pipeline](../architecture/governance.md) — Platform-level governance pipeline and governed mutation flow
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and service clients
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [PKI & Trust](pki.md) — Mutual TLS certificates and cryptographic identity

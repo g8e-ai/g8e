@@ -62,7 +62,7 @@ export class OperatorMetrics {
             try {
                 const value = getter();
                 if (value !== undefined && value !== null) return value;
-            } catch (e) {
+            } catch {
                 // continue
             }
         }

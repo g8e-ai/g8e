@@ -2,7 +2,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE for details.
 
 import { VSOBaseModel, VSOIdentifiableModel, F, now } from './base.js';
-import { ApiKeyStatus, AuthMethod, DeviceLinkStatus } from '../constants/auth.js';
+import { ApiKeyStatus, AuthMethod } from '../constants/auth.js';
 import { SessionType } from '../constants/session.js';
 
 // ---------------------------------------------------------------------------

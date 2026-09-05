@@ -22,19 +22,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestSignerController(t *testing.T) (*SignerController, *Stores) {
+func setupTestSignerController(t *testing.T) (*SignerController, *DocumentStoreService, *SignerStoreService) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
 
 	signerController := newSignerController(SignerControllerDeps{
 		Cfg:         infra.Cfg,
 		Logger:      infra.Logger,
-		DocStore:    infra.Stores.DocStore,
-		SignerStore: infra.Stores.SignerStore,
+		DocStore:    infra.DocStore,
+		SignerStore: infra.SignerStore,
 		Responder:   infra.Responder,
 	})
 
-	return signerController, infra.Stores
+	return signerController, infra.DocStore, infra.SignerStore
 }
 
 func TestNewSignerController_AllDepsProvidedNoNilFields(t *testing.T) {
@@ -43,8 +43,8 @@ func TestNewSignerController_AllDepsProvidedNoNilFields(t *testing.T) {
 	controller := newSignerController(SignerControllerDeps{
 		Cfg:         infra.Cfg,
 		Logger:      infra.Logger,
-		DocStore:    infra.Stores.DocStore,
-		SignerStore: infra.Stores.SignerStore,
+		DocStore:    infra.DocStore,
+		SignerStore: infra.SignerStore,
 		Responder:   infra.Responder,
 	})
 
@@ -56,13 +56,13 @@ func TestNewSignerController_AllDepsProvidedNoNilFields(t *testing.T) {
 
 	assert.Equal(t, infra.Cfg, controller.cfg)
 	assert.Equal(t, infra.Logger, controller.logger)
-	assert.Equal(t, infra.Stores.DocStore, controller.docStore)
-	assert.Equal(t, infra.Stores.SignerStore, controller.signerStore)
+	assert.Equal(t, infra.DocStore, controller.docStore)
+	assert.Equal(t, infra.SignerStore, controller.signerStore)
 	assert.Equal(t, infra.Responder, controller.responder)
 }
 
 func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
-	signerController, stores := setupTestSignerController(t)
+	signerController, docStore, _ := setupTestSignerController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers", nil)
@@ -84,7 +84,7 @@ func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		signerController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		t.Cleanup(func() { stores.DocStore.DocDelete("trusted_signers", "test-signer-1") })
+		t.Cleanup(func() { docStore.DocDelete("trusted_signers", "test-signer-1") })
 	})
 
 	t.Run("POST - missing id", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestSignerControllerHandleGovernanceSigners(t *testing.T) {
 }
 
 func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
-	signerController, stores := setupTestSignerController(t)
+	signerController, docStore, _ := setupTestSignerController(t)
 
 	t.Run("GET - not found", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/nonexistent", nil)
@@ -155,9 +155,9 @@ func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := stores.DocStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
+		err := docStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { stores.DocStore.DocDelete("trusted_signers", "test-signer-get") })
+		t.Cleanup(func() { docStore.DocDelete("trusted_signers", "test-signer-get") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/test-signer-get", nil)
 		rr := httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestSignerControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := stores.DocStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
+		err := docStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/test-signer-delete", nil)

@@ -49,12 +49,12 @@ func TestGatewayL3Notary_CLIVerifier_RejectsInactiveUser(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	cliVerifier := NewCLISessionVerifier(db.GetDocStore(), nil, logger, userSvc, cliSessionSvc)
 	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
 	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
@@ -65,7 +65,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsInactiveUser(t *testing.T) {
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -160,12 +160,12 @@ func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	cliVerifier := NewCLISessionVerifier(db.GetDocStore(), nil, logger, userSvc, cliSessionSvc)
 	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
 	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
@@ -176,7 +176,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsUnknownFingerprint(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// No CLI session created - verification should fail
 	unknownFingerprint := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -194,18 +194,18 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	sm := newTestSecretManager(t, db.db, fileSvc)
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, pki, logger, userSvc, cliSessionSvc)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	cliVerifier := NewCLISessionVerifier(db.GetDocStore(), pki, logger, userSvc, cliSessionSvc)
 	mockPasskey := testutil.NewConfigurableMockL3Notary(true)
 	notary := governance.NewGatewayL3Notary(cliVerifier, mockPasskey, logger)
 
@@ -215,7 +215,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a revoked certificate serial
 	cliSessionID := "cli-session-revoked"
@@ -234,7 +234,7 @@ func TestGatewayL3Notary_CLIVerifier_RejectsRevokedCertificate(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	// Revoke the certificate
 	err = pki.RevokeCertificate("1234567890abcdef", "test revocation")
@@ -255,12 +255,12 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	userSvc := NewUserService(stores.DocStore, logger)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	cliVerifier := NewCLISessionVerifier(stores.DocStore, nil, logger, userSvc, cliSessionSvc)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	cliVerifier := NewCLISessionVerifier(db.GetDocStore(), nil, logger, userSvc, cliSessionSvc)
 	notary := governance.NewGatewayL3Notary(cliVerifier, nil, logger)
 
 	// Create an active user
@@ -270,7 +270,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a known fingerprint
 	cliSessionID := "cli-session-456"
@@ -289,7 +289,7 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

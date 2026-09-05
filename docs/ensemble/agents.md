@@ -76,6 +76,8 @@ The interaction between agents follows strict architectural invariants:
 
 ## Related
 
+- [Platform Agents](../architecture/agents.md) — Platform-level agent architecture and ensemble role in the g8e platform
+- [Governance Pipeline](../architecture/governance.md) — Platform-level five-layer verification pipeline and governance postures
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Prompts](prompts.md) — System prompt assembly and persona templating

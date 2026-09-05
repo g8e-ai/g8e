@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "partial_milestone",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/utility/partial_milestone_loader.py",
+    "code_sha256": "5e176ed0c254ca9c4ec4dd2b906ca35f1d0d14f8fb997f2026b2c44057b0524a"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 5,
+    "sha256": "aee22a30b8e138a67da2ef3acae6812a951f325022eff37f6035d211ebcb6197"
+  },
+  "partition": "development",
+  "domain_strata": ["utility"]
+}

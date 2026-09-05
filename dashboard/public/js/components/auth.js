@@ -3,7 +3,6 @@
 
 import { EventType } from '../constants/events.js';
 import { AuthResponseModel } from '../models/auth-response-model.js';
-import { WebSessionModel } from '../models/session-model.js';
 import { webSessionService } from '../utils/web-session-service.js';
 import { UserRole, OperatorSessionRole } from '../constants/auth-constants.js';
 import { AppPaths } from '../constants/app-constants.js';

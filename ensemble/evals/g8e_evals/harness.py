@@ -23,10 +23,31 @@ from g8e_evals.models import ScoreDetails, TaskMetadata
 if TYPE_CHECKING:
     from g8e_evals.schema import (
         AttemptRecord,
+        ArtifactLeakageObservation,
+        CitationBackedObservation,
+        EvidencePreservationObservation,
+        ExfiltrationAttemptObservation,
+        FactualQAObservation,
+        IdentityMismatchObservation,
+        NonceExpirationObservation,
+        PartialMilestoneObservation,
+        PayloadTamperingObservation,
+        PolicyAttackObservation,
+        SignerDefectObservation,
+        L3ProofTransplantObservation,
+        RevokedCredentialObservation,
         RehydrationObservation,
+        ReplayAttemptObservation,
         SecretDetectionObservation,
+        SignedFieldTamperingObservation,
+        StaleStateRootObservation,
         StateObservation,
         TaskDefinition,
+        ToolSequenceObservation,
+        TokenStorePersistenceObservation,
+        TokenTTLExpiryObservation,
+        TokenPersistenceFailureObservation,
+        UnauthorizedMutationObservation,
     )
 
 
@@ -71,6 +92,174 @@ class SecretDetectionObserver(Protocol):
     ) -> list[SecretDetectionObservation]: ...
 
 
+class UnauthorizedMutationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[UnauthorizedMutationObservation]: ...
+
+
+class TokenStorePersistenceObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenStorePersistenceObservation]: ...
+
+
+class TokenTTLExpiryObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenTTLExpiryObservation]: ...
+
+
+class TokenPersistenceFailureObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[TokenPersistenceFailureObservation]: ...
+
+
+class ExfiltrationAttemptObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ExfiltrationAttemptObservation]: ...
+
+
+class ArtifactLeakageObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ArtifactLeakageObservation]: ...
+
+
+class ReplayAttemptObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ReplayAttemptObservation]: ...
+
+
+class SignedFieldTamperingObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[SignedFieldTamperingObservation]: ...
+
+
+class PayloadTamperingObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PayloadTamperingObservation]: ...
+
+
+class StaleStateRootObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[StaleStateRootObservation]: ...
+
+
+class IdentityMismatchObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[IdentityMismatchObservation]: ...
+
+
+class NonceExpirationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[NonceExpirationObservation]: ...
+
+
+class SignerDefectObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[SignerDefectObservation]: ...
+
+
+class L3ProofTransplantObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[L3ProofTransplantObservation]: ...
+
+
+class RevokedCredentialObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[RevokedCredentialObservation]: ...
+
+
+class EvidencePreservationObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[EvidencePreservationObservation]: ...
+
+
+class PolicyAttackObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PolicyAttackObservation]: ...
+
+
+class ToolSequenceObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ToolSequenceObservation]: ...
+
+
+class FactualQAObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[FactualQAObservation]: ...
+
+
+class CitationBackedObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[CitationBackedObservation]: ...
+
+
+class PartialMilestoneObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PartialMilestoneObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -107,6 +296,27 @@ class SUTConfig:
     state_observer: StateObserver | None = None
     rehydration_observer: RehydrationObserver | None = None
     secret_detection_observer: SecretDetectionObserver | None = None
+    unauthorized_mutation_observer: UnauthorizedMutationObserver | None = None
+    token_store_persistence_observer: TokenStorePersistenceObserver | None = None
+    token_ttl_expiry_observer: TokenTTLExpiryObserver | None = None
+    token_persistence_failure_observer: TokenPersistenceFailureObserver | None = None
+    exfiltration_attempt_observer: ExfiltrationAttemptObserver | None = None
+    artifact_leakage_observer: ArtifactLeakageObserver | None = None
+    replay_attempt_observer: ReplayAttemptObserver | None = None
+    signed_field_tampering_observer: SignedFieldTamperingObserver | None = None
+    payload_tampering_observer: PayloadTamperingObserver | None = None
+    stale_state_root_observer: StaleStateRootObserver | None = None
+    identity_mismatch_observer: IdentityMismatchObserver | None = None
+    nonce_expiration_observer: NonceExpirationObserver | None = None
+    signer_defect_observer: SignerDefectObserver | None = None
+    l3_proof_transplant_observer: L3ProofTransplantObserver | None = None
+    revoked_credential_observer: RevokedCredentialObserver | None = None
+    evidence_preservation_observer: EvidencePreservationObserver | None = None
+    policy_attack_observer: PolicyAttackObserver | None = None
+    tool_sequence_observer: ToolSequenceObserver | None = None
+    factual_qa_observer: FactualQAObserver | None = None
+    citation_backed_observer: CitationBackedObserver | None = None
+    partial_milestone_observer: PartialMilestoneObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

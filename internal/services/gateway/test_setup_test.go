@@ -32,7 +32,16 @@ type TestInfrastructure struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DB                 *CanonicalDBService
-	Stores             *Stores
+	DocStore           *DocumentStoreService
+	AppPolicyStore     *AppPolicyStoreService
+	SignerStore        *SignerStoreService
+	ConsensusStore     *ConsensusStoreService
+	StateRootSvc       *StateRootService
+	ReplayStore        *ReplayStoreService
+	KVStore            *KVStoreService
+	SSEStore           *SSEEventService
+	BlobStore          *BlobStoreService
+	AuditStore         *storage.SQLAuditStore
 	Pubsub             *GatewayWebSocketHandler
 	SecretMgr          *SecretManager
 	PKI                *PKIAuthority
@@ -81,7 +90,7 @@ func newTestKeystoreWithKeyring(tb testing.TB, fileSvc fs.RuntimeFileService, lo
 // openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
 // with an in-memory keyring so callers don't need to manage a keystore.
 // Vault auto-initializes on first open; the keystore is for secret operations.
-func openTestDB(t *testing.T, dataDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, *Stores, error) {
+func openTestDB(t *testing.T, dataDir string, fileSvc fs.RuntimeFileService, logger *slog.Logger) (*CanonicalDBService, error) {
 	t.Helper()
 	ks := newTestKeystore(t, fileSvc, logger)
 	vaultDir := fileSvc.Resolve(constants.VaultDirname)
@@ -102,7 +111,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	ks := newTestKeystore(t, fileSvc, logger)
 
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -111,21 +120,25 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	docStore := db.GetDocStore()
+	kvStore := db.GetKVStore()
+	sseStore := db.GetSSEStore()
+
+	pki := newPKIAuthority(fileSvc, docStore, sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(docStore, logger)
+	personaSvc := NewPersonaService(docStore, logger)
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, nil, "", "", "")
+	auth := NewAuthService(docStore, pki, logger, userSvc, personaSvc, resp, nil, "", "", "")
 	// Wire up auth service to user service for cache invalidation
 	userSvc.SetAuthService(auth)
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	cliSessionSvc := NewCLISessionService(docStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
+	webSessionSvc := NewWebSessionService(docStore, logger)
+	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(docStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -138,7 +151,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	require.NoError(t, err)
 	t.Cleanup(func() { suspendedTxService.Close() })
 
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(nil, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(nil, suspendedTxService, sseStore, pubsub, logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -152,7 +165,16 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		Cfg:                cfg,
 		Logger:             logger,
 		DB:                 db,
-		Stores:             stores,
+		DocStore:           db.GetDocStore(),
+		AppPolicyStore:     db.GetAppPolicyStore(),
+		SignerStore:        db.GetSignerStore(),
+		ConsensusStore:     db.GetConsensusStore(),
+		StateRootSvc:       db.GetStateRootSvc(),
+		ReplayStore:        db.GetReplayStore(),
+		KVStore:            db.GetKVStore(),
+		SSEStore:           db.GetSSEStore(),
+		BlobStore:          db.GetBlobStore(),
+		AuditStore:         db.GetAuditStore(),
 		Pubsub:             pubsub,
 		SecretMgr:          sm,
 		PKI:                pki,

@@ -29,15 +29,15 @@ import (
 
 func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionService, *models.User) {
 	t.Helper()
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	user, err := NewUserService(stores.DocStore, logger).CreateUser()
+	user, err := NewUserService(db.GetDocStore(), logger).CreateUser()
 	require.NoError(t, err)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 	resp := response.NewWriter(logger)
-	svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(db.GetDocStore(), logger)
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            svc,
 		WebSessionSvc:      webSessionSvc,
@@ -502,13 +502,13 @@ func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
 
 func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	t.Run("emitPasskeyRegisteredSSE appends event and publishes", func(t *testing.T) {
-		_, stores := newTestDB(t)
+		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+		webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		sseStore := stores.SSEStore
+		sseStore := db.GetSSEStore()
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)
@@ -536,11 +536,11 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 	})
 
 	t.Run("no SSE emission when dependencies not set", func(t *testing.T) {
-		_, stores := newTestDB(t)
+		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+		webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 		resp := response.NewWriter(logger)
-		svc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		svc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:       svc,
@@ -556,7 +556,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 			handler.orchestrator.EmitPasskeyRegisteredSSE(userID, cliSessionID)
 		}
 
-		sseStore := stores.SSEStore
+		sseStore := db.GetSSEStore()
 		route := SSERoute{UserID: userID, CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
@@ -662,16 +662,16 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 	})
 
 	t.Run("expired token returns 410", func(t *testing.T) {
-		_, stores := newTestDB(t)
+		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
-		userSvc := NewUserService(stores.DocStore, logger)
+		userSvc := NewUserService(db.GetDocStore(), logger)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
-		webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+		webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 		resp := response.NewWriter(logger)
-		psvc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		psvc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
+		enrollmentTokenSvc := NewEnrollmentTokenService(db.GetDocStore(), logger)
 		handler := NewPasskeyHandler(PasskeyHandlerDeps{
 			Service:            psvc,
 			WebSessionSvc:      webSessionSvc,
@@ -692,7 +692,7 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 			"consumed":       false,
 		})
 		require.NoError(t, err)
-		require.NoError(t, stores.DocStore.DocSet(
+		require.NoError(t, db.GetDocStore().DocSet(
 			marshaler.CollectionName(constants.CollectionEnrollmentTokens), tok.Token, expiredDoc))
 
 		hh := handler.RegisterChallenge(cfg)
@@ -756,17 +756,17 @@ func TestPasskeyHandler_RegisterChallenge_EnrollmentToken(t *testing.T) {
 // attestation yields 200, a web session cookie, and an SSE
 // passkey.registered event carrying the token's cli_session_id.
 func TestPasskeyHandler_RegisterVerify_EnrollmentToken_Valid(t *testing.T) {
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
 	user, err := userSvc.CreateUser()
 	require.NoError(t, err)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
 	resp := response.NewWriter(logger)
-	psvc, err := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	psvc, err := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
-	sseStore := stores.SSEStore
+	enrollmentTokenSvc := NewEnrollmentTokenService(db.GetDocStore(), logger)
+	sseStore := db.GetSSEStore()
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 	orchestrator, err := NewPasskeyOrchestrator(nil, nil, sseStore, pubsub, logger)

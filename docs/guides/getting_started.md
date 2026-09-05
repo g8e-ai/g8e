@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 ---
 
@@ -77,7 +77,7 @@ Follow the browser prompt to create your passkey. Once enrolled, the CLI holds m
 
 ### 4. Start the platform workloads
 
-With the owner identity established, bring up the Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed):
+With the owner identity established, bring up the Operator, Agentic Ensemble (g8ee), and Dashboard (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for component details:
 
 ```bash
 docker compose --profile bootstrapped up -d
@@ -163,7 +163,7 @@ If you only need the g8e wire protocol, constants, models, enums, or protobuf de
 As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.3
+go get github.com/g8e-ai/g8e/v2@v2.1.4
 ```
 
 Import the protocol packages in your Go code:
@@ -190,7 +190,7 @@ pip install g8e
 Pinned to a specific version:
 
 ```bash
-pip install g8e==2.1.3
+pip install g8e==2.1.4
 ```
 
 The package provides:
@@ -393,7 +393,7 @@ When `--endpoint` (or `-e`) is provided, the operator automatically initiates pl
 
 ### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `ensemble` (g8ee), and `dashboard` (g8ed). The stack uses a two-phase startup model where `docker compose up -d` starts only the unprofiled gateway service. After enrolling the first owner, start the remaining platform workloads under the `bootstrapped` profile and approve their enrollment requests:
+The root `docker-compose.yml` deploys the full platform stack on a shared `g8e-net` bridge network: `g8e-gateway` (PDP), `g8e-operator` (PEP), `ensemble` (g8ee), and `dashboard` (g8ed). See the [g8ee documentation](../ensemble/index.md) and the [g8ed documentation](../dashboard/index.md) for the first-party component details. The stack uses a two-phase startup model where `docker compose up -d` starts only the unprofiled gateway service. After enrolling the first owner, start the remaining platform workloads under the `bootstrapped` profile and approve their enrollment requests:
 
 ```bash
 # Phase 1: Start the gateway

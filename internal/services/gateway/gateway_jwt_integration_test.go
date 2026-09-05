@@ -126,7 +126,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -135,12 +135,12 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
@@ -151,13 +151,13 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db.GetDocStore(), pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -177,7 +177,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, db.GetSSEStore(), pubsub, logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -201,30 +201,30 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,
 			Logger:     logger,
-			AuditStore: stores.AuditStore,
+			AuditStore: db.GetAuditStore(),
 			Responder:  resp,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
-			BlobStore: stores.BlobStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
+			BlobStore: db.GetBlobStore(),
 			Pubsub:    pubsub,
 			Responder: resp,
 		},
 		SignerControllerDeps: SignerControllerDeps{
 			Cfg:         cfg,
 			Logger:      logger,
-			DocStore:    stores.DocStore,
-			SignerStore: stores.SignerStore,
+			DocStore:    db.GetDocStore(),
+			SignerStore: db.GetSignerStore(),
 			Responder:   resp,
 		},
 		BootstrapControllerDeps: BootstrapControllerDeps{
 			Cfg:                cfg,
 			Logger:             logger,
-			DocStore:           stores.DocStore,
+			DocStore:           db.GetDocStore(),
 			UserSvc:            userSvc,
 			PKI:                pki,
 			CLISessionSvc:      cliSessionSvc,
@@ -244,16 +244,16 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		},
 		SessionControllerDeps: SessionControllerDeps{
 			Logger:      logger,
-			DocStore:    stores.DocStore,
+			DocStore:    db.GetDocStore(),
 			Responder:   resp,
 			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
 		},
 		AdminControllerDeps: AdminControllerDeps{
 			Cfg:            cfg,
 			Logger:         logger,
-			DocStore:       stores.DocStore,
-			SignerStore:    stores.SignerStore,
-			ConsensusStore: stores.ConsensusStore,
+			DocStore:       db.GetDocStore(),
+			SignerStore:    db.GetSignerStore(),
+			ConsensusStore: db.GetConsensusStore(),
 			UserSvc:        userSvc,
 			Responder:      resp,
 		},
@@ -267,9 +267,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
 			Pubsub:    pubsub,
 			Auth:      auth,
 			Responder: resp,
@@ -277,8 +277,8 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		HealthControllerDeps: HealthControllerDeps{
 			Cfg:               cfg,
 			Logger:            logger,
-			DocStore:          stores.DocStore,
-			StateRootSvc:      stores.StateRootSvc,
+			DocStore:          db.GetDocStore(),
+			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
 			IsGovernanceReady: func() bool { return true },
@@ -366,7 +366,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -375,12 +375,12 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
@@ -391,13 +391,13 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db.GetDocStore(), pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -417,7 +417,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, db.GetSSEStore(), pubsub, logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -441,30 +441,30 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,
 			Logger:     logger,
-			AuditStore: stores.AuditStore,
+			AuditStore: db.GetAuditStore(),
 			Responder:  resp,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
-			BlobStore: stores.BlobStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
+			BlobStore: db.GetBlobStore(),
 			Pubsub:    pubsub,
 			Responder: resp,
 		},
 		SignerControllerDeps: SignerControllerDeps{
 			Cfg:         cfg,
 			Logger:      logger,
-			DocStore:    stores.DocStore,
-			SignerStore: stores.SignerStore,
+			DocStore:    db.GetDocStore(),
+			SignerStore: db.GetSignerStore(),
 			Responder:   resp,
 		},
 		BootstrapControllerDeps: BootstrapControllerDeps{
 			Cfg:                cfg,
 			Logger:             logger,
-			DocStore:           stores.DocStore,
+			DocStore:           db.GetDocStore(),
 			UserSvc:            userSvc,
 			PKI:                pki,
 			CLISessionSvc:      cliSessionSvc,
@@ -484,16 +484,16 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		},
 		SessionControllerDeps: SessionControllerDeps{
 			Logger:      logger,
-			DocStore:    stores.DocStore,
+			DocStore:    db.GetDocStore(),
 			Responder:   resp,
 			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
 		},
 		AdminControllerDeps: AdminControllerDeps{
 			Cfg:            cfg,
 			Logger:         logger,
-			DocStore:       stores.DocStore,
-			SignerStore:    stores.SignerStore,
-			ConsensusStore: stores.ConsensusStore,
+			DocStore:       db.GetDocStore(),
+			SignerStore:    db.GetSignerStore(),
+			ConsensusStore: db.GetConsensusStore(),
 			UserSvc:        userSvc,
 			Responder:      resp,
 		},
@@ -507,9 +507,9 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
 			Pubsub:    pubsub,
 			Auth:      auth,
 			Responder: resp,
@@ -517,8 +517,8 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		HealthControllerDeps: HealthControllerDeps{
 			Cfg:               cfg,
 			Logger:            logger,
-			DocStore:          stores.DocStore,
-			StateRootSvc:      stores.StateRootSvc,
+			DocStore:          db.GetDocStore(),
+			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
 			IsGovernanceReady: func() bool { return true },
@@ -621,7 +621,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -630,12 +630,12 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
@@ -646,13 +646,13 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+	auth := NewAuthService(db.GetDocStore(), pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(stores.DocStore, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	cliSessionSvc := NewCLISessionService(db.GetDocStore(), logger)
+	operatorSessionSvc := NewOperatorSessionService(db.GetDocStore(), logger)
+	webSessionSvc := NewWebSessionService(db.GetDocStore(), logger)
+	reg := NewRegistrationService(db.GetDocStore(), db.GetKVStore(), pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	passkey, _ := NewPasskeyService(db.GetDocStore(), logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -672,7 +672,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, pubsub, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, db.GetSSEStore(), pubsub, logger)
 	require.NoError(t, err)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:       passkey,
@@ -696,30 +696,30 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,
 			Logger:     logger,
-			AuditStore: stores.AuditStore,
+			AuditStore: db.GetAuditStore(),
 			Responder:  resp,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
-			BlobStore: stores.BlobStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
+			BlobStore: db.GetBlobStore(),
 			Pubsub:    pubsub,
 			Responder: resp,
 		},
 		SignerControllerDeps: SignerControllerDeps{
 			Cfg:         cfg,
 			Logger:      logger,
-			DocStore:    stores.DocStore,
-			SignerStore: stores.SignerStore,
+			DocStore:    db.GetDocStore(),
+			SignerStore: db.GetSignerStore(),
 			Responder:   resp,
 		},
 		BootstrapControllerDeps: BootstrapControllerDeps{
 			Cfg:                cfg,
 			Logger:             logger,
-			DocStore:           stores.DocStore,
+			DocStore:           db.GetDocStore(),
 			UserSvc:            userSvc,
 			PKI:                pki,
 			CLISessionSvc:      cliSessionSvc,
@@ -739,16 +739,16 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		},
 		SessionControllerDeps: SessionControllerDeps{
 			Logger:      logger,
-			DocStore:    stores.DocStore,
+			DocStore:    db.GetDocStore(),
 			Responder:   resp,
 			CrossOrigin: len(cfg.Gateway.AllowedOrigins) > 0,
 		},
 		AdminControllerDeps: AdminControllerDeps{
 			Cfg:            cfg,
 			Logger:         logger,
-			DocStore:       stores.DocStore,
-			SignerStore:    stores.SignerStore,
-			ConsensusStore: stores.ConsensusStore,
+			DocStore:       db.GetDocStore(),
+			SignerStore:    db.GetSignerStore(),
+			ConsensusStore: db.GetConsensusStore(),
 			UserSvc:        userSvc,
 			Responder:      resp,
 		},
@@ -762,9 +762,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		SSEControllerDeps: SSEControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  stores.DocStore,
-			KVStore:   stores.KVStore,
-			SSEStore:  stores.SSEStore,
+			DocStore:  db.GetDocStore(),
+			KVStore:   db.GetKVStore(),
+			SSEStore:  db.GetSSEStore(),
 			Pubsub:    pubsub,
 			Auth:      auth,
 			Responder: resp,
@@ -772,8 +772,8 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		HealthControllerDeps: HealthControllerDeps{
 			Cfg:               cfg,
 			Logger:            logger,
-			DocStore:          stores.DocStore,
-			StateRootSvc:      stores.StateRootSvc,
+			DocStore:          db.GetDocStore(),
+			StateRootSvc:      db.GetStateRootSvc(),
 			Responder:         resp,
 			IsReady:           func() bool { return true },
 			IsGovernanceReady: func() bool { return true },
@@ -874,18 +874,18 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := testutil.TempDir(t)
 	fileSvc := newTestFileSvc(t)
 	ks := newTestKeystore(t, fileSvc, logger)
-	db, stores, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
+	db, err := OpenCanonicalDBService(dbDir, fileSvc.Resolve(constants.VaultDirname), logger, "", ks, fileSvc)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	sm := db.GetSecretManager()
 
-	pki := newPKIAuthority(fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(fileSvc, db.GetDocStore(), sm, logger)
 	err = pki.InitializePKI(nil)
 	require.NoError(t, err)
 
-	userSvc := NewUserService(stores.DocStore, logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
 	// Initialize default personas
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
@@ -896,7 +896,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	}
 
 	resp := response.NewWriter(logger)
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+	auth := NewAuthService(db.GetDocStore(), pki, logger, userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
 
 	t.Run("Token with wrong aud is rejected", func(t *testing.T) {
 		claims := map[string]interface{}{
@@ -963,7 +963,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	})
 
 	t.Run("Token without iss/aud/nbf is accepted when not configured", func(t *testing.T) {
-		authNoValidation := NewAuthService(stores.DocStore, pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
+		authNoValidation := NewAuthService(db.GetDocStore(), pki, testutil.NewTestLogger(), userSvc, personaSvc, resp, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
 		claims := map[string]interface{}{
 			"sub": "user-123",

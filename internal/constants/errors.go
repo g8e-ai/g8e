@@ -378,6 +378,9 @@ var (
 	ErrPubSubActuator                     = errors.New("actuator not configured")
 	ErrPubSubL4Warden                     = errors.New("L4Warden not configured")
 	ErrPubSubMCPGateway                   = errors.New("MCP gateway not configured")
+	ErrPubSubMCPGatewayNil                = errors.New("MCP gateway binding cannot be nil")
+	ErrPubSubMCPGatewayAlreadyBound       = errors.New("MCP gateway already bound")
+	ErrPubSubMCPGatewayBindAfterStart     = errors.New("MCP gateway cannot be bound after start")
 	ErrPubSubMCPMissingToolName           = errors.New("MCP call missing tool_name")
 	ErrPubSubA2AGateway                   = errors.New("A2A gateway not configured")
 	ErrPubSubA2AMissingSkillName          = errors.New("A2A call missing skill_name")
@@ -668,6 +671,7 @@ var (
 	ErrJWTUnsupportedAlg   = errors.New("unsupported signing algorithm")
 	ErrJWTMissingKid       = errors.New("missing kid in header")
 	ErrJWTNotYetValid      = errors.New("token is not yet valid")
+	ErrJWTIssuedInFuture   = errors.New("token was issued in the future")
 	ErrJWTIssuerMismatch   = errors.New("token issuer mismatch")
 	ErrJWTAudienceMismatch = errors.New("token audience mismatch")
 

@@ -4,7 +4,7 @@
 import express from 'express';
 import { now, toISOString } from '../../models/base.js';
 import { AuditDownloadResponse } from '../../models/sse_models.js';
-import { ErrorResponse, AuditEventResponse } from '../../models/response_models.js';
+import { AuditEventResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { AuditPaths } from '../../constants/api_paths.js';

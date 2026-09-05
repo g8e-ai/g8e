@@ -219,7 +219,7 @@ async function handleToolsCall(req, res, { id, params, internalHttpClient, bindi
 
 async function buildVSOContext(req, bindingService) {
     // When using OAuth Client ID auth, there's no web session - resolve bound operators via user_id
-    let boundOperators = [];
+    let boundOperators;
     if (req.webSessionId) {
         boundOperators = await bindingService.resolveBoundOperators(req.webSessionId);
     } else {

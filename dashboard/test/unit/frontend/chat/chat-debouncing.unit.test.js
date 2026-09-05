@@ -253,7 +253,6 @@ describe('ChatComponent debouncing behavior with fake timers [FRONTEND - jsdom]'
                 chat.attemptReconnect = vi.fn(chat.attemptReconnect);
             }
             
-            const originalReconnect = chat.attemptReconnect;
             chat.attemptReconnect = vi.fn(() => {
                 reconnectAttempts++;
                 // Simulate successful reconnection after delay

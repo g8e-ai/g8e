@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,10 +22,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/services/auth"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore"
 	"github.com/g8e-ai/g8e/v2/internal/services/keystore/keystoretest"
+	"github.com/g8e-ai/g8e/v2/internal/services/pubsub"
 	pubsubtest "github.com/g8e-ai/g8e/v2/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/v2/internal/services/vault"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
@@ -34,23 +37,7 @@ import (
 
 func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	// 1. Setup mock client server for bootstrap
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/operators/reauth" {
-			resp := auth.AuthServicesResponse{
-				Success:           true,
-				OperatorID:        "test-op-1",
-				OperatorSessionId: "test-sess-1",
-				Config: &auth.BootstrapConfig{
-					MaxConcurrentTasks: 10,
-					MaxMemoryMB:        1024,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, testutil_MarshalJSON(t, resp))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
+	server := newG8eoBootstrapTestServer(t)
 	defer server.Close()
 
 	// 2. Configure g8eo to point to the mock server
@@ -85,7 +72,20 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
 
-	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t), fileSvc)
+	tlsConfig := newTestTLSConfig(t)
+	factoryCalls := 0
+	factory := func(baseURL, serverName string, logger *slog.Logger, receivedTLSConfig *certs.TLSConfig) (pubsub.PubSubClient, error) {
+		factoryCalls++
+		assert.Equal(t, cfg.PubSubURL, baseURL)
+		assert.Equal(t, cfg.TLSServerName, serverName)
+		assert.NotNil(t, logger)
+		assert.Same(t, tlsConfig, receivedTLSConfig)
+		assert.Equal(t, 10, cfg.MaxConcurrentTasks)
+		assert.Equal(t, "test-op-1", cfg.OperatorID)
+		assert.Equal(t, "test-sess-1", cfg.OperatorSessionId)
+		return pubsubtest.NewMockOperatorPubSubClient(), nil
+	}
+	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), tlsConfig, fileSvc, factory)
 	require.NoError(t, err)
 
 	// 3. Inject mocks
@@ -95,12 +95,6 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	// Inject test keystore (bypasses OS keychain for cross-platform CI)
 	service.mu.Lock()
 	service.keystore = ks
-	service.mu.Unlock()
-
-	// Inject Mock PubSub Client
-	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()
-	service.mu.Lock()
-	service.pubSubClient = mockPubSub
 	service.mu.Unlock()
 
 	// 4. Start the service
@@ -120,9 +114,61 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	}
 
 	assert.True(t, service.running)
+	assert.Equal(t, 1, factoryCalls)
 
 	// Clean up to avoid background goroutines logging after test completion
-	service.Stop(context.Background())
+	require.NoError(t, service.Stop(context.Background()))
+}
+
+func TestG8eoService_Start_FactoryFailureStopsBeforeDependents(t *testing.T) {
+	server := newG8eoBootstrapTestServer(t)
+	defer server.Close()
+
+	cfg := testutil.NewTestConfig(t)
+	u := server.URL[8:]
+	cfg.Endpoint = "127.0.0.1"
+	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPSPort)
+
+	factoryErr := fmt.Errorf("pub/sub client factory unavailable")
+	factoryCalls := 0
+	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t), newTestFileSvc(t), func(string, string, *slog.Logger, *certs.TLSConfig) (pubsub.PubSubClient, error) {
+		factoryCalls++
+		assert.Equal(t, 10, cfg.MaxConcurrentTasks)
+		return nil, factoryErr
+	})
+	require.NoError(t, err)
+	service.bootstrap.SetHTTPClient(server.Client())
+
+	err = service.Start(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, factoryErr)
+	assert.Equal(t, 1, factoryCalls)
+	assert.Nil(t, service.pubSubClient)
+	assert.Nil(t, service.pubSubResults)
+	assert.Nil(t, service.pubSubCommands)
+	assert.Nil(t, service.execution)
+	service.cancel()
+}
+
+func newG8eoBootstrapTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/operators/reauth" {
+			resp := auth.AuthServicesResponse{
+				Success:           true,
+				OperatorID:        "test-op-1",
+				OperatorSessionId: "test-sess-1",
+				Config: &auth.BootstrapConfig{
+					MaxConcurrentTasks: 10,
+					MaxMemoryMB:        1024,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, testutil_MarshalJSON(t, resp))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
 }
 
 func testutil_MarshalJSON(t *testing.T, v interface{}) string {

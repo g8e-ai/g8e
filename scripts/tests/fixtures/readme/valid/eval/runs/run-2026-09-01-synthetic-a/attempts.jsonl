@@ -1,0 +1,10 @@
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-001","task_id":"task-001","arm_id":"baseline","status":"completed","eligible":true,"receipt_id":"rec-001"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-002","task_id":"task-002","arm_id":"baseline","status":"completed","eligible":true,"receipt_id":"rec-002"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-003","task_id":"task-003","arm_id":"baseline","status":"completed","eligible":true,"receipt_id":"rec-003"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-004","task_id":"task-004","arm_id":"baseline","status":"completed","eligible":true,"receipt_id":"rec-004"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-005","task_id":"task-005","arm_id":"baseline","status":"completed","eligible":true,"receipt_id":"rec-005"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-006","task_id":"task-001","arm_id":"governed","status":"completed","eligible":true,"receipt_id":"rec-006"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-007","task_id":"task-002","arm_id":"governed","status":"completed","eligible":true,"receipt_id":"rec-007"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-008","task_id":"task-003","arm_id":"governed","status":"completed","eligible":true,"receipt_id":"rec-008"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-009","task_id":"task-004","arm_id":"governed","status":"completed","eligible":true,"receipt_id":"rec-009"}
+{"schema_version":"1.33.0","run_id":"run-2026-09-01-synthetic-a","attempt_id":"att-010","task_id":"task-005","arm_id":"governed","status":"infrastructure_failure","eligible":false,"receipt_id":null}

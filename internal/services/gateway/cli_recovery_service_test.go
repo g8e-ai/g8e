@@ -34,9 +34,9 @@ import (
 
 func newTestCLIRecoveryService(t *testing.T) *CLIRecoveryService {
 	t.Helper()
-	_, stores := newTestDB(t)
+	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
-	return NewCLIRecoveryService(stores.DocStore, logger)
+	return NewCLIRecoveryService(db.GetDocStore(), logger)
 }
 
 // generateTestCSR generates an ECDSA P-256 key and a PEM-encoded CSR, returning

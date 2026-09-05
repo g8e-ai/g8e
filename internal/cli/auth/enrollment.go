@@ -82,11 +82,12 @@ type EnrollmentGateway interface {
 	ProbeCLISession(ctx context.Context, fileSvc fs.RuntimeFileService) error
 }
 
-// KeyProvider generates CLI key pairs and CSRs. Section 7 will replace the
-// default file-backed implementation with a build-tag-resolved provider that
-// supports both file-backed and platform-backed (Windows CNG/TPM) keys. The
-// coordinator never branches on runtime.GOOS — that decision lives in the
-// provider.
+// KeyProvider is the key-generation abstraction used by the
+// EnrollmentCoordinator. The production implementation is FileKeyProvider,
+// which generates file-backed ECDSA P-256 keys and CSRs on every platform.
+// Tests substitute alternate KeyProvider implementations to drive enrollment
+// without touching real key material. The coordinator never branches on
+// runtime.GOOS — platform behavior lives in the provider.
 type KeyProvider interface {
 	// GenerateCLIKeyAndCSR creates a new CLI private key and CSR for the
 	// given common name. The returned key is staged into EnrollmentArtifacts

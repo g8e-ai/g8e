@@ -9,7 +9,7 @@ import { EventType } from '@g8ed/public/js/constants/events.js';
 
 function makeMarkdownRenderer() {
     return {
-        parseMarkdown: (text, _streaming) => text,
+        parseMarkdown: (text) => text,
         renderMermaidDiagrams: vi.fn(),
     };
 }

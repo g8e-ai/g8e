@@ -44,9 +44,7 @@ The static host's Content Security Policy includes the configured gateway origin
 
 ## Server-Side Gateway Clients
 
-`services/clients/g8eg_http_client.js` can create an `undici.Agent` from client certificate, key, and CA paths and pass it as a fetch dispatcher. `services/clients/g8eg_pubsub_client.js` can build WebSocket TLS options and preserve them when duplicated. The dashboard startup identity holder makes the enrolled app identity available to such clients.
-
-These classes are prepared but inactive in the current server: `server.js` does not construct either client and does not mount services that use them. The container's app enrollment therefore does not alter browser request routing.
+The dashboard container enrolls an mTLS app identity at startup (see [Startup Enrollment](./architecture.md#startup-enrollment)) but `server.js` is a static SPA host and does not construct server-to-server gateway clients. The enrolled identity is resolved and returned by `runStartupEnrollment()`; no module-global holder stores it. See [PKI & Trust](../ensemble/pki.md) for the platform certificate lifecycle that backs the enrollment credential.
 
 ## Configuration Surfaces
 
@@ -67,4 +65,11 @@ The browser-facing and container-facing gateway URLs are intentionally separate.
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
-- [Network Architecture](../architecture/network.md)
+- [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md) — Workload enrollment and in-tree component onboarding
+- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
+- [Docker Gateway Guide](../guides/docker_gateway.md) — Gateway container deployment and configuration
+- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts and Gateway API surfaces
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
+- [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment

@@ -19,7 +19,6 @@
 import {
     OperatorStatus,
     OperatorType,
-    CloudOperatorSubtype,
     HistoryEventType,
 } from '../constants/operator.js';
 import { SourceComponent } from '../constants/ai.js';

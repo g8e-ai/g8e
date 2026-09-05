@@ -64,6 +64,8 @@ type GatewayModeService struct {
 	stateRootSvc          *StateRootService
 	kvStore               *KVStoreService
 	replayStore           *ReplayStoreService
+	sseStore              *SSEEventService
+	blobStore             *BlobStoreService
 	pubsub                *GatewayWebSocketHandler
 	auth                  *AuthService
 	pki                   *PKIAuthority
@@ -134,17 +136,28 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 	// --- DB and pubsub ---
 	var db *CanonicalDBService
-	var stores *Stores
 	var err error
 	if b.db != nil {
 		db = b.db
-		stores = b.db.GetStores()
 	} else {
-		db, stores, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
+		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.VaultDir, logger, cfg.Gateway.VaultKeyPath, nil, b.fileSvc)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 		}
 	}
+
+	// Retrieve narrow typed stores once at the assembly boundary. Consumers
+	// below receive only the specific store they use; the private aggregate
+	// never leaves the persistence package.
+	docStore := db.GetDocStore()
+	signerStore := db.GetSignerStore()
+	consensusStore := db.GetConsensusStore()
+	stateRootSvc := db.GetStateRootSvc()
+	replayStore := db.GetReplayStore()
+	kvStore := db.GetKVStore()
+	sseStore := db.GetSSEStore()
+	blobStore := db.GetBlobStore()
+	auditStore := db.GetAuditStore()
 
 	wsHandler := NewGatewayWebSocketHandler(logger)
 
@@ -152,10 +165,10 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	sm := db.GetSecretManager()
 
 	// --- PKI ---
-	pki := newPKIAuthority(b.fileSvc, stores.DocStore, sm, logger)
+	pki := newPKIAuthority(b.fileSvc, docStore, sm, logger)
 
 	// --- Core services ---
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(docStore, logger)
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
@@ -163,7 +176,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		jwksProvider = NewJWKSProvider(cfg.Gateway.JWKSURL)
 	}
 
-	personaSvc := NewPersonaService(stores.DocStore, logger)
+	personaSvc := NewPersonaService(docStore, logger)
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
 		if err != nil {
@@ -179,25 +192,25 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	jwtRoleClaim := cfg.Gateway.JWTRoleClaim
 	jwtIssuer := cfg.Gateway.JWTIssuer
 	jwtAudience := cfg.Gateway.JWTAudience
-	auth := NewAuthService(stores.DocStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
+	auth := NewAuthService(docStore, pki, logger, userSvc, personaSvc, res, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
 
 	// Wire the pubsub command relay dependencies: the gateway intercepts
 	// app-published command intent on cmd: channels, validates the target
 	// operator session, fetches the current state root, and constructs the
 	// governed GovernanceEnvelope before fan-out.
-	wsHandler.SetCommandRelayDeps(stores.StateRootSvc, auth, string(cfg.Gateway.Posture))
+	wsHandler.SetCommandRelayDeps(stateRootSvc, auth, string(cfg.Gateway.Posture))
 
 	// Wire the pubsub receipt relay dependencies: the gateway intercepts
 	// operator-published signed ActionReceipts on receipts: channels,
 	// verifies the receipt signature against the operator's actuator public
 	// key (via the SignerStore), records the receipt in the gateway's
 	// SQLAuditStore, and fans out the envelope to subscribers.
-	wsHandler.SetReceiptRelayDeps(stores.SignerStore, stores.AuditStore)
+	wsHandler.SetReceiptRelayDeps(signerStore, auditStore)
 
-	cliSessionSvc := NewCLISessionService(stores.DocStore, logger)
-	operatorSessionSvc := NewOperatorSessionService(stores.DocStore, logger)
-	webSessionSvc := NewWebSessionService(stores.DocStore, logger)
+	cliSessionSvc := NewCLISessionService(docStore, logger)
+	operatorSessionSvc := NewOperatorSessionService(docStore, logger)
+	webSessionSvc := NewWebSessionService(docStore, logger)
 
 	// --- Certificate identity and PKI initialization ---
 	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
@@ -214,7 +227,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		}
 	}
 
-	reg := NewRegistrationService(stores.DocStore, stores.KVStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+	reg := NewRegistrationService(docStore, kvStore, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
 	// --- Passkey ---
 	passkeyCfg := &PasskeyConfig{
@@ -224,7 +237,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		HTTPPort:  cfg.Gateway.HTTPPort,
 		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
-	passkey, err := NewPasskeyService(stores.DocStore, logger, passkeyCfg)
+	passkey, err := NewPasskeyService(docStore, logger, passkeyCfg)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
@@ -271,7 +284,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	consensusSvc := b.consensusSvc
 	l2Deliberator := b.deliberator
 	if consensusSvc == nil && cfg.Gateway.Posture.RequiresL2() && cfg.Gateway.ConsensusID != "" {
-		policy, err := stores.ConsensusStore.GetConsensus(cfg.Gateway.ConsensusID)
+		policy, err := consensusStore.GetConsensus(cfg.Gateway.ConsensusID)
 		if err == nil && policy != nil {
 			fileProvider := consensus.NewFileKeyProvider(cfg.Gateway.SecretsDir, cfg.Gateway.ConsensusID)
 			keyProvider := consensus.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
@@ -294,21 +307,21 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	// --- Command Service (OperatorPubSubService) ---
 	cmdSvc := b.cmdSvc
 	if cmdSvc == nil {
-		cliVerifier := NewCLISessionVerifier(stores.DocStore, pki, logger, userSvc, cliSessionSvc)
+		cliVerifier := NewCLISessionVerifier(docStore, pki, logger, userSvc, cliSessionSvc)
 		l3Notary := governance.NewGatewayL3Notary(cliVerifier, passkey, logger)
 		platformDeps := &pubsub.PlatformEnrollmentDeps{
-			DocStore:         stores.DocStore,
+			DocStore:         docStore,
 			PKI:              pki,
 			CLISessions:      cliSessionSvc,
 			OperatorSessions: operatorSessionSvc,
 			Posture:          string(cfg.Gateway.Posture),
 		}
 		govCore := pubsub.GovernanceCoreDeps{
-			ReplayStore:       stores.ReplayStore,
-			StateRootProvider: stores.StateRootSvc,
-			TransactionAudit:  stores.DocStore,
+			ReplayStore:       replayStore,
+			StateRootProvider: stateRootSvc,
+			TransactionAudit:  docStore,
 			L3Notary:          l3Notary,
-			SignerStore:       stores.SignerStore,
+			SignerStore:       signerStore,
 			Doctrine:          doctrine,
 		}
 		execSvc := execution.NewExecutionService(cfg, logger)
@@ -317,9 +330,9 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 
 		govModeDeps := &pubsub.GatewayModeDeps{
 			GovernanceCoreDeps:     govCore,
-			GovernedDocStore:       stores.DocStore,
-			ConsensusPolicyStore:   stores.ConsensusStore,
-			FieldReader:            stores.DocStore,
+			GovernedDocStore:       docStore,
+			ConsensusPolicyStore:   consensusStore,
+			FieldReader:            docStore,
 			Consensus:              consensusSvc,
 			PlatformEnrollmentDeps: platformDeps,
 			Posture:                cfg.Gateway.Posture,
@@ -332,7 +345,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 				Execution:          execSvc,
 				FileEdit:           fileEditSvc,
 				PubSubClient:       loopbackClient,
-				AuditStore:         stores.AuditStore,
+				AuditStore:         auditStore,
 				Scrubbing:          scrubbingService,
 				ActuatorSigningKey: actuatorPriv,
 				ActuatorKeyID:      actuatorKeyID,
@@ -347,12 +360,12 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	}
 
 	// --- Platform enrollment service (C2: concrete cmdSvc injected) ---
-	platformEnrollmentSvc := NewPlatformEnrollmentService(stores.DocStore, userSvc, cmdSvc, stores.StateRootSvc, string(cfg.Gateway.Posture), logger)
+	platformEnrollmentSvc := NewPlatformEnrollmentService(docStore, userSvc, cmdSvc, stateRootSvc, string(cfg.Gateway.Posture), logger)
 
 	// --- MCP gateway (C2: concrete cmdSvc, auditLogger, l2Deliberator injected) ---
 	var auditLogger mcp.AuditLogger
-	if stores.AuditStore != nil {
-		auditLogger = pubsub.NewAuditLogger(stores.AuditStore, logger)
+	if auditStore != nil {
+		auditLogger = pubsub.NewAuditLogger(auditStore, logger)
 	}
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
@@ -365,14 +378,14 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		Posture:                string(cfg.Gateway.Posture),
 		A2ADownstreamURL:       cfg.Gateway.A2ADownstreamURL,
 		PublicBaseURL:          publicBaseURL,
-		AuditStore:             stores.AuditStore,
-		AuditReceiptQuery:      stores.AuditStore,
+		AuditStore:             auditStore,
+		AuditReceiptQuery:      auditStore,
 		EnvProc:                cmdSvc,
-		StateRootProvider:      stores.StateRootSvc,
+		StateRootProvider:      stateRootSvc,
 		SigningKey:             actuatorPriv,
 		KeyID:                  actuatorKeyID,
 		DownstreamURL:          cfg.Gateway.MCPDownstreamURL,
-		DBService:              stores.DocStore,
+		DBService:              docStore,
 		SessionValidator:       cmdSvc,
 		AuditLogger:            auditLogger,
 		L2ConsensusDeliberator: l2Deliberator,
@@ -381,17 +394,17 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	// Wire egress via single atomic setter
-	if cmdSvc != nil {
-		cmdSvc.SetMCPGateway(mcpGateway)
+	// The command service processes MCP envelopes for the MCP gateway, while the MCP gateway performs verified command-service egress. Complete this unavoidable construction cycle exactly once before either service starts.
+	if err := cmdSvc.BindMCPGateway(mcpGateway); err != nil {
+		return nil, fmt.Errorf("gateway: bind MCP gateway to command service: %w", err)
 	}
 
 	// --- Passkey orchestrator and handler ---
-	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, stores.SSEStore, wsHandler, logger)
+	passkeyOrchestrator, err := NewPasskeyOrchestrator(mcpGateway, suspendedTxService, sseStore, wsHandler, logger)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey orchestrator: %w", err)
 	}
-	enrollmentTokenSvc := NewEnrollmentTokenService(stores.DocStore, logger)
+	enrollmentTokenSvc := NewEnrollmentTokenService(docStore, logger)
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:            passkey,
 		WebSessionSvc:      webSessionSvc,
@@ -407,13 +420,15 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		fileSvc:               b.fileSvc,
 		doctrine:              doctrine,
 		db:                    db,
-		docStore:              stores.DocStore,
-		consensusStore:        stores.ConsensusStore,
-		signerStore:           stores.SignerStore,
-		auditStore:            stores.AuditStore,
-		stateRootSvc:          stores.StateRootSvc,
-		kvStore:               stores.KVStore,
-		replayStore:           stores.ReplayStore,
+		docStore:              docStore,
+		consensusStore:        consensusStore,
+		signerStore:           signerStore,
+		auditStore:            auditStore,
+		stateRootSvc:          stateRootSvc,
+		kvStore:               kvStore,
+		replayStore:           replayStore,
+		sseStore:              sseStore,
+		blobStore:             blobStore,
 		pubsub:                wsHandler,
 		auth:                  auth,
 		pki:                   pki,
@@ -431,7 +446,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		envProc:               cmdSvc,
 		platformEnrollmentSvc: platformEnrollmentSvc,
 		consensusSvc:          consensusSvc,
-		dispatchSvc:           NewDispatchService(logger, wsHandler, stores.StateRootSvc, auth, string(cfg.Gateway.Posture)),
+		dispatchSvc:           NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture)),
 		responder:             res,
 	}
 
@@ -584,24 +599,24 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		AuditControllerDeps: AuditControllerDeps{
 			Cfg:        cfg,
 			Logger:     logger,
-			AuditStore: ls.db.GetStores().AuditStore,
+			AuditStore: ls.auditStore,
 			Responder:  ls.responder,
 		},
 		DataControllerDeps: DataControllerDeps{
 			Cfg:       cfg,
 			Logger:    logger,
-			DocStore:  ls.db.GetStores().DocStore,
-			KVStore:   ls.db.GetStores().KVStore,
-			SSEStore:  ls.db.GetStores().SSEStore,
-			BlobStore: ls.db.GetStores().BlobStore,
+			DocStore:  ls.docStore,
+			KVStore:   ls.kvStore,
+			SSEStore:  ls.sseStore,
+			BlobStore: ls.blobStore,
 			Pubsub:    pubsub,
 			Responder: ls.responder,
 		},
 		SignerControllerDeps: SignerControllerDeps{
 			Cfg:         cfg,
 			Logger:      logger,
-			DocStore:    ls.db.GetStores().DocStore,
-			SignerStore: ls.db.GetStores().SignerStore,
+			DocStore:    ls.docStore,
+			SignerStore: ls.signerStore,
 			Responder:   ls.responder,
 		},
 		BootstrapControllerDeps: BootstrapControllerDeps{
@@ -685,7 +700,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			Logger:    logger,
 			DocStore:  ls.docStore,
 			KVStore:   ls.kvStore,
-			SSEStore:  ls.db.GetStores().SSEStore,
+			SSEStore:  ls.sseStore,
 			Pubsub:    pubsub,
 			Auth:      auth,
 			Responder: ls.responder,

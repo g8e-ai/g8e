@@ -100,8 +100,10 @@ For every renamed, removed, or changed identifier, search the docs:
 grep -rnE 'OldName|old_command|OLD_CONSTANT|removedEndpoint' docs/ protocol/docs/ --include='*.md'
 
 # Find docs with explicit g8e version callouts (go get, pip install, pip download) that
-# reference the previous release version. These must be updated every release.
-grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md --include='*.md' \
+# reference the previous release version. These must be updated every release. The README
+# template (docs/templates/README.md.tmpl) is included because it carries the version
+# callout that `make readme` renders into README.md.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md docs/templates/README.md.tmpl --include='*.md' --include='*.tmpl' \
   | grep -v release_notes | grep -v CHANGELOG
 
 # Check which docs were modified in the release range
@@ -142,6 +144,7 @@ Review the following documentation areas against the change inventory. For each 
 - **Guides** (`docs/guides/`): If CLI commands, flags, env vars, or setup steps changed, update the affected guides and any embedded command examples.
 - **Glossary / compliance** (`docs/reference/`): If terminology or control mappings changed, reconcile them.
 - **Developer docs** (`docs/devs/`): If code structure changed (new files, renamed files, deleted files, new packages), update `docs/devs/codemap.md` and any other relevant dev docs.
+- **README template** (`docs/templates/README.md.tmpl`): If the README's version callouts or any narrative content changed, update the template then run `make readme` to regenerate `README.md`. The template is the source of truth; `README.md` is a generated artifact and should not be edited directly.
 - **CHANGELOG / release notes**: Ensure every user-visible change (added, changed, removed, deprecated, fixed, security) is captured.
 
 ### How to Reconcile
@@ -454,7 +457,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - `docs/diagrams/`: Mermaid diagrams and flowcharts
 - `docs/release_notes/`: Historical release notes (past entries are immutable)
 - `demos/`: Demo configurations and doctrine files
-- `README.md`: Uses a dynamic GitHub badge for latest release; no hardcoded version
+- `README.md`: Generated from `docs/templates/README.md.tmpl` by `make readme`. The README itself does not carry a `Version:` header, but the template contains a `go get ...@vX.Y.Z` version callout that must be updated every release. Edit the template, then run `make readme` to regenerate `README.md`. Do not edit `README.md` directly.
 
 ---
 
@@ -463,7 +466,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 `make release` handles version syncing, tagging, and pushing (see [Release Workflow](#release-workflow)). The following must still be done manually:
 
 - [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
-- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation))
+- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This includes the README template (`docs/templates/README.md.tmpl`), which carries a `go get ...@vX.Y.Z` callout; after updating the template, run `make readme` to regenerate `README.md`. Do not edit `README.md` directly — it is a generated artifact
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. Generate compliance evidence**: Run `g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/` to produce the per-release compliance evidence report and CSV (see [Compliance Evidence Generation](#compliance-evidence-generation))
 - [ ] **5. `VERSION`**: Set to `vX.Y.Z`
@@ -475,7 +478,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **11. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **12. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
 
-**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `protocol/python/uv.lock`), all made by the agent, plus `make proto` to regenerate the downstream `ensemble/uv.lock` and `ensemble/evals/uv.lock`. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, release notes, and compliance evidence.
+**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `protocol/python/uv.lock`), all made by the agent, plus `make proto` to regenerate the downstream `ensemble/uv.lock` and `ensemble/evals/uv.lock` and `make readme` to regenerate `README.md` from the updated template. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, release notes, and compliance evidence.
 
 > **Workflow note:** All release prep (steps 1-10) happens on a feature branch. The agent does steps 1-9 and stops; it does not commit, push, or open the PR. The release owner does steps 11-12 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
@@ -514,6 +517,13 @@ grep -A1 '^name = "g8e"' ensemble/uv.lock
 grep -A1 '^name = "g8e"' ensemble/evals/uv.lock
 # Both should show X.Y.Z matching RELEASE_NUM.
 
+# 4c. Verify README.md is in sync with its template. `make readme` regenerates
+#     README.md from docs/templates/README.md.tmpl during PR prep (step 2). If
+#     this fails, the template was updated but `make readme` was not run (or vice
+#     versa). Run `make readme` to regenerate.
+make readme-check
+# Should print "README.md is up to date" and exit 0.
+
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
 #    version; should return nothing for docs modified in this release. Docs NOT modified
 #    are expected to still show the old version (that's the point). To check only modified
@@ -540,13 +550,15 @@ grep -rnE 'OldName|old_command|OLD_CONSTANT' docs/ protocol/docs/ --include='*.m
 #    release version in every release, regardless of whether the doc was touched
 #    by a code change. Should return nothing. Third-party tool version pins
 #    (e.g., `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`) are not g8e
-#    callouts and are excluded by the pattern.
-grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md --include='*.md' \
+#    callouts and are excluded by the pattern. The README template
+#    (docs/templates/README.md.tmpl) is included because it is the source of the
+#    version callout rendered into README.md by `make readme`.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md docs/templates/README.md.tmpl --include='*.md' --include='*.tmpl' \
   | grep -v release_notes | grep -v CHANGELOG \
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set all three version entries to `X.Y.Z` matching `VERSION`) before handing off to the release owner. If step 4b shows a mismatch, `make proto` was not run after bumping the `protocol/python` version — run `make proto` to regenerate the downstream lockfiles. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
+If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set all three version entries to `X.Y.Z` matching `VERSION`) before handing off to the release owner. If step 4b shows a mismatch, `make proto` was not run after bumping the `protocol/python` version — run `make proto` to regenerate the downstream lockfiles. If step 4c fails, the README template was updated but `make readme` was not run (or the template and README.md are otherwise out of sync) — run `make readme` to regenerate `README.md`. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
 
 ---
 

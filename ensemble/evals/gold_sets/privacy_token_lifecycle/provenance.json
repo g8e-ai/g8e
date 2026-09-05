@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "privacy_token_lifecycle",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/privacy/loader.py",
+    "code_sha256": "f89f0ce29998588fa5fdcc41384b76290be6010a10e1ab511d8264620afbe741"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 3,
+    "sha256": "19b021eb5941fd1d4172808e7c9f0c55efbbc8d846c2472b12bf3efdeb948944"
+  },
+  "partition": "development",
+  "domain_strata": ["privacy"]
+}

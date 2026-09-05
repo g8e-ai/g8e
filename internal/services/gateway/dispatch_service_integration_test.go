@@ -55,7 +55,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	}
 	userBytes, err := json.Marshal(userDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	opDoc := &models.OperatorDocumentGo{
 		ID:                operatorID,
@@ -68,7 +68,7 @@ func seedOperatorForDispatch(t *testing.T, infra *TestInfrastructure) (operatorI
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes))
 
 	return operatorID, operatorSessionID, userID
 }
@@ -87,7 +87,7 @@ func seedCLISessionForDispatch(t *testing.T, infra *TestInfrastructure, userID s
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
+	require.NoError(t, infra.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)

@@ -18,12 +18,11 @@ import { ErrorResponse, OperatorBinaryAvailabilityResponse } from '../../models/
 
 /**
  * @param {Object} options
- * @param {Object} options.settings - Settings object
  * @param {Object} options.operatorDownloadService - OperatorDownloadService instance
  * @param {Object} options.downloadAuthService - DownloadAuthService instance
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
-export function createOperatorRouter({ settings, operatorDownloadService, downloadAuthService, authorizationMiddleware }) {
+export function createOperatorRouter({ operatorDownloadService, downloadAuthService, authorizationMiddleware }) {
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -35,7 +34,6 @@ export function createOperatorRouter({ settings, operatorDownloadService, downlo
     router.get(OperatorPaths.HEALTH, requireInternalOrigin, async (req, res, next) => {
         try {
             const binaryStatus = await operatorDownloadService.getPlatformAvailability();
-            const availablePlatforms = Object.keys(binaryStatus).filter(p => binaryStatus[p].available);
             const allPlatformsAvailable = Object.values(binaryStatus).every(p => p.available);
 
             const isHealthy = allPlatformsAvailable;

@@ -18,10 +18,9 @@
  * `AppEnrollmentService` is replaced with a stub. No filesystem, no network.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { runStartupEnrollment } from '../../../../server.js';
 import { ConfigurationError } from '../../../../services/infra/app-enrollment-service.js';
-import { getAppIdentity, setAppIdentity } from '../../../../services/infra/app-identity.js';
 
 function _stubIdentity(appId = 'spiffe://g8e.local/app/g8ed') {
     return {
@@ -55,14 +54,6 @@ describe('runStartupEnrollment', () => {
 
     beforeEach(() => {
         _onFatalError = vi.fn();
-        // Reset the module-level identity holder between tests so a prior
-        // test's setAppIdentity does not leak into the next assertion.
-        setAppIdentity(null);
-    });
-
-    afterEach(() => {
-        setAppIdentity(null);
-        vi.restoreAllMocks();
     });
 
     it('proceeds when loadIdentity succeeds and does not call enroll', async () => {
@@ -75,7 +66,6 @@ describe('runStartupEnrollment', () => {
         expect(svc.enroll).not.toHaveBeenCalled();
         expect(_onFatalError).not.toHaveBeenCalled();
         expect(result).toEqual(identity);
-        expect(getAppIdentity()).toEqual(identity);
     });
 
     it('falls back to enroll when loadIdentity throws ConfigurationError', async () => {
@@ -91,7 +81,6 @@ describe('runStartupEnrollment', () => {
         expect(svc.enroll).toHaveBeenCalledTimes(1);
         expect(_onFatalError).not.toHaveBeenCalled();
         expect(result).toEqual(enrolled);
-        expect(getAppIdentity()).toEqual(enrolled);
     });
 
     it('calls onFatalError and returns null when loadIdentity throws a non-ConfigurationError', async () => {
@@ -105,7 +94,6 @@ describe('runStartupEnrollment', () => {
         expect(_onFatalError).toHaveBeenCalledTimes(1);
         expect(_onFatalError).toHaveBeenCalledWith(unexpected);
         expect(result).toBeNull();
-        expect(getAppIdentity()).toBeNull();
     });
 
     it('calls onFatalError and returns null when enroll throws after a ConfigurationError load failure', async () => {
@@ -122,38 +110,37 @@ describe('runStartupEnrollment', () => {
         expect(_onFatalError).toHaveBeenCalledTimes(1);
         expect(_onFatalError).toHaveBeenCalledWith(enrollErr);
         expect(result).toBeNull();
-        expect(getAppIdentity()).toBeNull();
     });
 
-    it('stores the loaded identity in the app-identity holder', async () => {
+    it('returns the loaded identity on the load path', async () => {
         const identity = _stubIdentity('spiffe://g8e.local/app/g8ed');
         const svc = _stubService({ loadResult: identity });
 
-        await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
+        const result = await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
 
-        expect(getAppIdentity()).toBe(identity);
+        expect(result).toBe(identity);
     });
 
-    it('stores the enrolled identity in the app-identity holder on the enroll path', async () => {
+    it('returns the enrolled identity on the enroll path', async () => {
         const identity = _stubIdentity('spiffe://g8e.local/app/g8ed');
         const svc = _stubService({
             loadThrows: new ConfigurationError('near-expiry'),
             enrollResult: identity,
         });
 
-        await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
+        const result = await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
 
-        expect(getAppIdentity()).toBe(identity);
+        expect(result).toBe(identity);
     });
 
-    it('does not store an identity when onFatalError is invoked', async () => {
+    it('returns null and does not produce an identity when onFatalError is invoked', async () => {
         const svc = _stubService({
             loadThrows: new ConfigurationError('missing'),
             enrollThrows: new ConfigurationError('enrollment failed'),
         });
 
-        await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
+        const result = await runStartupEnrollment({ enrollmentService: svc, onFatalError: _onFatalError });
 
-        expect(getAppIdentity()).toBeNull();
+        expect(result).toBeNull();
     });
 });

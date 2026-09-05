@@ -81,6 +81,10 @@ def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp
         lambda _path: SimpleNamespace(selected_keys=[1]),
     )
     monkeypatch.setattr(
+        "g8e_evals.benchmarks.ifeval.loader.validate_provenance",
+        lambda _provenance: None,
+    )
+    monkeypatch.setattr(
         "g8e_evals.benchmarks.ifeval.loader.validate_dataset",
         lambda _path, _provenance: None,
     )
@@ -123,6 +127,75 @@ def test_ifeval_subset_provenance_matches_source_and_transformation():
     assert provenance.source.license_spdx == "Apache-2.0"
     assert provenance.selected_keys == list(import_subset.SELECTED_KEYS)
     assert hashlib.sha256(transformation.read_bytes()).hexdigest() == provenance.transformation.code_sha256
+    assert provenance.partition == "development"
+    assert provenance.domain_strata == ["utility"]
+
+
+def _make_ifeval_provenance_dict() -> dict:
+    return {
+        "schema_version": 1,
+        "benchmark": "ifeval_subset",
+        "source": {
+            "url": "https://example.com",
+            "revision": "rev",
+            "license_spdx": "Apache-2.0",
+            "license_url": "https://example.com",
+            "sha256": "0" * 64,
+        },
+        "selected_keys": [1001],
+        "transformation": {
+            "description": "stub",
+            "code_path": "stub",
+            "code_sha256": "0" * 64,
+            "fixture_path": "stub",
+            "fixture_sha256": "0" * 64,
+        },
+        "output": {
+            "path": "input_data.jsonl",
+            "rows": 1,
+            "sha256": "0" * 64,
+        },
+        "partition": "development",
+        "domain_strata": ["utility"],
+    }
+
+
+@pytest.mark.unit
+def test_ifeval_provenance_rejects_missing_partition():
+    from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance
+
+    base = _make_ifeval_provenance_dict()
+    del base["partition"]
+    with pytest.raises(ValueError, match="partition"):
+        DatasetProvenance.model_validate(base)
+
+
+@pytest.mark.unit
+def test_ifeval_provenance_rejects_missing_domain_strata():
+    from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance
+
+    base = _make_ifeval_provenance_dict()
+    del base["domain_strata"]
+    with pytest.raises(ValueError, match="domain_strata"):
+        DatasetProvenance.model_validate(base)
+
+
+@pytest.mark.unit
+def test_ifeval_validate_provenance_accepts_complete_manifest():
+    from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance, validate_provenance
+
+    provenance = DatasetProvenance.model_validate(_make_ifeval_provenance_dict())
+    validate_provenance(provenance)
+
+
+@pytest.mark.unit
+def test_ifeval_validate_provenance_rejects_zero_schema_version():
+    from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance, validate_provenance
+
+    provenance = DatasetProvenance.model_validate(_make_ifeval_provenance_dict())
+    provenance.schema_version = 0
+    with pytest.raises(ValueError, match="schema_version"):
+        validate_provenance(provenance)
 
 
 @pytest.mark.integration

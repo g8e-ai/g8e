@@ -14,7 +14,6 @@ import { getOperatorService } from '../../services/initialization.js';
 
 export function createSSERouter({
     sseService,
-    operatorService,
     authMiddleware,
     authorizationMiddleware,
     rateLimiters
@@ -46,7 +45,7 @@ export function createSSERouter({
         let resolvedOperatorService;
         try {
             resolvedOperatorService = getResolvedOperatorService();
-        } catch (e) {
+        } catch {
             res.status(500).end();
             return;
         }

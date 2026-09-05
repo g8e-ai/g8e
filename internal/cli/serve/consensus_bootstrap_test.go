@@ -452,7 +452,7 @@ func TestBootstrapConsensusPolicy_PathIsDirectory(t *testing.T) {
 
 	tmpDir := testutil.TempDir(t)
 	// Pass the directory itself as the config path — os.ReadFile should fail
-	err := consensusPolicyBootstrap(nil, tmpDir, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, nil, tmpDir, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapReadConfig),
 		"reading a directory should produce ErrConsensusBootstrapReadConfig")
@@ -465,7 +465,7 @@ func TestBootstrapConsensusPolicy_EmptyFile(t *testing.T) {
 	configPath := filepath.Join(tmpDir, constants.ConsensusBootstrapConfigFilename)
 	require.NoError(t, os.WriteFile(configPath, []byte{}, 0600))
 
-	err := consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err := consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	// Empty file produces a JSON parse error (unexpected end of JSON input)
 	assert.True(t, errors.Is(err, constants.ErrConsensusBootstrapParseConfig))
@@ -486,7 +486,7 @@ func TestBootstrapConsensusPolicy_ValidConfigNilStoresOnlyChecksStoresAfterParse
 
 	// With nil stores, the file is read and parsed successfully, then
 	// stores == nil check triggers ErrGatewayStoresNil (not a DB error).
-	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil))
 }
@@ -506,7 +506,7 @@ func TestBootstrapConsensusPolicy_NilStoresWithInvalidSeedHex(t *testing.T) {
 
 	// Even with nil stores, the nil check happens after parse but before
 	// seed derivation. So we should get ErrGatewayStoresNil, not a seed error.
-	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
 		"nil stores check occurs before seed derivation")
@@ -539,7 +539,7 @@ func TestBootstrapConsensusPolicy_NilStoresWithMemberSeeds(t *testing.T) {
 	// With nil stores, the file is read and parsed successfully, then
 	// stores == nil check triggers ErrGatewayStoresNil (not a parse error).
 	// This proves the member_seeds format parses cleanly.
-	err = consensusPolicyBootstrap(nil, configPath, constants.TestPathShortSecrets, logger)
+	err = consensusPolicyBootstrap(nil, nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrGatewayStoresNil),
 		"member_seeds format must parse cleanly; nil stores check fires after parse")

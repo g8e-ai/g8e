@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "governance_adversarial",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/governance/loader.py",
+    "code_sha256": "4132c1393c96c5f4f38963b80e3d50bdc4306839701daf55466fd51e87d28689"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 7,
+    "sha256": "3bf0fe1e55940db854cd3ead8098242c61ac5e1adc6c97d6d7dae6d12942f532"
+  },
+  "partition": "development",
+  "domain_strata": ["security", "governance"]
+}

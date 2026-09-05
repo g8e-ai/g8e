@@ -52,7 +52,7 @@ class MarkdownRenderer {
             if (lang && this._hljs && this._hljs.getLanguage(lang)) {
                 try {
                     highlightedCode = this._hljs.highlight(content, { language: lang }).value;
-                } catch (e) {
+                } catch {
                     highlightedCode = this.escapeHtml(content);
                 }
             } else {
@@ -125,7 +125,6 @@ class MarkdownRenderer {
 
             const safeHref = this.escapeHtml(href);
             const title = token.attrGet('title');
-            const safeTitle = title ? ` title="${this.escapeHtml(title)}"` : '';
             token.attrSet('href', safeHref);
             if (title) {
                 token.attrSet('title', this.escapeHtml(title));

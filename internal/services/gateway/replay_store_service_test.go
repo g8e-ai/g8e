@@ -19,8 +19,8 @@ import (
 
 func newTestReplayStoreService(t *testing.T) *ReplayStoreService {
 	t.Helper()
-	_, stores := newTestDB(t)
-	return stores.ReplayStore
+	db := newTestDB(t)
+	return db.GetReplayStore()
 }
 
 func TestReplayStoreService_ReserveNonce(t *testing.T) {

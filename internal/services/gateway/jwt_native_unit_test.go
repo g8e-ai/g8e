@@ -298,6 +298,15 @@ func TestParseAndVerifyJWT_Unit(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("Issued in future outside clock skew", func(t *testing.T) {
+		claims := map[string]interface{}{
+			"iat": time.Now().Add(2 * time.Minute).Unix(),
+		}
+		token := generateTestJWT(t, privKey, kid, nil, claims)
+		_, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "", "")
+		assert.ErrorIs(t, err, constants.ErrJWTIssuedInFuture)
+	})
+
 	t.Run("Issuer mismatch", func(t *testing.T) {
 		token := generateTestJWT(t, privKey, kid, nil, validClaims)
 		_, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "wrong-issuer", "")

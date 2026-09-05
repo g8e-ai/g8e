@@ -40,7 +40,7 @@ import (
 func setupTestCLIRecoveryController(t *testing.T) (*CLIRecoveryController, *models.User) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	recoverySvc := NewCLIRecoveryService(infra.Stores.DocStore, infra.Logger)
+	recoverySvc := NewCLIRecoveryService(infra.DocStore, infra.Logger)
 
 	c := newCLIRecoveryController(CLIRecoveryControllerDeps{
 		Cfg:                infra.Cfg,
@@ -50,7 +50,7 @@ func setupTestCLIRecoveryController(t *testing.T) (*CLIRecoveryController, *mode
 		PKI:                infra.PKI,
 		CLISessionSvc:      infra.CLISessionSvc,
 		OperatorSessionSvc: infra.OperatorSessionSvc,
-		DocStore:           infra.Stores.DocStore,
+		DocStore:           infra.DocStore,
 		Responder:          infra.Responder,
 	})
 
@@ -175,7 +175,7 @@ func TestCLIRecoveryController_Request_MissingCSR(t *testing.T) {
 func TestCLIRecoveryController_Request_Unbootstrapped(t *testing.T) {
 	// Use fresh infrastructure with no users created.
 	infra := setupTestInfrastructure(t, false)
-	recoverySvc := NewCLIRecoveryService(infra.Stores.DocStore, infra.Logger)
+	recoverySvc := NewCLIRecoveryService(infra.DocStore, infra.Logger)
 	c := newCLIRecoveryController(CLIRecoveryControllerDeps{
 		Cfg:         infra.Cfg,
 		Logger:      infra.Logger,
@@ -653,7 +653,7 @@ func seedCLIIdentityForRecoveryApprove(t *testing.T, infra *TestInfrastructure) 
 	}
 	cliBytes, err := json.Marshal(cliDoc)
 	require.NoError(t, err)
-	require.NoError(t, infra.Stores.DocStore.DocSet(
+	require.NoError(t, infra.DocStore.DocSet(
 		marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliBytes,
 	))
 

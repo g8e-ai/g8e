@@ -23,3 +23,17 @@ g8ee is an agentic ensemble that acts as an L2 producer, emitting typed, signed 
 | [Testing](tests.md) | Testing framework and practices |
 | [Evals](evals.md) | Evaluation suite and benchmarks |
 | [Constants](constants.md) | Constants and configuration reference |
+
+## Related Platform Documentation
+
+- [Platform Overview](../architecture/overview.md) — Three-component g8e platform architecture and service topology
+- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
+- [Governance Gateway](../architecture/gateway.md) — Gateway architecture, protocol surfaces, and PKI authority
+- [Governed Operator](../architecture/operator.md) — Operator architecture, L4 Warden, and L5 Actuator execution boundary
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline and governance postures
+- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts, GovernanceEnvelope schema, and SPIFFE identifiers
+- [Authentication & Authorization](../architecture/auth.md) — mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
+- [SSE Streaming](../architecture/sse.md) — Gateway-side SSE push ingestion, filtering, and consumer endpoints
+- [Getting Started Guide](../guides/getting_started.md) — Platform installation, quick start, and unified stack deployment
+- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
+- [Dashboard (g8ed)](../dashboard/index.md) — First-party browser interface that consumes ensemble SSE events

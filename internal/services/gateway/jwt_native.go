@@ -37,10 +37,6 @@ type JWTHeader struct {
 	Typ string `json:"typ"`
 }
 
-const (
-	clockSkewAllowance = 60
-)
-
 type NativeJWT struct {
 	Header JWTHeader
 	Claims JWTClaims
@@ -66,6 +62,23 @@ func extractRoles(payloadBytes []byte, roleClaim string) []string {
 	var roleString string
 	if err := json.Unmarshal(rolesRaw, &roleString); err == nil {
 		return []string{roleString}
+	}
+
+	return nil
+}
+
+func validateJWTTemporalClaims(claims JWTClaims, now time.Time) error {
+	if claims.Exp != 0 && now.After(time.Unix(claims.Exp, 0).Add(constants.JWTClockSkew)) {
+		return constants.ErrExpired
+	}
+
+	// Validate not-before with clock skew allowance
+	if claims.Nbf != 0 && now.Before(time.Unix(claims.Nbf, 0).Add(-constants.JWTClockSkew)) {
+		return constants.ErrJWTNotYetValid
+	}
+
+	if claims.Iat != 0 && now.Before(time.Unix(claims.Iat, 0).Add(-constants.JWTClockSkew)) {
+		return constants.ErrJWTIssuedInFuture
 	}
 
 	return nil
@@ -111,17 +124,8 @@ func ParseAndVerifyJWT(ctx context.Context, tokenString string, jwks *JWKSProvid
 		return nil, fmt.Errorf("jwt: unmarshal payload: %w", err)
 	}
 
-	now := time.Now().Unix()
-	if claims.Exp != 0 && now > claims.Exp {
-		return nil, constants.ErrExpired
-	}
-
-	// Validate not-before with clock skew allowance
-	if claims.Nbf != 0 {
-		nbfWithSkew := claims.Nbf - clockSkewAllowance
-		if now < nbfWithSkew {
-			return nil, constants.ErrJWTNotYetValid
-		}
+	if err := validateJWTTemporalClaims(claims, time.Now()); err != nil {
+		return nil, err
 	}
 
 	// Validate issuer if expected

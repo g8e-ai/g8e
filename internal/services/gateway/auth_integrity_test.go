@@ -33,11 +33,11 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
 
 	// Create a disabled user
 	userID := "user-retired-test"
@@ -47,7 +47,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(disabledUser)
 	require.NoError(t, err)
-	err = stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Create a CLISession linked to the disabled user
@@ -62,7 +62,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	}
 	cliSessionBytes, err := json.Marshal(cliSession)
 	require.NoError(t, err)
-	err = stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
+	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as disabled
@@ -73,7 +73,7 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	assert.Equal(t, constants.UserStatusDisabled, user.Status)
 
 	// Verify that CLISession exists and is linked to the disabled user
-	cliDoc, err := stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	cliDoc, err := db.GetDocStore().DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	require.NoError(t, err)
 	assert.NotNil(t, cliDoc)
 
@@ -98,11 +98,11 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	userSvc := NewUserService(stores.DocStore, logger)
+	userSvc := NewUserService(db.GetDocStore(), logger)
 
 	// Create an active user
 	userID := "user-active-test"
@@ -112,7 +112,7 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	}
 	userBytes, err := json.Marshal(activeUser)
 	require.NoError(t, err)
-	err = stores.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
+	err = db.GetDocStore().DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes)
 	require.NoError(t, err)
 
 	// Verify that the user is marked as active
@@ -131,13 +131,13 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	logger := testutil.NewTestLogger()
 	fileSvc := newTestFileSvc(t)
 	dbDir := testutil.TempDir(t)
-	db, stores, err := openTestDB(t, dbDir, fileSvc, logger)
+	db, err := openTestDB(t, dbDir, fileSvc, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	responderSvc := response.NewWriter(logger)
-	personaSvc := NewPersonaService(stores.DocStore, logger)
-	auth := NewAuthService(stores.DocStore, nil, logger, nil, personaSvc, responderSvc, nil, "", "", "")
+	personaSvc := NewPersonaService(db.GetDocStore(), logger)
+	auth := NewAuthService(db.GetDocStore(), nil, logger, nil, personaSvc, responderSvc, nil, "", "", "")
 	return auth, db
 }
 

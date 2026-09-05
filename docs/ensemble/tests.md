@@ -163,6 +163,7 @@ The test infrastructure provides reusable fixtures and fakes in `tests/conftest.
 
 ## Related
 
+- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands
 - [Development](devs.md) — Development environment setup, protobuf generation, and coding standards
 - [Evals](evals.md) — Evaluation suite, benchmark datasets, and Judge scoring rubrics
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy

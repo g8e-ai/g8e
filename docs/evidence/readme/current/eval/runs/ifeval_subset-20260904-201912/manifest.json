@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.33.0",
+  "run_id": "a4a5e9ac-ca27-4f52-874f-46a19f3442da",
+  "suite_id": "ifeval_subset",
+  "suite_version": "5eee4bb14500",
+  "created_at": "2026-09-04T20:19:12.147665Z",
+  "orchestrator_version": "",
+  "experiment_preregistration_hash": null,
+  "source_revision": "",
+  "source_tree_state_hash": "",
+  "content_hashes": [
+    {
+      "name": "dataset",
+      "sha256": "5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37",
+      "byte_length": 1236
+    },
+    {
+      "name": "prompt_bundle",
+      "sha256": "bb1e3aa6ac6d43703b765ba67975a30c7124232cee0105d90e0b4f5c5d3ff62d",
+      "byte_length": 695
+    },
+    {
+      "name": "grader_bundle",
+      "sha256": "901fea8aa86ff16ccf9cc5be70ffc4e5392e6d69f9a74b39c5a9785947c3985a",
+      "byte_length": 360
+    }
+  ],
+  "arms": [
+    {
+      "arm_id": "doctrine",
+      "requested_posture": "l1_doctrine",
+      "uses_g8ee": true,
+      "uses_gateway": true,
+      "receipt_binding": true,
+      "is_production_posture": true
+    }
+  ],
+  "role_to_model": {
+    "primary": {
+      "role": "primary",
+      "provider": "fake",
+      "model": "fake-model",
+      "endpoint": null,
+      "endpoint_class": "local",
+      "api_key_present": false,
+      "seed_support": "unknown"
+    },
+    "assistant": {
+      "role": "assistant",
+      "provider": "fake",
+      "model": "fake-model",
+      "endpoint": null,
+      "endpoint_class": "local",
+      "api_key_present": false,
+      "seed_support": "unknown"
+    },
+    "lite": {
+      "role": "lite",
+      "provider": "fake",
+      "model": "fake-model",
+      "endpoint": null,
+      "endpoint_class": "local",
+      "api_key_present": false,
+      "seed_support": "unknown"
+    },
+    "judge": {
+      "role": "judge",
+      "provider": "fake",
+      "model": "fake-model",
+      "endpoint": null,
+      "endpoint_class": "local",
+      "api_key_present": false,
+      "seed_support": "unknown"
+    }
+  },
+  "sampling": {
+    "max_output_tokens": null,
+    "top_p": null,
+    "top_k": null,
+    "temperature": null,
+    "stop_sequences": [],
+    "seed": null
+  },
+  "context_limits": {},
+  "stack_environment": {
+    "os": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "arch": "x86_64",
+    "cpu": "",
+    "ram": "",
+    "gpu": "",
+    "runtime_version": "3.12.3",
+    "network_mode": "",
+    "stack_image_digests": {}
+  },
+  "redacted_config": {}
+}

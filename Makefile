@@ -183,6 +183,9 @@ help:
 	@echo "  validate-doctrines Validate doctrine JSON schema"
 	@echo "  validate-cosais     Validate COSAiS overlay coverage (Phase 8 CI guard)"
 	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
+	@echo "  readme          Generate README.md from template and public proof snapshot"
+	@echo "  readme-check    Check README.md is up to date without modifying files"
+	@echo "  readme-test     Run generator unit tests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
@@ -221,6 +224,24 @@ python-build:
 	@cp -r protocol/constants/doctrine protocol/python/g8e/_data/
 	@cd protocol/python && uv build
 	@echo "Python package built. Check protocol/python/dist/"
+
+# =============================================================================
+# README GENERATION
+# =============================================================================
+.PHONY: readme
+readme:
+	@echo "Generating README.md from template and public proof snapshot..."
+	@python3 scripts/generate_readme.py
+
+.PHONY: readme-check
+readme-check:
+	@echo "Checking README.md is up to date..."
+	@python3 scripts/generate_readme.py --check
+
+.PHONY: readme-test
+readme-test:
+	@echo "Running README generator tests..."
+	@python3 -m unittest discover -s scripts/tests -p 'test_generate_readme.py'
 
 # =============================================================================
 # PROTOCOL GENERATION
@@ -647,6 +668,11 @@ build-ensemble:
 # The dashboard requires node_modules installed first:
 #   cd dashboard && npm ci
 
+.PHONY: dashboard-lint
+dashboard-lint:
+	@echo "Running dashboard (g8ed) ESLint checks..."
+	@cd dashboard && npm run lint
+
 .PHONY: dashboard-test
 dashboard-test:
 	@echo "Running dashboard (g8ed) vitest suite..."
@@ -810,7 +836,7 @@ ci-ensemble: ensemble-lint ensemble-test
 	@echo "Ensemble CI complete."
 
 .PHONY: ci-dashboard
-ci-dashboard: dashboard-test
+ci-dashboard: dashboard-lint dashboard-test
 	@echo "Dashboard CI complete."
 
 .PHONY: _ci-verify-proto

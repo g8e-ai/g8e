@@ -54,7 +54,6 @@ export const OperatorListMixin = {
             return aName.localeCompare(bName);
         });
 
-        const totalPages = Math.ceil(sortedOperators.length / this.operatorsPerPage);
         const startIndex = (this.currentPage - 1) * this.operatorsPerPage;
         const endIndex = startIndex + this.operatorsPerPage;
         const paginatedOperators = sortedOperators.slice(startIndex, endIndex);
@@ -64,7 +63,7 @@ export const OperatorListMixin = {
             item.className = 'operator-list-item';
             item.setAttribute('data-operator-id', operator.operator_id);
 
-            const latestSnapshot = operator.latest_heartbeat_snapshot || {};
+
             const systemInfo = operator.system_info || {};
             const hostnameFull = systemInfo.hostname || ' - ';
 
@@ -102,7 +101,6 @@ export const OperatorListMixin = {
 
             const canBind = operator.status === OperatorStatus.ACTIVE;
             const isStale = operator.status === OperatorStatus.STALE;
-            const canUnbind = isBoundToMe || isStale;
 
             let bindBtnTitle, bindBtnIcon, bindBtnDisabled;
             if (isBoundToMe) {
@@ -467,7 +465,7 @@ export const OperatorListMixin = {
             try {
                 await navigator.clipboard.writeText(result.new_api_key);
                 alert(OperatorAlerts.SLOT_RESET_KEY_COPIED(result.slot_number));
-            } catch (clipboardError) {
+            } catch {
                 alert(OperatorAlerts.SLOT_RESET_KEY_DISPLAY(result.slot_number, result.new_api_key));
             }
 

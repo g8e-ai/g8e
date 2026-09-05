@@ -4,16 +4,11 @@
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { ApiKeyError } from '../../constants/auth.js';
-import { 
-    AuthenticationError, 
-    AuthorizationError, 
-    ValidationError, 
-    ResourceNotFoundError, 
-    InternalServerError,
-    BusinessLogicError,
-    DropKeyError
+import {
+    ValidationError,
+    ResourceNotFoundError
 } from '../../services/error_service.js';
-import { ErrorResponse, UserMeResponse, UserDevLogsResponse, UserDropKeyRefreshResponse } from '../../models/response_models.js';
+import { UserMeResponse, UserDevLogsResponse, UserDropKeyRefreshResponse } from '../../models/response_models.js';
 import { UserPaths } from '../../constants/api_paths.js';
 
 /**

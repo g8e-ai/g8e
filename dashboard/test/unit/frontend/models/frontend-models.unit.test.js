@@ -12,7 +12,6 @@ import {
     EventType, // Import the augmented EventType from here
 } from '@g8ed/public/js/models/investigation-models.js';
 import { InvestigationStatus } from '@g8ed/public/js/constants/investigation-constants.js';
-import { EventType } from '@g8ed/public/js/constants/events.js';
 
 describe('FrontendBaseModel — parse() [UNIT]', () => {
     class Item extends FrontendBaseModel {

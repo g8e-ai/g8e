@@ -276,8 +276,6 @@ export class CasesManager {
             return;
         }
 
-        const webSessionModel = authState.webSessionModel;
-
         try{
             // Mark as loading to prevent duplicates
             this.casesLoaded = true;
@@ -707,7 +705,7 @@ export class CasesManager {
     /**
      * Handle user unauthentication - disable interface
      */
-    handleUserUnauthenticated(data) {
+    handleUserUnauthenticated() {
         // Reset auth handling flag to allow re-auth
         this._isHandlingAuth = false;
         // Reset cases loaded flag so investigations can be loaded again on next login

@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-09-05
+Version: v2.1.4
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -166,7 +166,7 @@ This is the recovery path for an expired CLI session with a still-valid cert. Wh
 
 The certificate and key values are filesystem paths, not embedded credentials. If the local CLI record has no operator binding, the command resolves the user's active operator through the Gateway. It fails closed when identity fields are incomplete or when multiple active operators prevent a unique binding.
 
-Before g8ee accepts this context, it sends the exact `operator_session_id`, `cli_session_id`, and `user_id` tuple to `POST /api/v1/operators/validate` over its enrolled application mTLS channel. The Gateway verifies that both sessions are active and belong to the same user and operator. Local g8ee `operator_sessions` data is a projection and is never the authentication authority; missing, stale, mismatched, or duplicate active records are rejected.
+Before g8ee accepts this context, it sends the exact `operator_session_id`, `cli_session_id`, and `user_id` tuple to `POST /api/v1/operators/validate` over its enrolled application mTLS channel. The Gateway verifies that both sessions are active and belong to the same user and operator. Local g8ee `operator_sessions` data is a projection and is never the authentication authority; missing, stale, mismatched, or duplicate active records are rejected. See [Ensemble Governance](../ensemble/governance.md) for the g8ee-side operator session validation and envelope submission flow.
 
 **Logout Ownership Policy:**
 

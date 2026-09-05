@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "citation_backed",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/utility/citation_backed_loader.py",
+    "code_sha256": "ae9e5194516ce31537b888775ee00abfef6a364123c5a7803c38ada868f56e2f"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 5,
+    "sha256": "41ff4603f61825def5082780539e6f1c58c4ec228932c01b099da26cd736349b"
+  },
+  "partition": "development",
+  "domain_strata": ["utility"]
+}

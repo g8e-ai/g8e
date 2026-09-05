@@ -4,7 +4,7 @@
 
 The g8e Agentic Ensemble (`g8ee`) is implemented in Python as a FastAPI service situated in-tree under `ensemble/`. It serves as the primary reasoning and decision-making engine for the g8e platform, communicating with the Governance Gateway (`g8eg`) and Governed Operator (`g8eo`) via mTLS, signed `GovernanceEnvelope` transactions, SSE streaming, and pub/sub messaging.
 
-The ensemble relies on the in-tree `g8e` Python protocol package (`protocol/python/`) as the single source of truth for protocol constants, wire models, enums, and protobuf schemas.
+The ensemble relies on the in-tree `g8e` Python protocol package (`protocol/python/`) as the single source of truth for protocol constants, wire models, enums, and protobuf schemas. See [Protocol Reference](../architecture/protocol.md) for the platform-level protocol specification.
 
 ## Setup
 
@@ -153,6 +153,9 @@ pip install -e ".[dev,test,docs]"
 
 ## Related
 
+- [Platform Developer Guidelines](../devs/devs.md) — g8e platform-wide developer guidelines, coding standards, and conventions
+- [Code Map](../devs/codemap.md) — Platform-wide codebase map and component directory structure
+- [Protocol Reference](../architecture/protocol.md) — Platform-level canonical wire contracts and protobuf schema definitions
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Agents](agents.md) — Agent hierarchy, personas, and Tribunal consensus

@@ -4,9 +4,9 @@
 
 g8ee is the agentic ensemble component of the 3-component g8e platform:
 
-- **Governance Gateway (g8eg)** — Central Policy Decision Point (PDP). Owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. Operates under doctrine, consensus, ratify, or notary posture.
-- **Governed Operator (g8eo)** — Host-side Policy Execution Point (PEP). Enforces protocol compliance, verifies L1/L2/L3 signatures, executes transactions via the Actuator stage, and maintains local-first audit ledgers. Runs on target hosts.
-- **g8e Agentic Ensemble (g8ee)** — First-party g8e-compliant agentic ensemble. Acts as an L2 producer, emitting typed, signed GovernanceEnvelope transactions to the Gateway for validation and execution through the five-layer verification pipeline.
+- **Governance Gateway (g8eg)** — Central Policy Decision Point (PDP). Owns platform-level PKI, coordination, Pub/Sub, and transaction validation/suspension. Operates under doctrine, consensus, ratify, or notary posture. See [Gateway Architecture](../architecture/gateway.md) for the full gateway component design.
+- **Governed Operator (g8eo)** — Host-side Policy Execution Point (PEP). Enforces protocol compliance, verifies L1/L2/L3 signatures, executes transactions via the Actuator stage, and maintains local-first audit ledgers. Runs on target hosts. See [Operator Architecture](../architecture/operator.md) for the full operator component design.
+- **g8e Agentic Ensemble (g8ee)** — First-party g8e-compliant agentic ensemble. Acts as an L2 producer, emitting typed, signed GovernanceEnvelope transactions to the Gateway for validation and execution through the [five-layer verification pipeline](../architecture/governance.md).
 
 ## Protocol Surfaces
 
@@ -80,6 +80,13 @@ g8ee authenticates to the Gateway using mTLS:
 
 ## Related
 
+- [Platform Overview](../architecture/overview.md) — Three-component g8e platform architecture and service topology
+- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
+- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
+- [Operator Architecture](../architecture/operator.md) — Operator component design, L4 Warden, and L5 Actuator
+- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline and governance postures
+- [Authentication & Authorization](../architecture/auth.md) — mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
+- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Agents](agents.md) — Agent hierarchy, personas, and Tribunal consensus
 - [Protocol](protocol.md) — Protocol reference for Gateway integration

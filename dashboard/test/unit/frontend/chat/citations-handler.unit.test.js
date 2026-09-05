@@ -5,7 +5,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CitationsHandler } from '@g8ed/public/js/components/citations.js';
-import { CitationSource, CitationItem } from '@g8ed/public/js/models/ai-event-models.js';
 
 function makeSource(overrides = {}) {
     return {

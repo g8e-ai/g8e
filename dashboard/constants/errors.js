@@ -12,7 +12,7 @@ function loadSharedErrors() {
     try {
         const data = fs.readFileSync(sharedPath, 'utf8');
         return JSON.parse(data);
-    } catch (error) {
+    } catch {
         return {};
     }
 }

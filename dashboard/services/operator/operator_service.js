@@ -3,24 +3,19 @@
 
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
-import { EventEmitter } from 'events';
 import { OperatorStatus } from '../../constants/operator.js';
-import { OPERATOR_HISTORY_TRAIL_MAX } from '../../constants/service_config.js';
-import { Collections } from '../../constants/collections.js';
-import { 
-    OperatorDocument, 
-    OperatorStatusInfo, 
-    OperatorWithSessionContext, 
-    GrantedIntent, 
+import {
+    OperatorDocument,
+    OperatorStatusInfo,
+    OperatorWithSessionContext,
+    GrantedIntent,
 } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
-import { HistoryEventType } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
 
 import { OperatorSlotService } from './operator_slot_service.js';
 import { OperatorRelayService } from './operator_relay_service.js';
 import { OperatorNotificationService } from './operator_notification_service.js';
-import { OperatorDataService } from './operator_data_service.js';
 
 /**
  * OperatorService (Domain Layer)
@@ -265,7 +260,7 @@ class OperatorService {
     /**
      * Update operator's web session link.
      */
-    async updateWebSessionLink(operatorId, webSessionId, options = {}) {
+    async updateWebSessionLink(operatorId, webSessionId) {
         return this.operatorDataService.updateOperator(operatorId, { web_session_id: webSessionId });
     }
 

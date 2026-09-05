@@ -22,16 +22,12 @@ let _sharedApiPaths = {};
 try {
     const apiPathsFile = path.join(_SHARED_DIR, 'api_paths.json');
     _sharedApiPaths = JSON.parse(fs.readFileSync(apiPathsFile, 'utf8'));
-} catch (err) {
+} catch {
     // Fallback for tests or environments where shared file isn't available
     _sharedApiPaths = {
         internal_prefix: '/api/internal',
-        data_prefix: '/api/v1/data/',
-        data_settings: '/api/v1/data/settings',
-        kv_prefix: '/api/v1/kv/',
         data_blobs_prefix: '/api/v1/blobs/',
         health: '/api/v1/health',
-        pubsub_websocket: '/ws/pubsub',
         vse: {
             chat: '/chat',
             chat_stop: '/chat/stop',
@@ -421,10 +417,6 @@ export const MCPPaths = Object.freeze({
 });
 
 // --- SETUP domain ---
-const Setup = {
-    BASE:   BasePaths.SETUP,
-};
-
 export const SetupPaths = Object.freeze({
     WIZARD:  '/setup',
 });
@@ -619,25 +611,12 @@ export const apiPaths = {
         revoke:        (token)  => `${InternalDeviceLink.BASE}/${token}`,
         delete:        (token)  => `${InternalDeviceLink.BASE}/${token}?action=${InternalDeviceLink.DELETE}`,
     },
-    data: {
-        document: (collection, id) => `${_sharedApiPaths.data_prefix}${collection}/${id}`,
-        query:    (collection)    => `${_sharedApiPaths.data_prefix}${collection}/_query`,
-        settings: ()               => _sharedApiPaths.data_settings,
-    },
-    kv: {
-        key:    (key) => `${_sharedApiPaths.kv_prefix}${encodeURIComponent(key)}`,
-        keys:   ()     => `${_sharedApiPaths.kv_prefix}_keys`,
-        scan:   ()     => `${_sharedApiPaths.kv_prefix}_scan`,
-        ttl:    (key) => `${_sharedApiPaths.kv_prefix}${encodeURIComponent(key)}/_ttl`,
-        expire: (key) => `${_sharedApiPaths.kv_prefix}${encodeURIComponent(key)}/_expire`,
-    },
     blobs: {
         object:    (ns, id) => `${_sharedApiPaths.data_blobs_prefix}${encodeURIComponent(ns)}/${encodeURIComponent(id)}`,
         namespace: (ns)     => `${_sharedApiPaths.data_blobs_prefix}${encodeURIComponent(ns)}`,
     },
     gateway: {
         health:           () => _sharedApiPaths.health,
-        pubsubWebsocket:  () => _sharedApiPaths.pubsub_websocket,
     },
 };
 

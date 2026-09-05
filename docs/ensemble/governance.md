@@ -6,8 +6,8 @@ The g8e platform enforces zero-trust autonomous infrastructure management throug
 
 The governance architecture divides responsibilities between two primary components:
 
-- **Governance Gateway (Policy Decision Point / PDP)** — The central coordinator that enforces transport security, manages PKI, runs L1 Doctrine validation, brokers L2 Consensus deliberation, and manages L3 Notary human-in-the-loop authorization.
-- **Governed Operator (Policy Execution Point / PEP)** — The host-side agent that maintains local sovereignty, re-verifies all proofs, runs the L4 Warden pre-dispatch gate, and executes actions within the isolated L5 Actuator boundary.
+- **Governance Gateway (Policy Decision Point / PDP)** — The central coordinator that enforces transport security, manages PKI, runs L1 Doctrine validation, brokers L2 Consensus deliberation, and manages L3 Notary human-in-the-loop authorization. See [Gateway Architecture](../architecture/gateway.md) and [Governance Pipeline](../architecture/governance.md).
+- **Governed Operator (Policy Execution Point / PEP)** — The host-side agent that maintains local sovereignty, re-verifies all proofs, runs the L4 Warden pre-dispatch gate, and executes actions within the isolated L5 Actuator boundary. See [Operator Architecture](../architecture/operator.md).
 
 The g8e Agentic Ensemble (`g8ee`) acts as a first-party producer within this framework. Internally, `g8ee` runs an multi-agent generation and auditing pipeline (Tribunal, Auditor, and Warden risk analyzers) to synthesize and sanitize commands. Externally, `g8ee` dispatches host-level operations via `CommandIntent` messages and executes platform mutations directly via `GovernanceClient` using signed `GovernanceEnvelope` transactions.
 
@@ -172,6 +172,9 @@ The hashing algorithm adheres to strict canonicalization rules:
 
 ## Related
 
+- [Governance Pipeline](../architecture/governance.md) — Platform-level five-layer verification pipeline and governance posture reference
+- [Gateway Architecture](../architecture/gateway.md) — Gateway PDP design, PKI authority, and transaction validation
+- [Operator Architecture](../architecture/operator.md) — Operator PEP design, L4 Warden, and L5 Actuator execution boundary
 - [Agents](agents.md) — Multi-agent roster, persona models, and Tribunal consensus roles
 - [Architecture](architecture.md) — Platform components, protocol surfaces, and model hierarchy
 - [Protocol](protocol.md) — Canonical `GovernanceEnvelope` schemas, dispatch models, and hashing specifications

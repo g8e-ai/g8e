@@ -21,7 +21,7 @@ export class OperatorRelayService {
         if (this.internalHttpClient) return this.internalHttpClient;
         try {
             return getInternalHttpClient();
-        } catch (e) {
+        } catch {
             // During initialization, this may fail if called before Phase 5.
             // This is expected for the initial construction inside OperatorService.
             return null;

@@ -163,7 +163,7 @@ export async function copyToClipboard(text) {
         textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
-        let ok = false;
+        let ok;
         try {
             ok = document.execCommand('copy');
         } catch {

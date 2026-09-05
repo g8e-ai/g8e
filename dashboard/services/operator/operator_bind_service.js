@@ -9,7 +9,6 @@ import {
     BindOperatorsResponse,
     UnbindOperatorsResponse,
 } from '../../models/operator_model.js';
-import { now } from '../../models/base.js';
 
 export class BindOperatorsService {
     /**

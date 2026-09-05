@@ -25,10 +25,10 @@ import (
 func TestNewOperatorSessionService(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 
-	svc := NewOperatorSessionService(infra.Stores.DocStore, infra.Logger)
+	svc := NewOperatorSessionService(infra.DocStore, infra.Logger)
 
 	require.NotNil(t, svc)
-	assert.Equal(t, infra.Stores.DocStore, svc.db)
+	assert.Equal(t, infra.DocStore, svc.db)
 	assert.Equal(t, infra.Logger, svc.logger)
 }
 
@@ -46,7 +46,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, userID, orgID, operatorID, loginMethod)
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -84,7 +84,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -102,7 +102,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -120,7 +120,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -152,7 +152,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -168,7 +168,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession("", "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), "")
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), "")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
@@ -179,7 +179,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -197,7 +197,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -215,7 +215,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -233,7 +233,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 
@@ -254,12 +254,12 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 	})
 
 	t.Run("NilLogger_PersistsWithoutError", func(t *testing.T) {
-		svcNilLogger := NewOperatorSessionService(infra.Stores.DocStore, nil)
+		svcNilLogger := NewOperatorSessionService(infra.DocStore, nil)
 
 		err := svcNilLogger.PersistOperatorSession("op-session-nil-logger", "user-1", "org-1", "operator-1", "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), "op-session-nil-logger")
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), "op-session-nil-logger")
 		require.NoError(t, err)
 		require.NotNil(t, doc)
 	})
@@ -273,7 +273,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err = svc.PersistOperatorSession(operatorSessionID, "user-2", "org-2", "operator-2", "passkey")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -297,7 +297,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, specialUserID, specialOrgID, specialOperatorID, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -322,7 +322,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, longVal, longVal, longVal, "mTLS")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession
@@ -344,7 +344,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		}
 
 		for _, sid := range sessionIDs {
-			doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), sid)
+			doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), sid)
 			require.NoError(t, err)
 			require.NotNil(t, doc)
 
@@ -366,7 +366,7 @@ func TestOperatorSessionService_PersistOperatorSession(t *testing.T) {
 		err := svc.PersistOperatorSession(operatorSessionID, "user-1", "org-1", "operator-1", "passkey")
 		require.NoError(t, err)
 
-		doc, err := infra.Stores.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
+		doc, err := infra.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperatorSessions), operatorSessionID)
 		require.NoError(t, err)
 
 		var stored models.OperatorSession

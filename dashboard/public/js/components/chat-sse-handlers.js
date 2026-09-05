@@ -5,7 +5,6 @@ import { EventType, ToolDisplayCategory } from '../constants/events.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { notificationService } from '../utils/notification-service.js';
-import { debounce } from '../utils/debounce.js';
 
 export const ChatSSEHandlersMixin = {
     shouldProcessEvent(data) {

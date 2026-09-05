@@ -50,14 +50,6 @@ function makeSuccessResponse(settings = MOCK_SETTINGS, sections = MOCK_SECTIONS)
     };
 }
 
-function makeErrorResponse(status, body) {
-    return {
-        ok: false,
-        status,
-        json: () => Promise.resolve(body),
-    };
-}
-
 function buildDOM() {
     return new JSDOM(`
         <!DOCTYPE html>

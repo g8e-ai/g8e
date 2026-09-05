@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -36,9 +38,17 @@ func TestValidateReleaseVersion(t *testing.T) {
 	}{
 		{name: "valid version", input: "v2.1.3", wantErr: false},
 		{name: "valid patch zero", input: "v2.0.0", wantErr: false},
+		{name: "valid prerelease", input: "v2.1.3-beta.1", wantErr: false},
+		{name: "valid build metadata", input: "v2.1.3+build123", wantErr: false},
 		{name: "empty", input: "", wantErr: true},
 		{name: "missing v prefix", input: "2.1.3", wantErr: true},
 		{name: "lone v", input: "v", wantErr: true},
+		{name: "incomplete semver two parts", input: "v2.1", wantErr: true},
+		{name: "leading zero in major", input: "v02.1.0", wantErr: true},
+		{name: "slash traversal", input: "v2.1.3/../../evil", wantErr: true},
+		{name: "backslash traversal", input: `v2.1.3\..\evil`, wantErr: true},
+		{name: "parent dir prefix", input: "../v2.1.3", wantErr: true},
+		{name: "subpath", input: "v2.1.3/sub", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -59,6 +69,7 @@ func TestReleaseEvidenceReport_OverallPassing(t *testing.T) {
 	satisfied := compliance.KSIResult{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, MethodCount: 2}
 	notSatisfied := compliance.KSIResult{ID: "KSI-IAM-05", Status: compliance.KSIStatusNotSatisfied}
 	notApplicable := compliance.KSIResult{ID: "KSI-TPR-02", Status: compliance.KSIStatusNotApplicable}
+	unknownStatus := compliance.KSIResult{ID: "KSI-UNK-01", Status: "unknown_status"}
 	validDemo := &demoRunSummary{RunID: "run-1", Report: &compliancev1.ComplianceVerificationReport{Valid: true}}
 	invalidDemo := &demoRunSummary{RunID: "run-2", Report: &compliancev1.ComplianceVerificationReport{Valid: false, Failures: []*compliancev1.VerificationFailure{{Code: "x", Reason: "bad"}}}}
 
@@ -81,10 +92,40 @@ func TestReleaseEvidenceReport_OverallPassing(t *testing.T) {
 			reasonRe: "KSI KSI-IAM-05 is not satisfied",
 		},
 		{
+			name:     "ksi unknown status",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied, unknownStatus}}},
+			passing:  false,
+			reasonRe: "KSI KSI-UNK-01 has non-passing status: unknown_status",
+		},
+		{
 			name:     "demo run invalid",
 			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied, notApplicable}}, DemoReports: []*demoRunSummary{validDemo, invalidDemo}},
 			passing:  false,
 			reasonRe: "demo run run-2 is invalid",
+		},
+		{
+			name:     "demo run verification error",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied, notApplicable}}, DemoReports: []*demoRunSummary{{RunID: "run-3", Err: errors.New("read failed")}}},
+			passing:  false,
+			reasonRe: "demo run run-3 verification failed: read failed",
+		},
+		{
+			name:     "demo enumeration error",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied}}, DemoEnumerationErr: errors.New("permission denied")},
+			passing:  false,
+			reasonRe: "failed to enumerate demo runs: permission denied",
+		},
+		{
+			name:     "ksi history error",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{satisfied}}, KSIHistoryErr: errors.New("disk failure")},
+			passing:  false,
+			reasonRe: "failed to read KSI history: disk failure",
+		},
+		{
+			name:     "empty report no ksis and no demo runs",
+			report:   &releaseEvidenceReport{KSISet: &compliance.KSIResultSet{Results: []compliance.KSIResult{}}},
+			passing:  false,
+			reasonRe: "no evidence collected: KSI results and demo runs are both empty",
 		},
 		{
 			name:    "all passing",
@@ -189,7 +230,8 @@ func TestRenderReleaseEvidenceCSV_Rows(t *testing.T) {
 		}},
 	}
 
-	csvBytes := renderReleaseEvidenceCSV(report)
+	csvBytes, err := renderReleaseEvidenceCSV(report)
+	require.NoError(t, err)
 	r := csv.NewReader(strings.NewReader(string(csvBytes)))
 	records, err := r.ReadAll()
 	require.NoError(t, err)
@@ -212,7 +254,8 @@ func TestRenderReleaseEvidenceCSV_KSIUnavailable(t *testing.T) {
 		GeneratedAt:    time.Unix(1_700_000_000, 0).UTC(),
 		KSIUnavailable: "stores down",
 	}
-	csvBytes := renderReleaseEvidenceCSV(report)
+	csvBytes, err := renderReleaseEvidenceCSV(report)
+	require.NoError(t, err)
 	r := csv.NewReader(strings.NewReader(string(csvBytes)))
 	records, err := r.ReadAll()
 	require.NoError(t, err)
@@ -250,6 +293,57 @@ func TestWriteReleaseEvidenceArtifacts_EmptyOutDirFails(t *testing.T) {
 	err := writeReleaseEvidenceArtifacts(report, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+// TestWriteReleaseEvidenceArtifacts_PathTraversalRejected verifies that release
+// versions attempting directory traversal are rejected and cannot escape outDir.
+func TestWriteReleaseEvidenceArtifacts_PathTraversalRejected(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+	}{
+		{name: "parent dir traversal", version: "../../evil"},
+		{name: "subpath traversal", version: "foo/../../evil"},
+	}
+	outDir := t.TempDir()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := &releaseEvidenceReport{ReleaseVersion: tt.version}
+			err := writeReleaseEvidenceArtifacts(report, outDir)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrPathValidation)
+		})
+	}
+}
+
+type errorReadDirFileService struct {
+	fs.RuntimeFileService
+	err error
+}
+
+func (m *errorReadDirFileService) ReadDir(ctx context.Context, relPath string) ([]os.DirEntry, error) {
+	return nil, m.err
+}
+
+// TestEnumerateDemoRunIDs_ErrorPropagation verifies that non-not-found errors
+// from ReadDir are propagated while ErrNotFound returns an empty list.
+func TestEnumerateDemoRunIDs_ErrorPropagation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("propagates non-not-found error", func(t *testing.T) {
+		mockSvc := &errorReadDirFileService{err: errors.New("permission denied")}
+		runIDs, err := enumerateDemoRunIDs(ctx, mockSvc)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "permission denied")
+		assert.Nil(t, runIDs)
+	})
+
+	t.Run("returns empty list on not found", func(t *testing.T) {
+		mockSvc := &errorReadDirFileService{err: constants.ErrNotFound}
+		runIDs, err := enumerateDemoRunIDs(ctx, mockSvc)
+		require.NoError(t, err)
+		assert.Nil(t, runIDs)
+	})
 }
 
 // TestComplianceReleaseEvidenceCmdWithConfig_GeneratesReportWithDemoRun
