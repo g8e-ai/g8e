@@ -107,6 +107,7 @@ from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synt
 from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore, LocalRehydrationArtifact, TokenEntry
 from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
 from g8e_evals.benchmarks.privacy.exfiltration import LocalExfiltrationSimulator
+from g8e_evals.benchmarks.governance.benign_overblock_loader import BenignOverblockLoader
 from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
 from g8e_evals.benchmarks.governance.policy_attack_loader import PolicyAttackLoader
 from g8e_evals.benchmarks.governance.observers import (
@@ -2456,7 +2457,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2510,6 +2511,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/policy_attack/input_data.jsonl")
         loader = PolicyAttackLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "benign_overblock":
+        if gold_set is None:
+            gold_set = Path("gold_sets/benign_overblock/input_data.jsonl")
+        loader = BenignOverblockLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
