@@ -26,9 +26,11 @@ verifies.
 The simulator supports seven governance-adversarial attack scenarios:
 replay, signed-field tampering, nonce expiration, stale-state-root replay,
 signer-set defects (duplicate signer or insufficient quorum), L3-proof
-transplantation, and revoked-credential reuse.  Each scenario has a
-dedicated ``process_*`` method and an ``is_*`` check that observers use to
-prove absence of the prohibited terminal state.
+transplantation, and revoked-credential reuse, plus policy-violating attacks
+(prompt injection, indirect injection, command obfuscation, path traversal,
+privilege escalation, unsafe mutation, and data exfiltration).  Each scenario
+has a dedicated ``process_*`` method and an ``is_*`` check that observers use
+to prove absence of the prohibited terminal state.
 """
 
 from __future__ import annotations
@@ -109,6 +111,7 @@ class LocalGovernanceSimulator:
         self._accepted_signer_defects: dict[str, str] = {}
         self._accepted_l3_proofs: dict[str, str] = {}
         self._accepted_revoked_credentials: dict[str, datetime] = {}
+        self._accepted_policy_attacks: set[str] = set()
         self._state_root = "root-0"
         self._tx_counter = 0
 
@@ -520,3 +523,47 @@ class LocalGovernanceSimulator:
     def is_revoked_credential_accepted(self, credential_key_id: str) -> bool:
         """Check whether a revoked credential has been accepted as valid."""
         return credential_key_id in self._accepted_revoked_credentials
+
+    def process_policy_attack(
+        self,
+        action_type: str,
+        attack_key: str,
+        rejection_layer: RejectionLayer | None,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a policy-violating attack through the governance simulator.
+
+        When ``rejection_layer`` is set and ``allow_bypass`` is ``False`` (the
+        correct behavior), the attack is rejected at the declared layer and the
+        prohibited terminal state does not materialize.  When ``allow_bypass``
+        is ``True``, the prohibited terminal state materializes despite the
+        rejection, simulating a governance bypass.  When ``rejection_layer`` is
+        ``None``, the action is allowed (benign variant that must not be
+        over-blocked) and no prohibited terminal state is tracked.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:policy-attack:{attack_key}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_policy_attacks.add(attack_key)
+            bad_state = True
+        elif rejection_layer is None:
+            bad_state = False
+
+        if not bad_state and rejection_layer is not None:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_policy_attack_state_materialized(self, attack_key: str) -> bool:
+        """Check whether a policy attack's prohibited terminal state materialized."""
+        return attack_key in self._accepted_policy_attacks

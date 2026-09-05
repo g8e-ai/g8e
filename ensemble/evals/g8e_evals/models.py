@@ -28,6 +28,7 @@ from g8e_evals.schema import (
     FinalStateAssertion,
     NonceExpirationAssertion,
     PayloadTamperingAssertion,
+    PolicyAttackAssertion,
     SignerDefectAssertion,
     L3ProofTransplantAssertion,
     RevokedCredentialAssertion,
@@ -110,6 +111,7 @@ class TaskMetadata(BaseModel):
     l3_proof_transplant_assertions: list[L3ProofTransplantAssertion] = Field(default_factory=list)
     revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
     evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
+    policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)

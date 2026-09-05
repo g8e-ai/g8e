@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         IdentityMismatchObservation,
         NonceExpirationObservation,
         PayloadTamperingObservation,
+        PolicyAttackObservation,
         SignerDefectObservation,
         L3ProofTransplantObservation,
         RevokedCredentialObservation,
@@ -215,6 +216,14 @@ class EvidencePreservationObserver(Protocol):
     ) -> list[EvidencePreservationObservation]: ...
 
 
+class PolicyAttackObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PolicyAttackObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -267,6 +276,7 @@ class SUTConfig:
     l3_proof_transplant_observer: L3ProofTransplantObserver | None = None
     revoked_credential_observer: RevokedCredentialObserver | None = None
     evidence_preservation_observer: EvidencePreservationObserver | None = None
+    policy_attack_observer: PolicyAttackObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

@@ -67,6 +67,10 @@ from g8e_evals.schema import (
     PostureObservation,
     PayloadTamperingAssertion,
     PayloadTamperingObservation,
+    PolicyAttackAssertion,
+    PolicyAttackObservation,
+    AttackType,
+    AttackSeverity,
     ReceiptObservation,
     RehydrationAssertion,
     RehydrationBoundary,
@@ -110,7 +114,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.33.0"
+    assert SCHEMA_VERSION == "1.34.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -2749,6 +2753,156 @@ def test_attempt_record_links_evidence_preservation_observations():
     assert attempt.evidence_preservation_observation_refs == ["observation-1", "observation-2"]
 
 
+# ---------------------------------------------------------------------------
+# PolicyAttack assertion and observation schema validation
+# ---------------------------------------------------------------------------
+
+_ATTACK_COLLECTED = datetime(2026, 9, 4, 13, 0, tzinfo=UTC)
+
+
+def test_policy_attack_assertion_and_observation_round_trip():
+    assertion = PolicyAttackAssertion(
+        assertion_id="attack-1",
+        attack_type=AttackType.PROMPT_INJECTION,
+        action_type="CHAT_COMPLETION",
+        expected_outcome=PolicyOutcome.BLOCK,
+        expected_rejection_layer=RejectionLayer.L1_DOCTRINE,
+        severity=AttackSeverity.HIGH,
+        prohibited_terminal_state="injected instruction executed",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    observation = PolicyAttackObservation(
+        observation_id="attack-observation-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        attack_type=AttackType.PROMPT_INJECTION,
+        action_type="CHAT_COMPLETION",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        collected_at=_ATTACK_COLLECTED,
+        source_evidence_refs=["restricted-attack-evidence"],
+        source_evidence_sha256="f" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = PolicyAttackAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = PolicyAttackObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_policy_attack_assertion_rejects_block_without_rejection_layer():
+    with pytest.raises(ValidationError, match="blocked policy-attack assertion requires an expected rejection layer"):
+        PolicyAttackAssertion(
+            assertion_id="attack-1",
+            attack_type=AttackType.PROMPT_INJECTION,
+            action_type="CHAT_COMPLETION",
+            expected_outcome=PolicyOutcome.BLOCK,
+            prohibited_terminal_state="injected instruction executed",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        )
+
+
+def test_policy_attack_assertion_rejects_allow_with_rejection_layer():
+    with pytest.raises(ValidationError, match="allowed policy-attack assertion must not declare a rejection layer"):
+        PolicyAttackAssertion(
+            assertion_id="attack-1",
+            attack_type=AttackType.PROMPT_INJECTION,
+            action_type="CHAT_COMPLETION",
+            expected_outcome=PolicyOutcome.ALLOW,
+            expected_rejection_layer=RejectionLayer.L1_DOCTRINE,
+            prohibited_terminal_state="benign action blocked",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+        )
+
+
+def test_policy_attack_assertion_rejects_present_expected_state():
+    with pytest.raises(ValidationError, match="policy-attack expected absence requires exists=False"):
+        PolicyAttackAssertion(
+            assertion_id="attack-1",
+            attack_type=AttackType.PROMPT_INJECTION,
+            action_type="CHAT_COMPLETION",
+            expected_outcome=PolicyOutcome.BLOCK,
+            expected_rejection_layer=RejectionLayer.L1_DOCTRINE,
+            prohibited_terminal_state="injected instruction executed",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=True),
+        )
+
+
+def test_policy_attack_assertion_rejects_consistent_ledger_expected_state():
+    with pytest.raises(ValidationError, match="policy-attack expected absence requires consistent=False for ledger state"):
+        PolicyAttackAssertion(
+            assertion_id="attack-1",
+            attack_type=AttackType.PROMPT_INJECTION,
+            action_type="CHAT_COMPLETION",
+            expected_outcome=PolicyOutcome.BLOCK,
+            expected_rejection_layer=RejectionLayer.L1_DOCTRINE,
+            prohibited_terminal_state="injected instruction executed",
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+            expected_absence=StateValue(kind=StateEvidenceKind.LEDGER_CONSISTENCY, consistent=True),
+        )
+
+
+def test_verified_policy_attack_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified policy-attack observation requires source evidence",
+    ):
+        PolicyAttackObservation(
+            observation_id="attack-observation-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="attack-1",
+            attack_type=AttackType.PROMPT_INJECTION,
+            action_type="CHAT_COMPLETION",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            observed=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+            collected_at=_ATTACK_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_policy_attack_assertion_ids():
+    assertion = PolicyAttackAssertion(
+        assertion_id="duplicate",
+        attack_type=AttackType.PROMPT_INJECTION,
+        action_type="CHAT_COMPLETION",
+        expected_outcome=PolicyOutcome.BLOCK,
+        expected_rejection_layer=RejectionLayer.L1_DOCTRINE,
+        prohibited_terminal_state="injected instruction executed",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        expected_absence=StateValue(kind=StateEvidenceKind.FILE, exists=False),
+    )
+    with pytest.raises(ValidationError, match="policy-attack assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            policy_attack_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_policy_attack_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        policy_attack_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.policy_attack_observation_refs == ["observation-1", "observation-2"]
+
+
 def test_unsupported_exclusion_round_trip():
     exclusion = UnsupportedExclusion(
         exclusion_id="exclude-replay-1",
@@ -3012,6 +3166,7 @@ def test_forbidden_metadata_keys_covers_all_typed_assertion_fields():
         "l3_proof_transplant_assertions",
         "revoked_credential_assertions",
         "evidence_preservation_assertions",
+        "policy_attack_assertions",
         "unsupported_exclusions",
     }
     assert typed_assertion_fields <= FORBIDDEN_METADATA_KEYS
@@ -3039,6 +3194,7 @@ def test_forbidden_metadata_keys_covers_all_typed_observation_ref_fields():
         "l3_proof_transplant_observation_refs",
         "revoked_credential_observation_refs",
         "evidence_preservation_observation_refs",
+        "policy_attack_observation_refs",
         "unsupported_exclusion_refs",
     }
     assert typed_observation_ref_fields <= FORBIDDEN_METADATA_KEYS

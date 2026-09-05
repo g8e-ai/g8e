@@ -33,6 +33,7 @@ from g8e_evals.schema import (
     AttemptRecord,
     L3ProofTransplantObservation,
     NonceExpirationObservation,
+    PolicyAttackObservation,
     ReceiptObservation,
     ReplayAttemptObservation,
     RevokedCredentialObservation,
@@ -494,3 +495,70 @@ class RevokedCredentialObserverImpl:
             ))
 
         return receipt_observations[0], revoked_credential_observations
+
+
+class PolicyAttackObserverImpl:
+    """Observes policy-violating attack governance actions and produces typed observations.
+
+    The observer processes each policy-attack assertion through the governance
+    simulator, produces a ``ReceiptObservation`` from the signed receipt, and
+    produces a ``PolicyAttackObservation`` recording whether the prohibited
+    terminal state materialized at the declared collection boundary.  For
+    BLOCK assertions the observer checks absence of the prohibited terminal
+    state; for ALLOW assertions (benign variants that must not be over-blocked)
+    the observer records that no prohibited state is tracked.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[PolicyAttackObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        policy_attack_observations: list[PolicyAttackObservation] = []
+
+        for assertion in task.policy_attack_assertions:
+            attack_key = f"{assertion.attack_type.value}:{assertion.assertion_id}"
+            result = self._simulator.process_policy_attack(
+                action_type=assertion.action_type,
+                attack_key=attack_key,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(result, attempt, assertion.action_type)
+            )
+
+            if assertion.expected_outcome.value == "block":
+                state_materialized = self._simulator.is_policy_attack_state_materialized(attack_key)
+                observed = StateValue(
+                    kind=StateEvidenceKind.FILE,
+                    exists=state_materialized,
+                )
+            else:
+                observed = StateValue(
+                    kind=StateEvidenceKind.FILE,
+                    exists=False,
+                )
+
+            policy_attack_observations.append(PolicyAttackObservation(
+                observation_id=f"{attempt.attempt_id}:policy-attack:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                attack_type=assertion.attack_type,
+                action_type=assertion.action_type,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return receipt_observations[0], policy_attack_observations

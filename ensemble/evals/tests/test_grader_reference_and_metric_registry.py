@@ -299,6 +299,7 @@ _CURRENT_METRIC_IDS = [
     "l3_proof_transplant",
     "revoked_credential",
     "evidence_preservation",
+    "policy_attack",
 ]
 
 

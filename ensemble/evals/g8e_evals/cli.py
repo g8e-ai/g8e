@@ -73,6 +73,7 @@ from g8e_evals.schema import (
     L3ProofTransplantObservation,
     RevokedCredentialObservation,
     EvidencePreservationObservation,
+    PolicyAttackObservation,
     StackEnvironment,
     StateObservation,
     StageObservation,
@@ -107,9 +108,11 @@ from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore, L
 from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
 from g8e_evals.benchmarks.privacy.exfiltration import LocalExfiltrationSimulator
 from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
+from g8e_evals.benchmarks.governance.policy_attack_loader import PolicyAttackLoader
 from g8e_evals.benchmarks.governance.observers import (
     L3ProofTransplantObserverImpl,
     NonceExpirationObserverImpl,
+    PolicyAttackObserverImpl,
     ReplayAttemptObserverImpl,
     RevokedCredentialObserverImpl,
     SignedFieldTamperingObserverImpl,
@@ -158,6 +161,7 @@ _SIGNER_DEFECT_GRADER_ID = "signer_defect"
 _L3_PROOF_TRANSPLANT_GRADER_ID = "l3_proof_transplant"
 _REVOKED_CREDENTIAL_GRADER_ID = "revoked_credential"
 _EVIDENCE_PRESERVATION_GRADER_ID = "evidence_preservation"
+_POLICY_ATTACK_GRADER_ID = "policy_attack"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -2452,7 +2456,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2500,6 +2504,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/privacy_boundary_leakage/input_data.jsonl")
         loader = PrivacyBoundaryLeakageLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "policy_attack":
+        if gold_set is None:
+            gold_set = Path("gold_sets/policy_attack/input_data.jsonl")
+        loader = PolicyAttackLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2590,6 +2600,7 @@ async def _run_synthetic_suite(
             signer_defect_assertions=task.metadata.signer_defect_assertions,
             l3_proof_transplant_assertions=task.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=task.metadata.revoked_credential_assertions,
+            policy_attack_assertions=task.metadata.policy_attack_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2613,6 +2624,7 @@ async def _run_synthetic_suite(
     signer_defect_records: list[SignerDefectObservation] = []
     l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
     revoked_credential_records: list[RevokedCredentialObservation] = []
+    policy_attack_records: list[PolicyAttackObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
@@ -2787,6 +2799,7 @@ async def _run_synthetic_suite(
         signer_defect_observations: list[SignerDefectObservation] = []
         l3_proof_transplant_observations: list[L3ProofTransplantObservation] = []
         revoked_credential_observations: list[RevokedCredentialObservation] = []
+        policy_attack_observations: list[PolicyAttackObservation] = []
         governance_receipt: ReceiptObservation | None = None
 
         if task.metadata.replay_attempt_assertions:
@@ -2878,6 +2891,19 @@ async def _run_synthetic_suite(
             governance_receipt_records.append(governance_receipt)
             attempt.revoked_credential_observation_refs = [
                 obs.observation_id for obs in revoked_credential_observations
+            ]
+
+        if task.metadata.policy_attack_assertions:
+            simulator = LocalGovernanceSimulator()
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:policy-attack:{simulator.public_key_hex}".encode()
+            ).hexdigest()
+            observer = PolicyAttackObserverImpl(simulator, evidence_sha, evidence_ref)
+            governance_receipt, policy_attack_observations = await observer.observe(task_def, attempt)
+            policy_attack_records.extend(policy_attack_observations)
+            governance_receipt_records.append(governance_receipt)
+            attempt.policy_attack_observation_refs = [
+                obs.observation_id for obs in policy_attack_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -3223,6 +3249,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.policy_attack_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _POLICY_ATTACK_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    policy_attack_observations=policy_attack_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_POLICY_ATTACK_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -3278,6 +3330,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
         for obs in revoked_credential_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "policy-attack-observations.jsonl", "w") as f:
+        for obs in policy_attack_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

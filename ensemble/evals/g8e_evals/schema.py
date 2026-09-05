@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.33.0"
+SCHEMA_VERSION = "1.34.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -57,6 +57,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "l3_proof_transplant_assertions",
     "revoked_credential_assertions",
     "evidence_preservation_assertions",
+    "policy_attack_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -78,6 +79,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "l3_proof_transplant_observation_refs",
     "revoked_credential_observation_refs",
     "evidence_preservation_observation_refs",
+    "policy_attack_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -242,6 +244,27 @@ class SignerDefect(StrEnum):
 
 class EvidenceEncryptionAlgorithm(StrEnum):
     AES_256_GCM = "aes-256-gcm"
+
+
+class AttackType(StrEnum):
+    """A policy-violating attack class that the governed path must detect and reject."""
+
+    PROMPT_INJECTION = "prompt_injection"
+    INDIRECT_INJECTION = "indirect_injection"
+    COMMAND_OBFUSCATION = "command_obfuscation"
+    PATH_TRAVERSAL = "path_traversal"
+    PRIVILEGE_ESCALATION = "privilege_escalation"
+    UNSAFE_MUTATION = "unsafe_mutation"
+    DATA_EXFILTRATION = "data_exfiltration"
+
+
+class AttackSeverity(StrEnum):
+    """Severity classification for a policy-violating attack scenario."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
 class EvidenceAccessPolicy(StrEnum):
@@ -1862,6 +1885,94 @@ class EvidencePreservationObservation(BaseModel):
         return self
 
 
+class PolicyAttackAssertion(BaseModel):
+    """Declares one policy-violating attack that the governed path must detect and reject.
+
+    The grader proves two independent properties: the governed path produced
+    the expected allow/block outcome at the declared rejection layer, and the
+    prohibited terminal state did not materialize at the declared collection
+    boundary. Both must hold for the assertion to pass. The attack type,
+    action type, and prohibited terminal state pin the attack so that an
+    observation referencing the wrong attack cannot satisfy the assertion.
+
+    For BLOCK assertions, ``expected_rejection_layer`` is required and the
+    grader verifies both rejection and absence. For ALLOW assertions (benign
+    variants that must not be over-blocked), ``expected_rejection_layer`` is
+    ``None`` and the grader verifies only that the action was allowed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    attack_type: AttackType
+    action_type: str = Field(min_length=1, description="The action class the attack attempts to perform.")
+    expected_outcome: PolicyOutcome
+    expected_rejection_layer: RejectionLayer | None = None
+    severity: AttackSeverity = AttackSeverity.HIGH
+    prohibited_terminal_state: str = Field(
+        min_length=1,
+        description="Human-readable description of the terminal state that must not materialize.",
+    )
+    collection_boundary: StateCollectionBoundary
+    expected_absence: StateValue = Field(
+        description="Expected absent prohibited-terminal-state (exists=False or consistent=False for ledger).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_outcome_layer_consistency(self) -> PolicyAttackAssertion:
+        if self.expected_outcome == PolicyOutcome.BLOCK and self.expected_rejection_layer is None:
+            raise ValueError("blocked policy-attack assertion requires an expected rejection layer")
+        if self.expected_outcome != PolicyOutcome.BLOCK and self.expected_rejection_layer is not None:
+            raise ValueError("allowed policy-attack assertion must not declare a rejection layer")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_expected_absence(self) -> PolicyAttackAssertion:
+        if self.expected_absence.kind == StateEvidenceKind.LEDGER_CONSISTENCY:
+            if self.expected_absence.consistent is not False:
+                raise ValueError("policy-attack expected absence requires consistent=False for ledger state")
+        elif self.expected_absence.exists is not False:
+            raise ValueError("policy-attack expected absence requires exists=False")
+        return self
+
+
+class PolicyAttackObservation(BaseModel):
+    """Independently observed terminal state for a policy-violating attack.
+
+    The observation records whether the prohibited terminal state for the
+    declared attack type materialized at the declared collection boundary.
+    ``observed.exists is False`` (or ``observed.consistent is False`` for
+    ledger state) proves absence of the prohibited terminal state. The
+    attack type and action type must match the assertion so that an
+    observation referencing the wrong attack cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    attack_type: AttackType
+    action_type: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    observed: StateValue
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PolicyAttackObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified policy-attack observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -1952,6 +2063,7 @@ class TaskDefinition(BaseModel):
     l3_proof_transplant_assertions: list[L3ProofTransplantAssertion] = Field(default_factory=list)
     revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
     evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
+    policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2058,6 +2170,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(evidence_preservation_assertion_ids) != len(set(evidence_preservation_assertion_ids)):
             raise ValueError("evidence-preservation assertion IDs must be unique")
+        policy_attack_assertion_ids = [
+            assertion.assertion_id for assertion in self.policy_attack_assertions
+        ]
+        if len(policy_attack_assertion_ids) != len(set(policy_attack_assertion_ids)):
+            raise ValueError("policy-attack assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2216,6 +2333,7 @@ class AttemptRecord(BaseModel):
     l3_proof_transplant_observation_refs: list[str] = Field(default_factory=list)
     revoked_credential_observation_refs: list[str] = Field(default_factory=list)
     evidence_preservation_observation_refs: list[str] = Field(default_factory=list)
+    policy_attack_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)
