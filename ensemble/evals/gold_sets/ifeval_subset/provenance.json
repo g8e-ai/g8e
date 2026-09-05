@@ -26,5 +26,7 @@
     "path": "input_data.jsonl",
     "rows": 5,
     "sha256": "5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37"
-  }
+  },
+  "partition": "development",
+  "domain_strata": ["utility"]
 }

@@ -25,7 +25,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from g8e_evals.benchmarks.privacy.provenance import load_provenance, validate_dataset
+from g8e_evals.benchmarks.privacy.provenance import load_provenance, validate_dataset, validate_provenance
 from g8e_evals.harness import Task
 from g8e_evals.models import TaskMetadata
 from g8e_evals.schema import (
@@ -65,6 +65,7 @@ class PrivacyTokenLifecycleLoader:
             )
 
         provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
+        validate_provenance(provenance)
         validate_dataset(self.gold_set_path, provenance)
         rows = [
             json.loads(line)
@@ -157,6 +158,7 @@ class PrivacyBoundaryLeakageLoader:
             )
 
         provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
+        validate_provenance(provenance)
         validate_dataset(self.gold_set_path, provenance)
         rows = [
             json.loads(line)

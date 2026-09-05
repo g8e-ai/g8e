@@ -27,6 +27,7 @@ from g8e_evals.benchmarks.privacy.provenance import (
     SyntheticSuiteProvenance,
     SyntheticSuiteSource,
     validate_dataset,
+    validate_provenance,
 )
 from g8e_evals.schema import (
     StateCollectionBoundary,
@@ -64,6 +65,8 @@ def _make_provenance(
         benchmark="privacy_token_lifecycle",
         source=_make_source(),
         output=_make_output(path=path, rows=rows, sha256=sha256),
+        partition="development",
+        domain_strata=["privacy"],
     )
 
 
@@ -108,6 +111,8 @@ def test_synthetic_suite_provenance_rejects_missing_source_fields():
                 },
             ),
             output=_make_output(),
+            partition="development",
+            domain_strata=["privacy"],
         )
 
 
@@ -125,7 +130,77 @@ def test_synthetic_suite_provenance_rejects_missing_output_fields():
                     "rows": 1,
                 },
             ),
+            partition="development",
+            domain_strata=["privacy"],
         )
+
+
+@pytest.mark.unit
+def test_synthetic_suite_provenance_records_partition_and_domain_strata():
+    provenance = _make_provenance()
+    assert provenance.partition == "development"
+    assert provenance.domain_strata == ["privacy"]
+
+
+@pytest.mark.unit
+def test_synthetic_suite_provenance_rejects_missing_partition():
+    base = _make_provenance().model_dump()
+    del base["partition"]
+    with pytest.raises(ValueError, match="partition"):
+        SyntheticSuiteProvenance.model_validate(base)
+
+
+@pytest.mark.unit
+def test_synthetic_suite_provenance_rejects_missing_domain_strata():
+    base = _make_provenance().model_dump()
+    del base["domain_strata"]
+    with pytest.raises(ValueError, match="domain_strata"):
+        SyntheticSuiteProvenance.model_validate(base)
+
+
+@pytest.mark.unit
+def test_synthetic_suite_provenance_rejects_empty_domain_strata_entry():
+    with pytest.raises(ValueError, match="domain_strata"):
+        SyntheticSuiteProvenance(
+            schema_version=1,
+            benchmark="privacy_token_lifecycle",
+            source=_make_source(),
+            output=_make_output(),
+            partition="development",
+            domain_strata=["privacy", ""],
+        )
+
+
+# --- validate_provenance ---
+
+
+@pytest.mark.unit
+def test_validate_provenance_accepts_complete_manifest():
+    validate_provenance(_make_provenance())
+
+
+@pytest.mark.unit
+def test_validate_provenance_rejects_zero_schema_version():
+    provenance = _make_provenance()
+    provenance.schema_version = 0
+    with pytest.raises(ValueError, match="schema_version"):
+        validate_provenance(provenance)
+
+
+@pytest.mark.unit
+def test_validate_provenance_rejects_empty_partition():
+    provenance = _make_provenance()
+    provenance.partition = ""
+    with pytest.raises(ValueError, match="partition"):
+        validate_provenance(provenance)
+
+
+@pytest.mark.unit
+def test_validate_provenance_rejects_empty_domain_strata():
+    provenance = _make_provenance()
+    provenance.domain_strata = []
+    with pytest.raises(ValueError, match="domain_strata"):
+        validate_provenance(provenance)
 
 
 # --- validate_dataset ---

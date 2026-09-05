@@ -206,6 +206,8 @@ def _patch_provenance(monkeypatch) -> None:
             fixture_sha256="0" * 64,
         ),
         output=DatasetOutput(path="input_data.jsonl", rows=1, sha256="0" * 64),
+        partition="development",
+        domain_strata=["utility"],
     )
     monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
 
