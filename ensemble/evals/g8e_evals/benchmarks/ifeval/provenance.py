@@ -12,57 +12,120 @@ instruction-following-eval dataset.  The provenance manifest captures the
 upstream source URL, revision, license, transformation code hash, the
 output dataset hash, the row count, the data partition, and the domain
 strata.
+
+Validation enforces executable-code provenance: the declared
+``transformation.code_path`` and ``transformation.fixture_path`` are
+resolved under a trusted eval root with traversal protection, and their
+SHA-256 digests are verified before any dataset rows are read.  The
+provenance benchmark must match the loader's ``SUITE_ID`` so suite
+substitution is rejected.  All provenance models use ``extra="forbid"``
+and strict SHA-256 field patterns so unknown fields and malformed digests
+are rejected at parse time.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from g8e_evals.benchmarks.privacy.provenance import _resolve_under_root
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_sha256(v: str) -> str:
+    if not v or not v.strip():
+        raise ValueError("sha256 field must not be empty")
+    if not _SHA256_PATTERN.match(v):
+        raise ValueError(f"sha256 field must be a 64-character lowercase hex digest: {v}")
+    return v
+
+
+def _verify_file_digest(file_path: str, expected_sha256: str, trusted_root: Path) -> None:
+    """Resolve ``file_path`` under ``trusted_root`` and verify its SHA-256.
+
+    Raises ``ValueError`` if the path escapes the trusted root, the file
+    does not exist, or the computed digest does not match the expected
+    value.  This is the executable-code provenance gate: no dataset rows
+    are read until the transformation code and fixture hashes are
+    verified.
+    """
+    resolved = _resolve_under_root(file_path, trusted_root)
+    if not resolved.is_file():
+        raise ValueError(f"provenance file_path does not exist: {file_path}")
+    actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    if actual != expected_sha256:
+        raise ValueError(
+            f"provenance sha256 mismatch for {file_path}: "
+            f"{actual} != {expected_sha256}"
+        )
 
 
 class DatasetSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str
     revision: str
     license_spdx: str
     license_url: str
     sha256: str
 
-    @field_validator("url", "revision", "license_spdx", "license_url", "sha256")
+    @field_validator("url", "revision", "license_spdx", "license_url")
     @classmethod
     def _reject_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("source field must not be empty")
         return v
 
+    @field_validator("sha256")
+    @classmethod
+    def _validate_source_sha256(cls, v: str) -> str:
+        return _validate_sha256(v)
+
 
 class DatasetTransformation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     description: str
     code_path: str
     code_sha256: str
     fixture_path: str
     fixture_sha256: str
 
-    @field_validator("description", "code_path", "code_sha256", "fixture_path", "fixture_sha256")
+    @field_validator("description", "code_path", "fixture_path")
     @classmethod
     def _reject_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("transformation field must not be empty")
         return v
 
+    @field_validator("code_sha256", "fixture_sha256")
+    @classmethod
+    def _validate_transformation_sha256(cls, v: str) -> str:
+        return _validate_sha256(v)
+
 
 class DatasetOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     path: str
     rows: int
     sha256: str
 
-    @field_validator("path", "sha256")
+    @field_validator("path")
     @classmethod
     def _reject_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("output field must not be empty")
         return v
+
+    @field_validator("sha256")
+    @classmethod
+    def _validate_output_sha256(cls, v: str) -> str:
+        return _validate_sha256(v)
 
     @field_validator("rows")
     @classmethod
@@ -73,6 +136,8 @@ class DatasetOutput(BaseModel):
 
 
 class DatasetProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     schema_version: int
     benchmark: str
     source: DatasetSource
@@ -111,18 +176,31 @@ def load_provenance(path: Path) -> DatasetProvenance:
     return DatasetProvenance.model_validate_json(path.read_text())
 
 
-def validate_provenance(provenance: DatasetProvenance) -> None:
-    """Reject incomplete provenance before execution.
+def validate_provenance(
+    provenance: DatasetProvenance,
+    *,
+    suite_id: str = "ifeval_subset",
+    trusted_root: Path,
+) -> None:
+    """Reject incomplete or mismatched provenance before execution.
 
-    Checks that every required field is present and non-empty.  Pydantic
-    field validators handle empty-string and empty-list rejection at parse
-    time; this function is the explicit pre-execution gate that loaders
-    call after loading the manifest and before validating the dataset.
+    Checks that every required field is present and non-empty, that the
+    provenance benchmark matches the loader's ``SUITE_ID``, and that the
+    declared transformation code and fixture paths resolve under
+    ``trusted_root`` with matching SHA-256 digests.  Pydantic field
+    validators handle empty-string, empty-list, SHA-256 pattern, and
+    unknown-field rejection at parse time; this function is the explicit
+    pre-execution gate that loaders call after loading the manifest and
+    before validating the dataset.
     """
     if provenance.schema_version < 1:
         raise ValueError(f"provenance schema_version must be positive: {provenance.schema_version}")
     if not provenance.benchmark.strip():
         raise ValueError("provenance benchmark must not be empty")
+    if provenance.benchmark != suite_id:
+        raise ValueError(
+            f"provenance benchmark mismatch: {provenance.benchmark} != {suite_id}"
+        )
     if not provenance.partition.strip():
         raise ValueError("provenance partition must not be empty")
     if not provenance.domain_strata:
@@ -138,6 +216,8 @@ def validate_provenance(provenance: DatasetProvenance) -> None:
     out = provenance.output
     if not all([out.path, out.sha256]) or out.rows <= 0:
         raise ValueError("provenance output is incomplete")
+    _verify_file_digest(tr.code_path, tr.code_sha256, trusted_root)
+    _verify_file_digest(tr.fixture_path, tr.fixture_sha256, trusted_root)
 
 
 def validate_dataset(path: Path, provenance: DatasetProvenance) -> None:

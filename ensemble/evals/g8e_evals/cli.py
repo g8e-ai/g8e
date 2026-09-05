@@ -127,6 +127,9 @@ from g8e_evals.benchmarks.governance.observers import (
     SignedFieldTamperingObserverImpl,
     SignerDefectObserverImpl,
     StaleStateRootObserverImpl,
+    PayloadTamperingObserverImpl,
+    IdentityMismatchObserverImpl,
+    EvidencePreservationObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
 from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
@@ -208,11 +211,14 @@ _ASSERTION_FIELD_TO_GRADER_ID: list[tuple[str, str]] = [
     ("rehydration_assertions", _EXACT_LOCAL_REHYDRATION_GRADER_ID),
     ("replay_attempt_assertions", _REPLAY_ATTEMPT_GRADER_ID),
     ("signed_field_tampering_assertions", _SIGNED_FIELD_TAMPERING_GRADER_ID),
+    ("payload_tampering_assertions", _PAYLOAD_TAMPERING_GRADER_ID),
     ("nonce_expiration_assertions", _NONCE_EXPIRATION_GRADER_ID),
     ("stale_state_root_assertions", _STALE_STATE_ROOT_GRADER_ID),
+    ("identity_mismatch_assertions", _IDENTITY_MISMATCH_GRADER_ID),
     ("signer_defect_assertions", _SIGNER_DEFECT_GRADER_ID),
     ("l3_proof_transplant_assertions", _L3_PROOF_TRANSPLANT_GRADER_ID),
     ("revoked_credential_assertions", _REVOKED_CREDENTIAL_GRADER_ID),
+    ("evidence_preservation_assertions", _EVIDENCE_PRESERVATION_GRADER_ID),
     ("policy_attack_assertions", _POLICY_ATTACK_GRADER_ID),
     ("tool_sequence_assertions", _TOOL_SEQUENCE_GRADER_ID),
     ("factual_qa_assertions", _FACTUAL_QA_GRADER_ID),
@@ -2866,11 +2872,14 @@ async def _run_synthetic_suite(
             rehydration_assertions=task.metadata.rehydration_assertions,
             replay_attempt_assertions=task.metadata.replay_attempt_assertions,
             signed_field_tampering_assertions=task.metadata.signed_field_tampering_assertions,
+            payload_tampering_assertions=task.metadata.payload_tampering_assertions,
             nonce_expiration_assertions=task.metadata.nonce_expiration_assertions,
             stale_state_root_assertions=task.metadata.stale_state_root_assertions,
+            identity_mismatch_assertions=task.metadata.identity_mismatch_assertions,
             signer_defect_assertions=task.metadata.signer_defect_assertions,
             l3_proof_transplant_assertions=task.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=task.metadata.revoked_credential_assertions,
+            evidence_preservation_assertions=task.metadata.evidence_preservation_assertions,
             policy_attack_assertions=task.metadata.policy_attack_assertions,
             tool_sequence_assertions=task.metadata.tool_sequence_assertions,
             factual_qa_assertions=task.metadata.factual_qa_assertions,
@@ -2894,11 +2903,14 @@ async def _run_synthetic_suite(
     privacy_receipt_records: list[ReceiptObservation] = []
     replay_attempt_records: list[ReplayAttemptObservation] = []
     signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
+    payload_tampering_records: list[PayloadTamperingObservation] = []
     nonce_expiration_records: list[NonceExpirationObservation] = []
     stale_state_root_records: list[StaleStateRootObservation] = []
+    identity_mismatch_records: list[IdentityMismatchObservation] = []
     signer_defect_records: list[SignerDefectObservation] = []
     l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
     revoked_credential_records: list[RevokedCredentialObservation] = []
+    evidence_preservation_records: list[EvidencePreservationObservation] = []
     policy_attack_records: list[PolicyAttackObservation] = []
     tool_sequence_records: list[ToolSequenceObservation] = []
     factual_qa_records: list[FactualQAObservation] = []
@@ -3365,6 +3377,84 @@ async def _run_synthetic_suite(
                 obs.observation_id for obs in revoked_credential_observations
             ]
 
+        if task.metadata.payload_tampering_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:payload-tamper-receipt"
+            observer = PayloadTamperingObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, payload_tampering_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            payload_tampering_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in payload_tampering_observations
+            ]
+            payload_tampering_records.extend(payload_tampering_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.payload_tampering_observation_refs = [
+                obs.observation_id for obs in payload_tampering_observations
+            ]
+
+        if task.metadata.identity_mismatch_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:identity-mismatch-receipt"
+            observer = IdentityMismatchObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, identity_mismatch_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            identity_mismatch_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in identity_mismatch_observations
+            ]
+            identity_mismatch_records.extend(identity_mismatch_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.identity_mismatch_observation_refs = [
+                obs.observation_id for obs in identity_mismatch_observations
+            ]
+
+        if task.metadata.evidence_preservation_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:evidence-preservation-receipt"
+            observer = EvidencePreservationObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, evidence_preservation_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            evidence_preservation_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in evidence_preservation_observations
+            ]
+            evidence_preservation_records.extend(evidence_preservation_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.evidence_preservation_observation_refs = [
+                obs.observation_id for obs in evidence_preservation_observations
+            ]
+
         if task.metadata.policy_attack_assertions:
             simulator = LocalGovernanceSimulator()
             receipt_artifact_id = f"{attempt_id}:policy-attack-receipt"
@@ -3708,6 +3798,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.payload_tampering_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _PAYLOAD_TAMPERING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    payload_tampering_observations=payload_tampering_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PAYLOAD_TAMPERING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
         if task.metadata.nonce_expiration_assertions and governance_receipt is not None:
             grade = grade_deterministically(
                 _NONCE_EXPIRATION_GRADER_ID,
@@ -3748,6 +3864,32 @@ async def _run_synthetic_suite(
             )
             grade_metrics.append(MetricObservation(
                 metric_id=_STALE_STATE_ROOT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.identity_mismatch_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _IDENTITY_MISMATCH_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    identity_mismatch_observations=identity_mismatch_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_IDENTITY_MISMATCH_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=Arm.DIRECT,
@@ -3826,6 +3968,32 @@ async def _run_synthetic_suite(
             )
             grade_metrics.append(MetricObservation(
                 metric_id=_REVOKED_CREDENTIAL_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.evidence_preservation_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _EVIDENCE_PRESERVATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    evidence_preservation_observations=evidence_preservation_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EVIDENCE_PRESERVATION_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=Arm.DIRECT,
@@ -4017,11 +4185,17 @@ async def _run_synthetic_suite(
     with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
         for obs in signed_field_tampering_records:
             f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
+        for obs in payload_tampering_records:
+            f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
         for obs in nonce_expiration_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
         for obs in stale_state_root_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "identity-mismatch-observations.jsonl", "w") as f:
+        for obs in identity_mismatch_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
         for obs in signer_defect_records:
@@ -4031,6 +4205,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
         for obs in revoked_credential_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "evidence-preservation-observations.jsonl", "w") as f:
+        for obs in evidence_preservation_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "policy-attack-observations.jsonl", "w") as f:
         for obs in policy_attack_records:

@@ -499,7 +499,7 @@ class TestFailClosedEdgeCases:
     """Verify fail-closed behavior for invalid-evidence edge cases in _run_synthetic_suite."""
 
     @pytest.mark.asyncio
-    async def test_empty_metric_set_raises_invalid_evidence(self, tmp_path: Path) -> None:
+    async def test_empty_metric_set_raises_invalid_evidence(self, tmp_path: Path, monkeypatch) -> None:
         """A task that produces no graded metrics raises EvaluationRunError rather than passing."""
         dataset = tmp_path / "input_data.jsonl"
         provenance = tmp_path / "provenance.json"
@@ -516,7 +516,7 @@ class TestFailClosedEdgeCases:
 
         provenance.write_text(json.dumps({
             "schema_version": 1,
-            "benchmark": "no_grader_suite",
+            "benchmark": "tool_sequence",
             "source": {
                 "repository": "https://example.com/repo",
                 "revision": "test",
@@ -532,6 +532,11 @@ class TestFailClosedEdgeCases:
             "partition": "development",
             "domain_strata": ["utility"],
         }))
+
+        monkeypatch.setattr(
+            "g8e_evals.benchmarks.utility.loader.validate_provenance",
+            lambda _provenance, **_kwargs: None,
+        )
 
         with pytest.raises(cli.EvaluationRunError, match="no applicable grader"):
             await cli._run_synthetic_suite("tool_sequence", dataset, tmp_path, limit=None)
