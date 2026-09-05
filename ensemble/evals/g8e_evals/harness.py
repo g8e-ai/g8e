@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         FactualQAObservation,
         IdentityMismatchObservation,
         NonceExpirationObservation,
+        PartialMilestoneObservation,
         PayloadTamperingObservation,
         PolicyAttackObservation,
         SignerDefectObservation,
@@ -251,6 +252,14 @@ class CitationBackedObserver(Protocol):
     ) -> list[CitationBackedObservation]: ...
 
 
+class PartialMilestoneObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PartialMilestoneObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -307,6 +316,7 @@ class SUTConfig:
     tool_sequence_observer: ToolSequenceObserver | None = None
     factual_qa_observer: FactualQAObserver | None = None
     citation_backed_observer: CitationBackedObserver | None = None
+    partial_milestone_observer: PartialMilestoneObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

@@ -78,6 +78,7 @@ from g8e_evals.schema import (
     ToolSequenceObservation,
     FactualQAObservation,
     CitationBackedObservation,
+    PartialMilestoneObservation,
     StateObservation,
     StageObservation,
     TaskDefinition,
@@ -128,10 +129,13 @@ from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLo
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
+from g8e_evals.benchmarks.utility.partial_milestone_loader import PartialMilestoneLoader
+from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
 from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
 from g8e_evals.benchmarks.utility.observers import (
     CitationBackedObserverImpl,
     FactualQAObserverImpl,
+    PartialMilestoneObserverImpl,
     ToolSequenceObserverImpl,
 )
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
@@ -180,6 +184,7 @@ _POLICY_ATTACK_GRADER_ID = "policy_attack"
 _TOOL_SEQUENCE_GRADER_ID = "tool_sequence"
 _FACTUAL_QA_GRADER_ID = "factual_qa"
 _CITATION_BACKED_GRADER_ID = "citation_backed"
+_PARTIAL_MILESTONE_GRADER_ID = "partial_milestone"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -2474,7 +2479,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2552,6 +2557,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/citation_backed/input_data.jsonl")
         loader = CitationBackedLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "partial_milestone":
+        if gold_set is None:
+            gold_set = Path("gold_sets/partial_milestone/input_data.jsonl")
+        loader = PartialMilestoneLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2646,6 +2657,7 @@ async def _run_synthetic_suite(
             tool_sequence_assertions=task.metadata.tool_sequence_assertions,
             factual_qa_assertions=task.metadata.factual_qa_assertions,
             citation_backed_assertions=task.metadata.citation_backed_assertions,
+            partial_milestone_assertions=task.metadata.partial_milestone_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2673,6 +2685,7 @@ async def _run_synthetic_suite(
     tool_sequence_records: list[ToolSequenceObservation] = []
     factual_qa_records: list[FactualQAObservation] = []
     citation_backed_records: list[CitationBackedObservation] = []
+    partial_milestone_records: list[PartialMilestoneObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
@@ -2997,6 +3010,25 @@ async def _run_synthetic_suite(
             citation_backed_records.extend(citation_backed_observations)
             attempt.citation_backed_observation_refs = [
                 obs.observation_id for obs in citation_backed_observations
+            ]
+
+        partial_milestone_observations: list[PartialMilestoneObservation] = []
+        if task.metadata.partial_milestone_assertions:
+            milestone_sim = LocalPartialMilestoneSimulator()
+            observed_milestones = params.get("observed_milestones", [])
+            from g8e_evals.benchmarks.utility.partial_milestone_simulator import MilestoneRecord
+            milestone_sim.set_milestones([
+                MilestoneRecord(label=m["label"], order=m["order"])
+                for m in observed_milestones
+            ])
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:partial-milestone:{milestone_sim.finish().milestone_hash}".encode()
+            ).hexdigest()
+            observer = PartialMilestoneObserverImpl(milestone_sim, evidence_sha, evidence_ref)
+            partial_milestone_observations = await observer.observe(task_def, attempt)
+            partial_milestone_records.extend(partial_milestone_observations)
+            attempt.partial_milestone_observation_refs = [
+                obs.observation_id for obs in partial_milestone_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -3446,6 +3478,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.partial_milestone_assertions:
+            grade = grade_deterministically(
+                _PARTIAL_MILESTONE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    partial_milestone_observations=partial_milestone_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PARTIAL_MILESTONE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -3513,6 +3571,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "citation-backed-observations.jsonl", "w") as f:
         for obs in citation_backed_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "partial-milestone-observations.jsonl", "w") as f:
+        for obs in partial_milestone_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

@@ -21,11 +21,13 @@ from datetime import UTC, datetime
 
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
+from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
 from g8e_evals.schema import (
     AttemptRecord,
     CitationBackedObservation,
     FactualQAObservation,
+    PartialMilestoneObservation,
     TaskDefinition,
     ToolSequenceObservation,
     VerificationStatus,
@@ -157,6 +159,58 @@ class CitationBackedObserverImpl:
                 task_id=attempt.task_id,
                 assertion_id=assertion.assertion_id,
                 observed_citation=result.observed_citation,
+                collection_boundary=assertion.collection_boundary,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=self._evidence_sha,
+                verification_status=VerificationStatus.VERIFIED,
+            ))
+
+        return observations
+
+
+class PartialMilestoneObserverImpl:
+    """Observes reached milestones and produces typed observations.
+
+    The observer records the reached milestones from the simulator and
+    produces a ``PartialMilestoneObservation`` for each assertion on the
+    task.  The observation captures whether the declared milestone was
+    reached and at what order index, bound to source evidence.
+    """
+
+    def __init__(
+        self,
+        simulator: LocalPartialMilestoneSimulator,
+        evidence_sha: str,
+        evidence_ref: str,
+    ) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[PartialMilestoneObservation]:
+        result = self._simulator.finish()
+        reached_by_order = {m.order: m for m in result.milestones}
+        observations: list[PartialMilestoneObservation] = []
+
+        for assertion in task.partial_milestone_assertions:
+            reached_milestone = reached_by_order.get(assertion.expected_order)
+            milestone_reached = reached_milestone is not None
+            observed_label = reached_milestone.label if reached_milestone else ""
+            observed_order = reached_milestone.order if reached_milestone else None
+            observations.append(PartialMilestoneObservation(
+                observation_id=f"{attempt.attempt_id}:partial-milestone:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                milestone_reached=milestone_reached,
+                observed_label=observed_label,
+                observed_order=observed_order,
                 collection_boundary=assertion.collection_boundary,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],

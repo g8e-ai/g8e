@@ -78,6 +78,8 @@ from g8e_evals.schema import (
     CitationBackedAssertion,
     CitationBackedObservation,
     CitationMatchType,
+    PartialMilestoneAssertion,
+    PartialMilestoneObservation,
     StateAssertionPredicate,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -128,6 +130,7 @@ class DeterministicGradingContext:
     tool_sequence_observations: list[ToolSequenceObservation] = field(default_factory=list)
     factual_qa_observations: list[FactualQAObservation] = field(default_factory=list)
     citation_backed_observations: list[CitationBackedObservation] = field(default_factory=list)
+    partial_milestone_observations: list[PartialMilestoneObservation] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -3760,6 +3763,96 @@ class CitationBackedGrader:
         )
 
 
+class PartialMilestoneGrader:
+    """Proves that each declared milestone was reached at the declared order index.
+
+    For each assertion the grader verifies two independent properties:
+
+    1. The independently observed milestone was reached at the declared
+       expected order index. The observation's ``milestone_reached`` flag
+       must be true and the ``observed_order`` must equal the declared
+       ``expected_order``.
+    2. The observation is verified, context-bound to the correct
+       attempt/run/task, collected at the declared collection boundary,
+       and carries source evidence.
+
+    Both properties must hold for the assertion to pass.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.partial_milestone_assertions
+        if not assertions:
+            return self._failed("partial-milestone assertions are missing")
+
+        observations_by_assertion: dict[str, list[PartialMilestoneObservation]] = {}
+        for observation in context.partial_milestone_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"partial-milestone observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.attempt.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if not observation.milestone_reached:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.observed_order is None or observation.observed_order != assertion.expected_order:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"partial-milestone assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
     ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
@@ -3791,6 +3884,7 @@ _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("tool_sequence", "1.0.0"): ToolSequenceGrader(),
     ("factual_qa", "1.0.0"): FactualQAGrader(),
     ("citation_backed", "1.0.0"): CitationBackedGrader(),
+    ("partial_milestone", "1.0.0"): PartialMilestoneGrader(),
 }
 
 

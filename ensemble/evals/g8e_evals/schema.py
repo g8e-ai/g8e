@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.37.0"
+SCHEMA_VERSION = "1.38.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -61,6 +61,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "tool_sequence_assertions",
     "factual_qa_assertions",
     "citation_backed_assertions",
+    "partial_milestone_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -86,6 +87,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "tool_sequence_observation_refs",
     "factual_qa_observation_refs",
     "citation_backed_observation_refs",
+    "partial_milestone_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -2195,6 +2197,60 @@ class CitationBackedObservation(BaseModel):
         return self
 
 
+class PartialMilestoneAssertion(BaseModel):
+    """Declares one intermediate milestone that the model must reach in a long-horizon task.
+
+    The grader verifies that the independently observed milestone was reached
+    at the declared order index. The collection boundary pins where the
+    milestone is observed so that an observation from the wrong boundary
+    cannot satisfy the assertion. The ``expected_label`` is a human-readable
+    description of the milestone; the grader does not grade the label text
+    itself but records it for evidence binding and downstream analysis.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_label: str = Field(min_length=1)
+    expected_order: int = Field(ge=0)
+    collection_boundary: StateCollectionBoundary
+
+
+class PartialMilestoneObservation(BaseModel):
+    """Independently observed intermediate milestone for a long-horizon task.
+
+    The observation records whether the declared milestone was reached, the
+    observed label, and the observed order index at which it was reached.
+    The grader compares these against the declared expected milestone to
+    verify that the milestone was reached at the correct order.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    milestone_reached: bool
+    observed_label: str = ""
+    observed_order: int | None = Field(default=None, ge=0)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> PartialMilestoneObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified partial-milestone observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2289,6 +2345,7 @@ class TaskDefinition(BaseModel):
     tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
     citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
+    partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2415,6 +2472,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(citation_backed_assertion_ids) != len(set(citation_backed_assertion_ids)):
             raise ValueError("citation-backed assertion IDs must be unique")
+        partial_milestone_assertion_ids = [
+            assertion.assertion_id for assertion in self.partial_milestone_assertions
+        ]
+        if len(partial_milestone_assertion_ids) != len(set(partial_milestone_assertion_ids)):
+            raise ValueError("partial-milestone assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2577,6 +2639,7 @@ class AttemptRecord(BaseModel):
     tool_sequence_observation_refs: list[str] = Field(default_factory=list)
     factual_qa_observation_refs: list[str] = Field(default_factory=list)
     citation_backed_observation_refs: list[str] = Field(default_factory=list)
+    partial_milestone_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)

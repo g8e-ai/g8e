@@ -714,6 +714,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["citation_backed_observation"],
         release_threshold="Practical threshold: 1.0; any citation-backed mismatch is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="partial_milestone",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of declared partial milestones where the independently observed milestone was reached at the declared expected order index. The observation's milestone_reached flag must be true and the observed_order must equal the declared expected_order.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("partial_milestone"),
+        eligible_population="All attempts with declared partial-milestone assertions.",
+        denominator="Total number of declared partial-milestone assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["partial_milestone_observation"],
+        release_threshold="Practical threshold: 1.0; any missed or out-of-order milestone is a release blocker.",
+    ),
 ]
 
 

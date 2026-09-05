@@ -29,6 +29,7 @@ from g8e_evals.schema import (
     ExfiltrationAttemptAssertion,
     FinalStateAssertion,
     NonceExpirationAssertion,
+    PartialMilestoneAssertion,
     PayloadTamperingAssertion,
     PolicyAttackAssertion,
     SignerDefectAssertion,
@@ -118,6 +119,7 @@ class TaskMetadata(BaseModel):
     tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
     citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
+    partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
