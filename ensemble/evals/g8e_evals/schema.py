@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.34.0"
+SCHEMA_VERSION = "1.35.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -58,6 +58,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "revoked_credential_assertions",
     "evidence_preservation_assertions",
     "policy_attack_assertions",
+    "tool_sequence_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -80,6 +81,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "revoked_credential_observation_refs",
     "evidence_preservation_observation_refs",
     "policy_attack_observation_refs",
+    "tool_sequence_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -1973,6 +1975,82 @@ class PolicyAttackObservation(BaseModel):
         return self
 
 
+class ToolSequenceOutcome(StrEnum):
+    """Expected relationship between the observed and declared tool sequences.
+
+    ``match`` means the observed tool sequence must exactly equal the
+    declared expected sequence. ``avoid`` means the declared forbidden
+    sequence must not appear as a contiguous subsequence within the
+    observed tool sequence.
+    """
+
+    MATCH = "match"
+    AVOID = "avoid"
+
+
+class ToolSequenceAssertion(BaseModel):
+    """Declares one allowed or forbidden tool sequence that the model must follow.
+
+    For ``match`` assertions the grader verifies that the independently
+    observed tool sequence exactly equals the declared expected sequence.
+    For ``avoid`` assertions the grader verifies that the declared forbidden
+    sequence does not appear as a contiguous subsequence within the
+    observed tool sequence. The collection boundary pins where the tool
+    sequence is observed so that an observation from the wrong boundary
+    cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_sequence: list[str] = Field(min_length=1)
+    expected_outcome: ToolSequenceOutcome
+    collection_boundary: StateCollectionBoundary
+
+    @field_validator("expected_sequence")
+    @classmethod
+    def _reject_empty_tool_names(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("expected_sequence must not be empty")
+        for tool in v:
+            if not tool or not tool.strip():
+                raise ValueError("expected_sequence entries must not be empty")
+        return v
+
+
+class ToolSequenceObservation(BaseModel):
+    """Independently observed tool sequence for a utility task.
+
+    The observation records the actual sequence of tool calls invoked by
+    the model at the declared collection boundary. ``observed_sequence``
+    is the ordered list of tool names. The grader compares this against
+    the declared expected sequence to verify match or avoid outcomes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    observed_sequence: list[str] = Field(default_factory=list)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ToolSequenceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified tool-sequence observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2064,6 +2142,7 @@ class TaskDefinition(BaseModel):
     revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
     evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
     policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
+    tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2175,6 +2254,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(policy_attack_assertion_ids) != len(set(policy_attack_assertion_ids)):
             raise ValueError("policy-attack assertion IDs must be unique")
+        tool_sequence_assertion_ids = [
+            assertion.assertion_id for assertion in self.tool_sequence_assertions
+        ]
+        if len(tool_sequence_assertion_ids) != len(set(tool_sequence_assertion_ids)):
+            raise ValueError("tool-sequence assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2334,6 +2418,7 @@ class AttemptRecord(BaseModel):
     revoked_credential_observation_refs: list[str] = Field(default_factory=list)
     evidence_preservation_observation_refs: list[str] = Field(default_factory=list)
     policy_attack_observation_refs: list[str] = Field(default_factory=list)
+    tool_sequence_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)

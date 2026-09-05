@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         StaleStateRootObservation,
         StateObservation,
         TaskDefinition,
+        ToolSequenceObservation,
         TokenStorePersistenceObservation,
         TokenTTLExpiryObservation,
         TokenPersistenceFailureObservation,
@@ -224,6 +225,14 @@ class PolicyAttackObserver(Protocol):
     ) -> list[PolicyAttackObservation]: ...
 
 
+class ToolSequenceObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[ToolSequenceObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -277,6 +286,7 @@ class SUTConfig:
     revoked_credential_observer: RevokedCredentialObserver | None = None
     evidence_preservation_observer: EvidencePreservationObserver | None = None
     policy_attack_observer: PolicyAttackObserver | None = None
+    tool_sequence_observer: ToolSequenceObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

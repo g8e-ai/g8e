@@ -40,6 +40,7 @@ from g8e_evals.schema import (
     SignedFieldTamperingAssertion,
     StaleStateRootAssertion,
     StateFixtureDefinition,
+    ToolSequenceAssertion,
     TokenStorePersistenceAssertion,
     TokenTTLExpiryAssertion,
     TokenPersistenceFailureAssertion,
@@ -112,6 +113,7 @@ class TaskMetadata(BaseModel):
     revoked_credential_assertions: list[RevokedCredentialAssertion] = Field(default_factory=list)
     evidence_preservation_assertions: list[EvidencePreservationAssertion] = Field(default_factory=list)
     policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
+    tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)
