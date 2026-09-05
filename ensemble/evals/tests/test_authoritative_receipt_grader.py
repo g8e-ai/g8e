@@ -118,6 +118,9 @@ from g8e_evals.schema import (
     FactualQAAssertion,
     FactualQAObservation,
     FactualQAMatchType,
+    CitationBackedAssertion,
+    CitationBackedObservation,
+    CitationMatchType,
     VerificationStatus,
     GraderReference,
 )
@@ -10638,6 +10641,409 @@ def test_factual_qa_grader_mixed_match_types_in_one_task():
     context = _factual_qa_context(assertions=assertions, observations=observations)
 
     result = grade_deterministically("factual_qa", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# CitationBackedGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_CITATION_BACKED_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _citation_backed_assertion(
+    *,
+    assertion_id: str = "citation-backed-1",
+    expected_citation: str = "doi:10.1103/PhysRevLett.29.134",
+    match_type: CitationMatchType = CitationMatchType.EXACT_CITATION,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> CitationBackedAssertion:
+    return CitationBackedAssertion(
+        assertion_id=assertion_id,
+        expected_citation=expected_citation,
+        match_type=match_type,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _citation_backed_observation(
+    *,
+    assertion_id: str = "citation-backed-1",
+    observed_citation: str = "doi:10.1103/PhysRevLett.29.134",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> CitationBackedObservation:
+    return CitationBackedObservation(
+        observation_id=f"citation-backed-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        observed_citation=observed_citation,
+        collection_boundary=collection_boundary,
+        collected_at=_CITATION_BACKED_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _citation_backed_context(
+    *,
+    assertions: list[CitationBackedAssertion] | None = None,
+    observations: list[CitationBackedObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="utility",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="CITATION_BACKED",
+        compatible_arms=[Arm.DIRECT],
+        citation_backed_assertions=assertions if assertions is not None else [_citation_backed_assertion()],
+        graders=[GraderReference(grader_id="citation_backed", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        citation_backed_observations=observations if observations is not None else [_citation_backed_observation()],
+    )
+
+
+def test_citation_backed_grader_verifies_exact_citation_outcome():
+    result = grade_deterministically(
+        "citation_backed",
+        "1.0.0",
+        _citation_backed_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "citation-backed-obs-citation-backed-1" in result.evidence_refs
+    assert "evidence-citation-backed-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_citation_backed_grader_verifies_normalized_citation_outcome():
+    context = _citation_backed_context(
+        assertions=[_citation_backed_assertion(
+            expected_citation="Fleming A. Br J Exp Pathol. 1929;10(3):226-236",
+            match_type=CitationMatchType.NORMALIZED_CITATION,
+        )],
+        observations=[_citation_backed_observation(
+            observed_citation="  Fleming  A.  Br  J  Exp  Pathol.  1929;10(3):226-236  ",
+        )],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_verifies_contains_citation_outcome():
+    context = _citation_backed_context(
+        assertions=[_citation_backed_assertion(
+            expected_citation="Annalen der Physik",
+            match_type=CitationMatchType.CONTAINS_CITATION,
+        )],
+        observations=[_citation_backed_observation(
+            observed_citation="Einstein, A. (1916). Die Grundlage der allgemeinen Relativitatstheorie. Annalen der Physik, 49(7), 769-822.",
+        )],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_when_exact_citation_differs():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(observed_citation="doi:10.1103/PhysRevLett.30.999")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "citation-backed assertion failed: citation-backed-1"
+
+
+def test_citation_backed_grader_fails_when_normalized_citation_differs():
+    context = _citation_backed_context(
+        assertions=[_citation_backed_assertion(
+            expected_citation="Fleming A. Br J Exp Pathol. 1929;10(3):226-236",
+            match_type=CitationMatchType.NORMALIZED_CITATION,
+        )],
+        observations=[_citation_backed_observation(
+            observed_citation="Fleming B. Br J Exp Pathol. 1929;10(3):226-236",
+        )],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_when_contains_citation_absent():
+    context = _citation_backed_context(
+        assertions=[_citation_backed_assertion(
+            expected_citation="Annalen der Physik",
+            match_type=CitationMatchType.CONTAINS_CITATION,
+        )],
+        observations=[_citation_backed_observation(
+            observed_citation="Einstein, A. (1916). Die Grundlage der allgemeinen Relativitatstheorie. Physikalische Zeitschrift, 17, 101-112.",
+        )],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_when_exact_citation_has_extra_whitespace():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(observed_citation=" doi:10.1103/PhysRevLett.29.134 ")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_when_exact_citation_case_differs():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(observed_citation="DOI:10.1103/PhysRevLett.29.134")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_closed_on_missing_assertions():
+    context = _citation_backed_context(
+        assertions=[],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "citation-backed assertions are missing"
+
+
+def test_citation_backed_grader_fails_closed_on_missing_observation():
+    context = _citation_backed_context(
+        observations=[],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "citation-backed assertion failed: citation-backed-1"
+
+
+def test_citation_backed_grader_fails_closed_on_duplicate_observations():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(), _citation_backed_observation()],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_fails_closed_on_unverified_observation():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_unknown_observation_assertion():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_citation_backed_grader_rejects_cross_attempt_observation():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_cross_run_observation():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_cross_task_observation():
+    context = _citation_backed_context(
+        observations=[_citation_backed_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_collection_boundary_mismatch():
+    context = _citation_backed_context(
+        assertions=[_citation_backed_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_citation_backed_observation()],
+    )
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_missing_source_evidence_refs():
+    obs = _citation_backed_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _citation_backed_context(observations=[obs])
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_missing_source_evidence_sha256():
+    obs = _citation_backed_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _citation_backed_context(observations=[obs])
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_citation_backed_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("citation_backed", "2.0.0", _citation_backed_context())
+
+
+def test_citation_backed_grader_aggregates_multiple_assertions():
+    assertions = [
+        _citation_backed_assertion(assertion_id="citation-backed-1", expected_citation="doi:10.1103/PhysRevLett.29.134"),
+        _citation_backed_assertion(assertion_id="citation-backed-2", expected_citation="U.S. Const. amend. I"),
+    ]
+    observations = [
+        _citation_backed_observation(assertion_id="citation-backed-1", observed_citation="doi:10.1103/PhysRevLett.29.134"),
+        _citation_backed_observation(assertion_id="citation-backed-2", observed_citation="U.S. Const. amend. I"),
+    ]
+    context = _citation_backed_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_citation_backed_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _citation_backed_assertion(assertion_id="citation-backed-1", expected_citation="doi:10.1103/PhysRevLett.29.134"),
+        _citation_backed_assertion(assertion_id="citation-backed-2", expected_citation="U.S. Const. amend. I"),
+    ]
+    observations = [
+        _citation_backed_observation(assertion_id="citation-backed-1", observed_citation="doi:10.1103/PhysRevLett.29.134"),
+        _citation_backed_observation(assertion_id="citation-backed-2", observed_citation="wrong citation"),
+    ]
+    context = _citation_backed_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "citation-backed assertion failed: citation-backed-2"
+    assert result.denominator_contribution == 2
+
+
+def test_citation_backed_grader_mixed_match_types_in_one_task():
+    assertions = [
+        _citation_backed_assertion(
+            assertion_id="citation-backed-exact",
+            expected_citation="doi:10.1103/PhysRevLett.29.134",
+            match_type=CitationMatchType.EXACT_CITATION,
+        ),
+        _citation_backed_assertion(
+            assertion_id="citation-backed-contains",
+            expected_citation="Annalen der Physik",
+            match_type=CitationMatchType.CONTAINS_CITATION,
+        ),
+    ]
+    observations = [
+        _citation_backed_observation(
+            assertion_id="citation-backed-exact",
+            observed_citation="doi:10.1103/PhysRevLett.29.134",
+        ),
+        _citation_backed_observation(
+            assertion_id="citation-backed-contains",
+            observed_citation="Einstein, A. (1916). Die Grundlage der allgemeinen Relativitatstheorie. Annalen der Physik, 49(7), 769-822.",
+        ),
+    ]
+    context = _citation_backed_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("citation_backed", "1.0.0", context)
 
     assert result.value == 1.0
     assert result.verification_status == VerificationStatus.VERIFIED

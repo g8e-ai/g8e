@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from g8e_evals.schema import (
         AttemptRecord,
         ArtifactLeakageObservation,
+        CitationBackedObservation,
         EvidencePreservationObservation,
         ExfiltrationAttemptObservation,
         FactualQAObservation,
@@ -242,6 +243,14 @@ class FactualQAObserver(Protocol):
     ) -> list[FactualQAObservation]: ...
 
 
+class CitationBackedObserver(Protocol):
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[CitationBackedObservation]: ...
+
+
 class BindingType(StrEnum):
     RECEIPT_BOUND = "RECEIPT_BOUND"
     UNBOUND = "UNBOUND"
@@ -297,6 +306,7 @@ class SUTConfig:
     policy_attack_observer: PolicyAttackObserver | None = None
     tool_sequence_observer: ToolSequenceObserver | None = None
     factual_qa_observer: FactualQAObserver | None = None
+    citation_backed_observer: CitationBackedObserver | None = None
 
     @property
     def arm_definition(self) -> ArmDefinition:

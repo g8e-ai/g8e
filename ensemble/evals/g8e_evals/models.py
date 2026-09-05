@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     ArtifactLeakageAssertion,
+    CitationBackedAssertion,
     EvidencePreservationAssertion,
     FactualQAAssertion,
     FORBIDDEN_METADATA_KEYS,
@@ -116,6 +117,7 @@ class TaskMetadata(BaseModel):
     policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
     tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
+    citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)

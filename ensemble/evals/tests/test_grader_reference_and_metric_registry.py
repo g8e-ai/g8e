@@ -302,6 +302,7 @@ _CURRENT_METRIC_IDS = [
     "policy_attack",
     "tool_sequence",
     "factual_qa",
+    "citation_backed",
 ]
 
 

@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.36.0"
+SCHEMA_VERSION = "1.37.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -60,6 +60,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "policy_attack_assertions",
     "tool_sequence_assertions",
     "factual_qa_assertions",
+    "citation_backed_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -84,6 +85,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "policy_attack_observation_refs",
     "tool_sequence_observation_refs",
     "factual_qa_observation_refs",
+    "citation_backed_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -2120,6 +2122,79 @@ class FactualQAObservation(BaseModel):
         return self
 
 
+class CitationMatchType(StrEnum):
+    """Deterministic comparison strategy for citation-backed answer grading.
+
+    ``exact_citation`` means the observed citation must exactly equal the
+    declared expected citation (byte-for-byte string comparison of the
+    citation identifier, such as a DOI, URL, or statute reference).
+    ``normalized_citation`` means the observed citation must equal the
+    expected citation after whitespace and case normalization (collapsing
+    consecutive whitespace to single spaces, stripping leading and trailing
+    whitespace, and lowercasing). ``contains_citation`` means the declared
+    expected citation must appear as a contiguous substring within the
+    observed citation string.
+    """
+
+    EXACT_CITATION = "exact_citation"
+    NORMALIZED_CITATION = "normalized_citation"
+    CONTAINS_CITATION = "contains_citation"
+
+
+class CitationBackedAssertion(BaseModel):
+    """Declares one citation that the model must produce to back its answer.
+
+    The grader verifies that the independently observed answer carries the
+    declared citation satisfying the declared match type. The collection
+    boundary pins where the citation is observed so that an observation
+    from the wrong boundary cannot satisfy the assertion. The
+    ``expected_answer_text`` is the answer text that the citation is
+    expected to back; the grader does not grade the answer text itself
+    (that is the factual-qa grader's job) but records it for evidence
+    binding and downstream analysis.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    expected_citation: str = Field(min_length=1)
+    match_type: CitationMatchType
+    collection_boundary: StateCollectionBoundary
+
+
+class CitationBackedObservation(BaseModel):
+    """Independently observed citation for a citation-backed answer task.
+
+    The observation records the actual citation string produced by the
+    model at the declared collection boundary. ``observed_citation`` is
+    the raw citation text. The grader compares this against the declared
+    expected citation using the declared match type.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    observed_citation: str = ""
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> CitationBackedObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified citation-backed observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2213,6 +2288,7 @@ class TaskDefinition(BaseModel):
     policy_attack_assertions: list[PolicyAttackAssertion] = Field(default_factory=list)
     tool_sequence_assertions: list[ToolSequenceAssertion] = Field(default_factory=list)
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
+    citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2334,6 +2410,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(factual_qa_assertion_ids) != len(set(factual_qa_assertion_ids)):
             raise ValueError("factual-qa assertion IDs must be unique")
+        citation_backed_assertion_ids = [
+            assertion.assertion_id for assertion in self.citation_backed_assertions
+        ]
+        if len(citation_backed_assertion_ids) != len(set(citation_backed_assertion_ids)):
+            raise ValueError("citation-backed assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2495,6 +2576,7 @@ class AttemptRecord(BaseModel):
     policy_attack_observation_refs: list[str] = Field(default_factory=list)
     tool_sequence_observation_refs: list[str] = Field(default_factory=list)
     factual_qa_observation_refs: list[str] = Field(default_factory=list)
+    citation_backed_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)

@@ -77,6 +77,7 @@ from g8e_evals.schema import (
     StackEnvironment,
     ToolSequenceObservation,
     FactualQAObservation,
+    CitationBackedObservation,
     StateObservation,
     StageObservation,
     TaskDefinition,
@@ -123,10 +124,16 @@ from g8e_evals.benchmarks.governance.observers import (
     StaleStateRootObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
+from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
+from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
 from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
-from g8e_evals.benchmarks.utility.observers import FactualQAObserverImpl, ToolSequenceObserverImpl
+from g8e_evals.benchmarks.utility.observers import (
+    CitationBackedObserverImpl,
+    FactualQAObserverImpl,
+    ToolSequenceObserverImpl,
+)
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
@@ -172,6 +179,7 @@ _EVIDENCE_PRESERVATION_GRADER_ID = "evidence_preservation"
 _POLICY_ATTACK_GRADER_ID = "policy_attack"
 _TOOL_SEQUENCE_GRADER_ID = "tool_sequence"
 _FACTUAL_QA_GRADER_ID = "factual_qa"
+_CITATION_BACKED_GRADER_ID = "citation_backed"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -2466,7 +2474,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed"]
 _SYNTHETIC_STORE_KEY = b"s" * 32
 
 
@@ -2538,6 +2546,12 @@ async def _run_synthetic_suite(
         if gold_set is None:
             gold_set = Path("gold_sets/factual_qa/input_data.jsonl")
         loader = FactualQALoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "citation_backed":
+        if gold_set is None:
+            gold_set = Path("gold_sets/citation_backed/input_data.jsonl")
+        loader = CitationBackedLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
@@ -2631,6 +2645,7 @@ async def _run_synthetic_suite(
             policy_attack_assertions=task.metadata.policy_attack_assertions,
             tool_sequence_assertions=task.metadata.tool_sequence_assertions,
             factual_qa_assertions=task.metadata.factual_qa_assertions,
+            citation_backed_assertions=task.metadata.citation_backed_assertions,
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2657,6 +2672,7 @@ async def _run_synthetic_suite(
     policy_attack_records: list[PolicyAttackObservation] = []
     tool_sequence_records: list[ToolSequenceObservation] = []
     factual_qa_records: list[FactualQAObservation] = []
+    citation_backed_records: list[CitationBackedObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
@@ -2966,6 +2982,21 @@ async def _run_synthetic_suite(
             factual_qa_records.extend(factual_qa_observations)
             attempt.factual_qa_observation_refs = [
                 obs.observation_id for obs in factual_qa_observations
+            ]
+
+        citation_backed_observations: list[CitationBackedObservation] = []
+        if task.metadata.citation_backed_assertions:
+            citation_sim = LocalCitationBackedSimulator()
+            observed_citation = params.get("observed_citation", "")
+            citation_sim.set_citation(observed_citation)
+            evidence_sha = hashlib.sha256(
+                f"{task.id}:citation-backed:{citation_sim.finish().citation_hash}".encode()
+            ).hexdigest()
+            observer = CitationBackedObserverImpl(citation_sim, evidence_sha, evidence_ref)
+            citation_backed_observations = await observer.observe(task_def, attempt)
+            citation_backed_records.extend(citation_backed_observations)
+            attempt.citation_backed_observation_refs = [
+                obs.observation_id for obs in citation_backed_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -3389,6 +3420,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.citation_backed_assertions:
+            grade = grade_deterministically(
+                _CITATION_BACKED_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    citation_backed_observations=citation_backed_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_CITATION_BACKED_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -3453,6 +3510,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "factual-qa-observations.jsonl", "w") as f:
         for obs in factual_qa_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "citation-backed-observations.jsonl", "w") as f:
+        for obs in citation_backed_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

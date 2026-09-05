@@ -698,6 +698,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["factual_qa_observation"],
         release_threshold="Practical threshold: 1.0; any factual-QA mismatch is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="citation_backed",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of citation-backed assertions where the independently observed citation satisfies the declared match type against the expected citation. For exact_citation the observed citation must exactly equal the expected citation. For normalized_citation the observed citation must equal the expected citation after whitespace and case normalization. For contains_citation the expected citation must appear as a contiguous substring within the observed citation string.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("citation_backed"),
+        eligible_population="All attempts with declared citation-backed assertions.",
+        denominator="Total number of declared citation-backed assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["citation_backed_observation"],
+        release_threshold="Practical threshold: 1.0; any citation-backed mismatch is a release blocker.",
+    ),
 ]
 
 

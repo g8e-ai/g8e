@@ -75,6 +75,9 @@ from g8e_evals.schema import (
     FactualQAAssertion,
     FactualQAObservation,
     FactualQAMatchType,
+    CitationBackedAssertion,
+    CitationBackedObservation,
+    CitationMatchType,
     StateAssertionPredicate,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -124,6 +127,7 @@ class DeterministicGradingContext:
     policy_attack_observations: list[PolicyAttackObservation] = field(default_factory=list)
     tool_sequence_observations: list[ToolSequenceObservation] = field(default_factory=list)
     factual_qa_observations: list[FactualQAObservation] = field(default_factory=list)
+    citation_backed_observations: list[CitationBackedObservation] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -3558,6 +3562,11 @@ def _normalize_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
+def _normalize_citation(text: str) -> str:
+    """Collapse whitespace and lowercase for case-insensitive citation matching."""
+    return " ".join(text.split()).lower()
+
+
 class FactualQAGrader:
     """Proves that the observed answer satisfies the declared match type against the expected answer.
 
@@ -3654,6 +3663,103 @@ class FactualQAGrader:
         )
 
 
+class CitationBackedGrader:
+    """Proves that the observed citation satisfies the declared match type against the expected citation.
+
+    For each assertion the grader verifies two independent properties:
+
+    1. The independently observed citation satisfies the declared match type.
+       For ``exact_citation`` the observed citation must exactly equal the
+       declared expected citation. For ``normalized_citation`` the observed
+       citation must equal the expected citation after whitespace and case
+       normalization. For ``contains_citation`` the declared expected
+       citation must appear as a contiguous substring within the observed
+       citation string.
+    2. The observation is verified, context-bound to the correct
+       attempt/run/task, collected at the declared collection boundary,
+       and carries source evidence.
+
+    Both properties must hold for the assertion to pass.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.citation_backed_assertions
+        if not assertions:
+            return self._failed("citation-backed assertions are missing")
+
+        observations_by_assertion: dict[str, list[CitationBackedObservation]] = {}
+        for observation in context.citation_backed_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"citation-backed observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+
+            if assertion.match_type == CitationMatchType.EXACT_CITATION:
+                if observation.observed_citation != assertion.expected_citation:
+                    failed_assertions.append(assertion.assertion_id)
+            elif assertion.match_type == CitationMatchType.NORMALIZED_CITATION:
+                if _normalize_citation(observation.observed_citation) != _normalize_citation(assertion.expected_citation):
+                    failed_assertions.append(assertion.assertion_id)
+            elif assertion.match_type == CitationMatchType.CONTAINS_CITATION:
+                if assertion.expected_citation not in observation.observed_citation:
+                    failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"citation-backed assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
     ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
@@ -3684,6 +3790,7 @@ _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("policy_attack", "1.0.0"): PolicyAttackGrader(),
     ("tool_sequence", "1.0.0"): ToolSequenceGrader(),
     ("factual_qa", "1.0.0"): FactualQAGrader(),
+    ("citation_backed", "1.0.0"): CitationBackedGrader(),
 }
 
 

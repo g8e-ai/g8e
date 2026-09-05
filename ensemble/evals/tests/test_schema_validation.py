@@ -111,6 +111,9 @@ from g8e_evals.schema import (
     FactualQAAssertion,
     FactualQAObservation,
     FactualQAMatchType,
+    CitationBackedAssertion,
+    CitationBackedObservation,
+    CitationMatchType,
     UsageReconciliation,
     VerificationStatus,
     UnsupportedExclusion,
@@ -120,7 +123,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.36.0"
+    assert SCHEMA_VERSION == "1.37.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -3219,6 +3222,156 @@ def test_attempt_record_links_factual_qa_observations():
     assert attempt.factual_qa_observation_refs == ["observation-1", "observation-2"]
 
 
+# ---------------------------------------------------------------------------
+# CitationBackedAssertion and CitationBackedObservation schema validation
+# ---------------------------------------------------------------------------
+
+_CITATION_BACKED_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def test_citation_backed_assertion_and_observation_round_trip():
+    assertion = CitationBackedAssertion(
+        assertion_id="citation-backed-1",
+        expected_citation="doi:10.1103/PhysRevLett.29.134",
+        match_type=CitationMatchType.EXACT_CITATION,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    observation = CitationBackedObservation(
+        observation_id="citation-backed-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        observed_citation="doi:10.1103/PhysRevLett.29.134",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_CITATION_BACKED_COLLECTED,
+        source_evidence_refs=["restricted-citation-backed-evidence"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = CitationBackedAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = CitationBackedObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_citation_backed_assertion_rejects_empty_assertion_id():
+    with pytest.raises(ValidationError):
+        CitationBackedAssertion(
+            assertion_id="",
+            expected_citation="doi:10.1103/PhysRevLett.29.134",
+            match_type=CitationMatchType.EXACT_CITATION,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_citation_backed_assertion_rejects_empty_expected_citation():
+    with pytest.raises(ValidationError):
+        CitationBackedAssertion(
+            assertion_id="citation-backed-1",
+            expected_citation="",
+            match_type=CitationMatchType.EXACT_CITATION,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_citation_backed_assertion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        CitationBackedAssertion.model_validate({
+            "assertion_id": "citation-backed-1",
+            "expected_citation": "doi:10.1103/PhysRevLett.29.134",
+            "match_type": CitationMatchType.EXACT_CITATION,
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "unexpected_field": "bad",
+        })
+
+
+def test_citation_backed_observation_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        CitationBackedObservation.model_validate({
+            "observation_id": "citation-backed-obs-1",
+            "attempt_id": "attempt-1",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "assertion_id": "citation-backed-1",
+            "observed_citation": "doi:10.1103/PhysRevLett.29.134",
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "collected_at": _CITATION_BACKED_COLLECTED.isoformat(),
+            "source_evidence_refs": ["evidence-1"],
+            "source_evidence_sha256": "a" * 64,
+            "verification_status": VerificationStatus.VERIFIED,
+            "unexpected_field": "bad",
+        })
+
+
+def test_verified_citation_backed_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified citation-backed observation requires source evidence",
+    ):
+        CitationBackedObservation(
+            observation_id="citation-backed-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="citation-backed-1",
+            observed_citation="doi:10.1103/PhysRevLett.29.134",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_CITATION_BACKED_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_citation_backed_observation_requires_source_evidence_sha256():
+    with pytest.raises(
+        ValidationError,
+        match="verified citation-backed observation requires source evidence",
+    ):
+        CitationBackedObservation(
+            observation_id="citation-backed-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="citation-backed-1",
+            observed_citation="doi:10.1103/PhysRevLett.29.134",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_CITATION_BACKED_COLLECTED,
+            source_evidence_refs=["evidence-1"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_task_definition_rejects_duplicate_citation_backed_assertion_ids():
+    assertion = CitationBackedAssertion(
+        assertion_id="duplicate",
+        expected_citation="doi:10.1103/PhysRevLett.29.134",
+        match_type=CitationMatchType.EXACT_CITATION,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    with pytest.raises(ValidationError, match="citation-backed assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            citation_backed_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_citation_backed_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        citation_backed_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.citation_backed_observation_refs == ["observation-1", "observation-2"]
+
+
 def test_unsupported_exclusion_round_trip():
     exclusion = UnsupportedExclusion(
         exclusion_id="exclude-replay-1",
@@ -3484,6 +3637,8 @@ def test_forbidden_metadata_keys_covers_all_typed_assertion_fields():
         "evidence_preservation_assertions",
         "policy_attack_assertions",
         "tool_sequence_assertions",
+        "factual_qa_assertions",
+        "citation_backed_assertions",
         "unsupported_exclusions",
     }
     assert typed_assertion_fields <= FORBIDDEN_METADATA_KEYS
@@ -3513,6 +3668,8 @@ def test_forbidden_metadata_keys_covers_all_typed_observation_ref_fields():
         "evidence_preservation_observation_refs",
         "policy_attack_observation_refs",
         "tool_sequence_observation_refs",
+        "factual_qa_observation_refs",
+        "citation_backed_observation_refs",
         "unsupported_exclusion_refs",
     }
     assert typed_observation_ref_fields <= FORBIDDEN_METADATA_KEYS
