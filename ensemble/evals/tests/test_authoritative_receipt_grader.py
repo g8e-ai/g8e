@@ -121,6 +121,8 @@ from g8e_evals.schema import (
     CitationBackedAssertion,
     CitationBackedObservation,
     CitationMatchType,
+    PartialMilestoneAssertion,
+    PartialMilestoneObservation,
     VerificationStatus,
     GraderReference,
 )
@@ -11048,3 +11050,390 @@ def test_citation_backed_grader_mixed_match_types_in_one_task():
     assert result.value == 1.0
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# PartialMilestoneGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_PARTIAL_MILESTONE_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _partial_milestone_assertion(
+    *,
+    assertion_id: str = "partial-milestone-1",
+    expected_label: str = "literature review",
+    expected_order: int = 0,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> PartialMilestoneAssertion:
+    return PartialMilestoneAssertion(
+        assertion_id=assertion_id,
+        expected_label=expected_label,
+        expected_order=expected_order,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _partial_milestone_observation(
+    *,
+    assertion_id: str = "partial-milestone-1",
+    milestone_reached: bool = True,
+    observed_label: str = "literature review",
+    observed_order: int | None = 0,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> PartialMilestoneObservation:
+    return PartialMilestoneObservation(
+        observation_id=f"partial-milestone-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        milestone_reached=milestone_reached,
+        observed_label=observed_label,
+        observed_order=observed_order,
+        collection_boundary=collection_boundary,
+        collected_at=_PARTIAL_MILESTONE_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _partial_milestone_context(
+    *,
+    assertions: list[PartialMilestoneAssertion] | None = None,
+    observations: list[PartialMilestoneObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="utility",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="PARTIAL_MILESTONE",
+        compatible_arms=[Arm.DIRECT],
+        partial_milestone_assertions=assertions if assertions is not None else [_partial_milestone_assertion()],
+        graders=[GraderReference(grader_id="partial_milestone", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        partial_milestone_observations=observations if observations is not None else [_partial_milestone_observation()],
+    )
+
+
+def test_partial_milestone_grader_verifies_milestone_reached_at_correct_order():
+    result = grade_deterministically(
+        "partial_milestone",
+        "1.0.0",
+        _partial_milestone_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "partial-milestone-obs-partial-milestone-1" in result.evidence_refs
+    assert "evidence-partial-milestone-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_partial_milestone_grader_verifies_multiple_milestones_all_reached():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="testing", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="implementation", observed_order=1),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="testing", observed_order=2),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 3
+
+
+def test_partial_milestone_grader_fails_when_milestone_not_reached():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(milestone_reached=False, observed_order=None)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: partial-milestone-1"
+
+
+def test_partial_milestone_grader_fails_when_observed_order_mismatches():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(observed_order=2)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_when_observed_order_is_none():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(milestone_reached=True, observed_order=None)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_when_milestone_skipped():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="testing", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="testing", observed_order=2),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-2"
+    assert result.denominator_contribution == 3
+
+
+def test_partial_milestone_grader_fails_when_milestone_out_of_order():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="build", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="test", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="deploy", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="build", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="test", observed_order=2),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="deploy", observed_order=1),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(1 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_closed_on_missing_assertions():
+    context = _partial_milestone_context(
+        assertions=[],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "partial-milestone assertions are missing"
+
+
+def test_partial_milestone_grader_fails_closed_on_missing_observation():
+    context = _partial_milestone_context(
+        observations=[],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: partial-milestone-1"
+
+
+def test_partial_milestone_grader_fails_closed_on_duplicate_observations():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(), _partial_milestone_observation()],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_closed_on_unverified_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_unknown_observation_assertion():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_partial_milestone_grader_rejects_cross_attempt_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_cross_run_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_cross_task_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_collection_boundary_mismatch():
+    context = _partial_milestone_context(
+        assertions=[_partial_milestone_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_partial_milestone_observation()],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_missing_source_evidence_refs():
+    obs = _partial_milestone_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _partial_milestone_context(observations=[obs])
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_missing_source_evidence_sha256():
+    obs = _partial_milestone_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _partial_milestone_context(observations=[obs])
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("partial_milestone", "2.0.0", _partial_milestone_context())
+
+
+def test_partial_milestone_grader_aggregates_multiple_assertions():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="implementation", observed_order=1),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_partial_milestone_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", milestone_reached=False, observed_order=None),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-2"
+    assert result.denominator_contribution == 2
+
+
+def test_partial_milestone_grader_mixed_reached_and_wrong_order_in_one_task():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="assessment", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="planning", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="execution", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="assessment", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="planning", observed_order=1),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="execution", observed_order=5),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-3"
+    assert result.denominator_contribution == 3
