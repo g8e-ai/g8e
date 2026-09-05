@@ -185,13 +185,29 @@ class TokenPersistenceFailureObserverImpl:
 
     Calls ``persist`` on the store and records whether the operation was
     refused, in-memory state was rolled back, the sensitive value leaked,
-    and unsafe continuation was detected.
+    and unsafe continuation was detected.  When ``pre_existing_token_ids``
+    and ``uncommitted_token_id`` are provided, the observer independently
+    verifies post-failure state: pre-existing committed tokens must
+    survive and the uncommitted token must be absent.  The
+    ``in_memory_token_rolled_back`` and ``storage_failure_injected``
+    fields are set from the independent observation, not from the
+    store's self-reported result.
     """
 
-    def __init__(self, store: LocalEncryptedTokenStore, evidence_sha: str, evidence_ref: str) -> None:
+    def __init__(
+        self,
+        store: LocalEncryptedTokenStore,
+        evidence_sha: str,
+        evidence_ref: str,
+        *,
+        pre_existing_token_ids: list[str] | None = None,
+        uncommitted_token_id: str | None = None,
+    ) -> None:
         self._store = store
         self._evidence_sha = evidence_sha
         self._evidence_ref = evidence_ref
+        self._pre_existing_token_ids = pre_existing_token_ids or []
+        self._uncommitted_token_id = uncommitted_token_id
 
     async def observe(
         self,
@@ -202,6 +218,21 @@ class TokenPersistenceFailureObserverImpl:
         _sha, _status = _evidence_binding(self._evidence_sha)
         for assertion in task.token_persistence_failure_assertions:
             result = self._store.persist()
+
+            storage_failure_injected = not result.persisted
+            if self._pre_existing_token_ids or self._uncommitted_token_id:
+                pre_existing_survived = all(
+                    self._store.has_token(tid) for tid in self._pre_existing_token_ids
+                )
+                uncommitted_gone = (
+                    self._uncommitted_token_id is None
+                    or not self._store.has_token(self._uncommitted_token_id)
+                )
+                independently_rolled_back = pre_existing_survived and uncommitted_gone
+                in_memory_rolled_back = independently_rolled_back
+            else:
+                in_memory_rolled_back = result.rolled_back
+
             observations.append(TokenPersistenceFailureObservation(
                 observation_id=f"{attempt.attempt_id}:token-persist-fail:{assertion.assertion_id}",
                 attempt_id=attempt.attempt_id,
@@ -209,9 +240,9 @@ class TokenPersistenceFailureObserverImpl:
                 task_id=attempt.task_id,
                 assertion_id=assertion.assertion_id,
                 collection_boundary=assertion.collection_boundary,
-                storage_failure_injected=True,
+                storage_failure_injected=storage_failure_injected,
                 operation_refused=result.operation_refused,
-                in_memory_token_rolled_back=result.rolled_back,
+                in_memory_token_rolled_back=in_memory_rolled_back,
                 sensitive_value_leaked=result.sensitive_value_leaked,
                 unsafe_continuation_detected=result.unsafe_continuation,
                 measured_failure_outcome=TokenPersistenceFailureOutcome.STORAGE_FAILURE,
@@ -409,9 +440,14 @@ class RehydrationObserverImpl:
         _sha, _status = _evidence_binding(self._evidence_sha)
 
         self._artifact.serialize(self._tokens)
-        input_sha = self._artifact.input_sha256()
         restored, unresolved_types = self._artifact.rehydrate()
-        output_sha = self._artifact.output_sha256()
+        public_sha = self._artifact.public_sha256()
+        if public_sha:
+            input_sha = public_sha
+            output_sha = public_sha
+        else:
+            input_sha = self._artifact.input_sha256()
+            output_sha = self._artifact.output_sha256()
 
         for assertion in task.rehydration_assertions:
             restored_types = sorted({t.sensitive_type for t in restored})

@@ -17,7 +17,10 @@ artifact contains only hash-safe public evidence.
 The scanner checks the emitted artifact for occurrences of declared
 sensitive content types and returns the count and types found, so the
 ``ArtifactLeakageGrader`` can prove that the emitted artifact contains zero
-sensitive content occurrences in plaintext.
+sensitive content occurrences in plaintext.  The scanner counts every
+marker occurrence, not just one per type, so repeated leaks are fully
+counted.  The artifact class is validated as a safe path element to
+prevent path traversal outside the collection root.
 """
 
 from __future__ import annotations
@@ -39,14 +42,31 @@ _SENSITIVE_MARKERS: dict[SensitiveArtifactContentType, str] = {
 }
 
 
+def _validate_artifact_class(artifact_class: str) -> str:
+    """Validate that ``artifact_class`` is a safe single path element.
+
+    Rejects empty strings, path separators, ``..``, and any character that
+    could escape the collection root directory.
+    """
+    if not artifact_class:
+        raise ValueError("artifact_class must not be empty")
+    if "/" in artifact_class or "\\" in artifact_class:
+        raise ValueError(f"artifact_class must not contain path separators: {artifact_class}")
+    if artifact_class == ".." or ".." in artifact_class:
+        raise ValueError(f"artifact_class must not contain traversal sequences: {artifact_class}")
+    if "\x00" in artifact_class:
+        raise ValueError("artifact_class must not contain null bytes")
+    return artifact_class
+
+
 class LocalArtifactEmitter:
     """A local artifact emitter that writes public artifacts and scans for sensitive content.
 
     The emitter writes an artifact for a declared class to a collection
     boundary directory (report or export).  When ``leak_types`` is non-empty,
     the artifact contains sensitive plaintext markers for the declared types.
-    When ``leak_types`` is empty, the artifact contains only hash-safe public
-    evidence (SHA-256 digests of the sensitive values).
+    When ``leak_types`` is empty, the artifact contains only the provided
+    hash-safe public content (SHA-256 digests of the sensitive values).
     """
 
     def __init__(self, base_dir: Path) -> None:
@@ -70,8 +90,9 @@ class LocalArtifactEmitter:
         ``leak_types`` is empty, the artifact contains only the provided
         hash-safe public content.
         """
+        safe_class = _validate_artifact_class(artifact_class)
         self._base_dir.mkdir(parents=True, exist_ok=True)
-        artifact_path = self._base_dir / f"{artifact_class}.json"
+        artifact_path = self._base_dir / f"{safe_class}.json"
 
         if leak_types:
             parts = [content]
@@ -93,6 +114,8 @@ class LocalArtifactEmitter:
 
         Returns ``(present, sha256, byte_length, sensitive_occurrences, sensitive_types_found)``.
         ``present`` is ``False`` when the artifact file does not exist.
+        ``sensitive_occurrences`` counts every marker occurrence, not just
+        one per type, so repeated leaks are fully counted.
         """
         if not artifact_path.exists():
             return False, "", 0, 0, []
@@ -105,11 +128,13 @@ class LocalArtifactEmitter:
         occurrences = 0
         types_found: list[SensitiveArtifactContentType] = []
         for sensitive_type, marker in _SENSITIVE_MARKERS.items():
-            if marker in text:
-                occurrences += 1
+            count = text.count(marker)
+            if count > 0:
+                occurrences += count
                 types_found.append(sensitive_type)
 
         return True, sha, byte_length, occurrences, types_found
 
     def artifact_path(self, artifact_class: str) -> Path:
-        return self._base_dir / f"{artifact_class}.json"
+        safe_class = _validate_artifact_class(artifact_class)
+        return self._base_dir / f"{safe_class}.json"

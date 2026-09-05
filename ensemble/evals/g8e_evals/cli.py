@@ -2620,7 +2620,86 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
 
 
 _SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone"]
-_SYNTHETIC_STORE_KEY = b"s" * 32
+
+
+def _generate_per_run_key() -> bytes:
+    """Generate a random 32-byte AES-256 key for a synthetic run.
+
+    The key is generated outside the public report directory and is never
+    written to the report tree.  It encrypts restricted evidence (token
+    stores and rehydration artifacts) so that ciphertext in the public
+    report cannot be decrypted by anyone with access to the source code.
+    """
+    import secrets
+    return secrets.token_bytes(32)
+
+
+def _extract_canary_values(tasks: list) -> set[str]:
+    """Extract all synthetic sensitive values from task scenario params.
+
+    These values are classified as canaries: they must never appear in
+    plaintext in any public report artifact.  The regression scan checks
+    every file in the report tree against this set.
+    """
+    canaries: set[str] = set()
+    for task in tasks:
+        params = task.metadata.benchmark_specific
+        for token_spec in params.get("tokens", []):
+            if token_spec.get("value"):
+                canaries.add(token_spec["value"])
+        expired = params.get("expired_token")
+        if expired and expired.get("value"):
+            canaries.add(expired["value"])
+        ttl_token = params.get("ttl_token")
+        if ttl_token and ttl_token.get("value"):
+            canaries.add(ttl_token["value"])
+        for token_spec in params.get("rehydration_tokens", []):
+            if token_spec.get("value"):
+                canaries.add(token_spec["value"])
+    return canaries
+
+
+def _scan_report_for_canary_leaks(
+    report_dir: Path,
+    canary_values: set[str],
+    per_run_key: bytes,
+) -> None:
+    """Scan every file in the report tree for raw canary values and the key.
+
+    This is the fail-closed regression gate: no public report artifact may
+    contain raw canaries (synthetic sensitive values) or the per-run
+    decryption key.  The scan enumerates every file recursively, reads its
+    bytes, and checks for any canary value or the key bytes.  If any leak
+    is found, the function raises ``EvaluationRunError`` so the run fails
+    closed rather than producing a report that leaks sensitive values.
+    """
+    if not canary_values:
+        return
+    key_bytes = per_run_key
+    key_hex = per_run_key.hex()
+    leaks: list[str] = []
+    for file_path in sorted(report_dir.rglob("*")):
+        if not file_path.is_file():
+            continue
+        try:
+            content = file_path.read_bytes()
+        except OSError:
+            continue
+        text = content.decode("utf-8", errors="replace")
+        for canary in canary_values:
+            if canary and canary in text:
+                rel = file_path.relative_to(report_dir)
+                leaks.append(f"raw canary '{canary}' found in {rel}")
+        if key_bytes in content:
+            rel = file_path.relative_to(report_dir)
+            leaks.append(f"per-run key bytes found in {rel}")
+        if key_hex in text:
+            rel = file_path.relative_to(report_dir)
+            leaks.append(f"per-run key hex found in {rel}")
+    if leaks:
+        raise EvaluationRunError(
+            "canary leak scan failed: " + "; ".join(leaks)
+        )
 
 
 @main.command(name="bench-synthetic")
@@ -2760,6 +2839,9 @@ async def _run_synthetic_suite(
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))
 
+    per_run_key = _generate_per_run_key()
+    canary_values = _extract_canary_values(tasks)
+
     task_defs: list[TaskDefinition] = []
     for task in tasks:
         grader_refs = _derive_grader_refs_from_assertions(task.metadata)
@@ -2848,7 +2930,7 @@ async def _run_synthetic_suite(
         store_dir = report_dir / "stores" / task.id
         store_dir.mkdir(parents=True, exist_ok=True)
         store_path = store_dir / "store.json"
-        store = LocalEncryptedTokenStore(store_path, _SYNTHETIC_STORE_KEY)
+        store = LocalEncryptedTokenStore(store_path, per_run_key)
 
         task_evidence_indices: list[EvidenceIndex] = []
         task_receipt_ids: list[str] = []
@@ -2929,23 +3011,25 @@ async def _run_synthetic_suite(
             ]
 
         if task.metadata.token_persistence_failure_assertions:
-            for token_spec in params.get("tokens", []):
+            token_specs = params.get("tokens", [])
+            pre_existing_token_ids = [ts["token_id"] for ts in token_specs]
+            uncommitted_token_id = "uncommitted-rollback-token"
+            store = LocalEncryptedTokenStore(store_path, per_run_key)
+            for token_spec in token_specs:
                 store.store(
                     token_spec["token_id"],
                     token_spec["value"],
                     token_spec["sensitive_type"],
                     token_spec["ttl_seconds"],
                 )
-            store = LocalEncryptedTokenStore(
-                store_path, _SYNTHETIC_STORE_KEY, fail_persist=True,
+            store.persist()
+            store.store(
+                uncommitted_token_id,
+                "uncommitted-rollback-value",
+                "email",
+                3600,
             )
-            for token_spec in params.get("tokens", []):
-                store.store(
-                    token_spec["token_id"],
-                    token_spec["value"],
-                    token_spec["sensitive_type"],
-                    token_spec["ttl_seconds"],
-                )
+            store.set_fail_persist(True)
             store_ciphertext = store_path.read_bytes() if store_path.exists() else b""
             store_sha = hashlib.sha256(store_ciphertext).hexdigest()
             store_artifact_id = f"{attempt_id}:token-persist-fail-store"
@@ -2958,7 +3042,11 @@ async def _run_synthetic_suite(
                 report_dir=report_dir,
             )
             task_evidence_indices.append(store_index)
-            observer = TokenPersistenceFailureObserverImpl(store, store_sha, store_artifact_id)
+            observer = TokenPersistenceFailureObserverImpl(
+                store, store_sha, store_artifact_id,
+                pre_existing_token_ids=pre_existing_token_ids,
+                uncommitted_token_id=uncommitted_token_id,
+            )
             failure_observations = await observer.observe(task_def, attempt)
             token_persistence_failure_records.extend(failure_observations)
             attempt.token_persistence_failure_observation_refs = [
@@ -3041,7 +3129,12 @@ async def _run_synthetic_suite(
 
         if task.metadata.rehydration_assertions:
             rehydration_artifact_path = store_dir / "rehydration.json"
-            artifact = LocalRehydrationArtifact(rehydration_artifact_path)
+            rehydration_public_path = store_dir / "rehydration-public.json"
+            artifact = LocalRehydrationArtifact(
+                rehydration_artifact_path,
+                key=per_run_key,
+                public_path=rehydration_public_path,
+            )
             rehydration_token_specs = params.get("rehydration_tokens", [])
             rehydration_tokens: list[TokenEntry] = []
             for token_spec in rehydration_token_specs:
@@ -3963,6 +4056,8 @@ async def _run_synthetic_suite(
     with open(report_dir / "evidence-index.jsonl", "w") as f:
         for index in evidence_index_records:
             f.write(index.model_dump_json() + "\n")
+
+    _scan_report_for_canary_leaks(report_dir, canary_values, per_run_key)
 
     console.print(f"\n[bold green]Synthetic report saved to {report_dir}[/bold green]")
 
