@@ -11,11 +11,14 @@ These tests exercise the loader and provenance models without touching the
 filesystem. File I/O is stubbed via ``SimpleNamespace`` mocks and
 ``monkeypatch`` so the tests remain pure Tier 1 (no files, network, or DB).
 
-The reliability suite covers provider throttling, malformed structured
-output, interrupted streams, audit-store unavailability, signing failure,
-and measured-failure scenarios. Each task declares typed
-``ReliabilityAssertion`` records that the ``ReliabilityGrader`` evaluates
-against independently observed handling-behavior records.
+The reliability suite covers all twelve declared reliability failure
+scenarios (provider throttling, malformed structured output, interrupted
+streams, duplicate events, delayed events, audit-store unavailability,
+operator disconnect, operator restart, locked vault, signing failure,
+concurrent state mutations, and replay races) plus two measured-failure
+cases. Each task declares typed ``ReliabilityAssertion`` records that the
+``ReliabilityGrader`` evaluates against independently observed
+handling-behavior records.
 """
 
 from __future__ import annotations
@@ -444,6 +447,167 @@ def test_reliability_loader_produces_typed_tasks_with_no_evidence_measured_failu
 
 
 @pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_duplicate_event_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-duplicate-event-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-duplicate-event-assert-1",
+                scenario_type="duplicate_event",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="deduplicate",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.DUPLICATE_EVENT
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.DEDUPLICATE
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_delayed_event_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-delayed-event-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-delayed-event-assert-1",
+                scenario_type="delayed_event",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="detect_and_reject",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.DELAYED_EVENT
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.DETECT_AND_REJECT
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_operator_disconnect_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-operator-disconnect-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-operator-disconnect-assert-1",
+                scenario_type="operator_disconnect",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="reconnect_recover",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.OPERATOR_DISCONNECT
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.RECONNECT_RECOVER
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_operator_restart_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-operator-restart-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-operator-restart-assert-1",
+                scenario_type="operator_restart",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="reconnect_recover",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.OPERATOR_RESTART
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.RECONNECT_RECOVER
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_locked_vault_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-locked-vault-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-locked-vault-assert-1",
+                scenario_type="locked_vault",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="fail_closed",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.LOCKED_VAULT
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.FAIL_CLOSED
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_concurrent_state_mutation_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-concurrent-mutation-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-concurrent-mutation-assert-1",
+                scenario_type="concurrent_state_mutation",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="serialize_order",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.CONCURRENT_STATE_MUTATION
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.SERIALIZE_ORDER
+
+
+@pytest.mark.unit
+def test_reliability_loader_produces_typed_tasks_with_replay_race_scenario(monkeypatch):
+    row = _reliability_row(
+        key="reliability-replay-race-001",
+        reliability_assertions=[
+            _reliability_assertion(
+                assertion_id="reliability-replay-race-assert-1",
+                scenario_type="replay_race",
+                action_type="GOVERNANCE_ACTION",
+                expected_behavior="detect_and_reject",
+            ),
+        ],
+    )
+    content = (json.dumps(row, sort_keys=True) + "\n").encode()
+    mock_path = _stub_loader(monkeypatch, content)
+
+    tasks = list(ReliabilityLoader(mock_path).load())
+    task = tasks[0]
+    assertion = task.metadata.reliability_assertions[0]
+    assert assertion.scenario_type == ReliabilityScenarioType.REPLAY_RACE
+    assert assertion.expected_behavior == ReliabilityExpectedBehavior.DETECT_AND_REJECT
+
+
+@pytest.mark.unit
 def test_reliability_loader_sets_default_category_and_action_class(monkeypatch):
     row = {
         "key": "reliability-defaults-001",
@@ -549,7 +713,7 @@ def test_reliability_loader_all_fixture_rows_declare_typed_assertions():
 
     fixture_path = Path(__file__).resolve().parents[1] / "gold_sets" / "reliability" / "input_data.jsonl"
     rows = [json.loads(line) for line in fixture_path.read_text().splitlines() if line.strip()]
-    assert len(rows) == 7
+    assert len(rows) == 14
     for row in rows:
         assertions = row.get("reliability_assertions", [])
         assert len(assertions) >= 1, f"row {row['key']} declares no reliability_assertions"
@@ -570,9 +734,8 @@ def test_reliability_loader_all_fixture_rows_declare_typed_assertions():
 
 @pytest.mark.unit
 def test_reliability_loader_fixture_rows_cover_all_scenario_types():
-    """The fixture covers provider_throttling, malformed_structured_output,
-    interrupted_stream, audit_store_unavailable, and signing_failure scenario
-    types, plus two measured-failure cases."""
+    """The fixture covers all twelve declared ReliabilityScenarioType values,
+    plus two measured-failure cases."""
     from pathlib import Path
 
     fixture_path = Path(__file__).resolve().parents[1] / "gold_sets" / "reliability" / "input_data.jsonl"
@@ -586,6 +749,14 @@ def test_reliability_loader_fixture_rows_cover_all_scenario_types():
     assert "interrupted_stream" in scenario_types
     assert "audit_store_unavailable" in scenario_types
     assert "signing_failure" in scenario_types
+    assert "duplicate_event" in scenario_types
+    assert "delayed_event" in scenario_types
+    assert "operator_disconnect" in scenario_types
+    assert "operator_restart" in scenario_types
+    assert "locked_vault" in scenario_types
+    assert "concurrent_state_mutation" in scenario_types
+    assert "replay_race" in scenario_types
+    assert len(scenario_types) == 12
 
 
 @pytest.mark.unit

@@ -589,7 +589,7 @@ class TestReliabilitySuiteReport:
 
     @pytest.mark.asyncio
     async def test_reliability_passing_tasks_have_metrics_value_one(self, tmp_path: Path) -> None:
-        """The five passing reliability tasks produce metrics with value 1.0 and verified status."""
+        """The twelve passing reliability tasks produce metrics with value 1.0 and verified status."""
         report_dir = await _run_suite("reliability", tmp_path)
         metrics = _read_jsonl(report_dir / "metrics.jsonl", MetricObservation)
         assert len(metrics) > 0
@@ -600,6 +600,13 @@ class TestReliabilitySuiteReport:
             "reliability-interrupted-stream-001",
             "reliability-audit-store-unavailable-001",
             "reliability-signing-failure-001",
+            "reliability-duplicate-event-001",
+            "reliability-delayed-event-001",
+            "reliability-operator-disconnect-001",
+            "reliability-operator-restart-001",
+            "reliability-locked-vault-001",
+            "reliability-concurrent-mutation-001",
+            "reliability-replay-race-001",
         }
         for metric in metrics:
             if metric.task_id in passing_task_ids:
