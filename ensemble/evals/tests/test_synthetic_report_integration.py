@@ -95,7 +95,8 @@ class TestSyntheticReportRoundTrip:
         assert (report_dir / "attempts.jsonl").is_file()
         assert (report_dir / "metrics.jsonl").is_file()
         assert (report_dir / "evidence-index.jsonl").is_file()
-        assert (report_dir / "governance-receipts.jsonl").is_file()
+        assert (report_dir / "receipts.jsonl").is_file()
+        assert (report_dir / "stages.jsonl").is_file()
 
     @pytest.mark.asyncio
     async def test_privacy_boundary_leakage_report_has_all_expected_files(self, tmp_path: Path) -> None:
@@ -214,10 +215,10 @@ class TestAttemptReceiptRefs:
     @pytest.mark.asyncio
     async def test_governance_attempts_have_receipt_refs(self, tmp_path: Path) -> None:
         """Every attempt in the governance_adversarial report has non-empty receipt_refs
-        matching the receipt IDs in governance-receipts.jsonl."""
+        matching the receipt IDs in receipts.jsonl."""
         report_dir = await _run_suite("governance_adversarial", tmp_path)
         attempts = _read_jsonl(report_dir / "attempts.jsonl", AttemptRecord)
-        receipts = _read_jsonl(report_dir / "governance-receipts.jsonl", ReceiptObservation)
+        receipts = _read_jsonl(report_dir / "receipts.jsonl", ReceiptObservation)
 
         assert len(attempts) > 0
         assert len(receipts) > 0
@@ -229,15 +230,15 @@ class TestAttemptReceiptRefs:
             )
             for ref in attempt.receipt_refs:
                 assert ref in receipt_ids, (
-                    f"attempt {attempt.attempt_id} references receipt {ref} not in governance-receipts.jsonl"
+                    f"attempt {attempt.attempt_id} references receipt {ref} not in receipts.jsonl"
                 )
 
     @pytest.mark.asyncio
     async def test_privacy_attempts_have_receipt_refs_for_exfiltration(self, tmp_path: Path) -> None:
-        """Attempts with exfiltration assertions have receipt_refs matching privacy-receipts.jsonl."""
+        """Attempts with exfiltration assertions have receipt_refs matching receipts.jsonl."""
         report_dir = await _run_suite("privacy_boundary_leakage", tmp_path)
         attempts = _read_jsonl(report_dir / "attempts.jsonl", AttemptRecord)
-        privacy_receipts = _read_jsonl(report_dir / "privacy-receipts.jsonl", ReceiptObservation)
+        privacy_receipts = _read_jsonl(report_dir / "receipts.jsonl", ReceiptObservation)
 
         if not privacy_receipts:
             pytest.skip("no privacy receipts in this suite run")
@@ -248,7 +249,7 @@ class TestAttemptReceiptRefs:
         for attempt in attempts_with_receipts:
             for ref in attempt.receipt_refs:
                 assert ref in receipt_ids, (
-                    f"attempt {attempt.attempt_id} references receipt {ref} not in privacy-receipts.jsonl"
+                    f"attempt {attempt.attempt_id} references receipt {ref} not in receipts.jsonl"
                 )
 
 
@@ -546,7 +547,7 @@ class TestFailClosedEdgeCases:
         """Every receipt in the governance report passes signature verification with the
         simulator's public key."""
         report_dir = await _run_suite("governance_adversarial", tmp_path)
-        receipts = _read_jsonl(report_dir / "governance-receipts.jsonl", ReceiptObservation)
+        receipts = _read_jsonl(report_dir / "receipts.jsonl", ReceiptObservation)
         assert len(receipts) > 0
 
         for receipt_obs in receipts:
@@ -561,7 +562,7 @@ class TestFailClosedEdgeCases:
     async def test_receipt_signature_verification_in_privacy_report(self, tmp_path: Path) -> None:
         """Every receipt in the privacy report passes signature verification."""
         report_dir = await _run_suite("privacy_boundary_leakage", tmp_path)
-        receipts = _read_jsonl(report_dir / "privacy-receipts.jsonl", ReceiptObservation)
+        receipts = _read_jsonl(report_dir / "receipts.jsonl", ReceiptObservation)
 
         if not receipts:
             pytest.skip("no privacy receipts in this suite run")

@@ -40,7 +40,6 @@ def action_receipt_to_dict(receipt: ActionReceipt) -> dict[str, object]:
     return json_format.MessageToDict(
         receipt,
         preserving_proto_field_name=True,
-        always_print_fields_with_no_presence=True,
     )
 
 

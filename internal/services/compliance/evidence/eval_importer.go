@@ -324,6 +324,18 @@ func (i *EvalBundleImporter) buildNodes(ctx context.Context, manifest evalRunMan
 		evidenceIDs[index.ArtifactID] = node.ArtifactID
 		nodes = append(nodes, node)
 	}
+	receiptNodes, receiptIDs, err := i.buildReceiptNodes(manifest, scopeID, receipts, attemptRecords, evidenceIDs)
+	if err != nil {
+		return nil, err
+	}
+	nodes = append(nodes, receiptNodes...)
+	metricEvidenceIDs := make(map[string]string, len(evidenceIDs)+len(receiptIDs))
+	for logicalID, artifactID := range evidenceIDs {
+		metricEvidenceIDs[logicalID] = artifactID
+	}
+	for logicalID, artifactID := range receiptIDs {
+		metricEvidenceIDs[logicalID] = artifactID
+	}
 	metricIDs := make(map[string]string, len(metrics))
 	for _, record := range metrics {
 		metric := record.Value
@@ -341,50 +353,13 @@ func (i *EvalBundleImporter) buildNodes(ctx context.Context, manifest evalRunMan
 		if _, exists := metricIDs[key]; exists {
 			return nil, fmt.Errorf("%w: %s", constants.ErrEvidenceDuplicateID, key)
 		}
-		refs, err := resolveEvalReferences(metric.EvidenceRefs, evidenceIDs)
+		refs, err := resolveEvalReferences(metric.EvidenceRefs, metricEvidenceIDs)
 		if err != nil {
 			return nil, fmt.Errorf("metric %s: %w", metric.MetricID, err)
 		}
 		artifactID := ContentAddress(ArtifactTypeEvalMetric, record.Bytes)
 		metricIDs[key] = artifactID
 		nodes = append(nodes, EvidenceNode{ArtifactID: artifactID, ArtifactType: ArtifactTypeEvalMetric, SHA256: digestHex(record.Bytes), MediaType: constants.MediaTypeJSON, SchemaRef: "g8e_evals.schema.MetricObservation", ProducerIdentity: VersionedKey(metric.MetricID, metric.MetricVersion), ProducedAt: evalAttemptTime(attempt, manifest.CreatedAt), ScopeID: scopeID, RunID: manifest.RunID, AttemptID: metric.AttemptID, ScenarioID: metric.TaskID, VerificationStatus: VerificationStatusUnverified, BundlePath: linePath(constants.EvalRunMetricsFilename, record.Line), CanonicalBytes: record.Bytes, References: refs})
-	}
-	receiptIDs := make(map[string]string, len(receipts))
-	for _, record := range receipts {
-		receiptObservation := record.Value
-		if err := validateEvalSchema(manifest.SchemaVersion, receiptObservation.SchemaVersion, constants.EvalRunReceiptsFilename, record.Line); err != nil {
-			return nil, err
-		}
-		attempt, exists := attemptRecords[receiptObservation.AttemptID]
-		if !exists {
-			return nil, fmt.Errorf("%w: receipt %s attempt %s", constants.ErrUnresolvedReference, receiptObservation.ReceiptID, receiptObservation.AttemptID)
-		}
-		if receiptObservation.ReceiptID == "" || receiptObservation.RunID != manifest.RunID {
-			return nil, fmt.Errorf("%w: %s#%d: receipt run binding does not match manifest", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
-		}
-		if _, exists := receiptIDs[receiptObservation.ReceiptID]; exists {
-			return nil, fmt.Errorf("%w: %s", constants.ErrEvidenceDuplicateID, receiptObservation.ReceiptID)
-		}
-		receipt := &operatorv1.ActionReceipt{}
-		if err := compliancev1.UnmarshalCanonical(receiptObservation.ActionReceipt, receipt); err != nil {
-			return nil, fmt.Errorf("%w: %s#%d: %w", constants.ErrEvidenceArtifactMalformed, constants.EvalRunReceiptsFilename, record.Line, err)
-		}
-		actionType, actionTypeErr := evalReceiptActionType(receipt)
-		if receipt.GetTransactionId() != receiptObservation.TransactionID || actionTypeErr != nil || actionType != receiptObservation.ActionType {
-			return nil, fmt.Errorf("%w: %s#%d: receipt wrapper does not match action receipt", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
-		}
-		status := VerificationStatusFailed
-		publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
-		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil {
-			status = VerificationStatusVerified
-		}
-		artifactID := ContentAddress(ArtifactTypeEvalReceipt, record.Bytes)
-		receiptIDs[receiptObservation.ReceiptID] = artifactID
-		refs := []string{}
-		if evidenceID, exists := evidenceIDs[receiptObservation.ReceiptID]; exists {
-			refs = append(refs, evidenceID)
-		}
-		nodes = append(nodes, EvidenceNode{ArtifactID: artifactID, ArtifactType: ArtifactTypeEvalReceipt, SHA256: digestHex(record.Bytes), MediaType: constants.MediaTypeJSON, SchemaRef: "g8e_evals.schema.ReceiptObservation", ProducerIdentity: receipt.GetSignerKeyId(), ProducedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), ScopeID: scopeID, RunID: manifest.RunID, AttemptID: receiptObservation.AttemptID, ScenarioID: attempt.TaskID, TransactionID: receipt.GetTransactionId(), VerificationStatus: status, VerifierID: constants.EvalRunVerifierID, VerifierVersion: constants.EvalRunVerifierVersion, VerifiedAt: i.nowFunc(), BundlePath: linePath(constants.EvalRunReceiptsFilename, record.Line), CanonicalBytes: record.Bytes, References: refs})
 	}
 	for _, record := range stages {
 		stage := record.Value
@@ -439,6 +414,48 @@ func (i *EvalBundleImporter) buildNodes(ctx context.Context, manifest evalRunMan
 		}
 	}
 	return nodes, nil
+}
+
+func (i *EvalBundleImporter) buildReceiptNodes(manifest evalRunManifest, scopeID string, receipts []evalJSONLRecord[evalReceiptObservation], attempts map[string]evalAttemptRecord, evidenceIDs map[string]string) ([]EvidenceNode, map[string]string, error) {
+	nodes := make([]EvidenceNode, 0, len(receipts))
+	receiptIDs := make(map[string]string, len(receipts))
+	for _, record := range receipts {
+		receiptObservation := record.Value
+		if err := validateEvalSchema(manifest.SchemaVersion, receiptObservation.SchemaVersion, constants.EvalRunReceiptsFilename, record.Line); err != nil {
+			return nil, nil, err
+		}
+		attempt, exists := attempts[receiptObservation.AttemptID]
+		if !exists {
+			return nil, nil, fmt.Errorf("%w: receipt %s attempt %s", constants.ErrUnresolvedReference, receiptObservation.ReceiptID, receiptObservation.AttemptID)
+		}
+		if receiptObservation.ReceiptID == "" || receiptObservation.RunID != manifest.RunID {
+			return nil, nil, fmt.Errorf("%w: %s#%d: receipt run binding does not match manifest", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
+		}
+		if _, exists := receiptIDs[receiptObservation.ReceiptID]; exists {
+			return nil, nil, fmt.Errorf("%w: %s", constants.ErrEvidenceDuplicateID, receiptObservation.ReceiptID)
+		}
+		receipt := &operatorv1.ActionReceipt{}
+		if err := compliancev1.UnmarshalCanonical(receiptObservation.ActionReceipt, receipt); err != nil {
+			return nil, nil, fmt.Errorf("%w: %s#%d: %w", constants.ErrEvidenceArtifactMalformed, constants.EvalRunReceiptsFilename, record.Line, err)
+		}
+		actionType, actionTypeErr := evalReceiptActionType(receipt)
+		if receipt.GetTransactionId() != receiptObservation.TransactionID || actionTypeErr != nil || actionType != receiptObservation.ActionType {
+			return nil, nil, fmt.Errorf("%w: %s#%d: receipt wrapper does not match action receipt", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
+		}
+		status := VerificationStatusFailed
+		publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
+		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil {
+			status = VerificationStatusVerified
+		}
+		artifactID := ContentAddress(ArtifactTypeEvalReceipt, record.Bytes)
+		receiptIDs[receiptObservation.ReceiptID] = artifactID
+		refs := []string{}
+		if evidenceID, exists := evidenceIDs[receiptObservation.ReceiptID]; exists {
+			refs = append(refs, evidenceID)
+		}
+		nodes = append(nodes, EvidenceNode{ArtifactID: artifactID, ArtifactType: ArtifactTypeEvalReceipt, SHA256: digestHex(record.Bytes), MediaType: constants.MediaTypeJSON, SchemaRef: "g8e_evals.schema.ReceiptObservation", ProducerIdentity: receipt.GetSignerKeyId(), ProducedAt: time.UnixMilli(receipt.GetExecutedAtUnixMs()), ScopeID: scopeID, RunID: manifest.RunID, AttemptID: receiptObservation.AttemptID, ScenarioID: attempt.TaskID, TransactionID: receipt.GetTransactionId(), VerificationStatus: status, VerifierID: constants.EvalRunVerifierID, VerifierVersion: constants.EvalRunVerifierVersion, VerifiedAt: i.nowFunc(), BundlePath: linePath(constants.EvalRunReceiptsFilename, record.Line), CanonicalBytes: record.Bytes, References: refs})
+	}
+	return nodes, receiptIDs, nil
 }
 
 func (i *EvalBundleImporter) loadEvidenceArtifact(ctx context.Context, manifest evalRunManifest, scopeID string, index evalEvidenceIndex) (EvidenceNode, error) {

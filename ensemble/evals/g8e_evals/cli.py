@@ -14,9 +14,11 @@ import os
 import platform
 import sys
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 import click
 from rich.console import Console
@@ -266,6 +268,13 @@ def _derive_grader_refs_from_assertions(task_metadata: TaskMetadata) -> list[Gra
     return refs
 
 
+class _SyntheticObservation(Protocol):
+    observation_id: str
+    attempt_id: str
+
+    def model_dump_json(self) -> str: ...
+
+
 def _persist_evidence_artifact(
     content: str,
     *,
@@ -356,6 +365,22 @@ def _persist_receipt_evidence(
         report_dir=report_dir,
     )
     return index, index.sha256
+
+
+def _persist_synthetic_observation(
+    observation: _SyntheticObservation,
+    *,
+    run_id: str,
+    report_dir: Path,
+) -> EvidenceIndex:
+    return _persist_evidence_artifact(
+        observation.model_dump_json(),
+        run_id=run_id,
+        attempt_id=observation.attempt_id,
+        artifact_id=observation.observation_id,
+        schema_ref=f"g8e_evals.schema.{type(observation).__name__}",
+        report_dir=report_dir,
+    )
 
 
 @dataclass(frozen=True)
@@ -2975,6 +3000,33 @@ async def _run_synthetic_suite(
     state_records: list[StateObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
     evidence_index_records: list[EvidenceIndex] = []
+    synthetic_observation_groups: tuple[Sequence[_SyntheticObservation], ...] = (
+        token_store_persistence_records,
+        token_ttl_expiry_records,
+        token_persistence_failure_records,
+        exfiltration_attempt_records,
+        artifact_leakage_records,
+        rehydration_records,
+        replay_attempt_records,
+        signed_field_tampering_records,
+        payload_tampering_records,
+        nonce_expiration_records,
+        stale_state_root_records,
+        identity_mismatch_records,
+        signer_defect_records,
+        l3_proof_transplant_records,
+        revoked_credential_records,
+        evidence_preservation_records,
+        policy_attack_records,
+        tool_sequence_records,
+        factual_qa_records,
+        citation_backed_records,
+        partial_milestone_records,
+        reliability_records,
+        economics_performance_records,
+        final_state_records,
+        state_records,
+    )
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
 
@@ -4449,6 +4501,14 @@ async def _run_synthetic_suite(
         attempt.receipt_refs = task_receipt_ids
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        for observations in synthetic_observation_groups:
+            for observation in observations:
+                if observation.attempt_id == attempt_id:
+                    task_evidence_indices.append(_persist_synthetic_observation(
+                        observation,
+                        run_id=run_id,
+                        report_dir=report_dir,
+                    ))
         evidence_index_records.extend(task_evidence_indices)
         attempt_records.append(attempt)
 
@@ -4476,9 +4536,6 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "rehydration-observations.jsonl", "w") as f:
         for obs in rehydration_records:
-            f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "privacy-receipts.jsonl", "w") as f:
-        for obs in privacy_receipt_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
         for obs in replay_attempt_records:
@@ -4537,9 +4594,10 @@ async def _run_synthetic_suite(
     with open(report_dir / "state-observations.jsonl", "w") as f:
         for obs in state_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "governance-receipts.jsonl", "w") as f:
-        for obs in governance_receipt_records:
+    with open(report_dir / "receipts.jsonl", "w") as f:
+        for obs in [*privacy_receipt_records, *governance_receipt_records]:
             f.write(obs.model_dump_json() + "\n")
+    (report_dir / "stages.jsonl").write_text("")
     with open(report_dir / "metrics.jsonl", "w") as f:
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")
