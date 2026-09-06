@@ -46,9 +46,17 @@ type ProvenanceArtifact struct {
 	Body []byte
 }
 
-// ProvenanceSource enumerates the complete source provenance set for a demo.
+// DemoDefinitionArtifact is one canonical DemoScenarioDefinition body covered
+// by a DemoManifest scenario_definition_refs entry.
+type DemoDefinitionArtifact struct {
+	Body []byte
+}
+
+// ProvenanceSource enumerates the complete source provenance set for a demo,
+// including the manifest-referenced canonical scenario definitions.
 type ProvenanceSource interface {
 	Artifacts(context.Context, string) ([]ProvenanceArtifact, error)
+	Definitions(context.Context, string) ([]DemoDefinitionArtifact, error)
 }
 
 type demoRunVerifier struct {

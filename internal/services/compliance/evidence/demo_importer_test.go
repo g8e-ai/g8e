@@ -217,6 +217,11 @@ func (f *importerFixture) encodeResult(t *testing.T, result *compliancev1.DemoSc
 	f.reader.files[runArtifactPath(f.runID, constants.DemoRunResultsFilename)] = body
 }
 
+func (f *importerFixture) replaceResult(t *testing.T, result *compliancev1.DemoScenarioResult) {
+	t.Helper()
+	f.encodeResult(t, result)
+}
+
 func TestDemoRunImporter_SourceID(t *testing.T) {
 	importer := NewDemoRunImporter(&memoryArtifactReader{files: map[string][]byte{}}, "run-1", memoryProvenanceSource{})
 	assert.Equal(t, "demo-run", importer.SourceID())
@@ -760,6 +765,111 @@ func TestDemoRunImporter_Import_BlankLinesInResultsAreSkipped(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, resultCount)
+}
+
+func (f *importerFixture) addScenarioDefinition(t *testing.T) []byte {
+	t.Helper()
+	definition := &compliancev1.DemoScenarioDefinition{
+		ScenarioId: "scenario-1", ScenarioVersion: "1.0.0", DisplayNumber: "1", Title: "Scenario 1", Purpose: "Verify definition import",
+		RiskCategory: "governance", ExpectedActionClasses: []string{"FILE_EDIT"}, ExpectedOutcome: "allowed", AssertionRefs: []*compliancev1.VersionedReference{{Id: "assertion-1", Version: "1.0.0"}},
+		RequiredEvidenceTypes: []string{"action_receipt"}, RequiredEvidenceLevel: "L1", TimeoutSeconds: 30, FailurePolicy: "fail_closed", HarnessScenario: "scenario-1",
+	}
+	body, err := compliancev1.MarshalCanonical(definition)
+	require.NoError(t, err)
+	f.source.definitions = []DemoDefinitionArtifact{{Body: body}}
+
+	manifestPath := runArtifactPath(f.runID, constants.DemoRunManifestFilename)
+	manifest := &compliancev1.DemoManifest{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(f.reader.files[manifestPath], manifest))
+	manifest.ScenarioDefinitionRefs = []*compliancev1.VersionedReference{{Id: definition.ScenarioId, Version: definition.ScenarioVersion}}
+	f.reader.files[manifestPath], err = compliancev1.MarshalCanonical(manifest)
+	require.NoError(t, err)
+	return body
+}
+
+func TestDemoRunImporter_Import_ImportsAndLinksManifestScenarioDefinitions(t *testing.T) {
+	fix := newImporterFixture(t)
+	definitionBody := fix.addScenarioDefinition(t)
+	nodes, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+	require.NoError(t, err)
+
+	definitionID := ContentAddress(ArtifactTypeDemoDefinition, definitionBody)
+	var definitionNode, manifestNode, resultNode *EvidenceNode
+	for index := range nodes {
+		switch nodes[index].ArtifactType {
+		case ArtifactTypeDemoDefinition:
+			definitionNode = &nodes[index]
+		case ArtifactTypeDemoManifest:
+			manifestNode = &nodes[index]
+		case ArtifactTypeDemoResult:
+			resultNode = &nodes[index]
+		}
+	}
+	require.NotNil(t, definitionNode)
+	require.NotNil(t, manifestNode)
+	require.NotNil(t, resultNode)
+	assert.Equal(t, definitionID, definitionNode.ArtifactID)
+	assert.Equal(t, "g8e.compliance.v1.DemoScenarioDefinition", definitionNode.SchemaRef)
+	assert.Equal(t, fix.demoID, definitionNode.ProducerIdentity)
+	assert.Equal(t, fix.scopeID, definitionNode.ScopeID)
+	assert.Equal(t, fix.runID, definitionNode.RunID)
+	assert.Equal(t, "scenario-1", definitionNode.ScenarioID)
+	assert.Equal(t, VerificationStatusVerified, definitionNode.VerificationStatus)
+	assert.Equal(t, constants.ComplianceBundleDemoDefinitionsFilename+"#1", definitionNode.BundlePath)
+	assert.Equal(t, definitionBody, definitionNode.CanonicalBytes)
+	assert.Contains(t, manifestNode.References, definitionID)
+	assert.Contains(t, resultNode.References, definitionID)
+}
+
+func TestDemoRunImporter_Import_RejectsUnresolvedManifestScenarioDefinition(t *testing.T) {
+	fix := newImporterFixture(t)
+	fix.addScenarioDefinition(t)
+	fix.source.definitions = nil
+	_, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnresolvedReference)
+}
+
+func TestDemoRunImporter_Import_RejectsResultOutsideManifestDefinitions(t *testing.T) {
+	fix := newImporterFixture(t)
+	fix.addScenarioDefinition(t)
+	result := fix.decodeResult(t)
+	result.ScenarioRef = &compliancev1.VersionedReference{Id: "scenario-2", Version: "1.0.0"}
+	fix.replaceResult(t, result)
+	_, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrUnresolvedReference)
+}
+
+func TestDemoRunImporter_Import_RejectsMalformedAndDuplicateScenarioDefinitions(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*importerFixture)
+	}{
+		{name: "noncanonical definition", mutate: func(f *importerFixture) { f.source.definitions[0].Body = append(f.source.definitions[0].Body, '\n') }},
+		{name: "duplicate definition identity", mutate: func(f *importerFixture) { f.source.definitions = append(f.source.definitions, f.source.definitions[0]) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fix := newImporterFixture(t)
+			fix.addScenarioDefinition(t)
+			test.mutate(fix)
+			_, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+		})
+	}
+}
+
+func TestDemoRunImporter_Import_PropagatesScenarioDefinitionSourceFailure(t *testing.T) {
+	fix := newImporterFixture(t)
+	fix.addScenarioDefinition(t)
+	sourceErr := errors.New("definition source unavailable")
+	fix.source.definitionsErr = sourceErr
+	_, err := NewDemoRunImporter(fix.reader, fix.runID, fix.source).Import(context.Background())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceImporterFailed)
+	assert.ErrorIs(t, err, sourceErr)
 }
 
 func TestDemoRunImporter_Import_ProducesNodesForGraphIntegration(t *testing.T) {

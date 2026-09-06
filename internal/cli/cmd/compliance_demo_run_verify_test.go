@@ -40,11 +40,16 @@ func stubProvenanceSourceFactory(artifacts []evidence.ProvenanceArtifact) func(s
 }
 
 type stubProvenanceSource struct {
-	artifacts []evidence.ProvenanceArtifact
+	artifacts   []evidence.ProvenanceArtifact
+	definitions []evidence.DemoDefinitionArtifact
 }
 
 func (s *stubProvenanceSource) Artifacts(_ context.Context, _ string) ([]evidence.ProvenanceArtifact, error) {
 	return append([]evidence.ProvenanceArtifact(nil), s.artifacts...), nil
+}
+
+func (s *stubProvenanceSource) Definitions(_ context.Context, _ string) ([]evidence.DemoDefinitionArtifact, error) {
+	return append([]evidence.DemoDefinitionArtifact(nil), s.definitions...), nil
 }
 
 // writeDemoProvenanceTree creates a minimal demos/<org>/ directory tree under

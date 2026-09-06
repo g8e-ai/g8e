@@ -75,6 +75,17 @@ func (i *DemoRunImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 	runID := manifest.GetRunId()
 	nodes := make([]EvidenceNode, 0, 32)
 
+	definitionNodes, definitionIndex, err := i.loadDefinitions(ctx, manifest)
+	if err != nil {
+		return nil, err
+	}
+	nodes = append(nodes, definitionNodes...)
+
+	manifestRefs := make([]string, 0, len(definitionNodes))
+	for _, node := range definitionNodes {
+		manifestRefs = append(manifestRefs, node.ArtifactID)
+	}
+
 	manifestNode := EvidenceNode{
 		ArtifactID:         ContentAddress(ArtifactTypeDemoManifest, manifestBody),
 		ArtifactType:       ArtifactTypeDemoManifest,
@@ -91,10 +102,11 @@ func (i *DemoRunImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 		VerifiedAt:         i.nowFunc(),
 		BundlePath:         filepath.Join(constants.DemoRunManifestFilename),
 		CanonicalBytes:     manifestBody,
+		References:         manifestRefs,
 	}
 	nodes = append(nodes, manifestNode)
 
-	results, resultNodes, err := i.loadResults(ctx, manifest, scopeID, runID)
+	results, resultNodes, err := i.loadResults(ctx, manifest, scopeID, runID, definitionIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +154,63 @@ func (i *DemoRunImporter) loadManifest(ctx context.Context) (*compliancev1.DemoM
 	return manifest, result.Bytes, nil
 }
 
-func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev1.DemoManifest, scopeID, runID string) ([]*compliancev1.DemoScenarioResult, []EvidenceNode, error) {
+func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *compliancev1.DemoManifest) ([]EvidenceNode, map[string]string, error) {
+	scopeID := manifest.GetScopeId()
+	runID := manifest.GetRunId()
+	artifacts, err := i.source.Definitions(ctx, manifest.GetDemoId())
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: load scenario definitions: %w", constants.ErrEvidenceImporterFailed, err)
+	}
+	manifestRefs := manifest.GetScenarioDefinitionRefs()
+	definitionNodes := make([]EvidenceNode, 0, len(artifacts))
+	definitionIndex := make(map[string]string, len(artifacts))
+	seenIDs := make(map[string]bool, len(artifacts))
+	for idx, artifact := range artifacts {
+		body := artifact.Body
+		if err := ValidateCanonicalJSON(body); err != nil {
+			return nil, nil, fmt.Errorf("%w: %s#%d: %v", constants.ErrEvidenceArtifactMalformed, constants.ComplianceBundleDemoDefinitionsFilename, idx+1, err)
+		}
+		definition := &compliancev1.DemoScenarioDefinition{}
+		if err := compliancev1.UnmarshalCanonical(body, definition); err != nil {
+			return nil, nil, fmt.Errorf("%w: %s#%d: %v", constants.ErrEvidenceArtifactMalformed, constants.ComplianceBundleDemoDefinitionsFilename, idx+1, err)
+		}
+		artifactID := ContentAddress(ArtifactTypeDemoDefinition, body)
+		if seenIDs[artifactID] {
+			return nil, nil, fmt.Errorf("%w: %s#%d: duplicate scenario definition %s", constants.ErrEvidenceArtifactMalformed, constants.ComplianceBundleDemoDefinitionsFilename, idx+1, definition.GetScenarioId())
+		}
+		seenIDs[artifactID] = true
+		key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
+		definitionIndex[key] = artifactID
+		definitionNodes = append(definitionNodes, EvidenceNode{
+			ArtifactID:         artifactID,
+			ArtifactType:       ArtifactTypeDemoDefinition,
+			SHA256:             digestHex(body),
+			MediaType:          "application/json",
+			SchemaRef:          "g8e.compliance.v1.DemoScenarioDefinition",
+			ProducerIdentity:   manifest.GetDemoId(),
+			ProducedAt:         manifest.GetGeneratedAt().AsTime(),
+			ScopeID:            scopeID,
+			RunID:              runID,
+			ScenarioID:         definition.GetScenarioId(),
+			VerificationStatus: VerificationStatusVerified,
+			VerifierID:         constants.DemoRunVerifierID,
+			VerifierVersion:    constants.DemoRunVerifierVersion,
+			VerifiedAt:         i.nowFunc(),
+			BundlePath:         fmt.Sprintf("%s#%d", constants.ComplianceBundleDemoDefinitionsFilename, idx+1),
+			CanonicalBytes:     body,
+			References:         []string{},
+		})
+	}
+	for _, ref := range manifestRefs {
+		key := versionedKey(ref.GetId(), ref.GetVersion())
+		if _, ok := definitionIndex[key]; !ok {
+			return nil, nil, fmt.Errorf("%w: manifest scenario definition %s is not in the source definition set", constants.ErrUnresolvedReference, key)
+		}
+	}
+	return definitionNodes, definitionIndex, nil
+}
+
+func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev1.DemoManifest, scopeID, runID string, definitionIndex map[string]string) ([]*compliancev1.DemoScenarioResult, []EvidenceNode, error) {
 	path := i.runPath(constants.DemoRunResultsFilename)
 	result, err := ReadAndDigest(i.reader, ctx, path, constants.DemoRunMaxArtifactBytes)
 	if err != nil {
@@ -162,7 +230,16 @@ func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev
 		if scenarioResult.GetRunId() != runID || scenarioResult.GetScopeId() != scopeID {
 			return nil, nil, fmt.Errorf("%w: %s#%d: result scope or run does not match manifest", constants.ErrEvidenceScopeMismatch, path, idx+1)
 		}
+		scenarioKey := versionedKey(scenarioResult.GetScenarioRef().GetId(), scenarioResult.GetScenarioRef().GetVersion())
+		definitionID, ok := definitionIndex[scenarioKey]
+		if len(definitionIndex) > 0 && !ok {
+			return nil, nil, fmt.Errorf("%w: %s#%d: result scenario %s is not in the manifest definition set", constants.ErrUnresolvedReference, path, idx+1, scenarioKey)
+		}
 		results = append(results, scenarioResult)
+		refs := append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...)
+		if ok {
+			refs = append(refs, definitionID)
+		}
 		node := EvidenceNode{
 			ArtifactID:         ContentAddress(ArtifactTypeDemoResult, line),
 			ArtifactType:       ArtifactTypeDemoResult,
@@ -177,7 +254,7 @@ func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev
 			VerificationStatus: VerificationStatusUnverified,
 			BundlePath:         fmt.Sprintf("%s#%d", constants.DemoRunResultsFilename, idx+1),
 			CanonicalBytes:     line,
-			References:         append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...),
+			References:         refs,
 		}
 		nodes = append(nodes, node)
 	}

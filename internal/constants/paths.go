@@ -652,6 +652,22 @@ const (
 	LedgerStateFilename                    = "state.json"
 	LedgerEvidenceSchemaVersion            = "1.0.0"
 	LedgerEvidenceMaxCommits               = 4096
+	KSIHistoryReferencePrefix              = "ksi-history"
+	KSIResultReferencePrefix               = "ksi-result"
+	KSIHistorySchemaVersion                = "1.0.0"
+	KSIHistoryMaxSnapshots                 = 4096
+	BuildAttestationReferencePrefix        = "build-attestation"
+	ConfigAttestationReferencePrefix       = "config-attestation"
+	BuildConfigAttestationsFilename        = "build-config-attestations.jsonl"
+	BuildAttestationSchemaVersion          = "1.0.0"
+	BuildAttestationMaxRecords             = 4096
+	AttestationCollectionReferencePrefix   = "attestation-collection"
+	CustomerAttestationReferencePrefix     = "customer-attestation"
+	AssessorAttestationReferencePrefix     = "assessor-attestation"
+	AttestationSchemaVersion               = "1.0.0"
+	AttestationMaxRecords                  = 4096
+	AttestationEvidenceVerifierID          = "g8e-attestation-evidence-importer"
+	AttestationEvidenceVerifierVersion     = "1.0.0"
 	DemoMetricEvidenceVersion              = "1.0.0"
 	DemoMetricGraderID                     = "healthcare-threshold"
 	DemoMetricGraderVersion                = "1.0.0"
@@ -678,6 +694,9 @@ const (
 	EvalEncryptedEvidenceNonceBytes        = 12
 	MediaTypeJSON                          = "application/json"
 	EvalRunMaxRecords                      = 4096
+	EvidenceGraphVerifierID                = "g8e-evidence-graph-verifier"
+	EvidenceGraphVerifierVersion           = "1.0.0"
+	EvidenceGraphMaxBytes                  = 64 << 20
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a
