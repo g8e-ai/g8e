@@ -25,7 +25,7 @@ func TestKSIReceiptVerification_RejectsSignedFieldTampering(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, mla08Methods)
 
-	satisfied, _, err := mla08Methods[0](context.Background())
+	satisfied, _, err := mla08Methods[0].evaluate(context.Background())
 	require.NoError(t, err)
 	assert.False(t, satisfied, phase0RegressionAfterFix+": signed-field tampering fails cryptographic KSI verification")
 }
@@ -39,7 +39,7 @@ func TestKSIReceiptVerification_RejectsMissingFinalPersistenceAttestation(t *tes
 	mla08Methods := methods["KSI-MLA-08"]
 	require.NotEmpty(t, mla08Methods)
 
-	satisfied, evidence, err := mla08Methods[0](context.Background())
+	satisfied, evidence, err := mla08Methods[0].evaluate(context.Background())
 	require.NoError(t, err)
 	assert.False(t, satisfied, phase0RegressionAfterFix+": missing final-persistence evidence fails cryptographic KSI verification")
 	require.NotEmpty(t, evidence)

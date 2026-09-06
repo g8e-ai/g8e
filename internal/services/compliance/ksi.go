@@ -65,10 +65,14 @@ const (
 type EvidenceType string
 
 const (
-	EvidenceTypeReceiptID    EvidenceType = "receipt_id"
-	EvidenceTypeLedgerCommit EvidenceType = "ledger_commit"
-	EvidenceTypeExecutionID  EvidenceType = "execution_id"
-	EvidenceTypeMerkleRoot   EvidenceType = "merkle_root"
+	EvidenceTypeReceiptID           EvidenceType = "receipt_id"
+	EvidenceTypeLedgerCommit        EvidenceType = "ledger_commit"
+	EvidenceTypeExecutionID         EvidenceType = "execution_id"
+	EvidenceTypeMerkleRoot          EvidenceType = "merkle_root"
+	EvidenceTypeCommitmentSignature EvidenceType = "commitment_signature"
+	EvidenceTypeStateObservation    EvidenceType = "state_observation"
+	EvidenceTypeGraderResult        EvidenceType = "grader_result"
+	EvidenceTypeHistoricalFreshness EvidenceType = "historical_freshness"
 )
 
 // AutomatedMethod describes a single automated method used to evaluate a KSI.
@@ -77,9 +81,124 @@ type AutomatedMethod struct {
 	Description string `json:"description,omitempty"`
 }
 
-// KSIMethod is a function that evaluates a single KSI against live g8e state.
-// It returns whether the KSI is satisfied, supporting evidence, or an error.
-type KSIMethod func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error)
+// KSIArtifactIdentity identifies the evidence artifact a KSI method measures.
+type KSIArtifactIdentity string
+
+const (
+	KSIArtifactAuditEvents             KSIArtifactIdentity = "audit_events"
+	KSIArtifactActionReceipts          KSIArtifactIdentity = "action_receipts"
+	KSIArtifactFileMutations           KSIArtifactIdentity = "file_mutations"
+	KSIArtifactLedgerCommits           KSIArtifactIdentity = "ledger_commits"
+	KSIArtifactCommitments             KSIArtifactIdentity = "commitments"
+	KSIArtifactReceiptStateTransitions KSIArtifactIdentity = "receipt_state_transitions"
+	KSIArtifactGraderResults           KSIArtifactIdentity = "grader_results"
+	KSIArtifactHistorySnapshots        KSIArtifactIdentity = "ksi_history_snapshots"
+	KSIArtifactLedgerStateRoot         KSIArtifactIdentity = "ledger_state_root"
+)
+
+// KSICollectionBoundary identifies the independently queried evidence source.
+type KSICollectionBoundary string
+
+const (
+	KSICollectionAuditStore      KSICollectionBoundary = "audit_store"
+	KSICollectionLedgerStore     KSICollectionBoundary = "ledger_store"
+	KSICollectionCommitmentStore KSICollectionBoundary = "commitment_store"
+	KSICollectionEvalResults     KSICollectionBoundary = "eval_results"
+	KSICollectionHistoryStore    KSICollectionBoundary = "ksi_history_store"
+)
+
+// KSIVerifierFamily identifies the verification technique a method applies.
+type KSIVerifierFamily string
+
+const (
+	KSIVerifierExistence           KSIVerifierFamily = "existence"
+	KSIVerifierStructural          KSIVerifierFamily = "structural"
+	KSIVerifierCryptographic       KSIVerifierFamily = "cryptographic"
+	KSIVerifierStateObservation    KSIVerifierFamily = "state_observation"
+	KSIVerifierDeterministicGrader KSIVerifierFamily = "deterministic_grader"
+	KSIVerifierHistorical          KSIVerifierFamily = "historical"
+)
+
+// KSIMeasuredProperty identifies the fact established by a KSI method.
+type KSIMeasuredProperty string
+
+const (
+	KSIPropertyPresence                    KSIMeasuredProperty = "presence"
+	KSIPropertyChainLinkage                KSIMeasuredProperty = "chain_linkage"
+	KSIPropertySignatureValidity           KSIMeasuredProperty = "signature_validity"
+	KSIPropertyReceiptPersistenceIntegrity KSIMeasuredProperty = "receipt_persistence_integrity"
+	KSIPropertyStateTransitionBinding      KSIMeasuredProperty = "state_transition_binding"
+	KSIPropertyStateRootMatchesHead        KSIMeasuredProperty = "state_root_matches_head"
+	KSIPropertyEvidenceContentAddressing   KSIMeasuredProperty = "evidence_content_addressing"
+	KSIPropertyFreshness                   KSIMeasuredProperty = "freshness"
+)
+
+type ksiMethodEvaluator func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error)
+
+// KSIMethod binds one evaluator to the typed metadata used to prove method independence.
+type KSIMethod struct {
+	Name               string
+	Version            string
+	ArtifactIdentity   KSIArtifactIdentity
+	CollectionBoundary KSICollectionBoundary
+	VerifierFamily     KSIVerifierFamily
+	MeasuredProperty   KSIMeasuredProperty
+	evaluate           ksiMethodEvaluator
+}
+
+func newKSIMethod(name string, artifact KSIArtifactIdentity, boundary KSICollectionBoundary, verifier KSIVerifierFamily, property KSIMeasuredProperty, evaluate ksiMethodEvaluator) KSIMethod {
+	return KSIMethod{
+		Name: name, Version: constants.KSIMethodDefinitionVersion, ArtifactIdentity: artifact,
+		CollectionBoundary: boundary, VerifierFamily: verifier, MeasuredProperty: property, evaluate: evaluate,
+	}
+}
+
+func (m KSIMethod) validate() error {
+	if m.Name == "" || m.Version == "" || !m.ArtifactIdentity.valid() || !m.CollectionBoundary.valid() || !m.VerifierFamily.valid() || !m.MeasuredProperty.valid() || m.evaluate == nil {
+		return constants.ErrKSIMethodInvalid
+	}
+	return nil
+}
+
+func (a KSIArtifactIdentity) valid() bool {
+	switch a {
+	case KSIArtifactAuditEvents, KSIArtifactActionReceipts, KSIArtifactFileMutations, KSIArtifactLedgerCommits, KSIArtifactCommitments, KSIArtifactReceiptStateTransitions, KSIArtifactGraderResults, KSIArtifactHistorySnapshots, KSIArtifactLedgerStateRoot:
+		return true
+	default:
+		return false
+	}
+}
+
+func (b KSICollectionBoundary) valid() bool {
+	switch b {
+	case KSICollectionAuditStore, KSICollectionLedgerStore, KSICollectionCommitmentStore, KSICollectionEvalResults, KSICollectionHistoryStore:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v KSIVerifierFamily) valid() bool {
+	switch v {
+	case KSIVerifierExistence, KSIVerifierStructural, KSIVerifierCryptographic, KSIVerifierStateObservation, KSIVerifierDeterministicGrader, KSIVerifierHistorical:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p KSIMeasuredProperty) valid() bool {
+	switch p {
+	case KSIPropertyPresence, KSIPropertyChainLinkage, KSIPropertySignatureValidity, KSIPropertyReceiptPersistenceIntegrity, KSIPropertyStateTransitionBinding, KSIPropertyStateRootMatchesHead, KSIPropertyEvidenceContentAddressing, KSIPropertyFreshness:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m KSIMethod) independenceKey() string {
+	return string(m.ArtifactIdentity) + "\x00" + string(m.CollectionBoundary) + "\x00" + string(m.VerifierFamily) + "\x00" + string(m.MeasuredProperty)
+}
 
 // KSI represents a single Key Security Indicator from the FedRAMP 20x program.
 type KSI struct {

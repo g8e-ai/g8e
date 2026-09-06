@@ -697,6 +697,9 @@ const (
 	EvidenceGraphVerifierID                = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion           = "1.0.0"
 	EvidenceGraphMaxBytes                  = 64 << 20
+	KSIMethodDefinitionVersion             = "1.0.0"
+	KSIMethodVerifierID                    = "g8e-ksi-method-verifier"
+	KSIMethodVerifierVersion               = "1.0.0"
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

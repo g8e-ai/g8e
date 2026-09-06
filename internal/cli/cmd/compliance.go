@@ -131,7 +131,10 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compl
 	defer cleanup()
 
 	evaluator := compliance.NewKSIEvaluator(cat)
-	evaluator.RegisterDefaultMethods(deps)
+	if err := evaluator.RegisterDefaultMethods(deps); err != nil {
+		slog.Default().Warn("compliance: KSI method registration failed", "error", err)
+		return nil
+	}
 
 	resultSet, err := evaluator.Evaluate(ctx, class)
 	if err != nil {
@@ -178,6 +181,7 @@ func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService) (comp
 		Audit:       auditStore,
 		Ledger:      ledger,
 		Commitments: cl,
+		History:     newKSIHistoryStore(fileSvc),
 	}, func() { runCleanups(cleanups) }, true
 }
 

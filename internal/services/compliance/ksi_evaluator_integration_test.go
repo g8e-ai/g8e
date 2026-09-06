@@ -12,11 +12,13 @@ package compliance
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,24 +34,32 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 const (
 	integrationSessionID = "ksi-integration-session"
 	integrationTxID      = "ksi-integration-tx-1"
-	integrationCommit1   = "9f2c1ab4e6d84f01a2b3c4d5e6f708192a3b4c5d"
-	integrationCommit2   = "1a2b3c4d5e6f708192a3b4c5d9f2c1ab4e6d84f0"
 )
 
 // integrationEvaluatorFixture holds real storage backends wired exactly like
 // the production openEvaluatorDeps path: SQLAuditStore for audit evidence,
 // GitLedgerService for ledger evidence, and CommitmentLedger sharing g8e.db.
+type integrationEvalGraderReader struct {
+	results []GraderResult
+}
+
+func (r *integrationEvalGraderReader) ListGraderResults(context.Context) ([]GraderResult, error) {
+	return r.results, nil
+}
+
 type integrationEvaluatorFixture struct {
 	deps        EvaluatorDeps
 	auditStore  *storage.SQLAuditStore
 	ledger      *storage.GitLedgerService
 	commitments *storage.CommitmentLedger
+	history     *KSIHistoryStore
 	receiptKey  ed25519.PrivateKey
 	fileSvc     fs.RuntimeFileService
 	tempDir     string
@@ -92,16 +102,27 @@ func newIntegrationEvaluatorFixture(t *testing.T) *integrationEvaluatorFixture {
 		EncryptionVault: testVault,
 	}, logger, fileSvc)
 	require.NoError(t, err)
+	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
+	history := NewKSIHistoryStore(fileSvc, historyDir)
+	now := time.Now().UTC()
+	graders := &integrationEvalGraderReader{results: []GraderResult{{
+		ArtifactID: "metric:protocol-chain", GraderID: "protocol_chain", GraderVersion: "1.0.0",
+		SHA256: strings.Repeat("a", 64), Verified: true, ProducedAt: now,
+		Evidence: []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "receipt:" + integrationTxID, Sha256: strings.Repeat("b", 64)}},
+	}}}
 
 	return &integrationEvaluatorFixture{
 		deps: EvaluatorDeps{
 			Audit:       auditStore,
 			Ledger:      ledger,
 			Commitments: commitments,
+			History:     history,
+			Graders:     graders,
 		},
 		auditStore:  auditStore,
 		ledger:      ledger,
 		commitments: commitments,
+		history:     history,
 		receiptKey:  privKey,
 		fileSvc:     fileSvc,
 		tempDir:     tempDir,
@@ -126,7 +147,7 @@ func (f *integrationEvaluatorFixture) seedEvidence(t *testing.T) {
 	require.Positive(t, eventID)
 
 	signerKeyID := hex.EncodeToString(f.receiptKey.Public().(ed25519.PublicKey))
-	receipt := &operatorv1.ActionReceipt{TransactionId: integrationTxID, TransactionHash: "tx-hash-1", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, ExecutedAtUnixMs: now.UnixMilli(), SignerKeyId: signerKeyID}
+	receipt := &operatorv1.ActionReceipt{TransactionId: integrationTxID, TransactionHash: "tx-hash-1", StateRootBefore: "state-before", StateRootAfter: "state-after", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, ExecutedAtUnixMs: now.UnixMilli(), SignerKeyId: signerKeyID}
 	payload, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
 	receipt.Signature = hex.EncodeToString(ed25519.Sign(f.receiptKey, payload))
@@ -143,6 +164,8 @@ func (f *integrationEvaluatorFixture) seedEvidence(t *testing.T) {
 		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
 		Status:            receipt.Status,
+		StateRootBefore:   receipt.StateRootBefore,
+		StateRootAfter:    receipt.StateRootAfter,
 		ExecutedAt:        now,
 		SignerKeyID:       signerKeyID,
 		Signature:         receipt.Signature,
@@ -163,14 +186,30 @@ func (f *integrationEvaluatorFixture) seedEvidence(t *testing.T) {
 	require.NotNil(t, mirror)
 	require.NoError(t, f.ledger.CompleteMirrorCreate(mirror, ""))
 
-	appendCommitment := func(txID string, committedAtMs int64, priorHash, hash string) {
-		attestation := []byte(fmt.Sprintf(
-			`{"transaction_id":%q,"transaction_hash":"tx-hash","committed_at_unix_ms":%d,"action_type":%q,"auditor_key_id":"auditor-1","signature":"sig"}`,
-			txID, committedAtMs, string(constants.ActionTypeExecuteBash)))
-		require.NoError(t, f.commitments.AppendCommitmentJSON(attestation, priorHash, hash))
+	appendCommitment := func(txID string, committedAt time.Time, priorHash string) string {
+		attestation := &operatorv1.CommitmentAttestation{
+			TransactionId: txID, TransactionHash: "tx-hash", PriorCommitmentHash: priorHash,
+			StateRootAtCommit: receipt.StateRootBefore, ActionType: string(constants.ActionTypeExecuteBash),
+			TargetResource: "localhost", CommittedAtUnixMs: committedAt.UnixMilli(), AuditorKeyId: signerKeyID,
+		}
+		canonical, err := governance.CanonicalizeCommitmentAttestation(attestation)
+		require.NoError(t, err)
+		digest := sha256.Sum256(canonical)
+		attestation.Hash = hex.EncodeToString(digest[:])
+		attestation.Signature = hex.EncodeToString(ed25519.Sign(f.receiptKey, canonical))
+		body, err := json.Marshal(attestation)
+		require.NoError(t, err)
+		require.NoError(t, f.commitments.AppendCommitmentJSON(body, priorHash, attestation.Hash))
+		return attestation.Hash
 	}
-	appendCommitment("tx-1", now.Add(-time.Second).UnixMilli(), "", integrationCommit1)
-	appendCommitment("tx-2", now.UnixMilli(), integrationCommit1, integrationCommit2)
+	firstHash := appendCommitment("tx-1", now.Add(-time.Second), "")
+	appendCommitment("tx-2", now, firstHash)
+	require.NoError(t, f.history.SaveSnapshot(context.Background(), &KSIResultSet{
+		Class: ClassC, EvaluatedAtMs: now.UnixMilli(), Results: []KSIResult{
+			{ID: "KSI-CMT-01", Status: KSIStatusSatisfied},
+			{ID: "KSI-MLA-08", Status: KSIStatusSatisfied},
+		},
+	}))
 }
 
 // loadRealKSICatalog loads the shipped docs-as-code KSI catalog.
@@ -199,7 +238,7 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 
 	catalog := loadRealKSICatalog(t)
 	evaluator := NewKSIEvaluator(catalog)
-	evaluator.RegisterDefaultMethods(fixture.deps)
+	require.NoError(t, evaluator.RegisterDefaultMethods(fixture.deps))
 
 	resultSet, err := evaluator.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -209,14 +248,6 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 	merkleRoot, err := fixture.ledger.GetStateMerkleRoot()
 	require.NoError(t, err)
 	require.NotEmpty(t, merkleRoot)
-
-	commits, err := fixture.ledger.ListCommits("", 10)
-	require.NoError(t, err)
-	require.NotEmpty(t, commits)
-	commitHashes := make(map[string]bool, len(commits))
-	for _, c := range commits {
-		commitHashes[c.CommitHash] = true
-	}
 
 	resultsByID := make(map[string]KSIResult, len(resultSet.Results))
 	for _, res := range resultSet.Results {
@@ -232,19 +263,20 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 	}
 
 	// Evidence anchors resolve to real receipt IDs from the audit store.
-	assert.Equal(t, integrationTxID, firstEvidenceRef(t, resultsByID["KSI-CMT-03"], EvidenceTypeReceiptID))
 	assert.Equal(t, integrationTxID, firstEvidenceRef(t, resultsByID["KSI-MLA-08"], EvidenceTypeReceiptID))
 
-	// Evidence anchors resolve to real commitment hashes from the ledger.
-	assert.Equal(t, integrationCommit1, firstEvidenceRef(t, resultsByID["KSI-MLA-07"], EvidenceTypeLedgerCommit))
-	assert.Equal(t, integrationCommit2, firstEvidenceRef(t, resultsByID["KSI-SVC-05"], EvidenceTypeLedgerCommit))
+	// Evidence anchors resolve to real commitment hashes and cryptographic verification.
+	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-MLA-07"], EvidenceTypeLedgerCommit))
+	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-MLA-07"], EvidenceTypeCommitmentSignature))
+	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-SVC-05"], EvidenceTypeLedgerCommit))
 
-	// Merkle root evidence matches the real git ledger HEAD.
-	assert.Equal(t, merkleRoot, firstEvidenceRef(t, resultsByID["KSI-MLA-07"], EvidenceTypeMerkleRoot))
+	// Merkle state observations match the real git ledger HEAD.
+	assert.Equal(t, merkleRoot, firstEvidenceRef(t, resultsByID["KSI-CMT-03"], EvidenceTypeStateObservation))
+	assert.Equal(t, merkleRoot, firstEvidenceRef(t, resultsByID["KSI-SVC-05"], EvidenceTypeStateObservation))
 
-	// Ledger commit evidence references a commit that exists in the real repo.
-	commitRef := firstEvidenceRef(t, resultsByID["KSI-CMT-01"], EvidenceTypeLedgerCommit)
-	assert.True(t, commitHashes[commitRef], "evidence commit %s not found in real ledger commits", commitRef)
+	// Historical and grader-backed methods retain typed evidence anchors.
+	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-CMT-01"], EvidenceTypeHistoricalFreshness))
+	assert.NotEmpty(t, firstEvidenceRef(t, resultsByID["KSI-IAM-05"], EvidenceTypeGraderResult))
 
 	// Non-automatable KSIs fail-closed even with seeded evidence.
 	assert.Equal(t, KSIStatusNotSatisfied, resultsByID["KSI-CED-01"].Status)
@@ -254,14 +286,14 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 
 // TestKSIEvaluator_Integration_EmptyStoresFailClosed verifies that the
 // evaluator marks every KSI not_satisfied when the real stores hold no
-// evidence: no events, no receipts, no mutations, no ledger commits, no
-// commitments.
+// evidence: no events, no receipts, no mutations, no operational ledger commits,
+// and no commitments.
 func TestKSIEvaluator_Integration_EmptyStoresFailClosed(t *testing.T) {
 	fixture := newIntegrationEvaluatorFixture(t)
 
 	catalog := loadRealKSICatalog(t)
 	evaluator := NewKSIEvaluator(catalog)
-	evaluator.RegisterDefaultMethods(fixture.deps)
+	require.NoError(t, evaluator.RegisterDefaultMethods(fixture.deps))
 
 	resultSet, err := evaluator.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)

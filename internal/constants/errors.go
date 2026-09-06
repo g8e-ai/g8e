@@ -1180,6 +1180,8 @@ var (
 
 	// Compliance KSI errors
 	ErrKSICatalogInvalid          = errors.New("KSI catalog invalid")
+	ErrKSIMethodInvalid           = errors.New("KSI method invalid")
+	ErrKSIMethodNotIndependent    = errors.New("KSI methods are not independent")
 	ErrOverlayCatalogInvalid      = errors.New("overlay catalog invalid")
 	ErrOverlayReadFailed          = errors.New("overlay read failed")
 	ErrOverlayParseFailed         = errors.New("overlay parse failed")
