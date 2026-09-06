@@ -639,6 +639,25 @@ const (
 	DemoRunMaxArtifactBytes                = 16 << 20
 	DemoRunMaxResults                      = 1024
 	DemoRunMaxArtifactsPerDirectory        = 4096
+	EvalRunsDirname                        = "eval-runs"
+	EvalRunManifestFilename                = "manifest.json"
+	EvalRunTasksFilename                   = "tasks.jsonl"
+	EvalRunAttemptsFilename                = "attempts.jsonl"
+	EvalRunReceiptsFilename                = "receipts.jsonl"
+	EvalRunStagesFilename                  = "stages.jsonl"
+	EvalRunMetricsFilename                 = "metrics.jsonl"
+	EvalRunEvidenceIndexFilename           = "evidence-index.jsonl"
+	EvalRunEvidenceDirname                 = "evidence"
+	EvalRunEncryptedSuffix                 = ".enc"
+	EvalRunVerifierID                      = "g8e-eval-bundle-importer"
+	EvalRunVerifierVersion                 = "1.0.0"
+	EvalScopePrefix                        = "eval:"
+	EvalRestrictedEvidenceScope            = "restricted_evaluation_evidence"
+	EvalEvidenceEncryptionAES256GCM        = "aes-256-gcm"
+	EvalEncryptedEvidenceVersion           = 1
+	EvalEncryptedEvidenceNonceBytes        = 12
+	MediaTypeJSON                          = "application/json"
+	EvalRunMaxRecords                      = 4096
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

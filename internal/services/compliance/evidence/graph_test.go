@@ -379,19 +379,19 @@ func TestEvidenceGraph_ValidateEncryption_DetectsIncompleteMetadata(t *testing.T
 	assert.False(t, g.Valid())
 }
 
-func TestEvidenceGraph_ValidateEncryption_DetectsScopeMismatch(t *testing.T) {
+func TestEvidenceGraph_ValidateEncryption_AcceptsDistinctAccessAuthorizationScope(t *testing.T) {
 	g := NewEvidenceGraph(0, nil)
 	node := validNode(ArtifactTypeDemoManifest, "scope-1", []byte(`{}`))
 	node.Encryption = &EncryptionMetadata{
 		Algorithm:                   "aes-256-gcm",
 		KeyID:                       "key-1",
-		AuthorizationScope:          "scope-other",
+		AuthorizationScope:          "restricted-evidence-readers",
 		PlaintextSHA256:             "abc",
 		AuthenticatedMetadataSHA256: "def",
 	}
 	require.NoError(t, g.AddNode(node))
 	g.ValidateEncryption()
-	assert.False(t, g.Valid())
+	assert.True(t, g.Valid())
 }
 
 func TestEvidenceGraph_ValidateEncryption_PassesForCompleteMatchingMetadata(t *testing.T) {

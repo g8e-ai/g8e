@@ -48,7 +48,7 @@ func newImporterFixture(t *testing.T) *importerFixture {
 
 	manifest := &compliancev1.DemoManifest{
 		DemoId: demoID, DemoVersion: constants.DemoVersion, RunId: runID, ScopeId: scopeID,
-		GeneratedAt:   timestamppb.New(generatedAt),
+		GeneratedAt:    timestamppb.New(generatedAt),
 		SupportedLanes: []string{"automated"},
 	}
 	manifestBody, err := compliancev1.MarshalCanonical(manifest)
@@ -58,9 +58,9 @@ func newImporterFixture(t *testing.T) *importerFixture {
 		ResultId:    runID + ":scenario-1",
 		ScenarioRef: &compliancev1.VersionedReference{Id: "scenario-1", Version: "1.0.0"},
 		DemoId:      demoID, ScopeId: scopeID, RunId: runID,
-		StartedAt:        timestamppb.New(generatedAt.Add(time.Second)),
-		CompletedAt:      timestamppb.New(generatedAt.Add(2 * time.Second)),
-		Status:           "passed",
+		StartedAt:          timestamppb.New(generatedAt.Add(time.Second)),
+		CompletedAt:        timestamppb.New(generatedAt.Add(2 * time.Second)),
+		Status:             "passed",
 		VerificationStatus: "verified",
 	}
 	resultBody, err := compliancev1.MarshalCanonical(result)
@@ -181,9 +181,9 @@ func (f *importerFixture) addMetric(t *testing.T, sourceEvidenceRef string) stri
 	metric := &compliancev1.DemoMetricEvidence{
 		MetricId: "test-metric", MetricVersion: constants.DemoMetricEvidenceVersion,
 		RunId: f.runID, ScopeId: f.scopeID,
-		ScenarioRef:      &compliancev1.VersionedReference{Id: "scenario-1", Version: "1.0.0"},
+		ScenarioRef:       &compliancev1.VersionedReference{Id: "scenario-1", Version: "1.0.0"},
 		SourceEvidenceRef: sourceEvidenceRef,
-		Unit:             "count", Comparison: constants.DemoMetricComparisonGreaterThanOrEqual,
+		Unit:              "count", Comparison: constants.DemoMetricComparisonGreaterThanOrEqual,
 		Passed: true, MeasuredValue: 42, ThresholdValue: 10,
 		EvaluatedAt: timestamppb.New(time.Unix(1_700_000_002, 0).UTC()),
 		GraderRef:   &compliancev1.VersionedReference{Id: constants.DemoMetricGraderID, Version: constants.DemoMetricGraderVersion},
@@ -532,12 +532,12 @@ func TestDemoRunImporter_Import_MultipleResults(t *testing.T) {
 
 	// Add a second result.
 	result2 := &compliancev1.DemoScenarioResult{
-		ResultId:          fix.runID + ":scenario-2",
-		ScenarioRef:       &compliancev1.VersionedReference{Id: "scenario-2", Version: "1.0.0"},
-		DemoId:            fix.demoID, ScopeId: fix.scopeID, RunId: fix.runID,
-		StartedAt:         timestamppb.New(generatedAt.Add(3 * time.Second)),
-		CompletedAt:       timestamppb.New(generatedAt.Add(4 * time.Second)),
-		Status:            "passed",
+		ResultId:    fix.runID + ":scenario-2",
+		ScenarioRef: &compliancev1.VersionedReference{Id: "scenario-2", Version: "1.0.0"},
+		DemoId:      fix.demoID, ScopeId: fix.scopeID, RunId: fix.runID,
+		StartedAt:          timestamppb.New(generatedAt.Add(3 * time.Second)),
+		CompletedAt:        timestamppb.New(generatedAt.Add(4 * time.Second)),
+		Status:             "passed",
 		VerificationStatus: "verified",
 	}
 	result2Body, err := compliancev1.MarshalCanonical(result2)

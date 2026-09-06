@@ -30,29 +30,29 @@ import (
 type ArtifactType string
 
 const (
-	ArtifactTypeDemoManifest       ArtifactType = "demo-manifest"
-	ArtifactTypeDemoResult         ArtifactType = "demo-result"
-	ArtifactTypeDemoStepResult     ArtifactType = "demo-step-result"
-	ArtifactTypeDemoDefinition     ArtifactType = "demo-definition"
-	ArtifactTypeActionReceipt      ArtifactType = "action-receipt"
-	ArtifactTypeReceiptPersistence ArtifactType = "receipt-persistence"
-	ArtifactTypeStateObservation   ArtifactType = "state-observation"
-	ArtifactTypeDemoMetric         ArtifactType = "demo-metric"
-	ArtifactTypeProtocolChain      ArtifactType = "protocol-chain"
-	ArtifactTypeEvalManifest       ArtifactType = "eval-manifest"
-	ArtifactTypeEvalTask           ArtifactType = "eval-task"
-	ArtifactTypeEvalAttempt        ArtifactType = "eval-attempt"
-	ArtifactTypeEvalMetric         ArtifactType = "eval-metric"
-	ArtifactTypeEvalObservation    ArtifactType = "eval-observation"
-	ArtifactTypeEvalStage          ArtifactType = "eval-stage"
-	ArtifactTypeEvalReceipt        ArtifactType = "eval-receipt"
-	ArtifactTypeAuditRecord        ArtifactType = "audit-record"
-	ArtifactTypeLedgerCommit       ArtifactType = "ledger-commit"
-	ArtifactTypeLedgerState        ArtifactType = "ledger-state"
-	ArtifactTypeCommitment         ArtifactType = "commitment"
-	ArtifactTypeKSIResult          ArtifactType = "ksi-result"
-	ArtifactTypeBuildAttestation   ArtifactType = "build-attestation"
-	ArtifactTypeConfigAttestation  ArtifactType = "config-attestation"
+	ArtifactTypeDemoManifest        ArtifactType = "demo-manifest"
+	ArtifactTypeDemoResult          ArtifactType = "demo-result"
+	ArtifactTypeDemoStepResult      ArtifactType = "demo-step-result"
+	ArtifactTypeDemoDefinition      ArtifactType = "demo-definition"
+	ArtifactTypeActionReceipt       ArtifactType = "action-receipt"
+	ArtifactTypeReceiptPersistence  ArtifactType = "receipt-persistence"
+	ArtifactTypeStateObservation    ArtifactType = "state-observation"
+	ArtifactTypeDemoMetric          ArtifactType = "demo-metric"
+	ArtifactTypeProtocolChain       ArtifactType = "protocol-chain"
+	ArtifactTypeEvalManifest        ArtifactType = "eval-manifest"
+	ArtifactTypeEvalTask            ArtifactType = "eval-task"
+	ArtifactTypeEvalAttempt         ArtifactType = "eval-attempt"
+	ArtifactTypeEvalMetric          ArtifactType = "eval-metric"
+	ArtifactTypeEvalObservation     ArtifactType = "eval-observation"
+	ArtifactTypeEvalStage           ArtifactType = "eval-stage"
+	ArtifactTypeEvalReceipt         ArtifactType = "eval-receipt"
+	ArtifactTypeAuditRecord         ArtifactType = "audit-record"
+	ArtifactTypeLedgerCommit        ArtifactType = "ledger-commit"
+	ArtifactTypeLedgerState         ArtifactType = "ledger-state"
+	ArtifactTypeCommitment          ArtifactType = "commitment"
+	ArtifactTypeKSIResult           ArtifactType = "ksi-result"
+	ArtifactTypeBuildAttestation    ArtifactType = "build-attestation"
+	ArtifactTypeConfigAttestation   ArtifactType = "config-attestation"
 	ArtifactTypeCustomerAttestation ArtifactType = "customer-attestation"
 	ArtifactTypeAssessorAttestation ArtifactType = "assessor-attestation"
 )
@@ -71,10 +71,10 @@ const (
 // evidence. The plaintext digest and authenticated metadata digest allow
 // verification without decrypting the ciphertext.
 type EncryptionMetadata struct {
-	Algorithm                 string
-	KeyID                     string
-	AuthorizationScope        string
-	PlaintextSHA256           string
+	Algorithm                   string
+	KeyID                       string
+	AuthorizationScope          string
+	PlaintextSHA256             string
 	AuthenticatedMetadataSHA256 string
 }
 
@@ -131,11 +131,11 @@ type GraphFailure struct {
 // metadata authentication, canonical digests, path traversal, size limits,
 // and media-type limits.
 type EvidenceGraph struct {
-	nodes    map[string]*EvidenceNode
-	byScope  map[string][]*EvidenceNode
-	byType   map[ArtifactType][]*EvidenceNode
-	failures []GraphFailure
-	maxBytes int
+	nodes             map[string]*EvidenceNode
+	byScope           map[string][]*EvidenceNode
+	byType            map[ArtifactType][]*EvidenceNode
+	failures          []GraphFailure
+	maxBytes          int
 	allowedMediaTypes map[string]bool
 }
 
@@ -148,10 +148,10 @@ func NewEvidenceGraph(maxBytes int, allowedMediaTypes []string) *EvidenceGraph {
 		mt[t] = true
 	}
 	return &EvidenceGraph{
-		nodes:            make(map[string]*EvidenceNode),
-		byScope:          make(map[string][]*EvidenceNode),
-		byType:           make(map[ArtifactType][]*EvidenceNode),
-		maxBytes:         maxBytes,
+		nodes:             make(map[string]*EvidenceNode),
+		byScope:           make(map[string][]*EvidenceNode),
+		byType:            make(map[ArtifactType][]*EvidenceNode),
+		maxBytes:          maxBytes,
 		allowedMediaTypes: mt,
 	}
 }
@@ -322,9 +322,6 @@ func (g *EvidenceGraph) ValidateEncryption() {
 			if em.Algorithm == "" || em.KeyID == "" || em.AuthorizationScope == "" || em.PlaintextSHA256 == "" || em.AuthenticatedMetadataSHA256 == "" {
 				g.recordFailure(constants.ErrEvidenceEncryptionInvalid, node.ArtifactID, "encryption metadata is incomplete")
 			}
-			if em.AuthorizationScope != node.ScopeID {
-				g.recordFailure(constants.ErrEvidenceEncryptionInvalid, node.ArtifactID, fmt.Sprintf("encryption authorization scope %s does not match node scope %s", em.AuthorizationScope, node.ScopeID))
-			}
 		}
 	}
 }
@@ -432,10 +429,10 @@ func (n *EvidenceNode) ToProto() *compliancev1.ComplianceEvidenceReference {
 	}
 	if n.Encryption != nil {
 		ref.Encryption = &compliancev1.EvidenceEncryptionMetadata{
-			Algorithm:                 n.Encryption.Algorithm,
-			KeyId:                     n.Encryption.KeyID,
-			AuthorizationScope:        n.Encryption.AuthorizationScope,
-			PlaintextSha256:           n.Encryption.PlaintextSHA256,
+			Algorithm:                   n.Encryption.Algorithm,
+			KeyId:                       n.Encryption.KeyID,
+			AuthorizationScope:          n.Encryption.AuthorizationScope,
+			PlaintextSha256:             n.Encryption.PlaintextSHA256,
 			AuthenticatedMetadataSha256: n.Encryption.AuthenticatedMetadataSHA256,
 		}
 	}

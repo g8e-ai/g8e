@@ -76,21 +76,21 @@ func (i *DemoRunImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 	nodes := make([]EvidenceNode, 0, 32)
 
 	manifestNode := EvidenceNode{
-		ArtifactID:       ContentAddress(ArtifactTypeDemoManifest, manifestBody),
-		ArtifactType:     ArtifactTypeDemoManifest,
-		SHA256:           digestHex(manifestBody),
-		MediaType:        "application/json",
-		SchemaRef:        "g8e.compliance.v1.DemoManifest",
-		ProducerIdentity: manifest.GetDemoId(),
-		ProducedAt:       manifest.GetGeneratedAt().AsTime(),
-		ScopeID:          scopeID,
-		RunID:            runID,
+		ArtifactID:         ContentAddress(ArtifactTypeDemoManifest, manifestBody),
+		ArtifactType:       ArtifactTypeDemoManifest,
+		SHA256:             digestHex(manifestBody),
+		MediaType:          "application/json",
+		SchemaRef:          "g8e.compliance.v1.DemoManifest",
+		ProducerIdentity:   manifest.GetDemoId(),
+		ProducedAt:         manifest.GetGeneratedAt().AsTime(),
+		ScopeID:            scopeID,
+		RunID:              runID,
 		VerificationStatus: VerificationStatusVerified,
-		VerifierID:       constants.DemoRunVerifierID,
-		VerifierVersion:  constants.DemoRunVerifierVersion,
-		VerifiedAt:       i.nowFunc(),
-		BundlePath:       filepath.Join(constants.DemoRunManifestFilename),
-		CanonicalBytes:   manifestBody,
+		VerifierID:         constants.DemoRunVerifierID,
+		VerifierVersion:    constants.DemoRunVerifierVersion,
+		VerifiedAt:         i.nowFunc(),
+		BundlePath:         filepath.Join(constants.DemoRunManifestFilename),
+		CanonicalBytes:     manifestBody,
 	}
 	nodes = append(nodes, manifestNode)
 
@@ -164,20 +164,20 @@ func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev
 		}
 		results = append(results, scenarioResult)
 		node := EvidenceNode{
-			ArtifactID:       ContentAddress(ArtifactTypeDemoResult, line),
-			ArtifactType:     ArtifactTypeDemoResult,
-			SHA256:           digestHex(line),
-			MediaType:        "application/json",
-			SchemaRef:        "g8e.compliance.v1.DemoScenarioResult",
-			ProducerIdentity: scenarioResult.GetDemoId(),
-			ProducedAt:       scenarioResult.GetStartedAt().AsTime(),
-			ScopeID:          scopeID,
-			RunID:            runID,
-			ScenarioID:       scenarioResult.GetScenarioRef().GetId(),
+			ArtifactID:         ContentAddress(ArtifactTypeDemoResult, line),
+			ArtifactType:       ArtifactTypeDemoResult,
+			SHA256:             digestHex(line),
+			MediaType:          "application/json",
+			SchemaRef:          "g8e.compliance.v1.DemoScenarioResult",
+			ProducerIdentity:   scenarioResult.GetDemoId(),
+			ProducedAt:         scenarioResult.GetStartedAt().AsTime(),
+			ScopeID:            scopeID,
+			RunID:              runID,
+			ScenarioID:         scenarioResult.GetScenarioRef().GetId(),
 			VerificationStatus: VerificationStatusUnverified,
-			BundlePath:       fmt.Sprintf("%s#%d", constants.DemoRunResultsFilename, idx+1),
-			CanonicalBytes:   line,
-			References:       append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...),
+			BundlePath:         fmt.Sprintf("%s#%d", constants.DemoRunResultsFilename, idx+1),
+			CanonicalBytes:     line,
+			References:         append(append(append([]string{}, scenarioResult.GetReceiptRefs()...), scenarioResult.GetStateObservationRefs()...), scenarioResult.GetMetricRefs()...),
 		}
 		nodes = append(nodes, node)
 	}

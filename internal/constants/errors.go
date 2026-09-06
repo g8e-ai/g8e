@@ -1201,16 +1201,16 @@ var (
 	ErrComplianceReleaseEvidence  = errors.New("compliance: release evidence generation failed")
 
 	// Compliance evidence graph errors
-	ErrEvidenceDuplicateID        = errors.New("compliance: duplicate evidence artifact ID")
-	ErrEvidenceDuplicateContent   = errors.New("compliance: duplicate evidence content with conflicting metadata")
-	ErrEvidenceCycleDetected      = errors.New("compliance: prohibited reference cycle in evidence graph")
-	ErrEvidenceSchemaMismatch     = errors.New("compliance: evidence schema or version mismatch")
+	ErrEvidenceDuplicateID          = errors.New("compliance: duplicate evidence artifact ID")
+	ErrEvidenceDuplicateContent     = errors.New("compliance: duplicate evidence content with conflicting metadata")
+	ErrEvidenceCycleDetected        = errors.New("compliance: prohibited reference cycle in evidence graph")
+	ErrEvidenceSchemaMismatch       = errors.New("compliance: evidence schema or version mismatch")
 	ErrEvidenceMediaTypeUnsupported = errors.New("compliance: unsupported evidence media type")
-	ErrEvidenceTrustNotAssessed   = errors.New("compliance: evidence trust not assessed")
-	ErrEvidenceEncryptionInvalid  = errors.New("compliance: evidence encryption metadata authentication failed")
-	ErrEvidenceImporterFailed     = errors.New("compliance: evidence importer failed")
-	ErrEvidenceProducerUnverified = errors.New("compliance: evidence producer identity not verified")
-	ErrEvidenceVerifierUnverified = errors.New("compliance: evidence verifier identity not verified")
+	ErrEvidenceTrustNotAssessed     = errors.New("compliance: evidence trust not assessed")
+	ErrEvidenceEncryptionInvalid    = errors.New("compliance: evidence encryption metadata authentication failed")
+	ErrEvidenceImporterFailed       = errors.New("compliance: evidence importer failed")
+	ErrEvidenceProducerUnverified   = errors.New("compliance: evidence producer identity not verified")
+	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
 
 	// Compliance KSI history errors
 	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
