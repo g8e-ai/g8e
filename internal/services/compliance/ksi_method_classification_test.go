@@ -87,6 +87,11 @@ func TestDefaultMethods_EveryMethodHasTypedIndependenceMetadata(t *testing.T) {
 			assert.Equal(t, expected.boundary, method.CollectionBoundary)
 			assert.Equal(t, expected.verifier, method.VerifierFamily)
 			assert.Equal(t, expected.property, method.MeasuredProperty)
+			if method.Name == "ksiHistoryFreshness" {
+				assert.Equal(t, KSIOutcomeStaleEvidence, method.UnsatisfiedOutcome)
+			} else {
+				assert.Equal(t, KSIOutcomeInvalidEvidence, method.UnsatisfiedOutcome)
+			}
 			assert.False(t, independenceKeys[method.independenceKey()], "%s contains methods that restate the same fact", ksiID)
 			independenceKeys[method.independenceKey()] = true
 			seenNames[method.Name] = true

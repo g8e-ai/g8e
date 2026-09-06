@@ -316,6 +316,7 @@ func TestOSCALExporter_GenerateAssessmentResults_NotApplicableStatus(t *testing.
 			{
 				ID:                  "KSI-CMT-01",
 				Status:              KSIStatusNotApplicable,
+				Outcome:             KSIOutcomeNotApplicable,
 				MethodCount:         0,
 				LastValidatedUnixMs: time.Now().UnixMilli(),
 			},
@@ -331,6 +332,35 @@ func TestOSCALExporter_GenerateAssessmentResults_NotApplicableStatus(t *testing.
 
 // TestOSCALExporter_GenerateAssessmentResults_UnknownKSI asserts that a result
 // referencing an unknown KSI ID produces an error.
+func TestOSCALExporter_GenerateAssessmentResults_PreservesCompatibleStatusForDetailedFailures(t *testing.T) {
+	outcomes := []KSIOutcome{
+		KSIOutcomeMethodFailure,
+		KSIOutcomeInvalidEvidence,
+		KSIOutcomeStaleEvidence,
+		KSIOutcomeUnsupportedAutomation,
+		KSIOutcomeCustomerAttestationRequired,
+	}
+
+	for _, outcome := range outcomes {
+		t.Run(string(outcome), func(t *testing.T) {
+			exporter := NewOSCALExporter(oscalTestCatalog())
+			resultSet := &KSIResultSet{
+				Class:         ClassC,
+				EvaluatedAtMs: time.Now().UnixMilli(),
+				Results: []KSIResult{{
+					ID: "KSI-CMT-01", Status: KSIStatusNotSatisfied, Outcome: outcome, MethodCount: 2, LastValidatedUnixMs: time.Now().UnixMilli(),
+				}},
+			}
+
+			results, err := exporter.GenerateAssessmentResults(resultSet)
+			require.NoError(t, err)
+			require.Len(t, results.Results[0].Findings, 1)
+			assert.Equal(t, "not-satisfied", results.Results[0].Findings[0].Target.Status)
+			assert.Contains(t, results.Results[0].Findings[0].Description, string(outcome))
+		})
+	}
+}
+
 func TestOSCALExporter_GenerateAssessmentResults_UnknownKSI(t *testing.T) {
 	exporter := NewOSCALExporter(oscalTestCatalog())
 

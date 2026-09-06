@@ -50,6 +50,8 @@ func complianceReleaseEvidenceCmdWithConfig(
 		demoRuns    []string
 		projectRoot string
 		failClosed  bool
+		scopeID     string
+		runID       string
 	)
 
 	cmd := &cobra.Command{
@@ -100,7 +102,12 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 
 			source := provenanceSourceFactory(projectRoot)
 
-			report, err := collectReleaseEvidence(ctx, fileSvc, cat, certClass, demoRuns, source)
+			binding, err := buildEvaluationBinding(scopeID, runID)
+			if err != nil {
+				return err
+			}
+
+			report, err := collectReleaseEvidence(ctx, fileSvc, cat, certClass, demoRuns, source, binding)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrComplianceReleaseEvidence, err)
 			}
@@ -131,9 +138,13 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo run ID to verify (repeatable; defaults to all persisted runs)")
 	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root directory for demo provenance (defaults to cwd)")
 	cmd.Flags().BoolVar(&failClosed, "fail-closed", false, "Exit nonzero if any KSI is not satisfied or any demo run is invalid")
+	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every KSI result to the declared context (required)")
+	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every KSI result to the declared context (required)")
 
 	_ = cmd.MarkFlagRequired("version")
 	_ = cmd.MarkFlagRequired("out")
+	_ = cmd.MarkFlagRequired("scope-id")
+	_ = cmd.MarkFlagRequired("run-id")
 
 	return cmd
 }
@@ -270,13 +281,14 @@ func collectReleaseEvidence(
 	class compliance.CertificationClass,
 	runIDs []string,
 	source evidence.ProvenanceSource,
+	binding compliance.EvaluationBinding,
 ) (*releaseEvidenceReport, error) {
 	report := &releaseEvidenceReport{GeneratedAt: time.Now().UTC()}
 
 	// KSI evaluation. A nil result means the runtime stores could not be
 	// opened; record the gap and continue so the report still captures
 	// history and demo evidence.
-	ksiSet := evaluateKSIs(ctx, fileSvc, cat, class)
+	ksiSet := evaluateKSIs(ctx, fileSvc, cat, class, binding)
 	if ksiSet == nil {
 		report.KSIUnavailable = "audit store, ledger, or commitment store unavailable"
 	} else {

@@ -66,6 +66,23 @@ func writeTestKSICatalog(t *testing.T, fileSvc fs.RuntimeFileService, relPath st
 	return fileSvc.Resolve(relPath)
 }
 
+// testEvaluationBinding returns a valid EvaluationBinding for tests that need
+// to call evaluateKSIs or evaluator.Evaluate without constructing a binding
+// from CLI flags.
+func testEvaluationBinding(t *testing.T) compliance.EvaluationBinding {
+	t.Helper()
+	now := time.Now()
+	return compliance.EvaluationBinding{
+		ScopeID:            "test-scope",
+		RunID:              "test-run",
+		WindowStartUnixMs:  now.UnixMilli(),
+		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+	}
+}
+
 // setupTestVaultWithKey initializes a test vault header and writes its private key to secrets.
 func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey []byte) {
 	t.Helper()
@@ -118,6 +135,8 @@ func TestComplianceCmd_Structure(t *testing.T) {
 // wraps fileSvcFactory errors with ErrFileServiceInit.
 func TestComplianceKSICmd_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceKSICmdWithConfig(failingFileSvcFactory(errFactory))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -220,6 +239,8 @@ func TestComplianceKSICmd_ValidationErrors(t *testing.T) {
 			cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 			require.NoError(t, cmd.Flags().Set("catalog", catPath))
 			require.NoError(t, cmd.Flags().Set("class", certClass))
+			require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+			require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
@@ -250,6 +271,8 @@ func TestComplianceKSICmd_StoresUnavailable(t *testing.T) {
 
 	cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -269,6 +292,8 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("class", "C"))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -282,12 +307,23 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.NotEmpty(t, resultSet.Results)
 	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Equal(t, "test-scope", resultSet.Binding.ScopeID)
+	assert.Equal(t, "test-run", resultSet.Binding.RunID)
 
 	// Verify history snapshot saved.
 	historyStore := newKSIHistoryStore(fileSvc)
 	snapshots, err := historyStore.ListSnapshots(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, snapshots, 1)
+	intervals, err := newKSIUnavailableIntervalStore(fileSvc).ListIntervals(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, intervals, resultSet.NotSatisfiedCount())
+	for _, interval := range intervals {
+		assert.Equal(t, resultSet.Binding.ScopeID, interval.ScopeID)
+		assert.Equal(t, resultSet.Binding.RunID, interval.RunID)
+		assert.Equal(t, resultSet.Binding.WindowStartUnixMs, interval.StartUnixMs)
+		assert.Equal(t, resultSet.Binding.WindowEndUnixMs, interval.EndUnixMs)
+	}
 }
 
 // TestComplianceKSIHistoryCmd_EmptyHistory asserts that reading history when no
@@ -631,7 +667,8 @@ func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 
 	// evaluateKSIs with nil context should not panic.
 	var nilCtx context.Context
-	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC)
+	binding := testEvaluationBinding(t)
+	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC, binding)
 	require.NotNil(t, resultSet)
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.Equal(t, 2, resultSet.NotSatisfiedCount())

@@ -27,28 +27,43 @@ type ksiHistoryImporterFixture struct {
 
 func newKSIHistoryImporterFixture(t *testing.T) *ksiHistoryImporterFixture {
 	t.Helper()
+	binding := compliance.EvaluationBinding{
+		ScopeID:            "scope-1",
+		RunID:              "run-1",
+		WindowStartUnixMs:  1_699_999_000_000,
+		WindowEndUnixMs:    1_700_001_000_000,
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+	}
 	fixture := &ksiHistoryImporterFixture{
 		reader: &memoryArtifactReader{files: map[string][]byte{}},
 		snapshots: []compliance.KSIResultSet{{
 			Class:         compliance.ClassC,
 			EvaluatedAtMs: 1_700_000_000_000,
+			Binding:       binding,
 			Results: []compliance.KSIResult{{
 				ID:                  "KSI-CMT-01",
 				Status:              compliance.KSIStatusNotSatisfied,
-				Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeLedgerCommit), ArtifactId: "commit-1"}},
+				Outcome:             compliance.KSIOutcomeInvalidEvidence,
+				Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeLedgerCommit), ArtifactId: "commit-1", ScopeId: "scope-1", RunId: "run-1"}},
 				LastValidatedUnixMs: 1_699_999_999_000,
 				MethodCount:         2,
+				Binding:             binding,
 			}},
 		},
 			{
 				Class:         compliance.ClassC,
 				EvaluatedAtMs: 1_700_000_100_000,
+				Binding:       binding,
 				Results: []compliance.KSIResult{{
 					ID:                  "KSI-CMT-01",
 					Status:              compliance.KSIStatusSatisfied,
-					Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeReceiptID), ArtifactId: "transaction-1"}},
+					Outcome:             compliance.KSIOutcomeSatisfied,
+					Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeReceiptID), ArtifactId: "transaction-1", ScopeId: "scope-1", RunId: "run-1"}},
 					LastValidatedUnixMs: 1_700_000_099_000,
 					MethodCount:         2,
+					Binding:             binding,
 				}},
 			}},
 		binding: KSIHistoryImportBinding{
@@ -148,7 +163,7 @@ func TestKSIHistoryImporter_Import_RejectsMalformedCanonicalJSONL(t *testing.T) 
 			f.body = bytes.Replace(f.body, []byte("}\n"), []byte(",\"unknown\":true}\n"), 1)
 		}},
 		{name: "unknown result field", mutate: func(f *ksiHistoryImporterFixture) {
-			f.body = bytes.Replace(f.body, []byte("\"method_count\":2}"), []byte("\"method_count\":2,\"unknown\":true}"), 1)
+			f.body = bytes.Replace(f.body, []byte("\"method_count\":2,"), []byte("\"method_count\":2,\"unknown\":true,"), 1)
 		}},
 	}
 	for _, test := range tests {
@@ -179,6 +194,10 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 			f.snapshots[0].Results = append(f.snapshots[0].Results, f.snapshots[0].Results[0])
 		}},
 		{name: "invalid status", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Status = compliance.KSIStatus("unknown") }},
+		{name: "invalid outcome", mutate: func(f *ksiHistoryImporterFixture) {
+			f.snapshots[0].Results[0].Outcome = compliance.KSIOutcome("unknown")
+		}},
+		{name: "status outcome mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Outcome = compliance.KSIOutcomeSatisfied }},
 		{name: "negative method count", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].MethodCount = -1 }},
 		{name: "missing validation timestamp", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].LastValidatedUnixMs = 0 }},
 		{name: "validation after evaluation", mutate: func(f *ksiHistoryImporterFixture) {
@@ -188,6 +207,13 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 			f.snapshots[0].Results[0].Evidence[0].ArtifactType = "unknown"
 		}},
 		{name: "empty evidence reference", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ArtifactId = "" }},
+		{name: "missing result set binding scope", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.ScopeID = "" }},
+		{name: "missing result set binding run", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.RunID = "" }},
+		{name: "inverted result set binding window", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.WindowStartUnixMs = f.snapshots[0].Binding.WindowEndUnixMs + 1 }},
+		{name: "missing result binding scope", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Binding.ScopeID = "" }},
+		{name: "result binding mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Binding.RunID = "other-run" }},
+		{name: "evidence scope mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ScopeId = "other-scope" }},
+		{name: "evidence run mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].RunId = "other-run" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -203,9 +229,10 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 
 func TestKSIHistoryImporter_Import_EnforcesSnapshotLimit(t *testing.T) {
 	fixture := newKSIHistoryImporterFixture(t)
+	binding := fixture.snapshots[0].Binding
 	fixture.snapshots = make([]compliance.KSIResultSet, constants.KSIHistoryMaxSnapshots+1)
 	for index := range fixture.snapshots {
-		fixture.snapshots[index] = compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: int64(1_700_000_000_000 + index), Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, LastValidatedUnixMs: int64(1_699_999_999_000 + index), MethodCount: 2}}}
+		fixture.snapshots[index] = compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: int64(1_700_000_000_000 + index), Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: int64(1_699_999_999_000 + index), MethodCount: 2, Binding: binding}}}
 	}
 	fixture.replaceHistory(t)
 	_, err := NewKSIHistoryImporter(fixture.reader, fixture.binding).Import(context.Background())

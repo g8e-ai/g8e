@@ -329,7 +329,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 		findings = append(findings, OSCALFinding{
 			UUID:        generateUUID(),
 			Title:       "KSI " + res.ID + " Finding",
-			Description: fmt.Sprintf("KSI %s (%s): %s — %d automated methods evaluated", res.ID, ksi.Title, res.Status, res.MethodCount),
+			Description: fmt.Sprintf("KSI %s (%s): %s (%s) — %d automated methods evaluated", res.ID, ksi.Title, res.Status, res.Outcome, res.MethodCount),
 			Target: OSCALFindingTarget{
 				TargetID: res.ID,
 				Status:   status,

@@ -43,6 +43,47 @@ const (
 	KSIStatusNotApplicable KSIStatus = "not_applicable"
 )
 
+type KSIOutcome string
+
+const (
+	KSIOutcomeSatisfied                   KSIOutcome = "satisfied"
+	KSIOutcomeMethodFailure               KSIOutcome = "method_failure"
+	KSIOutcomeInvalidEvidence             KSIOutcome = "invalid_evidence"
+	KSIOutcomeStaleEvidence               KSIOutcome = "stale_evidence"
+	KSIOutcomeUnsupportedAutomation       KSIOutcome = "unsupported_automation"
+	KSIOutcomeCustomerAttestationRequired KSIOutcome = "customer_attestation_required"
+	KSIOutcomeNotApplicable               KSIOutcome = "not_applicable"
+)
+
+func (o KSIOutcome) Status() KSIStatus {
+	switch o {
+	case KSIOutcomeSatisfied:
+		return KSIStatusSatisfied
+	case KSIOutcomeNotApplicable:
+		return KSIStatusNotApplicable
+	default:
+		return KSIStatusNotSatisfied
+	}
+}
+
+func (o KSIOutcome) Valid() bool {
+	switch o {
+	case KSIOutcomeSatisfied, KSIOutcomeMethodFailure, KSIOutcomeInvalidEvidence, KSIOutcomeStaleEvidence, KSIOutcomeUnsupportedAutomation, KSIOutcomeCustomerAttestationRequired, KSIOutcomeNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+func (o KSIOutcome) validMethodUnsatisfiedOutcome() bool {
+	switch o {
+	case KSIOutcomeInvalidEvidence, KSIOutcomeStaleEvidence, KSIOutcomeUnsupportedAutomation, KSIOutcomeCustomerAttestationRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // CertificationClass represents a FedRAMP 20x certification class (CR26).
 type CertificationClass string
 
@@ -143,18 +184,20 @@ type KSIMethod struct {
 	CollectionBoundary KSICollectionBoundary
 	VerifierFamily     KSIVerifierFamily
 	MeasuredProperty   KSIMeasuredProperty
+	UnsatisfiedOutcome KSIOutcome
 	evaluate           ksiMethodEvaluator
 }
 
 func newKSIMethod(name string, artifact KSIArtifactIdentity, boundary KSICollectionBoundary, verifier KSIVerifierFamily, property KSIMeasuredProperty, evaluate ksiMethodEvaluator) KSIMethod {
 	return KSIMethod{
 		Name: name, Version: constants.KSIMethodDefinitionVersion, ArtifactIdentity: artifact,
-		CollectionBoundary: boundary, VerifierFamily: verifier, MeasuredProperty: property, evaluate: evaluate,
+		CollectionBoundary: boundary, VerifierFamily: verifier, MeasuredProperty: property,
+		UnsatisfiedOutcome: KSIOutcomeInvalidEvidence, evaluate: evaluate,
 	}
 }
 
 func (m KSIMethod) validate() error {
-	if m.Name == "" || m.Version == "" || !m.ArtifactIdentity.valid() || !m.CollectionBoundary.valid() || !m.VerifierFamily.valid() || !m.MeasuredProperty.valid() || m.evaluate == nil {
+	if m.Name == "" || m.Version == "" || !m.ArtifactIdentity.valid() || !m.CollectionBoundary.valid() || !m.VerifierFamily.valid() || !m.MeasuredProperty.valid() || !m.UnsatisfiedOutcome.validMethodUnsatisfiedOutcome() || m.evaluate == nil {
 		return constants.ErrKSIMethodInvalid
 	}
 	return nil
@@ -216,13 +259,46 @@ type KSI struct {
 	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms,omitempty"`
 }
 
+// EvaluationBinding carries the scope, evidence window, and method version
+// identity that bind a KSI evaluation to a specific assessment context. Every
+// KSIResult and KSIResultSet carries a binding so consumers can prove that no
+// result was produced from evidence outside the declared scope, run, attempt,
+// scenario, action, transaction, or assessment window.
+type EvaluationBinding struct {
+	ScopeID            string `json:"scope_id"`
+	RunID              string `json:"run_id"`
+	WindowStartUnixMs  int64  `json:"window_start_unix_ms"`
+	WindowEndUnixMs    int64  `json:"window_end_unix_ms"`
+	EvaluatorID        string `json:"evaluator_id"`
+	EvaluatorVersion   string `json:"evaluator_version"`
+	MethodDefinitionID string `json:"method_definition_id"`
+}
+
+// Validate returns constants.ErrKSIBindingIncomplete when required binding
+// fields are empty or the evidence window is inverted.
+func (b EvaluationBinding) Validate() error {
+	if b.ScopeID == "" || b.RunID == "" || b.WindowStartUnixMs <= 0 || b.WindowEndUnixMs <= 0 || b.WindowStartUnixMs > b.WindowEndUnixMs || b.EvaluatorID == "" || b.EvaluatorVersion == "" || b.MethodDefinitionID == "" {
+		return fmt.Errorf("%w: scope, run, window, evaluator, and method definition are required", constants.ErrKSIBindingIncomplete)
+	}
+	return nil
+}
+
+// Contains returns true when the given timestamp falls inside the evidence
+// window (inclusive). It is used to prove that evidence was produced within the
+// declared assessment window.
+func (b EvaluationBinding) Contains(producedAtMs int64) bool {
+	return producedAtMs >= b.WindowStartUnixMs && producedAtMs <= b.WindowEndUnixMs
+}
+
 // KSIResult is the evaluation result for a single KSI at a point in time.
 type KSIResult struct {
 	ID                  string                                      `json:"id"`
 	Status              KSIStatus                                   `json:"status"`
+	Outcome             KSIOutcome                                  `json:"outcome"`
 	Evidence            []*compliancev1.ComplianceEvidenceReference `json:"evidence,omitempty"`
 	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms"`
 	MethodCount         int                                         `json:"method_count"`
+	Binding             EvaluationBinding                           `json:"binding"`
 }
 
 // KSIResultSet is a collection of KSI evaluation results for a target class.
@@ -230,6 +306,7 @@ type KSIResultSet struct {
 	Class         CertificationClass `json:"class"`
 	EvaluatedAtMs int64              `json:"evaluated_at_ms"`
 	Results       []KSIResult        `json:"results"`
+	Binding       EvaluationBinding  `json:"binding"`
 }
 
 // KSICatalog is the typed collection of all known KSIs from the CR26 reference.

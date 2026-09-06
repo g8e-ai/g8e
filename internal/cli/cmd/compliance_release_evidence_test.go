@@ -367,6 +367,8 @@ func TestComplianceReleaseEvidenceCmdWithConfig_GeneratesReportWithDemoRun(t *te
 	require.NoError(t, cmd.Flags().Set("version", "v2.1.3"))
 	require.NoError(t, cmd.Flags().Set("out", outDir))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -421,6 +423,8 @@ func TestComplianceReleaseEvidenceCmdWithConfig_ExplicitDemoRunFlag(t *testing.T
 	require.NoError(t, cmd.Flags().Set("out", outDir))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("demo-run", runID))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -467,6 +471,8 @@ func TestComplianceReleaseEvidenceCmdWithConfig_FailClosedExitsNonzero(t *testin
 	require.NoError(t, cmd.Flags().Set("out", outDir))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("fail-closed", "true"))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

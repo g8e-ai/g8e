@@ -1182,6 +1182,8 @@ var (
 	ErrKSICatalogInvalid          = errors.New("KSI catalog invalid")
 	ErrKSIMethodInvalid           = errors.New("KSI method invalid")
 	ErrKSIMethodNotIndependent    = errors.New("KSI methods are not independent")
+	ErrKSIBindingIncomplete       = errors.New("KSI evaluation binding incomplete")
+	ErrKSIBindingMismatch         = errors.New("KSI evaluation binding mismatch")
 	ErrOverlayCatalogInvalid      = errors.New("overlay catalog invalid")
 	ErrOverlayReadFailed          = errors.New("overlay read failed")
 	ErrOverlayParseFailed         = errors.New("overlay parse failed")
@@ -1215,10 +1217,13 @@ var (
 	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
 
 	// Compliance KSI history errors
-	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
-	ErrKSIHistoryReadFailed  = errors.New("KSI history: read failed")
-	ErrKSIHistoryParseFailed = errors.New("KSI history: parse failed")
-	ErrKSIHistoryEmpty       = errors.New("KSI history: no snapshots found")
+	ErrKSIHistoryWriteFailed       = errors.New("KSI history: write failed")
+	ErrKSIHistoryReadFailed        = errors.New("KSI history: read failed")
+	ErrKSIHistoryParseFailed       = errors.New("KSI history: parse failed")
+	ErrKSIHistoryEmpty             = errors.New("KSI history: no snapshots found")
+	ErrKSIUnavailableWriteFailed   = errors.New("KSI unavailable interval: write failed")
+	ErrKSIUnavailableReadFailed    = errors.New("KSI unavailable interval: read failed")
+	ErrKSIUnavailableParseFailed   = errors.New("KSI unavailable interval: parse failed")
 
 	// Docker interactive enrollment walkthrough errors
 	ErrDockerStartEnrollmentFailed = errors.New("docker start: owner enrollment failed")

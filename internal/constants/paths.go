@@ -654,7 +654,6 @@ const (
 	LedgerEvidenceMaxCommits               = 4096
 	KSIHistoryReferencePrefix              = "ksi-history"
 	KSIResultReferencePrefix               = "ksi-result"
-	KSIHistorySchemaVersion                = "1.0.0"
 	KSIHistoryMaxSnapshots                 = 4096
 	BuildAttestationReferencePrefix        = "build-attestation"
 	ConfigAttestationReferencePrefix       = "config-attestation"
@@ -700,6 +699,11 @@ const (
 	KSIMethodDefinitionVersion             = "1.0.0"
 	KSIMethodVerifierID                    = "g8e-ksi-method-verifier"
 	KSIMethodVerifierVersion               = "1.0.0"
+	KSIEvaluatorID                         = "g8e-ksi-evaluator"
+	KSIEvaluatorVersion                    = "1.0.0"
+	KSIHistorySchemaVersion                = "1.2.0"
+	KSIUnavailableIntervalsFilename        = "ksi-unavailable-intervals.jsonl"
+	KSIUnavailableIntervalReferencePrefix  = "ksi-unavailable"
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

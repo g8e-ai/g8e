@@ -150,7 +150,7 @@ func (e *KSIEvaluator) MethodCount(ksiID string) int {
 }
 
 // Evaluate evaluates all KSIs applicable to the given certification class
-// and returns a KSIResultSet. For each KSI:
+// and returns a KSIResultSet bound to the given EvaluationBinding. For each KSI:
 //
 //  1. Runs all registered methods, collecting evidence.
 //  2. A KSI is satisfied only if ALL methods return true.
@@ -161,7 +161,13 @@ func (e *KSIEvaluator) MethodCount(ksiID string) int {
 //     target class (should not occur if KSIsForClass is used).
 //  6. Checks staleness: a KSI whose LastValidatedUnixMs exceeds its validation
 //     cycle is marked not_satisfied regardless of method results.
-func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (*KSIResultSet, error) {
+//  7. Stamps every result and evidence reference with the binding scope, run,
+//     and evidence window so consumers can prove no result was produced from
+//     evidence outside the declared assessment context.
+func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass, binding EvaluationBinding) (*KSIResultSet, error) {
+	if err := binding.Validate(); err != nil {
+		return nil, fmt.Errorf("compliance: evaluate: %w", err)
+	}
 	ksis := e.catalog.KSIsForClass(class)
 	minMethods := MinimumMethodsForClass(class)
 	now := time.Now()
@@ -170,6 +176,7 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 		Class:         class,
 		EvaluatedAtMs: now.UnixMilli(),
 		Results:       make([]KSIResult, 0, len(ksis)),
+		Binding:       binding,
 	}
 
 	for i := range ksis {
@@ -183,24 +190,27 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 		res := KSIResult{
 			ID:                  ksiID,
 			LastValidatedUnixMs: now.UnixMilli(),
+			Binding:             binding,
 		}
 
 		registered := e.methods[ksiID]
 		res.MethodCount = len(registered)
 
 		if len(registered) < minMethods {
-			res.Status = KSIStatusNotSatisfied
+			res.Outcome = KSIOutcomeUnsupportedAutomation
+			res.Status = res.Outcome.Status()
 			result.Results = append(result.Results, res)
 			continue
 		}
 
 		if ksi.LastValidatedUnixMs > 0 && ksi.IsStale(now) {
-			res.Status = KSIStatusNotSatisfied
+			res.Outcome = KSIOutcomeStaleEvidence
+			res.Status = res.Outcome.Status()
 			result.Results = append(result.Results, res)
 			continue
 		}
 
-		allSatisfied := true
+		res.Outcome = KSIOutcomeSatisfied
 		var allEvidence []*compliancev1.ComplianceEvidenceReference
 		for _, method := range registered {
 			if ctx.Err() != nil {
@@ -208,27 +218,49 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 			}
 			satisfied, evidence, err := method.evaluate(ctx)
 			if err != nil {
-				allSatisfied = false
-				allEvidence = append(allEvidence, newKSIEvidenceReference(EvidenceTypeExecutionID, ksiID))
+				res.Outcome = higherPriorityKSIOutcome(res.Outcome, KSIOutcomeMethodFailure)
+				allEvidence = append(allEvidence, stampEvidenceBinding(newKSIEvidenceReference(EvidenceTypeExecutionID, ksiID), binding))
 				continue
 			}
 			if !satisfied {
-				allSatisfied = false
+				res.Outcome = higherPriorityKSIOutcome(res.Outcome, method.UnsatisfiedOutcome)
 			}
-			allEvidence = append(allEvidence, evidence...)
+			for _, ref := range evidence {
+				allEvidence = append(allEvidence, stampEvidenceBinding(ref, binding))
+			}
 		}
 
-		if allSatisfied {
-			res.Status = KSIStatusSatisfied
-		} else {
-			res.Status = KSIStatusNotSatisfied
-		}
+		res.Status = res.Outcome.Status()
 		res.Evidence = allEvidence
 
 		result.Results = append(result.Results, res)
 	}
 
 	return result, nil
+}
+
+func higherPriorityKSIOutcome(current, candidate KSIOutcome) KSIOutcome {
+	if ksiOutcomePriority(candidate) > ksiOutcomePriority(current) {
+		return candidate
+	}
+	return current
+}
+
+func ksiOutcomePriority(outcome KSIOutcome) int {
+	switch outcome {
+	case KSIOutcomeMethodFailure:
+		return 5
+	case KSIOutcomeStaleEvidence:
+		return 4
+	case KSIOutcomeInvalidEvidence:
+		return 3
+	case KSIOutcomeCustomerAttestationRequired:
+		return 2
+	case KSIOutcomeUnsupportedAutomation:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // HasFailures returns true if any KSI in the result set is not_satisfied.
@@ -264,11 +296,16 @@ func (r *KSIResultSet) NotSatisfiedCount() int {
 }
 
 // Validate checks that the result set is internally consistent: all KSI IDs
-// reference KSIs in the catalog, and the result set is non-empty for a
-// non-trivial class.
+// reference KSIs in the catalog, the result set is non-empty for a non-trivial
+// class, the result-set binding is populated, every result binding matches the
+// result-set binding, and every evidence reference carries the same scope and
+// run binding as the result that produced it.
 func (r *KSIResultSet) Validate(catalog *KSICatalog) error {
 	if len(r.Results) == 0 {
 		return fmt.Errorf("%w: empty result set", constants.ErrValidationFailed)
+	}
+	if err := r.Binding.Validate(); err != nil {
+		return fmt.Errorf("%w: result set binding: %w", constants.ErrValidationFailed, err)
 	}
 	for i, res := range r.Results {
 		if res.ID == "" {
@@ -277,12 +314,52 @@ func (r *KSIResultSet) Validate(catalog *KSICatalog) error {
 		if catalog.FindKSI(res.ID) == nil {
 			return fmt.Errorf("%w: result at index %d references unknown KSI: %s", constants.ErrValidationFailed, i, res.ID)
 		}
+		if !res.Outcome.Valid() || res.Status != res.Outcome.Status() {
+			return fmt.Errorf("%w: result at index %d has inconsistent status and outcome", constants.ErrValidationFailed, i)
+		}
+		if err := res.Binding.Validate(); err != nil {
+			return fmt.Errorf("%w: result %s binding: %w", constants.ErrValidationFailed, res.ID, err)
+		}
+		if res.Binding.ScopeID != r.Binding.ScopeID || res.Binding.RunID != r.Binding.RunID || res.Binding.WindowStartUnixMs != r.Binding.WindowStartUnixMs || res.Binding.WindowEndUnixMs != r.Binding.WindowEndUnixMs || res.Binding.EvaluatorID != r.Binding.EvaluatorID || res.Binding.EvaluatorVersion != r.Binding.EvaluatorVersion || res.Binding.MethodDefinitionID != r.Binding.MethodDefinitionID {
+			return fmt.Errorf("%w: result %s binding does not match result set binding", constants.ErrKSIBindingMismatch, res.ID)
+		}
+		for j, evidence := range res.Evidence {
+			if evidence == nil {
+				return fmt.Errorf("%w: result %s evidence at index %d is nil", constants.ErrValidationFailed, res.ID, j)
+			}
+			if evidence.GetScopeId() != "" && evidence.GetScopeId() != r.Binding.ScopeID {
+				return fmt.Errorf("%w: result %s evidence %s scope %s does not match binding scope %s", constants.ErrKSIBindingMismatch, res.ID, evidence.GetArtifactId(), evidence.GetScopeId(), r.Binding.ScopeID)
+			}
+			if evidence.GetRunId() != "" && evidence.GetRunId() != r.Binding.RunID {
+				return fmt.Errorf("%w: result %s evidence %s run %s does not match binding run %s", constants.ErrKSIBindingMismatch, res.ID, evidence.GetArtifactId(), evidence.GetRunId(), r.Binding.RunID)
+			}
+		}
 	}
 	return nil
 }
 
 func newKSIEvidenceReference(evidenceType EvidenceType, artifactID string) *compliancev1.ComplianceEvidenceReference {
 	return &compliancev1.ComplianceEvidenceReference{ArtifactId: artifactID, ArtifactType: string(evidenceType)}
+}
+
+// stampEvidenceBinding writes the binding scope and run onto an evidence
+// reference when those fields are empty. References that already declare a
+// scope or run are left untouched so independently scoped evidence (e.g.
+// imported from another source) is not silently re-bound. The evidence window
+// is not stamped on individual references because the window is a property of
+// the result set, not of individual evidence artifacts; consumers verify
+// produced_at falls inside the window through KSIResultSet.Validate.
+func stampEvidenceBinding(ref *compliancev1.ComplianceEvidenceReference, binding EvaluationBinding) *compliancev1.ComplianceEvidenceReference {
+	if ref == nil {
+		return nil
+	}
+	if ref.GetScopeId() == "" {
+		ref.ScopeId = binding.ScopeID
+	}
+	if ref.GetRunId() == "" {
+		ref.RunId = binding.RunID
+	}
+	return ref
 }
 
 func newVerifiedKSIEvidenceReference(evidenceType EvidenceType, artifactID, digest string, producedAt time.Time) *compliancev1.ComplianceEvidenceReference {
@@ -628,7 +705,7 @@ func validGraderResult(result GraderResult) bool {
 }
 
 func newKSIHistoryFreshnessMethod(reader KSIHistoryReader, ksiID string, cycle time.Duration) KSIMethod {
-	return newKSIMethod("ksiHistoryFreshness", KSIArtifactHistorySnapshots, KSICollectionHistoryStore, KSIVerifierHistorical, KSIPropertyFreshness, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+	method := newKSIMethod("ksiHistoryFreshness", KSIArtifactHistorySnapshots, KSICollectionHistoryStore, KSIVerifierHistorical, KSIPropertyFreshness, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if reader == nil {
 			return false, nil, nil
 		}
@@ -648,6 +725,8 @@ func newKSIHistoryFreshnessMethod(reader KSIHistoryReader, ksiID string, cycle t
 		artifactID := fmt.Sprintf("%s:%d", ksiID, latest)
 		return true, []*compliancev1.ComplianceEvidenceReference{newVerifiedKSIEvidenceReference(EvidenceTypeHistoricalFreshness, artifactID, "", producedAt)}, nil
 	})
+	method.UnsatisfiedOutcome = KSIOutcomeStaleEvidence
+	return method
 }
 
 func latestKSIResultTimestamp(snapshots []KSIResultSet, ksiID string) int64 {

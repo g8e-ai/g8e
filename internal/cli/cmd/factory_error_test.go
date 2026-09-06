@@ -598,6 +598,8 @@ func TestComplianceReleaseEvidenceCmdWithConfig_FileSvcFactoryError(t *testing.T
 	)
 	require.NoError(t, cmd.Flags().Set("version", "v2.1.3"))
 	require.NoError(t, cmd.Flags().Set("out", t.TempDir()))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

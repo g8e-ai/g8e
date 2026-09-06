@@ -128,13 +128,22 @@ func validateKSIHistorySnapshot(resultSet compliance.KSIResultSet, class complia
 	if resultSet.Class != class || resultSet.EvaluatedAtMs <= 0 || len(resultSet.Results) == 0 {
 		return fmt.Errorf("%w: KSI history snapshot binding is incomplete", constants.ErrEvidenceArtifactMalformed)
 	}
+	if err := resultSet.Binding.Validate(); err != nil {
+		return fmt.Errorf("%w: KSI history snapshot result set binding: %w", constants.ErrEvidenceArtifactMalformed, err)
+	}
 	if len(prior) > 0 && resultSet.EvaluatedAtMs <= prior[len(prior)-1].resultSet.EvaluatedAtMs {
 		return fmt.Errorf("%w: KSI history chronology is not strictly increasing", constants.ErrEvidenceArtifactMalformed)
 	}
 	seen := make(map[string]struct{}, len(resultSet.Results))
 	for _, result := range resultSet.Results {
-		if result.ID == "" || !validKSIStatus(result.Status) || result.MethodCount < 0 || result.LastValidatedUnixMs <= 0 || result.LastValidatedUnixMs > resultSet.EvaluatedAtMs {
+		if result.ID == "" || !validKSIStatus(result.Status) || !result.Outcome.Valid() || result.Outcome.Status() != result.Status || result.MethodCount < 0 || result.LastValidatedUnixMs <= 0 || result.LastValidatedUnixMs > resultSet.EvaluatedAtMs {
 			return fmt.Errorf("%w: KSI result binding is incomplete", constants.ErrEvidenceArtifactMalformed)
+		}
+		if err := result.Binding.Validate(); err != nil {
+			return fmt.Errorf("%w: KSI result %s binding: %w", constants.ErrEvidenceArtifactMalformed, result.ID, err)
+		}
+		if result.Binding.ScopeID != resultSet.Binding.ScopeID || result.Binding.RunID != resultSet.Binding.RunID || result.Binding.WindowStartUnixMs != resultSet.Binding.WindowStartUnixMs || result.Binding.WindowEndUnixMs != resultSet.Binding.WindowEndUnixMs || result.Binding.EvaluatorID != resultSet.Binding.EvaluatorID || result.Binding.EvaluatorVersion != resultSet.Binding.EvaluatorVersion || result.Binding.MethodDefinitionID != resultSet.Binding.MethodDefinitionID {
+			return fmt.Errorf("%w: KSI result %s binding does not match snapshot binding", constants.ErrEvidenceArtifactMalformed, result.ID)
 		}
 		if _, exists := seen[result.ID]; exists {
 			return fmt.Errorf("%w: duplicate KSI result ID", constants.ErrEvidenceArtifactMalformed)
@@ -143,6 +152,12 @@ func validateKSIHistorySnapshot(resultSet compliance.KSIResultSet, class complia
 		for _, evidence := range result.Evidence {
 			if evidence == nil || !validKSIEvidenceArtifactType(evidence.GetArtifactType()) || evidence.GetArtifactId() == "" {
 				return fmt.Errorf("%w: KSI result evidence binding is incomplete", constants.ErrEvidenceArtifactMalformed)
+			}
+			if evidence.GetScopeId() != "" && evidence.GetScopeId() != resultSet.Binding.ScopeID {
+				return fmt.Errorf("%w: KSI result %s evidence scope mismatch", constants.ErrEvidenceArtifactMalformed, result.ID)
+			}
+			if evidence.GetRunId() != "" && evidence.GetRunId() != resultSet.Binding.RunID {
+				return fmt.Errorf("%w: KSI result %s evidence run mismatch", constants.ErrEvidenceArtifactMalformed, result.ID)
 			}
 		}
 	}

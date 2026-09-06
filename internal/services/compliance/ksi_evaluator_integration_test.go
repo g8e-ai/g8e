@@ -220,6 +220,21 @@ func loadRealKSICatalog(t *testing.T) *KSICatalog {
 	return catalog
 }
 
+// integrationBinding returns a valid EvaluationBinding for integration tests.
+func integrationBinding(t *testing.T) EvaluationBinding {
+	t.Helper()
+	now := time.Now()
+	return EvaluationBinding{
+		ScopeID:            "integration-scope",
+		RunID:              "integration-run",
+		WindowStartUnixMs:  now.UnixMilli(),
+		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+	}
+}
+
 // automatableKSIIDs mirrors the KSI IDs bound in DefaultMethods.
 var automatableKSIIDs = []string{
 	"KSI-CMT-01", "KSI-CMT-03", "KSI-CNA-01",
@@ -240,7 +255,7 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 	evaluator := NewKSIEvaluator(catalog)
 	require.NoError(t, evaluator.RegisterDefaultMethods(fixture.deps))
 
-	resultSet, err := evaluator.Evaluate(context.Background(), ClassC)
+	resultSet, err := evaluator.Evaluate(context.Background(), ClassC, integrationBinding(t))
 	require.NoError(t, err)
 	require.NoError(t, resultSet.Validate(catalog))
 	require.Len(t, resultSet.Results, len(catalog.KSIsForClass(ClassC)))
@@ -258,6 +273,7 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 		res, ok := resultsByID[ksiID]
 		require.True(t, ok, "result set missing %s", ksiID)
 		assert.Equal(t, KSIStatusSatisfied, res.Status, "%s should be satisfied against seeded evidence", ksiID)
+		assert.Equal(t, KSIOutcomeSatisfied, res.Outcome)
 		assert.GreaterOrEqual(t, res.MethodCount, MinimumMethodsForClass(ClassC))
 		assert.NotEmpty(t, res.Evidence, "%s should carry evidence anchors", ksiID)
 	}
@@ -280,6 +296,7 @@ func TestKSIEvaluator_Integration_SeededEvidenceSatisfiesAutomatableKSIs(t *test
 
 	// Non-automatable KSIs fail-closed even with seeded evidence.
 	assert.Equal(t, KSIStatusNotSatisfied, resultsByID["KSI-CED-01"].Status)
+	assert.Equal(t, KSIOutcomeUnsupportedAutomation, resultsByID["KSI-CED-01"].Outcome)
 	assert.Positive(t, resultSet.SatisfiedCount())
 	assert.Positive(t, resultSet.NotSatisfiedCount())
 }
@@ -295,7 +312,7 @@ func TestKSIEvaluator_Integration_EmptyStoresFailClosed(t *testing.T) {
 	evaluator := NewKSIEvaluator(catalog)
 	require.NoError(t, evaluator.RegisterDefaultMethods(fixture.deps))
 
-	resultSet, err := evaluator.Evaluate(context.Background(), ClassC)
+	resultSet, err := evaluator.Evaluate(context.Background(), ClassC, integrationBinding(t))
 	require.NoError(t, err)
 	require.NoError(t, resultSet.Validate(catalog))
 	require.NotEmpty(t, resultSet.Results)

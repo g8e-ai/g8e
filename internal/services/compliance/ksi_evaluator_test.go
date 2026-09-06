@@ -225,6 +225,21 @@ func testKSIMethod(name string, property KSIMeasuredProperty, evaluate ksiMethod
 	return newKSIMethod(name, KSIArtifactActionReceipts, KSICollectionAuditStore, KSIVerifierStructural, property, evaluate)
 }
 
+// testBinding returns a valid EvaluationBinding for evaluator tests.
+func testBinding(t *testing.T) EvaluationBinding {
+	t.Helper()
+	now := time.Now()
+	return EvaluationBinding{
+		ScopeID:            "test-scope",
+		RunID:              "test-run",
+		WindowStartUnixMs:  now.UnixMilli(),
+		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+	}
+}
+
 // TestKSIEvaluator_RegisterMethods binds methods to a KSI and verifies MethodCount.
 func TestKSIEvaluator_RegisterMethods(t *testing.T) {
 	catalog := testCatalog()
@@ -289,6 +304,10 @@ func TestKSIEvaluator_RegisterMethods_RejectsInvalidMetadataAtomically(t *testin
 		{name: "unknown verifier family", mutate: func(method *KSIMethod) { method.VerifierFamily = "unknown" }},
 		{name: "measured property", mutate: func(method *KSIMethod) { method.MeasuredProperty = "" }},
 		{name: "unknown measured property", mutate: func(method *KSIMethod) { method.MeasuredProperty = "unknown" }},
+		{name: "satisfied outcome for failure", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeSatisfied }},
+		{name: "method failure outcome for false result", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeMethodFailure }},
+		{name: "not applicable outcome for false result", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeNotApplicable }},
+		{name: "unknown unsatisfied outcome", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = "unknown" }},
 		{name: "evaluator", mutate: func(method *KSIMethod) { method.evaluate = nil }},
 	}
 
@@ -341,7 +360,7 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -352,6 +371,7 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 		if res.MethodCount >= 2 {
 			assert.Equal(t, KSIStatusSatisfied, res.Status,
 				"KSI %s should be satisfied with %d methods", res.ID, res.MethodCount)
+			assert.Equal(t, KSIOutcomeSatisfied, res.Outcome)
 			assert.NotEmpty(t, res.Evidence, "KSI %s should have evidence", res.ID)
 		}
 	}
@@ -365,7 +385,7 @@ func TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// KSI-CED-01 has 0 methods (not automatable by g8e), should fail-closed
@@ -395,13 +415,14 @@ func TestKSIEvaluator_Evaluate_StaleKSI_FailClosed(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
 		if res.ID == "KSI-CMT-01" {
 			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
 				"Stale KSI-CMT-01 should be not_satisfied despite having methods")
+			assert.Equal(t, KSIOutcomeStaleEvidence, res.Outcome)
 		}
 	}
 }
@@ -421,7 +442,7 @@ func TestKSIEvaluator_Evaluate_MethodError_FailClosed(t *testing.T) {
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", errMethod, okMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -447,7 +468,7 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", falseMethod, trueMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -458,6 +479,87 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 	}
 }
 
+func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
+	tests := []struct {
+		name        string
+		configure   func(*KSICatalog, *KSIEvaluator)
+		wantOutcome KSIOutcome
+	}{
+		{
+			name: "method execution failure",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("methodFailure", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, errors.New("method failed")
+				})
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeMethodFailure,
+		},
+		{
+			name: "invalid evidence",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("invalidEvidence", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeInvalidEvidence,
+		},
+		{
+			name: "stale evidence",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("staleEvidence", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				method.UnsatisfiedOutcome = KSIOutcomeStaleEvidence
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeStaleEvidence,
+		},
+		{
+			name:        "unsupported automation",
+			configure:   func(_ *KSICatalog, _ *KSIEvaluator) {},
+			wantOutcome: KSIOutcomeUnsupportedAutomation,
+		},
+		{
+			name: "customer attestation required",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("customerAttestation", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				method.UnsatisfiedOutcome = KSIOutcomeCustomerAttestationRequired
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeCustomerAttestationRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := testCatalog()
+			evaluator := NewKSIEvaluator(catalog)
+			tt.configure(catalog, evaluator)
+
+			resultSet, err := evaluator.Evaluate(context.Background(), ClassB, testBinding(t))
+			require.NoError(t, err)
+			result := findKSIResult(t, resultSet, "KSI-CMT-01")
+			assert.Equal(t, KSIStatusNotSatisfied, result.Status)
+			assert.Equal(t, tt.wantOutcome, result.Outcome)
+		})
+	}
+}
+
+func findKSIResult(t *testing.T, resultSet *KSIResultSet, ksiID string) KSIResult {
+	t.Helper()
+	for _, result := range resultSet.Results {
+		if result.ID == ksiID {
+			return result
+		}
+	}
+	t.Fatalf("missing KSI result %s", ksiID)
+	return KSIResult{}
+}
+
 // TestKSIEvaluator_Evaluate_NilDeps_FailClosed verifies that nil dependency
 // fields cause methods to return false (fail-closed).
 func TestKSIEvaluator_Evaluate_NilDeps_FailClosed(t *testing.T) {
@@ -465,7 +567,7 @@ func TestKSIEvaluator_Evaluate_NilDeps_FailClosed(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 	require.NoError(t, eval.RegisterDefaultMethods(EvaluatorDeps{}))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -489,7 +591,7 @@ func TestKSIEvaluator_Evaluate_EmptyStores_FailClosed(t *testing.T) {
 	}
 	require.NoError(t, eval.RegisterDefaultMethods(deps))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -513,7 +615,7 @@ func TestKSIEvaluator_Evaluate_ClassB_LowerThreshold(t *testing.T) {
 	})
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", okMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassB)
+	result, err := eval.Evaluate(context.Background(), ClassB, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -544,7 +646,7 @@ func TestKSIEvaluator_Evaluate_ClassA_NoMinimum(t *testing.T) {
 
 	eval := NewKSIEvaluator(catalog)
 
-	result, err := eval.Evaluate(context.Background(), ClassA)
+	result, err := eval.Evaluate(context.Background(), ClassA, testBinding(t))
 	require.NoError(t, err)
 
 	assert.Len(t, result.Results, 1)
@@ -565,7 +667,7 @@ func TestKSIEvaluator_Evaluate_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := eval.Evaluate(ctx, ClassC)
+	_, err := eval.Evaluate(ctx, ClassC, testBinding(t))
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -603,12 +705,14 @@ func TestKSIResultSet_SatisfiedCount(t *testing.T) {
 // TestKSIResultSet_Validate verifies result set validation against a catalog.
 func TestKSIResultSet_Validate(t *testing.T) {
 	catalog := testCatalog()
+	binding := testBinding(t)
 
 	t.Run("valid result set", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "KSI-CMT-01", Status: KSIStatusSatisfied},
-				{ID: "KSI-MLA-07", Status: KSIStatusSatisfied},
+				{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
+				{ID: "KSI-MLA-07", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		assert.NoError(t, rs.Validate(catalog))
@@ -622,10 +726,46 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		assert.Contains(t, err.Error(), "empty result set")
 	})
 
+	t.Run("missing result set binding", func(t *testing.T) {
+		rs := &KSIResultSet{
+			Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingIncomplete)
+	})
+
+	t.Run("result binding mismatch", func(t *testing.T) {
+		mismatched := binding
+		mismatched.RunID = "other-run"
+		rs := &KSIResultSet{
+			Binding: binding,
+			Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: mismatched}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+	})
+
+	t.Run("evidence scope mismatch", func(t *testing.T) {
+		rs := &KSIResultSet{
+			Binding: binding,
+			Results: []KSIResult{{
+				ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding,
+				Evidence: []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "tx-1", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: "other-scope"}},
+			}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+	})
+
 	t.Run("unknown KSI ID", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "KSI-FAKE-99", Status: KSIStatusSatisfied},
+				{ID: "KSI-FAKE-99", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		err := rs.Validate(catalog)
@@ -636,14 +776,29 @@ func TestKSIResultSet_Validate(t *testing.T) {
 
 	t.Run("empty KSI ID in result", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "", Status: KSIStatusSatisfied},
+				{ID: "", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		err := rs.Validate(catalog)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 		assert.Contains(t, err.Error(), "empty ID")
+	})
+
+	t.Run("missing detailed outcome", func(t *testing.T) {
+		rs := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusNotSatisfied, Binding: binding}}}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	})
+
+	t.Run("status contradicts detailed outcome", func(t *testing.T) {
+		rs := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeInvalidEvidence, Binding: binding}}}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 	})
 }
 
@@ -746,7 +901,7 @@ func TestKSIEvaluator_Evaluate_FullIntegration(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// Verify result set structure
@@ -773,7 +928,7 @@ func TestKSIEvaluator_Evaluate_NoMethodsRegistered(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -800,7 +955,7 @@ func TestKSIEvaluator_Evaluate_StorageError_FailClosed(t *testing.T) {
 	}
 	require.NoError(t, eval.RegisterDefaultMethods(deps))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// KSIs that depend on audit store should be not_satisfied due to error
