@@ -84,7 +84,7 @@ class ReliabilityLoader:
                             expected_behavior=ReliabilityExpectedBehavior(a["expected_behavior"]),
                             expected_evidence_preserved=a.get("expected_evidence_preserved", True),
                             collection_boundary=StateCollectionBoundary(
-                                a.get("collection_boundary", "OPERATOR_WORKLOAD")
+                                a.get("collection_boundary", "operator_workload")
                             ),
                         )
                         for a in data.get("reliability_assertions", [])

@@ -123,6 +123,10 @@ from g8e_evals.schema import (
     CitationMatchType,
     PartialMilestoneAssertion,
     PartialMilestoneObservation,
+    ReliabilityAssertion,
+    ReliabilityObservation,
+    ReliabilityScenarioType,
+    ReliabilityExpectedBehavior,
     VerificationStatus,
     GraderReference,
 )
@@ -11436,4 +11440,403 @@ def test_partial_milestone_grader_mixed_reached_and_wrong_order_in_one_task():
     assert result.value == pytest.approx(2 / 3)
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "partial-milestone assertion failed: milestone-3"
+    assert result.denominator_contribution == 3
+
+
+# ---------------------------------------------------------------------------
+# ReliabilityGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_RELIABILITY_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _reliability_assertion(
+    *,
+    assertion_id: str = "reliability-1",
+    scenario_type: ReliabilityScenarioType = ReliabilityScenarioType.PROVIDER_THROTTLING,
+    action_type: str = "CHAT_COMPLETION",
+    expected_behavior: ReliabilityExpectedBehavior = ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+    expected_evidence_preserved: bool = True,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> ReliabilityAssertion:
+    return ReliabilityAssertion(
+        assertion_id=assertion_id,
+        scenario_type=scenario_type,
+        action_type=action_type,
+        expected_behavior=expected_behavior,
+        expected_evidence_preserved=expected_evidence_preserved,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _reliability_observation(
+    *,
+    assertion_id: str = "reliability-1",
+    scenario_type: ReliabilityScenarioType = ReliabilityScenarioType.PROVIDER_THROTTLING,
+    action_type: str = "CHAT_COMPLETION",
+    observed_behavior: ReliabilityExpectedBehavior | None = ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+    evidence_preserved: bool = True,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> ReliabilityObservation:
+    return ReliabilityObservation(
+        observation_id=f"reliability-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        scenario_type=scenario_type,
+        action_type=action_type,
+        observed_behavior=observed_behavior,
+        evidence_preserved=evidence_preserved,
+        collection_boundary=collection_boundary,
+        collected_at=_RELIABILITY_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _reliability_context(
+    *,
+    assertions: list[ReliabilityAssertion] | None = None,
+    observations: list[ReliabilityObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="reliability",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="RELIABILITY",
+        compatible_arms=[Arm.DIRECT],
+        reliability_assertions=assertions if assertions is not None else [_reliability_assertion()],
+        graders=[GraderReference(grader_id="reliability", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        reliability_observations=observations if observations is not None else [_reliability_observation()],
+    )
+
+
+def test_reliability_grader_verifies_matching_behavior_and_evidence_preserved():
+    result = grade_deterministically("reliability", "1.0.0", _reliability_context())
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "reliability-obs-reliability-1" in result.evidence_refs
+    assert "evidence-reliability-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_reliability_grader_verifies_fail_closed_behavior():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(
+            scenario_type=ReliabilityScenarioType.MALFORMED_STRUCTURED_OUTPUT,
+            action_type="STRUCTURED_OUTPUT",
+            expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        )],
+        observations=[_reliability_observation(
+            scenario_type=ReliabilityScenarioType.MALFORMED_STRUCTURED_OUTPUT,
+            action_type="STRUCTURED_OUTPUT",
+            observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_when_observed_behavior_mismatches():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            observed_behavior=ReliabilityExpectedBehavior.DEGRADE_GRACEFULLY,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: reliability-1"
+
+
+def test_reliability_grader_fails_when_observed_behavior_is_none():
+    context = _reliability_context(
+        observations=[_reliability_observation(observed_behavior=None)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_when_evidence_not_preserved():
+    context = _reliability_context(
+        observations=[_reliability_observation(evidence_preserved=False)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_passes_when_evidence_not_required_and_not_preserved():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(expected_evidence_preserved=False)],
+        observations=[_reliability_observation(evidence_preserved=False)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_closed_on_missing_assertions():
+    context = _reliability_context(assertions=[])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "reliability assertions are missing"
+
+
+def test_reliability_grader_fails_closed_on_missing_observation():
+    context = _reliability_context(observations=[])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: reliability-1"
+
+
+def test_reliability_grader_fails_closed_on_duplicate_observations():
+    context = _reliability_context(
+        observations=[_reliability_observation(), _reliability_observation()],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_closed_on_unverified_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_unknown_observation_assertion():
+    context = _reliability_context(
+        observations=[_reliability_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_reliability_grader_rejects_cross_attempt_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_cross_run_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_cross_task_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_scenario_type_mismatch():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_action_type_mismatch():
+    context = _reliability_context(
+        observations=[_reliability_observation(action_type="WRONG_ACTION")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_collection_boundary_mismatch():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_reliability_observation()],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_missing_source_evidence_refs():
+    obs = _reliability_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _reliability_context(observations=[obs])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_missing_source_evidence_sha256():
+    obs = _reliability_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _reliability_context(observations=[obs])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("reliability", "2.0.0", _reliability_context())
+
+
+def test_reliability_grader_aggregates_multiple_assertions():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1", scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1", scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING),
+        _reliability_observation(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_reliability_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1"),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1"),
+        _reliability_observation(
+            assertion_id="rel-2",
+            scenario_type=ReliabilityScenarioType.SIGNING_FAILURE,
+            action_type="GOVERNANCE_ACTION",
+            observed_behavior=ReliabilityExpectedBehavior.DEGRADE_GRACEFULLY,
+        ),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: rel-2"
+    assert result.denominator_contribution == 2
+
+
+def test_reliability_grader_mixed_pass_and_none_behavior_in_one_task():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1"),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.AUDIT_STORE_UNAVAILABLE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+        _reliability_assertion(assertion_id="rel-3", scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM, action_type="STREAM_COMPLETION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1"),
+        _reliability_observation(
+            assertion_id="rel-2",
+            scenario_type=ReliabilityScenarioType.AUDIT_STORE_UNAVAILABLE,
+            action_type="GOVERNANCE_ACTION",
+            observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        ),
+        _reliability_observation(
+            assertion_id="rel-3",
+            scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM,
+            action_type="STREAM_COMPLETION",
+            observed_behavior=None,
+        ),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: rel-3"
     assert result.denominator_contribution == 3
