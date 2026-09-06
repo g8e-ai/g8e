@@ -136,12 +136,18 @@ from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLo
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
+from g8e_evals.benchmarks.utility.final_state_loader import FinalStateLoader
+from g8e_evals.benchmarks.utility.final_state_simulator import LocalFinalStateSimulator
+from g8e_evals.benchmarks.utility.ledger_consistency_loader import LedgerConsistencyLoader
+from g8e_evals.benchmarks.utility.ledger_consistency_simulator import LocalLedgerConsistencySimulator
 from g8e_evals.benchmarks.utility.partial_milestone_loader import PartialMilestoneLoader
 from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
 from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
 from g8e_evals.benchmarks.utility.observers import (
     CitationBackedObserverImpl,
     FactualQAObserverImpl,
+    FinalStateObserverImpl,
+    LedgerConsistencyObserverImpl,
     PartialMilestoneObserverImpl,
     ToolSequenceObserverImpl,
 )
@@ -224,6 +230,8 @@ _ASSERTION_FIELD_TO_GRADER_ID: list[tuple[str, str]] = [
     ("factual_qa_assertions", _FACTUAL_QA_GRADER_ID),
     ("citation_backed_assertions", _CITATION_BACKED_GRADER_ID),
     ("partial_milestone_assertions", _PARTIAL_MILESTONE_GRADER_ID),
+    ("expected_final_state_assertions", _FINAL_STATE_GRADER_ID),
+    ("state_fixture", _INDEPENDENT_STATE_GRADER_ID),
 ]
 
 
@@ -2625,7 +2633,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone", "final_state", "ledger_consistency"]
 
 
 def _generate_per_run_key() -> bytes:
@@ -2790,6 +2798,18 @@ async def _run_synthetic_suite(
         loader = PartialMilestoneLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "final_state":
+        if gold_set is None:
+            gold_set = Path("gold_sets/final_state/input_data.jsonl")
+        loader = FinalStateLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "ledger_consistency":
+        if gold_set is None:
+            gold_set = Path("gold_sets/ledger_consistency/input_data.jsonl")
+        loader = LedgerConsistencyLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
         raise EvaluationRunError(f"unknown synthetic suite: {suite}")
 
@@ -2885,6 +2905,13 @@ async def _run_synthetic_suite(
             factual_qa_assertions=task.metadata.factual_qa_assertions,
             citation_backed_assertions=task.metadata.citation_backed_assertions,
             partial_milestone_assertions=task.metadata.partial_milestone_assertions,
+            expected_final_state_assertions=task.metadata.expected_final_state_assertions,
+            state_fixture=task.metadata.state_fixture,
+            initial_state_fixture_hash=(
+                task.metadata.state_fixture.fixture_sha256
+                if task.metadata.state_fixture is not None
+                else None
+            ),
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2916,6 +2943,8 @@ async def _run_synthetic_suite(
     factual_qa_records: list[FactualQAObservation] = []
     citation_backed_records: list[CitationBackedObservation] = []
     partial_milestone_records: list[PartialMilestoneObservation] = []
+    final_state_records: list[FinalStateObservation] = []
+    state_records: list[StateObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
     evidence_index_records: list[EvidenceIndex] = []
 
@@ -3585,6 +3614,76 @@ async def _run_synthetic_suite(
                 obs.observation_id for obs in partial_milestone_observations
             ]
 
+        final_state_observations: list[FinalStateObservation] = []
+        final_state_receipts: list[ReceiptObservation] = []
+        if task.metadata.expected_final_state_assertions:
+            final_state_sim = LocalFinalStateSimulator()
+            final_state_params = params.get("final_state_params", {})
+            final_state_receipt_artifact_id = f"{attempt_id}:final-state-receipt"
+            observer = FinalStateObserverImpl(
+                final_state_sim, final_state_params, "", final_state_receipt_artifact_id,
+            )
+            fs_receipt_obs, final_state_observations = await observer.observe(task_def, attempt)
+            updated_final_state_obs: list[FinalStateObservation] = []
+            for fs_receipt, fs_obs in zip(fs_receipt_obs, final_state_observations, strict=True):
+                fs_receipt_artifact_id = f"{fs_receipt.receipt_id}:receipt"
+                receipt_index, receipt_sha = _persist_receipt_evidence(
+                    fs_receipt,
+                    run_id=run_id, attempt_id=attempt_id,
+                    artifact_id=fs_receipt_artifact_id, report_dir=report_dir,
+                )
+                task_evidence_indices.append(receipt_index)
+                governance_receipt_records.append(fs_receipt)
+                task_receipt_ids.append(fs_receipt.receipt_id)
+                final_state_receipts.append(fs_receipt)
+                updated_final_state_obs.append(fs_obs.model_copy(update={
+                    "source_evidence_refs": [fs_receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            final_state_records.extend(updated_final_state_obs)
+            final_state_observations = updated_final_state_obs
+            attempt.final_state_observation_refs = [
+                obs.observation_id for obs in updated_final_state_obs
+            ]
+
+        state_observations: list[StateObservation] = []
+        if task.metadata.state_fixture:
+            ledger_sim = LocalLedgerConsistencySimulator()
+            ledger_payloads = params.get("ledger_payloads", [])
+            ledger_sim.append_entries(ledger_payloads)
+            if params.get("inject_inconsistency", False):
+                ledger_sim.inject_inconsistency()
+            if params.get("inject_sequence_gap", False):
+                ledger_sim.inject_sequence_gap()
+            ledger_artifact_id = f"{attempt_id}:ledger-consistency-source"
+            ledger_result = ledger_sim.finish()
+            ledger_content = json.dumps(
+                {
+                    "consistent": ledger_result.consistent,
+                    "entry_count": ledger_result.entry_count,
+                    "head_sha256": ledger_result.head_sha256,
+                },
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            ledger_index = _persist_evidence_artifact(
+                ledger_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=ledger_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalLedgerConsistencySimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(ledger_index)
+            fixture_sha256 = task.metadata.state_fixture.fixture_sha256
+            observer = LedgerConsistencyObserverImpl(
+                ledger_sim, fixture_sha256, ledger_index.sha256, ledger_artifact_id,
+            )
+            state_observations = await observer.observe(task_def, attempt)
+            state_records.extend(state_observations)
+            attempt.state_observation_refs = [
+                obs.observation_id for obs in state_observations
+            ]
+
         attempt.ended_at = datetime.now(UTC)
 
         grade_metrics: list[MetricObservation] = []
@@ -4136,6 +4235,58 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.expected_final_state_assertions:
+            grade = grade_deterministically(
+                _FINAL_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=final_state_receipts,
+                    stages=[],
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_FINAL_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.state_fixture:
+            grade = grade_deterministically(
+                _INDEPENDENT_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    state_observations=state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_INDEPENDENT_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -4223,6 +4374,12 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "partial-milestone-observations.jsonl", "w") as f:
         for obs in partial_milestone_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+        for obs in final_state_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "state-observations.jsonl", "w") as f:
+        for obs in state_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "governance-receipts.jsonl", "w") as f:
         for obs in governance_receipt_records:

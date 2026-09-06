@@ -8,26 +8,38 @@
 """Production observer implementations for the synthetic utility eval suites.
 
 These observers interact with a ``LocalToolUseSimulator``,
-``LocalFactualQASimulator``, or ``LocalCitationBackedSimulator`` to
-produce typed observation records that the deterministic graders consume.
-Each observer implements the corresponding observer protocol from
-``g8e_evals.harness`` and produces verified observations bound to source
-evidence.
+``LocalFactualQASimulator``, ``LocalCitationBackedSimulator``,
+``LocalPartialMilestoneSimulator``, ``LocalFinalStateSimulator``, or
+``LocalLedgerConsistencySimulator`` to produce typed observation records
+that the deterministic graders consume.  Each observer implements the
+corresponding observer protocol from ``g8e_evals.harness`` and produces
+verified observations bound to source evidence.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from g8e.receipts import verify_action_receipt_signature
+
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
+from g8e_evals.benchmarks.utility.final_state_simulator import LocalFinalStateSimulator
+from g8e_evals.benchmarks.utility.ledger_consistency_simulator import (
+    LocalLedgerConsistencySimulator,
+)
 from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
 from g8e_evals.schema import (
     AttemptRecord,
     CitationBackedObservation,
     FactualQAObservation,
+    FinalStateObservation,
     PartialMilestoneObservation,
+    ReceiptObservation,
+    StateEvidenceKind,
+    StateObservation,
+    StateValue,
     TaskDefinition,
     ToolSequenceObservation,
     VerificationStatus,
@@ -229,6 +241,144 @@ class PartialMilestoneObserverImpl:
                 observed_label=observed_label,
                 observed_order=observed_order,
                 collection_boundary=assertion.collection_boundary,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=_sha,
+                verification_status=_status,
+            ))
+
+        return observations
+
+
+class FinalStateObserverImpl:
+    """Observes final-state transitions and produces typed observations.
+
+    The observer processes each final-state assertion through the
+    ``LocalFinalStateSimulator``, produces a ``ReceiptObservation`` from
+    the signed receipt (with signature verification against the simulator's
+    assessed public key), and produces a ``FinalStateObservation`` recording
+    the state-root-before and state-root-after values bound to the source
+    receipt.
+
+    The ``scenario_params`` mapping carries per-assertion state-root-before
+    and state-root-after values keyed by assertion ID, so the observer can
+    produce both changed and unchanged state-root transitions from the
+    scenario dataset without embedding them in typed assertion fields.
+    """
+
+    def __init__(
+        self,
+        simulator: LocalFinalStateSimulator,
+        scenario_params: dict[str, dict[str, str]],
+        evidence_sha: str,
+        evidence_ref: str,
+    ) -> None:
+        self._simulator = simulator
+        self._scenario_params = scenario_params
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[list[ReceiptObservation], list[FinalStateObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        final_state_observations: list[FinalStateObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
+
+        for assertion in task.expected_final_state_assertions:
+            params = self._scenario_params.get(assertion.assertion_id, {})
+            state_root_before = params.get("state_root_before", "root-before-0")
+            state_root_after = params.get("state_root_after", "root-after-0")
+            result = self._simulator.process_action(
+                action_type=assertion.action_type,
+                state_root_before=state_root_before,
+                state_root_after=state_root_after,
+            )
+            verified = verify_action_receipt_signature(
+                result.receipt, self._simulator.public_key_hex
+            )
+            receipt_obs = ReceiptObservation(
+                receipt_id=f"{attempt.attempt_id}:final-state:{assertion.assertion_id}:receipt",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                transaction_id=result.transaction_id,
+                action_type=assertion.action_type,
+                primary=True,
+                verified=verified,
+                action_receipt=result.receipt,
+            )
+            receipt_observations.append(receipt_obs)
+            final_state_observations.append(FinalStateObservation(
+                observation_id=f"{attempt.attempt_id}:final-state:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                state_root_before=result.state_root_before,
+                state_root_after=result.state_root_after,
+                source_receipt_id=receipt_obs.receipt_id,
+                verification_status=_status,
+            ))
+
+        if not receipt_observations:
+            raise ValueError("final-state observer produced no receipt observations")
+        return receipt_observations, final_state_observations
+
+
+class LedgerConsistencyObserverImpl:
+    """Observes ledger-consistency state and produces typed observations.
+
+    The observer reads the ledger state from the ``LocalLedgerConsistencySimulator``
+    and produces a ``StateObservation`` for each assertion on the task's
+    state fixture.  The observation captures the ledger consistency, entry
+    count, and head hash at the declared collection boundary, bound to
+    source evidence.
+    """
+
+    def __init__(
+        self,
+        simulator: LocalLedgerConsistencySimulator,
+        fixture_sha256: str,
+        evidence_sha: str,
+        evidence_ref: str,
+    ) -> None:
+        self._simulator = simulator
+        self._fixture_sha256 = fixture_sha256
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> list[StateObservation]:
+        result = self._simulator.finish()
+        observations: list[StateObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
+
+        if task.state_fixture is None:
+            return observations
+        for assertion in task.state_fixture.assertions:
+            observed = StateValue(
+                kind=StateEvidenceKind.LEDGER_CONSISTENCY,
+                consistent=result.consistent,
+                entry_count=result.entry_count,
+                head_sha256=result.head_sha256,
+            )
+            observations.append(StateObservation(
+                observation_id=f"{attempt.attempt_id}:ledger-consistency:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                fixture_sha256=self._fixture_sha256,
+                collection_boundary=assertion.collection_boundary,
+                target=assertion.target,
+                observed=observed,
                 collected_at=datetime.now(UTC),
                 source_evidence_refs=[self._evidence_ref],
                 source_evidence_sha256=_sha,
