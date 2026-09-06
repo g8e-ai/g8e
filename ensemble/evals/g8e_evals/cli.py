@@ -83,6 +83,7 @@ from g8e_evals.schema import (
     FactualQAObservation,
     CitationBackedObservation,
     PartialMilestoneObservation,
+    ReliabilityObservation,
     StateObservation,
     StageObservation,
     TaskDefinition,
@@ -152,6 +153,9 @@ from g8e_evals.benchmarks.utility.observers import (
     ToolSequenceObserverImpl,
 )
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
+from g8e_evals.benchmarks.reliability.loader import ReliabilityLoader
+from g8e_evals.benchmarks.reliability.simulator import LocalReliabilitySimulator
+from g8e_evals.benchmarks.reliability.observers import ReliabilityObserverImpl
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
@@ -198,6 +202,7 @@ _TOOL_SEQUENCE_GRADER_ID = "tool_sequence"
 _FACTUAL_QA_GRADER_ID = "factual_qa"
 _CITATION_BACKED_GRADER_ID = "citation_backed"
 _PARTIAL_MILESTONE_GRADER_ID = "partial_milestone"
+_RELIABILITY_GRADER_ID = "reliability"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -230,6 +235,7 @@ _ASSERTION_FIELD_TO_GRADER_ID: list[tuple[str, str]] = [
     ("factual_qa_assertions", _FACTUAL_QA_GRADER_ID),
     ("citation_backed_assertions", _CITATION_BACKED_GRADER_ID),
     ("partial_milestone_assertions", _PARTIAL_MILESTONE_GRADER_ID),
+    ("reliability_assertions", _RELIABILITY_GRADER_ID),
     ("expected_final_state_assertions", _FINAL_STATE_GRADER_ID),
     ("state_fixture", _INDEPENDENT_STATE_GRADER_ID),
 ]
@@ -2633,7 +2639,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone", "final_state", "ledger_consistency"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone", "final_state", "ledger_consistency", "reliability"]
 
 
 def _generate_per_run_key() -> bytes:
@@ -2810,6 +2816,12 @@ async def _run_synthetic_suite(
         loader = LedgerConsistencyLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "reliability":
+        if gold_set is None:
+            gold_set = Path("gold_sets/reliability/input_data.jsonl")
+        loader = ReliabilityLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
         raise EvaluationRunError(f"unknown synthetic suite: {suite}")
 
@@ -2905,6 +2917,7 @@ async def _run_synthetic_suite(
             factual_qa_assertions=task.metadata.factual_qa_assertions,
             citation_backed_assertions=task.metadata.citation_backed_assertions,
             partial_milestone_assertions=task.metadata.partial_milestone_assertions,
+            reliability_assertions=task.metadata.reliability_assertions,
             expected_final_state_assertions=task.metadata.expected_final_state_assertions,
             state_fixture=task.metadata.state_fixture,
             initial_state_fixture_hash=(
@@ -2943,6 +2956,7 @@ async def _run_synthetic_suite(
     factual_qa_records: list[FactualQAObservation] = []
     citation_backed_records: list[CitationBackedObservation] = []
     partial_milestone_records: list[PartialMilestoneObservation] = []
+    reliability_records: list[ReliabilityObservation] = []
     final_state_records: list[FinalStateObservation] = []
     state_records: list[StateObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
@@ -3614,6 +3628,41 @@ async def _run_synthetic_suite(
                 obs.observation_id for obs in partial_milestone_observations
             ]
 
+        reliability_observations: list[ReliabilityObservation] = []
+        if task.metadata.reliability_assertions:
+            reliability_sim = LocalReliabilitySimulator()
+            reliability_params = params.get("reliability_params", {})
+            reliability_artifact_id = f"{attempt_id}:reliability-source"
+            reliability_content = json.dumps(
+                {"reliability_params": reliability_params},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            reliability_index = _persist_evidence_artifact(
+                reliability_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=reliability_artifact_id,
+                schema_ref="g8e_evals.benchmarks.reliability.LocalReliabilitySimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(reliability_index)
+            observer = ReliabilityObserverImpl(
+                reliability_sim, reliability_params,
+                reliability_index.sha256, reliability_artifact_id,
+            )
+            reliability_observations = await observer.observe(task_def, attempt)
+            updated_reliability_obs: list[ReliabilityObservation] = []
+            for rel_obs in reliability_observations:
+                updated_reliability_obs.append(rel_obs.model_copy(update={
+                    "source_evidence_refs": [reliability_artifact_id],
+                    "source_evidence_sha256": reliability_index.sha256,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            reliability_records.extend(updated_reliability_obs)
+            reliability_observations = updated_reliability_obs
+            attempt.reliability_observation_refs = [
+                obs.observation_id for obs in updated_reliability_obs
+            ]
+
         final_state_observations: list[FinalStateObservation] = []
         final_state_receipts: list[ReceiptObservation] = []
         if task.metadata.expected_final_state_assertions:
@@ -4235,6 +4284,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.reliability_assertions:
+            grade = grade_deterministically(
+                _RELIABILITY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    reliability_observations=reliability_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_RELIABILITY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
         if task.metadata.expected_final_state_assertions:
             grade = grade_deterministically(
                 _FINAL_STATE_GRADER_ID,
@@ -4374,6 +4449,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "partial-milestone-observations.jsonl", "w") as f:
         for obs in partial_milestone_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "reliability-observations.jsonl", "w") as f:
+        for obs in reliability_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "final-state-observations.jsonl", "w") as f:
         for obs in final_state_records:

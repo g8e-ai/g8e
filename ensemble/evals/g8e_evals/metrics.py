@@ -730,6 +730,22 @@ _DEFAULT_DEFINITIONS: list[MetricDefinition] = [
         evidence_requirements=["partial_milestone_observation"],
         release_threshold="Practical threshold: 1.0; any missed or out-of-order milestone is a release blocker.",
     ),
+    MetricDefinition(
+        metric_id="reliability",
+        metric_version=_GRADER_VERSION,
+        definition="Proportion of declared reliability failure-scenario assertions where the system exhibited the expected handling behavior for the declared scenario type and evidence was preserved when required. An observation with no observed behavior means the system did not handle the failure, which is always a measured failure.",
+        unit="proportion",
+        direction=MetricDirection.HIGHER_IS_BETTER,
+        grader_class=_DETERMINISTIC,
+        grader_ref=_grader_ref("reliability"),
+        eligible_population="All attempts with declared reliability assertions.",
+        denominator="Total number of declared reliability assertions.",
+        missing_value_policy=MissingValuePolicy.EXCLUDE,
+        aggregation=AggregationMethod.PROPORTION,
+        uncertainty_method="Task-cluster bootstrap interval over per-assertion proportions.",
+        evidence_requirements=["reliability_observation"],
+        release_threshold="Practical threshold: 1.0; any reliability handling failure is a release blocker.",
+    ),
 ]
 
 
