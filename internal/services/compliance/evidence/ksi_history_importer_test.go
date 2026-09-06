@@ -15,6 +15,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 type ksiHistoryImporterFixture struct {
@@ -34,7 +35,7 @@ func newKSIHistoryImporterFixture(t *testing.T) *ksiHistoryImporterFixture {
 			Results: []compliance.KSIResult{{
 				ID:                  "KSI-CMT-01",
 				Status:              compliance.KSIStatusNotSatisfied,
-				Evidence:            []compliance.Evidence{{Type: compliance.EvidenceTypeLedgerCommit, Reference: "commit-1", Description: "first captured failure"}},
+				Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeLedgerCommit), ArtifactId: "commit-1"}},
 				LastValidatedUnixMs: 1_699_999_999_000,
 				MethodCount:         2,
 			}},
@@ -45,7 +46,7 @@ func newKSIHistoryImporterFixture(t *testing.T) *ksiHistoryImporterFixture {
 				Results: []compliance.KSIResult{{
 					ID:                  "KSI-CMT-01",
 					Status:              compliance.KSIStatusSatisfied,
-					Evidence:            []compliance.Evidence{{Type: compliance.EvidenceTypeReceiptID, Reference: "transaction-1"}},
+					Evidence:            []*compliancev1.ComplianceEvidenceReference{{ArtifactType: string(compliance.EvidenceTypeReceiptID), ArtifactId: "transaction-1"}},
 					LastValidatedUnixMs: 1_700_000_099_000,
 					MethodCount:         2,
 				}},
@@ -184,9 +185,9 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 			f.snapshots[0].Results[0].LastValidatedUnixMs = f.snapshots[0].EvaluatedAtMs + 1
 		}},
 		{name: "invalid evidence type", mutate: func(f *ksiHistoryImporterFixture) {
-			f.snapshots[0].Results[0].Evidence[0].Type = compliance.EvidenceType("unknown")
+			f.snapshots[0].Results[0].Evidence[0].ArtifactType = "unknown"
 		}},
-		{name: "empty evidence reference", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].Reference = "" }},
+		{name: "empty evidence reference", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ArtifactId = "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

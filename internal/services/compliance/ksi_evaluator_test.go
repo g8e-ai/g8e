@@ -20,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // mockAuditReader is a mock implementation of AuditEvidenceReader for unit testing.
@@ -165,7 +166,7 @@ func TestKSIEvaluator_RegisterMethods(t *testing.T) {
 
 	assert.Equal(t, 0, eval.MethodCount("KSI-CMT-01"))
 
-	method := func(ctx context.Context) (bool, []Evidence, error) {
+	method := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return true, nil, nil
 	}
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", method))
@@ -181,7 +182,7 @@ func TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	err := eval.RegisterMethods("KSI-FAKE-99", func(ctx context.Context) (bool, []Evidence, error) {
+	err := eval.RegisterMethods("KSI-FAKE-99", func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return true, nil, nil
 	})
 	require.Error(t, err)
@@ -279,11 +280,11 @@ func TestKSIEvaluator_Evaluate_MethodError_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	errMethod := func(ctx context.Context) (bool, []Evidence, error) {
+	errMethod := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return false, nil, errors.New("simulated storage failure")
 	}
-	okMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
+	okMethod := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, "tx-1")}, nil
 	}
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", errMethod, okMethod))
@@ -305,11 +306,11 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	falseMethod := func(ctx context.Context) (bool, []Evidence, error) {
+	falseMethod := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return false, nil, nil
 	}
-	trueMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "root"}}, nil
+	trueMethod := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeMerkleRoot, "root")}, nil
 	}
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", falseMethod, trueMethod))
@@ -375,8 +376,8 @@ func TestKSIEvaluator_Evaluate_ClassB_LowerThreshold(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 
 	// Register only 1 method for KSI-CMT-01
-	okMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
+	okMethod := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, "tx-1")}, nil
 	}
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", okMethod))
 

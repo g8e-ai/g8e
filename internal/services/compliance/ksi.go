@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // KSICategory represents a FedRAMP 20x KSI category (CR26).
@@ -70,14 +71,6 @@ const (
 	EvidenceTypeMerkleRoot   EvidenceType = "merkle_root"
 )
 
-// Evidence points to a specific artifact in g8e's audit store, ledger,
-// or LFAA execution vault that supports a KSI evaluation result.
-type Evidence struct {
-	Type        EvidenceType `json:"type"`
-	Reference   string       `json:"reference"`
-	Description string       `json:"description,omitempty"`
-}
-
 // AutomatedMethod describes a single automated method used to evaluate a KSI.
 type AutomatedMethod struct {
 	Name        string `json:"name"`
@@ -86,31 +79,31 @@ type AutomatedMethod struct {
 
 // KSIMethod is a function that evaluates a single KSI against live g8e state.
 // It returns whether the KSI is satisfied, supporting evidence, or an error.
-type KSIMethod func(ctx context.Context) (bool, []Evidence, error)
+type KSIMethod func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error)
 
 // KSI represents a single Key Security Indicator from the FedRAMP 20x program.
 type KSI struct {
-	ID                  string               `json:"id"`
-	Title               string               `json:"title"`
-	Category            KSICategory          `json:"category"`
-	Description         string               `json:"description,omitempty"`
-	ControlRefs         []string             `json:"control_refs"`
-	OverlayRefs         []string             `json:"overlay_refs,omitempty"`
-	ApplicableClasses   []CertificationClass `json:"applicable_classes"`
-	ValidationCycle     ValidationCycle      `json:"validation_cycle"`
-	Status              KSIStatus            `json:"status"`
-	AutomatedMethods    []AutomatedMethod    `json:"automated_methods"`
-	Evidence            []Evidence           `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64                `json:"last_validated_unix_ms,omitempty"`
+	ID                  string                                      `json:"id"`
+	Title               string                                      `json:"title"`
+	Category            KSICategory                                 `json:"category"`
+	Description         string                                      `json:"description,omitempty"`
+	ControlRefs         []string                                    `json:"control_refs"`
+	OverlayRefs         []string                                    `json:"overlay_refs,omitempty"`
+	ApplicableClasses   []CertificationClass                        `json:"applicable_classes"`
+	ValidationCycle     ValidationCycle                             `json:"validation_cycle"`
+	Status              KSIStatus                                   `json:"status"`
+	AutomatedMethods    []AutomatedMethod                           `json:"automated_methods"`
+	Evidence            []*compliancev1.ComplianceEvidenceReference `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms,omitempty"`
 }
 
 // KSIResult is the evaluation result for a single KSI at a point in time.
 type KSIResult struct {
-	ID                  string     `json:"id"`
-	Status              KSIStatus  `json:"status"`
-	Evidence            []Evidence `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64      `json:"last_validated_unix_ms"`
-	MethodCount         int        `json:"method_count"`
+	ID                  string                                      `json:"id"`
+	Status              KSIStatus                                   `json:"status"`
+	Evidence            []*compliancev1.ComplianceEvidenceReference `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms"`
+	MethodCount         int                                         `json:"method_count"`
 }
 
 // KSIResultSet is a collection of KSI evaluation results for a target class.

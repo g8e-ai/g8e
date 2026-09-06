@@ -24,20 +24,24 @@ type ImporterError struct {
 	Error    string `json:"error"`
 }
 
+type runBoundEvidenceImporter interface {
+	sourceRunID() string
+}
+
 // EvidenceGraphReport is the typed result of building and validating an
 // evidence graph from one or more importers. It captures the graph's
 // validity, node counts by type and scope, validation failures, and any
 // importer errors encountered during construction.
 type EvidenceGraphReport struct {
-	VerifierID      string           `json:"verifier_id"`
-	VerifierVersion string           `json:"verifier_version"`
-	Valid           bool             `json:"valid"`
-	NodeCount       int              `json:"node_count"`
-	NodesByType     map[string]int   `json:"nodes_by_type"`
-	NodesByScope    map[string]int   `json:"nodes_by_scope"`
-	Failures        []GraphFailure   `json:"failures"`
-	ImporterErrors  []ImporterError  `json:"importer_errors"`
-	VerifiedAt      time.Time        `json:"verified_at"`
+	VerifierID      string          `json:"verifier_id"`
+	VerifierVersion string          `json:"verifier_version"`
+	Valid           bool            `json:"valid"`
+	NodeCount       int             `json:"node_count"`
+	NodesByType     map[string]int  `json:"nodes_by_type"`
+	NodesByScope    map[string]int  `json:"nodes_by_scope"`
+	Failures        []GraphFailure  `json:"failures"`
+	ImporterErrors  []ImporterError `json:"importer_errors"`
+	VerifiedAt      time.Time       `json:"verified_at"`
 }
 
 // BuildAndValidateGraph constructs an evidence graph from the given
@@ -69,8 +73,13 @@ func BuildAndValidateGraph(
 		}
 		nodes, err := importer.Import(ctx)
 		if err != nil {
+			runID := ""
+			if runBoundImporter, ok := importer.(runBoundEvidenceImporter); ok {
+				runID = runBoundImporter.sourceRunID()
+			}
 			report.ImporterErrors = append(report.ImporterErrors, ImporterError{
 				SourceID: importer.SourceID(),
+				RunID:    runID,
 				Error:    err.Error(),
 			})
 			continue

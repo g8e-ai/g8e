@@ -58,6 +58,13 @@ func (i *DemoRunImporter) SourceID() string {
 	return "demo-run"
 }
 
+func (i *DemoRunImporter) sourceRunID() string {
+	if i == nil {
+		return ""
+	}
+	return i.runID
+}
+
 // Import reads the demo run evidence and yields EvidenceNode records.
 func (i *DemoRunImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
 	if i.reader == nil || i.source == nil || !ValidPathElement(i.runID) {

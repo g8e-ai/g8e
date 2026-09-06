@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // oscalTestCatalog returns a minimal valid KSICatalog for OSCAL tests.
@@ -63,9 +64,9 @@ func oscalTestResultSet() *KSIResultSet {
 				Status:              KSIStatusSatisfied,
 				MethodCount:         2,
 				LastValidatedUnixMs: time.Now().UnixMilli(),
-				Evidence: []Evidence{
-					{Type: EvidenceTypeExecutionID, Reference: "events:42", Description: "Audit events exist"},
-					{Type: EvidenceTypeLedgerCommit, Reference: "commit-abc", Description: "Ledger commits exist"},
+				Evidence: []*compliancev1.ComplianceEvidenceReference{
+					newKSIEvidenceReference(EvidenceTypeExecutionID, "events:42"),
+					newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-abc"),
 				},
 			},
 			{
@@ -73,8 +74,8 @@ func oscalTestResultSet() *KSIResultSet {
 				Status:              KSIStatusNotSatisfied,
 				MethodCount:         1,
 				LastValidatedUnixMs: time.Now().UnixMilli(),
-				Evidence: []Evidence{
-					{Type: EvidenceTypeLedgerCommit, Reference: "commit-def", Description: "Chain broken"},
+				Evidence: []*compliancev1.ComplianceEvidenceReference{
+					newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-def"),
 				},
 			},
 		},

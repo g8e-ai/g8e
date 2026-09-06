@@ -265,8 +265,8 @@ func TestKSIEvaluator_Integration_EmptyStoresFailClosed(t *testing.T) {
 func firstEvidenceRef(t *testing.T, res KSIResult, evidenceType EvidenceType) string {
 	t.Helper()
 	for _, ev := range res.Evidence {
-		if ev.Type == evidenceType {
-			return ev.Reference
+		if ev.GetArtifactType() == string(evidenceType) {
+			return ev.GetArtifactId()
 		}
 	}
 	t.Fatalf("no evidence of type %s in result %s", evidenceType, res.ID)

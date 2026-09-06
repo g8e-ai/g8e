@@ -73,8 +73,8 @@ func TestPhase0KSI_ReceiptSignatureMethodAcceptsNonemptyInvalidSignature(t *test
 
 // TestPhase0KSI_ReceiptSignatureMethodDoesNotVerifyAgainstTrustedKey documents
 // that the current method has no access to a trusted public key, no signature
-// algorithm binding, and no receipt-hash binding. The method signature is
-// func(ctx) (bool, []Evidence, error) with no key material parameter, so it
+// algorithm binding, and no receipt-hash binding. The method returns
+// protocol-owned evidence references but has no key material parameter, so it
 // cannot perform cryptographic verification even if it wanted to.
 func TestPhase0KSI_ReceiptSignatureMethodDoesNotVerifyAgainstTrustedKey(t *testing.T) {
 	// The EvaluatorDeps struct carries Audit, Ledger, and Commitments readers.
@@ -102,14 +102,14 @@ func TestPhase0KSI_ReceiptSignatureMethodDoesNotVerifyAgainstTrustedKey(t *testi
 	satisfied, evidence, err := mla08Methods[0](ctx)
 	require.NoError(t, err)
 
-	// The method returns satisfied=true with a description claiming "valid
-	// signatures" even though no key was consulted.
+	// The method returns satisfied=true with a receipt evidence reference even
+	// though no key was consulted.
 	assert.True(t, satisfied,
 		phase0RegressionBeforeFix+
 			": method returns satisfied without any trusted-key verification")
 	if len(evidence) > 0 {
-		assert.Contains(t, evidence[0].Description, "valid signatures",
+		assert.Equal(t, string(EvidenceTypeReceiptID), evidence[0].GetArtifactType(),
 			phase0RegressionBeforeFix+
-				": evidence description claims valid signatures without cryptographic verification")
+				": receipt evidence is accepted without cryptographic verification")
 	}
 }

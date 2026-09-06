@@ -141,7 +141,7 @@ func validateKSIHistorySnapshot(resultSet compliance.KSIResultSet, class complia
 		}
 		seen[result.ID] = struct{}{}
 		for _, evidence := range result.Evidence {
-			if !validLegacyEvidenceType(evidence.Type) || evidence.Reference == "" {
+			if evidence == nil || !validKSIEvidenceArtifactType(evidence.GetArtifactType()) || evidence.GetArtifactId() == "" {
 				return fmt.Errorf("%w: KSI result evidence binding is incomplete", constants.ErrEvidenceArtifactMalformed)
 			}
 		}
@@ -167,8 +167,8 @@ func validKSIStatus(status compliance.KSIStatus) bool {
 	}
 }
 
-func validLegacyEvidenceType(evidenceType compliance.EvidenceType) bool {
-	switch evidenceType {
+func validKSIEvidenceArtifactType(artifactType string) bool {
+	switch compliance.EvidenceType(artifactType) {
 	case compliance.EvidenceTypeReceiptID, compliance.EvidenceTypeLedgerCommit, compliance.EvidenceTypeExecutionID, compliance.EvidenceTypeMerkleRoot:
 		return true
 	default:

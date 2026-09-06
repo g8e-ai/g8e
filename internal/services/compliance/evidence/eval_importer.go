@@ -177,6 +177,13 @@ func (i *EvalBundleImporter) SourceID() string {
 	return "eval-bundle"
 }
 
+func (i *EvalBundleImporter) sourceRunID() string {
+	if i == nil {
+		return ""
+	}
+	return i.runID
+}
+
 func EvalScopeID(suiteID string) string {
 	return constants.EvalScopePrefix + suiteID
 }

@@ -572,6 +572,23 @@ func TestComplianceDemoRunVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) 
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestComplianceEvidenceGraphVerifyCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceEvidenceGraphVerifyCmdWithConfig(
+		failingFileSvcFactory(errFactory),
+		func(string) evidence.ProvenanceSource {
+			panic("provenance source should not be created when fileSvcFactory fails")
+		},
+	)
+	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 func TestComplianceReleaseEvidenceCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceReleaseEvidenceCmdWithConfig(
 		failingFileSvcFactory(errFactory),

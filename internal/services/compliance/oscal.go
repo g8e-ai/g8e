@@ -293,9 +293,12 @@ func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSC
 		// Build observation with evidence anchors.
 		var relevantEvidence []OSCALRelevantEvidence
 		for _, ev := range res.Evidence {
+			if ev == nil {
+				return nil, fmt.Errorf("%w: result %s contains nil evidence", constants.ErrValidationFailed, res.ID)
+			}
 			relevantEvidence = append(relevantEvidence, OSCALRelevantEvidence{
-				Href:        "#" + string(ev.Type) + ":" + ev.Reference,
-				Description: ev.Description,
+				Href:        "#" + ev.GetArtifactType() + ":" + ev.GetArtifactId(),
+				Description: ev.GetArtifactType(),
 			})
 		}
 

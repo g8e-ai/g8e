@@ -15,6 +15,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // AuditEvidenceReader provides read-only access to audit store evidence
@@ -141,7 +142,7 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 		}
 
 		allSatisfied := true
-		var allEvidence []Evidence
+		var allEvidence []*compliancev1.ComplianceEvidenceReference
 		for _, method := range registered {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -149,11 +150,7 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass) (
 			satisfied, evidence, err := method(ctx)
 			if err != nil {
 				allSatisfied = false
-				allEvidence = append(allEvidence, Evidence{
-					Type:        EvidenceTypeExecutionID,
-					Reference:   ksiID,
-					Description: fmt.Sprintf("method error: %v", err),
-				})
+				allEvidence = append(allEvidence, newKSIEvidenceReference(EvidenceTypeExecutionID, ksiID))
 				continue
 			}
 			if !satisfied {
@@ -225,6 +222,10 @@ func (r *KSIResultSet) Validate(catalog *KSICatalog) error {
 	return nil
 }
 
+func newKSIEvidenceReference(evidenceType EvidenceType, artifactID string) *compliancev1.ComplianceEvidenceReference {
+	return &compliancev1.ComplianceEvidenceReference{ArtifactId: artifactID, ArtifactType: string(evidenceType)}
+}
+
 // DefaultMethods returns g8e's built-in automated KSIMethod closures for
 // KSIs that g8e can evaluate from its audit store, ledger, and commitment
 // ledger. KSIs not automatable by g8e (e.g. training-related CED KSIs) are
@@ -235,7 +236,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 
 	// Reusable method factories.
 
-	auditEventsExist := func(ctx context.Context) (bool, []Evidence, error) {
+	auditEventsExist := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
@@ -246,14 +247,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(events) == 0 {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeExecutionID,
-			Reference:   fmt.Sprintf("events:%d", len(events)),
-			Description: "Audit store has recorded events",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeExecutionID, fmt.Sprintf("events:%d", len(events)))}, nil
 	}
 
-	receiptsExist := func(ctx context.Context) (bool, []Evidence, error) {
+	receiptsExist := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
@@ -264,14 +261,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(receipts) == 0 {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeReceiptID,
-			Reference:   receipts[0].TransactionID,
-			Description: "Signed action receipt exists in audit store",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, receipts[0].TransactionID)}, nil
 	}
 
-	receiptsHaveSignatures := func(ctx context.Context) (bool, []Evidence, error) {
+	receiptsHaveSignatures := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
@@ -284,21 +277,13 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		}
 		for _, r := range receipts {
 			if r.Signature == "" || r.SignerKeyID == "" {
-				return false, []Evidence{{
-					Type:        EvidenceTypeReceiptID,
-					Reference:   r.TransactionID,
-					Description: "Receipt missing signature or signer key ID",
-				}}, nil
+				return false, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, r.TransactionID)}, nil
 			}
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeReceiptID,
-			Reference:   receipts[0].TransactionID,
-			Description: "All sampled receipts have valid signatures",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, receipts[0].TransactionID)}, nil
 	}
 
-	fileMutationsTracked := func(ctx context.Context) (bool, []Evidence, error) {
+	fileMutationsTracked := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
@@ -309,14 +294,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(mutations) == 0 {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeExecutionID,
-			Reference:   fmt.Sprintf("mutations:%d", len(mutations)),
-			Description: "File mutations are tracked in audit store",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeExecutionID, fmt.Sprintf("mutations:%d", len(mutations)))}, nil
 	}
 
-	merkleRootExists := func(ctx context.Context) (bool, []Evidence, error) {
+	merkleRootExists := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Ledger == nil {
 			return false, nil, nil
 		}
@@ -327,14 +308,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if root == "" {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeMerkleRoot,
-			Reference:   root,
-			Description: "Ledger Merkle root is non-empty",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeMerkleRoot, root)}, nil
 	}
 
-	ledgerCommitsExist := func(ctx context.Context) (bool, []Evidence, error) {
+	ledgerCommitsExist := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Ledger == nil {
 			return false, nil, nil
 		}
@@ -345,14 +322,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(commits) == 0 {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeLedgerCommit,
-			Reference:   commits[0].CommitHash,
-			Description: "Ledger has committed entries",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, commits[0].CommitHash)}, nil
 	}
 
-	commitmentChainExists := func(ctx context.Context) (bool, []Evidence, error) {
+	commitmentChainExists := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Commitments == nil {
 			return false, nil, nil
 		}
@@ -363,14 +336,10 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(commitments) == 0 {
 			return false, nil, nil
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeLedgerCommit,
-			Reference:   commitments[0].Hash,
-			Description: "Commitment ledger has chained entries",
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, commitments[0].Hash)}, nil
 	}
 
-	commitmentChainIntact := func(ctx context.Context) (bool, []Evidence, error) {
+	commitmentChainIntact := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Commitments == nil {
 			return false, nil, nil
 		}
@@ -384,27 +353,15 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		for i, c := range commitments {
 			if i == 0 {
 				if c.PriorCommitmentHash != "" {
-					return false, []Evidence{{
-						Type:        EvidenceTypeLedgerCommit,
-						Reference:   c.Hash,
-						Description: "First commitment has non-empty prior hash",
-					}}, nil
+					return false, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, c.Hash)}, nil
 				}
 				continue
 			}
 			if c.PriorCommitmentHash != commitments[i-1].Hash {
-				return false, []Evidence{{
-					Type:        EvidenceTypeLedgerCommit,
-					Reference:   c.Hash,
-					Description: "Commitment chain broken: prior hash mismatch",
-				}}, nil
+				return false, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, c.Hash)}, nil
 			}
 		}
-		return true, []Evidence{{
-			Type:        EvidenceTypeLedgerCommit,
-			Reference:   commitments[len(commitments)-1].Hash,
-			Description: fmt.Sprintf("Commitment chain intact (%d entries)", len(commitments)),
-		}}, nil
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, commitments[len(commitments)-1].Hash)}, nil
 	}
 
 	// Bind methods to KSIs g8e can evaluate.
