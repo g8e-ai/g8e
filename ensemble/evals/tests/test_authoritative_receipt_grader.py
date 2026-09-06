@@ -127,6 +127,10 @@ from g8e_evals.schema import (
     ReliabilityObservation,
     ReliabilityScenarioType,
     ReliabilityExpectedBehavior,
+    EconomicsPerformanceAssertion,
+    EconomicsPerformanceObservation,
+    PerformanceMetricKind,
+    TaskComplexity,
     VerificationStatus,
     GraderReference,
 )
@@ -11839,4 +11843,473 @@ def test_reliability_grader_mixed_pass_and_none_behavior_in_one_task():
     assert result.value == pytest.approx(2 / 3)
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.failure == "reliability assertion failed: rel-3"
+    assert result.denominator_contribution == 3
+
+
+# ---------------------------------------------------------------------------
+# EconomicsPerformanceGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_ECONOMICS_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _economics_assertion(
+    *,
+    assertion_id: str = "economics-1",
+    metric_kind: PerformanceMetricKind = PerformanceMetricKind.PROVIDER_CHARGE,
+    role: str = "",
+    action_class: str = "CHAT_COMPLETION",
+    task_complexity: TaskComplexity = TaskComplexity.SIMPLE,
+    expected_value: float = 0.002,
+    tolerance: float = 0.001,
+    unit: str = "usd",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> EconomicsPerformanceAssertion:
+    return EconomicsPerformanceAssertion(
+        assertion_id=assertion_id,
+        metric_kind=metric_kind,
+        role=role,
+        action_class=action_class,
+        task_complexity=task_complexity,
+        expected_value=expected_value,
+        tolerance=tolerance,
+        unit=unit,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _economics_observation(
+    *,
+    assertion_id: str = "economics-1",
+    metric_kind: PerformanceMetricKind = PerformanceMetricKind.PROVIDER_CHARGE,
+    role: str = "",
+    action_class: str = "CHAT_COMPLETION",
+    task_complexity: TaskComplexity = TaskComplexity.SIMPLE,
+    observed_value: float | None = 0.002,
+    unit: str = "usd",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> EconomicsPerformanceObservation:
+    return EconomicsPerformanceObservation(
+        observation_id=f"economics-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        metric_kind=metric_kind,
+        role=role,
+        action_class=action_class,
+        task_complexity=task_complexity,
+        observed_value=observed_value,
+        unit=unit,
+        collection_boundary=collection_boundary,
+        collected_at=_ECONOMICS_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _economics_context(
+    *,
+    assertions: list[EconomicsPerformanceAssertion] | None = None,
+    observations: list[EconomicsPerformanceObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="economics_performance",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="ECONOMICS",
+        compatible_arms=[Arm.DIRECT],
+        economics_performance_assertions=assertions if assertions is not None else [_economics_assertion()],
+        graders=[GraderReference(grader_id="economics_performance", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        economics_performance_observations=observations if observations is not None else [_economics_observation()],
+    )
+
+
+def test_economics_performance_grader_verifies_value_within_tolerance():
+    result = grade_deterministically("economics_performance", "1.0.0", _economics_context())
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "economics-obs-economics-1" in result.evidence_refs
+    assert "evidence-economics-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_economics_performance_grader_fails_when_value_outside_tolerance():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.01)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: economics-1"
+
+
+def test_economics_performance_grader_fails_when_observed_value_is_none():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=None)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_passes_at_lower_tolerance_boundary():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.001)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_passes_at_upper_tolerance_boundary():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.003)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_fails_closed_on_missing_assertions():
+    context = _economics_context(assertions=[])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "economics-performance assertions are missing"
+
+
+def test_economics_performance_grader_fails_closed_on_missing_observation():
+    context = _economics_context(observations=[])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: economics-1"
+
+
+def test_economics_performance_grader_fails_closed_on_duplicate_observations():
+    context = _economics_context(
+        observations=[_economics_observation(), _economics_observation()],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_fails_closed_on_unverified_observation():
+    context = _economics_context(
+        observations=[_economics_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unknown_observation_assertion():
+    context = _economics_context(
+        observations=[_economics_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_economics_performance_grader_rejects_cross_attempt_observation():
+    context = _economics_context(
+        observations=[_economics_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_cross_run_observation():
+    context = _economics_context(
+        observations=[_economics_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_cross_task_observation():
+    context = _economics_context(
+        observations=[_economics_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_metric_kind_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+        )],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_role_mismatch():
+    context = _economics_context(
+        assertions=[_economics_assertion(role="primary")],
+        observations=[_economics_observation(role="assistant")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_action_class_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(action_class="WRONG_ACTION")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_task_complexity_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(task_complexity=TaskComplexity.COMPLEX)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unit_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(unit="wrong-unit")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_collection_boundary_mismatch():
+    context = _economics_context(
+        assertions=[_economics_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_economics_observation()],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_missing_source_evidence_refs():
+    obs = _economics_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _economics_context(observations=[obs])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_missing_source_evidence_sha256():
+    obs = _economics_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _economics_context(observations=[obs])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("economics_performance", "2.0.0", _economics_context())
+
+
+def test_economics_performance_grader_aggregates_multiple_assertions():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1", metric_kind=PerformanceMetricKind.PROVIDER_CHARGE),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_CALLS,
+            role="primary",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=3.0,
+            tolerance=1.0,
+            unit="calls",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1", metric_kind=PerformanceMetricKind.PROVIDER_CHARGE),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_CALLS,
+            role="primary",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=3.0,
+            unit="calls",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_economics_performance_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1"),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+            action_class="GOVERNANCE_ACTION",
+            task_complexity=TaskComplexity.COMPLEX,
+            expected_value=50.0,
+            tolerance=15.0,
+            unit="ms",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1"),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+            action_class="GOVERNANCE_ACTION",
+            task_complexity=TaskComplexity.COMPLEX,
+            observed_value=200.0,
+            unit="ms",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: econ-2"
+    assert result.denominator_contribution == 2
+
+
+def test_economics_performance_grader_mixed_pass_and_none_in_one_task():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1"),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_TOKENS,
+            role="assistant",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=1500.0,
+            tolerance=200.0,
+            unit="tokens",
+        ),
+        _economics_assertion(
+            assertion_id="econ-3",
+            metric_kind=PerformanceMetricKind.HUMAN_WAIT_TIME,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=12.0,
+            tolerance=3.0,
+            unit="seconds",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1"),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_TOKENS,
+            role="assistant",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=1500.0,
+            unit="tokens",
+        ),
+        _economics_observation(
+            assertion_id="econ-3",
+            metric_kind=PerformanceMetricKind.HUMAN_WAIT_TIME,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=None,
+            unit="seconds",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: econ-3"
     assert result.denominator_contribution == 3

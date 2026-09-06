@@ -668,3 +668,94 @@ class TestReliabilitySuiteReport:
                 f"attempt {attempt.attempt_id} has no reliability_observation_refs"
             )
 
+
+class TestEconomicsPerformanceSuiteReport:
+    """End-to-end economics and performance suite report round trip tests."""
+
+    @pytest.mark.asyncio
+    async def test_economics_performance_report_has_all_expected_files(self, tmp_path: Path) -> None:
+        """The economics_performance suite produces a complete report directory."""
+        report_dir = await _run_suite("economics_performance", tmp_path)
+
+        assert (report_dir / "manifest.json").is_file()
+        assert (report_dir / "tasks.jsonl").is_file()
+        assert (report_dir / "attempts.jsonl").is_file()
+        assert (report_dir / "metrics.jsonl").is_file()
+        assert (report_dir / "evidence-index.jsonl").is_file()
+        assert (report_dir / "economics-performance-observations.jsonl").is_file()
+
+    @pytest.mark.asyncio
+    async def test_economics_performance_passing_tasks_have_metrics_value_one(self, tmp_path: Path) -> None:
+        """The six passing economics-performance tasks produce metrics with value 1.0 and verified status."""
+        report_dir = await _run_suite("economics_performance", tmp_path)
+        metrics = _read_jsonl(report_dir / "metrics.jsonl", MetricObservation)
+        assert len(metrics) > 0
+
+        passing_task_ids = {
+            "econ-provider-charge-simple-001",
+            "econ-per-role-calls-moderate-001",
+            "econ-per-role-tokens-moderate-001",
+            "econ-stage-latency-complex-001",
+            "econ-local-resource-complex-001",
+            "econ-human-wait-moderate-001",
+        }
+        for metric in metrics:
+            if metric.task_id in passing_task_ids:
+                assert metric.value == 1.0, (
+                    f"metric {metric.metric_id} for passing task {metric.task_id} has value {metric.value}"
+                )
+                assert metric.verification_status == VerificationStatus.VERIFIED
+                assert metric.eligible is True
+
+    @pytest.mark.asyncio
+    async def test_economics_performance_measured_failure_tasks_have_value_below_one(self, tmp_path: Path) -> None:
+        """The two measured-failure economics-performance tasks produce metrics with value 0.0."""
+        report_dir = await _run_suite("economics_performance", tmp_path)
+        metrics = _read_jsonl(report_dir / "metrics.jsonl", MetricObservation)
+
+        failure_task_ids = {
+            "econ-out-of-tolerance-001",
+            "econ-no-measurement-001",
+        }
+        failure_metrics = [m for m in metrics if m.task_id in failure_task_ids]
+        assert len(failure_metrics) == 2
+        for metric in failure_metrics:
+            assert metric.value == 0.0, (
+                f"metric {metric.metric_id} for failure task {metric.task_id} has value {metric.value}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_economics_performance_evidence_index_digests_match_persisted_artifacts(self, tmp_path: Path) -> None:
+        """Every evidence index entry's SHA-256 and byte length match the persisted file bytes."""
+        report_dir = await _run_suite("economics_performance", tmp_path)
+        indices = _read_jsonl(report_dir / "evidence-index.jsonl", EvidenceIndex)
+        assert len(indices) > 0
+
+        for entry in indices:
+            artifact_path = report_dir / "evidence" / f"{entry.sha256}.json"
+            assert artifact_path.is_file(), (
+                f"evidence artifact {entry.sha256}.json not found for {entry.artifact_id}"
+            )
+            persisted_bytes = artifact_path.read_bytes()
+            actual_sha = hashlib.sha256(persisted_bytes).hexdigest()
+            assert actual_sha == entry.sha256, (
+                f"evidence index SHA-256 mismatch for {entry.artifact_id}: "
+                f"index={entry.sha256}, actual={actual_sha}"
+            )
+            assert len(persisted_bytes) == entry.byte_length, (
+                f"evidence index byte length mismatch for {entry.artifact_id}: "
+                f"index={entry.byte_length}, actual={len(persisted_bytes)}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_economics_performance_attempts_have_observation_refs(self, tmp_path: Path) -> None:
+        """Every attempt in the economics-performance report has economics_performance_observation_refs populated."""
+        report_dir = await _run_suite("economics_performance", tmp_path)
+        attempts = _read_jsonl(report_dir / "attempts.jsonl", AttemptRecord)
+        assert len(attempts) > 0
+
+        for attempt in attempts:
+            assert len(attempt.economics_performance_observation_refs) > 0, (
+                f"attempt {attempt.attempt_id} has no economics_performance_observation_refs"
+            )
+

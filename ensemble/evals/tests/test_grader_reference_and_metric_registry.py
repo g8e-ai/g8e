@@ -305,6 +305,7 @@ _CURRENT_METRIC_IDS = [
     "citation_backed",
     "partial_milestone",
     "reliability",
+    "economics_performance",
 ]
 
 

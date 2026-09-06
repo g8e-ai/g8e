@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.39.0"
+SCHEMA_VERSION = "1.40.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -63,6 +63,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "citation_backed_assertions",
     "partial_milestone_assertions",
     "reliability_assertions",
+    "economics_performance_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -90,6 +91,7 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "citation_backed_observation_refs",
     "partial_milestone_observation_refs",
     "reliability_observation_refs",
+    "economics_performance_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -2351,6 +2353,103 @@ class ReliabilityObservation(BaseModel):
         return self
 
 
+class PerformanceMetricKind(StrEnum):
+    """The kind of economics or performance measurement being asserted.
+
+    Each kind represents a distinct quantitative dimension that the
+    grader verifies against a declared expected value with a tolerance
+    window. The suite is stratified by task complexity and action class
+    so that measurements are comparable within a stratum.
+    """
+
+    PROVIDER_CHARGE = "provider_charge"
+    PER_ROLE_CALLS = "per_role_calls"
+    PER_ROLE_TOKENS = "per_role_tokens"
+    STAGE_LATENCY = "stage_latency"
+    LOCAL_RESOURCE_METADATA = "local_resource_metadata"
+    HUMAN_WAIT_TIME = "human_wait_time"
+
+
+class TaskComplexity(StrEnum):
+    """The complexity stratum of a task for economics and performance measurement.
+
+    Tasks are stratified by complexity so that measured values are
+    comparable within a stratum. Simple tasks involve a single model
+    call; moderate tasks involve multiple calls or light tool use;
+    complex tasks involve long-horizon multi-step work with heavy tool
+    use or governance.
+    """
+
+    SIMPLE = "simple"
+    MODERATE = "moderate"
+    COMPLEX = "complex"
+
+
+class EconomicsPerformanceAssertion(BaseModel):
+    """Declares one expected economics or performance measurement with a tolerance.
+
+    The grader proves that the independently observed value falls within
+    the declared tolerance window of the expected value. The metric kind,
+    role, action class, and task complexity pin the measurement so that
+    an observation referencing the wrong dimension or stratum cannot
+    satisfy the assertion. ``role`` is an empty string for non-role
+    metrics (provider charge, stage latency, local resource, human wait).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    metric_kind: PerformanceMetricKind
+    role: str = Field(default="", description="The LLM role for per-role metrics; empty for non-role metrics.")
+    action_class: str = Field(min_length=1, description="The action class being measured.")
+    task_complexity: TaskComplexity
+    expected_value: float
+    tolerance: float = Field(ge=0.0, description="The tolerance window; observed value must be within [expected - tolerance, expected + tolerance].")
+    unit: str = Field(min_length=1, description="The unit of measurement, e.g. usd, calls, tokens, ms, bytes, seconds.")
+    collection_boundary: StateCollectionBoundary
+
+
+class EconomicsPerformanceObservation(BaseModel):
+    """Independently observed economics or performance measurement.
+
+    The observation records the actual measured value for the declared
+    metric kind, role, action class, and task complexity. ``observed_value``
+    is ``None`` when the measurement was not collected (for example, the
+    provider did not return usage data), which is always a measured
+    failure. The metric kind, role, action class, and task complexity
+    must match the assertion so that an observation referencing the wrong
+    dimension or stratum cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    metric_kind: PerformanceMetricKind
+    role: str = ""
+    action_class: str = Field(min_length=1)
+    task_complexity: TaskComplexity
+    observed_value: float | None = None
+    unit: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> EconomicsPerformanceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified economics-performance observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2447,6 +2546,7 @@ class TaskDefinition(BaseModel):
     citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
     partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
     reliability_assertions: list[ReliabilityAssertion] = Field(default_factory=list)
+    economics_performance_assertions: list[EconomicsPerformanceAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2583,6 +2683,11 @@ class TaskDefinition(BaseModel):
         ]
         if len(reliability_assertion_ids) != len(set(reliability_assertion_ids)):
             raise ValueError("reliability assertion IDs must be unique")
+        economics_performance_assertion_ids = [
+            assertion.assertion_id for assertion in self.economics_performance_assertions
+        ]
+        if len(economics_performance_assertion_ids) != len(set(economics_performance_assertion_ids)):
+            raise ValueError("economics-performance assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2747,6 +2852,7 @@ class AttemptRecord(BaseModel):
     citation_backed_observation_refs: list[str] = Field(default_factory=list)
     partial_milestone_observation_refs: list[str] = Field(default_factory=list)
     reliability_observation_refs: list[str] = Field(default_factory=list)
+    economics_performance_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)
