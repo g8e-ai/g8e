@@ -226,7 +226,11 @@ func (e *KSIEvaluator) Evaluate(ctx context.Context, class CertificationClass, b
 				res.Outcome = higherPriorityKSIOutcome(res.Outcome, method.UnsatisfiedOutcome)
 			}
 			for _, ref := range evidence {
-				allEvidence = append(allEvidence, stampEvidenceBinding(ref, binding))
+				boundRef := stampEvidenceBinding(ref, binding)
+				if err := binding.ValidateEvidence(boundRef); err != nil {
+					res.Outcome = higherPriorityKSIOutcome(res.Outcome, KSIOutcomeInvalidEvidence)
+				}
+				allEvidence = append(allEvidence, boundRef)
 			}
 		}
 
@@ -320,18 +324,15 @@ func (r *KSIResultSet) Validate(catalog *KSICatalog) error {
 		if err := res.Binding.Validate(); err != nil {
 			return fmt.Errorf("%w: result %s binding: %w", constants.ErrValidationFailed, res.ID, err)
 		}
-		if res.Binding.ScopeID != r.Binding.ScopeID || res.Binding.RunID != r.Binding.RunID || res.Binding.WindowStartUnixMs != r.Binding.WindowStartUnixMs || res.Binding.WindowEndUnixMs != r.Binding.WindowEndUnixMs || res.Binding.EvaluatorID != r.Binding.EvaluatorID || res.Binding.EvaluatorVersion != r.Binding.EvaluatorVersion || res.Binding.MethodDefinitionID != r.Binding.MethodDefinitionID {
+		if !res.Binding.Equal(r.Binding) {
 			return fmt.Errorf("%w: result %s binding does not match result set binding", constants.ErrKSIBindingMismatch, res.ID)
 		}
 		for j, evidence := range res.Evidence {
 			if evidence == nil {
 				return fmt.Errorf("%w: result %s evidence at index %d is nil", constants.ErrValidationFailed, res.ID, j)
 			}
-			if evidence.GetScopeId() != "" && evidence.GetScopeId() != r.Binding.ScopeID {
-				return fmt.Errorf("%w: result %s evidence %s scope %s does not match binding scope %s", constants.ErrKSIBindingMismatch, res.ID, evidence.GetArtifactId(), evidence.GetScopeId(), r.Binding.ScopeID)
-			}
-			if evidence.GetRunId() != "" && evidence.GetRunId() != r.Binding.RunID {
-				return fmt.Errorf("%w: result %s evidence %s run %s does not match binding run %s", constants.ErrKSIBindingMismatch, res.ID, evidence.GetArtifactId(), evidence.GetRunId(), r.Binding.RunID)
+			if err := r.Binding.ValidateEvidence(evidence); err != nil {
+				return fmt.Errorf("%w: result %s evidence %s", err, res.ID, evidence.GetArtifactId())
 			}
 		}
 	}

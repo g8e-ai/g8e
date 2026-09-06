@@ -29,6 +29,12 @@ func unavailableTestBinding() EvaluationBinding {
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
+		},
 	}
 }
 
@@ -94,14 +100,29 @@ func TestUnavailableIntervalStoreAppendFromResultSetPersistsOnlyFailures(t *test
 }
 
 func TestUnavailableIntervalStoreAppendFromResultSetRejectsMismatchedResultBinding(t *testing.T) {
-	fileSvc := setupHistoryTestFS(t)
-	store := NewUnavailableIntervalStore(fileSvc, filepath.Join(constants.DataDirname, constants.ComplianceDirname))
-	rs := unavailableTestResultSet()
-	rs.Results[1].Binding.RunID = "other-run"
-
-	err := store.AppendFromResultSet(context.Background(), rs)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+	tests := []struct {
+		name   string
+		mutate func(*EvaluationBinding)
+	}{
+		{name: "another run", mutate: func(binding *EvaluationBinding) { binding.RunID = "other-run" }},
+		{name: "another assertion assessment", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.AssessmentIDs = []string{"assessment-2"}
+		}},
+		{name: "another attempt", mutate: func(binding *EvaluationBinding) { binding.AssertionAssessments.AttemptIDs = []string{"attempt-2"} }},
+		{name: "another scenario", mutate: func(binding *EvaluationBinding) { binding.AssertionAssessments.ScenarioIDs = []string{"scenario-2"} }},
+		{name: "another action", mutate: func(binding *EvaluationBinding) { binding.AssertionAssessments.ActionIDs = []string{"action-2"} }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileSvc := setupHistoryTestFS(t)
+			store := NewUnavailableIntervalStore(fileSvc, filepath.Join(constants.DataDirname, constants.ComplianceDirname))
+			resultSet := unavailableTestResultSet()
+			test.mutate(&resultSet.Results[1].Binding)
+			err := store.AppendFromResultSet(context.Background(), resultSet)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+		})
+	}
 }
 
 func TestUnavailableIntervalStoreFiltersAndTotalsChronologicalIntervals(t *testing.T) {

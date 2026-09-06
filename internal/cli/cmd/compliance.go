@@ -56,6 +56,12 @@ func complianceKSICmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.Ru
 	var catalogPath string
 	var scopeID string
 	var runID string
+	var assertionAssessmentIDs []string
+	var attemptIDs []string
+	var scenarioIDs []string
+	var actionIDs []string
+	var evidenceWindowStartUnixMs int64
+	var evidenceWindowEndUnixMs int64
 
 	cmd := &cobra.Command{
 		Use:   "ksi",
@@ -84,7 +90,7 @@ prove no result was produced from evidence outside the assessment context.`,
 			if err != nil {
 				return err
 			}
-			binding, err := buildEvaluationBinding(scopeID, runID)
+			binding, err := buildEvaluationBinding(scopeID, runID, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs)
 			if err != nil {
 				return err
 			}
@@ -115,30 +121,43 @@ prove no result was produced from evidence outside the assessment context.`,
 	cmd.Flags().StringVar(&catalogPath, "catalog", constants.DefaultKSICatalogPath, "Path to KSI catalog JSON file")
 	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every result to the declared context (required)")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every result to the declared context (required)")
+	cmd.Flags().StringSliceVar(&assertionAssessmentIDs, "assertion-assessment-id", nil, "Assertion assessment ID consumed by the KSI evaluation (repeatable, required)")
+	cmd.Flags().StringSliceVar(&attemptIDs, "attempt-id", nil, "Allowed evidence attempt ID (repeatable)")
+	cmd.Flags().StringSliceVar(&scenarioIDs, "scenario-id", nil, "Allowed evidence scenario ID (repeatable)")
+	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
+	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
+	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
 	_ = cmd.MarkFlagRequired("scope-id")
 	_ = cmd.MarkFlagRequired("run-id")
+	_ = cmd.MarkFlagRequired("assertion-assessment-id")
+	_ = cmd.MarkFlagRequired("evidence-window-start-unix-ms")
+	_ = cmd.MarkFlagRequired("evidence-window-end-unix-ms")
 
 	return cmd
 }
 
-// buildEvaluationBinding constructs an EvaluationBinding from CLI flags. The
-// evidence window starts at the current time and ends one second later so
-// every evaluation has a non-empty window. Callers that need a different
-// window can construct the binding directly.
-func buildEvaluationBinding(scopeID, runID string) (compliance.EvaluationBinding, error) {
-	if scopeID == "" || runID == "" {
-		return compliance.EvaluationBinding{}, fmt.Errorf("%w: --scope-id and --run-id are required", constants.ErrKSIBindingIncomplete)
-	}
-	now := time.Now()
-	return compliance.EvaluationBinding{
+// buildEvaluationBinding constructs an EvaluationBinding from CLI flags using
+// the caller-declared evidence collection interval.
+func buildEvaluationBinding(scopeID, runID string, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs int64, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs []string) (compliance.EvaluationBinding, error) {
+	binding := compliance.EvaluationBinding{
 		ScopeID:            scopeID,
 		RunID:              runID,
-		WindowStartUnixMs:  now.UnixMilli(),
-		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		WindowStartUnixMs:  evidenceWindowStartUnixMs,
+		WindowEndUnixMs:    evidenceWindowEndUnixMs,
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
-	}, nil
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: assertionAssessmentIDs,
+			AttemptIDs:    attemptIDs,
+			ScenarioIDs:   scenarioIDs,
+			ActionIDs:     actionIDs,
+		},
+	}
+	if err := binding.Validate(); err != nil {
+		return compliance.EvaluationBinding{}, fmt.Errorf("compliance: build evaluation binding: %w", err)
+	}
+	return binding, nil
 }
 
 // loadKSICatalog reads and validates the KSI catalog from the given path.

@@ -701,7 +701,7 @@ const (
 	KSIMethodVerifierVersion               = "1.0.0"
 	KSIEvaluatorID                         = "g8e-ksi-evaluator"
 	KSIEvaluatorVersion                    = "1.0.0"
-	KSIHistorySchemaVersion                = "1.2.0"
+	KSIHistorySchemaVersion                = "1.3.0"
 	KSIUnavailableIntervalsFilename        = "ksi-unavailable-intervals.jsonl"
 	KSIUnavailableIntervalReferencePrefix  = "ksi-unavailable"
 )

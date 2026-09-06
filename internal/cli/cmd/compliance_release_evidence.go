@@ -43,15 +43,21 @@ func complianceReleaseEvidenceCmdWithConfig(
 	provenanceSourceFactory func(string) evidence.ProvenanceSource,
 ) *cobra.Command {
 	var (
-		version     string
-		outDir      string
-		class       string
-		catalogPath string
-		demoRuns    []string
-		projectRoot string
-		failClosed  bool
-		scopeID     string
-		runID       string
+		version                   string
+		outDir                    string
+		class                     string
+		catalogPath               string
+		demoRuns                  []string
+		projectRoot               string
+		failClosed                bool
+		scopeID                   string
+		runID                     string
+		assertionAssessmentIDs    []string
+		attemptIDs                []string
+		scenarioIDs               []string
+		actionIDs                 []string
+		evidenceWindowStartUnixMs int64
+		evidenceWindowEndUnixMs   int64
 	)
 
 	cmd := &cobra.Command{
@@ -102,7 +108,7 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 
 			source := provenanceSourceFactory(projectRoot)
 
-			binding, err := buildEvaluationBinding(scopeID, runID)
+			binding, err := buildEvaluationBinding(scopeID, runID, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs)
 			if err != nil {
 				return err
 			}
@@ -140,11 +146,20 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 	cmd.Flags().BoolVar(&failClosed, "fail-closed", false, "Exit nonzero if any KSI is not satisfied or any demo run is invalid")
 	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every KSI result to the declared context (required)")
 	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every KSI result to the declared context (required)")
+	cmd.Flags().StringSliceVar(&assertionAssessmentIDs, "assertion-assessment-id", nil, "Assertion assessment ID consumed by the KSI evaluation (repeatable, required)")
+	cmd.Flags().StringSliceVar(&attemptIDs, "attempt-id", nil, "Allowed evidence attempt ID (repeatable)")
+	cmd.Flags().StringSliceVar(&scenarioIDs, "scenario-id", nil, "Allowed evidence scenario ID (repeatable)")
+	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
+	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
+	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
 
 	_ = cmd.MarkFlagRequired("version")
 	_ = cmd.MarkFlagRequired("out")
 	_ = cmd.MarkFlagRequired("scope-id")
 	_ = cmd.MarkFlagRequired("run-id")
+	_ = cmd.MarkFlagRequired("assertion-assessment-id")
+	_ = cmd.MarkFlagRequired("evidence-window-start-unix-ms")
+	_ = cmd.MarkFlagRequired("evidence-window-end-unix-ms")
 
 	return cmd
 }

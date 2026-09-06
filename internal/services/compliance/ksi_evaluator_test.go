@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -232,11 +234,17 @@ func testBinding(t *testing.T) EvaluationBinding {
 	return EvaluationBinding{
 		ScopeID:            "test-scope",
 		RunID:              "test-run",
-		WindowStartUnixMs:  now.UnixMilli(),
+		WindowStartUnixMs:  1_700_000_000_000,
 		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
+		},
 	}
 }
 
@@ -800,6 +808,101 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 	})
+}
+
+func TestEvaluationBindingValidateRequiresUniqueAssertionAssessmentScope(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluationBinding)
+	}{
+		{name: "missing assessment IDs", mutate: func(binding *EvaluationBinding) { binding.AssertionAssessments.AssessmentIDs = nil }},
+		{name: "duplicate assessment IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.AssessmentIDs = []string{"assessment-1", "assessment-1"}
+		}},
+		{name: "duplicate attempt IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.AttemptIDs = []string{"attempt-1", "attempt-1"}
+		}},
+		{name: "duplicate scenario IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.ScenarioIDs = []string{"scenario-1", "scenario-1"}
+		}},
+		{name: "duplicate action IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.ActionIDs = []string{"action-1", "action-1"}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			binding := testBinding(t)
+			test.mutate(&binding)
+			err := binding.Validate()
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrKSIBindingIncomplete)
+		})
+	}
+}
+
+func TestKSIResultSetValidateRejectsEvidenceOutsideAssertionAssessmentScope(t *testing.T) {
+	catalog := testCatalog()
+	binding := testBinding(t)
+	validEvidence := &compliancev1.ComplianceEvidenceReference{
+		ArtifactId: "receipt-1", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: binding.ScopeID, RunId: binding.RunID,
+		AttemptId: "attempt-1", ScenarioId: "scenario-1", TransactionId: "action-1", ProducedAt: timestamppb.New(time.UnixMilli(binding.WindowStartUnixMs)),
+	}
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ComplianceEvidenceReference)
+	}{
+		{name: "another scope", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.ScopeId = "scope-2" }},
+		{name: "another run", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.RunId = "run-2" }},
+		{name: "another attempt", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.AttemptId = "attempt-2" }},
+		{name: "another scenario", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.ScenarioId = "scenario-2" }},
+		{name: "another action", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.TransactionId = "action-2" }},
+		{name: "before assessment window", mutate: func(ref *compliancev1.ComplianceEvidenceReference) {
+			ref.ProducedAt = timestamppb.New(time.UnixMilli(binding.WindowStartUnixMs - 1))
+		}},
+		{name: "after assessment window", mutate: func(ref *compliancev1.ComplianceEvidenceReference) {
+			ref.ProducedAt = timestamppb.New(time.UnixMilli(binding.WindowEndUnixMs + 1))
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			evidence := proto.Clone(validEvidence).(*compliancev1.ComplianceEvidenceReference)
+			test.mutate(evidence)
+			resultSet := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding, Evidence: []*compliancev1.ComplianceEvidenceReference{evidence}}}}
+			err := resultSet.Validate(catalog)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+		})
+	}
+}
+
+func TestKSIResultSetValidateAcceptsEvidenceMatchingAnyAllowedAssertionAssessmentScopeValue(t *testing.T) {
+	binding := testBinding(t)
+	binding.AssertionAssessments = AssertionAssessmentScope{
+		AssessmentIDs: []string{"assessment-1", "assessment-2"},
+		AttemptIDs:    []string{"attempt-1", "attempt-2"},
+		ScenarioIDs:   []string{"scenario-1", "scenario-2"},
+		ActionIDs:     []string{"action-1", "action-2"},
+	}
+	evidence := &compliancev1.ComplianceEvidenceReference{
+		ArtifactId: "receipt-2", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: binding.ScopeID, RunId: binding.RunID,
+		AttemptId: "attempt-2", ScenarioId: "scenario-2", TransactionId: "action-2", ProducedAt: timestamppb.New(time.UnixMilli(binding.WindowEndUnixMs)),
+	}
+	resultSet := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding, Evidence: []*compliancev1.ComplianceEvidenceReference{evidence}}}}
+	assert.NoError(t, resultSet.Validate(testCatalog()))
+}
+
+func TestKSIEvaluatorEvaluateFailsClosedOnEvidenceOutsideAssertionAssessmentScope(t *testing.T) {
+	catalog := testCatalog()
+	evaluator := NewKSIEvaluator(catalog)
+	method := testKSIMethod("cross-scope", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "receipt-1", ArtifactType: string(EvidenceTypeReceiptID), AttemptId: "attempt-2"}}, nil
+	})
+	require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+	resultSet, err := evaluator.Evaluate(context.Background(), ClassB, testBinding(t))
+	require.NoError(t, err)
+	result := findKSIResult(t, resultSet, "KSI-CMT-01")
+	assert.Equal(t, KSIOutcomeInvalidEvidence, result.Outcome)
+	assert.Equal(t, KSIStatusNotSatisfied, result.Status)
 }
 
 // TestDefaultMethods_CommitmentChainIntact verifies that the commitment chain

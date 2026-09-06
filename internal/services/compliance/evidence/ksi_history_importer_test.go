@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
@@ -35,6 +36,12 @@ func newKSIHistoryImporterFixture(t *testing.T) *ksiHistoryImporterFixture {
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
+		},
 	}
 	fixture := &ksiHistoryImporterFixture{
 		reader: &memoryArtifactReader{files: map[string][]byte{}},
@@ -67,11 +74,12 @@ func newKSIHistoryImporterFixture(t *testing.T) *ksiHistoryImporterFixture {
 				}},
 			}},
 		binding: KSIHistoryImportBinding{
-			Path:             filepath.Join(constants.KSIHistoryDirname, constants.ComplianceBundleKSIHistoryFilename),
-			ScopeID:          "scope-1",
-			RunID:            "run-1",
-			Class:            compliance.ClassC,
-			ProducerIdentity: "compliance-evaluator-1",
+			Path:                 filepath.Join(constants.KSIHistoryDirname, constants.ComplianceBundleKSIHistoryFilename),
+			ScopeID:              "scope-1",
+			RunID:                "run-1",
+			Class:                compliance.ClassC,
+			ProducerIdentity:     "compliance-evaluator-1",
+			AssertionAssessments: binding.AssertionAssessments,
 		},
 	}
 	fixture.replaceHistory(t)
@@ -209,11 +217,23 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 		{name: "empty evidence reference", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ArtifactId = "" }},
 		{name: "missing result set binding scope", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.ScopeID = "" }},
 		{name: "missing result set binding run", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.RunID = "" }},
-		{name: "inverted result set binding window", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.WindowStartUnixMs = f.snapshots[0].Binding.WindowEndUnixMs + 1 }},
+		{name: "missing assertion assessments", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Binding.AssertionAssessments.AssessmentIDs = nil }},
+		{name: "inverted result set binding window", mutate: func(f *ksiHistoryImporterFixture) {
+			f.snapshots[0].Binding.WindowStartUnixMs = f.snapshots[0].Binding.WindowEndUnixMs + 1
+		}},
 		{name: "missing result binding scope", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Binding.ScopeID = "" }},
 		{name: "result binding mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Binding.RunID = "other-run" }},
+		{name: "result assertion assessment mismatch", mutate: func(f *ksiHistoryImporterFixture) {
+			f.snapshots[0].Results[0].Binding.AssertionAssessments.AssessmentIDs = []string{"assessment-2"}
+		}},
 		{name: "evidence scope mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ScopeId = "other-scope" }},
 		{name: "evidence run mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].RunId = "other-run" }},
+		{name: "evidence attempt mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].AttemptId = "attempt-2" }},
+		{name: "evidence scenario mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].ScenarioId = "scenario-2" }},
+		{name: "evidence action mismatch", mutate: func(f *ksiHistoryImporterFixture) { f.snapshots[0].Results[0].Evidence[0].TransactionId = "action-2" }},
+		{name: "evidence outside assessment window", mutate: func(f *ksiHistoryImporterFixture) {
+			f.snapshots[0].Results[0].Evidence[0].ProducedAt = timestamppb.New(time.UnixMilli(f.snapshots[0].Binding.WindowStartUnixMs - 1))
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -223,6 +243,27 @@ func TestKSIHistoryImporter_Import_RejectsInvalidSnapshotBindings(t *testing.T) 
 			_, err := NewKSIHistoryImporter(fixture.reader, fixture.binding).Import(context.Background())
 			require.Error(t, err)
 			assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+		})
+	}
+}
+
+func TestKSIHistoryImporter_Import_RejectsSnapshotOutsideImporterAssertionAssessmentScope(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliance.AssertionAssessmentScope)
+	}{
+		{name: "another assessment", mutate: func(scope *compliance.AssertionAssessmentScope) { scope.AssessmentIDs = []string{"assessment-2"} }},
+		{name: "another attempt", mutate: func(scope *compliance.AssertionAssessmentScope) { scope.AttemptIDs = []string{"attempt-2"} }},
+		{name: "another scenario", mutate: func(scope *compliance.AssertionAssessmentScope) { scope.ScenarioIDs = []string{"scenario-2"} }},
+		{name: "another action", mutate: func(scope *compliance.AssertionAssessmentScope) { scope.ActionIDs = []string{"action-2"} }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newKSIHistoryImporterFixture(t)
+			test.mutate(&fixture.binding.AssertionAssessments)
+			_, err := NewKSIHistoryImporter(fixture.reader, fixture.binding).Import(context.Background())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
 		})
 	}
 }

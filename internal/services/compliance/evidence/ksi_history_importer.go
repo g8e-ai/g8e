@@ -12,12 +12,13 @@ import (
 )
 
 type KSIHistoryImportBinding struct {
-	Reference        string
-	Path             string
-	ScopeID          string
-	RunID            string
-	Class            compliance.CertificationClass
-	ProducerIdentity string
+	Reference            string
+	Path                 string
+	ScopeID              string
+	RunID                string
+	Class                compliance.CertificationClass
+	ProducerIdentity     string
+	AssertionAssessments compliance.AssertionAssessmentScope
 }
 
 type KSIHistoryImporter struct {
@@ -59,6 +60,12 @@ func (i *KSIHistoryImporter) Import(ctx context.Context) ([]EvidenceNode, error)
 	if err != nil {
 		return nil, err
 	}
+	for _, snapshot := range snapshots {
+		binding := snapshot.resultSet.Binding
+		if binding.ScopeID != i.binding.ScopeID || binding.RunID != i.binding.RunID || !binding.AssertionAssessments.Equal(i.binding.AssertionAssessments) {
+			return nil, fmt.Errorf("%w: KSI history snapshot does not match importer binding", constants.ErrEvidenceScopeMismatch)
+		}
+	}
 	return i.buildNodes(snapshots), nil
 }
 
@@ -86,7 +93,7 @@ func (i *KSIHistoryImporter) buildNodes(snapshots []importedKSIHistorySnapshot) 
 
 func validKSIHistoryBinding(binding KSIHistoryImportBinding) bool {
 	_, _, referenceValid := ParseExpectedContentReference(binding.Reference, constants.KSIHistoryReferencePrefix)
-	return referenceValid && ValidRelativePath(binding.Path) && binding.ScopeID != "" && binding.RunID != "" && validCertificationClass(binding.Class) && binding.ProducerIdentity != ""
+	return referenceValid && ValidRelativePath(binding.Path) && binding.ScopeID != "" && binding.RunID != "" && validCertificationClass(binding.Class) && binding.ProducerIdentity != "" && binding.AssertionAssessments.Validate() == nil
 }
 
 func decodeKSIHistory(body []byte, class compliance.CertificationClass) ([]importedKSIHistorySnapshot, error) {
@@ -142,7 +149,7 @@ func validateKSIHistorySnapshot(resultSet compliance.KSIResultSet, class complia
 		if err := result.Binding.Validate(); err != nil {
 			return fmt.Errorf("%w: KSI result %s binding: %w", constants.ErrEvidenceArtifactMalformed, result.ID, err)
 		}
-		if result.Binding.ScopeID != resultSet.Binding.ScopeID || result.Binding.RunID != resultSet.Binding.RunID || result.Binding.WindowStartUnixMs != resultSet.Binding.WindowStartUnixMs || result.Binding.WindowEndUnixMs != resultSet.Binding.WindowEndUnixMs || result.Binding.EvaluatorID != resultSet.Binding.EvaluatorID || result.Binding.EvaluatorVersion != resultSet.Binding.EvaluatorVersion || result.Binding.MethodDefinitionID != resultSet.Binding.MethodDefinitionID {
+		if !result.Binding.Equal(resultSet.Binding) {
 			return fmt.Errorf("%w: KSI result %s binding does not match snapshot binding", constants.ErrEvidenceArtifactMalformed, result.ID)
 		}
 		if _, exists := seen[result.ID]; exists {
@@ -153,11 +160,8 @@ func validateKSIHistorySnapshot(resultSet compliance.KSIResultSet, class complia
 			if evidence == nil || !validKSIEvidenceArtifactType(evidence.GetArtifactType()) || evidence.GetArtifactId() == "" {
 				return fmt.Errorf("%w: KSI result evidence binding is incomplete", constants.ErrEvidenceArtifactMalformed)
 			}
-			if evidence.GetScopeId() != "" && evidence.GetScopeId() != resultSet.Binding.ScopeID {
-				return fmt.Errorf("%w: KSI result %s evidence scope mismatch", constants.ErrEvidenceArtifactMalformed, result.ID)
-			}
-			if evidence.GetRunId() != "" && evidence.GetRunId() != resultSet.Binding.RunID {
-				return fmt.Errorf("%w: KSI result %s evidence run mismatch", constants.ErrEvidenceArtifactMalformed, result.ID)
+			if err := resultSet.Binding.ValidateEvidence(evidence); err != nil {
+				return fmt.Errorf("%w: KSI result %s evidence binding: %v", constants.ErrEvidenceArtifactMalformed, result.ID, err)
 			}
 		}
 	}

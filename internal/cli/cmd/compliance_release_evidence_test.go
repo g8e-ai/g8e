@@ -63,6 +63,35 @@ func TestValidateReleaseVersion(t *testing.T) {
 	}
 }
 
+func TestComplianceReleaseEvidenceCmdWithConfig_RejectsEachMissingEvaluationBindingFlag(t *testing.T) {
+	requiredFlags := []struct {
+		name  string
+		value string
+	}{
+		{name: "scope-id", value: "test-scope"},
+		{name: "run-id", value: "test-run"},
+		{name: "assertion-assessment-id", value: "assessment-1"},
+		{name: "evidence-window-start-unix-ms", value: "1700000000000"},
+		{name: "evidence-window-end-unix-ms", value: "1700000001000"},
+	}
+	for _, omitted := range requiredFlags {
+		t.Run("missing "+omitted.name, func(t *testing.T) {
+			cmd := complianceReleaseEvidenceCmdWithConfig(failingFileSvcFactory(errFactory), stubProvenanceSourceFactory(nil))
+			args := []string{"--version", "v2.1.3", "--out", t.TempDir()}
+			for _, flag := range requiredFlags {
+				if flag.name != omitted.name {
+					args = append(args, "--"+flag.name, flag.value)
+				}
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), omitted.name)
+			assert.NotErrorIs(t, err, errFactory)
+		})
+	}
+}
+
 // TestReleaseEvidenceReport_OverallPassing verifies the fail-closed gating
 // logic across KSI availability, KSI status, and demo-run validity.
 func TestReleaseEvidenceReport_OverallPassing(t *testing.T) {
@@ -369,6 +398,9 @@ func TestComplianceReleaseEvidenceCmdWithConfig_GeneratesReportWithDemoRun(t *te
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -425,6 +457,9 @@ func TestComplianceReleaseEvidenceCmdWithConfig_ExplicitDemoRunFlag(t *testing.T
 	require.NoError(t, cmd.Flags().Set("demo-run", runID))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -473,6 +508,9 @@ func TestComplianceReleaseEvidenceCmdWithConfig_FailClosedExitsNonzero(t *testin
 	require.NoError(t, cmd.Flags().Set("fail-closed", "true"))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

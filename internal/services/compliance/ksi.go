@@ -264,14 +264,22 @@ type KSI struct {
 // KSIResult and KSIResultSet carries a binding so consumers can prove that no
 // result was produced from evidence outside the declared scope, run, attempt,
 // scenario, action, transaction, or assessment window.
+type AssertionAssessmentScope struct {
+	AssessmentIDs []string `json:"assessment_ids"`
+	AttemptIDs    []string `json:"attempt_ids,omitempty"`
+	ScenarioIDs   []string `json:"scenario_ids,omitempty"`
+	ActionIDs     []string `json:"action_ids,omitempty"`
+}
+
 type EvaluationBinding struct {
-	ScopeID            string `json:"scope_id"`
-	RunID              string `json:"run_id"`
-	WindowStartUnixMs  int64  `json:"window_start_unix_ms"`
-	WindowEndUnixMs    int64  `json:"window_end_unix_ms"`
-	EvaluatorID        string `json:"evaluator_id"`
-	EvaluatorVersion   string `json:"evaluator_version"`
-	MethodDefinitionID string `json:"method_definition_id"`
+	ScopeID              string                   `json:"scope_id"`
+	RunID                string                   `json:"run_id"`
+	WindowStartUnixMs    int64                    `json:"window_start_unix_ms"`
+	WindowEndUnixMs      int64                    `json:"window_end_unix_ms"`
+	EvaluatorID          string                   `json:"evaluator_id"`
+	EvaluatorVersion     string                   `json:"evaluator_version"`
+	MethodDefinitionID   string                   `json:"method_definition_id"`
+	AssertionAssessments AssertionAssessmentScope `json:"assertion_assessments"`
 }
 
 // Validate returns constants.ErrKSIBindingIncomplete when required binding
@@ -279,6 +287,88 @@ type EvaluationBinding struct {
 func (b EvaluationBinding) Validate() error {
 	if b.ScopeID == "" || b.RunID == "" || b.WindowStartUnixMs <= 0 || b.WindowEndUnixMs <= 0 || b.WindowStartUnixMs > b.WindowEndUnixMs || b.EvaluatorID == "" || b.EvaluatorVersion == "" || b.MethodDefinitionID == "" {
 		return fmt.Errorf("%w: scope, run, window, evaluator, and method definition are required", constants.ErrKSIBindingIncomplete)
+	}
+	if err := b.AssertionAssessments.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s AssertionAssessmentScope) Validate() error {
+	if len(s.AssessmentIDs) == 0 {
+		return fmt.Errorf("%w: at least one assertion assessment is required", constants.ErrKSIBindingIncomplete)
+	}
+	for _, values := range [][]string{s.AssessmentIDs, s.AttemptIDs, s.ScenarioIDs, s.ActionIDs} {
+		seen := make(map[string]struct{}, len(values))
+		for _, value := range values {
+			if value == "" {
+				return fmt.Errorf("%w: assertion assessment scope values must not be empty", constants.ErrKSIBindingIncomplete)
+			}
+			if _, exists := seen[value]; exists {
+				return fmt.Errorf("%w: assertion assessment scope values must be unique", constants.ErrKSIBindingIncomplete)
+			}
+			seen[value] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func (s AssertionAssessmentScope) Equal(other AssertionAssessmentScope) bool {
+	return equalStringSet(s.AssessmentIDs, other.AssessmentIDs) && equalStringSet(s.AttemptIDs, other.AttemptIDs) && equalStringSet(s.ScenarioIDs, other.ScenarioIDs) && equalStringSet(s.ActionIDs, other.ActionIDs)
+}
+
+func (b EvaluationBinding) Equal(other EvaluationBinding) bool {
+	return b.ScopeID == other.ScopeID && b.RunID == other.RunID && b.WindowStartUnixMs == other.WindowStartUnixMs && b.WindowEndUnixMs == other.WindowEndUnixMs && b.EvaluatorID == other.EvaluatorID && b.EvaluatorVersion == other.EvaluatorVersion && b.MethodDefinitionID == other.MethodDefinitionID && b.AssertionAssessments.Equal(other.AssertionAssessments)
+}
+
+func equalStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	values := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		values[value] = struct{}{}
+	}
+	for _, value := range right {
+		if _, exists := values[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (b EvaluationBinding) ValidateEvidence(ref *compliancev1.ComplianceEvidenceReference) error {
+	if ref == nil {
+		return fmt.Errorf("%w: evidence reference is nil", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetScopeId() != "" && ref.GetScopeId() != b.ScopeID {
+		return fmt.Errorf("%w: evidence scope does not match assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetRunId() != "" && ref.GetRunId() != b.RunID {
+		return fmt.Errorf("%w: evidence run does not match assessment run", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetAttemptId() != "" && !containsString(b.AssertionAssessments.AttemptIDs, ref.GetAttemptId()) {
+		return fmt.Errorf("%w: evidence attempt is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetScenarioId() != "" && !containsString(b.AssertionAssessments.ScenarioIDs, ref.GetScenarioId()) {
+		return fmt.Errorf("%w: evidence scenario is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetTransactionId() != "" && !containsString(b.AssertionAssessments.ActionIDs, ref.GetTransactionId()) {
+		return fmt.Errorf("%w: evidence action is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetProducedAt() != nil {
+		if err := ref.GetProducedAt().CheckValid(); err != nil || !b.Contains(ref.GetProducedAt().AsTime().UnixMilli()) {
+			return fmt.Errorf("%w: evidence timestamp is outside the assessment window", constants.ErrKSIBindingMismatch)
+		}
 	}
 	return nil
 }

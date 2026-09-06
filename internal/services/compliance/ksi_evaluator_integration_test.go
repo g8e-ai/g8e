@@ -227,11 +227,14 @@ func integrationBinding(t *testing.T) EvaluationBinding {
 	return EvaluationBinding{
 		ScopeID:            "integration-scope",
 		RunID:              "integration-run",
-		WindowStartUnixMs:  now.UnixMilli(),
+		WindowStartUnixMs:  now.Add(-time.Minute).UnixMilli(),
 		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+		},
 	}
 }
 

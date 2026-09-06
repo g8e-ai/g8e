@@ -75,11 +75,56 @@ func testEvaluationBinding(t *testing.T) compliance.EvaluationBinding {
 	return compliance.EvaluationBinding{
 		ScopeID:            "test-scope",
 		RunID:              "test-run",
-		WindowStartUnixMs:  now.UnixMilli(),
+		WindowStartUnixMs:  now.Add(-time.Hour).UnixMilli(),
 		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
 		EvaluatorID:        constants.KSIEvaluatorID,
 		EvaluatorVersion:   constants.KSIEvaluatorVersion,
 		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
+		},
+	}
+}
+
+func TestBuildEvaluationBindingPreservesExplicitEvidenceCollectionWindow(t *testing.T) {
+	const windowStartUnixMs int64 = 1_700_000_000_000
+	const windowEndUnixMs int64 = 1_700_000_001_000
+
+	binding, err := buildEvaluationBinding("test-scope", "test-run", windowStartUnixMs, windowEndUnixMs, []string{"assessment-1"}, []string{"attempt-1"}, []string{"scenario-1"}, []string{"action-1"})
+	require.NoError(t, err)
+	assert.Equal(t, windowStartUnixMs, binding.WindowStartUnixMs)
+	assert.Equal(t, windowEndUnixMs, binding.WindowEndUnixMs)
+}
+
+func TestComplianceKSICmd_RejectsEachMissingEvaluationBindingFlag(t *testing.T) {
+	requiredFlags := []struct {
+		name  string
+		value string
+	}{
+		{name: "scope-id", value: "test-scope"},
+		{name: "run-id", value: "test-run"},
+		{name: "assertion-assessment-id", value: "assessment-1"},
+		{name: "evidence-window-start-unix-ms", value: "1700000000000"},
+		{name: "evidence-window-end-unix-ms", value: "1700000001000"},
+	}
+	for _, omitted := range requiredFlags {
+		t.Run("missing "+omitted.name, func(t *testing.T) {
+			cmd := complianceKSICmdWithConfig(failingFileSvcFactory(errFactory))
+			args := make([]string, 0, (len(requiredFlags)-1)*2)
+			for _, flag := range requiredFlags {
+				if flag.name != omitted.name {
+					args = append(args, "--"+flag.name, flag.value)
+				}
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), omitted.name)
+			assert.NotErrorIs(t, err, errFactory)
+		})
 	}
 }
 
@@ -137,6 +182,9 @@ func TestComplianceKSICmd_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceKSICmdWithConfig(failingFileSvcFactory(errFactory))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -241,6 +289,9 @@ func TestComplianceKSICmd_ValidationErrors(t *testing.T) {
 			require.NoError(t, cmd.Flags().Set("class", certClass))
 			require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 			require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+			require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+			require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+			require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
@@ -273,6 +324,9 @@ func TestComplianceKSICmd_StoresUnavailable(t *testing.T) {
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -294,6 +348,9 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	require.NoError(t, cmd.Flags().Set("class", "C"))
 	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
 	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

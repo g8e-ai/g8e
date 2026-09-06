@@ -26,15 +26,15 @@ import (
 // intervals alongside satisfied snapshots gives consumers a complete
 // operating-effectiveness history rather than only current snapshots.
 type UnavailableInterval struct {
-	KSIID               string            `json:"ksi_id"`
-	ScopeID             string            `json:"scope_id"`
-	RunID               string            `json:"run_id"`
-	StartUnixMs         int64             `json:"start_unix_ms"`
-	EndUnixMs           int64             `json:"end_unix_ms"`
-	Outcome             KSIOutcome        `json:"outcome"`
-	Status              KSIStatus         `json:"status"`
-	Reason              string            `json:"reason,omitempty"`
-	Binding             EvaluationBinding `json:"binding"`
+	KSIID       string            `json:"ksi_id"`
+	ScopeID     string            `json:"scope_id"`
+	RunID       string            `json:"run_id"`
+	StartUnixMs int64             `json:"start_unix_ms"`
+	EndUnixMs   int64             `json:"end_unix_ms"`
+	Outcome     KSIOutcome        `json:"outcome"`
+	Status      KSIStatus         `json:"status"`
+	Reason      string            `json:"reason,omitempty"`
+	Binding     EvaluationBinding `json:"binding"`
 }
 
 // Validate returns constants.ErrKSIBindingIncomplete when required fields are
@@ -115,7 +115,7 @@ func (s *UnavailableIntervalStore) AppendFromResultSet(ctx context.Context, rs *
 		if err := res.Binding.Validate(); err != nil {
 			return fmt.Errorf("%w: result %s binding: %w", constants.ErrKSIUnavailableWriteFailed, res.ID, err)
 		}
-		if res.Binding != rs.Binding {
+		if !res.Binding.Equal(rs.Binding) {
 			return fmt.Errorf("%w: result %s binding does not match result set binding", constants.ErrKSIBindingMismatch, res.ID)
 		}
 		if !res.Outcome.Valid() || res.Status != res.Outcome.Status() {
