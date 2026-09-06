@@ -612,11 +612,7 @@ func parseExpectedContentReference(reference, expectedPrefix string) (string, st
 }
 
 func signerPublicKey(keyID string) (ed25519.PublicKey, error) {
-	decoded, err := hex.DecodeString(keyID)
-	if err != nil || len(decoded) != ed25519.PublicKeySize {
-		return nil, constants.ErrTrustedSignerKeyNotFound
-	}
-	return ed25519.PublicKey(decoded), nil
+	return governance.SignerPublicKey(keyID)
 }
 
 func receiptInvestigationBound(receipt *operatorv1.ActionReceipt, investigationIDs []string) bool {

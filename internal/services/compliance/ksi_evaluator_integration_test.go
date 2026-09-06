@@ -12,6 +12,7 @@ package compliance
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/pathutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage/storagetest"
@@ -48,6 +50,7 @@ type integrationEvaluatorFixture struct {
 	auditStore  *storage.SQLAuditStore
 	ledger      *storage.GitLedgerService
 	commitments *storage.CommitmentLedger
+	receiptKey  ed25519.PrivateKey
 	fileSvc     fs.RuntimeFileService
 	tempDir     string
 }
@@ -99,6 +102,7 @@ func newIntegrationEvaluatorFixture(t *testing.T) *integrationEvaluatorFixture {
 		auditStore:  auditStore,
 		ledger:      ledger,
 		commitments: commitments,
+		receiptKey:  privKey,
 		fileSvc:     fileSvc,
 		tempDir:     tempDir,
 	}
@@ -121,18 +125,29 @@ func (f *integrationEvaluatorFixture) seedEvidence(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, eventID)
 
+	signerKeyID := hex.EncodeToString(f.receiptKey.Public().(ed25519.PublicKey))
+	receipt := &operatorv1.ActionReceipt{TransactionId: integrationTxID, TransactionHash: "tx-hash-1", Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, ExecutedAtUnixMs: now.UnixMilli(), SignerKeyId: signerKeyID}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(f.receiptKey, payload))
+	attestation := &operatorv1.ReceiptPersistenceAttestation{TransactionId: integrationTxID, ReceiptSignatureDigest: governance.SignatureDigest([]string{receipt.Signature}), PersistedAtUnixMs: now.Add(time.Millisecond).UnixMilli(), AuditRecordId: integrationTxID, SignerKeyId: signerKeyID}
+	payload, err = governance.CanonicalizeReceiptPersistenceAttestation(attestation)
+	require.NoError(t, err)
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(f.receiptKey, payload))
+	receipt.FinalPersistenceAttestation = attestation
 	require.NoError(t, f.auditStore.RecordActionReceipt(&models.ActionReceiptRecord{
 		TransactionID:     integrationTxID,
-		TransactionHash:   "tx-hash-1",
+		TransactionHash:   receipt.TransactionHash,
 		OperatorID:        "operator-1",
 		OperatorSessionID: integrationSessionID,
 		ActionType:        constants.ActionTypeExecuteBash,
 		TargetResource:    "localhost",
-		Status:            operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		Status:            receipt.Status,
 		ExecutedAt:        now,
-		SignerKeyID:       "key-1",
-		Signature:         "signature-1",
+		SignerKeyID:       signerKeyID,
+		Signature:         receipt.Signature,
 		Timestamp:         now,
+		ActionReceipt:     receipt,
 	}))
 
 	require.NoError(t, f.auditStore.RecordFileMutation(&storage.FileMutationLog{

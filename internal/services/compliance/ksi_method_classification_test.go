@@ -40,16 +40,10 @@ type MethodInventoryEntry struct {
 // phase0MethodInventory classifies every method registered in DefaultMethods
 // and every KSI in the catalog that has no registered method.
 //
-// Key finding: no registered method performs cryptographic verification,
-// independent state observation, historical freshness analysis, or
-// customer-attestation import. Every registered method is either an existence
-// check (non-empty list/string) or a structural check (field presence or hash
-// linking without signature verification). The receiptsHaveSignatures method
-// is structural, not cryptographic: it checks that Signature and SignerKeyID
-// are nonempty, not that the signature verifies against a trusted key.
-//
-// This inventory is the baseline that Phase 3 closes by adding cryptographic,
-// state-observation, historical, and customer-attestation methods.
+// Key finding: receipt and final-persistence verification is cryptographic.
+// The remaining registered methods are existence or structural checks and do
+// not perform independent state observation, historical freshness analysis,
+// or customer-attestation import.
 var phase0MethodInventory = []MethodInventoryEntry{
 	// KSI-CMT-01: auditEventsExist + ledgerCommitsExist
 	{KSIID: "KSI-CMT-01", MethodName: "auditEventsExist", Classification: MethodClassExistence, Reason: "checks ListEvents returns a non-empty slice"},
@@ -79,8 +73,8 @@ var phase0MethodInventory = []MethodInventoryEntry{
 	{KSIID: "KSI-MLA-07", MethodName: "commitmentChainExists", Classification: MethodClassExistence, Reason: "checks ListCommitments returns a non-empty slice"},
 	{KSIID: "KSI-MLA-07", MethodName: "merkleRootExists", Classification: MethodClassExistence, Reason: "checks GetStateMerkleRoot returns a non-empty string"},
 
-	// KSI-MLA-08: receiptsHaveSignatures + commitmentChainExists
-	{KSIID: "KSI-MLA-08", MethodName: "receiptsHaveSignatures", Classification: MethodClassStructural, Reason: "checks Signature and SignerKeyID fields are nonempty; does not verify the signature against a trusted key"},
+	// KSI-MLA-08: receiptsCryptographicallyVerified + commitmentChainExists
+	{KSIID: "KSI-MLA-08", MethodName: "receiptsCryptographicallyVerified", Classification: MethodClassCryptographic, Reason: "verifies canonical receipt and final-persistence Ed25519 signatures against the signer public key"},
 	{KSIID: "KSI-MLA-08", MethodName: "commitmentChainExists", Classification: MethodClassExistence, Reason: "checks ListCommitments returns a non-empty slice"},
 
 	// KSI-SVC-04: fileMutationsTracked + ledgerCommitsExist
@@ -147,12 +141,10 @@ func TestPhase0MethodInventory_EveryRegisteredMethodClassified(t *testing.T) {
 		"inventory contains duplicate KSI|method entries")
 }
 
-// TestPhase0MethodInventory_NoCryptographicOrStateObservationMethods documents
-// that the current method set contains zero cryptographic, zero
-// state-observation, zero historical, and zero customer-attestation methods.
-// Every method is existence or structural. This is the baseline gap that
-// Phase 3 closes.
-func TestPhase0MethodInventory_NoCryptographicOrStateObservationMethods(t *testing.T) {
+// TestMethodInventory_CryptographicReceiptVerificationIsClassified verifies
+// that cryptographic receipt verification is present while later method
+// classes remain outstanding.
+func TestMethodInventory_CryptographicReceiptVerificationIsClassified(t *testing.T) {
 	counts := make(map[MethodClassification]int)
 	for _, e := range phase0MethodInventory {
 		if e.MethodName != "" {
@@ -160,10 +152,8 @@ func TestPhase0MethodInventory_NoCryptographicOrStateObservationMethods(t *testi
 		}
 	}
 
-	assert.Equal(t, 0, counts[MethodClassCryptographic],
-		phase0RegressionBeforeFix+
-			": no registered KSI method performs cryptographic signature verification; "+
-			"Phase 3 adds protocol-owned receipt and persistence-attestation verification")
+	assert.Equal(t, 1, counts[MethodClassCryptographic],
+		phase0RegressionAfterFix+": receipt and final-persistence verification is cryptographic")
 	assert.Equal(t, 0, counts[MethodClassStateObservation],
 		phase0RegressionBeforeFix+
 			": no registered KSI method performs independent state observation; "+

@@ -137,11 +137,7 @@ func ValidRelativePath(value string) bool {
 
 // SignerPublicKey decodes a hex-encoded Ed25519 public key.
 func SignerPublicKey(keyID string) (ed25519.PublicKey, error) {
-	decoded, err := hex.DecodeString(keyID)
-	if err != nil || len(decoded) != ed25519.PublicKeySize {
-		return nil, constants.ErrTrustedSignerKeyNotFound
-	}
-	return ed25519.PublicKey(decoded), nil
+	return governance.SignerPublicKey(keyID)
 }
 
 // ClassifyReadError maps a read error to the appropriate evidence error

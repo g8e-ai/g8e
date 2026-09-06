@@ -9,6 +9,8 @@ package compliance
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -19,8 +21,10 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // mockAuditReader is a mock implementation of AuditEvidenceReader for unit testing.
@@ -139,10 +143,22 @@ func testCatalog() *KSICatalog {
 }
 
 // fullDeps returns EvaluatorDeps with all mocks populated with valid evidence.
-func fullDeps() EvaluatorDeps {
+func fullDeps(t *testing.T) EvaluatorDeps {
+	t.Helper()
+	privateKey := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+	signerKeyID := hex.EncodeToString(privateKey.Public().(ed25519.PublicKey))
+	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-1", TransactionHash: "hash-1", ExecutedAtUnixMs: 1_700_000_001_000, SignerKeyId: signerKeyID}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	attestation := &operatorv1.ReceiptPersistenceAttestation{TransactionId: receipt.TransactionId, ReceiptSignatureDigest: governance.SignatureDigest([]string{receipt.Signature}), PersistedAtUnixMs: 1_700_000_002_000, AuditRecordId: receipt.TransactionId, SignerKeyId: signerKeyID}
+	payload, err = governance.CanonicalizeReceiptPersistenceAttestation(attestation)
+	require.NoError(t, err)
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receipt.FinalPersistenceAttestation = attestation
 	return EvaluatorDeps{
 		Audit: &mockAuditReader{
-			receipts:  []*models.ActionReceiptRecord{{TransactionID: "tx-1", Signature: "sig", SignerKeyID: "key-1"}},
+			receipts:  []*models.ActionReceiptRecord{{TransactionID: receipt.TransactionId, TransactionHash: receipt.TransactionHash, Signature: receipt.Signature, SignerKeyID: receipt.SignerKeyId, ActionReceipt: receipt}},
 			events:    []*storage.Event{{ID: 1, OperatorSessionID: "sess-1"}},
 			mutations: []*storage.FileMutationLog{{ID: 1, Filepath: "/etc/config"}},
 		},
@@ -194,7 +210,7 @@ func TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError(t *testing.T) {
 func TestKSIEvaluator_RegisterDefaultMethods(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	assert.GreaterOrEqual(t, eval.MethodCount("KSI-CMT-01"), 2)
 	assert.GreaterOrEqual(t, eval.MethodCount("KSI-MLA-07"), 2)
@@ -207,7 +223,7 @@ func TestKSIEvaluator_RegisterDefaultMethods(t *testing.T) {
 func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -231,7 +247,7 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 func TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -261,7 +277,7 @@ func TestKSIEvaluator_Evaluate_StaleKSI_FailClosed(t *testing.T) {
 	}
 
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)
@@ -428,7 +444,7 @@ func TestKSIEvaluator_Evaluate_ClassA_NoMinimum(t *testing.T) {
 func TestKSIEvaluator_Evaluate_ContextCancellation(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -518,7 +534,7 @@ func TestKSIResultSet_Validate(t *testing.T) {
 // TestDefaultMethods_CommitmentChainIntact verifies that the commitment chain
 // integrity method correctly detects broken chains.
 func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
-	deps := fullDeps()
+	deps := fullDeps(t)
 	methods := DefaultMethods(deps)
 
 	// KSI-SVC-05 uses commitmentChainIntact as one of its methods
@@ -558,39 +574,53 @@ func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
 	assert.False(t, allTrue, "At least one method should return false with broken chain")
 }
 
-// TestDefaultMethods_ReceiptSignatures verifies that the receipt signature
-// check method detects missing signatures.
-func TestDefaultMethods_ReceiptSignatures(t *testing.T) {
-	// With valid signatures
-	deps := fullDeps()
-	methods := DefaultMethods(deps)
-	mlaMethods := methods["KSI-MLA-08"]
-	require.Len(t, mlaMethods, 2)
-
-	for _, m := range mlaMethods {
-		ok, _, err := m(context.Background())
-		require.NoError(t, err)
-		assert.True(t, ok, "Method should return true with valid signatures")
+// TestDefaultMethods_ReceiptAndPersistenceCryptographicVerification verifies
+// canonical receipt and final-persistence evidence fail closed under mutation.
+func TestDefaultMethods_ReceiptAndPersistenceCryptographicVerification(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*mockAuditReader)
+		want   bool
+	}{
+		{name: "valid receipt and persistence", want: true},
+		{name: "missing canonical receipt", mutate: func(audit *mockAuditReader) { audit.receipts[0].ActionReceipt = nil }},
+		{name: "record signature binding mismatch", mutate: func(audit *mockAuditReader) { audit.receipts[0].Signature = "different" }},
+		{name: "malformed receipt signature", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.Signature = "not-hex"
+			audit.receipts[0].Signature = "not-hex"
+		}},
+		{name: "missing final persistence attestation", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation = nil
+		}},
+		{name: "mutated persistence signature", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation.Signature = "not-hex"
+		}},
+		{name: "mutated receipt signature digest", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation.ReceiptSignatureDigest = "wrong-digest"
+		}},
+		{name: "one invalid receipt among valid receipts", mutate: func(audit *mockAuditReader) {
+			invalid := *audit.receipts[0]
+			invalid.TransactionID = "tx-2"
+			invalid.ActionReceipt = nil
+			audit.receipts = append(audit.receipts, &invalid)
+		}},
 	}
 
-	// With missing signature
-	deps.Audit = &mockAuditReader{
-		receipts: []*models.ActionReceiptRecord{
-			{TransactionID: "tx-1", Signature: "", SignerKeyID: ""},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			audit := deps.Audit.(*mockAuditReader)
+			if tt.mutate != nil {
+				tt.mutate(audit)
+			}
+			methods := DefaultMethods(deps)["KSI-MLA-08"]
+			require.Len(t, methods, 2)
+			satisfied, evidence, err := methods[0](context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, satisfied)
+			assert.NotEmpty(t, evidence)
+		})
 	}
-	methods = DefaultMethods(deps)
-	mlaMethods = methods["KSI-MLA-08"]
-
-	anyFalse := false
-	for _, m := range mlaMethods {
-		ok, _, err := m(context.Background())
-		require.NoError(t, err)
-		if !ok {
-			anyFalse = true
-		}
-	}
-	assert.True(t, anyFalse, "at least one method should return false when signatures are missing")
 }
 
 // TestKSIEvaluator_Evaluate_FullIntegration verifies end-to-end evaluation
@@ -598,7 +628,7 @@ func TestDefaultMethods_ReceiptSignatures(t *testing.T) {
 func TestKSIEvaluator_Evaluate_FullIntegration(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	eval.RegisterDefaultMethods(fullDeps(t))
 
 	result, err := eval.Evaluate(context.Background(), ClassC)
 	require.NoError(t, err)

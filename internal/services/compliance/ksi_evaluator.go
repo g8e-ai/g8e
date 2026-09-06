@@ -14,6 +14,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
@@ -264,7 +265,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, receipts[0].TransactionID)}, nil
 	}
 
-	receiptsHaveSignatures := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+	receiptsCryptographicallyVerified := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		if deps.Audit == nil {
 			return false, nil, nil
 		}
@@ -275,12 +276,29 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 		if len(receipts) == 0 {
 			return false, nil, nil
 		}
-		for _, r := range receipts {
-			if r.Signature == "" || r.SignerKeyID == "" {
-				return false, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, r.TransactionID)}, nil
+		evidence := make([]*compliancev1.ComplianceEvidenceReference, 0, len(receipts))
+		for _, record := range receipts {
+			if err := ctx.Err(); err != nil {
+				return false, evidence, err
+			}
+			if record == nil {
+				return false, evidence, nil
+			}
+			reference := newKSIEvidenceReference(EvidenceTypeReceiptID, record.TransactionID)
+			evidence = append(evidence, reference)
+			receipt := record.ActionReceipt
+			if receipt == nil || receipt.GetTransactionId() != record.TransactionID || receipt.GetSignerKeyId() != record.SignerKeyID || receipt.GetSignature() != record.Signature {
+				return false, evidence, nil
+			}
+			publicKey, err := governance.SignerPublicKey(receipt.GetSignerKeyId())
+			if err != nil {
+				return false, evidence, nil
+			}
+			if governance.VerifyActionReceiptSignature(receipt, publicKey) != nil || governance.VerifyReceiptPersistenceAttestation(receipt, publicKey) != nil {
+				return false, evidence, nil
 			}
 		}
-		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, receipts[0].TransactionID)}, nil
+		return true, evidence, nil
 	}
 
 	fileMutationsTracked := func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
@@ -374,7 +392,7 @@ func DefaultMethods(deps EvaluatorDeps) map[string][]KSIMethod {
 	methods["KSI-IAM-07"] = []KSIMethod{fileMutationsTracked, receiptsExist}
 	methods["KSI-MLA-03"] = []KSIMethod{auditEventsExist, receiptsExist}
 	methods["KSI-MLA-07"] = []KSIMethod{commitmentChainExists, merkleRootExists}
-	methods["KSI-MLA-08"] = []KSIMethod{receiptsHaveSignatures, commitmentChainExists}
+	methods["KSI-MLA-08"] = []KSIMethod{receiptsCryptographicallyVerified, commitmentChainExists}
 	methods["KSI-SVC-04"] = []KSIMethod{fileMutationsTracked, ledgerCommitsExist}
 	methods["KSI-SVC-05"] = []KSIMethod{merkleRootExists, commitmentChainIntact}
 
