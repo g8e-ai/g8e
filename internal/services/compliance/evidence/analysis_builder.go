@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -94,7 +95,6 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	graphFailures := buildGraphFailureMessages(request.Graph)
 
 	analysis := &compliancev1.ComplianceAnalysis{
-		AnalysisId:                 analysisID(request),
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
 		ScopeRef:                   request.ScopeID,
 		GeneratedAt:                timestamppb.New(request.EvaluatedAt),
@@ -113,6 +113,11 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		EvidenceGraphValid:         request.Graph.Valid(),
 		EvidenceResources:          buildEvidenceResources(request),
 	}
+	analysisID, err := analysisContentAddress(analysis)
+	if err != nil {
+		return nil, fmt.Errorf("compliance analysis: derive content address: %w", err)
+	}
+	analysis.AnalysisId = analysisID
 	return analysis, nil
 }
 
@@ -194,6 +199,8 @@ func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.Evid
 		MissingEvidenceRefs:   missing,
 		StaleEvidenceRefs:     stale,
 		CompletenessStatus:    status,
+		WindowStartRef:        request.WindowStart.UTC().Format(time.RFC3339Nano),
+		WindowEndRef:          request.WindowEnd.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -489,7 +496,10 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 }
 
 func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {
-	result := append([]*compliancev1.ControlAssertionAssessment(nil), assessments...)
+	result := make([]*compliancev1.ControlAssertionAssessment, 0, len(assessments))
+	for _, assessment := range assessments {
+		result = append(result, proto.Clone(assessment).(*compliancev1.ControlAssertionAssessment))
+	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].GetAssessmentId() < result[j].GetAssessmentId()
 	})
@@ -497,35 +507,23 @@ func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAsse
 }
 
 func sortedFrameworkAssessments(assessments []*compliancev1.FrameworkControlAssessment) []*compliancev1.FrameworkControlAssessment {
-	result := append([]*compliancev1.FrameworkControlAssessment(nil), assessments...)
+	result := make([]*compliancev1.FrameworkControlAssessment, 0, len(assessments))
+	for _, assessment := range assessments {
+		result = append(result, proto.Clone(assessment).(*compliancev1.FrameworkControlAssessment))
+	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].GetAssessmentId() < result[j].GetAssessmentId()
 	})
 	return result
 }
 
-func analysisID(request AnalysisRequest) string {
-	assertionIDs := make([]string, 0, len(request.AssertionAssessments))
-	for _, a := range request.AssertionAssessments {
-		assertionIDs = append(assertionIDs, a.GetAssessmentId())
+func analysisContentAddress(analysis *compliancev1.ComplianceAnalysis) (string, error) {
+	canonical, err := compliancev1.MarshalCanonical(analysis)
+	if err != nil {
+		return "", err
 	}
-	sort.Strings(assertionIDs)
-	frameworkIDs := make([]string, 0, len(request.FrameworkAssessments))
-	for _, a := range request.FrameworkAssessments {
-		frameworkIDs = append(frameworkIDs, a.GetAssessmentId())
-	}
-	sort.Strings(frameworkIDs)
-	identity := strings.Join([]string{
-		request.ScopeID,
-		constants.AnalysisSchemaVersion,
-		constants.AnalysisBuilderID,
-		constants.AnalysisBuilderVersion,
-		request.EvaluatedAt.UTC().Format(time.RFC3339Nano),
-		strings.Join(assertionIDs, ","),
-		strings.Join(frameworkIDs, ","),
-	}, "\x00")
-	digest := sha256.Sum256([]byte(identity))
-	return "compliance-analysis:sha256:" + hex.EncodeToString(digest[:])
+	digest := sha256.Sum256(canonical)
+	return "compliance-analysis:sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 func gapID(scopeID, assertionRef, frameworkRef, controlID string) string {

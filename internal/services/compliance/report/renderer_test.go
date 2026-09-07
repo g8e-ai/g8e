@@ -9,6 +9,8 @@ package report
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -133,6 +135,42 @@ func TestRenderComplianceAnalysis_RejectsInvalidInput(t *testing.T) {
 			assert.ErrorIs(t, err, constants.ErrValidationFailed)
 			assert.Nil(t, rendered)
 		})
+	}
+}
+
+func TestRenderComplianceAnalysis_GoldenVectors(t *testing.T) {
+	tests := []struct {
+		format         Format
+		expectedSHA256 string
+	}{
+		{format: FormatJSON, expectedSHA256: "9f71eaab3df307e70d12108b0400807b01fb1df813d2cff7ea7573fa3104ac93"},
+		{format: FormatOSCAL, expectedSHA256: "b1ec314e04fa3b65990cb8f7315f3770f1d67a5be3190fa627adaf7a7e436a5b"},
+		{format: FormatMarkdown, expectedSHA256: "d9c9a0195677a4bef269f56670fcf77f90cdc114ad6b1992bd1cb254fe6265d5"},
+		{format: FormatHTML, expectedSHA256: "2ad80e6c4c4ef18913ba925bd3f3598ce109dc42b25fe583fea337c9728f135f"},
+		{format: FormatCLI, expectedSHA256: "ddb408d7bbde738afd7b09add4af91b1a137a8dfcd3061c1023bc8cd33669e84"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.format), func(t *testing.T) {
+			rendered, err := RenderComplianceAnalysis(rendererTestAnalysis(), tt.format)
+			require.NoError(t, err)
+			digest := sha256.Sum256(rendered.Body)
+			assert.Equal(t, tt.expectedSHA256, hex.EncodeToString(digest[:]))
+		})
+	}
+}
+
+func TestRenderComplianceAnalysis_CanonicalJSONReproducesEveryRenderer(t *testing.T) {
+	analysis := rendererTestAnalysis()
+	canonical, err := RenderComplianceAnalysis(analysis, FormatJSON)
+	require.NoError(t, err)
+	decoded := &compliancev1.ComplianceAnalysis{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(canonical.Body, decoded))
+	for _, format := range SupportedFormats() {
+		original, err := RenderComplianceAnalysis(analysis, format)
+		require.NoError(t, err)
+		reproduced, err := RenderComplianceAnalysis(decoded, format)
+		require.NoError(t, err)
+		assert.Equal(t, original.Body, reproduced.Body)
 	}
 }
 

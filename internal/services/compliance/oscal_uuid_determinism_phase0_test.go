@@ -73,16 +73,18 @@ func TestPhase0OSCAL_IdentifiersBindCanonicalRecordIdentities(t *testing.T) {
 		mutate   func(*compliancev1.ComplianceAnalysis)
 		selectID func(*OSCALAssessmentResults) string
 	}{
-		{name: "report identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.AnalysisId += "-changed" }, selectID: func(document *OSCALAssessmentResults) string { return document.UUID }},
+		{name: "report identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.AnalysisId += "-changed" }, selectID: func(document *OSCALAssessmentResults) string { return document.AssessmentResults.UUID }},
 		{name: "assertion assessment observation identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.AssertionAssessments[0].AssessmentId += "-changed"
 			analysis.FrameworkAssessments[0].AssertionAssessmentRefs[0] = analysis.AssertionAssessments[0].AssessmentId
-		}, selectID: func(document *OSCALAssessmentResults) string { return document.Results[0].Observations[0].UUID }},
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.Results[0].Observations[0].UUID
+		}},
 		{name: "assertion assessment subject identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.AssertionAssessments[0].AssessmentId += "-changed"
 			analysis.FrameworkAssessments[0].AssertionAssessmentRefs[0] = analysis.AssertionAssessments[0].AssessmentId
 		}, selectID: func(document *OSCALAssessmentResults) string {
-			return document.Results[0].Observations[0].Subjects[0].SubjectUUID
+			return document.AssessmentResults.Results[0].Observations[0].Subjects[0].SubjectUUID
 		}},
 		{name: "evidence identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			const changedDigest = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
@@ -90,10 +92,14 @@ func TestPhase0OSCAL_IdentifiersBindCanonicalRecordIdentities(t *testing.T) {
 			analysis.EvidenceResources[0].ArtifactId = changedArtifactID
 			analysis.EvidenceResources[0].Sha256 = changedDigest
 			analysis.AssertionAssessments[0].EvidenceRefs[0] = changedArtifactID
-		}, selectID: func(document *OSCALAssessmentResults) string { return document.BackMatter.Resources[0].UUID }},
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.BackMatter.Resources[0].UUID
+		}},
 		{name: "control identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.FrameworkAssessments[0].ControlId = "KSI-CMT-02"
-		}, selectID: func(document *OSCALAssessmentResults) string { return document.Results[0].Findings[0].UUID }},
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.Results[0].Findings[0].UUID
+		}},
 	}
 	exporter := NewOSCALExporter(oscalTestCatalog())
 	base, err := exporter.GenerateAssessmentResults(newAnalysis())

@@ -129,6 +129,10 @@ func frameworkTestCatalogs(t *testing.T) (*compliancev1.ControlAssertionCatalog,
 }
 
 func frameworkTestAssessment(assertionID, status, evidenceLevel string) *compliancev1.ControlAssertionAssessment {
+	failureReason := ""
+	if status == "unverifiable" {
+		failureReason = "required evidence is unavailable"
+	}
 	return &compliancev1.ControlAssertionAssessment{
 		AssessmentId:    "assertion-assessment:sha256:" + assertionID + "00000000000000000000000000000000000000000000000000000000000",
 		ScopeId:         "scope-1",
@@ -139,6 +143,7 @@ func frameworkTestAssessment(assertionID, status, evidenceLevel string) *complia
 		VerifierRef:     &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion},
 		EvidenceRefs:    []string{"evidence-1"},
 		FreshnessStatus: "fresh",
+		FailureReason:   failureReason,
 		Limitations:     []string{},
 	}
 }
@@ -181,6 +186,34 @@ func TestGradeFrameworkControls_NotSatisfiedWhenAnyAssertionNotSatisfied(t *test
 	require.Len(t, assessments, 2)
 	blockAssessment := findFrameworkAssessmentByControl(t, assessments, "KSI-MLA-07")
 	assert.Equal(t, "not_satisfied", blockAssessment.GetStatus())
+}
+
+func TestGradeFrameworkControls_StatusPrecedenceMatrix(t *testing.T) {
+	tests := []struct {
+		name     string
+		statuses []string
+		expected string
+	}{
+		{name: "all satisfied", statuses: []string{"satisfied", "satisfied"}, expected: "satisfied"},
+		{name: "all not applicable", statuses: []string{"not_applicable", "not_applicable"}, expected: "not_applicable"},
+		{name: "not satisfied precedes customer attestation", statuses: []string{"customer_attestation_required", "not_satisfied"}, expected: "not_satisfied"},
+		{name: "not satisfied precedes unverifiable", statuses: []string{"unverifiable", "not_satisfied"}, expected: "not_satisfied"},
+		{name: "customer attestation precedes unverifiable", statuses: []string{"unverifiable", "customer_attestation_required"}, expected: "customer_attestation_required"},
+		{name: "unverifiable precedes satisfied", statuses: []string{"satisfied", "unverifiable"}, expected: "unverifiable"},
+		{name: "satisfied and not applicable is satisfied", statuses: []string{"not_applicable", "satisfied"}, expected: "satisfied"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := frameworkGraderBaseRequest(t)
+			request.Crosswalks.Mappings[0].AssertionRefs = append(request.Crosswalks.Mappings[0].AssertionRefs, &compliancev1.VersionedReference{Id: "G8E-GOV-ALLOW-001", Version: "1.0.0"})
+			request.AssertionAssessments[0] = frameworkTestAssessment("G8E-GOV-BLOCK-001", tt.statuses[0], "L3")
+			request.AssertionAssessments[1] = frameworkTestAssessment("G8E-GOV-ALLOW-001", tt.statuses[1], "L3")
+			assessments, err := evidence.GradeFrameworkControls(context.Background(), request)
+			require.NoError(t, err)
+			assessment := findFrameworkAssessmentByControl(t, assessments, "KSI-MLA-07")
+			assert.Equal(t, tt.expected, assessment.GetStatus())
+		})
+	}
 }
 
 func TestGradeFrameworkControls_UnverifiableWhenAssertionAssessmentMissing(t *testing.T) {
@@ -342,6 +375,22 @@ func TestGradeFrameworkControls_RejectsNilAssertionAssessment(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
 }
 
+func TestGradeFrameworkControls_RejectsDuplicateAssertionAssessments(t *testing.T) {
+	request := frameworkGraderBaseRequest(t)
+	request.AssertionAssessments = append(request.AssertionAssessments, request.AssertionAssessments[0])
+	_, err := evidence.GradeFrameworkControls(context.Background(), request)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceDuplicateID)
+}
+
+func TestGradeFrameworkControls_RejectsMalformedAssertionAssessment(t *testing.T) {
+	request := frameworkGraderBaseRequest(t)
+	request.AssertionAssessments[0].Status = "unknown"
+	_, err := evidence.GradeFrameworkControls(context.Background(), request)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
 func TestGradeFrameworkControls_StopsOnCancellation(t *testing.T) {
 	request := frameworkGraderBaseRequest(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -411,6 +460,7 @@ func TestGradeFrameworkControls_EmitsAssessmentForEveryMappedControl(t *testing.
 			EvaluatedAt:     timestamppb.New(time.Date(2026, time.September, 6, 12, 0, 0, 0, time.UTC)),
 			VerifierRef:     &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion},
 			FreshnessStatus: "incomplete",
+			FailureReason:   "required evidence is unavailable",
 			Limitations:     []string{},
 		})
 	}
