@@ -108,7 +108,7 @@ def _project_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "suite_id": _required_string(manifest, "suite_id", "manifest"),
         "suite_version": _required_string(manifest, "suite_version", "manifest"),
         "created_at": _required_string(manifest, "created_at", "manifest"),
-        "orchestrator_version": str(manifest.get("orchestrator_version", "")),
+        "orchestrator_version": _required_string(manifest, "orchestrator_version", "manifest"),
         "source_revision": str(manifest.get("source_revision", "")),
         "source_tree_state_hash": str(manifest.get("source_tree_state_hash", "")),
         "content_hashes": content_hashes,
@@ -242,6 +242,8 @@ def project(private_report: Path, candidate_dir: Path, release_version: str, eva
     manifest = _project_manifest(_load_json(private_report / "manifest.json"))
     if manifest["schema_version"] != readme.STAGE1_EVAL_SCHEMA or manifest["suite_id"] != readme.STAGE1_SUITE:
         raise ProjectionError("private report is not the supported Stage 1 eval profile")
+    if eval_cli_version != manifest["orchestrator_version"]:
+        raise ProjectionError("eval CLI version does not match private manifest orchestrator version")
     tasks = _project_tasks(_load_jsonl(private_report / "tasks.jsonl"))
     attempts = _project_attempts(_load_jsonl(private_report / "attempts.jsonl"))
     metrics = _project_metrics(_load_jsonl(private_report / "metrics.jsonl"))

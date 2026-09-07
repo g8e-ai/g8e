@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from importlib.metadata import version as distribution_version
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -295,7 +296,8 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     manifest_data = json.loads(manifest_path.read_text())
     manifest = RunManifest.model_validate(manifest_data)
     assert manifest.suite_id == "ifeval_subset"
-    assert manifest.orchestrator_version == evals_version
+    assert evals_version == distribution_version("g8e-evals")
+    assert manifest.orchestrator_version == distribution_version("g8e-evals")
     assert len(manifest.arms) == 1
     assert manifest.arms[0].arm_id == Arm.DOCTRINE
     assert manifest.dataset_hash is not None

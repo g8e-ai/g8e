@@ -71,6 +71,7 @@ def _make_stage1_snapshot(tmp: str) -> Path:
     manifest.update({
         "schema_version": "1.40.0",
         "suite_id": "ifeval_subset",
+        "orchestrator_version": "2.1.5",
         "arms": [{"arm_id": "doctrine", "requested_posture": "l1_doctrine", "uses_g8ee": True, "uses_gateway": True, "receipt_binding": True, "is_production_posture": True}],
         "role_to_model": {
             "primary": {"role": "primary", "provider": "ollama", "model": "gemma4:12b", "endpoint": None, "endpoint_class": "self-hosted-lan", "api_key_present": False, "seed_support": "unknown"},
@@ -89,7 +90,7 @@ def _make_stage1_snapshot(tmp: str) -> Path:
     for order, task_id in enumerate(task_ids, start=1):
         attempt_id = f"run-2026-09-01-synthetic-a:{task_id}:doctrine:1"
         attempts.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "attempt_id": attempt_id, "task_id": task_id, "arm_id": "doctrine", "terminal_status": "completed", "assignment_order": order, "receipt_refs": []})
-        metrics.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "metric_id": "ifeval_subset_verifier", "metric_version": "1.0.0", "arm_id": "doctrine", "task_id": task_id, "eligible": True, "denominator_contribution": 1, "value": 1.0, "unit": "boolean", "verification_status": "verified", "grader_class": "deterministic", "evidence_refs": [f"attempts/{attempt_id}"]})
+        metrics.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "metric_id": "ifeval_subset_verifier", "metric_version": "1.0.0", "attempt_id": attempt_id, "arm_id": "doctrine", "task_id": task_id, "eligible": True, "denominator_contribution": 1, "value": 1.0, "unit": "boolean", "verification_status": "verified", "grader_class": "deterministic", "evidence_refs": [f"{attempt_id}:agent-trail"]})
         stages.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "stage_id": f"{attempt_id}:call:1", "attempt_id": attempt_id, "kind": "model_inference", "agent_role": "triage", "provider": "OllamaProvider", "model": "gemma4:e2b", "decision": None, "source": ""})
     _write_jsonl(snapshot_dir / run_rel / "attempts.jsonl", attempts)
     _write_jsonl(snapshot_dir / run_rel / "metrics.jsonl", metrics)
@@ -202,6 +203,7 @@ def _make_private_stage1_report(tmp: str) -> Path:
         {"name": "prompt_bundle", "sha256": manifest["prompt_hash"], "byte_length": 1},
         {"name": "grader_bundle", "sha256": manifest["grader_hash"], "byte_length": 1},
     ]
+    manifest["orchestrator_version"] = "0.3.0"
     for identity in manifest["role_to_model"].values():
         if isinstance(identity, dict):
             identity["endpoint"] = "http://192.168.1.2:11434"
@@ -213,8 +215,6 @@ def _make_private_stage1_report(tmp: str) -> Path:
     _write_jsonl(attempts_path, attempts)
     metrics_path = report / "metrics.jsonl"
     metrics = [json.loads(line) for line in metrics_path.read_text().splitlines()]
-    for metric in metrics:
-        metric["attempt_id"] = metric["evidence_refs"][0].removeprefix("attempts/")
     _write_jsonl(metrics_path, metrics)
     evidence_index_path = report / "evidence-index.jsonl"
     evidence_rows = [json.loads(line) for line in evidence_index_path.read_text().splitlines()]
@@ -448,6 +448,18 @@ class TestLoadSnapshot(unittest.TestCase):
                 gr.load_snapshot(snapshot_dir)
         self.assertIn("tasks projection", str(ctx.exception))
 
+    def test_stage1_metric_attempt_binding_rejects_foreign_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            metrics_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl"
+            rows = [json.loads(line) for line in metrics_path.read_text().splitlines()]
+            rows[0]["attempt_id"] = "foreign-attempt"
+            _write_jsonl(metrics_path, rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("does not bind to its attempt", str(ctx.exception))
+
     def test_stage1_summary_projection_must_match_typed_records(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             snapshot_dir = _make_stage1_snapshot(tmp)
@@ -478,6 +490,18 @@ class TestLoadSnapshot(unittest.TestCase):
             reproduction_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"
             reproduction = json.loads(reproduction_path.read_text())
             reproduction["task_limit"] = 4
+            reproduction_path.write_text(json.dumps(reproduction))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("reproduction manifest", str(ctx.exception))
+
+    def test_stage1_reproduction_eval_cli_version_must_match_orchestrator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            reproduction_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"
+            reproduction = json.loads(reproduction_path.read_text())
+            reproduction["eval_cli_version"] = "9.9.9"
             reproduction_path.write_text(json.dumps(reproduction))
             _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json")
             with self.assertRaises(gr.ReadmeError) as ctx:
@@ -668,6 +692,13 @@ class TestProjectReadmeEvidence(unittest.TestCase):
         self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/summary.json"), first_files)
         self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/evidence-index.jsonl"), first_files)
         self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"), first_files)
+
+    def test_refuses_eval_cli_version_mismatching_private_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_report = _make_private_stage1_report(tmp)
+            with self.assertRaises(pre.ProjectionError) as ctx:
+                pre.project(private_report, Path(tmp) / "candidate", "2.1.5", "9.9.9", 180)
+        self.assertIn("eval CLI version", str(ctx.exception))
 
     def test_refuses_to_replace_existing_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -267,7 +267,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.4
+go get github.com/g8e-ai/g8e/v2@v2.1.5
 ```
 
 **Python package** (requires Python 3.10+):
@@ -299,27 +299,39 @@ g8e uses the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) in FIP
 
 ## Evidence-Backed Operation
 
-The following sections present bounded, verifiable evidence that g8e operates as described. All claims derive from checksum-bound machine-readable artifacts in the public proof snapshot. Evidence is synthetic or simulated unless otherwise stated. The README generator validates and projects these artifacts; it does not recompute cryptographic verification.
+The following sections present bounded evidence from the checksum-bound machine-readable public snapshot. Each evidence block names its maturity stage and source artifacts; claims apply only to that measured scope. A Stage 1 real-agent diagnostic proves execution of its declared complete task population and typed outcomes, not receipt coverage, governed mutation, persistence, complete bundle verification, broad model quality, statistical significance, compliance, certification, or production suitability. Receipt, governance, state, and compliance sections render unavailable when the snapshot contains no eligible evidence. The offline README generator validates checksums, safe projections, record relationships, configured-versus-observed model roles, and claim boundaries; it does not run agents, call model providers, decrypt restricted evidence, or recompute cryptographic verification.
 
 ### Evidence Identity
 
+**Stage 1: Real-agent diagnostic.** This evidence covers one complete five-task `ifeval_subset` diagnostic through g8ee with declared real-provider configuration and retained terminal outcomes. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, statistical significance, compliance, certification, or production suitability.
+
 | Property | Value |
 | --- | --- |
-| Evidence cutoff | 2026-09-04T22:26:33Z |
-| Platform version | 2.1.3 |
-| Publication schema | 1.0.0 |
-| README evidence version | 1.0.0 |
-| Eval schema version | 1.33.0 |
+| Evidence cutoff | 2026-09-07T01:00:46.005138Z |
+| Platform version | 2.1.5 |
+| Publication schema | 2.0.0 |
+| README evidence version | 2.0.0 |
+| Eval schema version | 1.40.0 |
 | Suite version | 5eee4bb14500 |
-| Selected eval runs | a4a5e9ac-ca27-4f52-874f-46a19f3442da, d395af9e-bb88-4cda-9629-aa1bf7ee5df4 |
-| Selected demo runs | fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496, healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 |
+| Selected eval runs | e4e947da-b48f-49eb-9211-898cbe747018 |
+| Selected demo runs |  |
 | Source revision | (not populated) |
 | Source tree hash | (not populated) |
 | Dataset hash | 5eee4bb145007b67e3fe38899fc18a49a8b29b1d6ad844c76a160795bc9b6d37 |
-| Grader hash | 901fea8aa86ff16ccf9cc5be70ffc4e5392e6d69f9a74b39c5a9785947c3985a |
+| Grader hash | 943ae5f7268138a30034bc466aeae76a3f493e000e1791be0066aaa3d83c6092 |
 | Prompt hash | bb1e3aa6ac6d43703b765ba67975a30c7124232cee0105d90e0b4f5c5d3ff62d |
-| Model cohort | assistant=fake/fake-model; judge=fake/fake-model; lite=fake/fake-model; primary=fake/fake-model |
+| Model cohort | assistant=ollama/gemma4:e4b; lite=ollama/gemma4:e2b; primary=ollama/gemma4:12b |
 | Receipt verifier scope | canonical receipt signatures and final-persistence attestations |
+
+#### Configured and Observed Model Roles
+
+Configured role mappings come from the public manifest. A role is labeled observed only when retained provider-boundary stage telemetry matches its configured provider and model.
+
+| Role | Provider | Model | Endpoint class | Observation | Sources |
+| --- | --- | --- | --- | --- | --- |
+| primary | ollama | gemma4:12b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl) |
+| assistant | ollama | gemma4:e4b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl) |
+| lite | ollama | gemma4:e2b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl) |
 
 ### Eval Metrics
 
@@ -327,12 +339,7 @@ Metrics aggregate eligible, verified observations from the selected eval runs. V
 
 | Metric | Version | Arm | Unit | Value | Denominator | Rate | Status | Tasks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [eval_judge](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | score_1_to_5 | 25.000 | 5 | 5.000 | verified | 5 |
-| [eval_judge](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | score_1_to_5 | 25.000 | 5 | 5.000 | verified | 5 |
-| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | boolean | 1 | 5 | 20.0% | verified | 5 |
-| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | boolean | 1 | 5 | 20.0% | verified | 5 |
-| [stage_usage_reconciled](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | doctrine | boolean | 5 | 5 | 100.0% | verified | 5 |
-| [stage_usage_reconciled](docs/evidence/readme/current/eval/runs/ifeval_subset-20260904-201912/metrics.jsonl) | 1.0.0 | ensemble_ungoverned | boolean | 5 | 5 | 100.0% | verified | 5 |
+| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/metrics.jsonl) | 1.0.0 | doctrine | boolean | 4 | 5 | 80.0% | verified | 5 |
 
 The following candidate metrics are absent from the selected evidence and are omitted: receipt_integrity, protocol_chain, policy_outcome, final_state_accuracy, canary_scrubbing, independent_state_accuracy, model_boundary_raw_secret_rate, exact_local_rehydration, secret_detection_precision, secret_detection_recall, unauthorized_mutation.
 
@@ -340,37 +347,24 @@ The following candidate metrics are absent from the selected evidence and are om
 
 | Status | Count |
 | --- | --- |
-| completed | 10 |
+| completed | 5 |
+
+Assigned task definitions: [tasks.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/tasks.jsonl). Population and terminal outcomes: [attempts.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/attempts.jsonl). Observed model-call telemetry: [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl). Derived orientation summary: [summary.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/summary.json). Private-evidence hash metadata: [evidence-index.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/evidence-index.jsonl).
 
 ### Receipt Verification
 
-Receipt verification is bounded to canonical receipt signatures and final-persistence attestations. It does not constitute a complete eval-bundle verification.
+**Receipt evidence is unavailable for this Stage 1 campaign.** The answer-only tasks produced zero receipts, so this diagnostic supports no receipt-signature, mutation, persistence, or state claim.
 
-| Property | Value |
-| --- | --- |
-| Total receipts | 0 |
-| Verified signatures | 0 |
-| Verified persistence | 0 |
-| Failed signatures | 0 |
-| Failed persistence | 0 |
-| Missing keys | 0 |
-| Distinct signer key IDs |  |
-| Receipt-bound eligible attempts | 0 |
-| Pass | no |
 
 ### Governance and State Proof
 
-| Metric | Version | Arm | Denominator | Rate | Status |
-| --- | --- | --- | --- | --- | --- |
+**Governance and state evidence is unavailable for this Stage 1 campaign.** The answer-only diagnostic contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.
+
 
 ### Independently Verified Demonstrations
 
-The following scenarios are backed by canonical `ComplianceVerificationReport` records. All resources and data are synthetic or simulated.
+No demo verification reports in the selected snapshot.
 
-| Run ID | Environment | Scenario | Verifier | Version | Valid | Failures |
-| --- | --- | --- | --- | --- | --- | --- |
-| healthcare-run-20260904T213220Z-181f391b-e3e7-44fb-94a5-865a83644425 | healthcare-synthetic | healthcare-demo | g8e-demo-run-verifier | 1.0.0 | yes | 0 |
-| fedramp-run-20260904T222624Z-4c082fdf-72b9-48e6-8520-7f7395f3d496 | fedramp-synthetic | fedramp-demo | g8e-demo-run-verifier | 1.0.0 | yes | 0 |
 
 ### CI and Reproducibility
 
@@ -380,6 +374,8 @@ CI status is a live external signal, not a frozen pass claim.
 | --- | --- |
 | [CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) | workflow_status |
 | [Latest Release](https://github.com/g8e-ai/g8e/releases) | release_link |
+
+The portable Stage 1 run profile is recorded in [reproduction-manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/reproduction-manifest.json). Set `OLLAMA_ENDPOINT`, `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL` to values reachable by the process running `g8e-evals`; substitutions remain comparable only when recorded and are not byte-identical model reproductions.
 
 Local verification commands:
 
@@ -403,11 +399,9 @@ make lint
 ```
 
 **Evidence caveats**
-- Receipt verification covers canonical receipt signatures and final-persistence attestations only; it does not constitute complete eval-bundle verification.
-- ifeval_subset_verifier is a curated subset, not full IFEval.
-- L2 Consensus is labeled deterministic_replicated_doctrine; heterogeneous independent model consensus is not claimed.
-- Repository publication of actuator verification keys does not independently establish an external trust root.
-- The ifeval_subset fake provider produces zero receipts for text-generation tasks; receipt-bound proof comes from verified demo scenarios.
+- Stage 1 covers one complete five-task real-agent diagnostic and does not establish broad model quality or statistical significance.
+- The answer-only campaign produced zero receipts and supports no receipt, mutation, persistence, state, governance, or compliance claim.
+- Raw prompts, outputs, exact endpoints, local paths, credentials, and evidence keys remain private.
 
 ## Contributing
 

@@ -162,6 +162,7 @@ class MetricRow:
     unit: str
     verification_status: str
     grader_class: str
+    attempt_id: str
     evidence_ref: str
 
 
@@ -818,7 +819,7 @@ def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
         attempt = attempt_by_task[metric.task_id]
         if metric.arm_id != STAGE1_ARM or metric.grader_class != "deterministic" or metric.denominator_contribution != 1:
             raise ReadmeError(f"Stage 1 metric for task {metric.task_id} has an invalid deterministic denominator binding")
-        if metric.evidence_ref != f"attempts/{attempt.attempt_id}":
+        if metric.attempt_id != attempt.attempt_id:
             raise ReadmeError(f"Stage 1 metric for task {metric.task_id} does not bind to its attempt")
 
     if {task.task_id for task in run.tasks} != STAGE1_TASK_IDS or len(run.tasks) != len(STAGE1_TASK_IDS):
@@ -851,7 +852,7 @@ def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
         role: (role_map[role]["provider"], role_map[role]["model"], role_map[role]["endpoint_class"])
         for role in STAGE1_CONFIGURED_ROLES
     }
-    if reproduction.schema_version != "1.0.0" or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
+    if reproduction.schema_version != "1.0.0" or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
         raise ReadmeError(f"Stage 1 reproduction manifest for {run.run_id} does not match the fixed run profile")
 
 
@@ -1026,6 +1027,7 @@ def _parse_metrics(path: Path, run_id: str) -> tuple[MetricRow, ...]:
             unit=_require_str(raw, "unit", label),
             verification_status=_require_str(raw, "verification_status", label),
             grader_class=_require_str(raw, "grader_class", label),
+            attempt_id=str(raw.get("attempt_id", "")),
             evidence_ref=evidence_ref,
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:

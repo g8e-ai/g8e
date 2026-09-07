@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g8e-evals"
-version = "0.1.0"
+version = "0.3.0"
 description = "Evidence-grade evaluations for direct inference, the g8ee ensemble, and g8e governance"
 requires-python = ">=3.12"
 dependencies = [
