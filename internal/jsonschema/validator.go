@@ -13,7 +13,6 @@ import (
 	"math/big"
 	"net/mail"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -56,7 +55,7 @@ func (v *Validator) Validate(schema *Schema, data []byte) Failures {
 	instance, err := decodeJSONForValidation(data)
 	if err != nil {
 		return Failures{{
-			Reason:  ReasonCompileInvalidJSON,
+			Reason:  decodeReason(err),
 			Message: err.Error(),
 		}}
 	}
@@ -75,16 +74,7 @@ func (v *Validator) ValidateValue(schema *Schema, instance any) Failures {
 // decodeJSONForValidation decodes JSON bytes preserving number precision
 // via json.Number and rejecting trailing data.
 func decodeJSONForValidation(data []byte) (any, error) {
-	dec := json.NewDecoder(strings.NewReader(string(data)))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("invalid JSON: %w", err)
-	}
-	if dec.More() {
-		return nil, fmt.Errorf("trailing data after JSON document")
-	}
-	return v, nil
+	return decodeJSONStrict(data)
 }
 
 // failureCollector collects failures up to a maximum count.

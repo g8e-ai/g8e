@@ -102,9 +102,27 @@ type OSCALResult struct {
 	Description      string                 `json:"description,omitempty"`
 	Start            string                 `json:"start"`
 	End              string                 `json:"end,omitempty"`
+	Props            []OSCALProp            `json:"props,omitempty"`
+	LocalDefinitions *OSCALLocalDefinitions `json:"local-definitions,omitempty"`
 	ReviewedControls *OSCALReviewedControls `json:"reviewed-controls"`
 	Observations     []OSCALObservation     `json:"observations,omitempty"`
 	Findings         []OSCALFinding         `json:"findings,omitempty"`
+}
+
+type OSCALLocalDefinitions struct {
+	Components []OSCALSystemComponent `json:"components,omitempty"`
+}
+
+type OSCALSystemComponent struct {
+	UUID        string               `json:"uuid"`
+	Type        string               `json:"type"`
+	Title       string               `json:"title"`
+	Description string               `json:"description"`
+	Status      OSCALComponentStatus `json:"status"`
+}
+
+type OSCALComponentStatus struct {
+	State string `json:"state"`
 }
 
 type OSCALReviewedControls struct {
@@ -338,6 +356,8 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 				Title:            "Compliance Assessment for " + analysis.GetScopeRef(),
 				Description:      "Canonical cross-framework compliance analysis " + analysis.GetAnalysisId(),
 				Start:            generatedAt,
+				Props:            []OSCALProp{{Name: "g8e-scope-id", Value: analysis.GetScopeRef()}},
+				LocalDefinitions: &OSCALLocalDefinitions{Components: buildOSCALAssessmentSubjects(analysis)},
 				ReviewedControls: buildOSCALReviewedControls(findings),
 				Observations:     observations,
 				Findings:         findings,
@@ -557,6 +577,24 @@ func oscalEvidenceProps(resource *compliancev1.ComplianceEvidenceReference) []OS
 	return props
 }
 
+func buildOSCALAssessmentSubjects(analysis *compliancev1.ComplianceAnalysis) []OSCALSystemComponent {
+	assessments := append([]*compliancev1.ControlAssertionAssessment(nil), analysis.GetAssertionAssessments()...)
+	sort.Slice(assessments, func(i, j int) bool {
+		return assessments[i].GetAssessmentId() < assessments[j].GetAssessmentId()
+	})
+	subjects := make([]OSCALSystemComponent, 0, len(assessments))
+	for _, assessment := range assessments {
+		subjects = append(subjects, OSCALSystemComponent{
+			UUID:        oscalAssessmentSubjectUUID(analysis.GetAnalysisId(), assessment),
+			Type:        "software",
+			Title:       assessment.GetAssessmentId(),
+			Description: "The platform component assessed for assertion " + assessment.GetAssertionRef().GetId() + ".",
+			Status:      OSCALComponentStatus{State: "operational"},
+		})
+	}
+	return subjects
+}
+
 func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceIndex map[string]OSCALResource) ([]OSCALObservation, error) {
 	assessments := append([]*compliancev1.ControlAssertionAssessment(nil), analysis.GetAssertionAssessments()...)
 	sort.Slice(assessments, func(i, j int) bool {
@@ -595,7 +633,7 @@ func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceI
 			Props:       []OSCALProp{{Name: "g8e-verifier", Value: methodID}},
 			Collected:   assessment.GetEvaluatedAt().AsTime().UTC().Format(time.RFC3339),
 			Subjects: []OSCALSubject{{
-				SubjectUUID: generateUUID("assertion-subject", analysis.GetAnalysisId(), assessment.GetAssessmentId(), assessment.GetAssertionRef().GetId(), assessment.GetAssertionRef().GetVersion()),
+				SubjectUUID: oscalAssessmentSubjectUUID(analysis.GetAnalysisId(), assessment),
 				Type:        "component",
 				Title:       assessment.GetAssessmentId(),
 			}},
@@ -603,6 +641,10 @@ func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceI
 		})
 	}
 	return observations, nil
+}
+
+func oscalAssessmentSubjectUUID(analysisID string, assessment *compliancev1.ControlAssertionAssessment) string {
+	return generateUUID("assessment-subject-component", analysisID, assessment.GetAssessmentId(), assessment.GetAssertionRef().GetId(), assessment.GetAssertionRef().GetVersion())
 }
 
 func buildOSCALFindings(analysis *compliancev1.ComplianceAnalysis) ([]OSCALFinding, error) {

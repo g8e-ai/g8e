@@ -69,7 +69,7 @@ func (c *Compiler) Compile(data []byte) (*Schema, error) {
 	v, err := decodeJSONStrict(data)
 	if err != nil {
 		return nil, &CompileError{Failures: Failures{{
-			Reason:  ReasonCompileInvalidJSON,
+			Reason:  decodeReason(err),
 			Message: err.Error(),
 		}}}
 	}

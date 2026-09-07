@@ -8,6 +8,8 @@
 package compliance
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	oscalvalidator "github.com/g8e-ai/g8e/v2/internal/services/compliance/oscal/validator"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -59,6 +62,27 @@ func TestOSCALDocumentValidator_ValidateAssessmentResultsRejectsNilDocument(t *t
 	assert.Nil(t, result)
 }
 
+func TestOSCALDocumentValidator_ValidateAssessmentResultsReturnsProtocolOwnedSemanticFailures(t *testing.T) {
+	document, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(oscalTestAnalysis())
+	require.NoError(t, err)
+	for i := range document.AssessmentResults.BackMatter.Resources[0].Props {
+		if document.AssessmentResults.BackMatter.Resources[0].Props[i].Name == "scope-id" {
+			document.AssessmentResults.BackMatter.Resources[0].Props[i].Value = "scope-2"
+		}
+	}
+	validator, err := NewOSCALDocumentValidator()
+	require.NoError(t, err)
+
+	result, err := validator.ValidateAssessmentResults(document)
+	require.NoError(t, err)
+	assert.False(t, result.GetValid())
+	assert.Empty(t, result.GetStructuralFailures())
+	require.NotEmpty(t, result.GetSemanticFailures())
+	assert.Equal(t, string(oscalvalidator.SemanticEvidenceScopeMismatch), result.GetSemanticFailures()[0].GetCode())
+	assert.NotEmpty(t, result.GetSemanticFailures()[0].GetMessage())
+	assert.NotEmpty(t, result.GetSemanticFailures()[0].GetInstancePtr())
+}
+
 func TestOSCALDocumentValidator_ValidationResultIsCanonicalProtocolJSON(t *testing.T) {
 	validator, err := NewOSCALDocumentValidator()
 	require.NoError(t, err)
@@ -70,6 +94,17 @@ func TestOSCALDocumentValidator_ValidationResultIsCanonicalProtocolJSON(t *testi
 	decoded := &compliancev1.OSCALValidationResult{}
 	require.NoError(t, compliancev1.UnmarshalCanonical(encoded, decoded))
 	assert.True(t, proto.Equal(result, decoded))
+}
+
+func TestOSCALDocumentValidator_ValidationResultGoldenVector(t *testing.T) {
+	validator, err := NewOSCALDocumentValidator()
+	require.NoError(t, err)
+	result, err := validator.ValidateBytes([]byte(`{"invalid":true}`))
+	require.NoError(t, err)
+	encoded, err := compliancev1.MarshalCanonical(result)
+	require.NoError(t, err)
+	digest := sha256.Sum256(encoded)
+	assert.Equal(t, "03ecd403d6048fc97cea0e0d62074bdccba7a4f6080c3e58b3fa7998e156c27f", hex.EncodeToString(digest[:]))
 }
 
 func TestOSCALDocumentValidator_ValidateBytesReturnsDeterministicFailures(t *testing.T) {

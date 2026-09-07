@@ -10,7 +10,10 @@ package jsonschema
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
+
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // ReasonCode is a stable, machine-readable failure code. Every compile and
@@ -200,18 +203,98 @@ func (e *ValidationError) Error() string {
 func decodeJSONStrict(data []byte) (any, error) {
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("%s: %v", ReasonCompileInvalidJSON, err)
+	value, err := decodeJSONValue(dec, 0)
+	if err != nil {
+		return nil, err
 	}
-	if dec.More() {
-		return nil, fmt.Errorf("%s: trailing data after JSON document", ReasonCompileTrailingData)
+	if _, err := dec.Token(); err != io.EOF {
+		if err != nil {
+			return nil, newJSONDecodeError(ReasonCompileInvalidJSON, err.Error())
+		}
+		return nil, newJSONDecodeError(ReasonCompileTrailingData, "trailing data after JSON document")
 	}
-	// Check for duplicate keys
-	if dupErr := checkDuplicateKeys(v, ""); dupErr != nil {
-		return nil, dupErr
+	return value, nil
+}
+
+type jsonDecodeError struct {
+	reason  ReasonCode
+	message string
+}
+
+func (e *jsonDecodeError) Error() string {
+	return fmt.Sprintf("%s: %s", e.reason, e.message)
+}
+
+func newJSONDecodeError(reason ReasonCode, message string) error {
+	return &jsonDecodeError{reason: reason, message: message}
+}
+
+func decodeReason(err error) ReasonCode {
+	if decodeErr, ok := err.(*jsonDecodeError); ok {
+		return decodeErr.reason
 	}
-	return v, nil
+	return ReasonCompileInvalidJSON
+}
+
+func decodeJSONValue(decoder *json.Decoder, depth int) (any, error) {
+	if depth > constants.OSCALValidatorMaxDepth {
+		return nil, newJSONDecodeError(ReasonCompileResourceLimit, fmt.Sprintf("JSON nesting depth exceeds limit %d", constants.OSCALValidatorMaxDepth))
+	}
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, newJSONDecodeError(ReasonCompileInvalidJSON, err.Error())
+	}
+	delimiter, isDelimiter := token.(json.Delim)
+	if !isDelimiter {
+		return token, nil
+	}
+	switch delimiter {
+	case '{':
+		object := make(map[string]any)
+		for decoder.More() {
+			if len(object) >= constants.OSCALValidatorMaxProperties {
+				return nil, newJSONDecodeError(ReasonCompileResourceLimit, fmt.Sprintf("object property count exceeds limit %d", constants.OSCALValidatorMaxProperties))
+			}
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return nil, newJSONDecodeError(ReasonCompileInvalidJSON, err.Error())
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return nil, newJSONDecodeError(ReasonCompileInvalidJSON, "object key is not a string")
+			}
+			if _, exists := object[key]; exists {
+				return nil, newJSONDecodeError(ReasonCompileDuplicateKey, fmt.Sprintf("duplicate object key %q", key))
+			}
+			value, err := decodeJSONValue(decoder, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			object[key] = value
+		}
+		if _, err := decoder.Token(); err != nil {
+			return nil, newJSONDecodeError(ReasonCompileInvalidJSON, err.Error())
+		}
+		return object, nil
+	case '[':
+		array := make([]any, 0)
+		for decoder.More() {
+			if len(array) >= constants.OSCALValidatorMaxItems {
+				return nil, newJSONDecodeError(ReasonCompileResourceLimit, fmt.Sprintf("array item count exceeds limit %d", constants.OSCALValidatorMaxItems))
+			}
+			value, err := decodeJSONValue(decoder, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			array = append(array, value)
+		}
+		if _, err := decoder.Token(); err != nil {
+			return nil, newJSONDecodeError(ReasonCompileInvalidJSON, err.Error())
+		}
+		return array, nil
+	default:
+		return nil, newJSONDecodeError(ReasonCompileInvalidJSON, fmt.Sprintf("unexpected JSON delimiter %q", delimiter))
+	}
 }
 
 func checkDuplicateKeys(v any, path string) error {

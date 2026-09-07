@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/jsonschema"
 )
 
 // minimalValidOSCAL is a minimal valid OSCAL 1.1.2 assessment-results
@@ -30,7 +31,7 @@ const minimalValidOSCAL = `{
       "oscal-version": "1.1.2"
     },
     "import-ap": {
-      "href": "#a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5e"
+      "href": "urn:g8e:assessment-plan:compliance-analysis:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     "results": [
       {
@@ -39,6 +40,17 @@ const minimalValidOSCAL = `{
         "description": "Compliance assessment results",
         "start": "2026-09-07T00:00:00Z",
         "end": "2026-09-07T01:00:00Z",
+        "local-definitions": {
+          "components": [
+            {
+              "uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "type": "software",
+              "title": "Gateway",
+              "description": "Assessment subject",
+              "status": {"state": "operational"}
+            }
+          ]
+        },
         "reviewed-controls": {
           "control-selections": [
             {
@@ -137,6 +149,17 @@ func TestValidator_InvalidJSON_FailsStructural(t *testing.T) {
 	assert.NotEmpty(t, result.StructuralFailures)
 }
 
+func TestValidator_DuplicateJSONKeyFailsWithTypedStructuralReason(t *testing.T) {
+	v, err := NewValidator()
+	require.NoError(t, err)
+	result, err := v.Validate([]byte(`{"assessment-results":{"uuid":"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d","uuid":"b1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"}}`))
+	require.NoError(t, err)
+	assert.False(t, result.Valid)
+	require.Len(t, result.StructuralFailures, 1)
+	assert.Equal(t, jsonschema.ReasonCompileDuplicateKey, result.StructuralFailures[0].Reason)
+	assert.Empty(t, result.SemanticFailures)
+}
+
 func TestValidator_MissingRequiredField_FailsStructural(t *testing.T) {
 	v, err := NewValidator()
 	require.NoError(t, err)
@@ -146,6 +169,36 @@ func TestValidator_MissingRequiredField_FailsStructural(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Valid)
 	assert.NotEmpty(t, result.StructuralFailures)
+}
+
+func TestValidator_EmittedObjectMutationMatrixRejectsStructuralViolations(t *testing.T) {
+	tests := []struct {
+		name   string
+		old    string
+		new    string
+		reason jsonschema.ReasonCode
+	}{
+		{name: "assessment-results required UUID", old: `"uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "metadata required title", old: `"title": "g8e Compliance Assessment Results",`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "result required title", old: `"title": "Assessment Results",`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "component required description", old: `"description": "Assessment subject",`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "observation required methods", old: `"methods": ["TEST"],`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "finding required target", old: `"target": {`, new: `"removed-target": {`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "resource required UUID", old: `"uuid": "e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, reason: jsonschema.ReasonValueRequiredMissing},
+		{name: "result unknown property", old: `"title": "Assessment Results",`, new: `"title": "Assessment Results", "unknown": true,`, reason: jsonschema.ReasonValueAdditionalProp},
+	}
+	v, err := NewValidator()
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			document := replaceInJSON(t, minimalValidOSCAL, tt.old, tt.new)
+			result, err := v.Validate([]byte(document))
+			require.NoError(t, err)
+			assert.False(t, result.Valid)
+			assert.True(t, hasStructuralFailure(result.StructuralFailures, tt.reason), result.StructuralFailures.Error())
+			assert.Empty(t, result.SemanticFailures)
+		})
+	}
 }
 
 func TestValidator_InvalidUUID_Fails(t *testing.T) {
@@ -171,6 +224,8 @@ func TestValidator_DuplicateUUID_FailsSemantic(t *testing.T) {
 	assert.False(t, result.Valid)
 	// May fail structural or semantic depending on which UUID is duplicated
 	// The important thing is that it fails
+	assert.Empty(t, result.StructuralFailures)
+	assert.True(t, hasSemanticFailure(result.SemanticFailures, SemanticUUIDDuplicate))
 }
 
 func TestValidator_UnresolvedEvidenceRef_FailsSemantic(t *testing.T) {
@@ -257,6 +312,165 @@ func TestValidator_EmptyObservationSubjects_FailsSemantic(t *testing.T) {
 	}
 }
 
+func TestValidator_SemanticBindingsRejectInconsistentDocuments(t *testing.T) {
+	contentAddressProps := `"props": [
+            {"name": "artifact-id", "value": "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            {"name": "artifact-type", "value": "action-receipt"},
+            {"name": "sha256", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            {"name": "media-type", "value": "application/json"},
+            {"name": "schema-ref", "value": "g8e.operator.v1.ActionReceipt"},
+            {"name": "producer-identity", "value": "gateway"},
+            {"name": "verification-status", "value": "verified"},
+            {"name": "verifier-id", "value": "receipt-verifier"},
+            {"name": "verifier-version", "value": "1.0.0"},
+            {"name": "scope-id", "value": "scope-1"},
+            {"name": "bundle-path", "value": "receipts.jsonl"}
+          ]`
+	withContentAddress := replaceInJSON(t, minimalValidOSCAL, `"props": [
+            {
+              "name": "media-type",
+              "value": "application/json"
+            }
+          ]`, contentAddressProps)
+	withContentAddress = replaceInJSON(t, withContentAddress, `"end": "2026-09-07T01:00:00Z",`, `"end": "2026-09-07T01:00:00Z",
+        "props": [{"name": "g8e-scope-id", "value": "scope-1"}],`)
+	tests := []struct {
+		name     string
+		document string
+		reason   SemanticReasonCode
+	}{
+		{
+			name:     "unresolved local assessment plan",
+			document: replaceInJSON(t, minimalValidOSCAL, `"href": "urn:g8e:assessment-plan:compliance-analysis:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"href": "#99999999-eeee-4a7b-8c9d-0e1f2a3b4c5d"`),
+			reason:   SemanticImportAPMissing,
+		},
+		{
+			name:     "malformed local evidence reference",
+			document: replaceInJSON(t, minimalValidOSCAL, `"href": "#e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"`, `"href": "#not-a-resource"`),
+			reason:   SemanticObsEvidenceUnresolved,
+		},
+		{
+			name:     "duplicate reviewed control",
+			document: replaceInJSON(t, minimalValidOSCAL, `{"control-id": "KSI-MLA-07"}`, `{"control-id": "KSI-MLA-07"}, {"control-id": "KSI-MLA-07"}`),
+			reason:   SemanticReviewedControls,
+		},
+		{
+			name:     "finding target outside reviewed controls",
+			document: replaceInJSON(t, minimalValidOSCAL, `"target-id": "KSI-MLA-07"`, `"target-id": "KSI-CMT-99"`),
+			reason:   SemanticFindingTargetMissing,
+		},
+		{
+			name:     "unresolved observation subject",
+			document: replaceInJSON(t, minimalValidOSCAL, `"subject-uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"`, `"subject-uuid": "99999999-eeee-4a7b-8c9d-0e1f2a3b4c5d"`),
+			reason:   SemanticObsSubjectMissing,
+		},
+		{
+			name:     "result interval is inverted",
+			document: replaceInJSON(t, minimalValidOSCAL, `"end": "2026-09-07T01:00:00Z"`, `"end": "2026-09-06T23:00:00Z"`),
+			reason:   SemanticTimestampInvalid,
+		},
+		{
+			name:     "observation is outside result interval",
+			document: replaceInJSON(t, minimalValidOSCAL, `"collected": "2026-09-07T00:30:00Z"`, `"collected": "2026-09-07T02:00:00Z"`),
+			reason:   SemanticTimestampInvalid,
+		},
+		{
+			name:     "artifact type does not match content address",
+			document: replaceInJSON(t, withContentAddress, `"name": "artifact-type", "value": "action-receipt"`, `"name": "artifact-type", "value": "eval-metric"`),
+			reason:   SemanticContentAddressInvalid,
+		},
+		{
+			name:     "digest does not match content address",
+			document: replaceInJSON(t, withContentAddress, `"name": "sha256", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"name": "sha256", "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"`),
+			reason:   SemanticContentAddressInvalid,
+		},
+		{
+			name:     "duplicate evidence property",
+			document: replaceInJSON(t, withContentAddress, `{"name": "artifact-type", "value": "action-receipt"}`, `{"name": "artifact-type", "value": "action-receipt"}, {"name": "artifact-type", "value": "action-receipt"}`),
+			reason:   SemanticContentAddressInvalid,
+		},
+		{
+			name:     "verified evidence missing verifier identity",
+			document: replaceInJSON(t, withContentAddress, `{"name": "verifier-id", "value": "receipt-verifier"},`, ``),
+			reason:   SemanticContentAddressInvalid,
+		},
+		{
+			name:     "incomplete encryption metadata",
+			document: replaceInJSON(t, withContentAddress, `{"name": "bundle-path", "value": "receipts.jsonl"}`, `{"name": "bundle-path", "value": "receipts.jsonl"}, {"name": "encryption-algorithm", "value": "AES-256-GCM"}`),
+			reason:   SemanticContentAddressInvalid,
+		},
+		{
+			name: "content-addressed evidence missing result scope",
+			document: replaceInJSON(t, withContentAddress, `        "props": [{"name": "g8e-scope-id", "value": "scope-1"}],
+`, ``),
+			reason: SemanticEvidenceScopeMismatch,
+		},
+		{
+			name:     "cross-scope evidence link",
+			document: replaceInJSON(t, withContentAddress, `{"name": "scope-id", "value": "scope-1"}`, `{"name": "scope-id", "value": "scope-2"}`),
+			reason:   SemanticEvidenceScopeMismatch,
+		},
+		{
+			name: "back-matter resource missing title and description",
+			document: replaceInJSON(t, minimalValidOSCAL, `          "title": "Receipt Evidence",
+          "description": "Content-addressed receipt evidence",
+`, ``),
+			reason: SemanticBackMatterResourceMissing,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := NewValidator()
+			require.NoError(t, err)
+			result, err := v.Validate([]byte(tt.document))
+			require.NoError(t, err)
+			assert.Empty(t, result.StructuralFailures)
+			assert.False(t, result.Valid)
+			assert.True(t, hasSemanticFailure(result.SemanticFailures, tt.reason), result.SemanticFailures.Error())
+		})
+	}
+}
+
+func TestValidator_FindingTargetPassesWhenReviewedControlsIncludesAll(t *testing.T) {
+	document := replaceInJSON(t, minimalValidOSCAL, `"include-controls": [
+                {"control-id": "KSI-MLA-07"}
+              ]`, `"include-all": {}`)
+	v, err := NewValidator()
+	require.NoError(t, err)
+	result, err := v.Validate([]byte(document))
+	require.NoError(t, err)
+	assert.True(t, result.Valid, result.SemanticFailures.Error())
+}
+
+func TestValidator_ContentAddressedEvidenceWithMatchingScopePasses(t *testing.T) {
+	contentAddressProps := `"props": [
+            {"name": "artifact-id", "value": "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            {"name": "artifact-type", "value": "action-receipt"},
+            {"name": "sha256", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            {"name": "media-type", "value": "application/json"},
+            {"name": "schema-ref", "value": "g8e.operator.v1.ActionReceipt"},
+            {"name": "producer-identity", "value": "gateway"},
+            {"name": "verification-status", "value": "verified"},
+            {"name": "verifier-id", "value": "receipt-verifier"},
+            {"name": "verifier-version", "value": "1.0.0"},
+            {"name": "scope-id", "value": "scope-1"},
+            {"name": "bundle-path", "value": "receipts.jsonl"}
+          ]`
+	document := replaceInJSON(t, minimalValidOSCAL, `"props": [
+            {
+              "name": "media-type",
+              "value": "application/json"
+            }
+          ]`, contentAddressProps)
+	document = replaceInJSON(t, document, `"end": "2026-09-07T01:00:00Z",`, `"end": "2026-09-07T01:00:00Z",
+        "props": [{"name": "g8e-scope-id", "value": "scope-1"}],`)
+	v, err := NewValidator()
+	require.NoError(t, err)
+	result, err := v.Validate([]byte(document))
+	require.NoError(t, err)
+	assert.True(t, result.Valid, result.SemanticFailures.Error())
+}
+
 func TestValidator_ValidatorIdentity(t *testing.T) {
 	v, err := NewValidator()
 	require.NoError(t, err)
@@ -283,13 +497,15 @@ func TestValidator_StructuralFailurePreventsSemanticValidation(t *testing.T) {
 func TestValidator_DeterministicResults(t *testing.T) {
 	v, err := NewValidator()
 	require.NoError(t, err)
-	r1, err := v.Validate([]byte(minimalValidOSCAL))
+	document := replaceInJSON(t, minimalValidOSCAL, `"b1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"`, `"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"`)
+	document = replaceInJSON(t, document, `"2026-09-07T00:30:00Z"`, `"2026-09-07T02:00:00Z"`)
+	expected, err := v.Validate([]byte(document))
 	require.NoError(t, err)
-	r2, err := v.Validate([]byte(minimalValidOSCAL))
-	require.NoError(t, err)
-	assert.Equal(t, r1.Valid, r2.Valid)
-	assert.Equal(t, len(r1.StructuralFailures), len(r2.StructuralFailures))
-	assert.Equal(t, len(r1.SemanticFailures), len(r2.SemanticFailures))
+	for range 25 {
+		actual, err := v.Validate([]byte(document))
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	}
 }
 
 func TestIsValidUUID(t *testing.T) {
@@ -302,6 +518,15 @@ func TestIsValidUUID(t *testing.T) {
 }
 
 // --- Helpers ---
+
+func hasStructuralFailure(failures jsonschema.Failures, reason jsonschema.ReasonCode) bool {
+	for _, failure := range failures {
+		if failure.Reason == reason {
+			return true
+		}
+	}
+	return false
+}
 
 func hasSemanticFailure(failures SemanticFailures, reason SemanticReasonCode) bool {
 	for _, f := range failures {

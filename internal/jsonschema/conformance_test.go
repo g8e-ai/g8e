@@ -292,19 +292,20 @@ func TestFocused_UnicodeStringLength(t *testing.T) {
 }
 
 func TestFocused_DuplicateKeyRejection(t *testing.T) {
-	// The validator should handle duplicate keys gracefully.
-	// Note: Go's json.Decoder silently overwrites duplicate keys.
-	// The strict decoder in the compiler path should detect this.
-	// For the validator, we test that the decoded value validates correctly
-	// even if the original had duplicates (the last value wins).
+	// The validator rejects duplicate keys before schema evaluation.
+	// Go's json.Decoder normally overwrites duplicate keys.
+	// The shared strict decoder detects duplicates in its token stream.
+	// The validator returns the stable duplicate-key reason code
+	// instead of validating an ambiguously decoded final value.
 	c := NewCompiler()
 	s, err := c.Compile([]byte(`{"type":"object","properties":{"a":{"type":"integer"}}}`))
 	require.NoError(t, err)
 	v := NewValidator()
-	// This JSON has duplicate keys; Go's decoder will use the last value
+	// This JSON has a duplicate key and is rejected during strict decoding.
 	fs := v.Validate(s, []byte(`{"a":1,"a":"x"}`))
-	// The last value "x" fails the integer type check
-	assert.NotEmpty(t, fs)
+	// The failure remains distinct from an ordinary type mismatch.
+	require.Len(t, fs, 1)
+	assert.Equal(t, ReasonCompileDuplicateKey, fs[0].Reason)
 }
 
 func TestFocused_DeterministicFailureOrdering(t *testing.T) {

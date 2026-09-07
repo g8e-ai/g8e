@@ -50,6 +50,15 @@ func TestCompiler_RejectsInvalidJSON(t *testing.T) {
 	assert.True(t, ce.Failures.Has(ReasonCompileInvalidJSON))
 }
 
+func TestCompiler_RejectsDuplicateObjectKeys(t *testing.T) {
+	compiler := NewCompiler()
+	_, err := compiler.Compile([]byte(`{"type":"object","type":"array"}`))
+	require.Error(t, err)
+	compileErr, ok := err.(*CompileError)
+	require.True(t, ok)
+	assert.True(t, compileErr.Failures.Has(ReasonCompileDuplicateKey))
+}
+
 func TestCompiler_RejectsTrailingData(t *testing.T) {
 	c := NewCompiler()
 	_, err := c.Compile([]byte(`{}` + "\n" + `{}`))

@@ -158,7 +158,7 @@ func TestRenderComplianceAnalysis_GoldenVectors(t *testing.T) {
 		expectedSHA256 string
 	}{
 		{format: FormatJSON, expectedSHA256: "9f71eaab3df307e70d12108b0400807b01fb1df813d2cff7ea7573fa3104ac93"},
-		{format: FormatOSCAL, expectedSHA256: "b1ec314e04fa3b65990cb8f7315f3770f1d67a5be3190fa627adaf7a7e436a5b"},
+		{format: FormatOSCAL, expectedSHA256: "e6452f033cf7c29b951b803f4114d8e53bff365bb3aefed862876f9cb8d76f5c"},
 		{format: FormatMarkdown, expectedSHA256: "d9c9a0195677a4bef269f56670fcf77f90cdc114ad6b1992bd1cb254fe6265d5"},
 		{format: FormatHTML, expectedSHA256: "2ad80e6c4c4ef18913ba925bd3f3598ce109dc42b25fe583fea337c9728f135f"},
 		{format: FormatCLI, expectedSHA256: "ddb408d7bbde738afd7b09add4af91b1a137a8dfcd3061c1023bc8cd33669e84"},
