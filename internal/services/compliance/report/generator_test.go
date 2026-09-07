@@ -34,11 +34,30 @@ func (generationImporter) SourceID() string {
 	return "generation-test"
 }
 
+func validGenerationNode(scopeID string, producedAt, verifiedAt time.Time) evidence.EvidenceNode {
+	body := []byte(`{"schema_version":"1.0.0"}`)
+	artifactID := evidence.ContentAddress(evidence.ArtifactTypeDemoManifest, body)
+	return evidence.EvidenceNode{
+		ArtifactID:         artifactID,
+		ArtifactType:       evidence.ArtifactTypeDemoManifest,
+		SHA256:             artifactID[len(artifactID)-64:],
+		MediaType:          constants.MediaTypeJSON,
+		SchemaRef:          "g8e.compliance.v1.DemoRunManifest",
+		ProducerIdentity:   "generation-test@1.0.0",
+		ProducedAt:         producedAt,
+		ScopeID:            scopeID,
+		VerificationStatus: evidence.VerificationStatusVerified,
+		VerifierID:         "generation-test-verifier",
+		VerifierVersion:    "1.0.0",
+		VerifiedAt:         verifiedAt,
+		BundlePath:         constants.ComplianceBundleManifestFilename,
+		CanonicalBytes:     body,
+	}
+}
+
 func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonicalAnalysis(t *testing.T) {
 	windowStart := time.Unix(1_700_000_000, 0).UTC()
 	windowEnd := windowStart.Add(time.Hour)
-	body := []byte(`{"schema_version":"1.0.0"}`)
-	artifactID := evidence.ContentAddress(evidence.ArtifactTypeDemoManifest, body)
 	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 	require.NoError(t, err)
 
@@ -47,25 +66,10 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 		WindowStart: windowStart,
 		WindowEnd:   windowEnd,
 		EvaluatedAt: windowEnd,
-		Importers: []evidence.EvidenceImporter{generationImporter{nodes: []evidence.EvidenceNode{{
-			ArtifactID:         artifactID,
-			ArtifactType:       evidence.ArtifactTypeDemoManifest,
-			SHA256:             artifactID[len(artifactID)-64:],
-			MediaType:          constants.MediaTypeJSON,
-			SchemaRef:          "g8e.compliance.v1.DemoRunManifest",
-			ProducerIdentity:   "generation-test@1.0.0",
-			ProducedAt:         windowStart,
-			ScopeID:            "scope-1",
-			VerificationStatus: evidence.VerificationStatusVerified,
-			VerifierID:         "generation-test-verifier",
-			VerifierVersion:    "1.0.0",
-			VerifiedAt:         windowEnd,
-			BundlePath:         constants.ComplianceBundleManifestFilename,
-			CanonicalBytes:     body,
-		}}}},
-		Assertions: assertions,
-		Frameworks: frameworks,
-		Crosswalks: crosswalks,
+		Importers:   []evidence.EvidenceImporter{generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}},
+		Assertions:  assertions,
+		Frameworks:  frameworks,
+		Crosswalks:  crosswalks,
 	})
 
 	require.NoError(t, err)
@@ -77,6 +81,50 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	assert.Len(t, result.Analysis.GetAssertionAssessments(), len(assertions.GetAssertions()))
 	assert.NotEmpty(t, result.Analysis.GetFrameworkAssessments())
 	assert.True(t, result.Analysis.GetEvidenceGraphValid())
+}
+
+func TestGenerateComplianceAnalysis_RejectsMissingImporters(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+
+	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
+		ScopeID:     "scope-1",
+		WindowStart: windowStart,
+		WindowEnd:   windowEnd,
+		EvaluatedAt: windowEnd,
+		Assertions:  assertions,
+		Frameworks:  frameworks,
+		Crosswalks:  crosswalks,
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+	assert.Nil(t, result)
+}
+
+func TestGenerateComplianceAnalysis_RejectsEvidenceFromAnotherScope(t *testing.T) {
+	windowStart := time.Unix(1_700_000_000, 0).UTC()
+	windowEnd := windowStart.Add(time.Hour)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+
+	result, err := GenerateComplianceAnalysis(context.Background(), GenerationRequest{
+		ScopeID:     "scope-2",
+		WindowStart: windowStart,
+		WindowEnd:   windowEnd,
+		EvaluatedAt: windowEnd,
+		Importers:   []evidence.EvidenceImporter{generationImporter{nodes: []evidence.EvidenceNode{validGenerationNode("scope-1", windowStart, windowEnd)}}},
+		Assertions:  assertions,
+		Frameworks:  frameworks,
+		Crosswalks:  crosswalks,
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+	require.NotNil(t, result)
+	assert.Nil(t, result.Analysis)
 }
 
 func TestGenerateComplianceAnalysis_RejectsImporterFailureBeforeGrading(t *testing.T) {

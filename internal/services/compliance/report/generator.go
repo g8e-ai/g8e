@@ -34,10 +34,21 @@ type GenerationResult struct {
 }
 
 func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) (*GenerationResult, error) {
+	if len(request.Importers) == 0 {
+		return nil, fmt.Errorf("%w: report generation requires evidence importers", constants.ErrInvalidEvidenceGraph)
+	}
 	graph, graphReport := evidence.BuildAndValidateGraph(ctx, request.Importers, request.WindowStart, request.WindowEnd, request.EvaluatedAt)
 	result := &GenerationResult{GraphReport: graphReport}
 	if !graphReport.Valid {
 		return result, fmt.Errorf("%w: evidence graph verification failed", constants.ErrReportVerificationFailed)
+	}
+	if len(graph.NodesByScope(request.ScopeID)) == 0 {
+		return result, fmt.Errorf("%w: no evidence belongs to scope %s", constants.ErrEvidenceScopeMismatch, request.ScopeID)
+	}
+	for scopeID := range graphReport.NodesByScope {
+		if scopeID != request.ScopeID {
+			return result, fmt.Errorf("%w: evidence belongs to scope %s instead of %s", constants.ErrEvidenceScopeMismatch, scopeID, request.ScopeID)
+		}
 	}
 
 	assertionAssessments, err := evidence.GradeControlAssertions(ctx, evidence.AssertionGradingRequest{

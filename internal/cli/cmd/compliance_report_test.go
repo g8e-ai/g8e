@@ -39,6 +39,12 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 	return bytes.TrimSpace(output.Bytes()), cmd.RunE(cmd, nil)
 }
 
+func TestComplianceReportCmd_ContainsGenerateSubcommand(t *testing.T) {
+	cmd := complianceReportCmd()
+	require.Len(t, cmd.Commands(), 1)
+	assert.Equal(t, "generate", cmd.Commands()[0].Name())
+}
+
 func TestComplianceReportGenerateCmdWithConfig_ProducesCanonicalAnalysisFromVerifiedEvalEvidence(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	runID := persistMinimalEvidenceGraphEvalFixture(t, fileSvc)

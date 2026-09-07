@@ -26,7 +26,7 @@ import (
 func complianceReportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "report",
-		Short: "Generate and verify canonical compliance reports",
+		Short: "Generate canonical compliance reports",
 	}
 	cmd.AddCommand(complianceReportGenerateCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory))
 	return cmd
