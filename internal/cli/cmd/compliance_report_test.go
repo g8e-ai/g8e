@@ -18,6 +18,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -66,6 +67,54 @@ func TestComplianceReportGenerateCmdWithConfig_ProducesCanonicalAnalysisFromVeri
 	assert.True(t, analysis.GetEvidenceGraphValid())
 	assert.NotEmpty(t, analysis.GetAssertionAssessments())
 	assert.NotEmpty(t, analysis.GetFrameworkAssessments())
+}
+
+func TestComplianceReportGenerateCmdWithConfig_RendersRequestedFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		format   compliancereport.Format
+		contains string
+	}{
+		{name: "canonical JSON", format: compliancereport.FormatJSON, contains: "analysis_id"},
+		{name: "OSCAL", format: compliancereport.FormatOSCAL, contains: "g8e Compliance Assessment Results"},
+		{name: "Markdown", format: compliancereport.FormatMarkdown, contains: "# g8e Compliance Report"},
+		{name: "HTML", format: compliancereport.FormatHTML, contains: "<!doctype html>"},
+		{name: "CLI", format: compliancereport.FormatCLI, contains: "Compliance analysis:"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileSvc, _ := newCmdTestEnv(t)
+			runID := persistMinimalEvidenceGraphEvalFixture(t, fileSvc)
+			cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil))
+			windowStart := time.Unix(1_699_999_999, 0).UTC()
+			windowEnd := time.Unix(1_700_000_100, 0).UTC()
+			require.NoError(t, cmd.Flags().Set("scope-id", evidence.EvalScopeID("evidence-graph-suite")))
+			require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("eval-run", runID))
+			require.NoError(t, cmd.Flags().Set("format", string(test.format)))
+			var output bytes.Buffer
+			cmd.SetOut(&output)
+
+			require.NoError(t, cmd.RunE(cmd, nil))
+			assert.Contains(t, output.String(), test.contains)
+		})
+	}
+}
+
+func TestComplianceReportGenerateCmdWithConfig_RejectsUnsupportedFormat(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil))
+	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
+	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
+	require.NoError(t, cmd.Flags().Set("eval-run", "run-1"))
+	require.NoError(t, cmd.Flags().Set("format", "yaml"))
+
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
 
 func TestComplianceReportGenerateCmdWithConfig_RejectsMissingEvidenceRuns(t *testing.T) {

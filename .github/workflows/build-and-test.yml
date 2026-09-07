@@ -392,3 +392,30 @@ jobs:
       - name: Run vitest suite
         working-directory: dashboard
         run: npm test
+
+  website-tests:
+    name: Website Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Test and build
+        working-directory: website
+        run: npm run check && npm run build
+
+      - name: Validate Cloudflare bundle
+        working-directory: website
+        run: npx wrangler deploy --dry-run

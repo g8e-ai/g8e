@@ -279,6 +279,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 | Compliance (KSI, catalogs, demo evidence, OSCAL renderer) | `internal/services/compliance/` |
 | CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |
 | Architecture docs | `docs/architecture/` |
+| Public website | `website/` (generated from `README.md` with `make website-build`; verified with `make website-test`) |
 
 ## Contributing
 

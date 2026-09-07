@@ -20,7 +20,6 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
-	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 func complianceReportCmd() *cobra.Command {
@@ -43,6 +42,7 @@ func complianceReportGenerateCmdWithConfig(
 		evalRuns         []string
 		windowStartMilli int64
 		windowEndMilli   int64
+		outputFormat     string
 	)
 
 	cmd := &cobra.Command{
@@ -50,6 +50,10 @@ func complianceReportGenerateCmdWithConfig(
 		Short: "Generate canonical analysis from persisted evidence",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			format, err := compliancereport.ParseFormat(outputFormat)
+			if err != nil {
+				return err
+			}
 			if scopeID == "" {
 				return fmt.Errorf("%w: --scope-id is required", constants.ErrValidationFailed)
 			}
@@ -90,11 +94,18 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return err
 			}
-			body, err := compliancev1.MarshalCanonical(result.Analysis)
+			rendered, err := compliancereport.RenderComplianceAnalysis(result.Analysis, format)
 			if err != nil {
-				return fmt.Errorf("compliance report: marshal canonical analysis: %w", err)
+				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), string(body))
+			if _, err := cmd.OutOrStdout().Write(rendered.Body); err != nil {
+				return fmt.Errorf("compliance report: write %s output: %w", format, err)
+			}
+			if len(rendered.Body) == 0 || rendered.Body[len(rendered.Body)-1] != '\n' {
+				if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
+					return fmt.Errorf("compliance report: terminate %s output: %w", format, err)
+				}
+			}
 			return nil
 		},
 	}
@@ -104,6 +115,7 @@ func complianceReportGenerateCmdWithConfig(
 	cmd.Flags().StringSliceVar(&evalRuns, "eval-run", nil, "Eval bundle run ID (repeatable)")
 	cmd.Flags().Int64Var(&windowStartMilli, "window-start-unix-ms", 0, "Evidence window start as Unix milliseconds")
 	cmd.Flags().Int64Var(&windowEndMilli, "window-end-unix-ms", 0, "Evidence window end as Unix milliseconds")
+	cmd.Flags().StringVar(&outputFormat, "format", string(compliancereport.FormatJSON), "Output format: json, oscal, markdown, html, or cli")
 	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root directory (defaults to cwd)")
 	return cmd
 }

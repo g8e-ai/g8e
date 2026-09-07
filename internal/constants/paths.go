@@ -696,6 +696,10 @@ const (
 	EvalEncryptedEvidenceVersion           = 1
 	EvalEncryptedEvidenceNonceBytes        = 12
 	MediaTypeJSON                          = "application/json"
+	MediaTypeOSCALJSON                     = "application/oscal+json"
+	MediaTypeMarkdown                      = "text/markdown; charset=utf-8"
+	MediaTypeHTML                          = "text/html; charset=utf-8"
+	MediaTypeText                          = "text/plain; charset=utf-8"
 	EvalRunMaxRecords                      = 4096
 	EvidenceGraphVerifierID                = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion           = "1.0.0"

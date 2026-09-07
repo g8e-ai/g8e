@@ -186,6 +186,8 @@ help:
 	@echo "  readme          Generate README.md from template and public proof snapshot"
 	@echo "  readme-check    Check README.md is up to date without modifying files"
 	@echo "  readme-test     Run generator unit tests"
+	@echo "  website-build   Render g8e.ai from README.md"
+	@echo "  website-test    Test the g8e.ai generator and Worker"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
@@ -242,6 +244,16 @@ readme-check:
 readme-test:
 	@echo "Running README generator tests..."
 	@python3 -m unittest discover -s scripts/tests -p 'test_generate_readme.py'
+
+.PHONY: website-build
+website-build:
+	@echo "Rendering g8e.ai from README.md..."
+	@cd website && npm run build
+
+.PHONY: website-test
+website-test:
+	@echo "Testing the g8e.ai generator and Worker..."
+	@cd website && npm run check
 
 # =============================================================================
 # PROTOCOL GENERATION
