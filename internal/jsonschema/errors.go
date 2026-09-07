@@ -296,27 +296,3 @@ func decodeJSONValue(decoder *json.Decoder, depth int) (any, error) {
 		return nil, newJSONDecodeError(ReasonCompileInvalidJSON, fmt.Sprintf("unexpected JSON delimiter %q", delimiter))
 	}
 }
-
-func checkDuplicateKeys(v any, path string) error {
-	switch val := v.(type) {
-	case map[string]any:
-		// json.Decode already handles duplicate keys by overwriting,
-		// so we need a different approach. We use a raw decode to detect
-		// duplicates. However, since the standard library doesn't expose
-		// this, we skip duplicate-key detection at decode time and
-		// handle it in the validator's raw token stream.
-		// For now, recurse into values.
-		for k, sub := range val {
-			if err := checkDuplicateKeys(sub, path+"/"+escapeJSONPointerToken(k)); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for i, item := range val {
-			if err := checkDuplicateKeys(item, fmt.Sprintf("%s/%d", path, i)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}

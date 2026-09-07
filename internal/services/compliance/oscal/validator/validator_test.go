@@ -8,6 +8,9 @@
 package validator
 
 import (
+	"crypto/sha256"
+	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -21,6 +24,28 @@ import (
 
 // minimalValidOSCAL is a minimal valid OSCAL 1.1.2 assessment-results
 // document that passes both structural and semantic validation.
+//go:embed testdata/ifa_assessment-results-example-min.json
+var officialNISTAssessmentResults []byte
+
+//go:embed testdata/ifa_assessment-results-example-min.provenance.json
+var officialNISTAssessmentResultsProvenance []byte
+
+type officialFixtureProvenance struct {
+	FixtureType     string `json:"fixture_type"`
+	SchemaVersion   string `json:"schema_version"`
+	SourceURL       string `json:"source_url"`
+	SourceRepository string `json:"source_repository"`
+	SourceRevision  string `json:"source_revision"`
+	SourceBlob      string `json:"source_blob"`
+	SourcePath      string `json:"source_path"`
+	License         string `json:"license"`
+	ByteLength      int    `json:"byte_length"`
+	SHA256          string `json:"sha256"`
+	RetrievedAt     string `json:"retrieved_at"`
+	RetrievalMethod string `json:"retrieval_method"`
+	IntegrityNote   string `json:"integrity_note"`
+}
+
 const minimalValidOSCAL = `{
   "assessment-results": {
     "uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
@@ -140,6 +165,33 @@ func TestValidator_ValidMinimalDocument_PassesBothStages(t *testing.T) {
 	assert.Empty(t, result.SemanticFailures)
 }
 
+func TestValidator_OfficialNISTAssessmentResultsFixture_PassesBothStages(t *testing.T) {
+	var provenance officialFixtureProvenance
+	require.NoError(t, json.Unmarshal(officialNISTAssessmentResultsProvenance, &provenance))
+	assert.Equal(t, "oscal-assessment-results", provenance.FixtureType)
+	assert.Equal(t, constants.OSCALSchemaVersion, provenance.SchemaVersion)
+	assert.NotEmpty(t, provenance.SourceURL)
+	assert.NotEmpty(t, provenance.SourceRepository)
+	assert.NotEmpty(t, provenance.SourceRevision)
+	assert.NotEmpty(t, provenance.SourceBlob)
+	assert.NotEmpty(t, provenance.SourcePath)
+	assert.NotEmpty(t, provenance.License)
+	assert.NotEmpty(t, provenance.RetrievedAt)
+	assert.NotEmpty(t, provenance.RetrievalMethod)
+	assert.NotEmpty(t, provenance.IntegrityNote)
+	assert.Equal(t, provenance.ByteLength, len(officialNISTAssessmentResults))
+	digest := sha256.Sum256(officialNISTAssessmentResults)
+	assert.Equal(t, provenance.SHA256, hex.EncodeToString(digest[:]))
+
+	v, err := NewValidator()
+	require.NoError(t, err)
+	result, err := v.Validate(officialNISTAssessmentResults)
+	require.NoError(t, err)
+	assert.True(t, result.Valid, "structural failures: %v\nsemantic failures: %v", result.StructuralFailures, result.SemanticFailures)
+	assert.Empty(t, result.StructuralFailures)
+	assert.Empty(t, result.SemanticFailures)
+}
+
 func TestValidator_InvalidJSON_FailsStructural(t *testing.T) {
 	v, err := NewValidator()
 	require.NoError(t, err)
@@ -196,6 +248,47 @@ func TestValidator_EmittedObjectMutationMatrixRejectsStructuralViolations(t *tes
 			require.NoError(t, err)
 			assert.False(t, result.Valid)
 			assert.True(t, hasStructuralFailure(result.StructuralFailures, tt.reason), result.StructuralFailures.Error())
+			assert.Empty(t, result.SemanticFailures)
+		})
+	}
+}
+
+func TestValidator_EmittedObjectMutationMatrixRejectsUnknownProperties(t *testing.T) {
+	tests := []struct {
+		name string
+		old  string
+		new  string
+	}{
+		{name: "document root", old: `"assessment-results": {`, new: `"unknown": true, "assessment-results": {`},
+		{name: "assessment results", old: `"uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "metadata", old: `"title": "g8e Compliance Assessment Results",`, new: `"title": "g8e Compliance Assessment Results", "unknown": true,`},
+		{name: "assessment plan import", old: `"href": "urn:g8e:assessment-plan:compliance-analysis:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, new: `"href": "urn:g8e:assessment-plan:compliance-analysis:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "unknown": true`},
+		{name: "result", old: `"title": "Assessment Results",`, new: `"title": "Assessment Results", "unknown": true,`},
+		{name: "local definitions", old: `"local-definitions": {`, new: `"local-definitions": { "unknown": true,`},
+		{name: "component", old: `"uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "component status", old: `"status": {"state": "operational"}`, new: `"status": {"state": "operational", "unknown": true}`},
+		{name: "reviewed controls", old: `"reviewed-controls": {`, new: `"reviewed-controls": { "unknown": true,`},
+		{name: "control selection", old: `"include-controls": [`, new: `"unknown": true, "include-controls": [`},
+		{name: "control identifier", old: `{"control-id": "KSI-MLA-07"}`, new: `{"control-id": "KSI-MLA-07", "unknown": true}`},
+		{name: "observation", old: `"uuid": "c1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"uuid": "c1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "observation subject", old: `"subject-uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"subject-uuid": "d1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "relevant evidence", old: `"href": "#e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"href": "#e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "finding", old: `"uuid": "f1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"uuid": "f1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "finding target", old: `"type": "statement-id",`, new: `"type": "statement-id", "unknown": true,`},
+		{name: "finding target status", old: `"state": "satisfied"`, new: `"state": "satisfied", "unknown": true`},
+		{name: "back matter", old: `"back-matter": {`, new: `"back-matter": { "unknown": true,`},
+		{name: "resource", old: `"uuid": "e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",`, new: `"uuid": "e1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "unknown": true,`},
+		{name: "property", old: `"name": "media-type",`, new: `"name": "media-type", "unknown": true,`},
+	}
+	v, err := NewValidator()
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			document := replaceInJSON(t, minimalValidOSCAL, tt.old, tt.new)
+			result, err := v.Validate([]byte(document))
+			require.NoError(t, err)
+			assert.False(t, result.Valid)
+			assert.True(t, hasStructuralFailure(result.StructuralFailures, jsonschema.ReasonValueAdditionalProp), result.StructuralFailures.Error())
 			assert.Empty(t, result.SemanticFailures)
 		})
 	}
