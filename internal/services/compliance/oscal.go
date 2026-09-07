@@ -10,11 +10,13 @@ package compliance
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,9 +79,10 @@ type OSCALStatement struct {
 // OSCALAssessmentResults is the top-level OSCAL assessment-results model.
 // It contains per-KSI observations and results with evidence anchors.
 type OSCALAssessmentResults struct {
-	UUID     string        `json:"uuid"`
-	Metadata OSCALMetadata `json:"metadata"`
-	Results  []OSCALResult `json:"results"`
+	UUID       string          `json:"uuid"`
+	Metadata   OSCALMetadata   `json:"metadata"`
+	Results    []OSCALResult   `json:"results"`
+	BackMatter OSCALBackMatter `json:"back-matter,omitempty"`
 }
 
 // OSCALResult holds the assessment results for a single evaluation run.
@@ -140,7 +143,7 @@ type OSCALBackMatter struct {
 	Resources []OSCALResource `json:"resources,omitempty"`
 }
 
-// OSCALResource describes a referenced resource (KSI catalog).
+// OSCALResource describes a referenced catalog or content-addressed evidence resource.
 type OSCALResource struct {
 	UUID        string      `json:"uuid"`
 	Title       string      `json:"title"`
@@ -158,7 +161,7 @@ type OSCALProp struct {
 // Exporter
 // ---------------------------------------------------------------------------
 
-// OSCALExporter generates OSCAL JSON from a KSI catalog and evaluation results.
+// OSCALExporter generates component definitions from the KSI catalog and assessment results from canonical compliance analysis.
 type OSCALExporter struct {
 	catalog *KSICatalog
 }
@@ -268,95 +271,260 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 }
 
 // GenerateAssessmentResults produces an OSCAL assessment-results document from
-// a KSIResultSet. Each KSI result becomes an observation with evidence anchors
-// and a finding with pass/fail status.
-func (e *OSCALExporter) GenerateAssessmentResults(resultSet *KSIResultSet) (*OSCALAssessmentResults, error) {
-	if e.catalog == nil {
-		return nil, fmt.Errorf("%w: nil KSI catalog", constants.ErrValidationFailed)
-	}
-	if resultSet == nil {
-		return nil, fmt.Errorf("%w: nil KSI result set", constants.ErrValidationFailed)
+// canonical compliance analysis. Assertion assessments become observations,
+// framework control assessments become findings, and every evidence anchor
+// resolves to a typed content-addressed resource in back matter.
+func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.ComplianceAnalysis) (*OSCALAssessmentResults, error) {
+	if err := validateOSCALAnalysis(analysis); err != nil {
+		return nil, err
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	evaluatedAt := time.UnixMilli(resultSet.EvaluatedAtMs).UTC().Format(time.RFC3339)
-
-	var observations []OSCALObservation
-	var findings []OSCALFinding
-
-	for _, res := range resultSet.Results {
-		ksi := e.catalog.FindKSI(res.ID)
-		if ksi == nil {
-			return nil, fmt.Errorf("%w: result references unknown KSI: %s", constants.ErrValidationFailed, res.ID)
-		}
-
-		// Build observation with evidence anchors.
-		var relevantEvidence []OSCALRelevantEvidence
-		for _, ev := range res.Evidence {
-			if ev == nil {
-				return nil, fmt.Errorf("%w: result %s contains nil evidence", constants.ErrValidationFailed, res.ID)
-			}
-			relevantEvidence = append(relevantEvidence, OSCALRelevantEvidence{
-				Href:        "#" + ev.GetArtifactType() + ":" + ev.GetArtifactId(),
-				Description: ev.GetArtifactType(),
-			})
-		}
-
-		observations = append(observations, OSCALObservation{
-			UUID:        generateUUID(),
-			Title:       "KSI " + res.ID + " Evaluation",
-			Description: ksi.Title,
-			Methods:     []OSCALMethodRef{{MethodID: "TEST-AUTOMATED"}},
-			Subjects: []OSCALSubject{
-				{
-					SubjectUUID: generateUUID(),
-					Type:        "assessment-target",
-					Title:       res.ID,
-				},
-			},
-			RelevantEvidence: relevantEvidence,
-		})
-
-		// Map KSI status to OSCAL finding status.
-		status := "not-satisfied"
-		switch res.Status {
-		case KSIStatusSatisfied:
-			status = "satisfied"
-		case KSIStatusNotApplicable:
-			status = "not-applicable"
-		}
-
-		findings = append(findings, OSCALFinding{
-			UUID:        generateUUID(),
-			Title:       "KSI " + res.ID + " Finding",
-			Description: fmt.Sprintf("KSI %s (%s): %s (%s) — %d automated methods evaluated", res.ID, ksi.Title, res.Status, res.Outcome, res.MethodCount),
-			Target: OSCALFindingTarget{
-				TargetID: res.ID,
-				Status:   status,
-			},
-		})
+	resources, resourceIndex, err := buildOSCALEvidenceResources(analysis)
+	if err != nil {
+		return nil, err
 	}
-
+	observations, err := buildOSCALObservations(analysis, resourceIndex)
+	if err != nil {
+		return nil, err
+	}
+	findings, err := buildOSCALFindings(analysis)
+	if err != nil {
+		return nil, err
+	}
+	generatedAt := analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339)
 	return &OSCALAssessmentResults{
 		UUID: generateUUID(),
 		Metadata: OSCALMetadata{
-			Title:        "g8e KSI Assessment Results",
-			Published:    now,
-			LastModified: now,
-			Version:      e.catalog.Version,
+			Title:        "g8e Compliance Assessment Results",
+			Published:    generatedAt,
+			LastModified: generatedAt,
+			Version:      analysis.GetAnalysisSchemaVersion(),
 			OscalVersion: "1.1.2",
 		},
-		Results: []OSCALResult{
-			{
-				UUID:         generateUUID(),
-				Title:        "FedRAMP 20x Class " + string(resultSet.Class) + " KSI Assessment",
-				Description:  fmt.Sprintf("Automated KSI evaluation for FedRAMP 20x Certification Class %s", resultSet.Class),
-				Start:        evaluatedAt,
-				Observations: observations,
-				Findings:     findings,
-			},
-		},
+		Results: []OSCALResult{{
+			UUID:         generateUUID(),
+			Title:        "Compliance Assessment for " + analysis.GetScopeRef(),
+			Description:  "Canonical cross-framework compliance analysis " + analysis.GetAnalysisId(),
+			Start:        generatedAt,
+			Observations: observations,
+			Findings:     findings,
+		}},
+		BackMatter: OSCALBackMatter{Resources: resources},
 	}, nil
+}
+
+func validateOSCALAnalysis(analysis *compliancev1.ComplianceAnalysis) error {
+	if analysis == nil {
+		return fmt.Errorf("%w: nil compliance analysis", constants.ErrValidationFailed)
+	}
+	if analysis.GetAnalysisId() == "" || analysis.GetAnalysisSchemaVersion() == "" || analysis.GetScopeRef() == "" || analysis.GetGeneratorIdentity() == "" || analysis.GetGeneratorVersion() == "" {
+		return fmt.Errorf("%w: compliance analysis identity is incomplete", constants.ErrValidationFailed)
+	}
+	if analysis.GetGeneratedAt() == nil || analysis.GetGeneratedAt().CheckValid() != nil {
+		return fmt.Errorf("%w: compliance analysis generation time is invalid", constants.ErrValidationFailed)
+	}
+	if !analysis.GetEvidenceGraphValid() || len(analysis.GetEvidenceGraphFailures()) != 0 {
+		return fmt.Errorf("%w: compliance analysis evidence graph is invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	return nil
+}
+
+func buildOSCALEvidenceResources(analysis *compliancev1.ComplianceAnalysis) ([]OSCALResource, map[string]OSCALResource, error) {
+	evidenceResources := append([]*compliancev1.ComplianceEvidenceReference(nil), analysis.GetEvidenceResources()...)
+	sort.Slice(evidenceResources, func(i, j int) bool {
+		return evidenceResources[i].GetArtifactId() < evidenceResources[j].GetArtifactId()
+	})
+	resources := make([]OSCALResource, 0, len(evidenceResources))
+	index := make(map[string]OSCALResource, len(evidenceResources))
+	for _, evidenceResource := range evidenceResources {
+		if evidenceResource == nil {
+			return nil, nil, fmt.Errorf("%w: nil evidence resource", constants.ErrUnresolvedReference)
+		}
+		artifactType, digest, ok := parseOSCALContentAddress(evidenceResource.GetArtifactId())
+		if !ok || artifactType != evidenceResource.GetArtifactType() || digest != evidenceResource.GetSha256() {
+			return nil, nil, fmt.Errorf("%w: invalid content-addressed evidence resource %s", constants.ErrUnresolvedReference, evidenceResource.GetArtifactId())
+		}
+		if evidenceResource.GetMediaType() == "" || evidenceResource.GetSchemaRef() == "" || evidenceResource.GetProducerIdentity() == "" || evidenceResource.GetVerificationStatus() == "" || evidenceResource.GetBundlePath() == "" {
+			return nil, nil, fmt.Errorf("%w: incomplete evidence resource %s", constants.ErrUnresolvedReference, evidenceResource.GetArtifactId())
+		}
+		if evidenceResource.GetScopeId() != analysis.GetScopeRef() {
+			return nil, nil, fmt.Errorf("%w: evidence resource %s belongs to scope %s", constants.ErrEvidenceScopeMismatch, evidenceResource.GetArtifactId(), evidenceResource.GetScopeId())
+		}
+		if _, exists := index[evidenceResource.GetArtifactId()]; exists {
+			return nil, nil, fmt.Errorf("%w: duplicate evidence resource %s", constants.ErrEvidenceDuplicateID, evidenceResource.GetArtifactId())
+		}
+		resource := OSCALResource{
+			UUID:        generateUUID(),
+			Title:       evidenceResource.GetArtifactType() + " evidence",
+			Description: "Content-addressed evidence produced by " + evidenceResource.GetProducerIdentity(),
+			Props:       oscalEvidenceProps(evidenceResource),
+		}
+		resources = append(resources, resource)
+		index[evidenceResource.GetArtifactId()] = resource
+	}
+	for _, link := range analysis.GetEvidenceLinks() {
+		if link == nil {
+			return nil, nil, fmt.Errorf("%w: nil evidence link", constants.ErrUnresolvedReference)
+		}
+		if _, exists := index[link.GetSourceRef()]; !exists {
+			return nil, nil, fmt.Errorf("%w: evidence link source %s", constants.ErrUnresolvedReference, link.GetSourceRef())
+		}
+		if _, exists := index[link.GetTargetRef()]; !exists {
+			return nil, nil, fmt.Errorf("%w: evidence link target %s", constants.ErrUnresolvedReference, link.GetTargetRef())
+		}
+	}
+	return resources, index, nil
+}
+
+func oscalEvidenceProps(resource *compliancev1.ComplianceEvidenceReference) []OSCALProp {
+	values := []OSCALProp{
+		{Name: "artifact-id", Value: resource.GetArtifactId()},
+		{Name: "artifact-type", Value: resource.GetArtifactType()},
+		{Name: "sha256", Value: resource.GetSha256()},
+		{Name: "media-type", Value: resource.GetMediaType()},
+		{Name: "schema-ref", Value: resource.GetSchemaRef()},
+		{Name: "producer-identity", Value: resource.GetProducerIdentity()},
+		{Name: "verification-status", Value: resource.GetVerificationStatus()},
+		{Name: "verifier-id", Value: resource.GetVerifierId()},
+		{Name: "verifier-version", Value: resource.GetVerifierVersion()},
+		{Name: "scope-id", Value: resource.GetScopeId()},
+		{Name: "run-id", Value: resource.GetRunId()},
+		{Name: "attempt-id", Value: resource.GetAttemptId()},
+		{Name: "scenario-id", Value: resource.GetScenarioId()},
+		{Name: "transaction-id", Value: resource.GetTransactionId()},
+		{Name: "bundle-path", Value: resource.GetBundlePath()},
+	}
+	props := make([]OSCALProp, 0, len(values)+7)
+	for _, value := range values {
+		if value.Value != "" {
+			props = append(props, value)
+		}
+	}
+	if producedAt := resource.GetProducedAt(); producedAt != nil && producedAt.CheckValid() == nil {
+		props = append(props, OSCALProp{Name: "produced-at", Value: producedAt.AsTime().UTC().Format(time.RFC3339)})
+	}
+	if verifiedAt := resource.GetVerifiedAt(); verifiedAt != nil && verifiedAt.CheckValid() == nil {
+		props = append(props, OSCALProp{Name: "verified-at", Value: verifiedAt.AsTime().UTC().Format(time.RFC3339)})
+	}
+	if encryption := resource.GetEncryption(); encryption != nil {
+		encryptionValues := []OSCALProp{
+			{Name: "encryption-algorithm", Value: encryption.GetAlgorithm()},
+			{Name: "encryption-key-id", Value: encryption.GetKeyId()},
+			{Name: "encryption-authorization-scope", Value: encryption.GetAuthorizationScope()},
+			{Name: "plaintext-sha256", Value: encryption.GetPlaintextSha256()},
+			{Name: "authenticated-metadata-sha256", Value: encryption.GetAuthenticatedMetadataSha256()},
+		}
+		for _, value := range encryptionValues {
+			if value.Value != "" {
+				props = append(props, value)
+			}
+		}
+	}
+	return props
+}
+
+func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceIndex map[string]OSCALResource) ([]OSCALObservation, error) {
+	assessments := append([]*compliancev1.ControlAssertionAssessment(nil), analysis.GetAssertionAssessments()...)
+	sort.Slice(assessments, func(i, j int) bool {
+		return assessments[i].GetAssessmentId() < assessments[j].GetAssessmentId()
+	})
+	observations := make([]OSCALObservation, 0, len(assessments))
+	for _, assessment := range assessments {
+		if assessment == nil || assessment.GetAssessmentId() == "" || assessment.GetAssertionRef() == nil || assessment.GetVerifierRef() == nil || assessment.GetScopeId() != analysis.GetScopeRef() {
+			return nil, fmt.Errorf("%w: assertion assessment is incomplete or cross-scope", constants.ErrValidationFailed)
+		}
+		evidenceRefs := append([]string(nil), assessment.GetEvidenceRefs()...)
+		evidenceRefs = append(evidenceRefs, assessment.GetMetricRefs()...)
+		sort.Strings(evidenceRefs)
+		relevantEvidence := make([]OSCALRelevantEvidence, 0, len(evidenceRefs))
+		seen := make(map[string]struct{}, len(evidenceRefs))
+		for _, evidenceRef := range evidenceRefs {
+			if _, exists := seen[evidenceRef]; exists {
+				continue
+			}
+			seen[evidenceRef] = struct{}{}
+			resource, exists := resourceIndex[evidenceRef]
+			if !exists {
+				return nil, fmt.Errorf("%w: assertion assessment %s evidence %s", constants.ErrUnresolvedReference, assessment.GetAssessmentId(), evidenceRef)
+			}
+			relevantEvidence = append(relevantEvidence, OSCALRelevantEvidence{Href: "#" + resource.UUID, Description: evidenceRef})
+		}
+		methodID := assessment.GetVerifierRef().GetId()
+		if assessment.GetVerifierRef().GetVersion() != "" {
+			methodID += "@" + assessment.GetVerifierRef().GetVersion()
+		}
+		observations = append(observations, OSCALObservation{
+			UUID:        generateUUID(),
+			Title:       "Assertion " + assessment.GetAssertionRef().GetId() + " Assessment",
+			Description: fmt.Sprintf("%s at evidence level %s with %s evidence", assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus()),
+			Methods:     []OSCALMethodRef{{MethodID: methodID}},
+			Subjects: []OSCALSubject{{
+				SubjectUUID: generateUUID(),
+				Type:        "assessment-target",
+				Title:       assessment.GetAssessmentId(),
+			}},
+			RelevantEvidence: relevantEvidence,
+		})
+	}
+	return observations, nil
+}
+
+func buildOSCALFindings(analysis *compliancev1.ComplianceAnalysis) ([]OSCALFinding, error) {
+	assessments := append([]*compliancev1.FrameworkControlAssessment(nil), analysis.GetFrameworkAssessments()...)
+	sort.Slice(assessments, func(i, j int) bool {
+		return assessments[i].GetAssessmentId() < assessments[j].GetAssessmentId()
+	})
+	assertionAssessments := make(map[string]struct{}, len(analysis.GetAssertionAssessments()))
+	for _, assessment := range analysis.GetAssertionAssessments() {
+		if assessment != nil {
+			assertionAssessments[assessment.GetAssessmentId()] = struct{}{}
+		}
+	}
+	findings := make([]OSCALFinding, 0, len(assessments))
+	for _, assessment := range assessments {
+		if assessment == nil || assessment.GetAssessmentId() == "" || assessment.GetFrameworkRef() == nil || assessment.GetControlId() == "" || assessment.GetScopeId() != analysis.GetScopeRef() {
+			return nil, fmt.Errorf("%w: framework assessment is incomplete or cross-scope", constants.ErrValidationFailed)
+		}
+		for _, assertionRef := range assessment.GetAssertionAssessmentRefs() {
+			if _, exists := assertionAssessments[assertionRef]; !exists {
+				return nil, fmt.Errorf("%w: framework assessment %s assertion %s", constants.ErrUnresolvedReference, assessment.GetAssessmentId(), assertionRef)
+			}
+		}
+		findings = append(findings, OSCALFinding{
+			UUID:        generateUUID(),
+			Title:       assessment.GetFrameworkRef().GetId() + " " + assessment.GetControlId() + " Finding",
+			Description: fmt.Sprintf("%s at evidence level %s; responsibility: %s", assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetResponsibility()),
+			Target: OSCALFindingTarget{
+				TargetID: assessment.GetControlId(),
+				Status:   oscalFindingStatus(assessment.GetStatus()),
+			},
+		})
+	}
+	return findings, nil
+}
+
+func parseOSCALContentAddress(address string) (string, string, bool) {
+	parts := strings.Split(address, ":")
+	if len(parts) != 3 || parts[0] == "" || parts[1] != "sha256" || len(parts[2]) != 64 || strings.ToLower(parts[2]) != parts[2] {
+		return "", "", false
+	}
+	for _, character := range parts[2] {
+		if !strings.ContainsRune("0123456789abcdef", character) {
+			return "", "", false
+		}
+	}
+	return parts[0], parts[2], true
+}
+
+func oscalFindingStatus(status string) string {
+	switch status {
+	case "satisfied":
+		return "satisfied"
+	case "not_applicable":
+		return "not-applicable"
+	default:
+		return "not-satisfied"
+	}
 }
 
 // generateUUID produces a random RFC 4122 UUID v4 string using crypto/rand

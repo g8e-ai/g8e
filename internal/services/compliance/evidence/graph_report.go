@@ -46,8 +46,8 @@ type EvidenceGraphReport struct {
 
 // BuildAndValidateGraph constructs an evidence graph from the given
 // importers, adds all imported nodes, runs the full validation gauntlet,
-// and returns a typed report. Importer failures are recorded as
-// ImporterErrors and mark the graph invalid rather than aborting
+// and returns the graph and a typed report. Importer failures are recorded
+// as ImporterErrors and mark the report invalid rather than aborting
 // construction; nodes from successful importers are still validated.
 // The freshness window [windowStart, windowEnd] is applied during
 // ValidateFreshness; zero values disable the respective bound.
@@ -56,7 +56,7 @@ func BuildAndValidateGraph(
 	importers []EvidenceImporter,
 	windowStart, windowEnd time.Time,
 	verifiedAt time.Time,
-) *EvidenceGraphReport {
+) (*EvidenceGraph, *EvidenceGraphReport) {
 	report := &EvidenceGraphReport{
 		VerifierID:      constants.EvidenceGraphVerifierID,
 		VerifierVersion: constants.EvidenceGraphVerifierVersion,
@@ -105,7 +105,7 @@ func BuildAndValidateGraph(
 		report.NodesByScope[scopeID] = len(nodes)
 	}
 
-	return report
+	return graph, report
 }
 
 // MarshalJSON produces canonical compact JSON for the report.

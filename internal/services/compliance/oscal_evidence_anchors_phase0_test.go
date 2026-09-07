@@ -15,87 +15,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestPhase0OSCAL_EvidenceAnchorsAreNonContentAddressedDescriptionStrings
-// documents that the current OSCAL assessment-results export produces
-// relevant-evidence anchors as synthetic fragment strings of the form
-// "#<type>:<reference>" rather than resolvable, content-addressed artifact
-// references inside a complete evidence bundle.
-//
-// The href is a string like "#receipt_id:tx-123". It carries no sha256
-// digest, no bundle-relative path, no producer identity, no verification
-// status, and no schema reference. No evidence bundle exists today, so the
-// anchor cannot resolve to a typed artifact. Phase 1 adds
-// ComplianceEvidenceReference with digest, producer, scope binding, verifier,
-// and bundle_path; Phase 4 makes OSCAL anchors resolve to bundle resources.
-func TestPhase0OSCAL_EvidenceAnchorsAreNonContentAddressedDescriptionStrings(t *testing.T) {
-	exporter := NewOSCALExporter(oscalTestCatalog())
-	resultSet := oscalTestResultSet()
-
-	doc, err := exporter.GenerateAssessmentResults(resultSet)
+// TestPhase0OSCAL_EvidenceAnchorsResolveToContentAddressedResources verifies the Phase 4 replacement for synthetic evidence fragments.
+func TestPhase0OSCAL_EvidenceAnchorsResolveToContentAddressedResources(t *testing.T) {
+	doc, err := NewOSCALExporter(nil).GenerateAssessmentResults(oscalTestAnalysis())
 	require.NoError(t, err)
-	require.NotEmpty(t, doc.Results)
-	require.NotEmpty(t, doc.Results[0].Observations)
-
-	// Collect every relevant-evidence href across all observations.
-	var hrefs []string
-	for _, obs := range doc.Results[0].Observations {
-		for _, ev := range obs.RelevantEvidence {
-			hrefs = append(hrefs, ev.Href)
-		}
+	resources := make(map[string]OSCALResource, len(doc.BackMatter.Resources))
+	for _, resource := range doc.BackMatter.Resources {
+		resources[resource.UUID] = resource
 	}
-	require.NotEmpty(t, hrefs, "test result set must produce at least one evidence anchor")
-
-	for _, href := range hrefs {
-		// Current anchors are fragment strings starting with "#".
-		assert.True(t, strings.HasPrefix(href, "#"),
-			phase0RegressionBeforeFix+
-				": evidence anchor %q is a fragment string, not a bundle-relative path", href)
-
-		// No content digest is present in the anchor.
-		assert.NotContains(t, href, "sha256:",
-			phase0RegressionBeforeFix+
-				": evidence anchor %q carries no content digest", href)
-
-		// No bundle-relative path (e.g. "evidence/") is present.
-		assert.NotContains(t, href, "evidence/",
-			phase0RegressionBeforeFix+
-				": evidence anchor %q is not a bundle-relative path", href)
+	require.NotEmpty(t, resources)
+	for _, observation := range doc.Results[0].Observations {
+		for _, relevantEvidence := range observation.RelevantEvidence {
+			resource, exists := resources[strings.TrimPrefix(relevantEvidence.Href, "#")]
+			assert.True(t, exists, phase0RegressionAfterFix+": evidence anchor must resolve to an OSCAL back-matter resource")
+			assert.Contains(t, oscalPropValue(resource.Props, "artifact-id"), "sha256:", phase0RegressionAfterFix+": resolved resource must carry a content address")
+		}
 	}
 }
 
-// TestPhase0OSCAL_EvidenceAnchorCannotResolveToTypedArtifact documents that
-// the current OSCAL evidence anchor is a description string that cannot be
-// resolved to any typed artifact because no evidence bundle layout exists.
-// The back-matter resources section contains only the KSI catalog reference,
-// not individual evidence artifacts. Phase 4 adds resolvable evidence
-// resources to the bundle back-matter.
-func TestPhase0OSCAL_EvidenceAnchorCannotResolveToTypedArtifact(t *testing.T) {
-	exporter := NewOSCALExporter(oscalTestCatalog())
-	resultSet := oscalTestResultSet()
-
-	doc, err := exporter.GenerateAssessmentResults(resultSet)
+// TestPhase0OSCAL_EvidenceResourcesPreserveTypedArtifactMetadata verifies that analysis evidence metadata survives OSCAL projection.
+func TestPhase0OSCAL_EvidenceResourcesPreserveTypedArtifactMetadata(t *testing.T) {
+	analysis := oscalTestAnalysis()
+	doc, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
-
-	// The back-matter contains only the KSI catalog resource, not evidence.
-	var resourceTitles []string
-	for _, res := range doc.Results[0].Observations {
-		_ = res
-	}
-	_ = resourceTitles
-
-	// Check the component definition back-matter for evidence resources.
-	compDef, err := exporter.GenerateComponentDefinition()
-	require.NoError(t, err)
-
-	var backMatterTitles []string
-	for _, r := range compDef.BackMatter.Resources {
-		backMatterTitles = append(backMatterTitles, r.Title)
-	}
-
-	// The only back-matter resource is the KSI catalog, not evidence artifacts.
-	for _, title := range backMatterTitles {
-		assert.NotContains(t, strings.ToLower(title), "evidence",
-			phase0RegressionBeforeFix+
-				": back-matter resource %q is not an evidence artifact; no evidence bundle exists", title)
+	require.Len(t, doc.BackMatter.Resources, len(analysis.GetEvidenceResources()))
+	for _, resource := range doc.BackMatter.Resources {
+		assert.NotEmpty(t, oscalPropValue(resource.Props, "artifact-type"), phase0RegressionAfterFix)
+		assert.Len(t, oscalPropValue(resource.Props, "sha256"), 64, phase0RegressionAfterFix)
+		assert.NotEmpty(t, oscalPropValue(resource.Props, "producer-identity"), phase0RegressionAfterFix)
+		assert.Equal(t, "verified", oscalPropValue(resource.Props, "verification-status"), phase0RegressionAfterFix)
+		assert.NotEmpty(t, oscalPropValue(resource.Props, "bundle-path"), phase0RegressionAfterFix)
 	}
 }

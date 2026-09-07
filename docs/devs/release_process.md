@@ -381,6 +381,56 @@ The eval CLI version must match `orchestrator_version` in the private run manife
 
 A hotfix either runs the same complete minimum profile or publishes the current release with Stage 1 evidence explicitly unavailable. It never relabels evidence from an older release as current evidence.
 
+## Stage 2 Reproduction and Provenance
+
+v2.1.6 retains the complete v2.1.5 diagnostic as a Stage 1 baseline and adds one fresh, separately invoked five-task reproduction as Stage 2. Both populations contain the same fixed task IDs, one terminal attempt per task, and one directly bound deterministic metric per task. Stage 2 binds only the fresh reproduction to its versioned campaign profile, deterministic source inclusion manifest and root hash, executable component digests, Docker image digests, and public environment identities. It establishes independent execution state on the same local operator environment, not independent hardware, organizational control, trust roots, external audit, causal attribution, statistical significance, governance effectiveness, or compliance.
+
+Finalize the exact campaign profile and source inclusion paths before rebuilding. After the version-bearing binary and images are built, record their candidate component digests, image digests, and public environment identities in the private campaign directory, then collect provenance without repository history:
+
+```bash
+python3 scripts/collect_readme_provenance.py \
+  "$PWD" \
+  "${PRIVATE_CAMPAIGN_DIR}/provenance.json" \
+  --source-path VERSION \
+  --source-path scripts/generate_readme.py \
+  --source-path scripts/project_readme_evidence.py \
+  --source-path scripts/collect_readme_provenance.py \
+  --source-path scripts/promote_readme_evidence.py \
+  --source-path docs/templates/README.md.tmpl \
+  --campaign-profile "${PRIVATE_CAMPAIGN_DIR}/campaign-profile.json" \
+  --components "${PRIVATE_CAMPAIGN_DIR}/components.json" \
+  --images "${PRIVATE_CAMPAIGN_DIR}/images.json" \
+  --environment "${PRIVATE_CAMPAIGN_DIR}/environment.json"
+```
+
+The source inclusion list is explicit, ordered canonically by the collector, and complete for the declared README evidence implementation scope; it is not represented as a hash of every file in the repository. The collector rejects absolute, escaping, duplicate, symlinked, empty, or malformed source entries and malformed digest or environment records. Retain the collected file unchanged with the private campaign.
+
+Run the attended collection command once with a new output directory and evidence key. Do not reuse the v2.1.5 report, run ID, key, or execution state. After the new report is complete and immutable, project it together with the promoted v2.1.5 Stage 1 baseline and collected provenance:
+
+```bash
+python3 scripts/project_readme_evidence.py \
+  '<new-private-report-directory>' \
+  docs/evidence/readme/candidates/v2.1.6 \
+  --release-version 2.1.6 \
+  --eval-cli-version 0.3.0 \
+  --idle-timeout 600 \
+  --baseline-candidate docs/evidence/readme/current \
+  --provenance "${PRIVATE_CAMPAIGN_DIR}/provenance.json"
+```
+
+Publication schema `3.0.0` preserves the baseline artifacts and original Stage 1 maturity label, adds the fresh Stage 2 run, and declares checksum-bound `campaign-profile.json`, `provenance.json`, and `comparison.json` artifacts. Offline validation rejects profile drift, missing source, component, image, or environment provenance, source-root mismatches, incomplete or selected-only populations, incorrect task-level comparison bindings, baseline relabeling, fake provider identities, restricted material, undeclared files, and checksum failures.
+
+Render and retain a candidate README for review without changing the promoted snapshot. Compute the canonical candidate tree digest and provide that exact digest, the complete candidate file set, measured outcomes, role observations, evidence cutoff, and unavailable claim families to the release owner:
+
+```bash
+python3 scripts/promote_readme_evidence.py \
+  docs/evidence/readme/candidates/v2.1.6 \
+  docs/evidence/readme/current \
+  --approved-tree-sha256 '<release-owner-approved-candidate-tree-sha256>'
+```
+
+Promotion validates the candidate offline, refuses a digest mismatch, verifies the staged copy, installs only the approved tree, verifies the installed digest, and restores the prior current snapshot if installation fails. Approval applies only to the exact digest presented for review. Projection and promotion remain local attended release actions; CI validates checksums, relationships, safety, and README drift but never collects provenance, calls Ollama, runs the reproduction, selects evidence, approves a digest, or promotes a candidate.
+
 ---
 
 ## Version-Bearing Files

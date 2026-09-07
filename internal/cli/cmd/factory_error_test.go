@@ -589,6 +589,26 @@ func TestComplianceEvidenceGraphVerifyCmdWithConfig_FileSvcFactoryError(t *testi
 	assert.ErrorIs(t, err, errFactory)
 }
 
+func TestComplianceReportGenerateCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	cmd := complianceReportGenerateCmdWithConfig(
+		failingFileSvcFactory(errFactory),
+		func(string) evidence.ProvenanceSource {
+			panic("provenance source should not be created when fileSvcFactory fails")
+		},
+	)
+	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
+	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
+	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
 func TestComplianceReleaseEvidenceCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceReleaseEvidenceCmdWithConfig(
 		failingFileSvcFactory(errFactory),

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -53,32 +54,41 @@ func oscalTestCatalog() *KSICatalog {
 	}
 }
 
-// oscalTestResultSet returns a KSIResultSet with satisfied and not-satisfied results.
-func oscalTestResultSet() *KSIResultSet {
-	return &KSIResultSet{
-		Class:         ClassC,
-		EvaluatedAtMs: time.Now().UnixMilli(),
-		Results: []KSIResult{
+// oscalTestAnalysis returns canonical analysis with satisfied and not-satisfied control assessments.
+func oscalTestAnalysis() *compliancev1.ComplianceAnalysis {
+	const (
+		receiptDigest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		metricDigest  = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	receiptID := "action-receipt:sha256:" + receiptDigest
+	metricID := "eval-metric:sha256:" + metricDigest
+	generatedAt := time.Date(2026, time.September, 7, 12, 0, 0, 0, time.UTC)
+	firstAssessmentID := "assertion-assessment:sha256:" + receiptDigest
+	secondAssessmentID := "assertion-assessment:sha256:" + metricDigest
+	return &compliancev1.ComplianceAnalysis{
+		AnalysisId:            "compliance-analysis:sha256:" + receiptDigest,
+		AnalysisSchemaVersion: constants.AnalysisSchemaVersion,
+		ScopeRef:              "scope-1",
+		GeneratedAt:           timestamppb.New(generatedAt),
+		GeneratorIdentity:     constants.AnalysisBuilderID,
+		GeneratorVersion:      constants.AnalysisBuilderVersion,
+		AssertionAssessments: []*compliancev1.ControlAssertionAssessment{
 			{
-				ID:                  "KSI-CMT-01",
-				Status:              KSIStatusSatisfied,
-				MethodCount:         2,
-				LastValidatedUnixMs: time.Now().UnixMilli(),
-				Evidence: []*compliancev1.ComplianceEvidenceReference{
-					newKSIEvidenceReference(EvidenceTypeExecutionID, "events:42"),
-					newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-abc"),
-				},
+				AssessmentId: firstAssessmentID, ScopeId: "scope-1", AssertionRef: &compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"}, Status: "satisfied", EvidenceLevel: "L3", EvaluatedAt: timestamppb.New(generatedAt), VerifierRef: &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion}, EvidenceRefs: []string{receiptID}, FreshnessStatus: "fresh",
 			},
 			{
-				ID:                  "KSI-MLA-07",
-				Status:              KSIStatusNotSatisfied,
-				MethodCount:         1,
-				LastValidatedUnixMs: time.Now().UnixMilli(),
-				Evidence: []*compliancev1.ComplianceEvidenceReference{
-					newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-def"),
-				},
+				AssessmentId: secondAssessmentID, ScopeId: "scope-1", AssertionRef: &compliancev1.VersionedReference{Id: "G8E-CM-STATE-001", Version: "1.0.0"}, Status: "not_satisfied", EvidenceLevel: "L2", EvaluatedAt: timestamppb.New(generatedAt), VerifierRef: &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion}, EvidenceRefs: []string{metricID}, MetricRefs: []string{metricID}, FreshnessStatus: "fresh", FailureReason: "required deterministic grader did not pass",
 			},
 		},
+		FrameworkAssessments: []*compliancev1.FrameworkControlAssessment{
+			{AssessmentId: "framework-assessment:sha256:" + receiptDigest, ScopeId: "scope-1", FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-CMT-01", Status: "satisfied", Responsibility: "platform", AssertionAssessmentRefs: []string{firstAssessmentID}, EvidenceLevel: "L3"},
+			{AssessmentId: "framework-assessment:sha256:" + metricDigest, ScopeId: "scope-1", FrameworkRef: &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"}, ControlId: "KSI-MLA-07", Status: "not_satisfied", Responsibility: "shared", AssertionAssessmentRefs: []string{secondAssessmentID}, EvidenceLevel: "L2"},
+		},
+		EvidenceResources: []*compliancev1.ComplianceEvidenceReference{
+			{ArtifactId: receiptID, ArtifactType: "action-receipt", Sha256: receiptDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e.operator.v1.ActionReceipt", ProducerIdentity: "gateway", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.ReceiptEvidenceVerifierID, VerifierVersion: constants.ReceiptEvidenceVerifierVersion, BundlePath: constants.EvalRunReceiptsFilename},
+			{ArtifactId: metricID, ArtifactType: "eval-metric", Sha256: metricDigest, MediaType: constants.MediaTypeJSON, SchemaRef: "g8e_evals.schema.MetricObservation", ProducerIdentity: "policy_outcome@1.0.0", ScopeId: "scope-1", VerificationStatus: "verified", VerifierId: constants.EvalRunVerifierID, VerifierVersion: constants.EvalRunVerifierVersion, BundlePath: constants.EvalRunMetricsFilename},
+		},
+		EvidenceGraphValid: true,
 	}
 }
 
@@ -139,61 +149,36 @@ func TestOSCALExporter_GenerateComponentDefinition(t *testing.T) {
 	assert.Equal(t, "test-1.0", res.Props[1].Value)
 }
 
-// TestOSCALExporter_GenerateAssessmentResults asserts observations per KSI
-// result, findings with satisfied/not-satisfied status, and evidence anchors
-// from KSIResultSet.Results[].Evidence.
+// TestOSCALExporter_GenerateAssessmentResults asserts canonical assertion observations, framework findings, and evidence resources.
 func TestOSCALExporter_GenerateAssessmentResults(t *testing.T) {
-	cat := oscalTestCatalog()
-	exporter := NewOSCALExporter(cat)
-	rs := oscalTestResultSet()
-
-	results, err := exporter.GenerateAssessmentResults(rs)
+	analysis := oscalTestAnalysis()
+	results, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
 	require.NotNil(t, results)
 
-	// Top-level fields.
 	assert.NotEmpty(t, results.UUID)
-	assert.Equal(t, "g8e KSI Assessment Results", results.Metadata.Title)
-	assert.Equal(t, "test-1.0", results.Metadata.Version)
+	assert.Equal(t, "g8e Compliance Assessment Results", results.Metadata.Title)
+	assert.Equal(t, constants.AnalysisSchemaVersion, results.Metadata.Version)
 	assert.Equal(t, "1.1.2", results.Metadata.OscalVersion)
+	assert.Equal(t, analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339), results.Metadata.Published)
 
 	require.Len(t, results.Results, 1)
 	result := results.Results[0]
-	assert.Contains(t, result.Title, "Class C")
+	assert.Contains(t, result.Title, analysis.GetScopeRef())
 	assert.NotEmpty(t, result.Start)
-
-	// Observations: one per KSI result.
 	require.Len(t, result.Observations, 2)
-	obs0 := result.Observations[0]
-	assert.NotEmpty(t, obs0.UUID)
-	assert.Contains(t, obs0.Title, "KSI-CMT-01")
-	assert.Equal(t, "Logging Changes", obs0.Description)
-	require.Len(t, obs0.Methods, 1)
-	assert.Equal(t, "TEST-AUTOMATED", obs0.Methods[0].MethodID)
-	require.Len(t, obs0.Subjects, 1)
-	assert.Equal(t, "assessment-target", obs0.Subjects[0].Type)
-	assert.Equal(t, "KSI-CMT-01", obs0.Subjects[0].Title)
-
-	// Evidence anchors from KSIResultSet.
-	require.Len(t, obs0.RelevantEvidence, 2)
-	assert.Contains(t, obs0.RelevantEvidence[0].Href, "execution_id:events:42")
-	assert.Contains(t, obs0.RelevantEvidence[1].Href, "ledger_commit:commit-abc")
-
-	// Findings: one per KSI result with correct status mapping.
+	assert.Contains(t, result.Observations[0].Title, "G8E-GOV-BLOCK-001")
+	assert.Equal(t, constants.AssertionGraderID+"@"+constants.AssertionGraderVersion, result.Observations[0].Methods[0].MethodID)
+	assert.Equal(t, analysis.GetAssertionAssessments()[0].GetAssessmentId(), result.Observations[0].Subjects[0].Title)
 	require.Len(t, result.Findings, 2)
-	finding0 := result.Findings[0]
-	assert.NotEmpty(t, finding0.UUID)
-	assert.Contains(t, finding0.Title, "KSI-CMT-01")
-	assert.Equal(t, "satisfied", finding0.Target.Status)
-	assert.Equal(t, "KSI-CMT-01", finding0.Target.TargetID)
-
-	finding1 := result.Findings[1]
-	assert.Equal(t, "not-satisfied", finding1.Target.Status)
-	assert.Contains(t, finding1.Description, "KSI-MLA-07")
+	assert.Equal(t, "satisfied", result.Findings[0].Target.Status)
+	assert.Equal(t, "KSI-CMT-01", result.Findings[0].Target.TargetID)
+	assert.Equal(t, "not-satisfied", result.Findings[1].Target.Status)
+	assert.Equal(t, "KSI-MLA-07", result.Findings[1].Target.TargetID)
+	require.Len(t, results.BackMatter.Resources, 2)
 }
 
-// TestOSCALExporter_NilCatalog asserts that a nil catalog produces
-// ErrValidationFailed.
+// TestOSCALExporter_NilCatalog asserts that component generation requires a catalog while analysis rendering does not.
 func TestOSCALExporter_NilCatalog(t *testing.T) {
 	exporter := NewOSCALExporter(nil)
 
@@ -201,36 +186,25 @@ func TestOSCALExporter_NilCatalog(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 
-	_, err = exporter.GenerateAssessmentResults(oscalTestResultSet())
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
-}
-
-// TestOSCALExporter_NilResultSet asserts that a nil result set produces
-// ErrValidationFailed.
-func TestOSCALExporter_NilResultSet(t *testing.T) {
-	exporter := NewOSCALExporter(oscalTestCatalog())
-
-	_, err := exporter.GenerateAssessmentResults(nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
-}
-
-// TestOSCALExporter_EmptyResultSet asserts that an empty result set produces
-// valid output with empty observations/findings.
-func TestOSCALExporter_EmptyResultSet(t *testing.T) {
-	exporter := NewOSCALExporter(oscalTestCatalog())
-
-	rs := &KSIResultSet{
-		Class:         ClassC,
-		EvaluatedAtMs: time.Now().UnixMilli(),
-		Results:       []KSIResult{},
-	}
-
-	results, err := exporter.GenerateAssessmentResults(rs)
+	_, err = exporter.GenerateAssessmentResults(oscalTestAnalysis())
 	require.NoError(t, err)
-	require.NotNil(t, results)
+}
 
+// TestOSCALExporter_NilAnalysis asserts that nil canonical analysis produces ErrValidationFailed.
+func TestOSCALExporter_NilAnalysis(t *testing.T) {
+	_, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+// TestOSCALExporter_EmptyAnalysisAssessments asserts that analysis without assessments produces empty observations and findings.
+func TestOSCALExporter_EmptyAnalysisAssessments(t *testing.T) {
+	analysis := oscalTestAnalysis()
+	analysis.AssertionAssessments = nil
+	analysis.FrameworkAssessments = nil
+
+	results, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
+	require.NoError(t, err)
 	require.Len(t, results.Results, 1)
 	assert.Empty(t, results.Results[0].Observations)
 	assert.Empty(t, results.Results[0].Findings)
@@ -279,7 +253,7 @@ func TestOSCALComponentDefinition_MarshalJSON(t *testing.T) {
 func TestOSCALAssessmentResults_MarshalJSON(t *testing.T) {
 	exporter := NewOSCALExporter(oscalTestCatalog())
 
-	results, err := exporter.GenerateAssessmentResults(oscalTestResultSet())
+	results, err := exporter.GenerateAssessmentResults(oscalTestAnalysis())
 	require.NoError(t, err)
 
 	data, err := json.Marshal(results)
@@ -303,79 +277,64 @@ func TestOSCALAssessmentResults_MarshalJSON(t *testing.T) {
 	assert.Contains(t, resArr[0], "findings")
 }
 
-// TestOSCALExporter_GenerateAssessmentResults_NotApplicableStatus verifies
-// that KSIStatusNotApplicable maps to "not-applicable" in OSCAL findings.
-func TestOSCALExporter_GenerateAssessmentResults_NotApplicableStatus(t *testing.T) {
-	cat := oscalTestCatalog()
-	exporter := NewOSCALExporter(cat)
-
-	rs := &KSIResultSet{
-		Class:         ClassC,
-		EvaluatedAtMs: time.Now().UnixMilli(),
-		Results: []KSIResult{
-			{
-				ID:                  "KSI-CMT-01",
-				Status:              KSIStatusNotApplicable,
-				Outcome:             KSIOutcomeNotApplicable,
-				MethodCount:         0,
-				LastValidatedUnixMs: time.Now().UnixMilli(),
-			},
-		},
+// TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses verifies OSCAL-compatible framework finding statuses.
+func TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   string
+		expected string
+	}{
+		{name: "satisfied", status: "satisfied", expected: "satisfied"},
+		{name: "not satisfied", status: "not_satisfied", expected: "not-satisfied"},
+		{name: "not applicable", status: "not_applicable", expected: "not-applicable"},
+		{name: "unverifiable", status: "unverifiable", expected: "not-satisfied"},
+		{name: "customer attestation required", status: "customer_attestation_required", expected: "not-satisfied"},
 	}
-
-	results, err := exporter.GenerateAssessmentResults(rs)
-	require.NoError(t, err)
-	require.Len(t, results.Results, 1)
-	require.Len(t, results.Results[0].Findings, 1)
-	assert.Equal(t, "not-applicable", results.Results[0].Findings[0].Target.Status)
-}
-
-// TestOSCALExporter_GenerateAssessmentResults_UnknownKSI asserts that a result
-// referencing an unknown KSI ID produces an error.
-func TestOSCALExporter_GenerateAssessmentResults_PreservesCompatibleStatusForDetailedFailures(t *testing.T) {
-	outcomes := []KSIOutcome{
-		KSIOutcomeMethodFailure,
-		KSIOutcomeInvalidEvidence,
-		KSIOutcomeStaleEvidence,
-		KSIOutcomeUnsupportedAutomation,
-		KSIOutcomeCustomerAttestationRequired,
-	}
-
-	for _, outcome := range outcomes {
-		t.Run(string(outcome), func(t *testing.T) {
-			exporter := NewOSCALExporter(oscalTestCatalog())
-			resultSet := &KSIResultSet{
-				Class:         ClassC,
-				EvaluatedAtMs: time.Now().UnixMilli(),
-				Results: []KSIResult{{
-					ID: "KSI-CMT-01", Status: KSIStatusNotSatisfied, Outcome: outcome, MethodCount: 2, LastValidatedUnixMs: time.Now().UnixMilli(),
-				}},
-			}
-
-			results, err := exporter.GenerateAssessmentResults(resultSet)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis := oscalTestAnalysis()
+			analysis.FrameworkAssessments = analysis.FrameworkAssessments[:1]
+			analysis.FrameworkAssessments[0].Status = tt.status
+			results, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
 			require.NoError(t, err)
 			require.Len(t, results.Results[0].Findings, 1)
-			assert.Equal(t, "not-satisfied", results.Results[0].Findings[0].Target.Status)
-			assert.Contains(t, results.Results[0].Findings[0].Description, string(outcome))
+			assert.Equal(t, tt.expected, results.Results[0].Findings[0].Target.Status)
+			assert.Contains(t, results.Results[0].Findings[0].Description, tt.status)
 		})
 	}
 }
 
-func TestOSCALExporter_GenerateAssessmentResults_UnknownKSI(t *testing.T) {
-	exporter := NewOSCALExporter(oscalTestCatalog())
-
-	rs := &KSIResultSet{
-		Class:         ClassC,
-		EvaluatedAtMs: time.Now().UnixMilli(),
-		Results: []KSIResult{
-			{ID: "KSI-FAKE-99", Status: KSIStatusSatisfied, MethodCount: 1, LastValidatedUnixMs: time.Now().UnixMilli()},
-		},
+func TestOSCALExporter_GenerateAssessmentResults_RejectsInvalidGraphAndEvidenceReferences(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ComplianceAnalysis)
+		target error
+	}{
+		{name: "invalid graph", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceGraphValid = false }, target: constants.ErrInvalidEvidenceGraph},
+		{name: "missing evidence resource", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceResources = analysis.EvidenceResources[:1]
+		}, target: constants.ErrUnresolvedReference},
+		{name: "digest mismatch", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceResources[0].Sha256 = analysis.EvidenceResources[1].Sha256
+		}, target: constants.ErrUnresolvedReference},
+		{name: "cross scope evidence", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].ScopeId = "scope-2" }, target: constants.ErrEvidenceScopeMismatch},
+		{name: "missing bundle path", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].BundlePath = "" }, target: constants.ErrUnresolvedReference},
+		{name: "missing assertion assessment", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.FrameworkAssessments[0].AssertionAssessmentRefs = []string{"missing"}
+		}, target: constants.ErrUnresolvedReference},
+		{name: "missing evidence link target", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceLinks = []*compliancev1.EvidenceLink{{SourceRef: analysis.EvidenceResources[0].ArtifactId, TargetRef: "missing", LinkType: "references"}}
+		}, target: constants.ErrUnresolvedReference},
 	}
-
-	_, err := exporter.GenerateAssessmentResults(rs)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrValidationFailed)
-	assert.Contains(t, err.Error(), "unknown KSI")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis := oscalTestAnalysis()
+			tt.mutate(analysis)
+			_, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.target)
+		})
+	}
 }
 
 // TestOSCALExporter_GenerateComponentDefinition_DedupControlRefs verifies that
@@ -485,4 +444,73 @@ func TestGenerateUUID_RandomV4(t *testing.T) {
 
 	_, err := uuid.Parse(u1)
 	assert.NoError(t, err)
+}
+
+func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEvidenceResources(t *testing.T) {
+	const digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	artifactID := "action-receipt:sha256:" + digest
+	generatedAt := time.Date(2026, time.September, 7, 12, 0, 0, 0, time.UTC)
+	analysis := &compliancev1.ComplianceAnalysis{
+		AnalysisId:            "compliance-analysis:sha256:" + digest,
+		AnalysisSchemaVersion: constants.AnalysisSchemaVersion,
+		ScopeRef:              "scope-1",
+		GeneratedAt:           timestamppb.New(generatedAt),
+		GeneratorIdentity:     constants.AnalysisBuilderID,
+		GeneratorVersion:      constants.AnalysisBuilderVersion,
+		AssertionAssessments: []*compliancev1.ControlAssertionAssessment{{
+			AssessmentId:    "assertion-assessment:sha256:" + digest,
+			ScopeId:         "scope-1",
+			AssertionRef:    &compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"},
+			Status:          "satisfied",
+			EvidenceLevel:   "L3",
+			EvaluatedAt:     timestamppb.New(generatedAt),
+			VerifierRef:     &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion},
+			EvidenceRefs:    []string{artifactID},
+			FreshnessStatus: "fresh",
+		}},
+		FrameworkAssessments: []*compliancev1.FrameworkControlAssessment{{
+			AssessmentId:            "framework-assessment:sha256:" + digest,
+			ScopeId:                 "scope-1",
+			FrameworkRef:            &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"},
+			ControlId:               "KSI-MLA-07",
+			Status:                  "satisfied",
+			Responsibility:          "platform",
+			AssertionAssessmentRefs: []string{"assertion-assessment:sha256:" + digest},
+			EvidenceLevel:           "L3",
+		}},
+		EvidenceResources: []*compliancev1.ComplianceEvidenceReference{{
+			ArtifactId:         artifactID,
+			ArtifactType:       "action-receipt",
+			Sha256:             digest,
+			MediaType:          constants.MediaTypeJSON,
+			SchemaRef:          "g8e.operator.v1.ActionReceipt",
+			ProducerIdentity:   "gateway",
+			ScopeId:            "scope-1",
+			VerificationStatus: "verified",
+			VerifierId:         constants.ReceiptEvidenceVerifierID,
+			VerifierVersion:    constants.ReceiptEvidenceVerifierVersion,
+			BundlePath:         constants.EvalRunReceiptsFilename,
+		}},
+		EvidenceGraphValid: true,
+	}
+
+	doc, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
+	require.NoError(t, err)
+	require.Len(t, doc.BackMatter.Resources, 1)
+	resource := doc.BackMatter.Resources[0]
+	assert.Equal(t, artifactID, oscalPropValue(resource.Props, "artifact-id"))
+	assert.Equal(t, digest, oscalPropValue(resource.Props, "sha256"))
+	require.Len(t, doc.Results, 1)
+	require.Len(t, doc.Results[0].Observations, 1)
+	require.Len(t, doc.Results[0].Observations[0].RelevantEvidence, 1)
+	assert.Equal(t, "#"+resource.UUID, doc.Results[0].Observations[0].RelevantEvidence[0].Href)
+}
+
+func oscalPropValue(props []OSCALProp, name string) string {
+	for _, prop := range props {
+		if prop.Name == name {
+			return prop.Value
+		}
+	}
+	return ""
 }

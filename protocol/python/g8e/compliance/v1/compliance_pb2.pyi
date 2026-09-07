@@ -409,6 +409,158 @@ class ComplianceVerificationReport(_message.Message):
     reproduced_checksum_root: str
     def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ...) -> None: ...
 
+class EvidenceWindowCompleteness(_message.Message):
+    __slots__ = ("scope_id", "expected_evidence_count", "actual_evidence_count", "missing_evidence_refs", "stale_evidence_refs", "completeness_status", "window_start_ref", "window_end_ref")
+    SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_EVIDENCE_COUNT_FIELD_NUMBER: _ClassVar[int]
+    ACTUAL_EVIDENCE_COUNT_FIELD_NUMBER: _ClassVar[int]
+    MISSING_EVIDENCE_REFS_FIELD_NUMBER: _ClassVar[int]
+    STALE_EVIDENCE_REFS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETENESS_STATUS_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_START_REF_FIELD_NUMBER: _ClassVar[int]
+    WINDOW_END_REF_FIELD_NUMBER: _ClassVar[int]
+    scope_id: str
+    expected_evidence_count: int
+    actual_evidence_count: int
+    missing_evidence_refs: _containers.RepeatedScalarFieldContainer[str]
+    stale_evidence_refs: _containers.RepeatedScalarFieldContainer[str]
+    completeness_status: str
+    window_start_ref: str
+    window_end_ref: str
+    def __init__(self, scope_id: _Optional[str] = ..., expected_evidence_count: _Optional[int] = ..., actual_evidence_count: _Optional[int] = ..., missing_evidence_refs: _Optional[_Iterable[str]] = ..., stale_evidence_refs: _Optional[_Iterable[str]] = ..., completeness_status: _Optional[str] = ..., window_start_ref: _Optional[str] = ..., window_end_ref: _Optional[str] = ...) -> None: ...
+
+class ComplianceGap(_message.Message):
+    __slots__ = ("gap_id", "assertion_ref", "framework_ref", "control_id", "gap_type", "description", "responsibility")
+    GAP_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSERTION_REF_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_REF_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_ID_FIELD_NUMBER: _ClassVar[int]
+    GAP_TYPE_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    RESPONSIBILITY_FIELD_NUMBER: _ClassVar[int]
+    gap_id: str
+    assertion_ref: str
+    framework_ref: str
+    control_id: str
+    gap_type: str
+    description: str
+    responsibility: str
+    def __init__(self, gap_id: _Optional[str] = ..., assertion_ref: _Optional[str] = ..., framework_ref: _Optional[str] = ..., control_id: _Optional[str] = ..., gap_type: _Optional[str] = ..., description: _Optional[str] = ..., responsibility: _Optional[str] = ...) -> None: ...
+
+class EvidenceLink(_message.Message):
+    __slots__ = ("source_ref", "target_ref", "link_type")
+    SOURCE_REF_FIELD_NUMBER: _ClassVar[int]
+    TARGET_REF_FIELD_NUMBER: _ClassVar[int]
+    LINK_TYPE_FIELD_NUMBER: _ClassVar[int]
+    source_ref: str
+    target_ref: str
+    link_type: str
+    def __init__(self, source_ref: _Optional[str] = ..., target_ref: _Optional[str] = ..., link_type: _Optional[str] = ...) -> None: ...
+
+class ComplianceFinding(_message.Message):
+    __slots__ = ("finding_id", "subject_ref", "severity", "description", "related_assertion_ref", "related_control_id")
+    FINDING_ID_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_REF_FIELD_NUMBER: _ClassVar[int]
+    SEVERITY_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    RELATED_ASSERTION_REF_FIELD_NUMBER: _ClassVar[int]
+    RELATED_CONTROL_ID_FIELD_NUMBER: _ClassVar[int]
+    finding_id: str
+    subject_ref: str
+    severity: str
+    description: str
+    related_assertion_ref: str
+    related_control_id: str
+    def __init__(self, finding_id: _Optional[str] = ..., subject_ref: _Optional[str] = ..., severity: _Optional[str] = ..., description: _Optional[str] = ..., related_assertion_ref: _Optional[str] = ..., related_control_id: _Optional[str] = ...) -> None: ...
+
+class ComplianceRemediation(_message.Message):
+    __slots__ = ("remediation_id", "finding_ref", "action", "priority", "owner")
+    REMEDIATION_ID_FIELD_NUMBER: _ClassVar[int]
+    FINDING_REF_FIELD_NUMBER: _ClassVar[int]
+    ACTION_FIELD_NUMBER: _ClassVar[int]
+    PRIORITY_FIELD_NUMBER: _ClassVar[int]
+    OWNER_FIELD_NUMBER: _ClassVar[int]
+    remediation_id: str
+    finding_ref: str
+    action: str
+    priority: str
+    owner: str
+    def __init__(self, remediation_id: _Optional[str] = ..., finding_ref: _Optional[str] = ..., action: _Optional[str] = ..., priority: _Optional[str] = ..., owner: _Optional[str] = ...) -> None: ...
+
+class ControlSection(_message.Message):
+    __slots__ = ("section_id", "title", "responsibility", "status_filter", "control_assessment_refs", "description")
+    SECTION_ID_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    RESPONSIBILITY_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FILTER_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_ASSESSMENT_REFS_FIELD_NUMBER: _ClassVar[int]
+    DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    section_id: str
+    title: str
+    responsibility: str
+    status_filter: str
+    control_assessment_refs: _containers.RepeatedScalarFieldContainer[str]
+    description: str
+    def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ...) -> None: ...
+
+class ComplianceAnalysis(_message.Message):
+    __slots__ = ("analysis_id", "analysis_schema_version", "scope_ref", "generated_at", "generator_identity", "generator_version", "evidence_window_completeness", "assertion_assessments", "framework_assessments", "gaps", "evidence_links", "limitations", "findings", "remediation", "sections", "evidence_graph_failures", "evidence_graph_valid", "evidence_resources")
+    ANALYSIS_ID_FIELD_NUMBER: _ClassVar[int]
+    ANALYSIS_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_REF_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    GENERATOR_IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    GENERATOR_VERSION_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_WINDOW_COMPLETENESS_FIELD_NUMBER: _ClassVar[int]
+    ASSERTION_ASSESSMENTS_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_ASSESSMENTS_FIELD_NUMBER: _ClassVar[int]
+    GAPS_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_LINKS_FIELD_NUMBER: _ClassVar[int]
+    LIMITATIONS_FIELD_NUMBER: _ClassVar[int]
+    FINDINGS_FIELD_NUMBER: _ClassVar[int]
+    REMEDIATION_FIELD_NUMBER: _ClassVar[int]
+    SECTIONS_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_GRAPH_FAILURES_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_GRAPH_VALID_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_RESOURCES_FIELD_NUMBER: _ClassVar[int]
+    analysis_id: str
+    analysis_schema_version: str
+    scope_ref: str
+    generated_at: _timestamp_pb2.Timestamp
+    generator_identity: str
+    generator_version: str
+    evidence_window_completeness: EvidenceWindowCompleteness
+    assertion_assessments: _containers.RepeatedCompositeFieldContainer[ControlAssertionAssessment]
+    framework_assessments: _containers.RepeatedCompositeFieldContainer[FrameworkControlAssessment]
+    gaps: _containers.RepeatedCompositeFieldContainer[ComplianceGap]
+    evidence_links: _containers.RepeatedCompositeFieldContainer[EvidenceLink]
+    limitations: _containers.RepeatedScalarFieldContainer[str]
+    findings: _containers.RepeatedCompositeFieldContainer[ComplianceFinding]
+    remediation: _containers.RepeatedCompositeFieldContainer[ComplianceRemediation]
+    sections: _containers.RepeatedCompositeFieldContainer[ControlSection]
+    evidence_graph_failures: _containers.RepeatedScalarFieldContainer[str]
+    evidence_graph_valid: bool
+    evidence_resources: _containers.RepeatedCompositeFieldContainer[ComplianceEvidenceReference]
+    def __init__(self, analysis_id: _Optional[str] = ..., analysis_schema_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., evidence_window_completeness: _Optional[_Union[EvidenceWindowCompleteness, _Mapping]] = ..., assertion_assessments: _Optional[_Iterable[_Union[ControlAssertionAssessment, _Mapping]]] = ..., framework_assessments: _Optional[_Iterable[_Union[FrameworkControlAssessment, _Mapping]]] = ..., gaps: _Optional[_Iterable[_Union[ComplianceGap, _Mapping]]] = ..., evidence_links: _Optional[_Iterable[_Union[EvidenceLink, _Mapping]]] = ..., limitations: _Optional[_Iterable[str]] = ..., findings: _Optional[_Iterable[_Union[ComplianceFinding, _Mapping]]] = ..., remediation: _Optional[_Iterable[_Union[ComplianceRemediation, _Mapping]]] = ..., sections: _Optional[_Iterable[_Union[ControlSection, _Mapping]]] = ..., evidence_graph_failures: _Optional[_Iterable[str]] = ..., evidence_graph_valid: _Optional[bool] = ..., evidence_resources: _Optional[_Iterable[_Union[ComplianceEvidenceReference, _Mapping]]] = ...) -> None: ...
+
+class FrameworkProfile(_message.Message):
+    __slots__ = ("profile_id", "framework_ref", "profile_version", "generated_at", "analysis_ref", "control_assessments", "limitations")
+    PROFILE_ID_FIELD_NUMBER: _ClassVar[int]
+    FRAMEWORK_REF_FIELD_NUMBER: _ClassVar[int]
+    PROFILE_VERSION_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    ANALYSIS_REF_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_ASSESSMENTS_FIELD_NUMBER: _ClassVar[int]
+    LIMITATIONS_FIELD_NUMBER: _ClassVar[int]
+    profile_id: str
+    framework_ref: VersionedReference
+    profile_version: str
+    generated_at: _timestamp_pb2.Timestamp
+    analysis_ref: str
+    control_assessments: _containers.RepeatedCompositeFieldContainer[FrameworkControlAssessment]
+    limitations: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, profile_id: _Optional[str] = ..., framework_ref: _Optional[_Union[VersionedReference, _Mapping]] = ..., profile_version: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., analysis_ref: _Optional[str] = ..., control_assessments: _Optional[_Iterable[_Union[FrameworkControlAssessment, _Mapping]]] = ..., limitations: _Optional[_Iterable[str]] = ...) -> None: ...
+
 class FrameworkControlReference(_message.Message):
     __slots__ = ("framework_ref", "control_id")
     FRAMEWORK_REF_FIELD_NUMBER: _ClassVar[int]
