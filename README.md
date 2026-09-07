@@ -9,10 +9,6 @@
 
 The **g8e Governance Suite** combines the g8e sovereign execution platform, the g8ee agentic ensemble, and the g8ed operator dashboard into a complete system for governed AI operations. It delivers frontier AI reasoning to the edge without surrendering data custody: models reason over tokenized projections and cryptographic commitments, while state, keys, and raw data remain on the host that owns them. All three suite components live in this polyglot monorepo and run together through the [Unified Docker Stack](docs/guides/unified_stack.md).
 
-<p align="center">
-  <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />
-</p>
-
 **Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Unified Docker Stack](docs/guides/unified_stack.md) · [g8ee Docs](docs/ensemble/index.md) · [g8ed Docs](docs/dashboard/index.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [Build Gateway](docs/guides/build_gateway.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
 ## The g8e Governance Suite
