@@ -406,7 +406,7 @@ def project_stage2(baseline_candidate: Path, private_report: Path, provenance: d
     with tempfile.TemporaryDirectory(prefix="readme-stage2-", dir=candidate_dir.parent) as temp:
         temporary = Path(temp)
         reproduction_candidate = temporary / "reproduction"
-        project(private_report, reproduction_candidate, release_version, eval_cli_version, idle_timeout_seconds)
+        project(private_report, reproduction_candidate, release_version, eval_cli_version, 180)
         reproduction_index = _load_json(reproduction_candidate / "index.json")
         reproduction_ref = reproduction_index["eval_runs"][0]
         reproduction_run_id = reproduction_ref["run_id"]
@@ -421,8 +421,12 @@ def project_stage2(baseline_candidate: Path, private_report: Path, provenance: d
         environment = provenance.get("environment")
         if not isinstance(source_tree, dict) or not isinstance(components, list) or not isinstance(images, list) or not isinstance(environment, dict):
             raise ProjectionError("Stage 2 provenance is incomplete")
+        command_arguments = reproduction_manifest["command"]["arguments"]
+        timeout_index = command_arguments.index("--idle-timeout") + 1
+        command_arguments[timeout_index] = str(idle_timeout_seconds)
         reproduction_manifest.update({
             "schema_version": "2.0.0",
+            "idle_timeout_seconds": idle_timeout_seconds,
             "campaign_profile_sha256": hashlib.sha256(_canonical_json(campaign_profile).encode()).hexdigest(),
             "source_state_sha256": _required_string(source_tree, "state_sha256", "source tree"),
             "component_sha256s": {str(row["name"]): str(row["sha256"]) for row in components},

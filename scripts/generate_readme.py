@@ -300,6 +300,7 @@ class CampaignProfile:
     task_limit: int | None
     idle_timeout_seconds: int
     endpoint_class: str
+    roles: dict[str, tuple[str, str, str]]
 
 
 @dataclass(frozen=True)
@@ -870,7 +871,7 @@ def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifes
     )
 
 
-def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
+def _validate_stage1_run(run: LoadedEvalRun, platform_version: str, idle_timeout_seconds: int) -> None:
     manifest = run.manifest
     arms = _require_list(manifest, "arms", f"manifest for {run.run_id}")
     if len(arms) != 1 or not isinstance(arms[0], dict) or arms[0].get("arm_id") != STAGE1_ARM:
@@ -959,7 +960,7 @@ def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
         role: (role_map[role]["provider"], role_map[role]["model"], role_map[role]["endpoint_class"])
         for role in STAGE1_CONFIGURED_ROLES
     }
-    if reproduction.schema_version not in {"1.0.0", "2.0.0"} or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
+    if reproduction.schema_version not in {"1.0.0", "2.0.0"} or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != idle_timeout_seconds or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
         raise ReadmeError(f"Stage 1 reproduction manifest for {run.run_id} does not match the fixed run profile")
 
 
@@ -1051,7 +1052,8 @@ def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path, platform_version: str) -
     )
     if _is_stage1_manifest(manifest):
         expected_release = reproduction_manifest.release_version if reproduction_manifest is not None else platform_version
-        _validate_stage1_run(run, expected_release)
+        expected_timeout = 180 if ref.maturity == "stage1" else reproduction_manifest.idle_timeout_seconds if reproduction_manifest is not None else 180
+        _validate_stage1_run(run, expected_release, expected_timeout)
     return run
 
 
@@ -1331,11 +1333,24 @@ def _parse_campaign_profile(path: Path) -> CampaignProfile:
     label = "Stage 2 campaign profile"
     if not isinstance(raw, dict):
         raise ReadmeError(f"{label} must be an object")
-    _require_exact_fields(raw, {"schema_version", "profile_id", "release_version", "suite_id", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class"}, label)
+    _require_exact_fields(raw, {"schema_version", "profile_id", "release_version", "suite_id", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class", "roles"}, label)
     task_ids = _require_list(raw, "task_ids", label)
+    if not all(isinstance(task_id, str) and task_id for task_id in task_ids):
+        raise ReadmeError(f"task_ids in {label} must contain non-empty strings")
     task_limit = _require_field(raw, "task_limit", label)
     if task_limit is not None:
         raise ReadmeError(f"{label} task_limit must be null")
+    raw_roles = _require_field(raw, "roles", label)
+    if not isinstance(raw_roles, dict) or set(raw_roles) != set(STAGE1_CONFIGURED_ROLES):
+        raise ReadmeError(f"roles in {label} must contain primary, assistant, and lite")
+    roles: dict[str, tuple[str, str, str]] = {}
+    for role in STAGE1_CONFIGURED_ROLES:
+        identity = raw_roles[role]
+        role_label = f"{role} role in {label}"
+        if not isinstance(identity, dict):
+            raise ReadmeError(f"{role_label} must be an object")
+        _require_exact_fields(identity, {"provider", "model", "endpoint_class"}, role_label)
+        roles[role] = (_require_str(identity, "provider", role_label), _require_str(identity, "model", role_label), _require_str(identity, "endpoint_class", role_label))
     return CampaignProfile(
         schema_version=_require_str(raw, "schema_version", label),
         profile_id=_require_str(raw, "profile_id", label),
@@ -1347,6 +1362,7 @@ def _parse_campaign_profile(path: Path) -> CampaignProfile:
         task_limit=task_limit,
         idle_timeout_seconds=_require_int(raw, "idle_timeout_seconds", label, minimum=1),
         endpoint_class=_require_str(raw, "endpoint_class", label),
+        roles=roles,
     )
 
 
@@ -1472,14 +1488,14 @@ def _validate_stage2(manifest: PublicationManifest, runs: dict[str, LoadedEvalRu
     profile = stage2.campaign_profile
     provenance = stage2.provenance
     comparison = stage2.comparison
-    if profile.schema_version != STAGE2_PROFILE_SCHEMA or profile.profile_id != STAGE2_PROFILE_ID or profile.release_version != manifest.platform_version or profile.suite_id != STAGE1_SUITE or profile.arm_id != STAGE1_ARM or set(profile.task_ids) != STAGE1_TASK_IDS or len(profile.task_ids) != len(STAGE1_TASK_IDS) or profile.repetitions != 1 or profile.task_limit is not None or profile.idle_timeout_seconds != 180 or profile.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"}:
+    if profile.schema_version != STAGE2_PROFILE_SCHEMA or profile.profile_id != STAGE2_PROFILE_ID or profile.release_version != manifest.platform_version or profile.suite_id != STAGE1_SUITE or profile.arm_id != STAGE1_ARM or set(profile.task_ids) != STAGE1_TASK_IDS or len(profile.task_ids) != len(STAGE1_TASK_IDS) or profile.repetitions != 1 or profile.task_limit is not None or profile.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"}:
         raise ReadmeError("Stage 2 campaign profile does not match the fixed reproduction profile")
     profile_raw = {
-        "schema_version": profile.schema_version, "profile_id": profile.profile_id, "release_version": profile.release_version, "suite_id": profile.suite_id, "arm_id": profile.arm_id, "task_ids": list(profile.task_ids), "repetitions": profile.repetitions, "task_limit": profile.task_limit, "idle_timeout_seconds": profile.idle_timeout_seconds, "endpoint_class": profile.endpoint_class,
+        "schema_version": profile.schema_version, "profile_id": profile.profile_id, "release_version": profile.release_version, "suite_id": profile.suite_id, "arm_id": profile.arm_id, "task_ids": list(profile.task_ids), "repetitions": profile.repetitions, "task_limit": profile.task_limit, "idle_timeout_seconds": profile.idle_timeout_seconds, "endpoint_class": profile.endpoint_class, "roles": {role: {"provider": identity[0], "model": identity[1], "endpoint_class": identity[2]} for role, identity in profile.roles.items()},
     }
     profile_sha = hashlib.sha256(_canonical_json(profile_raw).encode()).hexdigest()
     repro_manifest = reproduction.reproduction_manifest
-    if repro_manifest is None or repro_manifest.schema_version != "2.0.0" or repro_manifest.release_version != manifest.platform_version or repro_manifest.campaign_profile_sha256 != profile_sha or repro_manifest.source_state_sha256 != provenance.source_state_sha256 or repro_manifest.component_sha256s != {name: value[1] for name, value in provenance.components.items()} or repro_manifest.image_sha256s != {name: value[1] for name, value in provenance.images.items()} or repro_manifest.environment != provenance.environment:
+    if repro_manifest is None or repro_manifest.schema_version != "2.0.0" or repro_manifest.release_version != manifest.platform_version or repro_manifest.campaign_profile_sha256 != profile_sha or repro_manifest.idle_timeout_seconds != profile.idle_timeout_seconds or repro_manifest.roles != profile.roles or repro_manifest.source_state_sha256 != provenance.source_state_sha256 or repro_manifest.component_sha256s != {name: value[1] for name, value in provenance.components.items()} or repro_manifest.image_sha256s != {name: value[1] for name, value in provenance.images.items()} or repro_manifest.environment != provenance.environment:
         raise ReadmeError("Stage 2 reproduction manifest does not match campaign profile, source state, component, image, and environment provenance")
     if provenance.campaign_profile_sha256 != profile_sha:
         raise ReadmeError("Stage 2 provenance campaign profile binding does not match")

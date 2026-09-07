@@ -413,7 +413,7 @@ python3 scripts/project_readme_evidence.py \
   docs/evidence/readme/candidates/v2.1.6 \
   --release-version 2.1.6 \
   --eval-cli-version 0.3.0 \
-  --idle-timeout 180 \
+  --idle-timeout 600 \
   --baseline-candidate docs/evidence/readme/current \
   --provenance "${PRIVATE_CAMPAIGN_DIR}/provenance.json"
 ```

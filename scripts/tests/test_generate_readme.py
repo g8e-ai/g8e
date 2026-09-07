@@ -241,6 +241,11 @@ def _make_stage2_provenance(tmp: str) -> dict:
         "task_limit": None,
         "idle_timeout_seconds": 180,
         "endpoint_class": "self-hosted-lan",
+        "roles": {
+            "primary": {"provider": "ollama", "model": "gemma4:12b", "endpoint_class": "self-hosted-lan"},
+            "assistant": {"provider": "ollama", "model": "gemma4:e4b", "endpoint_class": "self-hosted-lan"},
+            "lite": {"provider": "ollama", "model": "gemma4:e2b", "endpoint_class": "self-hosted-lan"},
+        },
     }
     components = [{"name": "g8e", "version": "2.1.6", "sha256": "a" * 64}, {"name": "g8e-evals", "version": "0.3.0", "sha256": "b" * 64}]
     images = [{"service": service, "image": f"g8e-{service}:2.1.6", "sha256": character * 64} for service, character in (("gateway", "c"), ("operator", "d"), ("ensemble", "e"), ("dashboard", "f"))]
