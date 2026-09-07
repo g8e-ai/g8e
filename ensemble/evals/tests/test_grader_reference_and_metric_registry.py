@@ -303,6 +303,9 @@ _CURRENT_METRIC_IDS = [
     "tool_sequence",
     "factual_qa",
     "citation_backed",
+    "partial_milestone",
+    "reliability",
+    "economics_performance",
 ]
 
 

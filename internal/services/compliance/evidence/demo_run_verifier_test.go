@@ -73,11 +73,20 @@ func (e memoryDirEntry) Type() os.FileMode          { return 0 }
 func (e memoryDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 type memoryProvenanceSource struct {
-	artifacts []ProvenanceArtifact
+	artifacts      []ProvenanceArtifact
+	definitions    []DemoDefinitionArtifact
+	definitionsErr error
 }
 
 func (s memoryProvenanceSource) Artifacts(_ context.Context, _ string) ([]ProvenanceArtifact, error) {
 	return append([]ProvenanceArtifact(nil), s.artifacts...), nil
+}
+
+func (s memoryProvenanceSource) Definitions(_ context.Context, _ string) ([]DemoDefinitionArtifact, error) {
+	if s.definitionsErr != nil {
+		return nil, s.definitionsErr
+	}
+	return append([]DemoDefinitionArtifact(nil), s.definitions...), nil
 }
 
 func TestVerifyDemoRun_AcceptsCanonicalCorrelatedRun(t *testing.T) {

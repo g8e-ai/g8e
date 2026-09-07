@@ -42,6 +42,12 @@ from g8e_evals.schema import (
     StateCollectionBoundary,
     StateEvidenceKind,
     StateValue,
+    PayloadTamperingAssertion,
+    IdentityMismatchAssertion,
+    IdentityBinding,
+    EvidencePreservationAssertion,
+    EvidencePreservationPath,
+    EvidencePreservationOutcome,
 )
 
 
@@ -72,7 +78,8 @@ class GovernanceAdversarialLoader:
             )
 
         provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
-        validate_provenance(provenance)
+        trusted_root = self.gold_set_path.parent.parent.parent
+        validate_provenance(provenance, suite_id=self.SUITE_ID, trusted_root=trusted_root)
         validate_dataset(self.gold_set_path, provenance)
         rows = [
             json.loads(line)
@@ -189,6 +196,50 @@ class GovernanceAdversarialLoader:
                             expected_absence=_parse_absence(a.get("expected_absence", {})),
                         )
                         for a in data.get("revoked_credential_assertions", [])
+                    ],
+                    payload_tampering_assertions=[
+                        PayloadTamperingAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            original_payload_hash=a["original_payload_hash"],
+                            tampered_payload_hash=a["tampered_payload_hash"],
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("payload_tampering_assertions", [])
+                    ],
+                    identity_mismatch_assertions=[
+                        IdentityMismatchAssertion(
+                            assertion_id=a["assertion_id"],
+                            action_type=a["action_type"],
+                            identity_binding=IdentityBinding(a["identity_binding"]),
+                            expected_identity=a["expected_identity"],
+                            mismatched_identity=a["mismatched_identity"],
+                            expected_rejection_layer=RejectionLayer(a["expected_rejection_layer"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_absence=_parse_absence(a.get("expected_absence", {})),
+                        )
+                        for a in data.get("identity_mismatch_assertions", [])
+                    ],
+                    evidence_preservation_assertions=[
+                        EvidencePreservationAssertion(
+                            assertion_id=a["assertion_id"],
+                            preservation_path=EvidencePreservationPath(a["preservation_path"]),
+                            collection_boundary=StateCollectionBoundary(
+                                a.get("collection_boundary", "operator_workload")
+                            ),
+                            expected_fail_closed=a.get("expected_fail_closed", True),
+                            expected_no_unsafe_continuation=a.get("expected_no_unsafe_continuation", True),
+                            expected_outcome=EvidencePreservationOutcome(
+                                a.get("expected_outcome", "evidence_preserved")
+                            ),
+                        )
+                        for a in data.get("evidence_preservation_assertions", [])
                     ],
                     benchmark_specific=data.get("scenario_params", {}),
                 ),

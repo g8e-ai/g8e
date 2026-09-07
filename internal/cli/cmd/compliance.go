@@ -43,6 +43,7 @@ CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
 		complianceOverlayCmdWithConfig(newFileSvc),
 		complianceDemoRunCmd(),
 		complianceReleaseEvidenceCmdWithConfig(newFileSvc, defaultProvenanceSourceFactory),
+		complianceEvidenceGraphCmd(),
 	)
 
 	return cmd
@@ -53,12 +54,22 @@ CR26 KSIs and persists KSI evaluation snapshots for historical metrics.`,
 func complianceKSICmdWithConfig(fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)) *cobra.Command {
 	var class string
 	var catalogPath string
+	var scopeID string
+	var runID string
+	var assertionAssessmentIDs []string
+	var attemptIDs []string
+	var scenarioIDs []string
+	var actionIDs []string
+	var evidenceWindowStartUnixMs int64
+	var evidenceWindowEndUnixMs int64
 
 	cmd := &cobra.Command{
 		Use:   "ksi",
 		Short: "Evaluate KSIs and print the result set as JSON",
 		Long: `Evaluate g8e's live state against the FedRAMP 20x Key Security Indicators
-for the specified certification class and print the KSIResultSet as JSON.`,
+for the specified certification class and print the KSIResultSet as JSON.
+Every result is bound to the declared --scope-id and --run-id so consumers can
+prove no result was produced from evidence outside the assessment context.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if ctx == nil {
@@ -79,7 +90,11 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 			if err != nil {
 				return err
 			}
-			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass)
+			binding, err := buildEvaluationBinding(scopeID, runID, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs)
+			if err != nil {
+				return err
+			}
+			resultSet := evaluateKSIs(ctx, fileSvc, cat, certClass, binding)
 			if resultSet == nil {
 				return fmt.Errorf("%w: cannot evaluate KSIs (audit store or ledger unavailable)", constants.ErrReportStoreUnavailable)
 			}
@@ -87,6 +102,9 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 			historyStore := newKSIHistoryStore(fileSvc)
 			if err := saveKSIHistorySnapshot(ctx, historyStore, resultSet); err != nil {
 				slog.Default().Warn("compliance: failed to save KSI history snapshot", "error", err)
+			}
+			if err := newKSIUnavailableIntervalStore(fileSvc).AppendFromResultSet(ctx, resultSet); err != nil {
+				return fmt.Errorf("compliance: save KSI unavailable intervals: %w", err)
 			}
 
 			output, err := json.MarshalIndent(resultSet, "", "  ")
@@ -101,8 +119,45 @@ for the specified certification class and print the KSIResultSet as JSON.`,
 
 	cmd.Flags().StringVar(&class, "class", "C", "FedRAMP 20x certification class (A, B, C, D)")
 	cmd.Flags().StringVar(&catalogPath, "catalog", constants.DefaultKSICatalogPath, "Path to KSI catalog JSON file")
+	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every result to the declared context (required)")
+	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every result to the declared context (required)")
+	cmd.Flags().StringSliceVar(&assertionAssessmentIDs, "assertion-assessment-id", nil, "Assertion assessment ID consumed by the KSI evaluation (repeatable, required)")
+	cmd.Flags().StringSliceVar(&attemptIDs, "attempt-id", nil, "Allowed evidence attempt ID (repeatable)")
+	cmd.Flags().StringSliceVar(&scenarioIDs, "scenario-id", nil, "Allowed evidence scenario ID (repeatable)")
+	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
+	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
+	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
+	_ = cmd.MarkFlagRequired("scope-id")
+	_ = cmd.MarkFlagRequired("run-id")
+	_ = cmd.MarkFlagRequired("assertion-assessment-id")
+	_ = cmd.MarkFlagRequired("evidence-window-start-unix-ms")
+	_ = cmd.MarkFlagRequired("evidence-window-end-unix-ms")
 
 	return cmd
+}
+
+// buildEvaluationBinding constructs an EvaluationBinding from CLI flags using
+// the caller-declared evidence collection interval.
+func buildEvaluationBinding(scopeID, runID string, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs int64, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs []string) (compliance.EvaluationBinding, error) {
+	binding := compliance.EvaluationBinding{
+		ScopeID:            scopeID,
+		RunID:              runID,
+		WindowStartUnixMs:  evidenceWindowStartUnixMs,
+		WindowEndUnixMs:    evidenceWindowEndUnixMs,
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: assertionAssessmentIDs,
+			AttemptIDs:    attemptIDs,
+			ScenarioIDs:   scenarioIDs,
+			ActionIDs:     actionIDs,
+		},
+	}
+	if err := binding.Validate(); err != nil {
+		return compliance.EvaluationBinding{}, fmt.Errorf("compliance: build evaluation binding: %w", err)
+	}
+	return binding, nil
 }
 
 // loadKSICatalog reads and validates the KSI catalog from the given path.
@@ -115,9 +170,10 @@ func loadKSICatalog(path string) (*compliance.KSICatalog, error) {
 }
 
 // evaluateKSIs opens the runtime stores, creates a KSI evaluator, registers
-// default methods, and runs evaluation. Returns nil if stores are unavailable
-// or evaluation fails. Callers must treat nil as a fail-closed error.
-func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compliance.KSICatalog, class compliance.CertificationClass) *compliance.KSIResultSet {
+// default methods, and runs evaluation bound to the given binding. Returns nil
+// if stores are unavailable or evaluation fails. Callers must treat nil as a
+// fail-closed error.
+func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compliance.KSICatalog, class compliance.CertificationClass, binding compliance.EvaluationBinding) *compliance.KSIResultSet {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -130,9 +186,12 @@ func evaluateKSIs(ctx context.Context, fileSvc fs.RuntimeFileService, cat *compl
 	defer cleanup()
 
 	evaluator := compliance.NewKSIEvaluator(cat)
-	evaluator.RegisterDefaultMethods(deps)
+	if err := evaluator.RegisterDefaultMethods(deps); err != nil {
+		slog.Default().Warn("compliance: KSI method registration failed", "error", err)
+		return nil
+	}
 
-	resultSet, err := evaluator.Evaluate(ctx, class)
+	resultSet, err := evaluator.Evaluate(ctx, class, binding)
 	if err != nil {
 		slog.Default().Warn("compliance: KSI evaluation failed", "error", err)
 		return nil
@@ -177,6 +236,7 @@ func openEvaluatorDeps(ctx context.Context, fileSvc fs.RuntimeFileService) (comp
 		Audit:       auditStore,
 		Ledger:      ledger,
 		Commitments: cl,
+		History:     newKSIHistoryStore(fileSvc),
 	}, func() { runCleanups(cleanups) }, true
 }
 
@@ -321,6 +381,10 @@ Without --ksi, prints all snapshots as a JSON array.`,
 func newKSIHistoryStore(fileSvc fs.RuntimeFileService) *compliance.KSIHistoryStore {
 	historyDir := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.KSIHistoryDirname)
 	return compliance.NewKSIHistoryStore(fileSvc, historyDir)
+}
+
+func newKSIUnavailableIntervalStore(fileSvc fs.RuntimeFileService) *compliance.UnavailableIntervalStore {
+	return compliance.NewUnavailableIntervalStore(fileSvc, filepath.Join(constants.DataDirname, constants.ComplianceDirname))
 }
 
 // saveKSIHistorySnapshot persists a KSIResultSet snapshot via the given history

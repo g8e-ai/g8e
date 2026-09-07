@@ -14,7 +14,7 @@ Release work is split between the **agent** (PR prep) and the **release owner** 
 1. Inventory the changes since the previous release tag
 2. Reconcile documentation with the code changes
 3. Write `docs/release_notes/vX.Y.x/vX.Y.Z.md`
-4. Generate compliance evidence: run `g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/` (see [Compliance Evidence Generation](#compliance-evidence-generation))
+4. Generate compliance evidence: run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags (see [Compliance Evidence Generation](#compliance-evidence-generation))
 5. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies) so CI's version sync and locked-environment checks pass on the PR
 6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
 7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
@@ -237,8 +237,8 @@ Every release generates a per-release compliance evidence artifact that captures
 
 The command runs three currently-available compliance evidence sources and renders them into a single markdown report and a CSV:
 
-1. **KSI evaluation** — runs `g8e compliance ksi --class C` against the live runtime stores (audit store, git ledger, commitment ledger) and records the per-KSI status, method count, and last-validated timestamp. When the runtime stores are unavailable, the report records the gap honestly rather than inventing a passing result.
-2. **KSI history snapshot** — reads persisted KSI evaluation snapshots from `.g8e/data/compliance/ksi-history/` and records the snapshot count and time range. The current evaluation is also persisted as a new snapshot.
+1. **KSI evaluation** — evaluates class C against the live runtime stores (audit store, git ledger, commitment ledger) under the caller-declared scope, run, assertion-assessment set, and evidence window, then records the per-KSI status, method count, and last-validated timestamp. When the runtime stores are unavailable, the report records the gap honestly rather than inventing a passing result.
+2. **KSI history snapshot inventory** — reads previously persisted KSI evaluation snapshots from `.g8e/data/compliance/ksi-history/` and records the snapshot count and time range. Release-evidence aggregation is read-only and does not persist its current KSI evaluation as a history snapshot.
 3. **Demo-run verification** — runs `g8e compliance demo-run verify <run-id>` for each persisted demo evidence run (or for explicit run IDs passed via `--demo-run`) and records the verification result, failure count, verifier ID and version, reproduced checksum root, and verified-at timestamp.
 
 The full `g8e compliance report generate` bundle (signed, cross-framework OSCAL, historical effectiveness) is planned (Phase 4-7 of the proof-backed reporting pipeline) and not yet implemented. The release-evidence artifact captures what the pipeline can demonstrate today; it does not claim certification, accreditation, authorization, or legal compliance. See the [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) document for the pipeline architecture, assertion catalog, evidence levels, and roadmap.
@@ -255,18 +255,37 @@ Two files are written into the output directory (typically `docs/release_notes/v
 ### Command
 
 ```bash
+export RELEASE_SCOPE_ID='<assessment-scope-id>'
+export RELEASE_RUN_ID='<assessment-run-id>'
+export ASSERTION_ASSESSMENT_ID='<consumed-assertion-assessment-id>'
+export EVIDENCE_WINDOW_START_UNIX_MS='<inclusive-start-unix-ms>'
+export EVIDENCE_WINDOW_END_UNIX_MS='<inclusive-end-unix-ms>'
+
 g8e compliance release-evidence \
   --version vX.Y.Z \
   --out docs/release_notes/vX.Y.x/ \
   --class C \
-  [--demo-run <run-id> ...] \
-  [--fail-closed]
+  --scope-id "${RELEASE_SCOPE_ID}" \
+  --run-id "${RELEASE_RUN_ID}" \
+  --assertion-assessment-id "${ASSERTION_ASSESSMENT_ID}" \
+  --evidence-window-start-unix-ms "${EVIDENCE_WINDOW_START_UNIX_MS}" \
+  --evidence-window-end-unix-ms "${EVIDENCE_WINDOW_END_UNIX_MS}"
 ```
+
+The scope ID, run ID, assertion-assessment IDs, and inclusive evidence window are declared by the release assessment and must identify the actual assessment context. Repeat the assertion-assessment, attempt, scenario, and action flags for every identifier admitted into that context. Evidence references carrying an identifier outside these allowlists or a timestamp outside the declared window fail closed.
 
 Flags:
 
-- `--version` (required): Release version with `v` prefix (e.g. `v2.1.3`).
+- `--version` (required): Release version with `v` prefix (e.g. `v2.1.5`).
 - `--out` (required): Output directory for the markdown report and CSV. Typically `docs/release_notes/vX.Y.x/`.
+- `--scope-id` (required): Assessment scope ID bound to every KSI result.
+- `--run-id` (required): Assessment run ID bound to every KSI result.
+- `--assertion-assessment-id` (required, repeatable): Assertion-assessment ID consumed by the KSI evaluation. At least one is required.
+- `--evidence-window-start-unix-ms` (required): Inclusive start of the declared evidence collection interval in Unix milliseconds.
+- `--evidence-window-end-unix-ms` (required): Inclusive end of the declared evidence collection interval in Unix milliseconds.
+- `--attempt-id`: Attempt ID admitted into the assertion-assessment scope. Repeatable.
+- `--scenario-id`: Scenario ID admitted into the assertion-assessment scope. Repeatable.
+- `--action-id`: Action or transaction ID admitted into the assertion-assessment scope. Repeatable.
 - `--class`: FedRAMP 20x certification class (A, B, C, D). Defaults to `C`.
 - `--catalog`: Path to KSI catalog JSON. Defaults to `docs/reference/ksi-catalog.json`.
 - `--demo-run`: Demo run ID to verify. Repeatable. When omitted, all persisted runs under `.g8e/data/compliance/demo-evidence/` are verified.
@@ -288,6 +307,79 @@ Add a `### Compliance Evidence` subsection to the release notes file pointing to
 
 Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md](vX.Y.Z-compliance-evidence.md) with a machine-readable [CSV](vX.Y.Z-compliance-evidence.csv). The report captures KSI evaluation, KSI history, and demo-run verification at the release boundary.
 ```
+
+---
+
+## Stage 1 Real-Agent README Evidence
+
+A release may publish a Stage 1 real-agent diagnostic after the version-bearing release candidate is built and before the public evidence snapshot is promoted. Stage 1 covers one complete five-task `ifeval_subset` run through the `doctrine` arm with one repetition, no task limit, a 180-second idle timeout, real provider identities for the primary, assistant, and lite roles, and all terminal outcomes retained. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, broad model quality, statistical significance, compliance, certification, or production suitability.
+
+The v2.1.5 release-owner profile uses `gemma4:12b` for primary, `gemma4:e4b` for assistant, and `gemma4:e2b` for lite through an Ollama endpoint classified publicly as `self-hosted-lan`. Reproducing operators set their own reachable endpoint and may substitute locally available model tags, but the reproduction manifest records every substitution and does not describe different tags or model revisions as byte-identical reproduction.
+
+### Attended collection
+
+Collection is a local, side-effecting release-preparation step. It requires a running and enrolled full stack, an authenticated CLI context, a reachable Ollama endpoint, a new private campaign directory, and an owner-only 32-byte evidence key. The operator sets these variables without placing the endpoint or private paths in the public candidate:
+
+```bash
+export PRIVATE_CAMPAIGN_DIR='<new-private-campaign-directory>'
+export EVIDENCE_KEY_FILE="${PRIVATE_CAMPAIGN_DIR}/evidence-key.json"
+export OLLAMA_ENDPOINT='<operator-reachable-ollama-endpoint>'
+export PRIMARY_MODEL='gemma4:12b'
+export ASSISTANT_MODEL='gemma4:e4b'
+export LITE_MODEL='gemma4:e2b'
+mkdir -p "${PRIVATE_CAMPAIGN_DIR}/reports"
+umask 077
+python3 -c 'import base64,json,secrets; print(json.dumps({"version":1,"key_id":"readme-stage1-owner","key_b64":base64.b64encode(secrets.token_bytes(32)).decode()}))' > "${EVIDENCE_KEY_FILE}"
+curl --fail --silent --show-error "${OLLAMA_ENDPOINT}/api/tags" > "${PRIVATE_CAMPAIGN_DIR}/ollama-tags.json"
+```
+
+Inspect the retained inventory and stop if any declared tag is absent. Build the release candidate, start and enroll the full stack through the [Sovereignty Gauntlet guide](../guides/sovereignty_gauntlet.md), refresh the CLI identity, and run the fixed profile once:
+
+```bash
+REPO_ROOT="$PWD"
+./g8e auth refresh
+export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+cd ensemble/evals
+uv sync --locked --extra test
+uv run g8e-evals run \
+  --suite ifeval_subset \
+  --arm doctrine \
+  --provider ollama \
+  --model "${PRIMARY_MODEL}" \
+  --assistant-provider ollama \
+  --assistant-model "${ASSISTANT_MODEL}" \
+  --lite-provider ollama \
+  --lite-model "${LITE_MODEL}" \
+  --primary-endpoint "${OLLAMA_ENDPOINT}" \
+  --assistant-endpoint "${OLLAMA_ENDPOINT}" \
+  --lite-endpoint "${OLLAMA_ENDPOINT}" \
+  --idle-timeout 180 \
+  --g8ee-url http://localhost:8000 \
+  --g8e-cli "${REPO_ROOT}/g8e" \
+  --auth-project-root "${REPO_ROOT}" \
+  --evidence-key-file "${EVIDENCE_KEY_FILE}" \
+  --output-dir "${PRIVATE_CAMPAIGN_DIR}/reports"
+```
+
+Do not pass `--limit`, do not add a judge, do not rerun only failed tasks, and do not modify the private report after completion. A complete candidate has exactly the task IDs `1001`, `1019`, `1051`, `1072`, and `1075`, one terminal attempt per task, one bound deterministic `ifeval_subset_verifier` metric per task, and at least one real provider-boundary model call per attempt. Failures and timeouts remain in the denominator. Zero receipts are an unavailable receipt result, not a pass.
+
+### Candidate projection and approval
+
+Return to the repository root and project the completed private report into a new candidate. The projection command strips raw prompts, raw outputs, exact endpoints, local paths, credentials, keys, encrypted payload locations, and private topology; emits safe manifest, task, attempt, stage, metric, summary, evidence-index, reproduction-manifest, and zero-receipt projections; computes all checksums; and validates the result with the offline README reader.
+
+```bash
+python3 scripts/project_readme_evidence.py \
+  '<private-report-directory>' \
+  docs/evidence/readme/candidates/v2.1.5 \
+  --release-version 2.1.5 \
+  --eval-cli-version 0.3.0 \
+  --idle-timeout 180
+```
+
+The eval CLI version must match `orchestrator_version` in the private run manifest; projection fails closed on a mismatch. The release owner reviews every candidate file and README sentence before promotion. Promotion is explicit and separate from projection. After approval, replace `docs/evidence/readme/current/` with the reviewed candidate, run `make readme`, and verify with `make readme-test`, `make readme-check`, relevant eval tests and lint, platform tests, and the release checks. CI only validates the checked-in snapshot and README drift; it does not start Ollama, run agents, possess evidence keys, collect evidence, select a candidate, or promote it.
+
+A hotfix either runs the same complete minimum profile or publishes the current release with Stage 1 evidence explicitly unavailable. It never relabels evidence from an older release as current evidence.
 
 ---
 
@@ -468,7 +560,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 - [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
 - [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This includes the README template (`docs/templates/README.md.tmpl`), which carries a `go get ...@vX.Y.Z` callout; after updating the template, run `make readme` to regenerate `README.md`. Do not edit `README.md` directly — it is a generated artifact
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
-- [ ] **4. Generate compliance evidence**: Run `g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/` to produce the per-release compliance evidence report and CSV (see [Compliance Evidence Generation](#compliance-evidence-generation))
+- [ ] **4. Generate compliance evidence**: Run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags to produce the per-release compliance evidence report and CSV (see [Compliance Evidence Generation](#compliance-evidence-generation))
 - [ ] **5. `VERSION`**: Set to `vX.Y.Z`
 - [ ] **6. Sync Python files and regenerate downstream lockfiles**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`), `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`), and the editable `g8e` package entry in `protocol/python/uv.lock` (`version = "X.Y.Z"`) to match `VERSION` (no `v` prefix). Then run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies and would otherwise fail `uv sync --locked` in CI). This is required so CI's version sync check passes and `uv run --locked` remains usable on the PR. The agent edits the `protocol/python` files manually; it cannot run `make release` to do it. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net; it does not regenerate the downstream lockfiles.
 - [ ] **7. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
@@ -598,7 +690,7 @@ For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
 2. Inventory the changes and reconcile documentation for the touched areas
-3. Set `VERSION`, sync the Python package files to match, run `make proto` to regenerate the downstream `uv.lock` files, update `CHANGELOG.md`, write release notes, and generate compliance evidence (`g8e compliance release-evidence --version vX.Y.Z --out docs/release_notes/vX.Y.x/`)
+3. Set `VERSION`, sync the Python package files to match, run `make proto` to regenerate the downstream `uv.lock` files, update `CHANGELOG.md`, write release notes, and generate compliance evidence with the release version, output directory, assessment binding, and evidence-window flags documented in [Compliance Evidence Generation](#compliance-evidence-generation)
 4. Hand off to the release owner, who commits, pushes, opens and merges the PR; after CI on `main` passes, pulls main locally, and runs `make release` to re-sync the Python files (no-op), tag, and push; GitHub Actions workflows create the release and upload assets
 
 ---

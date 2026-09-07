@@ -19,11 +19,13 @@ from g8e.operator.v1.operator_pb2 import (
     DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
     L2_STATUS_REQUIRED_VALID,
     L3_STATUS_REQUIRED_FAILED,
+    ActionReceipt,
 )
 from g8e.receipts import (
     ED25519_SPKI_PREFIX,
     PUBLIC_KEY_PEM_BEGIN,
     PUBLIC_KEY_PEM_END,
+    action_receipt_to_dict,
     canonicalize_action_receipt,
     canonicalize_receipt_persistence_attestation,
     parse_action_receipt,
@@ -43,6 +45,12 @@ STAGE_EVIDENCE_VECTOR_PATH = Path(__file__).resolve().parents[2] / VECTORS_DIREC
 @pytest.fixture
 def vector() -> dict[str, object]:
     return json.loads(VECTOR_PATH.read_text())
+
+
+def test_action_receipt_to_dict_omits_default_proto_fields():
+    receipt = ActionReceipt(transaction_id="tx-1")
+
+    assert action_receipt_to_dict(receipt) == {"transaction_id": "tx-1"}
 
 
 def test_action_receipt_matches_cross_language_vector(vector):

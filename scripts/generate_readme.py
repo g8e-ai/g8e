@@ -33,8 +33,23 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_PUB_SCHEMAS = {"1.0.0"}
-SUPPORTED_EVAL_SCHEMAS = {"1.33.0"}
+SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0"}
+SUPPORTED_EVAL_SCHEMAS = {"1.33.0", "1.40.0"}
+STAGE1_EVAL_SCHEMA = "1.40.0"
+STAGE1_SUITE = "ifeval_subset"
+STAGE1_ARM = "doctrine"
+STAGE1_TASK_IDS = frozenset({"1001", "1019", "1051", "1072", "1075"})
+STAGE1_CONFIGURED_ROLES = ("primary", "assistant", "lite")
+STAGE1_TERMINAL_STATUSES = frozenset({
+    "completed",
+    "model_failed",
+    "governance_rejected",
+    "human_denied",
+    "timed_out",
+    "infrastructure_failed",
+    "invalid_evidence",
+})
+FORBIDDEN_PROVIDER_IDENTITIES = frozenset({"fake", "fakeprovider", "canned", "mock", "stub", "test"})
 
 MARKER_PATTERN = re.compile(r"\{\{([A-Z_][A-Z0-9_]*)\}\}")
 
@@ -78,6 +93,8 @@ class EvalRunRef:
     run_id: str
     manifest_path: str
     manifest_sha256: str
+    tasks_path: str | None
+    tasks_sha256: str | None
     attempts_path: str
     attempts_sha256: str
     metrics_path: str
@@ -86,6 +103,12 @@ class EvalRunRef:
     receipts_sha256: str
     stages_path: str
     stages_sha256: str
+    summary_path: str | None
+    summary_sha256: str | None
+    evidence_index_path: str | None
+    evidence_index_sha256: str | None
+    reproduction_manifest_path: str | None
+    reproduction_manifest_sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -139,6 +162,7 @@ class MetricRow:
     unit: str
     verification_status: str
     grader_class: str
+    attempt_id: str
     evidence_ref: str
 
 
@@ -178,16 +202,85 @@ class StageRow:
     layer: str
     outcome: str
     detail: str
+    agent_role: str
+    provider: str
+    model: str
+
+
+@dataclass(frozen=True)
+class TaskProjection:
+    schema_version: str
+    task_id: str
+    suite_id: str
+    suite_version: str
+    category: str
+    prompt_hash: str
+    prompt_length: int
+    compatible_arms: tuple[str, ...]
+    graders: tuple[tuple[str, str, str], ...]
+
+
+@dataclass(frozen=True)
+class SummaryProjection:
+    schema_version: str
+    run_id: str
+    assigned_tasks: int
+    terminal_attempts: int
+    outcomes: dict[str, int]
+    metric_id: str
+    metric_version: str
+    numerator: int
+    denominator: int
+    unit: str
+    receipt_count: int
+
+
+@dataclass(frozen=True)
+class EvidenceIndexProjection:
+    schema_version: str
+    artifact_id: str
+    attempt_id: str
+    evidence_kind: str
+    media_type: str
+    plaintext_sha256: str
+    byte_length: int
+    retained_privately: bool
+
+
+@dataclass(frozen=True)
+class ReproductionManifest:
+    schema_version: str
+    release_version: str
+    run_id: str
+    eval_schema_version: str
+    eval_cli_version: str
+    suite_id: str
+    suite_version: str
+    arm_id: str
+    task_ids: tuple[str, ...]
+    repetitions: int
+    task_limit: int | None
+    idle_timeout_seconds: int
+    endpoint_class: str
+    roles: dict[str, tuple[str, str, str]]
+    environment: dict[str, str]
+    provider_inventory_retained_privately: bool
+    command_program: str
+    command_arguments: tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class LoadedEvalRun:
     run_id: str
     manifest: dict[str, Any]
+    tasks: tuple[TaskProjection, ...]
     attempts: tuple[AttemptRow, ...]
     metrics: tuple[MetricRow, ...]
     receipts: tuple[ReceiptRow, ...]
     stages: tuple[StageRow, ...]
+    summary: SummaryProjection | None
+    evidence_index: tuple[EvidenceIndexProjection, ...]
+    reproduction_manifest: ReproductionManifest | None
 
 
 @dataclass(frozen=True)
@@ -386,11 +479,31 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         receipts_sha256 = _require_str(raw, "receipts_sha256", label)
         stages_path = _require_str(raw, "stages_path", label)
         stages_sha256 = _require_str(raw, "stages_sha256", label)
+        if pub_version == "2.0.0":
+            tasks_path = _require_str(raw, "tasks_path", label)
+            tasks_sha256 = _require_str(raw, "tasks_sha256", label)
+            summary_path = _require_str(raw, "summary_path", label)
+            summary_sha256 = _require_str(raw, "summary_sha256", label)
+            evidence_index_path = _require_str(raw, "evidence_index_path", label)
+            evidence_index_sha256 = _require_str(raw, "evidence_index_sha256", label)
+            reproduction_manifest_path = _require_str(raw, "reproduction_manifest_path", label)
+            reproduction_manifest_sha256 = _require_str(raw, "reproduction_manifest_sha256", label)
+        else:
+            tasks_path = None
+            tasks_sha256 = None
+            summary_path = None
+            summary_sha256 = None
+            evidence_index_path = None
+            evidence_index_sha256 = None
+            reproduction_manifest_path = None
+            reproduction_manifest_sha256 = None
         eval_runs.append(
             EvalRunRef(
                 run_id=run_id,
                 manifest_path=manifest_path,
                 manifest_sha256=manifest_sha256,
+                tasks_path=tasks_path,
+                tasks_sha256=tasks_sha256,
                 attempts_path=attempts_path,
                 attempts_sha256=attempts_sha256,
                 metrics_path=metrics_path,
@@ -399,6 +512,12 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
                 receipts_sha256=receipts_sha256,
                 stages_path=stages_path,
                 stages_sha256=stages_sha256,
+                summary_path=summary_path,
+                summary_sha256=summary_sha256,
+                evidence_index_path=evidence_index_path,
+                evidence_index_sha256=evidence_index_sha256,
+                reproduction_manifest_path=reproduction_manifest_path,
+                reproduction_manifest_sha256=reproduction_manifest_sha256,
             )
         )
 
@@ -469,18 +588,298 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
     )
 
 
-def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path) -> LoadedEvalRun:
+def _normalized_provider(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]", "", value.lower())
+    if normalized.endswith("provider"):
+        normalized = normalized[:-8]
+    return normalized
+
+
+def _is_fake_identity(provider: str, model: str) -> bool:
+    normalized_provider = _normalized_provider(provider)
+    normalized_model = re.sub(r"[^a-z0-9]", "", model.lower())
+    return normalized_provider in FORBIDDEN_PROVIDER_IDENTITIES or normalized_model in FORBIDDEN_PROVIDER_IDENTITIES or normalized_model.startswith("fake")
+
+
+def _is_stage1_manifest(manifest: dict[str, Any]) -> bool:
+    return manifest.get("schema_version") == STAGE1_EVAL_SCHEMA and manifest.get("suite_id") == STAGE1_SUITE
+
+
+def _require_exact_fields(raw: dict[str, Any], expected: set[str], label: str) -> None:
+    missing = expected - raw.keys()
+    if missing:
+        raise ReadmeError(f"missing field {sorted(missing)[0]} in {label}")
+    extra = raw.keys() - expected
+    if extra:
+        raise ReadmeError(f"unsupported field {sorted(extra)[0]} in {label}")
+
+
+def _require_sha256(raw: dict[str, Any], key: str, label: str) -> str:
+    value = _require_str(raw, key, label)
+    if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise ReadmeError(f"field {key} in {label} must be a lowercase SHA-256 digest")
+    return value
+
+
+def _parse_tasks_projection(path: Path, run_id: str) -> tuple[TaskProjection, ...]:
+    rows: list[TaskProjection] = []
+    seen: set[str] = set()
+    expected_fields = {"schema_version", "task_id", "suite_id", "suite_version", "category", "prompt_hash", "prompt_length", "compatible_arms", "graders"}
+    for idx, raw in enumerate(_load_jsonl(path)):
+        label = f"tasks projection[{idx}] for {run_id}"
+        if not isinstance(raw, dict):
+            raise ReadmeError(f"{label} is not an object")
+        _require_exact_fields(raw, expected_fields, label)
+        task_id = _require_str(raw, "task_id", label)
+        if task_id in seen:
+            raise ReadmeError(f"duplicate task_id {task_id} in tasks projection for {run_id}")
+        seen.add(task_id)
+        compatible_arms = _require_list(raw, "compatible_arms", label)
+        if not all(isinstance(arm, str) and arm for arm in compatible_arms):
+            raise ReadmeError(f"compatible_arms in {label} must contain non-empty strings")
+        raw_graders = _require_list(raw, "graders", label)
+        graders: list[tuple[str, str, str]] = []
+        for grader_idx, grader in enumerate(raw_graders):
+            grader_label = f"{label} graders[{grader_idx}]"
+            if not isinstance(grader, dict):
+                raise ReadmeError(f"{grader_label} is not an object")
+            _require_exact_fields(grader, {"grader_id", "grader_version", "grader_class"}, grader_label)
+            graders.append((_require_str(grader, "grader_id", grader_label), _require_str(grader, "grader_version", grader_label), _require_str(grader, "grader_class", grader_label)))
+        rows.append(TaskProjection(
+            schema_version=_require_str(raw, "schema_version", label),
+            task_id=task_id,
+            suite_id=_require_str(raw, "suite_id", label),
+            suite_version=_require_str(raw, "suite_version", label),
+            category=_require_str(raw, "category", label, allow_empty=True),
+            prompt_hash=_require_sha256(raw, "prompt_hash", label),
+            prompt_length=_require_int(raw, "prompt_length", label),
+            compatible_arms=tuple(compatible_arms),
+            graders=tuple(graders),
+        ))
+    return tuple(rows)
+
+
+def _parse_summary_projection(path: Path, run_id: str) -> SummaryProjection:
+    raw = _load_json(path)
+    label = f"summary projection for {run_id}"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"schema_version", "run_id", "assigned_tasks", "terminal_attempts", "outcomes", "metric_id", "metric_version", "numerator", "denominator", "unit", "receipt_count"}, label)
+    outcomes = _require_field(raw, "outcomes", label)
+    if not isinstance(outcomes, dict) or not all(isinstance(status, str) and isinstance(count, int) and not isinstance(count, bool) and count >= 0 for status, count in outcomes.items()):
+        raise ReadmeError(f"outcomes in {label} must map statuses to non-negative integers")
+    return SummaryProjection(
+        schema_version=_require_str(raw, "schema_version", label),
+        run_id=_require_str(raw, "run_id", label),
+        assigned_tasks=_require_int(raw, "assigned_tasks", label),
+        terminal_attempts=_require_int(raw, "terminal_attempts", label),
+        outcomes=outcomes,
+        metric_id=_require_str(raw, "metric_id", label),
+        metric_version=_require_str(raw, "metric_version", label),
+        numerator=_require_int(raw, "numerator", label),
+        denominator=_require_int(raw, "denominator", label),
+        unit=_require_str(raw, "unit", label),
+        receipt_count=_require_int(raw, "receipt_count", label),
+    )
+
+
+def _parse_evidence_index_projection(path: Path, run_id: str) -> tuple[EvidenceIndexProjection, ...]:
+    rows: list[EvidenceIndexProjection] = []
+    seen: set[str] = set()
+    expected_fields = {"schema_version", "artifact_id", "attempt_id", "evidence_kind", "media_type", "plaintext_sha256", "byte_length", "retained_privately"}
+    for idx, raw in enumerate(_load_jsonl(path)):
+        label = f"evidence-index projection[{idx}] for {run_id}"
+        if not isinstance(raw, dict):
+            raise ReadmeError(f"{label} is not an object")
+        _require_exact_fields(raw, expected_fields, label)
+        artifact_id = _require_str(raw, "artifact_id", label)
+        if artifact_id in seen:
+            raise ReadmeError(f"duplicate artifact_id {artifact_id} in evidence-index projection for {run_id}")
+        seen.add(artifact_id)
+        rows.append(EvidenceIndexProjection(
+            schema_version=_require_str(raw, "schema_version", label),
+            artifact_id=artifact_id,
+            attempt_id=_require_str(raw, "attempt_id", label),
+            evidence_kind=_require_str(raw, "evidence_kind", label),
+            media_type=_require_str(raw, "media_type", label),
+            plaintext_sha256=_require_sha256(raw, "plaintext_sha256", label),
+            byte_length=_require_int(raw, "byte_length", label),
+            retained_privately=_require_bool(raw, "retained_privately", label),
+        ))
+    return tuple(rows)
+
+
+def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifest:
+    raw = _load_json(path)
+    label = f"reproduction manifest for {run_id}"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"schema_version", "release_version", "run_id", "eval_schema_version", "eval_cli_version", "suite_id", "suite_version", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class", "roles", "environment", "provider_inventory_retained_privately", "command"}, label)
+    task_ids = _require_list(raw, "task_ids", label)
+    if not all(isinstance(task_id, str) and task_id for task_id in task_ids):
+        raise ReadmeError(f"task_ids in {label} must contain non-empty strings")
+    task_limit = _require_field(raw, "task_limit", label)
+    if task_limit is not None and (not isinstance(task_limit, int) or isinstance(task_limit, bool) or task_limit < 1):
+        raise ReadmeError(f"task_limit in {label} must be null or a positive integer")
+    raw_roles = _require_field(raw, "roles", label)
+    if not isinstance(raw_roles, dict):
+        raise ReadmeError(f"roles in {label} must be an object")
+    roles: dict[str, tuple[str, str, str]] = {}
+    for role, identity in raw_roles.items():
+        role_label = f"{role} role in {label}"
+        if not isinstance(role, str) or not isinstance(identity, dict):
+            raise ReadmeError(f"roles in {label} must map role names to objects")
+        _require_exact_fields(identity, {"provider", "model", "endpoint_class"}, role_label)
+        roles[role] = (_require_str(identity, "provider", role_label), _require_str(identity, "model", role_label), _require_str(identity, "endpoint_class", role_label))
+    environment = _require_field(raw, "environment", label)
+    if not isinstance(environment, dict) or set(environment) != {"os", "arch"} or not all(isinstance(value, str) and value for value in environment.values()):
+        raise ReadmeError(f"environment in {label} must contain non-empty os and arch strings")
+    command = _require_field(raw, "command", label)
+    if not isinstance(command, dict):
+        raise ReadmeError(f"command in {label} must be an object")
+    _require_exact_fields(command, {"program", "arguments"}, f"command in {label}")
+    arguments = _require_list(command, "arguments", f"command in {label}")
+    if not all(isinstance(argument, str) and argument for argument in arguments):
+        raise ReadmeError(f"arguments in command in {label} must contain non-empty strings")
+    return ReproductionManifest(
+        schema_version=_require_str(raw, "schema_version", label),
+        release_version=_require_str(raw, "release_version", label),
+        run_id=_require_str(raw, "run_id", label),
+        eval_schema_version=_require_str(raw, "eval_schema_version", label),
+        eval_cli_version=_require_str(raw, "eval_cli_version", label),
+        suite_id=_require_str(raw, "suite_id", label),
+        suite_version=_require_str(raw, "suite_version", label),
+        arm_id=_require_str(raw, "arm_id", label),
+        task_ids=tuple(task_ids),
+        repetitions=_require_int(raw, "repetitions", label, minimum=1),
+        task_limit=task_limit,
+        idle_timeout_seconds=_require_int(raw, "idle_timeout_seconds", label, minimum=1),
+        endpoint_class=_require_str(raw, "endpoint_class", label),
+        roles=roles,
+        environment=environment,
+        provider_inventory_retained_privately=_require_bool(raw, "provider_inventory_retained_privately", label),
+        command_program=_require_str(command, "program", f"command in {label}"),
+        command_arguments=tuple(arguments),
+    )
+
+
+def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
+    manifest = run.manifest
+    arms = _require_list(manifest, "arms", f"manifest for {run.run_id}")
+    if len(arms) != 1 or not isinstance(arms[0], dict) or arms[0].get("arm_id") != STAGE1_ARM:
+        raise ReadmeError(f"Stage 1 run {run.run_id} must declare only the doctrine arm")
+
+    role_map = _require_field(manifest, "role_to_model", f"manifest for {run.run_id}")
+    if not isinstance(role_map, dict):
+        raise ReadmeError(f"role_to_model in Stage 1 run {run.run_id} must be an object")
+    for role in STAGE1_CONFIGURED_ROLES:
+        identity = role_map.get(role)
+        if not isinstance(identity, dict):
+            raise ReadmeError(f"Stage 1 run {run.run_id} must configure the {role} role")
+        provider = _require_str(identity, "provider", f"{role} identity in {run.run_id}")
+        model = _require_str(identity, "model", f"{role} identity in {run.run_id}")
+        if _is_fake_identity(provider, model):
+            raise ReadmeError(f"Stage 1 run {run.run_id} requires a real provider identity for {role}")
+        endpoint = identity.get("endpoint")
+        if endpoint not in (None, ""):
+            raise ReadmeError(f"Stage 1 public manifest contains an exact provider endpoint for {role}")
+        endpoint_class = _require_str(identity, "endpoint_class", f"{role} identity in {run.run_id}")
+        if endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"}:
+            raise ReadmeError(f"unsupported endpoint class for {role} in {run.run_id}: {endpoint_class}")
+
+    if len(run.attempts) != len(STAGE1_TASK_IDS):
+        raise ReadmeError(f"Stage 1 run {run.run_id} must retain a complete five-task population")
+    task_ids = [attempt.task_id for attempt in run.attempts]
+    if set(task_ids) != STAGE1_TASK_IDS or len(task_ids) != len(set(task_ids)):
+        raise ReadmeError(f"Stage 1 run {run.run_id} must retain the complete five-task population exactly once")
+    for attempt in run.attempts:
+        if attempt.arm_id != STAGE1_ARM:
+            raise ReadmeError(f"Stage 1 attempt {attempt.attempt_id} must use the doctrine arm")
+        if attempt.status not in STAGE1_TERMINAL_STATUSES:
+            raise ReadmeError(f"Stage 1 attempt {attempt.attempt_id} has non-terminal status {attempt.status}")
+
+    model_stages_by_attempt: dict[str, list[StageRow]] = {}
+    for stage in run.stages:
+        if stage.layer != "model_inference":
+            continue
+        if not stage.provider or not stage.model:
+            raise ReadmeError(f"Stage 1 model stage {stage.stage_id} lacks provider identity")
+        if _is_fake_identity(stage.provider, stage.model):
+            raise ReadmeError(f"Stage 1 run {run.run_id} contains a fake provider stage {stage.stage_id}")
+        model_stages_by_attempt.setdefault(stage.attempt_id, []).append(stage)
+    for attempt in run.attempts:
+        if attempt.attempt_id not in model_stages_by_attempt:
+            raise ReadmeError(f"Stage 1 attempt {attempt.attempt_id} lacks observed real model-call telemetry")
+
+    verifier_metrics = [metric for metric in run.metrics if metric.metric_id == "ifeval_subset_verifier"]
+    if len(verifier_metrics) != len(STAGE1_TASK_IDS) or {metric.task_id for metric in verifier_metrics} != STAGE1_TASK_IDS:
+        raise ReadmeError(f"Stage 1 run {run.run_id} must bind one deterministic verifier metric to every task")
+    attempt_by_task = {attempt.task_id: attempt for attempt in run.attempts}
+    for metric in verifier_metrics:
+        attempt = attempt_by_task[metric.task_id]
+        if metric.arm_id != STAGE1_ARM or metric.grader_class != "deterministic" or metric.denominator_contribution != 1:
+            raise ReadmeError(f"Stage 1 metric for task {metric.task_id} has an invalid deterministic denominator binding")
+        if metric.attempt_id != attempt.attempt_id:
+            raise ReadmeError(f"Stage 1 metric for task {metric.task_id} does not bind to its attempt")
+
+    if {task.task_id for task in run.tasks} != STAGE1_TASK_IDS or len(run.tasks) != len(STAGE1_TASK_IDS):
+        raise ReadmeError(f"Stage 1 tasks projection for {run.run_id} must contain the complete five-task population exactly once")
+    suite_version = _require_str(manifest, "suite_version", f"manifest for {run.run_id}")
+    for task in run.tasks:
+        if task.schema_version != STAGE1_EVAL_SCHEMA or task.suite_id != STAGE1_SUITE or task.suite_version != suite_version:
+            raise ReadmeError(f"Stage 1 tasks projection for {run.run_id} does not match the run manifest")
+        if STAGE1_ARM not in task.compatible_arms or ("ifeval_subset_verifier", "1.0.0", "deterministic") not in task.graders:
+            raise ReadmeError(f"Stage 1 tasks projection for task {task.task_id} lacks the declared arm or deterministic grader")
+
+    summary = run.summary
+    if summary is None:
+        raise ReadmeError(f"Stage 1 summary projection for {run.run_id} is missing")
+    outcomes = _attempt_outcomes({run.run_id: run})
+    numerator = sum(1 for metric in verifier_metrics if metric.eligible and metric.value == 1.0)
+    denominator = sum(metric.denominator_contribution for metric in verifier_metrics if metric.eligible)
+    if summary.schema_version != "1.0.0" or summary.run_id != run.run_id or summary.assigned_tasks != len(run.tasks) or summary.terminal_attempts != len(run.attempts) or summary.outcomes != outcomes or summary.metric_id != "ifeval_subset_verifier" or summary.metric_version != "1.0.0" or summary.numerator != numerator or summary.denominator != denominator or summary.unit != verifier_metrics[0].unit or summary.receipt_count != len(run.receipts):
+        raise ReadmeError(f"Stage 1 summary projection for {run.run_id} does not match the typed run records")
+
+    attempt_ids = {attempt.attempt_id for attempt in run.attempts}
+    for evidence in run.evidence_index:
+        if evidence.schema_version != "1.0.0" or evidence.attempt_id not in attempt_ids or not evidence.retained_privately:
+            raise ReadmeError(f"Stage 1 evidence-index projection for {run.run_id} is not bound to retained private evidence")
+
+    reproduction = run.reproduction_manifest
+    if reproduction is None:
+        raise ReadmeError(f"Stage 1 reproduction manifest for {run.run_id} is missing")
+    configured_roles = {
+        role: (role_map[role]["provider"], role_map[role]["model"], role_map[role]["endpoint_class"])
+        for role in STAGE1_CONFIGURED_ROLES
+    }
+    if reproduction.schema_version != "1.0.0" or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
+        raise ReadmeError(f"Stage 1 reproduction manifest for {run.run_id} does not match the fixed run profile")
+
+
+def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path, platform_version: str) -> LoadedEvalRun:
     manifest_path = _safe_relative_path(snapshot_dir, ref.manifest_path)
     attempts_path = _safe_relative_path(snapshot_dir, ref.attempts_path)
     metrics_path = _safe_relative_path(snapshot_dir, ref.metrics_path)
     receipts_path = _safe_relative_path(snapshot_dir, ref.receipts_path)
     stages_path = _safe_relative_path(snapshot_dir, ref.stages_path)
+    tasks_path = _safe_relative_path(snapshot_dir, ref.tasks_path) if ref.tasks_path is not None else None
+    summary_path = _safe_relative_path(snapshot_dir, ref.summary_path) if ref.summary_path is not None else None
+    evidence_index_path = _safe_relative_path(snapshot_dir, ref.evidence_index_path) if ref.evidence_index_path is not None else None
+    reproduction_manifest_path = _safe_relative_path(snapshot_dir, ref.reproduction_manifest_path) if ref.reproduction_manifest_path is not None else None
 
     _validate_sha256(manifest_path, ref.manifest_sha256, f"manifest.json for {ref.run_id}")
     _validate_sha256(attempts_path, ref.attempts_sha256, f"attempts.jsonl for {ref.run_id}")
     _validate_sha256(metrics_path, ref.metrics_sha256, f"metrics.jsonl for {ref.run_id}")
     _validate_sha256(receipts_path, ref.receipts_sha256, f"receipts.jsonl for {ref.run_id}")
     _validate_sha256(stages_path, ref.stages_sha256, f"stages.jsonl for {ref.run_id}")
+    if tasks_path is not None and ref.tasks_sha256 is not None:
+        _validate_sha256(tasks_path, ref.tasks_sha256, f"tasks.jsonl projection for {ref.run_id}")
+    if summary_path is not None and ref.summary_sha256 is not None:
+        _validate_sha256(summary_path, ref.summary_sha256, f"summary.json projection for {ref.run_id}")
+    if evidence_index_path is not None and ref.evidence_index_sha256 is not None:
+        _validate_sha256(evidence_index_path, ref.evidence_index_sha256, f"evidence-index.jsonl projection for {ref.run_id}")
+    if reproduction_manifest_path is not None and ref.reproduction_manifest_sha256 is not None:
+        _validate_sha256(reproduction_manifest_path, ref.reproduction_manifest_sha256, f"reproduction-manifest.json for {ref.run_id}")
 
     manifest = _load_json(manifest_path)
     if not isinstance(manifest, dict):
@@ -496,10 +895,14 @@ def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path) -> LoadedEvalRun:
             f"unsupported eval schema version {manifest_schema} in {ref.run_id}"
         )
 
+    tasks = _parse_tasks_projection(tasks_path, ref.run_id) if tasks_path is not None else ()
     attempts = _parse_attempts(attempts_path, ref.run_id)
     metrics = _parse_metrics(metrics_path, ref.run_id)
     receipts = _parse_receipts(receipts_path, ref.run_id)
     stages = _parse_stages(stages_path, ref.run_id)
+    summary = _parse_summary_projection(summary_path, ref.run_id) if summary_path is not None else None
+    evidence_index = _parse_evidence_index_projection(evidence_index_path, ref.run_id) if evidence_index_path is not None else ()
+    reproduction_manifest = _parse_reproduction_manifest(reproduction_manifest_path, ref.run_id) if reproduction_manifest_path is not None else None
 
     seen_attempt_ids = {a.attempt_id for a in attempts}
     seen_receipt_ids = {r.receipt_id for r in receipts}
@@ -527,14 +930,21 @@ def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path) -> LoadedEvalRun:
         if s.attempt_id not in seen_attempt_ids:
             raise ReadmeError(f"stage {s.stage_id} references missing attempt {s.attempt_id}")
 
-    return LoadedEvalRun(
+    run = LoadedEvalRun(
         run_id=ref.run_id,
         manifest=manifest,
+        tasks=tasks,
         attempts=attempts,
         metrics=metrics,
         receipts=receipts,
         stages=stages,
+        summary=summary,
+        evidence_index=evidence_index,
+        reproduction_manifest=reproduction_manifest,
     )
+    if _is_stage1_manifest(manifest):
+        _validate_stage1_run(run, platform_version)
+    return run
 
 
 def _parse_attempts(path: Path, run_id: str) -> tuple[AttemptRow, ...]:
@@ -617,6 +1027,7 @@ def _parse_metrics(path: Path, run_id: str) -> tuple[MetricRow, ...]:
             unit=_require_str(raw, "unit", label),
             verification_status=_require_str(raw, "verification_status", label),
             grader_class=_require_str(raw, "grader_class", label),
+            attempt_id=str(raw.get("attempt_id", "")),
             evidence_ref=evidence_ref,
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:
@@ -697,6 +1108,9 @@ def _parse_stages(path: Path, run_id: str) -> tuple[StageRow, ...]:
             layer=layer,
             outcome=outcome,
             detail=detail,
+            agent_role=str(raw.get("agent_role", "")),
+            provider=str(raw.get("provider", "")),
+            model=str(raw.get("model", "")),
         )
         if row.schema_version not in SUPPORTED_EVAL_SCHEMAS:
             raise ReadmeError(f"unsupported schema version in {label}")
@@ -813,7 +1227,7 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
     eval_runs: dict[str, LoadedEvalRun] = {}
     artifact_paths: set[str] = {"index.json"}
     for ref in manifest.eval_runs:
-        run = _load_eval_run(ref, snapshot_dir)
+        run = _load_eval_run(ref, snapshot_dir, manifest.platform_version)
         eval_runs[ref.run_id] = run
         artifact_paths.update([
             ref.manifest_path,
@@ -822,6 +1236,7 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
             ref.receipts_path,
             ref.stages_path,
         ])
+        artifact_paths.update(path for path in (ref.tasks_path, ref.summary_path, ref.evidence_index_path, ref.reproduction_manifest_path) if path is not None)
 
     receipt_verification = _load_receipt_verification(manifest.receipt_verification, snapshot_dir)
     artifact_paths.add(manifest.receipt_verification.result_path)
@@ -879,18 +1294,29 @@ _CANARY_MARKERS = (
     "RAW-CANARY-",
 )
 
+_RESTRICTED_EVIDENCE_FIELD_NAMES = (
+    "prompt",
+    "raw_prompt",
+    "model_output",
+    "raw_output",
+    "raw_response",
+)
+
+_ABSOLUTE_PATH_PATTERN = re.compile(r'"(?:[^"\\]|\\.)*"\s*:\s*"(?:/(?:home|Users|root|tmp|var/tmp)/|[A-Za-z]:\\\\)')
+_PRIVATE_NETWORK_PATTERN = re.compile(r"https?://(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})(?::\d+)?(?:/|\b)", re.IGNORECASE)
+
 
 def _scan_artifact_content(snapshot_dir: Path, declared: set[str]) -> None:
     """Scan declared artifacts for forbidden private keys, credential fields, and raw canary values."""
     for rel in sorted(declared):
-        if rel == "index.json":
-            continue
         path = _safe_relative_path(snapshot_dir, rel)
         if not path.is_file():
             continue
         _scan_file_for_private_keys(path, rel)
         _scan_file_for_credential_fields(path, rel)
         _scan_file_for_canaries(path, rel)
+        _scan_file_for_restricted_evidence(path, rel)
+        _scan_file_for_machine_specific_values(path, rel)
 
 
 def _scan_file_for_private_keys(path: Path, rel: str) -> None:
@@ -923,6 +1349,21 @@ def _scan_file_for_canaries(path: Path, rel: str) -> None:
                 f"forbidden raw canary value in public snapshot artifact {rel}: "
                 f"found marker {marker!r}"
             )
+
+
+def _scan_file_for_restricted_evidence(path: Path, rel: str) -> None:
+    text = path.read_text(errors="replace").lower()
+    for field in _RESTRICTED_EVIDENCE_FIELD_NAMES:
+        if f'"{field}"' in text:
+            raise ReadmeError(f"forbidden restricted evidence field in public snapshot artifact {rel}: found {field}")
+
+
+def _scan_file_for_machine_specific_values(path: Path, rel: str) -> None:
+    text = path.read_text(errors="replace")
+    if _ABSOLUTE_PATH_PATTERN.search(text):
+        raise ReadmeError(f"machine-specific absolute path in public snapshot artifact {rel}")
+    if _PRIVATE_NETWORK_PATTERN.search(text):
+        raise ReadmeError(f"exact private-network topology in public snapshot artifact {rel}")
 
 
 def _project_metrics(runs: dict[str, LoadedEvalRun]) -> dict[str, MetricProjection]:
@@ -966,6 +1407,29 @@ def _attempt_outcomes(runs: dict[str, LoadedEvalRun]) -> dict[str, int]:
         for attempt in run.attempts:
             counts[attempt.status] = counts.get(attempt.status, 0) + 1
     return counts
+
+
+def _stage1_runs(snapshot: ProofSnapshot) -> tuple[LoadedEvalRun, ...]:
+    return tuple(run for run in snapshot.eval_runs.values() if _is_stage1_manifest(run.manifest))
+
+
+def _observed_configured_roles(run: LoadedEvalRun) -> set[str]:
+    role_map = run.manifest.get("role_to_model", {})
+    observed: set[str] = set()
+    if not isinstance(role_map, dict):
+        return observed
+    for stage in run.stages:
+        if stage.layer != "model_inference":
+            continue
+        for role in STAGE1_CONFIGURED_ROLES:
+            identity = role_map.get(role)
+            if not isinstance(identity, dict):
+                continue
+            provider = identity.get("provider")
+            model = identity.get("model")
+            if isinstance(provider, str) and isinstance(model, str) and _normalized_provider(provider) == _normalized_provider(stage.provider) and model == stage.model:
+                observed.add(role)
+    return observed
 
 
 def _render_link(url: str, text: str) -> str:
@@ -1071,6 +1535,14 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
     lines = [
         "### Evidence Identity",
         "",
+    ]
+    stage1_runs = _stage1_runs(snapshot)
+    if stage1_runs:
+        lines.extend([
+            "**Stage 1: Real-agent diagnostic.** This evidence covers one complete five-task `ifeval_subset` diagnostic through g8ee with declared real-provider configuration and retained terminal outcomes. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, statistical significance, compliance, certification, or production suitability.",
+            "",
+        ])
+    lines.extend([
         "| Property | Value |",
         "| --- | --- |",
         f"| Evidence cutoff | {_escape_cell(m.evidence_cutoff)} |",
@@ -1088,7 +1560,26 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
         f"| Prompt hash | {_escape_cell(', '.join(sorted(prompt_hashes)))} |",
         f"| Model cohort | {_escape_cell('; '.join(sorted(model_cohorts)))} |",
         f"| Receipt verifier scope | {_escape_cell(m.receipt_verification.scope)} |",
-    ]
+    ])
+    for run in stage1_runs:
+        ref = next(ref for ref in m.eval_runs if ref.run_id == run.run_id)
+        observed_roles = _observed_configured_roles(run)
+        role_map = run.manifest["role_to_model"]
+        lines.extend([
+            "",
+            "#### Configured and Observed Model Roles",
+            "",
+            "Configured role mappings come from the public manifest. A role is labeled observed only when retained provider-boundary stage telemetry matches its configured provider and model.",
+            "",
+            "| Role | Provider | Model | Endpoint class | Observation | Sources |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ])
+        for role in STAGE1_CONFIGURED_ROLES:
+            identity = role_map[role]
+            observation = "Observed model call" if role in observed_roles else "Configured but unobserved"
+            manifest_link = _render_link(f"docs/evidence/readme/current/{ref.manifest_path}", "manifest.json")
+            stages_link = _render_link(f"docs/evidence/readme/current/{ref.stages_path}", "stages.jsonl")
+            lines.append(f"| {_escape_cell(role)} | {_escape_cell(identity['provider'])} | {_escape_cell(identity['model'])} | {_escape_cell(identity['endpoint_class'])} | {observation} | {manifest_link}; {stages_link} |")
     return "\n".join(lines)
 
 
@@ -1159,11 +1650,24 @@ def _render_eval_metrics(snapshot: ProofSnapshot) -> str:
         for status, count in sorted(outcomes.items()):
             lines.append(f"| {_escape_cell(status)} | {count} |")
 
+    if _stage1_runs(snapshot):
+        ref = snapshot.manifest.eval_runs[0]
+        if ref.tasks_path is None or ref.summary_path is None or ref.evidence_index_path is None:
+            raise ReadmeError("Stage 1 publication artifact references are missing")
+        tasks_link = _render_link(f"docs/evidence/readme/current/{ref.tasks_path}", "tasks.jsonl")
+        attempts_link = _render_link(f"docs/evidence/readme/current/{ref.attempts_path}", "attempts.jsonl")
+        stages_link = _render_link(f"docs/evidence/readme/current/{ref.stages_path}", "stages.jsonl")
+        summary_link = _render_link(f"docs/evidence/readme/current/{ref.summary_path}", "summary.json")
+        evidence_index_link = _render_link(f"docs/evidence/readme/current/{ref.evidence_index_path}", "evidence-index.jsonl")
+        lines.extend(["", f"Assigned task definitions: {tasks_link}. Population and terminal outcomes: {attempts_link}. Observed model-call telemetry: {stages_link}. Derived orientation summary: {summary_link}. Private-evidence hash metadata: {evidence_index_link}."])
+
     return "\n".join(lines)
 
 
 def _render_receipt_proof(snapshot: ProofSnapshot) -> str:
     r = snapshot.receipt_verification
+    if _stage1_runs(snapshot) and r.total_receipts == 0:
+        return "### Receipt Verification\n\n**Receipt evidence is unavailable for this Stage 1 campaign.** The answer-only tasks produced zero receipts, so this diagnostic supports no receipt-signature, mutation, persistence, or state claim.\n"
     pass_label = "no"
     if (
         r.total_receipts > 0
@@ -1223,6 +1727,9 @@ def _render_governance_proof(snapshot: ProofSnapshot) -> str:
         "independent_state_accuracy",
         "canary_scrubbing",
     }
+    eligible_governance = [projection for projection in projections.values() if projection.metric_id in governance_metrics]
+    if _stage1_runs(snapshot) and not eligible_governance:
+        return "### Governance and State Proof\n\n**Governance and state evidence is unavailable for this Stage 1 campaign.** The answer-only diagnostic contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.\n"
 
     lines = [
         "### Governance and State Proof",
@@ -1303,6 +1810,17 @@ def _render_ci_reproducibility(snapshot: ProofSnapshot) -> str:
     ]
     for link in snapshot.manifest.ci_links:
         lines.append(f"| {_render_link(link.url, link.label)} | {_escape_cell(link.kind)} |")
+
+    stage1_runs = _stage1_runs(snapshot)
+    if stage1_runs:
+        ref = snapshot.manifest.eval_runs[0]
+        if ref.reproduction_manifest_path is None:
+            raise ReadmeError("Stage 1 reproduction manifest reference is missing")
+        reproduction_link = _render_link(f"docs/evidence/readme/current/{ref.reproduction_manifest_path}", "reproduction-manifest.json")
+        lines.extend([
+            "",
+            f"The portable Stage 1 run profile is recorded in {reproduction_link}. Set `OLLAMA_ENDPOINT`, `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL` to values reachable by the process running `g8e-evals`; substitutions remain comparable only when recorded and are not byte-identical model reproductions.",
+        ])
 
     lines.append("")
     lines.append("Local verification commands:")

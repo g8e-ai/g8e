@@ -82,7 +82,7 @@ def test_ifeval_loader_preserves_typed_policy_state_and_privacy_expectations(tmp
     )
     monkeypatch.setattr(
         "g8e_evals.benchmarks.ifeval.loader.validate_provenance",
-        lambda _provenance: None,
+        lambda _provenance, **_kwargs: None,
     )
     monkeypatch.setattr(
         "g8e_evals.benchmarks.ifeval.loader.validate_dataset",
@@ -181,11 +181,15 @@ def test_ifeval_provenance_rejects_missing_domain_strata():
 
 
 @pytest.mark.unit
-def test_ifeval_validate_provenance_accepts_complete_manifest():
+def test_ifeval_validate_provenance_accepts_complete_manifest(monkeypatch):
     from g8e_evals.benchmarks.ifeval.provenance import DatasetProvenance, validate_provenance
 
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.ifeval.provenance._verify_file_digest",
+        lambda file_path, expected_sha256, trusted_root: None,
+    )
     provenance = DatasetProvenance.model_validate(_make_ifeval_provenance_dict())
-    validate_provenance(provenance)
+    validate_provenance(provenance, trusted_root=Path("."))
 
 
 @pytest.mark.unit
@@ -195,16 +199,21 @@ def test_ifeval_validate_provenance_rejects_zero_schema_version():
     provenance = DatasetProvenance.model_validate(_make_ifeval_provenance_dict())
     provenance.schema_version = 0
     with pytest.raises(ValueError, match="schema_version"):
-        validate_provenance(provenance)
+        validate_provenance(provenance, trusted_root=Path("."))
 
 
 @pytest.mark.integration
-def test_ifeval_loader_rejects_dataset_not_matching_provenance(tmp_path: Path):
+def test_ifeval_loader_rejects_dataset_not_matching_provenance(tmp_path: Path, monkeypatch):
     base_dir = Path(__file__).parent.parent
     gold_set_dir = base_dir / "gold_sets/ifeval_subset"
     dataset = tmp_path / "input_data.jsonl"
     dataset.write_bytes((gold_set_dir / "input_data.jsonl").read_bytes() + b'{"key": 9999}\n')
     dataset.with_name("provenance.json").write_bytes((gold_set_dir / "provenance.json").read_bytes())
+
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.ifeval.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
+    )
 
     with pytest.raises(ValueError, match="SHA-256 mismatch"):
         list(IFEvalLoader(dataset).load())

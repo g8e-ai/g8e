@@ -14,9 +14,11 @@ import os
 import platform
 import sys
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 import click
 from rich.console import Console
@@ -36,6 +38,7 @@ from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
+from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.graders import (
@@ -83,6 +86,8 @@ from g8e_evals.schema import (
     FactualQAObservation,
     CitationBackedObservation,
     PartialMilestoneObservation,
+    ReliabilityObservation,
+    EconomicsPerformanceObservation,
     StateObservation,
     StageObservation,
     TaskDefinition,
@@ -127,22 +132,37 @@ from g8e_evals.benchmarks.governance.observers import (
     SignedFieldTamperingObserverImpl,
     SignerDefectObserverImpl,
     StaleStateRootObserverImpl,
+    PayloadTamperingObserverImpl,
+    IdentityMismatchObserverImpl,
+    EvidencePreservationObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
 from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
 from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
+from g8e_evals.benchmarks.utility.final_state_loader import FinalStateLoader
+from g8e_evals.benchmarks.utility.final_state_simulator import LocalFinalStateSimulator
+from g8e_evals.benchmarks.utility.ledger_consistency_loader import LedgerConsistencyLoader
+from g8e_evals.benchmarks.utility.ledger_consistency_simulator import LocalLedgerConsistencySimulator
 from g8e_evals.benchmarks.utility.partial_milestone_loader import PartialMilestoneLoader
 from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
 from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
 from g8e_evals.benchmarks.utility.observers import (
     CitationBackedObserverImpl,
     FactualQAObserverImpl,
+    FinalStateObserverImpl,
+    LedgerConsistencyObserverImpl,
     PartialMilestoneObserverImpl,
     ToolSequenceObserverImpl,
 )
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
+from g8e_evals.benchmarks.reliability.loader import ReliabilityLoader
+from g8e_evals.benchmarks.reliability.simulator import LocalReliabilitySimulator
+from g8e_evals.benchmarks.reliability.observers import ReliabilityObserverImpl
+from g8e_evals.benchmarks.economics.loader import EconomicsPerformanceLoader
+from g8e_evals.benchmarks.economics.simulator import LocalEconomicsPerformanceSimulator
+from g8e_evals.benchmarks.economics.observers import EconomicsPerformanceObserverImpl
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.report.aggregate import aggregate_results
@@ -189,6 +209,8 @@ _TOOL_SEQUENCE_GRADER_ID = "tool_sequence"
 _FACTUAL_QA_GRADER_ID = "factual_qa"
 _CITATION_BACKED_GRADER_ID = "citation_backed"
 _PARTIAL_MILESTONE_GRADER_ID = "partial_milestone"
+_RELIABILITY_GRADER_ID = "reliability"
+_ECONOMICS_PERFORMANCE_GRADER_ID = "economics_performance"
 _GRADER_VERSION = "1.0.0"
 _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
@@ -208,16 +230,23 @@ _ASSERTION_FIELD_TO_GRADER_ID: list[tuple[str, str]] = [
     ("rehydration_assertions", _EXACT_LOCAL_REHYDRATION_GRADER_ID),
     ("replay_attempt_assertions", _REPLAY_ATTEMPT_GRADER_ID),
     ("signed_field_tampering_assertions", _SIGNED_FIELD_TAMPERING_GRADER_ID),
+    ("payload_tampering_assertions", _PAYLOAD_TAMPERING_GRADER_ID),
     ("nonce_expiration_assertions", _NONCE_EXPIRATION_GRADER_ID),
     ("stale_state_root_assertions", _STALE_STATE_ROOT_GRADER_ID),
+    ("identity_mismatch_assertions", _IDENTITY_MISMATCH_GRADER_ID),
     ("signer_defect_assertions", _SIGNER_DEFECT_GRADER_ID),
     ("l3_proof_transplant_assertions", _L3_PROOF_TRANSPLANT_GRADER_ID),
     ("revoked_credential_assertions", _REVOKED_CREDENTIAL_GRADER_ID),
+    ("evidence_preservation_assertions", _EVIDENCE_PRESERVATION_GRADER_ID),
     ("policy_attack_assertions", _POLICY_ATTACK_GRADER_ID),
     ("tool_sequence_assertions", _TOOL_SEQUENCE_GRADER_ID),
     ("factual_qa_assertions", _FACTUAL_QA_GRADER_ID),
     ("citation_backed_assertions", _CITATION_BACKED_GRADER_ID),
     ("partial_milestone_assertions", _PARTIAL_MILESTONE_GRADER_ID),
+    ("reliability_assertions", _RELIABILITY_GRADER_ID),
+    ("economics_performance_assertions", _ECONOMICS_PERFORMANCE_GRADER_ID),
+    ("expected_final_state_assertions", _FINAL_STATE_GRADER_ID),
+    ("state_fixture", _INDEPENDENT_STATE_GRADER_ID),
 ]
 
 
@@ -238,6 +267,13 @@ def _derive_grader_refs_from_assertions(task_metadata: TaskMetadata) -> list[Gra
                 grader_class=GraderClass.DETERMINISTIC,
             ))
     return refs
+
+
+class _SyntheticObservation(Protocol):
+    observation_id: str
+    attempt_id: str
+
+    def model_dump_json(self) -> str: ...
 
 
 def _persist_evidence_artifact(
@@ -330,6 +366,22 @@ def _persist_receipt_evidence(
         report_dir=report_dir,
     )
     return index, index.sha256
+
+
+def _persist_synthetic_observation(
+    observation: _SyntheticObservation,
+    *,
+    run_id: str,
+    report_dir: Path,
+) -> EvidenceIndex:
+    return _persist_evidence_artifact(
+        observation.model_dump_json(),
+        run_id=run_id,
+        attempt_id=observation.attempt_id,
+        artifact_id=observation.observation_id,
+        schema_ref=f"g8e_evals.schema.{type(observation).__name__}",
+        report_dir=report_dir,
+    )
 
 
 @dataclass(frozen=True)
@@ -746,6 +798,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         run_id=run_id,
         suite_id=suite_id,
         suite_version=suite_version,
+        orchestrator_version=EVALS_VERSION,
         arms=[arm_entry],
         content_hashes=content_hashes,
         role_to_model=RoleToModelMapping(
@@ -2619,7 +2672,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone"]
+_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone", "final_state", "ledger_consistency", "reliability", "economics_performance"]
 
 
 def _generate_per_run_key() -> bytes:
@@ -2784,6 +2837,30 @@ async def _run_synthetic_suite(
         loader = PartialMilestoneLoader(gold_set)
         tasks = list(loader.load())
         provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "final_state":
+        if gold_set is None:
+            gold_set = Path("gold_sets/final_state/input_data.jsonl")
+        loader = FinalStateLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "ledger_consistency":
+        if gold_set is None:
+            gold_set = Path("gold_sets/ledger_consistency/input_data.jsonl")
+        loader = LedgerConsistencyLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "reliability":
+        if gold_set is None:
+            gold_set = Path("gold_sets/reliability/input_data.jsonl")
+        loader = ReliabilityLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
+    elif suite == "economics_performance":
+        if gold_set is None:
+            gold_set = Path("gold_sets/economics_performance/input_data.jsonl")
+        loader = EconomicsPerformanceLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
     else:
         raise EvaluationRunError(f"unknown synthetic suite: {suite}")
 
@@ -2824,6 +2901,7 @@ async def _run_synthetic_suite(
         run_id=run_id,
         suite_id=suite_id,
         suite_version=suite_version,
+        orchestrator_version=EVALS_VERSION,
         arms=[arm_entry],
         content_hashes=content_hashes,
         role_to_model=RoleToModelMapping(),
@@ -2866,16 +2944,28 @@ async def _run_synthetic_suite(
             rehydration_assertions=task.metadata.rehydration_assertions,
             replay_attempt_assertions=task.metadata.replay_attempt_assertions,
             signed_field_tampering_assertions=task.metadata.signed_field_tampering_assertions,
+            payload_tampering_assertions=task.metadata.payload_tampering_assertions,
             nonce_expiration_assertions=task.metadata.nonce_expiration_assertions,
             stale_state_root_assertions=task.metadata.stale_state_root_assertions,
+            identity_mismatch_assertions=task.metadata.identity_mismatch_assertions,
             signer_defect_assertions=task.metadata.signer_defect_assertions,
             l3_proof_transplant_assertions=task.metadata.l3_proof_transplant_assertions,
             revoked_credential_assertions=task.metadata.revoked_credential_assertions,
+            evidence_preservation_assertions=task.metadata.evidence_preservation_assertions,
             policy_attack_assertions=task.metadata.policy_attack_assertions,
             tool_sequence_assertions=task.metadata.tool_sequence_assertions,
             factual_qa_assertions=task.metadata.factual_qa_assertions,
             citation_backed_assertions=task.metadata.citation_backed_assertions,
             partial_milestone_assertions=task.metadata.partial_milestone_assertions,
+            reliability_assertions=task.metadata.reliability_assertions,
+            economics_performance_assertions=task.metadata.economics_performance_assertions,
+            expected_final_state_assertions=task.metadata.expected_final_state_assertions,
+            state_fixture=task.metadata.state_fixture,
+            initial_state_fixture_hash=(
+                task.metadata.state_fixture.fixture_sha256
+                if task.metadata.state_fixture is not None
+                else None
+            ),
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
@@ -2894,18 +2984,52 @@ async def _run_synthetic_suite(
     privacy_receipt_records: list[ReceiptObservation] = []
     replay_attempt_records: list[ReplayAttemptObservation] = []
     signed_field_tampering_records: list[SignedFieldTamperingObservation] = []
+    payload_tampering_records: list[PayloadTamperingObservation] = []
     nonce_expiration_records: list[NonceExpirationObservation] = []
     stale_state_root_records: list[StaleStateRootObservation] = []
+    identity_mismatch_records: list[IdentityMismatchObservation] = []
     signer_defect_records: list[SignerDefectObservation] = []
     l3_proof_transplant_records: list[L3ProofTransplantObservation] = []
     revoked_credential_records: list[RevokedCredentialObservation] = []
+    evidence_preservation_records: list[EvidencePreservationObservation] = []
     policy_attack_records: list[PolicyAttackObservation] = []
     tool_sequence_records: list[ToolSequenceObservation] = []
     factual_qa_records: list[FactualQAObservation] = []
     citation_backed_records: list[CitationBackedObservation] = []
     partial_milestone_records: list[PartialMilestoneObservation] = []
+    reliability_records: list[ReliabilityObservation] = []
+    economics_performance_records: list[EconomicsPerformanceObservation] = []
+    final_state_records: list[FinalStateObservation] = []
+    state_records: list[StateObservation] = []
     governance_receipt_records: list[ReceiptObservation] = []
     evidence_index_records: list[EvidenceIndex] = []
+    synthetic_observation_groups: tuple[Sequence[_SyntheticObservation], ...] = (
+        token_store_persistence_records,
+        token_ttl_expiry_records,
+        token_persistence_failure_records,
+        exfiltration_attempt_records,
+        artifact_leakage_records,
+        rehydration_records,
+        replay_attempt_records,
+        signed_field_tampering_records,
+        payload_tampering_records,
+        nonce_expiration_records,
+        stale_state_root_records,
+        identity_mismatch_records,
+        signer_defect_records,
+        l3_proof_transplant_records,
+        revoked_credential_records,
+        evidence_preservation_records,
+        policy_attack_records,
+        tool_sequence_records,
+        factual_qa_records,
+        citation_backed_records,
+        partial_milestone_records,
+        reliability_records,
+        economics_performance_records,
+        final_state_records,
+        state_records,
+    )
 
     console.print(f"[bold blue]Running synthetic {suite} ({len(tasks)} tasks)...[/bold blue]")
 
@@ -3365,6 +3489,84 @@ async def _run_synthetic_suite(
                 obs.observation_id for obs in revoked_credential_observations
             ]
 
+        if task.metadata.payload_tampering_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:payload-tamper-receipt"
+            observer = PayloadTamperingObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, payload_tampering_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            payload_tampering_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in payload_tampering_observations
+            ]
+            payload_tampering_records.extend(payload_tampering_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.payload_tampering_observation_refs = [
+                obs.observation_id for obs in payload_tampering_observations
+            ]
+
+        if task.metadata.identity_mismatch_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:identity-mismatch-receipt"
+            observer = IdentityMismatchObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, identity_mismatch_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            identity_mismatch_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in identity_mismatch_observations
+            ]
+            identity_mismatch_records.extend(identity_mismatch_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.identity_mismatch_observation_refs = [
+                obs.observation_id for obs in identity_mismatch_observations
+            ]
+
+        if task.metadata.evidence_preservation_assertions:
+            simulator = LocalGovernanceSimulator()
+            receipt_artifact_id = f"{attempt_id}:evidence-preservation-receipt"
+            observer = EvidencePreservationObserverImpl(simulator, "", receipt_artifact_id)
+            governance_receipt, evidence_preservation_observations = await observer.observe(task_def, attempt)
+            receipt_index, receipt_sha = _persist_receipt_evidence(
+                governance_receipt,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=receipt_artifact_id, report_dir=report_dir,
+            )
+            task_evidence_indices.append(receipt_index)
+            evidence_preservation_observations = [
+                obs.model_copy(update={
+                    "source_evidence_refs": [receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                })
+                for obs in evidence_preservation_observations
+            ]
+            evidence_preservation_records.extend(evidence_preservation_observations)
+            governance_receipt_records.append(governance_receipt)
+            task_receipt_ids.append(governance_receipt.receipt_id)
+            attempt.evidence_preservation_observation_refs = [
+                obs.observation_id for obs in evidence_preservation_observations
+            ]
+
         if task.metadata.policy_attack_assertions:
             simulator = LocalGovernanceSimulator()
             receipt_artifact_id = f"{attempt_id}:policy-attack-receipt"
@@ -3493,6 +3695,146 @@ async def _run_synthetic_suite(
             partial_milestone_records.extend(partial_milestone_observations)
             attempt.partial_milestone_observation_refs = [
                 obs.observation_id for obs in partial_milestone_observations
+            ]
+
+        reliability_observations: list[ReliabilityObservation] = []
+        if task.metadata.reliability_assertions:
+            reliability_sim = LocalReliabilitySimulator()
+            reliability_params = params.get("reliability_params", {})
+            reliability_artifact_id = f"{attempt_id}:reliability-source"
+            reliability_content = json.dumps(
+                {"reliability_params": reliability_params},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            reliability_index = _persist_evidence_artifact(
+                reliability_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=reliability_artifact_id,
+                schema_ref="g8e_evals.benchmarks.reliability.LocalReliabilitySimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(reliability_index)
+            observer = ReliabilityObserverImpl(
+                reliability_sim, reliability_params,
+                reliability_index.sha256, reliability_artifact_id,
+            )
+            reliability_observations = await observer.observe(task_def, attempt)
+            updated_reliability_obs: list[ReliabilityObservation] = []
+            for rel_obs in reliability_observations:
+                updated_reliability_obs.append(rel_obs.model_copy(update={
+                    "source_evidence_refs": [reliability_artifact_id],
+                    "source_evidence_sha256": reliability_index.sha256,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            reliability_records.extend(updated_reliability_obs)
+            reliability_observations = updated_reliability_obs
+            attempt.reliability_observation_refs = [
+                obs.observation_id for obs in updated_reliability_obs
+            ]
+
+        economics_performance_observations: list[EconomicsPerformanceObservation] = []
+        if task.metadata.economics_performance_assertions:
+            econ_sim = LocalEconomicsPerformanceSimulator()
+            econ_params = params.get("economics_params", {})
+            econ_artifact_id = f"{attempt_id}:economics-performance-source"
+            econ_content = json.dumps(
+                {"economics_params": econ_params},
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            econ_index = _persist_evidence_artifact(
+                econ_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=econ_artifact_id,
+                schema_ref="g8e_evals.benchmarks.economics.LocalEconomicsPerformanceSimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(econ_index)
+            econ_observer = EconomicsPerformanceObserverImpl(
+                econ_sim, econ_params,
+                econ_index.sha256, econ_artifact_id,
+            )
+            economics_performance_observations = await econ_observer.observe(task_def, attempt)
+            updated_econ_obs: list[EconomicsPerformanceObservation] = []
+            for ep_obs in economics_performance_observations:
+                updated_econ_obs.append(ep_obs.model_copy(update={
+                    "source_evidence_refs": [econ_artifact_id],
+                    "source_evidence_sha256": econ_index.sha256,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            economics_performance_records.extend(updated_econ_obs)
+            economics_performance_observations = updated_econ_obs
+            attempt.economics_performance_observation_refs = [
+                obs.observation_id for obs in updated_econ_obs
+            ]
+
+        final_state_observations: list[FinalStateObservation] = []
+        final_state_receipts: list[ReceiptObservation] = []
+        if task.metadata.expected_final_state_assertions:
+            final_state_sim = LocalFinalStateSimulator()
+            final_state_params = params.get("final_state_params", {})
+            final_state_receipt_artifact_id = f"{attempt_id}:final-state-receipt"
+            observer = FinalStateObserverImpl(
+                final_state_sim, final_state_params, "", final_state_receipt_artifact_id,
+            )
+            fs_receipt_obs, final_state_observations = await observer.observe(task_def, attempt)
+            updated_final_state_obs: list[FinalStateObservation] = []
+            for fs_receipt, fs_obs in zip(fs_receipt_obs, final_state_observations, strict=True):
+                fs_receipt_artifact_id = f"{fs_receipt.receipt_id}:receipt"
+                receipt_index, receipt_sha = _persist_receipt_evidence(
+                    fs_receipt,
+                    run_id=run_id, attempt_id=attempt_id,
+                    artifact_id=fs_receipt_artifact_id, report_dir=report_dir,
+                )
+                task_evidence_indices.append(receipt_index)
+                governance_receipt_records.append(fs_receipt)
+                task_receipt_ids.append(fs_receipt.receipt_id)
+                final_state_receipts.append(fs_receipt)
+                updated_final_state_obs.append(fs_obs.model_copy(update={
+                    "source_evidence_refs": [fs_receipt_artifact_id],
+                    "source_evidence_sha256": receipt_sha,
+                    "verification_status": VerificationStatus.VERIFIED,
+                }))
+            final_state_records.extend(updated_final_state_obs)
+            final_state_observations = updated_final_state_obs
+            attempt.final_state_observation_refs = [
+                obs.observation_id for obs in updated_final_state_obs
+            ]
+
+        state_observations: list[StateObservation] = []
+        if task.metadata.state_fixture:
+            ledger_sim = LocalLedgerConsistencySimulator()
+            ledger_payloads = params.get("ledger_payloads", [])
+            ledger_sim.append_entries(ledger_payloads)
+            if params.get("inject_inconsistency", False):
+                ledger_sim.inject_inconsistency()
+            if params.get("inject_sequence_gap", False):
+                ledger_sim.inject_sequence_gap()
+            ledger_artifact_id = f"{attempt_id}:ledger-consistency-source"
+            ledger_result = ledger_sim.finish()
+            ledger_content = json.dumps(
+                {
+                    "consistent": ledger_result.consistent,
+                    "entry_count": ledger_result.entry_count,
+                    "head_sha256": ledger_result.head_sha256,
+                },
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            )
+            ledger_index = _persist_evidence_artifact(
+                ledger_content,
+                run_id=run_id, attempt_id=attempt_id,
+                artifact_id=ledger_artifact_id,
+                schema_ref="g8e_evals.benchmarks.utility.LocalLedgerConsistencySimulator",
+                report_dir=report_dir,
+            )
+            task_evidence_indices.append(ledger_index)
+            fixture_sha256 = task.metadata.state_fixture.fixture_sha256
+            observer = LedgerConsistencyObserverImpl(
+                ledger_sim, fixture_sha256, ledger_index.sha256, ledger_artifact_id,
+            )
+            state_observations = await observer.observe(task_def, attempt)
+            state_records.extend(state_observations)
+            attempt.state_observation_refs = [
+                obs.observation_id for obs in state_observations
             ]
 
         attempt.ended_at = datetime.now(UTC)
@@ -3708,6 +4050,32 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.payload_tampering_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _PAYLOAD_TAMPERING_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    payload_tampering_observations=payload_tampering_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_PAYLOAD_TAMPERING_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
         if task.metadata.nonce_expiration_assertions and governance_receipt is not None:
             grade = grade_deterministically(
                 _NONCE_EXPIRATION_GRADER_ID,
@@ -3748,6 +4116,32 @@ async def _run_synthetic_suite(
             )
             grade_metrics.append(MetricObservation(
                 metric_id=_STALE_STATE_ROOT_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.identity_mismatch_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _IDENTITY_MISMATCH_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    identity_mismatch_observations=identity_mismatch_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_IDENTITY_MISMATCH_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=Arm.DIRECT,
@@ -3826,6 +4220,32 @@ async def _run_synthetic_suite(
             )
             grade_metrics.append(MetricObservation(
                 metric_id=_REVOKED_CREDENTIAL_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.evidence_preservation_assertions and governance_receipt is not None:
+            grade = grade_deterministically(
+                _EVIDENCE_PRESERVATION_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[governance_receipt],
+                    stages=[],
+                    evidence_preservation_observations=evidence_preservation_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_EVIDENCE_PRESERVATION_GRADER_ID,
                 attempt_id=attempt_id,
                 run_id=run_id,
                 arm_id=Arm.DIRECT,
@@ -3968,6 +4388,110 @@ async def _run_synthetic_suite(
                 grader_class=GraderClass.DETERMINISTIC,
                 evidence_refs=grade.evidence_refs,
             ))
+        if task.metadata.reliability_assertions:
+            grade = grade_deterministically(
+                _RELIABILITY_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    reliability_observations=reliability_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_RELIABILITY_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.economics_performance_assertions:
+            grade = grade_deterministically(
+                _ECONOMICS_PERFORMANCE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    economics_performance_observations=economics_performance_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_ECONOMICS_PERFORMANCE_GRADER_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.expected_final_state_assertions:
+            grade = grade_deterministically(
+                _FINAL_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=final_state_receipts,
+                    stages=[],
+                    final_state_observations=final_state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_FINAL_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
+        if task.metadata.state_fixture:
+            grade = grade_deterministically(
+                _INDEPENDENT_STATE_GRADER_ID,
+                _GRADER_VERSION,
+                DeterministicGradingContext(
+                    task=task_def,
+                    attempt=attempt,
+                    receipts=[],
+                    stages=[],
+                    state_observations=state_observations,
+                ),
+            )
+            grade_metrics.append(MetricObservation(
+                metric_id=_INDEPENDENT_STATE_METRIC_ID,
+                attempt_id=attempt_id,
+                run_id=run_id,
+                arm_id=Arm.DIRECT,
+                task_id=task.id,
+                value=grade.value,
+                unit="proportion",
+                eligible=grade.verification_status == VerificationStatus.VERIFIED,
+                denominator_contribution=grade.denominator_contribution,
+                verification_status=grade.verification_status,
+                grader_class=GraderClass.DETERMINISTIC,
+                evidence_refs=grade.evidence_refs,
+            ))
 
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
@@ -3980,6 +4504,14 @@ async def _run_synthetic_suite(
         attempt.receipt_refs = task_receipt_ids
         metric_records.extend(grade_metrics)
         attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        for observations in synthetic_observation_groups:
+            for observation in observations:
+                if observation.attempt_id == attempt_id:
+                    task_evidence_indices.append(_persist_synthetic_observation(
+                        observation,
+                        run_id=run_id,
+                        report_dir=report_dir,
+                    ))
         evidence_index_records.extend(task_evidence_indices)
         attempt_records.append(attempt)
 
@@ -4008,20 +4540,23 @@ async def _run_synthetic_suite(
     with open(report_dir / "rehydration-observations.jsonl", "w") as f:
         for obs in rehydration_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "privacy-receipts.jsonl", "w") as f:
-        for obs in privacy_receipt_records:
-            f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
         for obs in replay_attempt_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
         for obs in signed_field_tampering_records:
             f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
+        for obs in payload_tampering_records:
+            f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
         for obs in nonce_expiration_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
         for obs in stale_state_root_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "identity-mismatch-observations.jsonl", "w") as f:
+        for obs in identity_mismatch_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
         for obs in signer_defect_records:
@@ -4031,6 +4566,9 @@ async def _run_synthetic_suite(
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
         for obs in revoked_credential_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "evidence-preservation-observations.jsonl", "w") as f:
+        for obs in evidence_preservation_records:
             f.write(obs.model_dump_json() + "\n")
     with open(report_dir / "policy-attack-observations.jsonl", "w") as f:
         for obs in policy_attack_records:
@@ -4047,9 +4585,22 @@ async def _run_synthetic_suite(
     with open(report_dir / "partial-milestone-observations.jsonl", "w") as f:
         for obs in partial_milestone_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "governance-receipts.jsonl", "w") as f:
-        for obs in governance_receipt_records:
+    with open(report_dir / "reliability-observations.jsonl", "w") as f:
+        for obs in reliability_records:
             f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "economics-performance-observations.jsonl", "w") as f:
+        for obs in economics_performance_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+        for obs in final_state_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "state-observations.jsonl", "w") as f:
+        for obs in state_records:
+            f.write(obs.model_dump_json() + "\n")
+    with open(report_dir / "receipts.jsonl", "w") as f:
+        for obs in [*privacy_receipt_records, *governance_receipt_records]:
+            f.write(obs.model_dump_json() + "\n")
+    (report_dir / "stages.jsonl").write_text("")
     with open(report_dir / "metrics.jsonl", "w") as f:
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")

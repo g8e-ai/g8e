@@ -9,17 +9,27 @@ package compliance
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/models"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/services/storage"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 // mockAuditReader is a mock implementation of AuditEvidenceReader for unit testing.
@@ -88,6 +98,24 @@ func (m *mockCommitmentReader) ListCommitments() ([]*storage.CommitmentRow, erro
 	return m.commitments, nil
 }
 
+type mockKSIHistoryReader struct {
+	snapshots []KSIResultSet
+	err       error
+}
+
+func (m *mockKSIHistoryReader) ListSnapshots(context.Context) ([]KSIResultSet, error) {
+	return m.snapshots, m.err
+}
+
+type mockEvalGraderReader struct {
+	results []GraderResult
+	err     error
+}
+
+func (m *mockEvalGraderReader) ListGraderResults(context.Context) ([]GraderResult, error) {
+	return m.results, m.err
+}
+
 // testCatalog returns a minimal catalog for evaluator tests with 4 KSIs
 // across different categories, all applicable to Class C. LastValidatedUnixMs
 // is set to now so KSIs are not stale by default; the stale test overrides this.
@@ -138,22 +166,84 @@ func testCatalog() *KSICatalog {
 }
 
 // fullDeps returns EvaluatorDeps with all mocks populated with valid evidence.
-func fullDeps() EvaluatorDeps {
+func fullDeps(t *testing.T) EvaluatorDeps {
+	t.Helper()
+	privateKey := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
+	signerKeyID := hex.EncodeToString(privateKey.Public().(ed25519.PublicKey))
+	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-1", TransactionHash: "hash-1", StateRootBefore: "state-before", StateRootAfter: "state-after", ExecutedAtUnixMs: 1_700_000_001_000, SignerKeyId: signerKeyID}
+	payload, err := governance.CanonicalizeActionReceipt(receipt)
+	require.NoError(t, err)
+	receipt.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	attestation := &operatorv1.ReceiptPersistenceAttestation{TransactionId: receipt.TransactionId, ReceiptSignatureDigest: governance.SignatureDigest([]string{receipt.Signature}), PersistedAtUnixMs: 1_700_000_002_000, AuditRecordId: receipt.TransactionId, SignerKeyId: signerKeyID}
+	payload, err = governance.CanonicalizeReceiptPersistenceAttestation(attestation)
+	require.NoError(t, err)
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	receipt.FinalPersistenceAttestation = attestation
+	commitment := &operatorv1.CommitmentAttestation{TransactionId: "tx-1", TransactionHash: "hash-1", StateRootAtCommit: "state-before", CommittedAtUnixMs: 1_700_000_003_000, AuditorKeyId: signerKeyID}
+	payload, err = governance.CanonicalizeCommitmentAttestation(commitment)
+	require.NoError(t, err)
+	commitmentHash := sha256.Sum256(payload)
+	commitment.Hash = hex.EncodeToString(commitmentHash[:])
+	commitment.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+	commitmentJSON, err := json.Marshal(commitment)
+	require.NoError(t, err)
+	committedAt := time.UnixMilli(commitment.CommittedAtUnixMs).UTC()
+	now := time.Now().UTC()
 	return EvaluatorDeps{
 		Audit: &mockAuditReader{
-			receipts:  []*models.ActionReceiptRecord{{TransactionID: "tx-1", Signature: "sig", SignerKeyID: "key-1"}},
+			receipts: []*models.ActionReceiptRecord{{
+				TransactionID: receipt.TransactionId, TransactionHash: receipt.TransactionHash,
+				StateRootBefore: receipt.StateRootBefore, StateRootAfter: receipt.StateRootAfter,
+				ExecutedAt: now, Signature: receipt.Signature, SignerKeyID: receipt.SignerKeyId, ActionReceipt: receipt,
+			}},
 			events:    []*storage.Event{{ID: 1, OperatorSessionID: "sess-1"}},
 			mutations: []*storage.FileMutationLog{{ID: 1, Filepath: "/etc/config"}},
 		},
 		Ledger: &mockLedgerReader{
-			merkleRoot: "abc123def456",
-			commits:    []storage.LedgerCommit{{CommitHash: "commit-1"}},
+			merkleRoot: "commit-1",
+			commits:    []storage.LedgerCommit{{CommitHash: "commit-1", ParentHash: "bootstrap-commit", TimestampUTC: now}},
 		},
-		Commitments: &mockCommitmentReader{
-			commitments: []*storage.CommitmentRow{
-				{Seq: 1, TransactionID: "tx-1", Hash: "hash-1", PriorCommitmentHash: ""},
-				{Seq: 2, TransactionID: "tx-2", Hash: "hash-2", PriorCommitmentHash: "hash-1"},
+		Commitments: &mockCommitmentReader{commitments: []*storage.CommitmentRow{{
+			Seq: 1, TransactionID: commitment.TransactionId, TransactionHash: commitment.TransactionHash,
+			Hash: commitment.Hash, StateRootAtCommit: commitment.StateRootAtCommit,
+			CommittedAt: committedAt, AuditorKeyID: commitment.AuditorKeyId, Signature: commitment.Signature,
+			AttestationJSON: commitmentJSON,
+		}}},
+		History: &mockKSIHistoryReader{snapshots: []KSIResultSet{{
+			Class: ClassC, EvaluatedAtMs: now.UnixMilli(), Results: []KSIResult{
+				{ID: "KSI-CMT-01", Status: KSIStatusSatisfied},
+				{ID: "KSI-MLA-08", Status: KSIStatusSatisfied},
 			},
+		}}},
+		Graders: &mockEvalGraderReader{results: []GraderResult{{
+			ArtifactID: "metric:protocol-chain", GraderID: "protocol_chain", GraderVersion: "1.0.0",
+			SHA256: strings.Repeat("a", 64), Verified: true, ProducedAt: now,
+			Evidence: []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "receipt:tx-1", Sha256: strings.Repeat("b", 64)}},
+		}}},
+	}
+}
+
+func testKSIMethod(name string, property KSIMeasuredProperty, evaluate ksiMethodEvaluator) KSIMethod {
+	return newKSIMethod(name, KSIArtifactActionReceipts, KSICollectionAuditStore, KSIVerifierStructural, property, evaluate)
+}
+
+// testBinding returns a valid EvaluationBinding for evaluator tests.
+func testBinding(t *testing.T) EvaluationBinding {
+	t.Helper()
+	now := time.Now()
+	return EvaluationBinding{
+		ScopeID:            "test-scope",
+		RunID:              "test-run",
+		WindowStartUnixMs:  1_700_000_000_000,
+		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
 		},
 	}
 }
@@ -165,14 +255,85 @@ func TestKSIEvaluator_RegisterMethods(t *testing.T) {
 
 	assert.Equal(t, 0, eval.MethodCount("KSI-CMT-01"))
 
-	method := func(ctx context.Context) (bool, []Evidence, error) {
+	method := testKSIMethod("testMethod", KSIPropertyPresence, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return true, nil, nil
-	}
+	})
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", method))
 	assert.Equal(t, 1, eval.MethodCount("KSI-CMT-01"))
 
-	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", method))
-	assert.Equal(t, 2, eval.MethodCount("KSI-CMT-01"))
+	require.ErrorIs(t, eval.RegisterMethods("KSI-CMT-01", method), constants.ErrKSIMethodNotIndependent)
+	assert.Equal(t, 1, eval.MethodCount("KSI-CMT-01"))
+
+	sameIdentity := method
+	sameIdentity.MeasuredProperty = KSIPropertySignatureValidity
+	require.ErrorIs(t, eval.RegisterMethods("KSI-CMT-01", sameIdentity), constants.ErrKSIMethodInvalid)
+	assert.Equal(t, 1, eval.MethodCount("KSI-CMT-01"))
+}
+
+func TestKSIEvaluator_RegisterMethods_AllowsEachIndependentMetadataDimension(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*KSIMethod)
+	}{
+		{name: "artifact identity", mutate: func(method *KSIMethod) { method.ArtifactIdentity = KSIArtifactFileMutations }},
+		{name: "collection boundary", mutate: func(method *KSIMethod) { method.CollectionBoundary = KSICollectionEvalResults }},
+		{name: "verifier family", mutate: func(method *KSIMethod) { method.VerifierFamily = KSIVerifierCryptographic }},
+		{name: "measured property", mutate: func(method *KSIMethod) { method.MeasuredProperty = KSIPropertySignatureValidity }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eval := NewKSIEvaluator(testCatalog())
+			first := testKSIMethod("first", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+				return true, nil, nil
+			})
+			second := first
+			second.Name = "second"
+			tt.mutate(&second)
+
+			require.NoError(t, eval.RegisterMethods("KSI-CMT-01", first, second))
+			assert.Equal(t, 2, eval.MethodCount("KSI-CMT-01"))
+		})
+	}
+}
+
+func TestKSIEvaluator_RegisterMethods_RejectsInvalidMetadataAtomically(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*KSIMethod)
+	}{
+		{name: "name", mutate: func(method *KSIMethod) { method.Name = "" }},
+		{name: "version", mutate: func(method *KSIMethod) { method.Version = "" }},
+		{name: "artifact identity", mutate: func(method *KSIMethod) { method.ArtifactIdentity = "" }},
+		{name: "unknown artifact identity", mutate: func(method *KSIMethod) { method.ArtifactIdentity = "unknown" }},
+		{name: "collection boundary", mutate: func(method *KSIMethod) { method.CollectionBoundary = "" }},
+		{name: "unknown collection boundary", mutate: func(method *KSIMethod) { method.CollectionBoundary = "unknown" }},
+		{name: "verifier family", mutate: func(method *KSIMethod) { method.VerifierFamily = "" }},
+		{name: "unknown verifier family", mutate: func(method *KSIMethod) { method.VerifierFamily = "unknown" }},
+		{name: "measured property", mutate: func(method *KSIMethod) { method.MeasuredProperty = "" }},
+		{name: "unknown measured property", mutate: func(method *KSIMethod) { method.MeasuredProperty = "unknown" }},
+		{name: "satisfied outcome for failure", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeSatisfied }},
+		{name: "method failure outcome for false result", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeMethodFailure }},
+		{name: "not applicable outcome for false result", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = KSIOutcomeNotApplicable }},
+		{name: "unknown unsatisfied outcome", mutate: func(method *KSIMethod) { method.UnsatisfiedOutcome = "unknown" }},
+		{name: "evaluator", mutate: func(method *KSIMethod) { method.evaluate = nil }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eval := NewKSIEvaluator(testCatalog())
+			valid := testKSIMethod("valid", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+				return true, nil, nil
+			})
+			invalid := valid
+			invalid.Name = "invalid"
+			invalid.MeasuredProperty = KSIPropertySignatureValidity
+			tt.mutate(&invalid)
+
+			require.ErrorIs(t, eval.RegisterMethods("KSI-CMT-01", valid, invalid), constants.ErrKSIMethodInvalid)
+			assert.Equal(t, 0, eval.MethodCount("KSI-CMT-01"))
+		})
+	}
 }
 
 // TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError verifies that registering
@@ -181,11 +342,10 @@ func TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	err := eval.RegisterMethods("KSI-FAKE-99", func(ctx context.Context) (bool, []Evidence, error) {
+	err := eval.RegisterMethods("KSI-FAKE-99", testKSIMethod("testMethod", KSIPropertyPresence, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return true, nil, nil
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown KSI ID")
+	}))
+	require.ErrorIs(t, err, constants.ErrKSICatalogInvalid)
 }
 
 // TestKSIEvaluator_RegisterDefaultMethods registers default methods and verifies
@@ -193,7 +353,7 @@ func TestKSIEvaluator_RegisterMethods_UnknownKSI_ReturnsError(t *testing.T) {
 func TestKSIEvaluator_RegisterDefaultMethods(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
 	assert.GreaterOrEqual(t, eval.MethodCount("KSI-CMT-01"), 2)
 	assert.GreaterOrEqual(t, eval.MethodCount("KSI-MLA-07"), 2)
@@ -206,9 +366,9 @@ func TestKSIEvaluator_RegisterDefaultMethods(t *testing.T) {
 func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -219,6 +379,7 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 		if res.MethodCount >= 2 {
 			assert.Equal(t, KSIStatusSatisfied, res.Status,
 				"KSI %s should be satisfied with %d methods", res.ID, res.MethodCount)
+			assert.Equal(t, KSIOutcomeSatisfied, res.Outcome)
 			assert.NotEmpty(t, res.Evidence, "KSI %s should have evidence", res.ID)
 		}
 	}
@@ -230,9 +391,9 @@ func TestKSIEvaluator_Evaluate_AllSatisfied(t *testing.T) {
 func TestKSIEvaluator_Evaluate_InsufficientMethods_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// KSI-CED-01 has 0 methods (not automatable by g8e), should fail-closed
@@ -260,15 +421,16 @@ func TestKSIEvaluator_Evaluate_StaleKSI_FailClosed(t *testing.T) {
 	}
 
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
 		if res.ID == "KSI-CMT-01" {
 			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
 				"Stale KSI-CMT-01 should be not_satisfied despite having methods")
+			assert.Equal(t, KSIOutcomeStaleEvidence, res.Outcome)
 		}
 	}
 }
@@ -279,16 +441,16 @@ func TestKSIEvaluator_Evaluate_MethodError_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	errMethod := func(ctx context.Context) (bool, []Evidence, error) {
+	errMethod := testKSIMethod("errorMethod", KSIPropertyPresence, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return false, nil, errors.New("simulated storage failure")
-	}
-	okMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
-	}
+	})
+	okMethod := testKSIMethod("okMethod", KSIPropertySignatureValidity, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, "tx-1")}, nil
+	})
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", errMethod, okMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -305,16 +467,16 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	falseMethod := func(ctx context.Context) (bool, []Evidence, error) {
+	falseMethod := testKSIMethod("falseMethod", KSIPropertyPresence, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
 		return false, nil, nil
-	}
-	trueMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "root"}}, nil
-	}
+	})
+	trueMethod := testKSIMethod("trueMethod", KSIPropertyStateRootMatchesHead, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeMerkleRoot, "root")}, nil
+	})
 
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", falseMethod, trueMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -325,14 +487,95 @@ func TestKSIEvaluator_Evaluate_MethodReturnsFalse_FailClosed(t *testing.T) {
 	}
 }
 
+func TestKSIEvaluator_Evaluate_SeparatesDetailedOutcomes(t *testing.T) {
+	tests := []struct {
+		name        string
+		configure   func(*KSICatalog, *KSIEvaluator)
+		wantOutcome KSIOutcome
+	}{
+		{
+			name: "method execution failure",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("methodFailure", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, errors.New("method failed")
+				})
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeMethodFailure,
+		},
+		{
+			name: "invalid evidence",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("invalidEvidence", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeInvalidEvidence,
+		},
+		{
+			name: "stale evidence",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("staleEvidence", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				method.UnsatisfiedOutcome = KSIOutcomeStaleEvidence
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeStaleEvidence,
+		},
+		{
+			name:        "unsupported automation",
+			configure:   func(_ *KSICatalog, _ *KSIEvaluator) {},
+			wantOutcome: KSIOutcomeUnsupportedAutomation,
+		},
+		{
+			name: "customer attestation required",
+			configure: func(_ *KSICatalog, evaluator *KSIEvaluator) {
+				method := testKSIMethod("customerAttestation", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+					return false, nil, nil
+				})
+				method.UnsatisfiedOutcome = KSIOutcomeCustomerAttestationRequired
+				require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+			},
+			wantOutcome: KSIOutcomeCustomerAttestationRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := testCatalog()
+			evaluator := NewKSIEvaluator(catalog)
+			tt.configure(catalog, evaluator)
+
+			resultSet, err := evaluator.Evaluate(context.Background(), ClassB, testBinding(t))
+			require.NoError(t, err)
+			result := findKSIResult(t, resultSet, "KSI-CMT-01")
+			assert.Equal(t, KSIStatusNotSatisfied, result.Status)
+			assert.Equal(t, tt.wantOutcome, result.Outcome)
+		})
+	}
+}
+
+func findKSIResult(t *testing.T, resultSet *KSIResultSet, ksiID string) KSIResult {
+	t.Helper()
+	for _, result := range resultSet.Results {
+		if result.ID == ksiID {
+			return result
+		}
+	}
+	t.Fatalf("missing KSI result %s", ksiID)
+	return KSIResult{}
+}
+
 // TestKSIEvaluator_Evaluate_NilDeps_FailClosed verifies that nil dependency
 // fields cause methods to return false (fail-closed).
 func TestKSIEvaluator_Evaluate_NilDeps_FailClosed(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(EvaluatorDeps{})
+	require.NoError(t, eval.RegisterDefaultMethods(EvaluatorDeps{}))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -354,9 +597,9 @@ func TestKSIEvaluator_Evaluate_EmptyStores_FailClosed(t *testing.T) {
 		Ledger:      &mockLedgerReader{},
 		Commitments: &mockCommitmentReader{},
 	}
-	eval.RegisterDefaultMethods(deps)
+	require.NoError(t, eval.RegisterDefaultMethods(deps))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -375,12 +618,12 @@ func TestKSIEvaluator_Evaluate_ClassB_LowerThreshold(t *testing.T) {
 	eval := NewKSIEvaluator(catalog)
 
 	// Register only 1 method for KSI-CMT-01
-	okMethod := func(ctx context.Context) (bool, []Evidence, error) {
-		return true, []Evidence{{Type: EvidenceTypeReceiptID, Reference: "tx-1"}}, nil
-	}
+	okMethod := testKSIMethod("okMethod", KSIPropertyPresence, func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeReceiptID, "tx-1")}, nil
+	})
 	require.NoError(t, eval.RegisterMethods("KSI-CMT-01", okMethod))
 
-	result, err := eval.Evaluate(context.Background(), ClassB)
+	result, err := eval.Evaluate(context.Background(), ClassB, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -411,7 +654,7 @@ func TestKSIEvaluator_Evaluate_ClassA_NoMinimum(t *testing.T) {
 
 	eval := NewKSIEvaluator(catalog)
 
-	result, err := eval.Evaluate(context.Background(), ClassA)
+	result, err := eval.Evaluate(context.Background(), ClassA, testBinding(t))
 	require.NoError(t, err)
 
 	assert.Len(t, result.Results, 1)
@@ -427,12 +670,12 @@ func TestKSIEvaluator_Evaluate_ClassA_NoMinimum(t *testing.T) {
 func TestKSIEvaluator_Evaluate_ContextCancellation(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := eval.Evaluate(ctx, ClassC)
+	_, err := eval.Evaluate(ctx, ClassC, testBinding(t))
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
@@ -470,12 +713,14 @@ func TestKSIResultSet_SatisfiedCount(t *testing.T) {
 // TestKSIResultSet_Validate verifies result set validation against a catalog.
 func TestKSIResultSet_Validate(t *testing.T) {
 	catalog := testCatalog()
+	binding := testBinding(t)
 
 	t.Run("valid result set", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "KSI-CMT-01", Status: KSIStatusSatisfied},
-				{ID: "KSI-MLA-07", Status: KSIStatusSatisfied},
+				{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
+				{ID: "KSI-MLA-07", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		assert.NoError(t, rs.Validate(catalog))
@@ -489,10 +734,46 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		assert.Contains(t, err.Error(), "empty result set")
 	})
 
+	t.Run("missing result set binding", func(t *testing.T) {
+		rs := &KSIResultSet{
+			Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingIncomplete)
+	})
+
+	t.Run("result binding mismatch", func(t *testing.T) {
+		mismatched := binding
+		mismatched.RunID = "other-run"
+		rs := &KSIResultSet{
+			Binding: binding,
+			Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: mismatched}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+	})
+
+	t.Run("evidence scope mismatch", func(t *testing.T) {
+		rs := &KSIResultSet{
+			Binding: binding,
+			Results: []KSIResult{{
+				ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding,
+				Evidence: []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "tx-1", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: "other-scope"}},
+			}},
+		}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+	})
+
 	t.Run("unknown KSI ID", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "KSI-FAKE-99", Status: KSIStatusSatisfied},
+				{ID: "KSI-FAKE-99", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		err := rs.Validate(catalog)
@@ -503,8 +784,9 @@ func TestKSIResultSet_Validate(t *testing.T) {
 
 	t.Run("empty KSI ID in result", func(t *testing.T) {
 		rs := &KSIResultSet{
+			Binding: binding,
 			Results: []KSIResult{
-				{ID: "", Status: KSIStatusSatisfied},
+				{ID: "", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding},
 			},
 		}
 		err := rs.Validate(catalog)
@@ -512,12 +794,121 @@ func TestKSIResultSet_Validate(t *testing.T) {
 		assert.ErrorIs(t, err, constants.ErrValidationFailed)
 		assert.Contains(t, err.Error(), "empty ID")
 	})
+
+	t.Run("missing detailed outcome", func(t *testing.T) {
+		rs := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusNotSatisfied, Binding: binding}}}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	})
+
+	t.Run("status contradicts detailed outcome", func(t *testing.T) {
+		rs := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeInvalidEvidence, Binding: binding}}}
+		err := rs.Validate(catalog)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	})
+}
+
+func TestEvaluationBindingValidateRequiresUniqueAssertionAssessmentScope(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluationBinding)
+	}{
+		{name: "missing assessment IDs", mutate: func(binding *EvaluationBinding) { binding.AssertionAssessments.AssessmentIDs = nil }},
+		{name: "duplicate assessment IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.AssessmentIDs = []string{"assessment-1", "assessment-1"}
+		}},
+		{name: "duplicate attempt IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.AttemptIDs = []string{"attempt-1", "attempt-1"}
+		}},
+		{name: "duplicate scenario IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.ScenarioIDs = []string{"scenario-1", "scenario-1"}
+		}},
+		{name: "duplicate action IDs", mutate: func(binding *EvaluationBinding) {
+			binding.AssertionAssessments.ActionIDs = []string{"action-1", "action-1"}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			binding := testBinding(t)
+			test.mutate(&binding)
+			err := binding.Validate()
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrKSIBindingIncomplete)
+		})
+	}
+}
+
+func TestKSIResultSetValidateRejectsEvidenceOutsideAssertionAssessmentScope(t *testing.T) {
+	catalog := testCatalog()
+	binding := testBinding(t)
+	validEvidence := &compliancev1.ComplianceEvidenceReference{
+		ArtifactId: "receipt-1", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: binding.ScopeID, RunId: binding.RunID,
+		AttemptId: "attempt-1", ScenarioId: "scenario-1", TransactionId: "action-1", ProducedAt: timestamppb.New(time.UnixMilli(binding.WindowStartUnixMs)),
+	}
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ComplianceEvidenceReference)
+	}{
+		{name: "another scope", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.ScopeId = "scope-2" }},
+		{name: "another run", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.RunId = "run-2" }},
+		{name: "another attempt", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.AttemptId = "attempt-2" }},
+		{name: "another scenario", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.ScenarioId = "scenario-2" }},
+		{name: "another action", mutate: func(ref *compliancev1.ComplianceEvidenceReference) { ref.TransactionId = "action-2" }},
+		{name: "before assessment window", mutate: func(ref *compliancev1.ComplianceEvidenceReference) {
+			ref.ProducedAt = timestamppb.New(time.UnixMilli(binding.WindowStartUnixMs - 1))
+		}},
+		{name: "after assessment window", mutate: func(ref *compliancev1.ComplianceEvidenceReference) {
+			ref.ProducedAt = timestamppb.New(time.UnixMilli(binding.WindowEndUnixMs + 1))
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			evidence := proto.Clone(validEvidence).(*compliancev1.ComplianceEvidenceReference)
+			test.mutate(evidence)
+			resultSet := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding, Evidence: []*compliancev1.ComplianceEvidenceReference{evidence}}}}
+			err := resultSet.Validate(catalog)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrKSIBindingMismatch)
+		})
+	}
+}
+
+func TestKSIResultSetValidateAcceptsEvidenceMatchingAnyAllowedAssertionAssessmentScopeValue(t *testing.T) {
+	binding := testBinding(t)
+	binding.AssertionAssessments = AssertionAssessmentScope{
+		AssessmentIDs: []string{"assessment-1", "assessment-2"},
+		AttemptIDs:    []string{"attempt-1", "attempt-2"},
+		ScenarioIDs:   []string{"scenario-1", "scenario-2"},
+		ActionIDs:     []string{"action-1", "action-2"},
+	}
+	evidence := &compliancev1.ComplianceEvidenceReference{
+		ArtifactId: "receipt-2", ArtifactType: string(EvidenceTypeReceiptID), ScopeId: binding.ScopeID, RunId: binding.RunID,
+		AttemptId: "attempt-2", ScenarioId: "scenario-2", TransactionId: "action-2", ProducedAt: timestamppb.New(time.UnixMilli(binding.WindowEndUnixMs)),
+	}
+	resultSet := &KSIResultSet{Binding: binding, Results: []KSIResult{{ID: "KSI-CMT-01", Status: KSIStatusSatisfied, Outcome: KSIOutcomeSatisfied, Binding: binding, Evidence: []*compliancev1.ComplianceEvidenceReference{evidence}}}}
+	assert.NoError(t, resultSet.Validate(testCatalog()))
+}
+
+func TestKSIEvaluatorEvaluateFailsClosedOnEvidenceOutsideAssertionAssessmentScope(t *testing.T) {
+	catalog := testCatalog()
+	evaluator := NewKSIEvaluator(catalog)
+	method := testKSIMethod("cross-scope", KSIPropertyPresence, func(context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error) {
+		return true, []*compliancev1.ComplianceEvidenceReference{{ArtifactId: "receipt-1", ArtifactType: string(EvidenceTypeReceiptID), AttemptId: "attempt-2"}}, nil
+	})
+	require.NoError(t, evaluator.RegisterMethods("KSI-CMT-01", method))
+	resultSet, err := evaluator.Evaluate(context.Background(), ClassB, testBinding(t))
+	require.NoError(t, err)
+	result := findKSIResult(t, resultSet, "KSI-CMT-01")
+	assert.Equal(t, KSIOutcomeInvalidEvidence, result.Outcome)
+	assert.Equal(t, KSIStatusNotSatisfied, result.Status)
 }
 
 // TestDefaultMethods_CommitmentChainIntact verifies that the commitment chain
 // integrity method correctly detects broken chains.
 func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
-	deps := fullDeps()
+	deps := fullDeps(t)
 	methods := DefaultMethods(deps)
 
 	// KSI-SVC-05 uses commitmentChainIntact as one of its methods
@@ -527,7 +918,7 @@ func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
 	// With intact chain (fullDeps), at least one method should return true
 	anyTrue := false
 	for _, m := range svcMethods {
-		ok, _, err := m(context.Background())
+		ok, _, err := m.evaluate(context.Background())
 		require.NoError(t, err)
 		if ok {
 			anyTrue = true
@@ -548,7 +939,7 @@ func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
 	// commitmentChainIntact should now return false
 	allTrue := true
 	for _, m := range svcMethods {
-		ok, _, err := m(context.Background())
+		ok, _, err := m.evaluate(context.Background())
 		require.NoError(t, err)
 		if !ok {
 			allTrue = false
@@ -557,39 +948,53 @@ func TestDefaultMethods_CommitmentChainIntact(t *testing.T) {
 	assert.False(t, allTrue, "At least one method should return false with broken chain")
 }
 
-// TestDefaultMethods_ReceiptSignatures verifies that the receipt signature
-// check method detects missing signatures.
-func TestDefaultMethods_ReceiptSignatures(t *testing.T) {
-	// With valid signatures
-	deps := fullDeps()
-	methods := DefaultMethods(deps)
-	mlaMethods := methods["KSI-MLA-08"]
-	require.Len(t, mlaMethods, 2)
-
-	for _, m := range mlaMethods {
-		ok, _, err := m(context.Background())
-		require.NoError(t, err)
-		assert.True(t, ok, "Method should return true with valid signatures")
+// TestDefaultMethods_ReceiptAndPersistenceCryptographicVerification verifies
+// canonical receipt and final-persistence evidence fail closed under mutation.
+func TestDefaultMethods_ReceiptAndPersistenceCryptographicVerification(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*mockAuditReader)
+		want   bool
+	}{
+		{name: "valid receipt and persistence", want: true},
+		{name: "missing canonical receipt", mutate: func(audit *mockAuditReader) { audit.receipts[0].ActionReceipt = nil }},
+		{name: "record signature binding mismatch", mutate: func(audit *mockAuditReader) { audit.receipts[0].Signature = "different" }},
+		{name: "malformed receipt signature", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.Signature = "not-hex"
+			audit.receipts[0].Signature = "not-hex"
+		}},
+		{name: "missing final persistence attestation", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation = nil
+		}},
+		{name: "mutated persistence signature", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation.Signature = "not-hex"
+		}},
+		{name: "mutated receipt signature digest", mutate: func(audit *mockAuditReader) {
+			audit.receipts[0].ActionReceipt.FinalPersistenceAttestation.ReceiptSignatureDigest = "wrong-digest"
+		}},
+		{name: "one invalid receipt among valid receipts", mutate: func(audit *mockAuditReader) {
+			invalid := *audit.receipts[0]
+			invalid.TransactionID = "tx-2"
+			invalid.ActionReceipt = nil
+			audit.receipts = append(audit.receipts, &invalid)
+		}},
 	}
 
-	// With missing signature
-	deps.Audit = &mockAuditReader{
-		receipts: []*models.ActionReceiptRecord{
-			{TransactionID: "tx-1", Signature: "", SignerKeyID: ""},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			audit := deps.Audit.(*mockAuditReader)
+			if tt.mutate != nil {
+				tt.mutate(audit)
+			}
+			methods := DefaultMethods(deps)["KSI-MLA-08"]
+			require.Len(t, methods, 2)
+			satisfied, evidence, err := methods[0].evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, satisfied)
+			assert.NotEmpty(t, evidence)
+		})
 	}
-	methods = DefaultMethods(deps)
-	mlaMethods = methods["KSI-MLA-08"]
-
-	anyFalse := false
-	for _, m := range mlaMethods {
-		ok, _, err := m(context.Background())
-		require.NoError(t, err)
-		if !ok {
-			anyFalse = true
-		}
-	}
-	assert.True(t, anyFalse, "at least one method should return false when signatures are missing")
 }
 
 // TestKSIEvaluator_Evaluate_FullIntegration verifies end-to-end evaluation
@@ -597,9 +1002,9 @@ func TestDefaultMethods_ReceiptSignatures(t *testing.T) {
 func TestKSIEvaluator_Evaluate_FullIntegration(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(fullDeps())
+	require.NoError(t, eval.RegisterDefaultMethods(fullDeps(t)))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// Verify result set structure
@@ -626,7 +1031,7 @@ func TestKSIEvaluator_Evaluate_NoMethodsRegistered(t *testing.T) {
 	catalog := testCatalog()
 	eval := NewKSIEvaluator(catalog)
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	for _, res := range result.Results {
@@ -651,9 +1056,9 @@ func TestKSIEvaluator_Evaluate_StorageError_FailClosed(t *testing.T) {
 		Ledger:      &mockLedgerReader{merkleRoot: "abc123", commits: []storage.LedgerCommit{{CommitHash: "c1"}}},
 		Commitments: &mockCommitmentReader{commitments: []*storage.CommitmentRow{{Hash: "h1"}}},
 	}
-	eval.RegisterDefaultMethods(deps)
+	require.NoError(t, eval.RegisterDefaultMethods(deps))
 
-	result, err := eval.Evaluate(context.Background(), ClassC)
+	result, err := eval.Evaluate(context.Background(), ClassC, testBinding(t))
 	require.NoError(t, err)
 
 	// KSIs that depend on audit store should be not_satisfied due to error
@@ -662,5 +1067,162 @@ func TestKSIEvaluator_Evaluate_StorageError_FailClosed(t *testing.T) {
 			assert.Equal(t, KSIStatusNotSatisfied, res.Status,
 				"KSI %s should be not_satisfied due to audit store error", res.ID)
 		}
+	}
+}
+
+func TestDefaultMethods_CommitmentCryptographicVerification(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorDeps)
+		want   bool
+	}{
+		{name: "valid signed commitment", want: true},
+		{name: "missing commitment", mutate: func(deps *EvaluatorDeps) { deps.Commitments = &mockCommitmentReader{} }},
+		{name: "malformed attestation", mutate: func(deps *EvaluatorDeps) {
+			deps.Commitments.(*mockCommitmentReader).commitments[0].AttestationJSON = []byte("{")
+		}},
+		{name: "mutated hash", mutate: func(deps *EvaluatorDeps) {
+			deps.Commitments.(*mockCommitmentReader).commitments[0].Hash = strings.Repeat("0", 64)
+		}},
+		{name: "mutated signature", mutate: func(deps *EvaluatorDeps) {
+			deps.Commitments.(*mockCommitmentReader).commitments[0].Signature = "not-hex"
+		}},
+		{name: "nil dependency", mutate: func(deps *EvaluatorDeps) { deps.Commitments = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			if tt.mutate != nil {
+				tt.mutate(&deps)
+			}
+			method := DefaultMethods(deps)["KSI-MLA-07"][1]
+			got, evidence, err := method.evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			if tt.want {
+				require.NotEmpty(t, evidence)
+				assert.Equal(t, string(EvidenceTypeCommitmentSignature), evidence[0].ArtifactType)
+				assert.Equal(t, constants.KSIMethodVerifierID, evidence[0].VerifierId)
+				assert.Equal(t, "verified", evidence[0].VerificationStatus)
+			} else if len(evidence) > 0 {
+				assert.Equal(t, "failed", evidence[0].VerificationStatus)
+			}
+		})
+	}
+}
+
+func TestDefaultMethods_LedgerBootstrapCommitIsNotOperationalEvidence(t *testing.T) {
+	deps := fullDeps(t)
+	deps.Ledger.(*mockLedgerReader).commits[0].ParentHash = ""
+	methods := DefaultMethods(deps)["KSI-CMT-03"]
+	require.Len(t, methods, 2)
+
+	for _, method := range methods {
+		satisfied, _, err := method.evaluate(context.Background())
+		require.NoError(t, err)
+		assert.False(t, satisfied)
+	}
+}
+
+func TestDefaultMethods_LedgerMerkleRootMatchesHead(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorDeps)
+		want   bool
+	}{
+		{name: "root matches head", want: true},
+		{name: "root differs from head", mutate: func(deps *EvaluatorDeps) { deps.Ledger.(*mockLedgerReader).merkleRoot = "different" }},
+		{name: "missing head commit", mutate: func(deps *EvaluatorDeps) { deps.Ledger.(*mockLedgerReader).commits = nil }},
+		{name: "nil dependency", mutate: func(deps *EvaluatorDeps) { deps.Ledger = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			if tt.mutate != nil {
+				tt.mutate(&deps)
+			}
+			got, _, err := DefaultMethods(deps)["KSI-SVC-05"][1].evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDefaultMethods_IndependentStateObservation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorDeps)
+		want   bool
+	}{
+		{name: "distinct state roots", want: true},
+		{name: "missing state root", mutate: func(deps *EvaluatorDeps) { deps.Audit.(*mockAuditReader).receipts[0].StateRootAfter = "" }},
+		{name: "unchanged state root", mutate: func(deps *EvaluatorDeps) { deps.Audit.(*mockAuditReader).receipts[0].StateRootAfter = "state-before" }},
+		{name: "missing receipt", mutate: func(deps *EvaluatorDeps) { deps.Audit.(*mockAuditReader).receipts = nil }},
+		{name: "nil dependency", mutate: func(deps *EvaluatorDeps) { deps.Audit = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			if tt.mutate != nil {
+				tt.mutate(&deps)
+			}
+			got, _, err := DefaultMethods(deps)["KSI-CNA-01"][1].evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDefaultMethods_DeterministicGraderResultsVerified(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorDeps)
+		want   bool
+	}{
+		{name: "verified content-addressed result", want: true},
+		{name: "missing result", mutate: func(deps *EvaluatorDeps) { deps.Graders = &mockEvalGraderReader{} }},
+		{name: "unverified result", mutate: func(deps *EvaluatorDeps) { deps.Graders.(*mockEvalGraderReader).results[0].Verified = false }},
+		{name: "malformed result digest", mutate: func(deps *EvaluatorDeps) { deps.Graders.(*mockEvalGraderReader).results[0].SHA256 = "bad" }},
+		{name: "missing source evidence", mutate: func(deps *EvaluatorDeps) { deps.Graders.(*mockEvalGraderReader).results[0].Evidence = nil }},
+		{name: "malformed source digest", mutate: func(deps *EvaluatorDeps) { deps.Graders.(*mockEvalGraderReader).results[0].Evidence[0].Sha256 = "bad" }},
+		{name: "nil dependency", mutate: func(deps *EvaluatorDeps) { deps.Graders = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			if tt.mutate != nil {
+				tt.mutate(&deps)
+			}
+			got, _, err := DefaultMethods(deps)["KSI-IAM-05"][1].evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDefaultMethods_KSIHistoryFreshness(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*EvaluatorDeps)
+		want   bool
+	}{
+		{name: "fresh KSI snapshot", want: true},
+		{name: "stale KSI snapshot", mutate: func(deps *EvaluatorDeps) {
+			deps.History.(*mockKSIHistoryReader).snapshots[0].EvaluatedAtMs = time.Now().Add(-8 * 24 * time.Hour).UnixMilli()
+		}},
+		{name: "missing snapshots", mutate: func(deps *EvaluatorDeps) { deps.History = &mockKSIHistoryReader{} }},
+		{name: "missing KSI result", mutate: func(deps *EvaluatorDeps) { deps.History.(*mockKSIHistoryReader).snapshots[0].Results = nil }},
+		{name: "nil dependency", mutate: func(deps *EvaluatorDeps) { deps.History = nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := fullDeps(t)
+			if tt.mutate != nil {
+				tt.mutate(&deps)
+			}
+			got, _, err := DefaultMethods(deps)["KSI-CMT-01"][1].evaluate(context.Background())
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
 	}
 }

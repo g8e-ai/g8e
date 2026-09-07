@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import generate_readme as gr
+import project_readme_evidence as pre
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "readme"
@@ -48,6 +49,179 @@ def _update_sha_in_index(index: dict, rel: str, new_sha: str) -> None:
             for item in value:
                 if isinstance(item, dict):
                     _update_sha_in_index(item, rel, new_sha)
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
+
+
+def _set_artifact_checksum(snapshot_dir: Path, rel: str) -> None:
+    index_path = snapshot_dir / "index.json"
+    index = json.loads(index_path.read_text())
+    _update_sha_in_index(index, rel, gr._sha256_file(snapshot_dir / rel))
+    index_path.write_text(json.dumps(index))
+
+
+def _make_stage1_snapshot(tmp: str) -> Path:
+    snapshot_dir = Path(tmp) / "snap"
+    shutil.copytree(VALID, snapshot_dir)
+    run_rel = "eval/runs/run-2026-09-01-synthetic-a"
+    manifest_path = snapshot_dir / run_rel / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update({
+        "schema_version": "1.40.0",
+        "suite_id": "ifeval_subset",
+        "orchestrator_version": "2.1.5",
+        "arms": [{"arm_id": "doctrine", "requested_posture": "l1_doctrine", "uses_g8ee": True, "uses_gateway": True, "receipt_binding": True, "is_production_posture": True}],
+        "role_to_model": {
+            "primary": {"role": "primary", "provider": "ollama", "model": "gemma4:12b", "endpoint": None, "endpoint_class": "self-hosted-lan", "api_key_present": False, "seed_support": "unknown"},
+            "assistant": {"role": "assistant", "provider": "ollama", "model": "gemma4:e4b", "endpoint": None, "endpoint_class": "self-hosted-lan", "api_key_present": False, "seed_support": "unknown"},
+            "lite": {"role": "lite", "provider": "ollama", "model": "gemma4:e2b", "endpoint": None, "endpoint_class": "self-hosted-lan", "api_key_present": False, "seed_support": "unknown"},
+            "judge": None,
+        },
+    })
+    manifest.pop("model_mapping", None)
+    manifest_path.write_text(json.dumps(manifest))
+
+    task_ids = ["1001", "1019", "1051", "1072", "1075"]
+    attempts = []
+    metrics = []
+    stages = []
+    for order, task_id in enumerate(task_ids, start=1):
+        attempt_id = f"run-2026-09-01-synthetic-a:{task_id}:doctrine:1"
+        attempts.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "attempt_id": attempt_id, "task_id": task_id, "arm_id": "doctrine", "terminal_status": "completed", "assignment_order": order, "receipt_refs": []})
+        metrics.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "metric_id": "ifeval_subset_verifier", "metric_version": "1.0.0", "attempt_id": attempt_id, "arm_id": "doctrine", "task_id": task_id, "eligible": True, "denominator_contribution": 1, "value": 1.0, "unit": "boolean", "verification_status": "verified", "grader_class": "deterministic", "evidence_refs": [f"{attempt_id}:agent-trail"]})
+        stages.append({"schema_version": "1.40.0", "run_id": "run-2026-09-01-synthetic-a", "stage_id": f"{attempt_id}:call:1", "attempt_id": attempt_id, "kind": "model_inference", "agent_role": "triage", "provider": "OllamaProvider", "model": "gemma4:e2b", "decision": None, "source": ""})
+    _write_jsonl(snapshot_dir / run_rel / "attempts.jsonl", attempts)
+    _write_jsonl(snapshot_dir / run_rel / "metrics.jsonl", metrics)
+    _write_jsonl(snapshot_dir / run_rel / "stages.jsonl", stages)
+    (snapshot_dir / run_rel / "receipts.jsonl").write_text("")
+
+    receipt_path = snapshot_dir / "eval/receipt-verification.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt.update({"total_receipts": 0, "verified_signatures": 0, "verified_persistence": 0, "failed_signatures": 0, "failed_persistence": 0, "missing_keys": 0, "distinct_signer_key_ids": [], "receipt_bound_eligible_attempts": 0, "sample_receipt_fingerprints": []})
+    receipt_path.write_text(json.dumps(receipt))
+
+    tasks_path = snapshot_dir / run_rel / "tasks.jsonl"
+    _write_jsonl(tasks_path, [
+        {
+            "schema_version": "1.40.0",
+            "task_id": task_id,
+            "suite_id": "ifeval_subset",
+            "suite_version": manifest["suite_version"],
+            "category": "instruction_following",
+            "prompt_hash": hashlib.sha256(f"prompt-{task_id}".encode()).hexdigest(),
+            "prompt_length": 20,
+            "compatible_arms": ["doctrine"],
+            "graders": [{"grader_id": "ifeval_subset_verifier", "grader_version": "1.0.0", "grader_class": "deterministic"}],
+        }
+        for task_id in task_ids
+    ])
+    summary_path = snapshot_dir / run_rel / "summary.json"
+    summary_path.write_text(json.dumps({
+        "schema_version": "1.0.0",
+        "run_id": "run-2026-09-01-synthetic-a",
+        "assigned_tasks": 5,
+        "terminal_attempts": 5,
+        "outcomes": {"completed": 5},
+        "metric_id": "ifeval_subset_verifier",
+        "metric_version": "1.0.0",
+        "numerator": 5,
+        "denominator": 5,
+        "unit": "boolean",
+        "receipt_count": 0,
+    }))
+    evidence_index_path = snapshot_dir / run_rel / "evidence-index.jsonl"
+    _write_jsonl(evidence_index_path, [
+        {
+            "schema_version": "1.0.0",
+            "artifact_id": f"evidence-{task_id}-answer",
+            "attempt_id": f"run-2026-09-01-synthetic-a:{task_id}:doctrine:1",
+            "evidence_kind": "answer",
+            "media_type": "text/plain",
+            "plaintext_sha256": hashlib.sha256(f"answer-{task_id}".encode()).hexdigest(),
+            "byte_length": 20,
+            "retained_privately": True,
+        }
+        for task_id in task_ids
+    ])
+    reproduction_path = snapshot_dir / run_rel / "reproduction-manifest.json"
+    reproduction_path.write_text(json.dumps({
+        "schema_version": "1.0.0",
+        "release_version": "2.1.5",
+        "run_id": "run-2026-09-01-synthetic-a",
+        "eval_schema_version": "1.40.0",
+        "eval_cli_version": "2.1.5",
+        "suite_id": "ifeval_subset",
+        "suite_version": manifest["suite_version"],
+        "arm_id": "doctrine",
+        "task_ids": task_ids,
+        "repetitions": 1,
+        "task_limit": None,
+        "idle_timeout_seconds": 180,
+        "endpoint_class": "self-hosted-lan",
+        "roles": {
+            role: {"provider": identity["provider"], "model": identity["model"], "endpoint_class": identity["endpoint_class"]}
+            for role, identity in manifest["role_to_model"].items()
+            if role in {"primary", "assistant", "lite"}
+        },
+        "environment": {"os": "linux", "arch": "x86_64"},
+        "provider_inventory_retained_privately": True,
+        "command": {
+            "program": "g8e-evals",
+            "arguments": ["run", "--suite", "ifeval_subset", "--arm", "doctrine", "--primary-endpoint", "${OLLAMA_ENDPOINT}"],
+        },
+    }))
+
+    index_path = snapshot_dir / "index.json"
+    index = json.loads(index_path.read_text())
+    index["publication_schema_version"] = "2.0.0"
+    index["readme_evidence_version"] = "2.0.0"
+    index["platform_version"] = "2.1.5"
+    run_ref = index["eval_runs"][0]
+    for name in ["tasks.jsonl", "summary.json", "evidence-index.jsonl", "reproduction-manifest.json"]:
+        stem = name.removesuffix(".jsonl").removesuffix(".json").replace("-", "_")
+        run_ref[f"{stem}_path"] = f"{run_rel}/{name}"
+        run_ref[f"{stem}_sha256"] = gr._sha256_file(snapshot_dir / run_rel / name)
+    index_path.write_text(json.dumps(index))
+
+    for name in ["manifest.json", "tasks.jsonl", "attempts.jsonl", "metrics.jsonl", "receipts.jsonl", "stages.jsonl", "summary.json", "evidence-index.jsonl", "reproduction-manifest.json"]:
+        _set_artifact_checksum(snapshot_dir, f"{run_rel}/{name}")
+    _set_artifact_checksum(snapshot_dir, "eval/receipt-verification.json")
+    return snapshot_dir
+
+
+def _make_private_stage1_report(tmp: str) -> Path:
+    snapshot_dir = _make_stage1_snapshot(tmp)
+    source = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a"
+    report = Path(tmp) / "private-report"
+    shutil.copytree(source, report)
+    manifest_path = report / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["content_hashes"] = [
+        {"name": "dataset", "sha256": manifest["dataset_hash"], "byte_length": 1},
+        {"name": "prompt_bundle", "sha256": manifest["prompt_hash"], "byte_length": 1},
+        {"name": "grader_bundle", "sha256": manifest["grader_hash"], "byte_length": 1},
+    ]
+    manifest["orchestrator_version"] = "0.3.0"
+    for identity in manifest["role_to_model"].values():
+        if isinstance(identity, dict):
+            identity["endpoint"] = "http://192.168.1.2:11434"
+    manifest_path.write_text(json.dumps(manifest))
+    attempts_path = report / "attempts.jsonl"
+    attempts = [json.loads(line) for line in attempts_path.read_text().splitlines()]
+    for order, attempt in enumerate(attempts, start=1):
+        attempt["ended_at"] = f"2026-09-01T14:00:0{order}Z"
+    _write_jsonl(attempts_path, attempts)
+    metrics_path = report / "metrics.jsonl"
+    metrics = [json.loads(line) for line in metrics_path.read_text().splitlines()]
+    _write_jsonl(metrics_path, metrics)
+    evidence_index_path = report / "evidence-index.jsonl"
+    evidence_rows = [json.loads(line) for line in evidence_index_path.read_text().splitlines()]
+    for row in evidence_rows:
+        row["sha256"] = row.pop("plaintext_sha256")
+    _write_jsonl(evidence_index_path, evidence_rows)
+    return report
 
 
 class TestLoadSnapshot(unittest.TestCase):
@@ -202,6 +376,138 @@ class TestLoadSnapshot(unittest.TestCase):
                 gr.load_snapshot(Path(tmp) / "snap")
         self.assertIn("positive denominator", str(ctx.exception))
 
+    def test_current_eval_schema_stage1_snapshot_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage1_snapshot(tmp))
+        self.assertEqual(next(iter(snapshot.eval_runs.values())).manifest["schema_version"], "1.40.0")
+
+    def test_fake_configured_provider_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            manifest_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["role_to_model"]["primary"]["provider"] = "fake"
+            manifest_path.write_text(json.dumps(manifest))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/manifest.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("real provider", str(ctx.exception))
+
+    def test_fake_provider_stage_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            stages_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl"
+            rows = [json.loads(line) for line in stages_path.read_text().splitlines()]
+            rows[0]["provider"] = "FakeProvider"
+            rows[0]["model"] = "fake-model"
+            _write_jsonl(stages_path, rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("fake provider stage", str(ctx.exception))
+
+    def test_selected_only_stage1_population_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            attempts_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/attempts.jsonl"
+            rows = [json.loads(line) for line in attempts_path.read_text().splitlines()][:-1]
+            _write_jsonl(attempts_path, rows)
+            metrics_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl"
+            metric_rows = [json.loads(line) for line in metrics_path.read_text().splitlines()][:-1]
+            _write_jsonl(metrics_path, metric_rows)
+            stages_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl"
+            stage_rows = [json.loads(line) for line in stages_path.read_text().splitlines()][:-1]
+            _write_jsonl(stages_path, stage_rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/attempts.jsonl")
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl")
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/stages.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("complete five-task", str(ctx.exception))
+
+    def test_stage1_publication_requires_safe_projection_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            index_path = snapshot_dir / "index.json"
+            index = json.loads(index_path.read_text())
+            del index["eval_runs"][0]["tasks_path"]
+            del index["eval_runs"][0]["tasks_sha256"]
+            index_path.write_text(json.dumps(index))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("tasks_path", str(ctx.exception))
+
+    def test_stage1_tasks_projection_must_match_complete_population(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            tasks_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/tasks.jsonl"
+            rows = [json.loads(line) for line in tasks_path.read_text().splitlines()][:-1]
+            _write_jsonl(tasks_path, rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/tasks.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("tasks projection", str(ctx.exception))
+
+    def test_stage1_metric_attempt_binding_rejects_foreign_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            metrics_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl"
+            rows = [json.loads(line) for line in metrics_path.read_text().splitlines()]
+            rows[0]["attempt_id"] = "foreign-attempt"
+            _write_jsonl(metrics_path, rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/metrics.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("does not bind to its attempt", str(ctx.exception))
+
+    def test_stage1_summary_projection_must_match_typed_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            summary_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/summary.json"
+            summary = json.loads(summary_path.read_text())
+            summary["denominator"] = 4
+            summary_path.write_text(json.dumps(summary))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/summary.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("summary projection", str(ctx.exception))
+
+    def test_stage1_evidence_index_projection_rejects_foreign_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            evidence_index_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/evidence-index.jsonl"
+            rows = [json.loads(line) for line in evidence_index_path.read_text().splitlines()]
+            rows[0]["attempt_id"] = "foreign-attempt"
+            _write_jsonl(evidence_index_path, rows)
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/evidence-index.jsonl")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("evidence-index projection", str(ctx.exception))
+
+    def test_stage1_reproduction_manifest_must_match_run_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            reproduction_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"
+            reproduction = json.loads(reproduction_path.read_text())
+            reproduction["task_limit"] = 4
+            reproduction_path.write_text(json.dumps(reproduction))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("reproduction manifest", str(ctx.exception))
+
+    def test_stage1_reproduction_eval_cli_version_must_match_orchestrator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            reproduction_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"
+            reproduction = json.loads(reproduction_path.read_text())
+            reproduction["eval_cli_version"] = "9.9.9"
+            reproduction_path.write_text(json.dumps(reproduction))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("reproduction manifest", str(ctx.exception))
+
 
 class TestProjectMetrics(unittest.TestCase):
     def test_project_eligible_only(self) -> None:
@@ -305,6 +611,47 @@ class TestRenderReadme(unittest.TestCase):
             rendered = gr.render_readme(snapshot, template)
             self.assertIn("| Pass | no |", rendered)
 
+    def test_stage1_renders_configured_and_observed_roles_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage1_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Configured but unobserved", rendered)
+        self.assertIn("Observed model call", rendered)
+        self.assertIn("gemma4:e2b", rendered)
+
+    def test_stage1_zero_receipts_and_governance_are_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage1_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Receipt evidence is unavailable", rendered)
+        self.assertIn("Governance and state evidence is unavailable", rendered)
+        self.assertNotIn("| Pass | no |", rendered)
+
+    def test_stage1_scope_and_source_links_render(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage1_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Stage 1: Real-agent diagnostic", rendered)
+        self.assertIn("complete five-task", rendered)
+        self.assertIn("tasks.jsonl", rendered)
+        self.assertIn("attempts.jsonl", rendered)
+        self.assertIn("stages.jsonl", rendered)
+        self.assertIn("summary.json", rendered)
+        self.assertIn("evidence-index.jsonl", rendered)
+        self.assertIn("reproduction-manifest.json", rendered)
+
+    def test_unsafe_exact_private_endpoint_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            manifest_path = snapshot_dir / "eval/runs/run-2026-09-01-synthetic-a/manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["role_to_model"]["primary"]["endpoint"] = "http://192.168.1.2:11434"
+            manifest_path.write_text(json.dumps(manifest))
+            _set_artifact_checksum(snapshot_dir, "eval/runs/run-2026-09-01-synthetic-a/manifest.json")
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("exact provider endpoint", str(ctx.exception))
+
     def test_unsafe_ci_label_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             shutil.copytree(VALID, Path(tmp) / "snap")
@@ -326,6 +673,41 @@ class TestRenderReadme(unittest.TestCase):
             with self.assertRaises(gr.ReadmeError) as ctx:
                 gr.load_snapshot(Path(tmp) / "snap")
         self.assertIn("unsupported claim label", str(ctx.exception))
+
+
+class TestProjectReadmeEvidence(unittest.TestCase):
+    def test_projects_private_report_to_deterministic_safe_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_report = _make_private_stage1_report(tmp)
+            first = Path(tmp) / "candidate-first"
+            second = Path(tmp) / "candidate-second"
+            pre.project(private_report, first, "2.1.5", "0.3.0", 180)
+            pre.project(private_report, second, "2.1.5", "0.3.0", 180)
+            gr.load_snapshot(first)
+            first_files = {path.relative_to(first): path.read_bytes() for path in first.rglob("*") if path.is_file()}
+            second_files = {path.relative_to(second): path.read_bytes() for path in second.rglob("*") if path.is_file()}
+        self.assertEqual(first_files, second_files)
+        self.assertNotIn(b"192.168.1.2", b"".join(first_files.values()))
+        self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/tasks.jsonl"), first_files)
+        self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/summary.json"), first_files)
+        self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/evidence-index.jsonl"), first_files)
+        self.assertIn(Path("eval/runs/run-2026-09-01-synthetic-a/reproduction-manifest.json"), first_files)
+
+    def test_refuses_eval_cli_version_mismatching_private_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_report = _make_private_stage1_report(tmp)
+            with self.assertRaises(pre.ProjectionError) as ctx:
+                pre.project(private_report, Path(tmp) / "candidate", "2.1.5", "9.9.9", 180)
+        self.assertIn("eval CLI version", str(ctx.exception))
+
+    def test_refuses_to_replace_existing_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            private_report = _make_private_stage1_report(tmp)
+            candidate = Path(tmp) / "candidate"
+            candidate.mkdir()
+            with self.assertRaises(pre.ProjectionError) as ctx:
+                pre.project(private_report, candidate, "2.1.5", "0.3.0", 180)
+        self.assertIn("already exists", str(ctx.exception))
 
 
 class TestGenerate(unittest.TestCase):
@@ -477,6 +859,47 @@ class TestSafetyScans(unittest.TestCase):
             with self.assertRaises(gr.ReadmeError) as ctx:
                 gr.load_snapshot(Path(tmp) / "snap")
         self.assertIn("forbidden raw canary value", str(ctx.exception))
+
+    def test_raw_prompt_field_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["prompt"] = "private operator request"
+            self._corrupt_declared_artifact(tmp, "eval/receipt-verification.json", json.dumps(base))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("forbidden restricted evidence field", str(ctx.exception))
+
+    def test_machine_specific_absolute_path_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["artifact_path"] = "/home/release-owner/private/report.json"
+            self._corrupt_declared_artifact(tmp, "eval/receipt-verification.json", json.dumps(base))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("machine-specific absolute path", str(ctx.exception))
+
+    def test_private_network_endpoint_in_declared_artifact_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            base = json.loads((Path(tmp) / "snap" / "eval" / "receipt-verification.json").read_text())
+            base["inventory_endpoint"] = "http://192.168.1.2:11434/api/tags"
+            self._corrupt_declared_artifact(tmp, "eval/receipt-verification.json", json.dumps(base))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("exact private-network topology", str(ctx.exception))
+
+    def test_private_network_endpoint_in_index_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(VALID, Path(tmp) / "snap")
+            index_path = Path(tmp) / "snap/index.json"
+            index = json.loads(index_path.read_text())
+            index["caveats"].append("Inventory retained at http://192.168.1.2:11434/api/tags")
+            index_path.write_text(json.dumps(index))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(Path(tmp) / "snap")
+        self.assertIn("exact private-network topology", str(ctx.exception))
 
     def test_canary_metric_id_not_flagged(self) -> None:
         """The metric ID canary_scrubbing is not a raw canary value and must not be flagged."""

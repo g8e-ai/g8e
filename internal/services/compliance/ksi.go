@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // KSICategory represents a FedRAMP 20x KSI category (CR26).
@@ -42,6 +43,47 @@ const (
 	KSIStatusNotApplicable KSIStatus = "not_applicable"
 )
 
+type KSIOutcome string
+
+const (
+	KSIOutcomeSatisfied                   KSIOutcome = "satisfied"
+	KSIOutcomeMethodFailure               KSIOutcome = "method_failure"
+	KSIOutcomeInvalidEvidence             KSIOutcome = "invalid_evidence"
+	KSIOutcomeStaleEvidence               KSIOutcome = "stale_evidence"
+	KSIOutcomeUnsupportedAutomation       KSIOutcome = "unsupported_automation"
+	KSIOutcomeCustomerAttestationRequired KSIOutcome = "customer_attestation_required"
+	KSIOutcomeNotApplicable               KSIOutcome = "not_applicable"
+)
+
+func (o KSIOutcome) Status() KSIStatus {
+	switch o {
+	case KSIOutcomeSatisfied:
+		return KSIStatusSatisfied
+	case KSIOutcomeNotApplicable:
+		return KSIStatusNotApplicable
+	default:
+		return KSIStatusNotSatisfied
+	}
+}
+
+func (o KSIOutcome) Valid() bool {
+	switch o {
+	case KSIOutcomeSatisfied, KSIOutcomeMethodFailure, KSIOutcomeInvalidEvidence, KSIOutcomeStaleEvidence, KSIOutcomeUnsupportedAutomation, KSIOutcomeCustomerAttestationRequired, KSIOutcomeNotApplicable:
+		return true
+	default:
+		return false
+	}
+}
+
+func (o KSIOutcome) validMethodUnsatisfiedOutcome() bool {
+	switch o {
+	case KSIOutcomeInvalidEvidence, KSIOutcomeStaleEvidence, KSIOutcomeUnsupportedAutomation, KSIOutcomeCustomerAttestationRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // CertificationClass represents a FedRAMP 20x certification class (CR26).
 type CertificationClass string
 
@@ -64,19 +106,15 @@ const (
 type EvidenceType string
 
 const (
-	EvidenceTypeReceiptID    EvidenceType = "receipt_id"
-	EvidenceTypeLedgerCommit EvidenceType = "ledger_commit"
-	EvidenceTypeExecutionID  EvidenceType = "execution_id"
-	EvidenceTypeMerkleRoot   EvidenceType = "merkle_root"
+	EvidenceTypeReceiptID           EvidenceType = "receipt_id"
+	EvidenceTypeLedgerCommit        EvidenceType = "ledger_commit"
+	EvidenceTypeExecutionID         EvidenceType = "execution_id"
+	EvidenceTypeMerkleRoot          EvidenceType = "merkle_root"
+	EvidenceTypeCommitmentSignature EvidenceType = "commitment_signature"
+	EvidenceTypeStateObservation    EvidenceType = "state_observation"
+	EvidenceTypeGraderResult        EvidenceType = "grader_result"
+	EvidenceTypeHistoricalFreshness EvidenceType = "historical_freshness"
 )
-
-// Evidence points to a specific artifact in g8e's audit store, ledger,
-// or LFAA execution vault that supports a KSI evaluation result.
-type Evidence struct {
-	Type        EvidenceType `json:"type"`
-	Reference   string       `json:"reference"`
-	Description string       `json:"description,omitempty"`
-}
 
 // AutomatedMethod describes a single automated method used to evaluate a KSI.
 type AutomatedMethod struct {
@@ -84,33 +122,273 @@ type AutomatedMethod struct {
 	Description string `json:"description,omitempty"`
 }
 
-// KSIMethod is a function that evaluates a single KSI against live g8e state.
-// It returns whether the KSI is satisfied, supporting evidence, or an error.
-type KSIMethod func(ctx context.Context) (bool, []Evidence, error)
+// KSIArtifactIdentity identifies the evidence artifact a KSI method measures.
+type KSIArtifactIdentity string
+
+const (
+	KSIArtifactAuditEvents             KSIArtifactIdentity = "audit_events"
+	KSIArtifactActionReceipts          KSIArtifactIdentity = "action_receipts"
+	KSIArtifactFileMutations           KSIArtifactIdentity = "file_mutations"
+	KSIArtifactLedgerCommits           KSIArtifactIdentity = "ledger_commits"
+	KSIArtifactCommitments             KSIArtifactIdentity = "commitments"
+	KSIArtifactReceiptStateTransitions KSIArtifactIdentity = "receipt_state_transitions"
+	KSIArtifactGraderResults           KSIArtifactIdentity = "grader_results"
+	KSIArtifactHistorySnapshots        KSIArtifactIdentity = "ksi_history_snapshots"
+	KSIArtifactLedgerStateRoot         KSIArtifactIdentity = "ledger_state_root"
+)
+
+// KSICollectionBoundary identifies the independently queried evidence source.
+type KSICollectionBoundary string
+
+const (
+	KSICollectionAuditStore      KSICollectionBoundary = "audit_store"
+	KSICollectionLedgerStore     KSICollectionBoundary = "ledger_store"
+	KSICollectionCommitmentStore KSICollectionBoundary = "commitment_store"
+	KSICollectionEvalResults     KSICollectionBoundary = "eval_results"
+	KSICollectionHistoryStore    KSICollectionBoundary = "ksi_history_store"
+)
+
+// KSIVerifierFamily identifies the verification technique a method applies.
+type KSIVerifierFamily string
+
+const (
+	KSIVerifierExistence           KSIVerifierFamily = "existence"
+	KSIVerifierStructural          KSIVerifierFamily = "structural"
+	KSIVerifierCryptographic       KSIVerifierFamily = "cryptographic"
+	KSIVerifierStateObservation    KSIVerifierFamily = "state_observation"
+	KSIVerifierDeterministicGrader KSIVerifierFamily = "deterministic_grader"
+	KSIVerifierHistorical          KSIVerifierFamily = "historical"
+)
+
+// KSIMeasuredProperty identifies the fact established by a KSI method.
+type KSIMeasuredProperty string
+
+const (
+	KSIPropertyPresence                    KSIMeasuredProperty = "presence"
+	KSIPropertyChainLinkage                KSIMeasuredProperty = "chain_linkage"
+	KSIPropertySignatureValidity           KSIMeasuredProperty = "signature_validity"
+	KSIPropertyReceiptPersistenceIntegrity KSIMeasuredProperty = "receipt_persistence_integrity"
+	KSIPropertyStateTransitionBinding      KSIMeasuredProperty = "state_transition_binding"
+	KSIPropertyStateRootMatchesHead        KSIMeasuredProperty = "state_root_matches_head"
+	KSIPropertyEvidenceContentAddressing   KSIMeasuredProperty = "evidence_content_addressing"
+	KSIPropertyFreshness                   KSIMeasuredProperty = "freshness"
+)
+
+type ksiMethodEvaluator func(ctx context.Context) (bool, []*compliancev1.ComplianceEvidenceReference, error)
+
+// KSIMethod binds one evaluator to the typed metadata used to prove method independence.
+type KSIMethod struct {
+	Name               string
+	Version            string
+	ArtifactIdentity   KSIArtifactIdentity
+	CollectionBoundary KSICollectionBoundary
+	VerifierFamily     KSIVerifierFamily
+	MeasuredProperty   KSIMeasuredProperty
+	UnsatisfiedOutcome KSIOutcome
+	evaluate           ksiMethodEvaluator
+}
+
+func newKSIMethod(name string, artifact KSIArtifactIdentity, boundary KSICollectionBoundary, verifier KSIVerifierFamily, property KSIMeasuredProperty, evaluate ksiMethodEvaluator) KSIMethod {
+	return KSIMethod{
+		Name: name, Version: constants.KSIMethodDefinitionVersion, ArtifactIdentity: artifact,
+		CollectionBoundary: boundary, VerifierFamily: verifier, MeasuredProperty: property,
+		UnsatisfiedOutcome: KSIOutcomeInvalidEvidence, evaluate: evaluate,
+	}
+}
+
+func (m KSIMethod) validate() error {
+	if m.Name == "" || m.Version == "" || !m.ArtifactIdentity.valid() || !m.CollectionBoundary.valid() || !m.VerifierFamily.valid() || !m.MeasuredProperty.valid() || !m.UnsatisfiedOutcome.validMethodUnsatisfiedOutcome() || m.evaluate == nil {
+		return constants.ErrKSIMethodInvalid
+	}
+	return nil
+}
+
+func (a KSIArtifactIdentity) valid() bool {
+	switch a {
+	case KSIArtifactAuditEvents, KSIArtifactActionReceipts, KSIArtifactFileMutations, KSIArtifactLedgerCommits, KSIArtifactCommitments, KSIArtifactReceiptStateTransitions, KSIArtifactGraderResults, KSIArtifactHistorySnapshots, KSIArtifactLedgerStateRoot:
+		return true
+	default:
+		return false
+	}
+}
+
+func (b KSICollectionBoundary) valid() bool {
+	switch b {
+	case KSICollectionAuditStore, KSICollectionLedgerStore, KSICollectionCommitmentStore, KSICollectionEvalResults, KSICollectionHistoryStore:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v KSIVerifierFamily) valid() bool {
+	switch v {
+	case KSIVerifierExistence, KSIVerifierStructural, KSIVerifierCryptographic, KSIVerifierStateObservation, KSIVerifierDeterministicGrader, KSIVerifierHistorical:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p KSIMeasuredProperty) valid() bool {
+	switch p {
+	case KSIPropertyPresence, KSIPropertyChainLinkage, KSIPropertySignatureValidity, KSIPropertyReceiptPersistenceIntegrity, KSIPropertyStateTransitionBinding, KSIPropertyStateRootMatchesHead, KSIPropertyEvidenceContentAddressing, KSIPropertyFreshness:
+		return true
+	default:
+		return false
+	}
+}
+
+func (m KSIMethod) independenceKey() string {
+	return string(m.ArtifactIdentity) + "\x00" + string(m.CollectionBoundary) + "\x00" + string(m.VerifierFamily) + "\x00" + string(m.MeasuredProperty)
+}
 
 // KSI represents a single Key Security Indicator from the FedRAMP 20x program.
 type KSI struct {
-	ID                  string               `json:"id"`
-	Title               string               `json:"title"`
-	Category            KSICategory          `json:"category"`
-	Description         string               `json:"description,omitempty"`
-	ControlRefs         []string             `json:"control_refs"`
-	OverlayRefs         []string             `json:"overlay_refs,omitempty"`
-	ApplicableClasses   []CertificationClass `json:"applicable_classes"`
-	ValidationCycle     ValidationCycle      `json:"validation_cycle"`
-	Status              KSIStatus            `json:"status"`
-	AutomatedMethods    []AutomatedMethod    `json:"automated_methods"`
-	Evidence            []Evidence           `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64                `json:"last_validated_unix_ms,omitempty"`
+	ID                  string                                      `json:"id"`
+	Title               string                                      `json:"title"`
+	Category            KSICategory                                 `json:"category"`
+	Description         string                                      `json:"description,omitempty"`
+	ControlRefs         []string                                    `json:"control_refs"`
+	OverlayRefs         []string                                    `json:"overlay_refs,omitempty"`
+	ApplicableClasses   []CertificationClass                        `json:"applicable_classes"`
+	ValidationCycle     ValidationCycle                             `json:"validation_cycle"`
+	Status              KSIStatus                                   `json:"status"`
+	AutomatedMethods    []AutomatedMethod                           `json:"automated_methods"`
+	Evidence            []*compliancev1.ComplianceEvidenceReference `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms,omitempty"`
+}
+
+// EvaluationBinding carries the scope, evidence window, and method version
+// identity that bind a KSI evaluation to a specific assessment context. Every
+// KSIResult and KSIResultSet carries a binding so consumers can prove that no
+// result was produced from evidence outside the declared scope, run, attempt,
+// scenario, action, transaction, or assessment window.
+type AssertionAssessmentScope struct {
+	AssessmentIDs []string `json:"assessment_ids"`
+	AttemptIDs    []string `json:"attempt_ids,omitempty"`
+	ScenarioIDs   []string `json:"scenario_ids,omitempty"`
+	ActionIDs     []string `json:"action_ids,omitempty"`
+}
+
+type EvaluationBinding struct {
+	ScopeID              string                   `json:"scope_id"`
+	RunID                string                   `json:"run_id"`
+	WindowStartUnixMs    int64                    `json:"window_start_unix_ms"`
+	WindowEndUnixMs      int64                    `json:"window_end_unix_ms"`
+	EvaluatorID          string                   `json:"evaluator_id"`
+	EvaluatorVersion     string                   `json:"evaluator_version"`
+	MethodDefinitionID   string                   `json:"method_definition_id"`
+	AssertionAssessments AssertionAssessmentScope `json:"assertion_assessments"`
+}
+
+// Validate returns constants.ErrKSIBindingIncomplete when required binding
+// fields are empty or the evidence window is inverted.
+func (b EvaluationBinding) Validate() error {
+	if b.ScopeID == "" || b.RunID == "" || b.WindowStartUnixMs <= 0 || b.WindowEndUnixMs <= 0 || b.WindowStartUnixMs > b.WindowEndUnixMs || b.EvaluatorID == "" || b.EvaluatorVersion == "" || b.MethodDefinitionID == "" {
+		return fmt.Errorf("%w: scope, run, window, evaluator, and method definition are required", constants.ErrKSIBindingIncomplete)
+	}
+	if err := b.AssertionAssessments.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s AssertionAssessmentScope) Validate() error {
+	if len(s.AssessmentIDs) == 0 {
+		return fmt.Errorf("%w: at least one assertion assessment is required", constants.ErrKSIBindingIncomplete)
+	}
+	for _, values := range [][]string{s.AssessmentIDs, s.AttemptIDs, s.ScenarioIDs, s.ActionIDs} {
+		seen := make(map[string]struct{}, len(values))
+		for _, value := range values {
+			if value == "" {
+				return fmt.Errorf("%w: assertion assessment scope values must not be empty", constants.ErrKSIBindingIncomplete)
+			}
+			if _, exists := seen[value]; exists {
+				return fmt.Errorf("%w: assertion assessment scope values must be unique", constants.ErrKSIBindingIncomplete)
+			}
+			seen[value] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func (s AssertionAssessmentScope) Equal(other AssertionAssessmentScope) bool {
+	return equalStringSet(s.AssessmentIDs, other.AssessmentIDs) && equalStringSet(s.AttemptIDs, other.AttemptIDs) && equalStringSet(s.ScenarioIDs, other.ScenarioIDs) && equalStringSet(s.ActionIDs, other.ActionIDs)
+}
+
+func (b EvaluationBinding) Equal(other EvaluationBinding) bool {
+	return b.ScopeID == other.ScopeID && b.RunID == other.RunID && b.WindowStartUnixMs == other.WindowStartUnixMs && b.WindowEndUnixMs == other.WindowEndUnixMs && b.EvaluatorID == other.EvaluatorID && b.EvaluatorVersion == other.EvaluatorVersion && b.MethodDefinitionID == other.MethodDefinitionID && b.AssertionAssessments.Equal(other.AssertionAssessments)
+}
+
+func equalStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	values := make(map[string]struct{}, len(left))
+	for _, value := range left {
+		values[value] = struct{}{}
+	}
+	for _, value := range right {
+		if _, exists := values[value]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (b EvaluationBinding) ValidateEvidence(ref *compliancev1.ComplianceEvidenceReference) error {
+	if ref == nil {
+		return fmt.Errorf("%w: evidence reference is nil", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetScopeId() != "" && ref.GetScopeId() != b.ScopeID {
+		return fmt.Errorf("%w: evidence scope does not match assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetRunId() != "" && ref.GetRunId() != b.RunID {
+		return fmt.Errorf("%w: evidence run does not match assessment run", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetAttemptId() != "" && !containsString(b.AssertionAssessments.AttemptIDs, ref.GetAttemptId()) {
+		return fmt.Errorf("%w: evidence attempt is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetScenarioId() != "" && !containsString(b.AssertionAssessments.ScenarioIDs, ref.GetScenarioId()) {
+		return fmt.Errorf("%w: evidence scenario is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetTransactionId() != "" && !containsString(b.AssertionAssessments.ActionIDs, ref.GetTransactionId()) {
+		return fmt.Errorf("%w: evidence action is outside the assertion assessment scope", constants.ErrKSIBindingMismatch)
+	}
+	if ref.GetProducedAt() != nil {
+		if err := ref.GetProducedAt().CheckValid(); err != nil || !b.Contains(ref.GetProducedAt().AsTime().UnixMilli()) {
+			return fmt.Errorf("%w: evidence timestamp is outside the assessment window", constants.ErrKSIBindingMismatch)
+		}
+	}
+	return nil
+}
+
+// Contains returns true when the given timestamp falls inside the evidence
+// window (inclusive). It is used to prove that evidence was produced within the
+// declared assessment window.
+func (b EvaluationBinding) Contains(producedAtMs int64) bool {
+	return producedAtMs >= b.WindowStartUnixMs && producedAtMs <= b.WindowEndUnixMs
 }
 
 // KSIResult is the evaluation result for a single KSI at a point in time.
 type KSIResult struct {
-	ID                  string     `json:"id"`
-	Status              KSIStatus  `json:"status"`
-	Evidence            []Evidence `json:"evidence,omitempty"`
-	LastValidatedUnixMs int64      `json:"last_validated_unix_ms"`
-	MethodCount         int        `json:"method_count"`
+	ID                  string                                      `json:"id"`
+	Status              KSIStatus                                   `json:"status"`
+	Outcome             KSIOutcome                                  `json:"outcome"`
+	Evidence            []*compliancev1.ComplianceEvidenceReference `json:"evidence,omitempty"`
+	LastValidatedUnixMs int64                                       `json:"last_validated_unix_ms"`
+	MethodCount         int                                         `json:"method_count"`
+	Binding             EvaluationBinding                           `json:"binding"`
 }
 
 // KSIResultSet is a collection of KSI evaluation results for a target class.
@@ -118,6 +396,7 @@ type KSIResultSet struct {
 	Class         CertificationClass `json:"class"`
 	EvaluatedAtMs int64              `json:"evaluated_at_ms"`
 	Results       []KSIResult        `json:"results"`
+	Binding       EvaluationBinding  `json:"binding"`
 }
 
 // KSICatalog is the typed collection of all known KSIs from the CR26 reference.

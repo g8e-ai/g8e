@@ -66,6 +66,68 @@ func writeTestKSICatalog(t *testing.T, fileSvc fs.RuntimeFileService, relPath st
 	return fileSvc.Resolve(relPath)
 }
 
+// testEvaluationBinding returns a valid EvaluationBinding for tests that need
+// to call evaluateKSIs or evaluator.Evaluate without constructing a binding
+// from CLI flags.
+func testEvaluationBinding(t *testing.T) compliance.EvaluationBinding {
+	t.Helper()
+	now := time.Now()
+	return compliance.EvaluationBinding{
+		ScopeID:            "test-scope",
+		RunID:              "test-run",
+		WindowStartUnixMs:  now.Add(-time.Hour).UnixMilli(),
+		WindowEndUnixMs:    now.Add(time.Second).UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+			AttemptIDs:    []string{"attempt-1"},
+			ScenarioIDs:   []string{"scenario-1"},
+			ActionIDs:     []string{"action-1"},
+		},
+	}
+}
+
+func TestBuildEvaluationBindingPreservesExplicitEvidenceCollectionWindow(t *testing.T) {
+	const windowStartUnixMs int64 = 1_700_000_000_000
+	const windowEndUnixMs int64 = 1_700_000_001_000
+
+	binding, err := buildEvaluationBinding("test-scope", "test-run", windowStartUnixMs, windowEndUnixMs, []string{"assessment-1"}, []string{"attempt-1"}, []string{"scenario-1"}, []string{"action-1"})
+	require.NoError(t, err)
+	assert.Equal(t, windowStartUnixMs, binding.WindowStartUnixMs)
+	assert.Equal(t, windowEndUnixMs, binding.WindowEndUnixMs)
+}
+
+func TestComplianceKSICmd_RejectsEachMissingEvaluationBindingFlag(t *testing.T) {
+	requiredFlags := []struct {
+		name  string
+		value string
+	}{
+		{name: "scope-id", value: "test-scope"},
+		{name: "run-id", value: "test-run"},
+		{name: "assertion-assessment-id", value: "assessment-1"},
+		{name: "evidence-window-start-unix-ms", value: "1700000000000"},
+		{name: "evidence-window-end-unix-ms", value: "1700000001000"},
+	}
+	for _, omitted := range requiredFlags {
+		t.Run("missing "+omitted.name, func(t *testing.T) {
+			cmd := complianceKSICmdWithConfig(failingFileSvcFactory(errFactory))
+			args := make([]string, 0, (len(requiredFlags)-1)*2)
+			for _, flag := range requiredFlags {
+				if flag.name != omitted.name {
+					args = append(args, "--"+flag.name, flag.value)
+				}
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), omitted.name)
+			assert.NotErrorIs(t, err, errFactory)
+		})
+	}
+}
+
 // setupTestVaultWithKey initializes a test vault header and writes its private key to secrets.
 func setupTestVaultWithKey(t *testing.T, fileSvc fs.RuntimeFileService, privKey []byte) {
 	t.Helper()
@@ -92,16 +154,16 @@ func writeTestOverlays(t *testing.T, dir string, overlayCat *compliance.OverlayC
 }
 
 // TestComplianceCmd_Structure asserts that complianceCmd() is non-nil and has
-// the expected "ksi", "ksi-history", "overlay", and "demo-run" subcommands.
+// the expected compliance subcommands.
 func TestComplianceCmd_Structure(t *testing.T) {
 	cmd := complianceCmd()
 	require.NotNil(t, cmd)
 	assert.Equal(t, "compliance", cmd.Use)
 
 	subcommands := cmd.Commands()
-	assert.Len(t, subcommands, 5)
+	assert.Len(t, subcommands, 6)
 
-	names := make(map[string]bool, 5)
+	names := make(map[string]bool, 6)
 	for _, sub := range subcommands {
 		names[sub.Name()] = true
 	}
@@ -110,6 +172,7 @@ func TestComplianceCmd_Structure(t *testing.T) {
 	assert.True(t, names["ksi-history"], "compliance should have 'ksi-history' subcommand")
 	assert.True(t, names["overlay"], "compliance should have 'overlay' subcommand")
 	assert.True(t, names["demo-run"], "compliance should have 'demo-run' subcommand")
+	assert.True(t, names["evidence-graph"], "compliance should have 'evidence-graph' subcommand")
 	assert.True(t, names["release-evidence"], "compliance should have 'release-evidence' subcommand")
 }
 
@@ -117,6 +180,11 @@ func TestComplianceCmd_Structure(t *testing.T) {
 // wraps fileSvcFactory errors with ErrFileServiceInit.
 func TestComplianceKSICmd_FileSvcFactoryError(t *testing.T) {
 	cmd := complianceKSICmdWithConfig(failingFileSvcFactory(errFactory))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -219,6 +287,11 @@ func TestComplianceKSICmd_ValidationErrors(t *testing.T) {
 			cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 			require.NoError(t, cmd.Flags().Set("catalog", catPath))
 			require.NoError(t, cmd.Flags().Set("class", certClass))
+			require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+			require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+			require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+			require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+			require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
@@ -249,6 +322,11 @@ func TestComplianceKSICmd_StoresUnavailable(t *testing.T) {
 
 	cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -268,6 +346,11 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	cmd := complianceKSICmdWithConfig(fileSvcFactoryFor(fileSvc))
 	require.NoError(t, cmd.Flags().Set("catalog", catPath))
 	require.NoError(t, cmd.Flags().Set("class", "C"))
+	require.NoError(t, cmd.Flags().Set("scope-id", "test-scope"))
+	require.NoError(t, cmd.Flags().Set("run-id", "test-run"))
+	require.NoError(t, cmd.Flags().Set("assertion-assessment-id", "assessment-1"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-start-unix-ms", "1700000000000"))
+	require.NoError(t, cmd.Flags().Set("evidence-window-end-unix-ms", "2700000000000"))
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -281,12 +364,23 @@ func TestComplianceKSICmd_Success_OutputsJSON(t *testing.T) {
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.NotEmpty(t, resultSet.Results)
 	assert.Equal(t, 2, resultSet.NotSatisfiedCount())
+	assert.Equal(t, "test-scope", resultSet.Binding.ScopeID)
+	assert.Equal(t, "test-run", resultSet.Binding.RunID)
 
 	// Verify history snapshot saved.
 	historyStore := newKSIHistoryStore(fileSvc)
 	snapshots, err := historyStore.ListSnapshots(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, snapshots, 1)
+	intervals, err := newKSIUnavailableIntervalStore(fileSvc).ListIntervals(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, intervals, resultSet.NotSatisfiedCount())
+	for _, interval := range intervals {
+		assert.Equal(t, resultSet.Binding.ScopeID, interval.ScopeID)
+		assert.Equal(t, resultSet.Binding.RunID, interval.RunID)
+		assert.Equal(t, resultSet.Binding.WindowStartUnixMs, interval.StartUnixMs)
+		assert.Equal(t, resultSet.Binding.WindowEndUnixMs, interval.EndUnixMs)
+	}
 }
 
 // TestComplianceKSIHistoryCmd_EmptyHistory asserts that reading history when no
@@ -630,7 +724,8 @@ func TestEvaluateKSIs_NilContextHandling(t *testing.T) {
 
 	// evaluateKSIs with nil context should not panic.
 	var nilCtx context.Context
-	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC)
+	binding := testEvaluationBinding(t)
+	resultSet := evaluateKSIs(nilCtx, fileSvc, cat, compliance.ClassC, binding)
 	require.NotNil(t, resultSet)
 	assert.Equal(t, compliance.ClassC, resultSet.Class)
 	assert.Equal(t, 2, resultSet.NotSatisfiedCount())

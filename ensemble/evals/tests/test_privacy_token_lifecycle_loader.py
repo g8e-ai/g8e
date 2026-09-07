@@ -14,6 +14,8 @@ filesystem.  File I/O is stubbed via ``SimpleNamespace`` mocks and
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import hashlib
 import json
 from types import SimpleNamespace
@@ -71,11 +73,15 @@ def _make_provenance(
 
 
 def _mock_path(content: bytes, name: str = "input_data.jsonl") -> Any:
+    _root = SimpleNamespace(name="trusted_root")
+    _parent2 = SimpleNamespace(name="gold_sets", parent=_root)
+    _parent1 = SimpleNamespace(name="suite_dir", parent=_parent2)
     return SimpleNamespace(
         name=name,
         read_bytes=lambda: content,
         read_text=content.decode,
         exists=lambda: True,
+        parent=_parent1,
         with_name=lambda n: SimpleNamespace(
             name=n,
             read_text=lambda: json.dumps(_make_provenance().model_dump()),
@@ -175,8 +181,12 @@ def test_synthetic_suite_provenance_rejects_empty_domain_strata_entry():
 
 
 @pytest.mark.unit
-def test_validate_provenance_accepts_complete_manifest():
-    validate_provenance(_make_provenance())
+def test_validate_provenance_accepts_complete_manifest(monkeypatch):
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.provenance._verify_code_digest",
+        lambda code_path, expected_sha256, trusted_root: None,
+    )
+    validate_provenance(_make_provenance(), suite_id="privacy_token_lifecycle", trusted_root=Path("."))
 
 
 @pytest.mark.unit
@@ -184,7 +194,7 @@ def test_validate_provenance_rejects_zero_schema_version():
     provenance = _make_provenance()
     provenance.schema_version = 0
     with pytest.raises(ValueError, match="schema_version"):
-        validate_provenance(provenance)
+        validate_provenance(provenance, suite_id="privacy_token_lifecycle", trusted_root=Path("."))
 
 
 @pytest.mark.unit
@@ -192,7 +202,7 @@ def test_validate_provenance_rejects_empty_partition():
     provenance = _make_provenance()
     provenance.partition = ""
     with pytest.raises(ValueError, match="partition"):
-        validate_provenance(provenance)
+        validate_provenance(provenance, suite_id="privacy_token_lifecycle", trusted_root=Path("."))
 
 
 @pytest.mark.unit
@@ -200,7 +210,7 @@ def test_validate_provenance_rejects_empty_domain_strata():
     provenance = _make_provenance()
     provenance.domain_strata = []
     with pytest.raises(ValueError, match="domain_strata"):
-        validate_provenance(provenance)
+        validate_provenance(provenance, suite_id="privacy_token_lifecycle", trusted_root=Path("."))
 
 
 # --- validate_dataset ---
@@ -271,6 +281,10 @@ def test_loader_produces_typed_tasks_with_persistence_assertions(monkeypatch):
         lambda _path: _make_provenance(),
     )
     monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.validate_dataset",
         lambda _path, _prov: None,
     )
@@ -318,6 +332,10 @@ def test_loader_produces_typed_tasks_with_ttl_expiry_assertions(monkeypatch):
         lambda _path: _make_provenance(),
     )
     monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.validate_dataset",
         lambda _path, _prov: None,
     )
@@ -357,6 +375,10 @@ def test_loader_produces_typed_tasks_with_persistence_failure_assertions(monkeyp
     monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.load_provenance",
         lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
     )
     monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.validate_dataset",
@@ -412,6 +434,10 @@ def test_loader_skips_blank_lines_in_dataset(monkeypatch):
         lambda _path: _make_provenance(rows=3),
     )
     monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.validate_dataset",
         lambda _path, _prov: None,
     )
@@ -442,6 +468,10 @@ def test_loader_applies_default_values_for_optional_assertion_fields(monkeypatch
     monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.load_provenance",
         lambda _path: _make_provenance(),
+    )
+    monkeypatch.setattr(
+        "g8e_evals.benchmarks.privacy.loader.validate_provenance",
+        lambda _provenance, **_kwargs: None,
     )
     monkeypatch.setattr(
         "g8e_evals.benchmarks.privacy.loader.validate_dataset",

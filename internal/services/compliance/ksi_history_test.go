@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/paths"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // setupHistoryTestFS creates a RuntimeFileService backed by a temp directory.
@@ -49,15 +50,17 @@ func TestKSIHistoryStore_SaveAndListRoundTrip(t *testing.T) {
 			{
 				ID:                  "KSI-CMT-01",
 				Status:              KSIStatusSatisfied,
+				Outcome:             KSIOutcomeSatisfied,
 				LastValidatedUnixMs: now,
 				MethodCount:         2,
-				Evidence: []Evidence{
-					{Type: EvidenceTypeLedgerCommit, Reference: "commit-abc", Description: "Ledger commit exists"},
+				Evidence: []*compliancev1.ComplianceEvidenceReference{
+					newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-abc"),
 				},
 			},
 			{
 				ID:                  "KSI-SVC-05",
 				Status:              KSIStatusNotSatisfied,
+				Outcome:             KSIOutcomeInvalidEvidence,
 				LastValidatedUnixMs: now,
 				MethodCount:         2,
 			},
@@ -76,10 +79,11 @@ func TestKSIHistoryStore_SaveAndListRoundTrip(t *testing.T) {
 	require.Len(t, snap.Results, 2)
 	assert.Equal(t, original.Results[0].ID, snap.Results[0].ID)
 	assert.Equal(t, original.Results[0].Status, snap.Results[0].Status)
+	assert.Equal(t, original.Results[0].Outcome, snap.Results[0].Outcome)
 	assert.Equal(t, original.Results[0].MethodCount, snap.Results[0].MethodCount)
 	require.Len(t, snap.Results[0].Evidence, 1)
-	assert.Equal(t, original.Results[0].Evidence[0].Type, snap.Results[0].Evidence[0].Type)
-	assert.Equal(t, original.Results[0].Evidence[0].Reference, snap.Results[0].Evidence[0].Reference)
+	assert.Equal(t, original.Results[0].Evidence[0].ArtifactType, snap.Results[0].Evidence[0].ArtifactType)
+	assert.Equal(t, original.Results[0].Evidence[0].ArtifactId, snap.Results[0].Evidence[0].ArtifactId)
 	assert.Equal(t, original.Results[1].ID, snap.Results[1].ID)
 	assert.Equal(t, original.Results[1].Status, snap.Results[1].Status)
 }
