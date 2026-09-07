@@ -197,6 +197,7 @@ func analysisTestGraph(t *testing.T) *evidence.EvidenceGraph {
 		VerifierID:         "test-verifier",
 		VerifierVersion:    "1.0.0",
 		VerifiedAt:         analysisTestEvaluatedAt.Add(-time.Hour),
+		BundlePath:         constants.EvalRunReceiptsFilename,
 		CanonicalBytes:     receiptBody,
 		References:         []string{},
 	}))
@@ -217,6 +218,7 @@ func analysisTestGraph(t *testing.T) *evidence.EvidenceGraph {
 		VerifierID:         "test-verifier",
 		VerifierVersion:    "1.0.0",
 		VerifiedAt:         analysisTestEvaluatedAt.Add(-time.Hour),
+		BundlePath:         constants.EvalRunMetricsFilename,
 		CanonicalBytes:     metricBody,
 		References:         []string{receiptID},
 	}))
@@ -315,6 +317,26 @@ func TestBuildComplianceAnalysis_DerivesEvidenceLinksFromGraphReferences(t *test
 	assert.NotEmpty(t, links[0].GetSourceRef())
 	assert.NotEmpty(t, links[0].GetTargetRef())
 	assert.NotEqual(t, links[0].GetSourceRef(), links[0].GetTargetRef())
+}
+
+func TestBuildComplianceAnalysis_EmbedsSortedTypedEvidenceResources(t *testing.T) {
+	request := analysisBaseRequest(t)
+	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
+	require.NoError(t, err)
+	resources := analysis.GetEvidenceResources()
+	require.Len(t, resources, request.Graph.NodeCount())
+	for i, resource := range resources {
+		assert.Equal(t, request.ScopeID, resource.GetScopeId())
+		assert.NotEmpty(t, resource.GetArtifactId())
+		assert.NotEmpty(t, resource.GetArtifactType())
+		assert.NotEmpty(t, resource.GetSha256())
+		assert.NotEmpty(t, resource.GetBundlePath())
+		assert.NotEmpty(t, resource.GetProducerIdentity())
+		assert.Equal(t, string(evidence.VerificationStatusVerified), resource.GetVerificationStatus())
+		if i > 0 {
+			assert.Less(t, resources[i-1].GetArtifactId(), resource.GetArtifactId())
+		}
+	}
 }
 
 func TestBuildComplianceAnalysis_EmitsGapsForNotSatisfiedAssertions(t *testing.T) {

@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-06
-Version: v2.1.5
+Last Updated: 2026-09-07
+Version: v2.1.6
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -623,7 +623,9 @@ Stage 1 publication proceeds in two separate operations:
 
 The release owner reviews the candidate before promotion. Do not write directly into `docs/evidence/readme/current/`, do not promote automatically after collection, and do not regenerate `README.md` until the candidate is explicitly approved. After promotion, run `make readme`, `make readme-test`, and `make readme-check` plus the relevant eval, lint, platform, and release verification lanes. CI performs only offline validation and drift checks; it never calls Ollama, runs real agents, owns private evidence, or selects evidence.
 
-Later evidence stages may publish repeat-run provenance, governed-action receipts and state proof, complete bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
+Stage 2 for v2.1.6 uses this same stack setup for one fresh, separately invoked complete run. Before the run, the release owner binds the versioned profile to an explicit deterministic source inclusion manifest, component and image digests, and public operating system, architecture, hardware, Python, and container-runtime identities. Projection preserves the v2.1.5 run as Stage 1 and compares both complete populations without causal or statistical attribution. Promotion requires explicit release-owner approval of the exact canonical candidate tree digest; a mismatch leaves the current snapshot unchanged. See [Stage 2 Reproduction and Provenance](../devs/release_process.md#stage-2-reproduction-and-provenance) for the commands and approval boundary.
+
+Later evidence stages may publish governed-action receipts and state proof, complete bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
 
 ### Publication ownership and approvals
 

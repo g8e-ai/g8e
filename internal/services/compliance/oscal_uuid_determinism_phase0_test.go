@@ -10,7 +10,6 @@ package compliance
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +19,7 @@ import (
 // current OSCAL export uses random RFC 4122 UUID v4 for every document, result,
 // observation, finding, subject, component, control-implementation, and
 // back-matter resource identifier. Regenerating an assessment from identical
-// inputs (same catalog, same result set, same evaluated-at timestamp) produces
+// inputs (the same canonical analysis and generated-at timestamp) produces
 // different UUIDs and therefore different byte output on every run.
 //
 // This non-determinism prevents reproducible verification: an independent
@@ -30,20 +29,12 @@ import (
 // evidence identities. When the fix lands, this test is flipped to assert
 // byte-identical output.
 func TestPhase0OSCAL_RandomUUIDsPreventByteIdenticalOutput(t *testing.T) {
-	catalog := oscalTestCatalog()
-	resultSet := oscalTestResultSet()
+	analysis := oscalTestAnalysis()
+	exporter := NewOSCALExporter(oscalTestCatalog())
 
-	// Freeze the timestamp so the only source of difference is UUIDs.
-	// We do this by pinning EvaluatedAtMs; the OSCAL exporter also calls
-	// time.Now() for Published/LastModified, so we cannot fully eliminate
-	// time-based variance. Instead we compare UUIDs directly.
-	resultSet.EvaluatedAtMs = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
-
-	exporter := NewOSCALExporter(catalog)
-
-	doc1, err := exporter.GenerateAssessmentResults(resultSet)
+	doc1, err := exporter.GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
-	doc2, err := exporter.GenerateAssessmentResults(resultSet)
+	doc2, err := exporter.GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
 
 	// Marshal both to canonical JSON (field order is stable from struct order).

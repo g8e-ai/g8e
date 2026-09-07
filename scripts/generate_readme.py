@@ -33,8 +33,11 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0"}
+SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0", "3.0.0"}
 SUPPORTED_EVAL_SCHEMAS = {"1.33.0", "1.40.0"}
+STAGE2_PUB_SCHEMA = "3.0.0"
+STAGE2_PROFILE_SCHEMA = "1.0.0"
+STAGE2_PROFILE_ID = "readme-stage2-v2.1.6"
 STAGE1_EVAL_SCHEMA = "1.40.0"
 STAGE1_SUITE = "ifeval_subset"
 STAGE1_ARM = "doctrine"
@@ -109,6 +112,17 @@ class EvalRunRef:
     evidence_index_sha256: str | None
     reproduction_manifest_path: str | None
     reproduction_manifest_sha256: str | None
+    maturity: str
+
+
+@dataclass(frozen=True)
+class Stage2Ref:
+    campaign_profile_path: str
+    campaign_profile_sha256: str
+    provenance_path: str
+    provenance_sha256: str
+    comparison_path: str
+    comparison_sha256: str
 
 
 @dataclass(frozen=True)
@@ -146,6 +160,7 @@ class PublicationManifest:
     ci_links: tuple[CILink, ...]
     claim_labels: tuple[str, ...]
     caveats: tuple[str, ...]
+    stage2_ref: Stage2Ref | None
 
 
 @dataclass(frozen=True)
@@ -267,6 +282,65 @@ class ReproductionManifest:
     provider_inventory_retained_privately: bool
     command_program: str
     command_arguments: tuple[str, ...]
+    campaign_profile_sha256: str | None
+    source_state_sha256: str | None
+    component_sha256s: dict[str, str]
+    image_sha256s: dict[str, str]
+
+
+@dataclass(frozen=True)
+class CampaignProfile:
+    schema_version: str
+    profile_id: str
+    release_version: str
+    suite_id: str
+    arm_id: str
+    task_ids: tuple[str, ...]
+    repetitions: int
+    task_limit: int | None
+    idle_timeout_seconds: int
+    endpoint_class: str
+
+
+@dataclass(frozen=True)
+class Stage2Provenance:
+    campaign_profile_sha256: str
+    source_state_sha256: str
+    source_files: tuple[tuple[str, int, str], ...]
+    components: dict[str, tuple[str, str]]
+    images: dict[str, tuple[str, str]]
+    environment: dict[str, str]
+
+
+@dataclass(frozen=True)
+class ComparisonTask:
+    task_id: str
+    baseline_attempt_id: str
+    baseline_status: str
+    baseline_value: float
+    reproduction_attempt_id: str
+    reproduction_status: str
+    reproduction_value: float
+
+
+@dataclass(frozen=True)
+class Stage2Comparison:
+    baseline_run_id: str
+    baseline_maturity: str
+    reproduction_run_id: str
+    reproduction_maturity: str
+    same_operator_environment: bool
+    causal_attribution: bool
+    statistical_claim: bool
+    declared_differences: tuple[str, ...]
+    tasks: tuple[ComparisonTask, ...]
+
+
+@dataclass(frozen=True)
+class Stage2Evidence:
+    campaign_profile: CampaignProfile
+    provenance: Stage2Provenance
+    comparison: Stage2Comparison
 
 
 @dataclass(frozen=True)
@@ -333,6 +407,7 @@ class ProofSnapshot:
     receipt_verification: ReceiptVerificationResult
     demo_reports: tuple[DemoReport, ...]
     artifact_paths: set[str]
+    stage2: Stage2Evidence | None
 
 
 def _repo_root() -> Path:
@@ -479,7 +554,7 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         receipts_sha256 = _require_str(raw, "receipts_sha256", label)
         stages_path = _require_str(raw, "stages_path", label)
         stages_sha256 = _require_str(raw, "stages_sha256", label)
-        if pub_version == "2.0.0":
+        if pub_version in {"2.0.0", STAGE2_PUB_SCHEMA}:
             tasks_path = _require_str(raw, "tasks_path", label)
             tasks_sha256 = _require_str(raw, "tasks_sha256", label)
             summary_path = _require_str(raw, "summary_path", label)
@@ -518,7 +593,22 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
                 evidence_index_sha256=evidence_index_sha256,
                 reproduction_manifest_path=reproduction_manifest_path,
                 reproduction_manifest_sha256=reproduction_manifest_sha256,
+                maturity=_require_str(raw, "maturity", label) if pub_version == STAGE2_PUB_SCHEMA else "stage1",
             )
+        )
+
+    stage2_ref = None
+    if pub_version == STAGE2_PUB_SCHEMA:
+        raw_stage2 = _require_field(d, "stage2", "index.json")
+        if not isinstance(raw_stage2, dict):
+            raise ReadmeError("stage2 in index.json must be an object")
+        stage2_ref = Stage2Ref(
+            campaign_profile_path=_require_str(raw_stage2, "campaign_profile_path", "index.json stage2"),
+            campaign_profile_sha256=_require_str(raw_stage2, "campaign_profile_sha256", "index.json stage2"),
+            provenance_path=_require_str(raw_stage2, "provenance_path", "index.json stage2"),
+            provenance_sha256=_require_str(raw_stage2, "provenance_sha256", "index.json stage2"),
+            comparison_path=_require_str(raw_stage2, "comparison_path", "index.json stage2"),
+            comparison_sha256=_require_str(raw_stage2, "comparison_sha256", "index.json stage2"),
         )
 
     raw_receipt = _require_field(d, "receipt_verification", "index.json")
@@ -585,6 +675,7 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         ci_links=tuple(ci_links),
         claim_labels=tuple(raw_claims),
         caveats=tuple(raw_caveats),
+        stage2_ref=stage2_ref,
     )
 
 
@@ -714,7 +805,13 @@ def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifes
     label = f"reproduction manifest for {run_id}"
     if not isinstance(raw, dict):
         raise ReadmeError(f"{label} must be an object")
-    _require_exact_fields(raw, {"schema_version", "release_version", "run_id", "eval_schema_version", "eval_cli_version", "suite_id", "suite_version", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class", "roles", "environment", "provider_inventory_retained_privately", "command"}, label)
+    schema_version = _require_str(raw, "schema_version", label)
+    expected_fields = {"schema_version", "release_version", "run_id", "eval_schema_version", "eval_cli_version", "suite_id", "suite_version", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class", "roles", "environment", "provider_inventory_retained_privately", "command"}
+    if schema_version == "2.0.0":
+        expected_fields.update({"campaign_profile_sha256", "source_state_sha256", "component_sha256s", "image_sha256s"})
+    elif schema_version != "1.0.0":
+        raise ReadmeError(f"unsupported schema version in {label}: {schema_version}")
+    _require_exact_fields(raw, expected_fields, label)
     task_ids = _require_list(raw, "task_ids", label)
     if not all(isinstance(task_id, str) and task_id for task_id in task_ids):
         raise ReadmeError(f"task_ids in {label} must contain non-empty strings")
@@ -732,8 +829,14 @@ def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifes
         _require_exact_fields(identity, {"provider", "model", "endpoint_class"}, role_label)
         roles[role] = (_require_str(identity, "provider", role_label), _require_str(identity, "model", role_label), _require_str(identity, "endpoint_class", role_label))
     environment = _require_field(raw, "environment", label)
-    if not isinstance(environment, dict) or set(environment) != {"os", "arch"} or not all(isinstance(value, str) and value for value in environment.values()):
-        raise ReadmeError(f"environment in {label} must contain non-empty os and arch strings")
+    expected_environment = {"os", "arch"} if schema_version == "1.0.0" else {"os", "arch", "hardware", "python", "container_runtime"}
+    if not isinstance(environment, dict) or set(environment) != expected_environment or not all(isinstance(value, str) and value for value in environment.values()):
+        raise ReadmeError(f"environment in {label} does not match its schema")
+    component_sha256s = raw.get("component_sha256s", {})
+    image_sha256s = raw.get("image_sha256s", {})
+    for name, values in (("component_sha256s", component_sha256s), ("image_sha256s", image_sha256s)):
+        if not isinstance(values, dict) or not all(isinstance(key, str) and key and isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for key, value in values.items()):
+            raise ReadmeError(f"{name} in {label} must map identities to lowercase SHA-256 digests")
     command = _require_field(raw, "command", label)
     if not isinstance(command, dict):
         raise ReadmeError(f"command in {label} must be an object")
@@ -742,7 +845,7 @@ def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifes
     if not all(isinstance(argument, str) and argument for argument in arguments):
         raise ReadmeError(f"arguments in command in {label} must contain non-empty strings")
     return ReproductionManifest(
-        schema_version=_require_str(raw, "schema_version", label),
+        schema_version=schema_version,
         release_version=_require_str(raw, "release_version", label),
         run_id=_require_str(raw, "run_id", label),
         eval_schema_version=_require_str(raw, "eval_schema_version", label),
@@ -760,6 +863,10 @@ def _parse_reproduction_manifest(path: Path, run_id: str) -> ReproductionManifes
         provider_inventory_retained_privately=_require_bool(raw, "provider_inventory_retained_privately", label),
         command_program=_require_str(command, "program", f"command in {label}"),
         command_arguments=tuple(arguments),
+        campaign_profile_sha256=_require_sha256(raw, "campaign_profile_sha256", label) if schema_version == "2.0.0" else None,
+        source_state_sha256=_require_sha256(raw, "source_state_sha256", label) if schema_version == "2.0.0" else None,
+        component_sha256s=component_sha256s,
+        image_sha256s=image_sha256s,
     )
 
 
@@ -852,7 +959,7 @@ def _validate_stage1_run(run: LoadedEvalRun, platform_version: str) -> None:
         role: (role_map[role]["provider"], role_map[role]["model"], role_map[role]["endpoint_class"])
         for role in STAGE1_CONFIGURED_ROLES
     }
-    if reproduction.schema_version != "1.0.0" or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
+    if reproduction.schema_version not in {"1.0.0", "2.0.0"} or reproduction.release_version != platform_version or reproduction.run_id != run.run_id or reproduction.eval_schema_version != STAGE1_EVAL_SCHEMA or reproduction.eval_cli_version != manifest.get("orchestrator_version") or reproduction.suite_id != STAGE1_SUITE or reproduction.suite_version != suite_version or reproduction.arm_id != STAGE1_ARM or set(reproduction.task_ids) != STAGE1_TASK_IDS or len(reproduction.task_ids) != len(STAGE1_TASK_IDS) or reproduction.repetitions != 1 or reproduction.task_limit is not None or reproduction.idle_timeout_seconds != 180 or reproduction.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"} or reproduction.roles != configured_roles or not reproduction.provider_inventory_retained_privately or reproduction.command_program != "g8e-evals" or "${OLLAMA_ENDPOINT}" not in reproduction.command_arguments:
         raise ReadmeError(f"Stage 1 reproduction manifest for {run.run_id} does not match the fixed run profile")
 
 
@@ -943,7 +1050,8 @@ def _load_eval_run(ref: EvalRunRef, snapshot_dir: Path, platform_version: str) -
         reproduction_manifest=reproduction_manifest,
     )
     if _is_stage1_manifest(manifest):
-        _validate_stage1_run(run, platform_version)
+        expected_release = reproduction_manifest.release_version if reproduction_manifest is not None else platform_version
+        _validate_stage1_run(run, expected_release)
     return run
 
 
@@ -1214,6 +1322,187 @@ def _load_demo_report(ref: DemoReportRef, snapshot_dir: Path) -> DemoReport:
     )
 
 
+def _canonical_json(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def _parse_campaign_profile(path: Path) -> CampaignProfile:
+    raw = _load_json(path)
+    label = "Stage 2 campaign profile"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"schema_version", "profile_id", "release_version", "suite_id", "arm_id", "task_ids", "repetitions", "task_limit", "idle_timeout_seconds", "endpoint_class"}, label)
+    task_ids = _require_list(raw, "task_ids", label)
+    task_limit = _require_field(raw, "task_limit", label)
+    if task_limit is not None:
+        raise ReadmeError(f"{label} task_limit must be null")
+    return CampaignProfile(
+        schema_version=_require_str(raw, "schema_version", label),
+        profile_id=_require_str(raw, "profile_id", label),
+        release_version=_require_str(raw, "release_version", label),
+        suite_id=_require_str(raw, "suite_id", label),
+        arm_id=_require_str(raw, "arm_id", label),
+        task_ids=tuple(task_ids),
+        repetitions=_require_int(raw, "repetitions", label, minimum=1),
+        task_limit=task_limit,
+        idle_timeout_seconds=_require_int(raw, "idle_timeout_seconds", label, minimum=1),
+        endpoint_class=_require_str(raw, "endpoint_class", label),
+    )
+
+
+def _parse_stage2_provenance(path: Path) -> Stage2Provenance:
+    raw = _load_json(path)
+    label = "Stage 2 provenance"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"schema_version", "campaign_profile", "campaign_profile_sha256", "source_tree", "components", "images", "environment"}, label)
+    if _require_str(raw, "schema_version", label) != "1.0.0":
+        raise ReadmeError(f"unsupported {label} schema")
+    raw_profile = _require_field(raw, "campaign_profile", label)
+    if not isinstance(raw_profile, dict):
+        raise ReadmeError(f"campaign profile in {label} must be an object")
+    profile_sha = _require_sha256(raw, "campaign_profile_sha256", label)
+    if hashlib.sha256(_canonical_json(raw_profile).encode()).hexdigest() != profile_sha:
+        raise ReadmeError(f"campaign profile hash in {label} does not match")
+    source_tree = _require_field(raw, "source_tree", label)
+    if not isinstance(source_tree, dict):
+        raise ReadmeError(f"source tree in {label} must be an object")
+    _require_exact_fields(source_tree, {"algorithm", "files", "state_sha256"}, f"source tree in {label}")
+    if _require_str(source_tree, "algorithm", label) != "sha256-canonical-jsonl-v1":
+        raise ReadmeError(f"unsupported source tree algorithm in {label}")
+    raw_files = _require_list(source_tree, "files", label)
+    files: list[tuple[str, int, str]] = []
+    canonical_rows: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    for index, row in enumerate(raw_files):
+        row_label = f"source file[{index}] in {label}"
+        if not isinstance(row, dict):
+            raise ReadmeError(f"{row_label} must be an object")
+        _require_exact_fields(row, {"path", "byte_length", "sha256"}, row_label)
+        relative = _require_str(row, "path", row_label)
+        if Path(relative).is_absolute() or ".." in Path(relative).parts or relative in seen_paths:
+            raise ReadmeError(f"unsafe or duplicate source path in {row_label}")
+        seen_paths.add(relative)
+        length = _require_int(row, "byte_length", row_label)
+        digest = _require_sha256(row, "sha256", row_label)
+        files.append((relative, length, digest))
+        canonical_rows.append({"path": relative, "byte_length": length, "sha256": digest})
+    if not files:
+        raise ReadmeError(f"source inclusion manifest in {label} is empty")
+    source_sha = _require_sha256(source_tree, "state_sha256", label)
+    if hashlib.sha256("".join(_canonical_json(row) for row in canonical_rows).encode()).hexdigest() != source_sha:
+        raise ReadmeError(f"source state hash in {label} does not match the inclusion manifest")
+
+    components: dict[str, tuple[str, str]] = {}
+    for index, row in enumerate(_require_list(raw, "components", label)):
+        row_label = f"component[{index}] in {label}"
+        if not isinstance(row, dict):
+            raise ReadmeError(f"{row_label} must be an object")
+        _require_exact_fields(row, {"name", "version", "sha256"}, row_label)
+        name = _require_str(row, "name", row_label)
+        if name in components:
+            raise ReadmeError(f"duplicate component identity in {label}: {name}")
+        components[name] = (_require_str(row, "version", row_label), _require_sha256(row, "sha256", row_label))
+    images: dict[str, tuple[str, str]] = {}
+    for index, row in enumerate(_require_list(raw, "images", label)):
+        row_label = f"image[{index}] in {label}"
+        if not isinstance(row, dict):
+            raise ReadmeError(f"{row_label} must be an object")
+        _require_exact_fields(row, {"service", "image", "sha256"}, row_label)
+        service = _require_str(row, "service", row_label)
+        if service in images:
+            raise ReadmeError(f"duplicate image identity in {label}: {service}")
+        images[service] = (_require_str(row, "image", row_label), _require_sha256(row, "sha256", row_label))
+    if not components or not images:
+        raise ReadmeError(f"Stage 2 component and image provenance must both be present")
+    environment = _require_field(raw, "environment", label)
+    expected_environment = {"os", "arch", "hardware", "python", "container_runtime"}
+    if not isinstance(environment, dict) or set(environment) != expected_environment or not all(isinstance(value, str) and value for value in environment.values()):
+        raise ReadmeError(f"environment in {label} must contain complete public runtime identities")
+    return Stage2Provenance(profile_sha, source_sha, tuple(files), components, images, environment)
+
+
+def _parse_stage2_comparison(path: Path) -> Stage2Comparison:
+    raw = _load_json(path)
+    label = "Stage 2 comparison"
+    if not isinstance(raw, dict):
+        raise ReadmeError(f"{label} must be an object")
+    _require_exact_fields(raw, {"schema_version", "baseline_run_id", "baseline_maturity", "reproduction_run_id", "reproduction_maturity", "same_operator_environment", "causal_attribution", "statistical_claim", "declared_differences", "tasks"}, label)
+    if _require_str(raw, "schema_version", label) != "1.0.0":
+        raise ReadmeError(f"unsupported {label} schema")
+    differences = _require_list(raw, "declared_differences", label)
+    if not differences or not all(isinstance(value, str) and value for value in differences):
+        raise ReadmeError(f"declared differences in {label} must contain non-empty strings")
+    tasks: list[ComparisonTask] = []
+    seen: set[str] = set()
+    for index, row in enumerate(_require_list(raw, "tasks", label)):
+        row_label = f"task[{index}] in {label}"
+        if not isinstance(row, dict):
+            raise ReadmeError(f"{row_label} must be an object")
+        _require_exact_fields(row, {"task_id", "baseline_attempt_id", "baseline_status", "baseline_value", "reproduction_attempt_id", "reproduction_status", "reproduction_value"}, row_label)
+        task_id = _require_str(row, "task_id", row_label)
+        if task_id in seen:
+            raise ReadmeError(f"duplicate task in {label}: {task_id}")
+        seen.add(task_id)
+        baseline_value = _require_field(row, "baseline_value", row_label)
+        reproduction_value = _require_field(row, "reproduction_value", row_label)
+        _require_finite(baseline_value, f"baseline value in {row_label}")
+        _require_finite(reproduction_value, f"reproduction value in {row_label}")
+        tasks.append(ComparisonTask(task_id, _require_str(row, "baseline_attempt_id", row_label), _require_str(row, "baseline_status", row_label), float(baseline_value), _require_str(row, "reproduction_attempt_id", row_label), _require_str(row, "reproduction_status", row_label), float(reproduction_value)))
+    return Stage2Comparison(
+        baseline_run_id=_require_str(raw, "baseline_run_id", label),
+        baseline_maturity=_require_str(raw, "baseline_maturity", label),
+        reproduction_run_id=_require_str(raw, "reproduction_run_id", label),
+        reproduction_maturity=_require_str(raw, "reproduction_maturity", label),
+        same_operator_environment=_require_bool(raw, "same_operator_environment", label),
+        causal_attribution=_require_bool(raw, "causal_attribution", label),
+        statistical_claim=_require_bool(raw, "statistical_claim", label),
+        declared_differences=tuple(differences),
+        tasks=tuple(tasks),
+    )
+
+
+def _validate_stage2(manifest: PublicationManifest, runs: dict[str, LoadedEvalRun], stage2: Stage2Evidence) -> None:
+    baseline_refs = [ref for ref in manifest.eval_runs if ref.maturity == "stage1"]
+    reproduction_refs = [ref for ref in manifest.eval_runs if ref.maturity == "stage2"]
+    if len(baseline_refs) != 1 or len(reproduction_refs) != 1:
+        raise ReadmeError("Stage 2 publication requires exactly one Stage 1 baseline and one Stage 2 reproduction")
+    baseline = runs[baseline_refs[0].run_id]
+    reproduction = runs[reproduction_refs[0].run_id]
+    profile = stage2.campaign_profile
+    provenance = stage2.provenance
+    comparison = stage2.comparison
+    if profile.schema_version != STAGE2_PROFILE_SCHEMA or profile.profile_id != STAGE2_PROFILE_ID or profile.release_version != manifest.platform_version or profile.suite_id != STAGE1_SUITE or profile.arm_id != STAGE1_ARM or set(profile.task_ids) != STAGE1_TASK_IDS or len(profile.task_ids) != len(STAGE1_TASK_IDS) or profile.repetitions != 1 or profile.task_limit is not None or profile.idle_timeout_seconds != 180 or profile.endpoint_class not in {"local", "self-hosted", "self-hosted-lan", "remote"}:
+        raise ReadmeError("Stage 2 campaign profile does not match the fixed reproduction profile")
+    profile_raw = {
+        "schema_version": profile.schema_version, "profile_id": profile.profile_id, "release_version": profile.release_version, "suite_id": profile.suite_id, "arm_id": profile.arm_id, "task_ids": list(profile.task_ids), "repetitions": profile.repetitions, "task_limit": profile.task_limit, "idle_timeout_seconds": profile.idle_timeout_seconds, "endpoint_class": profile.endpoint_class,
+    }
+    profile_sha = hashlib.sha256(_canonical_json(profile_raw).encode()).hexdigest()
+    repro_manifest = reproduction.reproduction_manifest
+    if repro_manifest is None or repro_manifest.schema_version != "2.0.0" or repro_manifest.release_version != manifest.platform_version or repro_manifest.campaign_profile_sha256 != profile_sha or repro_manifest.source_state_sha256 != provenance.source_state_sha256 or repro_manifest.component_sha256s != {name: value[1] for name, value in provenance.components.items()} or repro_manifest.image_sha256s != {name: value[1] for name, value in provenance.images.items()} or repro_manifest.environment != provenance.environment:
+        raise ReadmeError("Stage 2 reproduction manifest does not match campaign profile, source state, component, image, and environment provenance")
+    if provenance.campaign_profile_sha256 != profile_sha:
+        raise ReadmeError("Stage 2 provenance campaign profile binding does not match")
+    baseline_manifest = baseline.reproduction_manifest
+    if baseline_manifest is None or baseline_manifest.release_version == manifest.platform_version:
+        raise ReadmeError("Stage 2 baseline must retain its original prior-release identity")
+    if comparison.baseline_run_id != baseline.run_id or comparison.reproduction_run_id != reproduction.run_id:
+        raise ReadmeError("Stage 2 comparison run bindings do not match the publication")
+    if comparison.baseline_maturity != "stage1" or comparison.reproduction_maturity != "stage2":
+        raise ReadmeError("Stage 2 comparison baseline maturity and reproduction maturity labels are invalid")
+    if comparison.causal_attribution or comparison.statistical_claim:
+        raise ReadmeError("Stage 2 comparison cannot make causal or statistical claims")
+    if {task.task_id for task in comparison.tasks} != STAGE1_TASK_IDS or len(comparison.tasks) != len(STAGE1_TASK_IDS):
+        raise ReadmeError("Stage 2 comparison must retain the complete five-task population")
+    attempts = {run.run_id: {attempt.task_id: attempt for attempt in run.attempts} for run in (baseline, reproduction)}
+    metrics = {run.run_id: {metric.task_id: metric for metric in run.metrics if metric.metric_id == "ifeval_subset_verifier"} for run in (baseline, reproduction)}
+    for task in comparison.tasks:
+        baseline_attempt = attempts[baseline.run_id][task.task_id]
+        reproduction_attempt = attempts[reproduction.run_id][task.task_id]
+        if task.baseline_attempt_id != baseline_attempt.attempt_id or task.baseline_status != baseline_attempt.status or task.baseline_value != metrics[baseline.run_id][task.task_id].value or task.reproduction_attempt_id != reproduction_attempt.attempt_id or task.reproduction_status != reproduction_attempt.status or task.reproduction_value != metrics[reproduction.run_id][task.task_id].value:
+            raise ReadmeError(f"Stage 2 comparison task {task.task_id} does not match typed run records")
+
+
 def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
     index_path = _safe_relative_path(snapshot_dir, "index.json")
     if not index_path.exists():
@@ -1238,6 +1527,19 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         ])
         artifact_paths.update(path for path in (ref.tasks_path, ref.summary_path, ref.evidence_index_path, ref.reproduction_manifest_path) if path is not None)
 
+    stage2 = None
+    if manifest.stage2_ref is not None:
+        ref = manifest.stage2_ref
+        campaign_profile_path = _safe_relative_path(snapshot_dir, ref.campaign_profile_path)
+        provenance_path = _safe_relative_path(snapshot_dir, ref.provenance_path)
+        comparison_path = _safe_relative_path(snapshot_dir, ref.comparison_path)
+        _validate_sha256(campaign_profile_path, ref.campaign_profile_sha256, "Stage 2 campaign profile")
+        _validate_sha256(provenance_path, ref.provenance_sha256, "Stage 2 provenance")
+        _validate_sha256(comparison_path, ref.comparison_sha256, "Stage 2 comparison")
+        stage2 = Stage2Evidence(_parse_campaign_profile(campaign_profile_path), _parse_stage2_provenance(provenance_path), _parse_stage2_comparison(comparison_path))
+        _validate_stage2(manifest, eval_runs, stage2)
+        artifact_paths.update({ref.campaign_profile_path, ref.provenance_path, ref.comparison_path})
+
     receipt_verification = _load_receipt_verification(manifest.receipt_verification, snapshot_dir)
     artifact_paths.add(manifest.receipt_verification.result_path)
 
@@ -1258,6 +1560,7 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         receipt_verification=receipt_verification,
         demo_reports=tuple(demo_reports),
         artifact_paths=artifact_paths,
+        stage2=stage2,
     )
 
 
@@ -1537,7 +1840,12 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
         "",
     ]
     stage1_runs = _stage1_runs(snapshot)
-    if stage1_runs:
+    if snapshot.stage2 is not None:
+        lines.extend([
+            "**Stage 2: Reproduction and provenance.** This snapshot compares the complete original diagnostic with one fresh, separately invoked reproduction and binds the reproduction to a versioned campaign profile, deterministic source inclusion manifest, component and image digests, and public environment identities. The original run remains Stage 1. Both executions used the same local operator environment, so this establishes independent execution state rather than independent hardware, organizational control, trust roots, or external audit. No causal or statistical attribution is supported.",
+            "",
+        ])
+    elif stage1_runs:
         lines.extend([
             "**Stage 1: Real-agent diagnostic.** This evidence covers one complete five-task `ifeval_subset` diagnostic through g8ee with declared real-provider configuration and retained terminal outcomes. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, statistical significance, compliance, certification, or production suitability.",
             "",
@@ -1580,6 +1888,29 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
             manifest_link = _render_link(f"docs/evidence/readme/current/{ref.manifest_path}", "manifest.json")
             stages_link = _render_link(f"docs/evidence/readme/current/{ref.stages_path}", "stages.jsonl")
             lines.append(f"| {_escape_cell(role)} | {_escape_cell(identity['provider'])} | {_escape_cell(identity['model'])} | {_escape_cell(identity['endpoint_class'])} | {observation} | {manifest_link}; {stages_link} |")
+    if snapshot.stage2 is not None and m.stage2_ref is not None:
+        stage2 = snapshot.stage2
+        ref = m.stage2_ref
+        profile_link = _render_link(f"docs/evidence/readme/current/{ref.campaign_profile_path}", "campaign-profile.json")
+        provenance_link = _render_link(f"docs/evidence/readme/current/{ref.provenance_path}", "provenance.json")
+        comparison_link = _render_link(f"docs/evidence/readme/current/{ref.comparison_path}", "comparison.json")
+        baseline = snapshot.eval_runs[stage2.comparison.baseline_run_id]
+        reproduction = snapshot.eval_runs[stage2.comparison.reproduction_run_id]
+        baseline_metric = sum(metric.value for metric in baseline.metrics if metric.metric_id == "ifeval_subset_verifier")
+        reproduction_metric = sum(metric.value for metric in reproduction.metrics if metric.metric_id == "ifeval_subset_verifier")
+        lines.extend([
+            "",
+            "#### Stage 2 Reproduction Comparison",
+            "",
+            f"The fixed profile is recorded in {profile_link}, reproduction source and runtime provenance in {provenance_link}, and the complete task-level comparison in {comparison_link}. No causal or statistical attribution is made for observed differences.",
+            "",
+            "| Execution | Maturity | Run ID | Deterministic result | Population |",
+            "| --- | --- | --- | --- | --- |",
+            f"| Original | Stage 1 | {_escape_cell(baseline.run_id)} | {int(baseline_metric)}/5 | Complete five-task population |",
+            f"| Reproduction | Stage 2 | {_escape_cell(reproduction.run_id)} | {int(reproduction_metric)}/5 | Complete five-task population |",
+            "",
+            f"Reproduction source state: `{stage2.provenance.source_state_sha256}`. Bound components: {len(stage2.provenance.components)}. Bound images: {len(stage2.provenance.images)}. Same local operator environment: {'yes' if stage2.comparison.same_operator_environment else 'no'}.",
+        ])
     return "\n".join(lines)
 
 
@@ -1667,6 +1998,8 @@ def _render_eval_metrics(snapshot: ProofSnapshot) -> str:
 def _render_receipt_proof(snapshot: ProofSnapshot) -> str:
     r = snapshot.receipt_verification
     if _stage1_runs(snapshot) and r.total_receipts == 0:
+        if snapshot.stage2 is not None:
+            return "### Receipt Verification\n\n**Receipt evidence is unavailable for this Stage 2 comparison.** The answer-only tasks produced zero receipts, so this evidence supports no receipt-signature, mutation, persistence, or state claim.\n"
         return "### Receipt Verification\n\n**Receipt evidence is unavailable for this Stage 1 campaign.** The answer-only tasks produced zero receipts, so this diagnostic supports no receipt-signature, mutation, persistence, or state claim.\n"
     pass_label = "no"
     if (
@@ -1729,6 +2062,8 @@ def _render_governance_proof(snapshot: ProofSnapshot) -> str:
     }
     eligible_governance = [projection for projection in projections.values() if projection.metric_id in governance_metrics]
     if _stage1_runs(snapshot) and not eligible_governance:
+        if snapshot.stage2 is not None:
+            return "### Governance and State Proof\n\n**Governance and state evidence is unavailable for this Stage 2 comparison.** The answer-only evidence contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.\n"
         return "### Governance and State Proof\n\n**Governance and state evidence is unavailable for this Stage 1 campaign.** The answer-only diagnostic contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.\n"
 
     lines = [
@@ -1812,7 +2147,17 @@ def _render_ci_reproducibility(snapshot: ProofSnapshot) -> str:
         lines.append(f"| {_render_link(link.url, link.label)} | {_escape_cell(link.kind)} |")
 
     stage1_runs = _stage1_runs(snapshot)
-    if stage1_runs:
+    if snapshot.stage2 is not None and snapshot.manifest.stage2_ref is not None:
+        reproduction_ref = next(ref for ref in snapshot.manifest.eval_runs if ref.maturity == "stage2")
+        if reproduction_ref.reproduction_manifest_path is None:
+            raise ReadmeError("Stage 2 reproduction manifest reference is missing")
+        reproduction_link = _render_link(f"docs/evidence/readme/current/{reproduction_ref.reproduction_manifest_path}", "reproduction-manifest.json")
+        profile_link = _render_link(f"docs/evidence/readme/current/{snapshot.manifest.stage2_ref.campaign_profile_path}", "campaign-profile.json")
+        lines.extend([
+            "",
+            f"The portable Stage 2 profile is recorded in {profile_link} and its executed substitutions and provenance bindings are recorded in {reproduction_link}. Set `OLLAMA_ENDPOINT`, `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL` to values reachable by the process running `g8e-evals`; substitutions remain comparable only when recorded and are not byte-identical model reproductions.",
+        ])
+    elif stage1_runs:
         ref = snapshot.manifest.eval_runs[0]
         if ref.reproduction_manifest_path is None:
             raise ReadmeError("Stage 1 reproduction manifest reference is missing")
