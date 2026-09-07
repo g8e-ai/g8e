@@ -6,7 +6,7 @@
 
 # HTTP server
 fastapi==0.135.2
-uvicorn==0.46.0
+uvicorn==0.52.4
 
 # Data validation and modeling
 pydantic==2.13.4
