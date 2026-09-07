@@ -80,6 +80,12 @@ from g8e_evals.schema import (
     CitationMatchType,
     PartialMilestoneAssertion,
     PartialMilestoneObservation,
+    ReliabilityAssertion,
+    ReliabilityObservation,
+    EconomicsPerformanceAssertion,
+    EconomicsPerformanceObservation,
+    PerformanceMetricKind,
+    TaskComplexity,
     StateAssertionPredicate,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -131,6 +137,8 @@ class DeterministicGradingContext:
     factual_qa_observations: list[FactualQAObservation] = field(default_factory=list)
     citation_backed_observations: list[CitationBackedObservation] = field(default_factory=list)
     partial_milestone_observations: list[PartialMilestoneObservation] = field(default_factory=list)
+    reliability_observations: list[ReliabilityObservation] = field(default_factory=list)
+    economics_performance_observations: list[EconomicsPerformanceObservation] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -3853,6 +3861,200 @@ class PartialMilestoneGrader:
         )
 
 
+class ReliabilityGrader(DeterministicGrader):
+    """Grader for reliability failure-scenario handling.
+
+    The grader proves two independent properties for each reliability
+    assertion: the system exhibited the expected handling behavior for
+    the declared scenario type, and evidence was preserved when required.
+    Both must hold for the assertion to pass. An observation with
+    ``observed_behavior=None`` means the system did not handle the failure
+    at all, which is always a measured failure.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.reliability_assertions
+        if not assertions:
+            return self._failed("reliability assertions are missing")
+
+        observations_by_assertion: dict[str, list[ReliabilityObservation]] = {}
+        for observation in context.reliability_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"reliability observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.scenario_type != assertion.scenario_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.action_type != assertion.action_type:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+            if observation.observed_behavior != assertion.expected_behavior:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if assertion.expected_evidence_preserved and not observation.evidence_preserved:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"reliability assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
+class EconomicsPerformanceGrader(DeterministicGrader):
+    """Grader for economics and performance measurements.
+
+    The grader proves two independent properties for each economics-
+    performance assertion: the independently observed value falls within
+    the declared tolerance window of the expected value, and the
+    observation is verified and bound to source evidence. Both must hold
+    for the assertion to pass. An observation with ``observed_value=None``
+    means the measurement was not collected, which is always a measured
+    failure. The metric kind, role, action class, and task complexity
+    must all match so that an observation referencing the wrong dimension
+    or stratum cannot satisfy the assertion.
+    """
+
+    def grade(self, context: DeterministicGradingContext) -> DeterministicGrade:
+        assertions = context.task.economics_performance_assertions
+        if not assertions:
+            return self._failed("economics-performance assertions are missing")
+
+        observations_by_assertion: dict[str, list[EconomicsPerformanceObservation]] = {}
+        for observation in context.economics_performance_observations:
+            observations_by_assertion.setdefault(observation.assertion_id, []).append(observation)
+        assertion_ids = {assertion.assertion_id for assertion in assertions}
+        unknown_assertion_ids = set(observations_by_assertion) - assertion_ids
+        if unknown_assertion_ids:
+            return self._failed(
+                f"economics-performance observation references an unknown assertion: {sorted(unknown_assertion_ids)[0]}"
+            )
+
+        evidence_refs: list[str] = []
+        failed_assertions: list[str] = []
+        for assertion in assertions:
+            observations = observations_by_assertion.get(assertion.assertion_id, [])
+            if len(observations) != 1:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            observation = observations[0]
+            evidence_refs.append(observation.observation_id)
+            if observation.attempt_id != context.attempt.attempt_id:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if (
+                observation.run_id != context.attempt.run_id
+                or observation.task_id != context.task.task_id
+            ):
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.metric_kind != assertion.metric_kind:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.role != assertion.role:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.action_class != assertion.action_class:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.task_complexity != assertion.task_complexity:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.unit != assertion.unit:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.collection_boundary != assertion.collection_boundary:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if observation.verification_status != VerificationStatus.VERIFIED:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            if not observation.source_evidence_refs or observation.source_evidence_sha256 is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            evidence_refs.extend(observation.source_evidence_refs)
+            if observation.observed_value is None:
+                failed_assertions.append(assertion.assertion_id)
+                continue
+            lower_bound = assertion.expected_value - assertion.tolerance
+            upper_bound = assertion.expected_value + assertion.tolerance
+            if observation.observed_value < lower_bound or observation.observed_value > upper_bound:
+                failed_assertions.append(assertion.assertion_id)
+
+        value = (len(assertions) - len(failed_assertions)) / len(assertions)
+        return DeterministicGrade(
+            value=value,
+            verification_status=VerificationStatus.VERIFIED,
+            evidence_refs=list(dict.fromkeys(evidence_refs)),
+            failure=(
+                f"economics-performance assertion failed: {failed_assertions[0]}"
+                if failed_assertions
+                else None
+            ),
+            denominator_contribution=len(assertions),
+        )
+
+    @staticmethod
+    def _failed(failure: str, evidence_refs: list[str] | None = None) -> DeterministicGrade:
+        return DeterministicGrade(
+            value=0.0,
+            verification_status=VerificationStatus.FAILED,
+            evidence_refs=evidence_refs or [],
+            failure=failure,
+            denominator_contribution=0,
+        )
+
+
 _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("receipt_integrity", "1.0.0"): ReceiptIntegrityGrader(),
     ("canary_scrubbing", "1.0.0"): CanaryScrubbingGrader(),
@@ -3885,6 +4087,8 @@ _GRADERS: dict[tuple[str, str], DeterministicGrader] = {
     ("factual_qa", "1.0.0"): FactualQAGrader(),
     ("citation_backed", "1.0.0"): CitationBackedGrader(),
     ("partial_milestone", "1.0.0"): PartialMilestoneGrader(),
+    ("reliability", "1.0.0"): ReliabilityGrader(),
+    ("economics_performance", "1.0.0"): EconomicsPerformanceGrader(),
 }
 
 

@@ -15,6 +15,8 @@ from g8e_evals.models import TaskMetadata
 
 
 class IFEvalLoader:
+    SUITE_ID = "ifeval_subset"
+
     def __init__(self, gold_set_path: Path):
         self.gold_set_path = gold_set_path
 
@@ -28,7 +30,8 @@ class IFEvalLoader:
             raise FileNotFoundError(f"IFEval gold set not found at {self.gold_set_path}")
 
         provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
-        validate_provenance(provenance)
+        trusted_root = self.gold_set_path.parent.parent.parent
+        validate_provenance(provenance, suite_id=self.SUITE_ID, trusted_root=trusted_root)
         validate_dataset(self.gold_set_path, provenance)
         rows = [json.loads(line) for line in self.gold_set_path.read_text().splitlines() if line.strip()]
         if [row["key"] for row in rows] != provenance.selected_keys:

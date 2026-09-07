@@ -114,6 +114,14 @@ from g8e_evals.schema import (
     CitationBackedAssertion,
     CitationBackedObservation,
     CitationMatchType,
+    ReliabilityAssertion,
+    ReliabilityObservation,
+    ReliabilityScenarioType,
+    ReliabilityExpectedBehavior,
+    EconomicsPerformanceAssertion,
+    EconomicsPerformanceObservation,
+    PerformanceMetricKind,
+    TaskComplexity,
     UsageReconciliation,
     VerificationStatus,
     UnsupportedExclusion,
@@ -123,7 +131,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_schema_version_is_pinned():
-    assert SCHEMA_VERSION == "1.38.0"
+    assert SCHEMA_VERSION == "1.40.0"
 
 
 def test_rehydration_assertion_and_observation_round_trip():
@@ -3639,6 +3647,8 @@ def test_forbidden_metadata_keys_covers_all_typed_assertion_fields():
         "tool_sequence_assertions",
         "factual_qa_assertions",
         "citation_backed_assertions",
+        "reliability_assertions",
+        "economics_performance_assertions",
         "unsupported_exclusions",
     }
     assert typed_assertion_fields <= FORBIDDEN_METADATA_KEYS
@@ -3670,6 +3680,408 @@ def test_forbidden_metadata_keys_covers_all_typed_observation_ref_fields():
         "tool_sequence_observation_refs",
         "factual_qa_observation_refs",
         "citation_backed_observation_refs",
+        "reliability_observation_refs",
+        "economics_performance_observation_refs",
         "unsupported_exclusion_refs",
     }
     assert typed_observation_ref_fields <= FORBIDDEN_METADATA_KEYS
+
+
+# ---------------------------------------------------------------------------
+# ReliabilityAssertion and ReliabilityObservation schema validation
+# ---------------------------------------------------------------------------
+
+_RELIABILITY_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def test_reliability_assertion_and_observation_round_trip():
+    assertion = ReliabilityAssertion(
+        assertion_id="reliability-1",
+        scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+        action_type="CHAT_COMPLETION",
+        expected_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+        expected_evidence_preserved=True,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    observation = ReliabilityObservation(
+        observation_id="reliability-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+        action_type="CHAT_COMPLETION",
+        observed_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+        evidence_preserved=True,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_RELIABILITY_COLLECTED,
+        source_evidence_refs=["restricted-reliability-evidence"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = ReliabilityAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = ReliabilityObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_reliability_assertion_rejects_empty_assertion_id():
+    with pytest.raises(ValidationError):
+        ReliabilityAssertion(
+            assertion_id="",
+            scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+            action_type="CHAT_COMPLETION",
+            expected_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_reliability_assertion_rejects_empty_action_type():
+    with pytest.raises(ValidationError):
+        ReliabilityAssertion(
+            assertion_id="reliability-1",
+            scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+            action_type="",
+            expected_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_reliability_assertion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        ReliabilityAssertion.model_validate({
+            "assertion_id": "reliability-1",
+            "scenario_type": ReliabilityScenarioType.PROVIDER_THROTTLING,
+            "action_type": "CHAT_COMPLETION",
+            "expected_behavior": ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            "expected_evidence_preserved": True,
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "unexpected_field": "bad",
+        })
+
+
+def test_reliability_observation_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        ReliabilityObservation.model_validate({
+            "observation_id": "reliability-obs-1",
+            "attempt_id": "attempt-1",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "assertion_id": "reliability-1",
+            "scenario_type": ReliabilityScenarioType.PROVIDER_THROTTLING,
+            "action_type": "CHAT_COMPLETION",
+            "observed_behavior": ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            "evidence_preserved": True,
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "collected_at": _RELIABILITY_COLLECTED.isoformat(),
+            "source_evidence_refs": ["evidence-1"],
+            "source_evidence_sha256": "a" * 64,
+            "verification_status": VerificationStatus.VERIFIED,
+            "unexpected_field": "bad",
+        })
+
+
+def test_verified_reliability_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified reliability observation requires source evidence",
+    ):
+        ReliabilityObservation(
+            observation_id="reliability-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="reliability-1",
+            scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+            action_type="CHAT_COMPLETION",
+            observed_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            evidence_preserved=True,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_RELIABILITY_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_reliability_observation_requires_source_evidence_sha256():
+    with pytest.raises(
+        ValidationError,
+        match="verified reliability observation requires source evidence",
+    ):
+        ReliabilityObservation(
+            observation_id="reliability-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="reliability-1",
+            scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+            action_type="CHAT_COMPLETION",
+            observed_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+            evidence_preserved=True,
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_RELIABILITY_COLLECTED,
+            source_evidence_refs=["evidence-1"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_reliability_observation_accepts_none_observed_behavior():
+    observation = ReliabilityObservation(
+        observation_id="reliability-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id="reliability-1",
+        scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+        action_type="CHAT_COMPLETION",
+        observed_behavior=None,
+        evidence_preserved=False,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_RELIABILITY_COLLECTED,
+        source_evidence_refs=["evidence-1"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+    assert observation.observed_behavior is None
+
+
+def test_task_definition_rejects_duplicate_reliability_assertion_ids():
+    assertion = ReliabilityAssertion(
+        assertion_id="duplicate",
+        scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING,
+        action_type="CHAT_COMPLETION",
+        expected_behavior=ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    with pytest.raises(ValidationError, match="reliability assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            reliability_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_reliability_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        reliability_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.reliability_observation_refs == ["observation-1", "observation-2"]
+
+
+# ---------------------------------------------------------------------------
+# EconomicsPerformanceAssertion and EconomicsPerformanceObservation schema validation
+# ---------------------------------------------------------------------------
+
+_ECONOMICS_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def test_economics_performance_assertion_and_observation_round_trip():
+    assertion = EconomicsPerformanceAssertion(
+        assertion_id="econ-1",
+        metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+        role="",
+        action_class="CHAT_COMPLETION",
+        task_complexity=TaskComplexity.SIMPLE,
+        expected_value=0.002,
+        tolerance=0.001,
+        unit="usd",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    observation = EconomicsPerformanceObservation(
+        observation_id="econ-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id=assertion.assertion_id,
+        metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+        role="",
+        action_class="CHAT_COMPLETION",
+        task_complexity=TaskComplexity.SIMPLE,
+        observed_value=0.002,
+        unit="usd",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_ECONOMICS_COLLECTED,
+        source_evidence_refs=["econ-evidence-1"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+
+    restored_assertion = EconomicsPerformanceAssertion.model_validate_json(assertion.model_dump_json())
+    restored_observation = EconomicsPerformanceObservation.model_validate_json(observation.model_dump_json())
+
+    assert restored_assertion == assertion
+    assert restored_observation == observation
+
+
+def test_economics_performance_assertion_rejects_empty_assertion_id():
+    with pytest.raises(ValidationError):
+        EconomicsPerformanceAssertion(
+            assertion_id="",
+            metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.SIMPLE,
+            expected_value=0.002,
+            tolerance=0.001,
+            unit="usd",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_economics_performance_assertion_rejects_empty_action_class():
+    with pytest.raises(ValidationError):
+        EconomicsPerformanceAssertion(
+            assertion_id="econ-1",
+            metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+            action_class="",
+            task_complexity=TaskComplexity.SIMPLE,
+            expected_value=0.002,
+            tolerance=0.001,
+            unit="usd",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        )
+
+
+def test_economics_performance_assertion_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        EconomicsPerformanceAssertion.model_validate({
+            "assertion_id": "econ-1",
+            "metric_kind": PerformanceMetricKind.PROVIDER_CHARGE,
+            "role": "",
+            "action_class": "CHAT_COMPLETION",
+            "task_complexity": TaskComplexity.SIMPLE,
+            "expected_value": 0.002,
+            "tolerance": 0.001,
+            "unit": "usd",
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "unexpected_field": "bad",
+        })
+
+
+def test_economics_performance_observation_rejects_extra_fields():
+    with pytest.raises(ValidationError, match="extra"):
+        EconomicsPerformanceObservation.model_validate({
+            "observation_id": "econ-obs-1",
+            "attempt_id": "attempt-1",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "assertion_id": "econ-1",
+            "metric_kind": PerformanceMetricKind.PROVIDER_CHARGE,
+            "role": "",
+            "action_class": "CHAT_COMPLETION",
+            "task_complexity": TaskComplexity.SIMPLE,
+            "observed_value": 0.002,
+            "unit": "usd",
+            "collection_boundary": StateCollectionBoundary.OPERATOR_WORKLOAD,
+            "collected_at": _ECONOMICS_COLLECTED.isoformat(),
+            "source_evidence_refs": ["evidence-1"],
+            "source_evidence_sha256": "a" * 64,
+            "verification_status": VerificationStatus.VERIFIED,
+            "unexpected_field": "bad",
+        })
+
+
+def test_verified_economics_performance_observation_requires_source_evidence():
+    with pytest.raises(
+        ValidationError,
+        match="verified economics-performance observation requires source evidence",
+    ):
+        EconomicsPerformanceObservation(
+            observation_id="econ-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="econ-1",
+            metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.SIMPLE,
+            observed_value=0.002,
+            unit="usd",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_ECONOMICS_COLLECTED,
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_verified_economics_performance_observation_requires_source_evidence_sha256():
+    with pytest.raises(
+        ValidationError,
+        match="verified economics-performance observation requires source evidence",
+    ):
+        EconomicsPerformanceObservation(
+            observation_id="econ-obs-1",
+            attempt_id="attempt-1",
+            run_id="run-1",
+            task_id="task-1",
+            assertion_id="econ-1",
+            metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.SIMPLE,
+            observed_value=0.002,
+            unit="usd",
+            collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+            collected_at=_ECONOMICS_COLLECTED,
+            source_evidence_refs=["evidence-1"],
+            verification_status=VerificationStatus.VERIFIED,
+        )
+
+
+def test_economics_performance_observation_accepts_none_observed_value():
+    observation = EconomicsPerformanceObservation(
+        observation_id="econ-obs-1",
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        assertion_id="econ-1",
+        metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+        action_class="CHAT_COMPLETION",
+        task_complexity=TaskComplexity.SIMPLE,
+        observed_value=None,
+        unit="usd",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+        collected_at=_ECONOMICS_COLLECTED,
+        source_evidence_refs=["evidence-1"],
+        source_evidence_sha256="a" * 64,
+        verification_status=VerificationStatus.VERIFIED,
+    )
+    assert observation.observed_value is None
+
+
+def test_task_definition_rejects_duplicate_economics_performance_assertion_ids():
+    assertion = EconomicsPerformanceAssertion(
+        assertion_id="duplicate",
+        metric_kind=PerformanceMetricKind.PROVIDER_CHARGE,
+        action_class="CHAT_COMPLETION",
+        task_complexity=TaskComplexity.SIMPLE,
+        expected_value=0.002,
+        tolerance=0.001,
+        unit="usd",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
+    )
+    with pytest.raises(ValidationError, match="economics-performance assertion IDs must be unique"):
+        TaskDefinition(
+            task_id="task-1",
+            suite_id="suite-1",
+            suite_version="1.0.0",
+            prompt_hash="prompt-hash",
+            economics_performance_assertions=[assertion, assertion],
+        )
+
+
+def test_attempt_record_links_economics_performance_observations():
+    attempt = AttemptRecord(
+        attempt_id="a1",
+        run_id="r1",
+        task_id="t1",
+        arm_id=Arm.DOCTRINE,
+        economics_performance_observation_refs=["observation-1", "observation-2"],
+    )
+
+    assert attempt.economics_performance_observation_refs == ["observation-1", "observation-2"]

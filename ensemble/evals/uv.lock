@@ -626,7 +626,7 @@ wheels = [
 
 [[package]]
 name = "g8e"
-version = "2.1.4"
+version = "2.1.5"
 source = { directory = "../../protocol/python" }
 dependencies = [
     { name = "protobuf" },
@@ -646,7 +646,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "g8e-evals"
-version = "0.1.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

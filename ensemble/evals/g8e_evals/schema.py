@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.38.0"
+SCHEMA_VERSION = "1.40.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -62,6 +62,8 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "factual_qa_assertions",
     "citation_backed_assertions",
     "partial_milestone_assertions",
+    "reliability_assertions",
+    "economics_performance_assertions",
     "unsupported_exclusions",
     "state_observation_refs",
     "final_state_observation_refs",
@@ -88,6 +90,8 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "factual_qa_observation_refs",
     "citation_backed_observation_refs",
     "partial_milestone_observation_refs",
+    "reliability_observation_refs",
+    "economics_performance_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -2251,6 +2255,201 @@ class PartialMilestoneObservation(BaseModel):
         return self
 
 
+class ReliabilityScenarioType(StrEnum):
+    """A reliability failure scenario that the system must handle correctly.
+
+    Each scenario type represents a distinct adverse condition that the
+    governed path may encounter in production. The grader verifies that
+    the system's observed handling behavior matches the declared expected
+    behavior and that evidence is preserved when required.
+    """
+
+    PROVIDER_THROTTLING = "provider_throttling"
+    MALFORMED_STRUCTURED_OUTPUT = "malformed_structured_output"
+    INTERRUPTED_STREAM = "interrupted_stream"
+    DUPLICATE_EVENT = "duplicate_event"
+    DELAYED_EVENT = "delayed_event"
+    AUDIT_STORE_UNAVAILABLE = "audit_store_unavailable"
+    OPERATOR_DISCONNECT = "operator_disconnect"
+    OPERATOR_RESTART = "operator_restart"
+    LOCKED_VAULT = "locked_vault"
+    SIGNING_FAILURE = "signing_failure"
+    CONCURRENT_STATE_MUTATION = "concurrent_state_mutation"
+    REPLAY_RACE = "replay_race"
+
+
+class ReliabilityExpectedBehavior(StrEnum):
+    """The expected handling behavior for a reliability failure scenario.
+
+    The grader verifies that the observed behavior matches the declared
+    expected behavior. ``None`` in the observation means the system did
+    not handle the failure at all (silently swallowed it), which is always
+    a measured failure.
+    """
+
+    RETRY_WITH_BACKOFF = "retry_with_backoff"
+    FAIL_CLOSED = "fail_closed"
+    DEGRADE_GRACEFULLY = "degrade_gracefully"
+    DEDUPLICATE = "deduplicate"
+    RECONNECT_RECOVER = "reconnect_recover"
+    SERIALIZE_ORDER = "serialize_order"
+    DETECT_AND_REJECT = "detect_and_reject"
+
+
+class ReliabilityAssertion(BaseModel):
+    """Declares one reliability failure scenario and its expected handling behavior.
+
+    The grader proves two independent properties: the system exhibited the
+    expected handling behavior for the declared scenario type, and evidence
+    was preserved when required. Both must hold for the assertion to pass.
+    The scenario type and action type pin the failure so that an observation
+    referencing the wrong scenario cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    scenario_type: ReliabilityScenarioType
+    action_type: str = Field(min_length=1, description="The action class the scenario targets.")
+    expected_behavior: ReliabilityExpectedBehavior
+    expected_evidence_preserved: bool = True
+    collection_boundary: StateCollectionBoundary
+
+
+class ReliabilityObservation(BaseModel):
+    """Independently observed handling behavior for a reliability failure scenario.
+
+    The observation records the system's actual handling behavior and
+    whether evidence was preserved. ``observed_behavior`` is ``None`` when
+    the system did not handle the failure at all. The scenario type and
+    action type must match the assertion so that an observation referencing
+    the wrong scenario cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    scenario_type: ReliabilityScenarioType
+    action_type: str = Field(min_length=1)
+    observed_behavior: ReliabilityExpectedBehavior | None = None
+    evidence_preserved: bool = False
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> ReliabilityObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified reliability observation requires source evidence")
+        return self
+
+
+class PerformanceMetricKind(StrEnum):
+    """The kind of economics or performance measurement being asserted.
+
+    Each kind represents a distinct quantitative dimension that the
+    grader verifies against a declared expected value with a tolerance
+    window. The suite is stratified by task complexity and action class
+    so that measurements are comparable within a stratum.
+    """
+
+    PROVIDER_CHARGE = "provider_charge"
+    PER_ROLE_CALLS = "per_role_calls"
+    PER_ROLE_TOKENS = "per_role_tokens"
+    STAGE_LATENCY = "stage_latency"
+    LOCAL_RESOURCE_METADATA = "local_resource_metadata"
+    HUMAN_WAIT_TIME = "human_wait_time"
+
+
+class TaskComplexity(StrEnum):
+    """The complexity stratum of a task for economics and performance measurement.
+
+    Tasks are stratified by complexity so that measured values are
+    comparable within a stratum. Simple tasks involve a single model
+    call; moderate tasks involve multiple calls or light tool use;
+    complex tasks involve long-horizon multi-step work with heavy tool
+    use or governance.
+    """
+
+    SIMPLE = "simple"
+    MODERATE = "moderate"
+    COMPLEX = "complex"
+
+
+class EconomicsPerformanceAssertion(BaseModel):
+    """Declares one expected economics or performance measurement with a tolerance.
+
+    The grader proves that the independently observed value falls within
+    the declared tolerance window of the expected value. The metric kind,
+    role, action class, and task complexity pin the measurement so that
+    an observation referencing the wrong dimension or stratum cannot
+    satisfy the assertion. ``role`` is an empty string for non-role
+    metrics (provider charge, stage latency, local resource, human wait).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assertion_id: str = Field(min_length=1)
+    metric_kind: PerformanceMetricKind
+    role: str = Field(default="", description="The LLM role for per-role metrics; empty for non-role metrics.")
+    action_class: str = Field(min_length=1, description="The action class being measured.")
+    task_complexity: TaskComplexity
+    expected_value: float
+    tolerance: float = Field(ge=0.0, description="The tolerance window; observed value must be within [expected - tolerance, expected + tolerance].")
+    unit: str = Field(min_length=1, description="The unit of measurement, e.g. usd, calls, tokens, ms, bytes, seconds.")
+    collection_boundary: StateCollectionBoundary
+
+
+class EconomicsPerformanceObservation(BaseModel):
+    """Independently observed economics or performance measurement.
+
+    The observation records the actual measured value for the declared
+    metric kind, role, action class, and task complexity. ``observed_value``
+    is ``None`` when the measurement was not collected (for example, the
+    provider did not return usage data), which is always a measured
+    failure. The metric kind, role, action class, and task complexity
+    must match the assertion so that an observation referencing the wrong
+    dimension or stratum cannot satisfy the assertion.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    assertion_id: str = Field(min_length=1)
+    metric_kind: PerformanceMetricKind
+    role: str = ""
+    action_class: str = Field(min_length=1)
+    task_complexity: TaskComplexity
+    observed_value: float | None = None
+    unit: str = Field(min_length=1)
+    collection_boundary: StateCollectionBoundary
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> EconomicsPerformanceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified economics-performance observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2346,6 +2545,8 @@ class TaskDefinition(BaseModel):
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
     citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
     partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
+    reliability_assertions: list[ReliabilityAssertion] = Field(default_factory=list)
+    economics_performance_assertions: list[EconomicsPerformanceAssertion] = Field(default_factory=list)
 
     graders: list[GraderReference] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
@@ -2477,6 +2678,16 @@ class TaskDefinition(BaseModel):
         ]
         if len(partial_milestone_assertion_ids) != len(set(partial_milestone_assertion_ids)):
             raise ValueError("partial-milestone assertion IDs must be unique")
+        reliability_assertion_ids = [
+            assertion.assertion_id for assertion in self.reliability_assertions
+        ]
+        if len(reliability_assertion_ids) != len(set(reliability_assertion_ids)):
+            raise ValueError("reliability assertion IDs must be unique")
+        economics_performance_assertion_ids = [
+            assertion.assertion_id for assertion in self.economics_performance_assertions
+        ]
+        if len(economics_performance_assertion_ids) != len(set(economics_performance_assertion_ids)):
+            raise ValueError("economics-performance assertion IDs must be unique")
         grader_keys = [
             (grader.grader_id, grader.grader_version) for grader in self.graders
         ]
@@ -2640,6 +2851,8 @@ class AttemptRecord(BaseModel):
     factual_qa_observation_refs: list[str] = Field(default_factory=list)
     citation_backed_observation_refs: list[str] = Field(default_factory=list)
     partial_milestone_observation_refs: list[str] = Field(default_factory=list)
+    reliability_observation_refs: list[str] = Field(default_factory=list)
+    economics_performance_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)

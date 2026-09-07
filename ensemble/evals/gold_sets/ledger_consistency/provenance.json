@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "ledger_consistency",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.4",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/utility/ledger_consistency_loader.py",
+    "code_sha256": "13a11b28d13fe99e044f0c4e9405616a03685d2dfe467eb7fe9cd99e48da03f7"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 3,
+    "sha256": "27dce6bba18c59319e0597d25f88403cfbe3e23b5071db8835ba8fefe3222b2c"
+  },
+  "partition": "development",
+  "domain_strata": ["utility"]
+}

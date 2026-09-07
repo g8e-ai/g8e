@@ -115,7 +115,7 @@ var phase0ClaimInventory = []ClaimInventoryEntry{
 
 	// --- FedRAMP 20x ---
 	{Framework: "FedRAMP 20x", ControlID: "KSI catalog", Claim: "31 KSIs across 10 categories with typed evaluator, OSCAL export, history, COSAiS overlays", Classification: ClaimClassPlatformTechnical, Notes: "compliance package"},
-	{Framework: "FedRAMP 20x", ControlID: "KSI-MLA-08", Claim: "Receipt signatures validated by nonempty-field check", Classification: ClaimClassPlatformTechnical, Notes: "Phase 0 regression: method checks presence not cryptographic validity"},
+	{Framework: "FedRAMP 20x", ControlID: "KSI-MLA-08", Claim: "Receipt and final-persistence signatures are cryptographically verified", Classification: ClaimClassPlatformTechnical, Notes: "canonical Ed25519 verification fails closed on missing, malformed, or tampered receipt evidence"},
 	{Framework: "FedRAMP 20x", ControlID: "Class D", Claim: "Class D (high) certification", Classification: ClaimClassPlanned, Notes: "explicitly marked out-of-scope until FedRAMP opens Phase 4"},
 	{Framework: "FedRAMP 20x", ControlID: "Certification", Claim: "FedRAMP authorization", Classification: ClaimClassAssessor, Notes: "platform produces evidence; FedRAMP 3PAO authorization is assessor-dependent"},
 

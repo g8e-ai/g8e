@@ -43,13 +43,21 @@ func complianceReleaseEvidenceCmdWithConfig(
 	provenanceSourceFactory func(string) evidence.ProvenanceSource,
 ) *cobra.Command {
 	var (
-		version     string
-		outDir      string
-		class       string
-		catalogPath string
-		demoRuns    []string
-		projectRoot string
-		failClosed  bool
+		version                   string
+		outDir                    string
+		class                     string
+		catalogPath               string
+		demoRuns                  []string
+		projectRoot               string
+		failClosed                bool
+		scopeID                   string
+		runID                     string
+		assertionAssessmentIDs    []string
+		attemptIDs                []string
+		scenarioIDs               []string
+		actionIDs                 []string
+		evidenceWindowStartUnixMs int64
+		evidenceWindowEndUnixMs   int64
 	)
 
 	cmd := &cobra.Command{
@@ -100,7 +108,12 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 
 			source := provenanceSourceFactory(projectRoot)
 
-			report, err := collectReleaseEvidence(ctx, fileSvc, cat, certClass, demoRuns, source)
+			binding, err := buildEvaluationBinding(scopeID, runID, evidenceWindowStartUnixMs, evidenceWindowEndUnixMs, assertionAssessmentIDs, attemptIDs, scenarioIDs, actionIDs)
+			if err != nil {
+				return err
+			}
+
+			report, err := collectReleaseEvidence(ctx, fileSvc, cat, certClass, demoRuns, source, binding)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrComplianceReleaseEvidence, err)
 			}
@@ -131,9 +144,22 @@ satisfied, KSI evaluation is unavailable, or any demo run is invalid.`,
 	cmd.Flags().StringSliceVar(&demoRuns, "demo-run", nil, "Demo run ID to verify (repeatable; defaults to all persisted runs)")
 	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root directory for demo provenance (defaults to cwd)")
 	cmd.Flags().BoolVar(&failClosed, "fail-closed", false, "Exit nonzero if any KSI is not satisfied or any demo run is invalid")
+	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Assessment scope ID binding every KSI result to the declared context (required)")
+	cmd.Flags().StringVar(&runID, "run-id", "", "Assessment run ID binding every KSI result to the declared context (required)")
+	cmd.Flags().StringSliceVar(&assertionAssessmentIDs, "assertion-assessment-id", nil, "Assertion assessment ID consumed by the KSI evaluation (repeatable, required)")
+	cmd.Flags().StringSliceVar(&attemptIDs, "attempt-id", nil, "Allowed evidence attempt ID (repeatable)")
+	cmd.Flags().StringSliceVar(&scenarioIDs, "scenario-id", nil, "Allowed evidence scenario ID (repeatable)")
+	cmd.Flags().StringSliceVar(&actionIDs, "action-id", nil, "Allowed evidence action or transaction ID (repeatable)")
+	cmd.Flags().Int64Var(&evidenceWindowStartUnixMs, "evidence-window-start-unix-ms", 0, "Inclusive start of the evidence collection interval in Unix milliseconds (required)")
+	cmd.Flags().Int64Var(&evidenceWindowEndUnixMs, "evidence-window-end-unix-ms", 0, "Inclusive end of the evidence collection interval in Unix milliseconds (required)")
 
 	_ = cmd.MarkFlagRequired("version")
 	_ = cmd.MarkFlagRequired("out")
+	_ = cmd.MarkFlagRequired("scope-id")
+	_ = cmd.MarkFlagRequired("run-id")
+	_ = cmd.MarkFlagRequired("assertion-assessment-id")
+	_ = cmd.MarkFlagRequired("evidence-window-start-unix-ms")
+	_ = cmd.MarkFlagRequired("evidence-window-end-unix-ms")
 
 	return cmd
 }
@@ -270,13 +296,14 @@ func collectReleaseEvidence(
 	class compliance.CertificationClass,
 	runIDs []string,
 	source evidence.ProvenanceSource,
+	binding compliance.EvaluationBinding,
 ) (*releaseEvidenceReport, error) {
 	report := &releaseEvidenceReport{GeneratedAt: time.Now().UTC()}
 
 	// KSI evaluation. A nil result means the runtime stores could not be
 	// opened; record the gap and continue so the report still captures
 	// history and demo evidence.
-	ksiSet := evaluateKSIs(ctx, fileSvc, cat, class)
+	ksiSet := evaluateKSIs(ctx, fileSvc, cat, class, binding)
 	if ksiSet == nil {
 		report.KSIUnavailable = "audit store, ledger, or commitment store unavailable"
 	} else {

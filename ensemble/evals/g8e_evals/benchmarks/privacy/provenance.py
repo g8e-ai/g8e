@@ -12,14 +12,57 @@ imported from an external dataset.  The provenance manifest captures the
 suite generation code hash, the output dataset hash, the row count, the
 license, the data partition, and the domain strata under which the suite
 is published.
+
+Validation enforces executable-code provenance: the declared ``code_path``
+is resolved under a trusted eval root with traversal protection, and its
+SHA-256 digest is verified against ``code_sha256`` before any dataset
+rows are read.  The provenance benchmark must match the loader's
+``SUITE_ID`` so suite substitution is rejected.  All provenance models
+use ``extra="forbid"`` and strict SHA-256 field patterns so unknown
+fields and malformed digests are rejected at parse time.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_sha256(v: str) -> str:
+    if not v or not v.strip():
+        raise ValueError("sha256 field must not be empty")
+    if not _SHA256_PATTERN.match(v):
+        raise ValueError(f"sha256 field must be a 64-character lowercase hex digest: {v}")
+    return v
+
+
+def _resolve_under_root(code_path: str, trusted_root: Path) -> Path:
+    """Resolve ``code_path`` under ``trusted_root`` with traversal protection.
+
+    Rejects absolute paths, path separators that escape the root, and
+    any resolved path that does not stay within ``trusted_root``.  This
+    prevents path traversal attacks via crafted ``code_path`` values.
+    """
+    if not code_path or not code_path.strip():
+        raise ValueError("code_path must not be empty")
+    if code_path.startswith("/"):
+        raise ValueError(f"code_path must not be absolute: {code_path}")
+    if "\x00" in code_path:
+        raise ValueError("code_path must not contain null bytes")
+    if ".." in code_path.split("/"):
+        raise ValueError(f"code_path must not contain traversal sequences: {code_path}")
+    resolved = (trusted_root / code_path).resolve()
+    root_resolved = trusted_root.resolve()
+    try:
+        resolved.relative_to(root_resolved)
+    except ValueError:
+        raise ValueError(f"code_path resolves outside trusted root: {code_path}") from None
+    return resolved
 
 
 class SyntheticSuiteSource(BaseModel):
@@ -30,33 +73,47 @@ class SyntheticSuiteSource(BaseModel):
     suite, the license, and the SHA-256 of the generation code.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     repository: str
     revision: str
     license_spdx: str
     code_path: str
     code_sha256: str
 
-    @field_validator("repository", "revision", "license_spdx", "code_path", "code_sha256")
+    @field_validator("repository", "revision", "license_spdx", "code_path")
     @classmethod
     def _reject_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("source field must not be empty")
         return v
 
+    @field_validator("code_sha256")
+    @classmethod
+    def _validate_code_sha256(cls, v: str) -> str:
+        return _validate_sha256(v)
+
 
 class SyntheticSuiteOutput(BaseModel):
     """The output dataset of a synthetic suite."""
+
+    model_config = ConfigDict(extra="forbid")
 
     path: str
     rows: int
     sha256: str
 
-    @field_validator("path", "sha256")
+    @field_validator("path")
     @classmethod
     def _reject_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("output field must not be empty")
         return v
+
+    @field_validator("sha256")
+    @classmethod
+    def _validate_output_sha256(cls, v: str) -> str:
+        return _validate_sha256(v)
 
     @field_validator("rows")
     @classmethod
@@ -75,6 +132,8 @@ class SyntheticSuiteProvenance(BaseModel):
     field lists the domain categories the dataset covers.  Validation
     rejects incomplete or mismatched provenance before execution.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     schema_version: int
     benchmark: str
@@ -105,18 +164,31 @@ def load_provenance(path: Path) -> SyntheticSuiteProvenance:
     return SyntheticSuiteProvenance.model_validate_json(path.read_text())
 
 
-def validate_provenance(provenance: SyntheticSuiteProvenance) -> None:
-    """Reject incomplete provenance before execution.
+def validate_provenance(
+    provenance: SyntheticSuiteProvenance,
+    *,
+    suite_id: str,
+    trusted_root: Path,
+) -> None:
+    """Reject incomplete or mismatched provenance before execution.
 
-    Checks that every required field is present and non-empty.  Pydantic
-    field validators handle empty-string and empty-list rejection at parse
-    time; this function is the explicit pre-execution gate that loaders
-    call after loading the manifest and before validating the dataset.
+    Checks that every required field is present and non-empty, that the
+    provenance benchmark matches the loader's ``SUITE_ID``, and that the
+    declared generation code path resolves under ``trusted_root`` with a
+    matching SHA-256 digest.  Pydantic field validators handle
+    empty-string, empty-list, SHA-256 pattern, and unknown-field
+    rejection at parse time; this function is the explicit pre-execution
+    gate that loaders call after loading the manifest and before
+    validating the dataset.
     """
     if provenance.schema_version < 1:
         raise ValueError(f"provenance schema_version must be positive: {provenance.schema_version}")
     if not provenance.benchmark.strip():
         raise ValueError("provenance benchmark must not be empty")
+    if provenance.benchmark != suite_id:
+        raise ValueError(
+            f"provenance benchmark mismatch: {provenance.benchmark} != {suite_id}"
+        )
     if not provenance.partition.strip():
         raise ValueError("provenance partition must not be empty")
     if not provenance.domain_strata:
@@ -127,6 +199,26 @@ def validate_provenance(provenance: SyntheticSuiteProvenance) -> None:
     out = provenance.output
     if not all([out.path, out.sha256]) or out.rows <= 0:
         raise ValueError("provenance output is incomplete")
+    _verify_code_digest(src.code_path, src.code_sha256, trusted_root)
+
+
+def _verify_code_digest(code_path: str, expected_sha256: str, trusted_root: Path) -> None:
+    """Resolve ``code_path`` under ``trusted_root`` and verify its SHA-256.
+
+    Raises ``ValueError`` if the path escapes the trusted root, the file
+    does not exist, or the computed digest does not match the expected
+    value.  This is the executable-code provenance gate: no dataset rows
+    are read until the generation code hash is verified.
+    """
+    resolved = _resolve_under_root(code_path, trusted_root)
+    if not resolved.is_file():
+        raise ValueError(f"provenance code_path does not exist: {code_path}")
+    actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
+    if actual != expected_sha256:
+        raise ValueError(
+            f"provenance code_sha256 mismatch for {code_path}: "
+            f"{actual} != {expected_sha256}"
+        )
 
 
 def validate_dataset(path: Path, provenance: SyntheticSuiteProvenance) -> None:

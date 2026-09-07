@@ -13,8 +13,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // DemoDirectoryProvenanceSource reads the immutable source files covered by a demo manifest.
@@ -64,4 +67,43 @@ func (s *DemoDirectoryProvenanceSource) Artifacts(ctx context.Context, demoID st
 	}
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Name < artifacts[j].Name })
 	return artifacts, nil
+}
+
+// Definitions returns the canonical DemoScenarioDefinition bodies for the
+// given demo ID, loaded from the canonical catalog and marshaled as canonical
+// compact JSON. The definitions are sorted by scenario ID for deterministic
+// output. An empty result is returned when the demo ID has no matching
+// definitions in the canonical catalog.
+func (s *DemoDirectoryProvenanceSource) Definitions(ctx context.Context, demoID string) ([]DemoDefinitionArtifact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s == nil || s.projectRoot == "" || !validPathElement(demoID) || demoScope(demoID) == "" {
+		return nil, fmt.Errorf("%w: invalid demo provenance root or demo ID", constants.ErrInvalidEvidenceGraph)
+	}
+	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()
+	if err != nil {
+		return nil, fmt.Errorf("load canonical catalogs for definitions: %w", err)
+	}
+	scenarioCatalog, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	if err != nil {
+		return nil, fmt.Errorf("load demo scenario catalog: %w", err)
+	}
+	prefix := demoID + "-"
+	matching := make([]*compliancev1.DemoScenarioDefinition, 0)
+	for _, definition := range scenarioCatalog.GetDefinitions() {
+		if strings.HasPrefix(definition.GetScenarioId(), prefix) {
+			matching = append(matching, definition)
+		}
+	}
+	sort.Slice(matching, func(i, j int) bool { return matching[i].GetScenarioId() < matching[j].GetScenarioId() })
+	definitions := make([]DemoDefinitionArtifact, 0, len(matching))
+	for _, definition := range matching {
+		body, err := compliancev1.MarshalCanonical(definition)
+		if err != nil {
+			return nil, fmt.Errorf("marshal demo scenario definition %s: %w", definition.GetScenarioId(), err)
+		}
+		definitions = append(definitions, DemoDefinitionArtifact{Body: body})
+	}
+	return definitions, nil
 }

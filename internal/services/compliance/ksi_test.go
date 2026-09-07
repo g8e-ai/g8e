@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
 // TestKSICatalog_LoadFromDisk loads the shipped KSI catalog and validates its structure.
@@ -284,7 +285,7 @@ func TestKSI_JSONRoundTrip(t *testing.T) {
 		ValidationCycle:     ValidationCycleMachine,
 		Status:              KSIStatusSatisfied,
 		AutomatedMethods:    []AutomatedMethod{{Name: "merkle_root_check", Description: "Verifies ledger Merkle root"}},
-		Evidence:            []Evidence{{Type: EvidenceTypeMerkleRoot, Reference: "abc123", Description: "Current Merkle root"}},
+		Evidence:            []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeMerkleRoot, "abc123")},
 		LastValidatedUnixMs: time.Now().UnixMilli(),
 	}
 
@@ -318,7 +319,7 @@ func TestKSIResultSet_JSONRoundTrip(t *testing.T) {
 			{
 				ID:                  "KSI-CMT-01",
 				Status:              KSIStatusSatisfied,
-				Evidence:            []Evidence{{Type: EvidenceTypeLedgerCommit, Reference: "commit-abc"}},
+				Evidence:            []*compliancev1.ComplianceEvidenceReference{newKSIEvidenceReference(EvidenceTypeLedgerCommit, "commit-abc")},
 				LastValidatedUnixMs: time.Now().UnixMilli(),
 				MethodCount:         2,
 			},

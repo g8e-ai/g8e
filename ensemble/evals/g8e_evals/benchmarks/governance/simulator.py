@@ -23,14 +23,16 @@ stages before that layer succeed, the declared layer fails, and L4
 verification fails.  When an action is allowed, all stages succeed and L4
 verifies.
 
-The simulator supports seven governance-adversarial attack scenarios:
-replay, signed-field tampering, nonce expiration, stale-state-root replay,
-signer-set defects (duplicate signer or insufficient quorum), L3-proof
-transplantation, and revoked-credential reuse, plus policy-violating attacks
-(prompt injection, indirect injection, command obfuscation, path traversal,
-privilege escalation, unsafe mutation, and data exfiltration).  Each scenario
-has a dedicated ``process_*`` method and an ``is_*`` check that observers use
-to prove absence of the prohibited terminal state.
+The simulator supports ten governance-adversarial attack scenarios:
+replay, signed-field tampering, payload tampering, nonce expiration,
+stale-state-root replay, identity-binding mismatch, signer-set defects
+(duplicate signer or insufficient quorum), L3-proof transplantation,
+revoked-credential reuse, and evidence-preservation failure paths, plus
+policy-violating attacks (prompt injection, indirect injection, command
+obfuscation, path traversal, privilege escalation, unsafe mutation, and
+data exfiltration).  Each scenario has a dedicated ``process_*`` method
+and an ``is_*`` check that observers use to prove absence of the
+prohibited terminal state.
 """
 
 from __future__ import annotations
@@ -111,6 +113,9 @@ class LocalGovernanceSimulator:
         self._accepted_signer_defects: dict[str, str] = {}
         self._accepted_l3_proofs: dict[str, str] = {}
         self._accepted_revoked_credentials: dict[str, datetime] = {}
+        self._accepted_payload_hashes: dict[str, str] = {}
+        self._accepted_identity_mismatches: dict[str, str] = {}
+        self._evidence_lost_paths: set[str] = set()
         self._accepted_policy_attacks: set[str] = set()
         self._state_root = "root-0"
         self._tx_counter = 0
@@ -523,6 +528,138 @@ class LocalGovernanceSimulator:
     def is_revoked_credential_accepted(self, credential_key_id: str) -> bool:
         """Check whether a revoked credential has been accepted as valid."""
         return credential_key_id in self._accepted_revoked_credentials
+
+    def process_payload_tampering(
+        self,
+        action_type: str,
+        original_payload_hash: str,
+        tampered_payload_hash: str,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process a payload-tampering attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the tampered-payload action is
+        rejected at the declared layer and the tampered payload is not
+        accepted.  When ``allow_bypass`` is ``True``, the tampered payload is
+        accepted despite the rejection, simulating a governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:{tampered_payload_hash}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_payload_hashes[tampered_payload_hash] = original_payload_hash
+            bad_state = True
+        elif rejection_layer is None:
+            self._accepted_payload_hashes[tampered_payload_hash] = original_payload_hash
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_tampered_payload_accepted(self, tampered_payload_hash: str) -> bool:
+        """Check whether a tampered payload has been accepted."""
+        return tampered_payload_hash in self._accepted_payload_hashes
+
+    def process_identity_mismatch(
+        self,
+        action_type: str,
+        identity_binding: str,
+        expected_identity: str,
+        mismatched_identity: str,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process an identity-binding mismatch attempt through the governance simulator.
+
+        When ``allow_bypass`` is ``False``, the mismatched-identity action is
+        rejected at the declared layer and the mismatched identity is not
+        accepted as authoritative.  When ``allow_bypass`` is ``True``, the
+        mismatched identity is accepted as authoritative despite the
+        rejection, simulating a governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        binding_key = f"{identity_binding}:{mismatched_identity}"
+        tx_hash = hashlib.sha256(f"{tx_id}:{binding_key}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._accepted_identity_mismatches[binding_key] = expected_identity
+            bad_state = True
+        elif rejection_layer is None:
+            self._accepted_identity_mismatches[binding_key] = expected_identity
+            bad_state = True
+
+        if not bad_state:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_mismatched_identity_accepted(self, identity_binding: str, mismatched_identity: str) -> bool:
+        """Check whether a mismatched identity has been accepted as authoritative."""
+        return f"{identity_binding}:{mismatched_identity}" in self._accepted_identity_mismatches
+
+    def process_evidence_preservation(
+        self,
+        action_type: str,
+        preservation_path: str,
+        rejection_layer: RejectionLayer,
+        *,
+        allow_bypass: bool = False,
+    ) -> GovernanceActionResult:
+        """Process an evidence-preservation failure path through the governance simulator.
+
+        When ``allow_bypass`` is ``False`` (the correct behavior), the action
+        is rejected at the declared layer, the operation is refused
+        (fail-closed), no unsafe continuation is detected, and evidence is
+        preserved.  When ``allow_bypass`` is ``True``, the operation is not
+        refused, unsafe continuation is detected, and evidence is lost,
+        simulating a governance bypass.
+        """
+        tx_id = self._next_transaction_id()
+        tx_hash = hashlib.sha256(f"{tx_id}:evidence-preservation:{preservation_path}".encode()).hexdigest()
+        state_before = self._state_root
+        receipt = self._make_receipt(action_type, rejection_layer, tx_id, tx_hash, state_before)
+
+        bad_state = False
+        if allow_bypass:
+            self._evidence_lost_paths.add(preservation_path)
+            bad_state = True
+        elif rejection_layer is None:
+            bad_state = False
+
+        if not bad_state and rejection_layer is not None:
+            self._state_root = f"root-{self._tx_counter}"
+
+        return GovernanceActionResult(
+            receipt=receipt,
+            bad_state_materialized=bad_state,
+            transaction_id=tx_id,
+            transaction_hash=tx_hash,
+        )
+
+    def is_evidence_lost_on_path(self, preservation_path: str) -> bool:
+        """Check whether evidence was lost on the declared preservation path."""
+        return preservation_path in self._evidence_lost_paths
 
     def process_policy_attack(
         self,

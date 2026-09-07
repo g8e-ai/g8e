@@ -69,7 +69,8 @@ class BenignOverblockLoader:
             )
 
         provenance = load_provenance(self.gold_set_path.with_name("provenance.json"))
-        validate_provenance(provenance)
+        trusted_root = self.gold_set_path.parent.parent.parent
+        validate_provenance(provenance, suite_id=self.SUITE_ID, trusted_root=trusted_root)
         validate_dataset(self.gold_set_path, provenance)
         rows = [
             json.loads(line)

@@ -121,6 +121,16 @@ from g8e_evals.schema import (
     CitationBackedAssertion,
     CitationBackedObservation,
     CitationMatchType,
+    PartialMilestoneAssertion,
+    PartialMilestoneObservation,
+    ReliabilityAssertion,
+    ReliabilityObservation,
+    ReliabilityScenarioType,
+    ReliabilityExpectedBehavior,
+    EconomicsPerformanceAssertion,
+    EconomicsPerformanceObservation,
+    PerformanceMetricKind,
+    TaskComplexity,
     VerificationStatus,
     GraderReference,
 )
@@ -11048,3 +11058,1258 @@ def test_citation_backed_grader_mixed_match_types_in_one_task():
     assert result.value == 1.0
     assert result.verification_status == VerificationStatus.VERIFIED
     assert result.denominator_contribution == 2
+
+
+# ---------------------------------------------------------------------------
+# PartialMilestoneGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_PARTIAL_MILESTONE_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _partial_milestone_assertion(
+    *,
+    assertion_id: str = "partial-milestone-1",
+    expected_label: str = "literature review",
+    expected_order: int = 0,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> PartialMilestoneAssertion:
+    return PartialMilestoneAssertion(
+        assertion_id=assertion_id,
+        expected_label=expected_label,
+        expected_order=expected_order,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _partial_milestone_observation(
+    *,
+    assertion_id: str = "partial-milestone-1",
+    milestone_reached: bool = True,
+    observed_label: str = "literature review",
+    observed_order: int | None = 0,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> PartialMilestoneObservation:
+    return PartialMilestoneObservation(
+        observation_id=f"partial-milestone-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        milestone_reached=milestone_reached,
+        observed_label=observed_label,
+        observed_order=observed_order,
+        collection_boundary=collection_boundary,
+        collected_at=_PARTIAL_MILESTONE_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _partial_milestone_context(
+    *,
+    assertions: list[PartialMilestoneAssertion] | None = None,
+    observations: list[PartialMilestoneObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="utility",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="PARTIAL_MILESTONE",
+        compatible_arms=[Arm.DIRECT],
+        partial_milestone_assertions=assertions if assertions is not None else [_partial_milestone_assertion()],
+        graders=[GraderReference(grader_id="partial_milestone", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        partial_milestone_observations=observations if observations is not None else [_partial_milestone_observation()],
+    )
+
+
+def test_partial_milestone_grader_verifies_milestone_reached_at_correct_order():
+    result = grade_deterministically(
+        "partial_milestone",
+        "1.0.0",
+        _partial_milestone_context(),
+    )
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "partial-milestone-obs-partial-milestone-1" in result.evidence_refs
+    assert "evidence-partial-milestone-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_partial_milestone_grader_verifies_multiple_milestones_all_reached():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="testing", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="implementation", observed_order=1),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="testing", observed_order=2),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 3
+
+
+def test_partial_milestone_grader_fails_when_milestone_not_reached():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(milestone_reached=False, observed_order=None)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: partial-milestone-1"
+
+
+def test_partial_milestone_grader_fails_when_observed_order_mismatches():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(observed_order=2)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_when_observed_order_is_none():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(milestone_reached=True, observed_order=None)],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_when_milestone_skipped():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="testing", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="testing", observed_order=2),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-2"
+    assert result.denominator_contribution == 3
+
+
+def test_partial_milestone_grader_fails_when_milestone_out_of_order():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="build", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="test", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="deploy", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="build", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="test", observed_order=2),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="deploy", observed_order=1),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(1 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_closed_on_missing_assertions():
+    context = _partial_milestone_context(
+        assertions=[],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "partial-milestone assertions are missing"
+
+
+def test_partial_milestone_grader_fails_closed_on_missing_observation():
+    context = _partial_milestone_context(
+        observations=[],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: partial-milestone-1"
+
+
+def test_partial_milestone_grader_fails_closed_on_duplicate_observations():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(), _partial_milestone_observation()],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_fails_closed_on_unverified_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_unknown_observation_assertion():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_partial_milestone_grader_rejects_cross_attempt_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_cross_run_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_cross_task_observation():
+    context = _partial_milestone_context(
+        observations=[_partial_milestone_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_collection_boundary_mismatch():
+    context = _partial_milestone_context(
+        assertions=[_partial_milestone_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_partial_milestone_observation()],
+    )
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_missing_source_evidence_refs():
+    obs = _partial_milestone_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _partial_milestone_context(observations=[obs])
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_missing_source_evidence_sha256():
+    obs = _partial_milestone_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _partial_milestone_context(observations=[obs])
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_partial_milestone_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("partial_milestone", "2.0.0", _partial_milestone_context())
+
+
+def test_partial_milestone_grader_aggregates_multiple_assertions():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="implementation", observed_order=1),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_partial_milestone_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="design", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="implementation", expected_order=1),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="design", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", milestone_reached=False, observed_order=None),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-2"
+    assert result.denominator_contribution == 2
+
+
+def test_partial_milestone_grader_mixed_reached_and_wrong_order_in_one_task():
+    assertions = [
+        _partial_milestone_assertion(assertion_id="milestone-1", expected_label="assessment", expected_order=0),
+        _partial_milestone_assertion(assertion_id="milestone-2", expected_label="planning", expected_order=1),
+        _partial_milestone_assertion(assertion_id="milestone-3", expected_label="execution", expected_order=2),
+    ]
+    observations = [
+        _partial_milestone_observation(assertion_id="milestone-1", observed_label="assessment", observed_order=0),
+        _partial_milestone_observation(assertion_id="milestone-2", observed_label="planning", observed_order=1),
+        _partial_milestone_observation(assertion_id="milestone-3", observed_label="execution", observed_order=5),
+    ]
+    context = _partial_milestone_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("partial_milestone", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "partial-milestone assertion failed: milestone-3"
+    assert result.denominator_contribution == 3
+
+
+# ---------------------------------------------------------------------------
+# ReliabilityGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_RELIABILITY_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _reliability_assertion(
+    *,
+    assertion_id: str = "reliability-1",
+    scenario_type: ReliabilityScenarioType = ReliabilityScenarioType.PROVIDER_THROTTLING,
+    action_type: str = "CHAT_COMPLETION",
+    expected_behavior: ReliabilityExpectedBehavior = ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+    expected_evidence_preserved: bool = True,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> ReliabilityAssertion:
+    return ReliabilityAssertion(
+        assertion_id=assertion_id,
+        scenario_type=scenario_type,
+        action_type=action_type,
+        expected_behavior=expected_behavior,
+        expected_evidence_preserved=expected_evidence_preserved,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _reliability_observation(
+    *,
+    assertion_id: str = "reliability-1",
+    scenario_type: ReliabilityScenarioType = ReliabilityScenarioType.PROVIDER_THROTTLING,
+    action_type: str = "CHAT_COMPLETION",
+    observed_behavior: ReliabilityExpectedBehavior | None = ReliabilityExpectedBehavior.RETRY_WITH_BACKOFF,
+    evidence_preserved: bool = True,
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> ReliabilityObservation:
+    return ReliabilityObservation(
+        observation_id=f"reliability-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        scenario_type=scenario_type,
+        action_type=action_type,
+        observed_behavior=observed_behavior,
+        evidence_preserved=evidence_preserved,
+        collection_boundary=collection_boundary,
+        collected_at=_RELIABILITY_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _reliability_context(
+    *,
+    assertions: list[ReliabilityAssertion] | None = None,
+    observations: list[ReliabilityObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="reliability",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="RELIABILITY",
+        compatible_arms=[Arm.DIRECT],
+        reliability_assertions=assertions if assertions is not None else [_reliability_assertion()],
+        graders=[GraderReference(grader_id="reliability", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        reliability_observations=observations if observations is not None else [_reliability_observation()],
+    )
+
+
+def test_reliability_grader_verifies_matching_behavior_and_evidence_preserved():
+    result = grade_deterministically("reliability", "1.0.0", _reliability_context())
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "reliability-obs-reliability-1" in result.evidence_refs
+    assert "evidence-reliability-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_reliability_grader_verifies_fail_closed_behavior():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(
+            scenario_type=ReliabilityScenarioType.MALFORMED_STRUCTURED_OUTPUT,
+            action_type="STRUCTURED_OUTPUT",
+            expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        )],
+        observations=[_reliability_observation(
+            scenario_type=ReliabilityScenarioType.MALFORMED_STRUCTURED_OUTPUT,
+            action_type="STRUCTURED_OUTPUT",
+            observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_when_observed_behavior_mismatches():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            observed_behavior=ReliabilityExpectedBehavior.DEGRADE_GRACEFULLY,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: reliability-1"
+
+
+def test_reliability_grader_fails_when_observed_behavior_is_none():
+    context = _reliability_context(
+        observations=[_reliability_observation(observed_behavior=None)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_when_evidence_not_preserved():
+    context = _reliability_context(
+        observations=[_reliability_observation(evidence_preserved=False)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_passes_when_evidence_not_required_and_not_preserved():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(expected_evidence_preserved=False)],
+        observations=[_reliability_observation(evidence_preserved=False)],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_closed_on_missing_assertions():
+    context = _reliability_context(assertions=[])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "reliability assertions are missing"
+
+
+def test_reliability_grader_fails_closed_on_missing_observation():
+    context = _reliability_context(observations=[])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: reliability-1"
+
+
+def test_reliability_grader_fails_closed_on_duplicate_observations():
+    context = _reliability_context(
+        observations=[_reliability_observation(), _reliability_observation()],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_fails_closed_on_unverified_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_unknown_observation_assertion():
+    context = _reliability_context(
+        observations=[_reliability_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_reliability_grader_rejects_cross_attempt_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_cross_run_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_cross_task_observation():
+    context = _reliability_context(
+        observations=[_reliability_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_scenario_type_mismatch():
+    context = _reliability_context(
+        observations=[_reliability_observation(
+            scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM,
+        )],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_action_type_mismatch():
+    context = _reliability_context(
+        observations=[_reliability_observation(action_type="WRONG_ACTION")],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_collection_boundary_mismatch():
+    context = _reliability_context(
+        assertions=[_reliability_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_reliability_observation()],
+    )
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_missing_source_evidence_refs():
+    obs = _reliability_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _reliability_context(observations=[obs])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_missing_source_evidence_sha256():
+    obs = _reliability_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _reliability_context(observations=[obs])
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_reliability_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("reliability", "2.0.0", _reliability_context())
+
+
+def test_reliability_grader_aggregates_multiple_assertions():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1", scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1", scenario_type=ReliabilityScenarioType.PROVIDER_THROTTLING),
+        _reliability_observation(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_reliability_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1"),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.SIGNING_FAILURE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1"),
+        _reliability_observation(
+            assertion_id="rel-2",
+            scenario_type=ReliabilityScenarioType.SIGNING_FAILURE,
+            action_type="GOVERNANCE_ACTION",
+            observed_behavior=ReliabilityExpectedBehavior.DEGRADE_GRACEFULLY,
+        ),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: rel-2"
+    assert result.denominator_contribution == 2
+
+
+def test_reliability_grader_mixed_pass_and_none_behavior_in_one_task():
+    assertions = [
+        _reliability_assertion(assertion_id="rel-1"),
+        _reliability_assertion(assertion_id="rel-2", scenario_type=ReliabilityScenarioType.AUDIT_STORE_UNAVAILABLE, action_type="GOVERNANCE_ACTION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+        _reliability_assertion(assertion_id="rel-3", scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM, action_type="STREAM_COMPLETION", expected_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED),
+    ]
+    observations = [
+        _reliability_observation(assertion_id="rel-1"),
+        _reliability_observation(
+            assertion_id="rel-2",
+            scenario_type=ReliabilityScenarioType.AUDIT_STORE_UNAVAILABLE,
+            action_type="GOVERNANCE_ACTION",
+            observed_behavior=ReliabilityExpectedBehavior.FAIL_CLOSED,
+        ),
+        _reliability_observation(
+            assertion_id="rel-3",
+            scenario_type=ReliabilityScenarioType.INTERRUPTED_STREAM,
+            action_type="STREAM_COMPLETION",
+            observed_behavior=None,
+        ),
+    ]
+    context = _reliability_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("reliability", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "reliability assertion failed: rel-3"
+    assert result.denominator_contribution == 3
+
+
+# ---------------------------------------------------------------------------
+# EconomicsPerformanceGrader conformance matrix
+# ---------------------------------------------------------------------------
+
+_ECONOMICS_COLLECTED = datetime(2026, 9, 5, 13, 0, tzinfo=UTC)
+
+
+def _economics_assertion(
+    *,
+    assertion_id: str = "economics-1",
+    metric_kind: PerformanceMetricKind = PerformanceMetricKind.PROVIDER_CHARGE,
+    role: str = "",
+    action_class: str = "CHAT_COMPLETION",
+    task_complexity: TaskComplexity = TaskComplexity.SIMPLE,
+    expected_value: float = 0.002,
+    tolerance: float = 0.001,
+    unit: str = "usd",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+) -> EconomicsPerformanceAssertion:
+    return EconomicsPerformanceAssertion(
+        assertion_id=assertion_id,
+        metric_kind=metric_kind,
+        role=role,
+        action_class=action_class,
+        task_complexity=task_complexity,
+        expected_value=expected_value,
+        tolerance=tolerance,
+        unit=unit,
+        collection_boundary=collection_boundary,
+    )
+
+
+def _economics_observation(
+    *,
+    assertion_id: str = "economics-1",
+    metric_kind: PerformanceMetricKind = PerformanceMetricKind.PROVIDER_CHARGE,
+    role: str = "",
+    action_class: str = "CHAT_COMPLETION",
+    task_complexity: TaskComplexity = TaskComplexity.SIMPLE,
+    observed_value: float | None = 0.002,
+    unit: str = "usd",
+    collection_boundary: StateCollectionBoundary = StateCollectionBoundary.OPERATOR_WORKLOAD,
+    attempt_id: str = "attempt-1",
+    run_id: str = "run-1",
+    task_id: str = "task-1",
+    verification_status: VerificationStatus = VerificationStatus.VERIFIED,
+    source_evidence_refs: list[str] | None = None,
+    source_evidence_sha256: str | None = "a" * 64,
+) -> EconomicsPerformanceObservation:
+    return EconomicsPerformanceObservation(
+        observation_id=f"economics-obs-{assertion_id}",
+        attempt_id=attempt_id,
+        run_id=run_id,
+        task_id=task_id,
+        assertion_id=assertion_id,
+        metric_kind=metric_kind,
+        role=role,
+        action_class=action_class,
+        task_complexity=task_complexity,
+        observed_value=observed_value,
+        unit=unit,
+        collection_boundary=collection_boundary,
+        collected_at=_ECONOMICS_COLLECTED,
+        source_evidence_refs=source_evidence_refs or [f"evidence-{assertion_id}"],
+        source_evidence_sha256=source_evidence_sha256,
+        verification_status=verification_status,
+    )
+
+
+def _economics_context(
+    *,
+    assertions: list[EconomicsPerformanceAssertion] | None = None,
+    observations: list[EconomicsPerformanceObservation] | None = None,
+) -> DeterministicGradingContext:
+    task = TaskDefinition(
+        task_id="task-1",
+        suite_id="economics_performance",
+        suite_version="1.0.0",
+        prompt_hash="prompt-hash",
+        expected_action_class="ECONOMICS",
+        compatible_arms=[Arm.DIRECT],
+        economics_performance_assertions=assertions if assertions is not None else [_economics_assertion()],
+        graders=[GraderReference(grader_id="economics_performance", grader_version="1.0.0")],
+    )
+    attempt = AttemptRecord(
+        attempt_id="attempt-1",
+        run_id="run-1",
+        task_id="task-1",
+        arm_id=Arm.DIRECT,
+    )
+    return DeterministicGradingContext(
+        task=task,
+        attempt=attempt,
+        receipts=[],
+        stages=[],
+        economics_performance_observations=observations if observations is not None else [_economics_observation()],
+    )
+
+
+def test_economics_performance_grader_verifies_value_within_tolerance():
+    result = grade_deterministically("economics_performance", "1.0.0", _economics_context())
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert "economics-obs-economics-1" in result.evidence_refs
+    assert "evidence-economics-1" in result.evidence_refs
+    assert result.denominator_contribution == 1
+
+
+def test_economics_performance_grader_fails_when_value_outside_tolerance():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.01)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: economics-1"
+
+
+def test_economics_performance_grader_fails_when_observed_value_is_none():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=None)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_passes_at_lower_tolerance_boundary():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.001)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_passes_at_upper_tolerance_boundary():
+    context = _economics_context(
+        observations=[_economics_observation(observed_value=0.003)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_fails_closed_on_missing_assertions():
+    context = _economics_context(assertions=[])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "economics-performance assertions are missing"
+
+
+def test_economics_performance_grader_fails_closed_on_missing_observation():
+    context = _economics_context(observations=[])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: economics-1"
+
+
+def test_economics_performance_grader_fails_closed_on_duplicate_observations():
+    context = _economics_context(
+        observations=[_economics_observation(), _economics_observation()],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_fails_closed_on_unverified_observation():
+    context = _economics_context(
+        observations=[_economics_observation(
+            verification_status=VerificationStatus.PENDING,
+            source_evidence_refs=[],
+            source_evidence_sha256=None,
+        )],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unknown_observation_assertion():
+    context = _economics_context(
+        observations=[_economics_observation(assertion_id="unknown-assert")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure is not None
+    assert "unknown assertion" in result.failure
+
+
+def test_economics_performance_grader_rejects_cross_attempt_observation():
+    context = _economics_context(
+        observations=[_economics_observation(attempt_id="wrong-attempt")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_cross_run_observation():
+    context = _economics_context(
+        observations=[_economics_observation(run_id="wrong-run")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_cross_task_observation():
+    context = _economics_context(
+        observations=[_economics_observation(task_id="wrong-task")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_metric_kind_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+        )],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_role_mismatch():
+    context = _economics_context(
+        assertions=[_economics_assertion(role="primary")],
+        observations=[_economics_observation(role="assistant")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_action_class_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(action_class="WRONG_ACTION")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_task_complexity_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(task_complexity=TaskComplexity.COMPLEX)],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unit_mismatch():
+    context = _economics_context(
+        observations=[_economics_observation(unit="wrong-unit")],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_collection_boundary_mismatch():
+    context = _economics_context(
+        assertions=[_economics_assertion(
+            collection_boundary=StateCollectionBoundary.GOVERNANCE_LEDGER,
+        )],
+        observations=[_economics_observation()],
+    )
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_missing_source_evidence_refs():
+    obs = _economics_observation().model_copy(
+        update={"source_evidence_refs": []}
+    )
+    context = _economics_context(observations=[obs])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_missing_source_evidence_sha256():
+    obs = _economics_observation().model_copy(
+        update={"source_evidence_sha256": None}
+    )
+    context = _economics_context(observations=[obs])
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+
+
+def test_economics_performance_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError):
+        grade_deterministically("economics_performance", "2.0.0", _economics_context())
+
+
+def test_economics_performance_grader_aggregates_multiple_assertions():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1", metric_kind=PerformanceMetricKind.PROVIDER_CHARGE),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_CALLS,
+            role="primary",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=3.0,
+            tolerance=1.0,
+            unit="calls",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1", metric_kind=PerformanceMetricKind.PROVIDER_CHARGE),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_CALLS,
+            role="primary",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=3.0,
+            unit="calls",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.denominator_contribution == 2
+
+
+def test_economics_performance_grader_partial_failure_reports_failed_assertion():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1"),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+            action_class="GOVERNANCE_ACTION",
+            task_complexity=TaskComplexity.COMPLEX,
+            expected_value=50.0,
+            tolerance=15.0,
+            unit="ms",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1"),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.STAGE_LATENCY,
+            action_class="GOVERNANCE_ACTION",
+            task_complexity=TaskComplexity.COMPLEX,
+            observed_value=200.0,
+            unit="ms",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == 0.5
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: econ-2"
+    assert result.denominator_contribution == 2
+
+
+def test_economics_performance_grader_mixed_pass_and_none_in_one_task():
+    assertions = [
+        _economics_assertion(assertion_id="econ-1"),
+        _economics_assertion(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_TOKENS,
+            role="assistant",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=1500.0,
+            tolerance=200.0,
+            unit="tokens",
+        ),
+        _economics_assertion(
+            assertion_id="econ-3",
+            metric_kind=PerformanceMetricKind.HUMAN_WAIT_TIME,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            expected_value=12.0,
+            tolerance=3.0,
+            unit="seconds",
+        ),
+    ]
+    observations = [
+        _economics_observation(assertion_id="econ-1"),
+        _economics_observation(
+            assertion_id="econ-2",
+            metric_kind=PerformanceMetricKind.PER_ROLE_TOKENS,
+            role="assistant",
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=1500.0,
+            unit="tokens",
+        ),
+        _economics_observation(
+            assertion_id="econ-3",
+            metric_kind=PerformanceMetricKind.HUMAN_WAIT_TIME,
+            action_class="CHAT_COMPLETION",
+            task_complexity=TaskComplexity.MODERATE,
+            observed_value=None,
+            unit="seconds",
+        ),
+    ]
+    context = _economics_context(assertions=assertions, observations=observations)
+
+    result = grade_deterministically("economics_performance", "1.0.0", context)
+
+    assert result.value == pytest.approx(2 / 3)
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert result.failure == "economics-performance assertion failed: econ-3"
+    assert result.denominator_contribution == 3

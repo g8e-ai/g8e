@@ -17,11 +17,13 @@ The observers produce two kinds of evidence:
 1. ``ReceiptObservation`` records from the simulator's signed receipts, with
    deterministic stage evidence showing the rejection at the declared layer.
 2. Typed security observations (``ReplayAttemptObservation``,
-   ``SignedFieldTamperingObservation``, ``NonceExpirationObservation``,
-   ``StaleStateRootObservation``, ``SignerDefectObservation``,
-   ``L3ProofTransplantObservation``, ``RevokedCredentialObservation``) that
-   record whether the prohibited terminal state materialized at the declared
-   collection boundary.
+   ``SignedFieldTamperingObservation``, ``PayloadTamperingObservation``,
+   ``NonceExpirationObservation``, ``StaleStateRootObservation``,
+   ``IdentityMismatchObservation``, ``SignerDefectObservation``,
+   ``L3ProofTransplantObservation``, ``RevokedCredentialObservation``,
+   ``EvidencePreservationObservation``) that record whether the
+   prohibited terminal state materialized at the declared collection
+   boundary.
 """
 
 from __future__ import annotations
@@ -32,11 +34,16 @@ from g8e.receipts import verify_action_receipt_signature
 from g8e_evals.benchmarks.governance.simulator import GovernanceActionResult, LocalGovernanceSimulator
 from g8e_evals.schema import (
     AttemptRecord,
+    EvidencePreservationObservation,
+    EvidencePreservationOutcome,
+    IdentityMismatchObservation,
     L3ProofTransplantObservation,
     NonceExpirationObservation,
+    PayloadTamperingObservation,
     PolicyAttackObservation,
     ReceiptObservation,
     ReplayAttemptObservation,
+    RejectionLayer,
     RevokedCredentialObservation,
     SignedFieldTamperingObservation,
     SignerDefectObservation,
@@ -538,6 +545,205 @@ class RevokedCredentialObserverImpl:
             ))
 
         return receipt_observations[0], revoked_credential_observations
+
+
+class PayloadTamperingObserverImpl:
+    """Observes payload-tampering governance actions and produces typed observations.
+
+    The observer processes each payload-tampering assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces a ``PayloadTamperingObservation`` recording whether
+    the tampered payload was accepted at the declared collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[PayloadTamperingObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        payload_observations: list[PayloadTamperingObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
+
+        for assertion in task.payload_tampering_assertions:
+            result = self._simulator.process_payload_tampering(
+                action_type=assertion.action_type,
+                original_payload_hash=assertion.original_payload_hash,
+                tampered_payload_hash=assertion.tampered_payload_hash,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
+            )
+
+            tampered_accepted = self._simulator.is_tampered_payload_accepted(
+                assertion.tampered_payload_hash
+            )
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=tampered_accepted,
+            )
+
+            payload_observations.append(PayloadTamperingObservation(
+                observation_id=f"{attempt.attempt_id}:payload-tamper:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                tampered_payload_hash=assertion.tampered_payload_hash,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=_sha,
+                verification_status=_status,
+            ))
+
+        return receipt_observations[0], payload_observations
+
+
+class IdentityMismatchObserverImpl:
+    """Observes identity-binding mismatch governance actions and produces typed observations.
+
+    The observer processes each identity-mismatch assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces an ``IdentityMismatchObservation`` recording whether
+    the mismatched identity was accepted as authoritative at the declared
+    collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[IdentityMismatchObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        identity_observations: list[IdentityMismatchObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
+
+        for assertion in task.identity_mismatch_assertions:
+            result = self._simulator.process_identity_mismatch(
+                action_type=assertion.action_type,
+                identity_binding=assertion.identity_binding.value,
+                expected_identity=assertion.expected_identity,
+                mismatched_identity=assertion.mismatched_identity,
+                rejection_layer=assertion.expected_rejection_layer,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(
+                    result, attempt, assertion.action_type, self._simulator.public_key_hex
+                )
+            )
+
+            mismatched_accepted = self._simulator.is_mismatched_identity_accepted(
+                assertion.identity_binding.value, assertion.mismatched_identity
+            )
+            observed = StateValue(
+                kind=StateEvidenceKind.FILE,
+                exists=mismatched_accepted,
+            )
+
+            identity_observations.append(IdentityMismatchObservation(
+                observation_id=f"{attempt.attempt_id}:identity-mismatch:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                action_type=assertion.action_type,
+                identity_binding=assertion.identity_binding,
+                expected_identity=assertion.expected_identity,
+                mismatched_identity=assertion.mismatched_identity,
+                collection_boundary=assertion.collection_boundary,
+                observed=observed,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=_sha,
+                verification_status=_status,
+            ))
+
+        return receipt_observations[0], identity_observations
+
+
+class EvidencePreservationObserverImpl:
+    """Observes evidence-preservation failure paths and produces typed observations.
+
+    The observer processes each evidence-preservation assertion through the
+    governance simulator, produces a ``ReceiptObservation`` from the signed
+    receipt, and produces an ``EvidencePreservationObservation`` recording
+    whether the operation was refused (fail-closed), whether unsafe
+    continuation was detected, and the measured outcome (evidence preserved
+    vs evidence lost) at the declared collection boundary.
+    """
+
+    def __init__(self, simulator: LocalGovernanceSimulator, evidence_sha: str, evidence_ref: str) -> None:
+        self._simulator = simulator
+        self._evidence_sha = evidence_sha
+        self._evidence_ref = evidence_ref
+
+    async def observe(
+        self,
+        task: TaskDefinition,
+        attempt: AttemptRecord,
+    ) -> tuple[ReceiptObservation, list[EvidencePreservationObservation]]:
+        receipt_observations: list[ReceiptObservation] = []
+        preservation_observations: list[EvidencePreservationObservation] = []
+        _sha, _status = _evidence_binding(self._evidence_sha)
+
+        for assertion in task.evidence_preservation_assertions:
+            result = self._simulator.process_evidence_preservation(
+                action_type="EVIDENCE_PRESERVATION_PROBE",
+                preservation_path=assertion.preservation_path.value,
+                rejection_layer=RejectionLayer.L4_VERIFICATION,
+            )
+            receipt_observations.append(
+                _make_receipt_observation(
+                    result, attempt, "EVIDENCE_PRESERVATION_PROBE", self._simulator.public_key_hex
+                )
+            )
+
+            evidence_lost = self._simulator.is_evidence_lost_on_path(
+                assertion.preservation_path.value
+            )
+            operation_refused = not evidence_lost
+            unsafe_continuation = evidence_lost
+            measured_outcome = (
+                EvidencePreservationOutcome.EVIDENCE_LOST
+                if evidence_lost
+                else EvidencePreservationOutcome.EVIDENCE_PRESERVED
+            )
+
+            preservation_observations.append(EvidencePreservationObservation(
+                observation_id=f"{attempt.attempt_id}:evidence-preservation:{assertion.assertion_id}",
+                attempt_id=attempt.attempt_id,
+                run_id=attempt.run_id,
+                task_id=attempt.task_id,
+                assertion_id=assertion.assertion_id,
+                preservation_path=assertion.preservation_path,
+                collection_boundary=assertion.collection_boundary,
+                failure_path_injected=True,
+                operation_refused=operation_refused,
+                unsafe_continuation_detected=unsafe_continuation,
+                measured_outcome=measured_outcome,
+                collected_at=datetime.now(UTC),
+                source_evidence_refs=[self._evidence_ref],
+                source_evidence_sha256=_sha,
+                verification_status=_status,
+            ))
+
+        return receipt_observations[0], preservation_observations
 
 
 class PolicyAttackObserverImpl:

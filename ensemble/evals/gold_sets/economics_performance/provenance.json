@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "benchmark": "economics_performance",
+  "source": {
+    "repository": "https://github.com/lateralus-labs/g8e",
+    "revision": "draft/v2.1.5",
+    "license_spdx": "Apache-2.0",
+    "code_path": "g8e_evals/benchmarks/economics/loader.py",
+    "code_sha256": "e4251e131bf4f7c5a0bd45d13a5fa820a48b2534b7648b33b915799d95930e0d"
+  },
+  "output": {
+    "path": "input_data.jsonl",
+    "rows": 8,
+    "sha256": "43c895118f9f7969135307b22eaad771136801bdfc6f47af186330246c4c7f33"
+  },
+  "partition": "development",
+  "domain_strata": ["economics", "performance"]
+}

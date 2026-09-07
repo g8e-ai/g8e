@@ -1180,6 +1180,10 @@ var (
 
 	// Compliance KSI errors
 	ErrKSICatalogInvalid          = errors.New("KSI catalog invalid")
+	ErrKSIMethodInvalid           = errors.New("KSI method invalid")
+	ErrKSIMethodNotIndependent    = errors.New("KSI methods are not independent")
+	ErrKSIBindingIncomplete       = errors.New("KSI evaluation binding incomplete")
+	ErrKSIBindingMismatch         = errors.New("KSI evaluation binding mismatch")
 	ErrOverlayCatalogInvalid      = errors.New("overlay catalog invalid")
 	ErrOverlayReadFailed          = errors.New("overlay read failed")
 	ErrOverlayParseFailed         = errors.New("overlay parse failed")
@@ -1200,11 +1204,26 @@ var (
 	ErrDemoRunVerificationFailed  = errors.New("compliance: demo run verification failed")
 	ErrComplianceReleaseEvidence  = errors.New("compliance: release evidence generation failed")
 
+	// Compliance evidence graph errors
+	ErrEvidenceDuplicateID          = errors.New("compliance: duplicate evidence artifact ID")
+	ErrEvidenceDuplicateContent     = errors.New("compliance: duplicate evidence content with conflicting metadata")
+	ErrEvidenceCycleDetected        = errors.New("compliance: prohibited reference cycle in evidence graph")
+	ErrEvidenceSchemaMismatch       = errors.New("compliance: evidence schema or version mismatch")
+	ErrEvidenceMediaTypeUnsupported = errors.New("compliance: unsupported evidence media type")
+	ErrEvidenceTrustNotAssessed     = errors.New("compliance: evidence trust not assessed")
+	ErrEvidenceEncryptionInvalid    = errors.New("compliance: evidence encryption metadata authentication failed")
+	ErrEvidenceImporterFailed       = errors.New("compliance: evidence importer failed")
+	ErrEvidenceProducerUnverified   = errors.New("compliance: evidence producer identity not verified")
+	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
+
 	// Compliance KSI history errors
-	ErrKSIHistoryWriteFailed = errors.New("KSI history: write failed")
-	ErrKSIHistoryReadFailed  = errors.New("KSI history: read failed")
-	ErrKSIHistoryParseFailed = errors.New("KSI history: parse failed")
-	ErrKSIHistoryEmpty       = errors.New("KSI history: no snapshots found")
+	ErrKSIHistoryWriteFailed     = errors.New("KSI history: write failed")
+	ErrKSIHistoryReadFailed      = errors.New("KSI history: read failed")
+	ErrKSIHistoryParseFailed     = errors.New("KSI history: parse failed")
+	ErrKSIHistoryEmpty           = errors.New("KSI history: no snapshots found")
+	ErrKSIUnavailableWriteFailed = errors.New("KSI unavailable interval: write failed")
+	ErrKSIUnavailableReadFailed  = errors.New("KSI unavailable interval: read failed")
+	ErrKSIUnavailableParseFailed = errors.New("KSI unavailable interval: parse failed")
 
 	// Docker interactive enrollment walkthrough errors
 	ErrDockerStartEnrollmentFailed = errors.New("docker start: owner enrollment failed")

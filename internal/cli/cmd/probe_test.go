@@ -25,7 +25,7 @@ func TestProbe_EvaluateFailClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("catalog load: %v", err)
 	}
-	rs := evaluateKSIs(context.Background(), fileSvc, loaded, compliance.ClassC)
+	rs := evaluateKSIs(context.Background(), fileSvc, loaded, compliance.ClassC, testEvaluationBinding(t))
 	t.Logf("resultSet is nil: %v", rs == nil)
 	if rs != nil {
 		t.Logf("results: %d, satisfied: %d, notsat: %d", len(rs.Results), rs.SatisfiedCount(), rs.NotSatisfiedCount())

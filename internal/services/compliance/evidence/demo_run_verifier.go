@@ -46,9 +46,17 @@ type ProvenanceArtifact struct {
 	Body []byte
 }
 
-// ProvenanceSource enumerates the complete source provenance set for a demo.
+// DemoDefinitionArtifact is one canonical DemoScenarioDefinition body covered
+// by a DemoManifest scenario_definition_refs entry.
+type DemoDefinitionArtifact struct {
+	Body []byte
+}
+
+// ProvenanceSource enumerates the complete source provenance set for a demo,
+// including the manifest-referenced canonical scenario definitions.
 type ProvenanceSource interface {
 	Artifacts(context.Context, string) ([]ProvenanceArtifact, error)
+	Definitions(context.Context, string) ([]DemoDefinitionArtifact, error)
 }
 
 type demoRunVerifier struct {
@@ -604,11 +612,7 @@ func parseExpectedContentReference(reference, expectedPrefix string) (string, st
 }
 
 func signerPublicKey(keyID string) (ed25519.PublicKey, error) {
-	decoded, err := hex.DecodeString(keyID)
-	if err != nil || len(decoded) != ed25519.PublicKeySize {
-		return nil, constants.ErrTrustedSignerKeyNotFound
-	}
-	return ed25519.PublicKey(decoded), nil
+	return governance.SignerPublicKey(keyID)
 }
 
 func receiptInvestigationBound(receipt *operatorv1.ActionReceipt, investigationIDs []string) bool {

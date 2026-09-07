@@ -9,6 +9,7 @@ package compliance
 
 import (
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -64,27 +65,12 @@ func TestPhase0Architecture_ComplianceDoesNotImportDemoOrEvalPackages(t *testing
 			"current separation is intentional and documented here. Found unexpected deps: %v", found)
 }
 
-// TestPhase0Architecture_EvidenceStructLacksContentAddressedFields documents
-// that the current Evidence model carries only a string type tag, a string
-// reference, and a human description. It has no content digest, producer
-// identity, assessment-scope binding, verifier identity, verifier version,
-// verification status, production time, freshness, or bundle-relative
-// location. This is the baseline gap that Phase 1's ComplianceEvidenceReference
-// model closes.
-func TestPhase0Architecture_EvidenceStructLacksContentAddressedFields(t *testing.T) {
-	e := Evidence{
-		Type:        EvidenceTypeReceiptID,
-		Reference:   "tx-123",
-		Description: "receipt exists",
-	}
-
-	// The struct has exactly three fields. Phase 1 adds digest, producer,
-	// scope binding, verifier, freshness, and bundle path.
-	assert.Equal(t, "tx-123", e.Reference, phase0RegressionBeforeFix)
-	assert.Equal(t, "receipt exists", e.Description, phase0RegressionBeforeFix)
-	// No digest field exists: the reference is an opaque string, not a
-	// content-addressed artifact ID with a sha256.
-	assert.NotContains(t, e.Reference, "sha256:", phase0RegressionBeforeFix+": reference is not content-addressed")
+// TestPhase3Architecture_KSIResultsUseProtocolEvidenceReferences verifies that
+// KSI evaluation no longer exposes the legacy local Evidence string record.
+func TestPhase3Architecture_KSIResultsUseProtocolEvidenceReferences(t *testing.T) {
+	field, ok := reflect.TypeOf(KSIResult{}).FieldByName("Evidence")
+	require.True(t, ok, phase0RegressionAfterFix)
+	assert.Equal(t, reflect.TypeOf([]*compliancev1.ComplianceEvidenceReference{}), field.Type, phase0RegressionAfterFix)
 }
 
 // TestPhase1Architecture_ModelsAreProtocolOwned verifies that Phase 1 closes

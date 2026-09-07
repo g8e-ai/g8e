@@ -11,194 +11,117 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// MethodClassification is the Phase 0 classification of every KSI automated
-// method registered in DefaultMethods. The plan requires each method to be
-// classified as existence, structural, cryptographic, state-observation,
-// historical, customer-attestation, or unsupported evidence.
-type MethodClassification string
-
-const (
-	MethodClassExistence           MethodClassification = "existence"
-	MethodClassStructural          MethodClassification = "structural"
-	MethodClassCryptographic       MethodClassification = "cryptographic"
-	MethodClassStateObservation    MethodClassification = "state_observation"
-	MethodClassHistorical          MethodClassification = "historical"
-	MethodClassCustomerAttestation MethodClassification = "customer_attestation"
-	MethodClassUnsupported         MethodClassification = "unsupported"
-)
-
-// MethodInventoryEntry classifies one KSI method or one unregistered KSI.
-type MethodInventoryEntry struct {
-	KSIID          string
-	MethodName     string // empty for unregistered KSIs
-	Classification MethodClassification
-	Reason         string
+type expectedMethodMetadata struct {
+	artifact KSIArtifactIdentity
+	boundary KSICollectionBoundary
+	verifier KSIVerifierFamily
+	property KSIMeasuredProperty
 }
 
-// phase0MethodInventory classifies every method registered in DefaultMethods
-// and every KSI in the catalog that has no registered method.
-//
-// Key finding: no registered method performs cryptographic verification,
-// independent state observation, historical freshness analysis, or
-// customer-attestation import. Every registered method is either an existence
-// check (non-empty list/string) or a structural check (field presence or hash
-// linking without signature verification). The receiptsHaveSignatures method
-// is structural, not cryptographic: it checks that Signature and SignerKeyID
-// are nonempty, not that the signature verifies against a trusted key.
-//
-// This inventory is the baseline that Phase 3 closes by adding cryptographic,
-// state-observation, historical, and customer-attestation methods.
-var phase0MethodInventory = []MethodInventoryEntry{
-	// KSI-CMT-01: auditEventsExist + ledgerCommitsExist
-	{KSIID: "KSI-CMT-01", MethodName: "auditEventsExist", Classification: MethodClassExistence, Reason: "checks ListEvents returns a non-empty slice"},
-	{KSIID: "KSI-CMT-01", MethodName: "ledgerCommitsExist", Classification: MethodClassExistence, Reason: "checks ListCommits returns a non-empty slice"},
-
-	// KSI-CMT-03: ledgerCommitsExist + receiptsExist
-	{KSIID: "KSI-CMT-03", MethodName: "ledgerCommitsExist", Classification: MethodClassExistence, Reason: "checks ListCommits returns a non-empty slice"},
-	{KSIID: "KSI-CMT-03", MethodName: "receiptsExist", Classification: MethodClassExistence, Reason: "checks ListActionReceipts returns a non-empty slice"},
-
-	// KSI-CNA-01: receiptsExist + auditEventsExist
-	{KSIID: "KSI-CNA-01", MethodName: "receiptsExist", Classification: MethodClassExistence, Reason: "checks ListActionReceipts returns a non-empty slice"},
-	{KSIID: "KSI-CNA-01", MethodName: "auditEventsExist", Classification: MethodClassExistence, Reason: "checks ListEvents returns a non-empty slice"},
-
-	// KSI-IAM-05: receiptsExist + auditEventsExist
-	{KSIID: "KSI-IAM-05", MethodName: "receiptsExist", Classification: MethodClassExistence, Reason: "checks ListActionReceipts returns a non-empty slice"},
-	{KSIID: "KSI-IAM-05", MethodName: "auditEventsExist", Classification: MethodClassExistence, Reason: "checks ListEvents returns a non-empty slice"},
-
-	// KSI-IAM-07: fileMutationsTracked + receiptsExist
-	{KSIID: "KSI-IAM-07", MethodName: "fileMutationsTracked", Classification: MethodClassExistence, Reason: "checks ListFileMutations returns a non-empty slice"},
-	{KSIID: "KSI-IAM-07", MethodName: "receiptsExist", Classification: MethodClassExistence, Reason: "checks ListActionReceipts returns a non-empty slice"},
-
-	// KSI-MLA-03: auditEventsExist + receiptsExist
-	{KSIID: "KSI-MLA-03", MethodName: "auditEventsExist", Classification: MethodClassExistence, Reason: "checks ListEvents returns a non-empty slice"},
-	{KSIID: "KSI-MLA-03", MethodName: "receiptsExist", Classification: MethodClassExistence, Reason: "checks ListActionReceipts returns a non-empty slice"},
-
-	// KSI-MLA-07: commitmentChainExists + merkleRootExists
-	{KSIID: "KSI-MLA-07", MethodName: "commitmentChainExists", Classification: MethodClassExistence, Reason: "checks ListCommitments returns a non-empty slice"},
-	{KSIID: "KSI-MLA-07", MethodName: "merkleRootExists", Classification: MethodClassExistence, Reason: "checks GetStateMerkleRoot returns a non-empty string"},
-
-	// KSI-MLA-08: receiptsHaveSignatures + commitmentChainExists
-	{KSIID: "KSI-MLA-08", MethodName: "receiptsHaveSignatures", Classification: MethodClassStructural, Reason: "checks Signature and SignerKeyID fields are nonempty; does not verify the signature against a trusted key"},
-	{KSIID: "KSI-MLA-08", MethodName: "commitmentChainExists", Classification: MethodClassExistence, Reason: "checks ListCommitments returns a non-empty slice"},
-
-	// KSI-SVC-04: fileMutationsTracked + ledgerCommitsExist
-	{KSIID: "KSI-SVC-04", MethodName: "fileMutationsTracked", Classification: MethodClassExistence, Reason: "checks ListFileMutations returns a non-empty slice"},
-	{KSIID: "KSI-SVC-04", MethodName: "ledgerCommitsExist", Classification: MethodClassExistence, Reason: "checks ListCommits returns a non-empty slice"},
-
-	// KSI-SVC-05: merkleRootExists + commitmentChainIntact
-	{KSIID: "KSI-SVC-05", MethodName: "merkleRootExists", Classification: MethodClassExistence, Reason: "checks GetStateMerkleRoot returns a non-empty string"},
-	{KSIID: "KSI-SVC-05", MethodName: "commitmentChainIntact", Classification: MethodClassStructural, Reason: "checks prior-hash linking between consecutive commitments; does not verify commitment signatures or cross-links to receipts"},
+var expectedDefaultMethodMetadata = map[string]expectedMethodMetadata{
+	"auditEventsExist": {
+		artifact: KSIArtifactAuditEvents, boundary: KSICollectionAuditStore,
+		verifier: KSIVerifierExistence, property: KSIPropertyPresence,
+	},
+	"receiptsExist": {
+		artifact: KSIArtifactActionReceipts, boundary: KSICollectionAuditStore,
+		verifier: KSIVerifierExistence, property: KSIPropertyPresence,
+	},
+	"receiptsCryptographicallyVerified": {
+		artifact: KSIArtifactActionReceipts, boundary: KSICollectionAuditStore,
+		verifier: KSIVerifierCryptographic, property: KSIPropertyReceiptPersistenceIntegrity,
+	},
+	"fileMutationsTracked": {
+		artifact: KSIArtifactFileMutations, boundary: KSICollectionAuditStore,
+		verifier: KSIVerifierExistence, property: KSIPropertyPresence,
+	},
+	"ledgerCommitsExist": {
+		artifact: KSIArtifactLedgerCommits, boundary: KSICollectionLedgerStore,
+		verifier: KSIVerifierExistence, property: KSIPropertyPresence,
+	},
+	"commitmentChainExists": {
+		artifact: KSIArtifactCommitments, boundary: KSICollectionCommitmentStore,
+		verifier: KSIVerifierExistence, property: KSIPropertyPresence,
+	},
+	"commitmentChainIntact": {
+		artifact: KSIArtifactCommitments, boundary: KSICollectionCommitmentStore,
+		verifier: KSIVerifierStructural, property: KSIPropertyChainLinkage,
+	},
+	"commitmentsCryptographicallyVerified": {
+		artifact: KSIArtifactCommitments, boundary: KSICollectionCommitmentStore,
+		verifier: KSIVerifierCryptographic, property: KSIPropertySignatureValidity,
+	},
+	"ledgerMerkleRootMatchesHead": {
+		artifact: KSIArtifactLedgerStateRoot, boundary: KSICollectionLedgerStore,
+		verifier: KSIVerifierStateObservation, property: KSIPropertyStateRootMatchesHead,
+	},
+	"independentStateObserved": {
+		artifact: KSIArtifactReceiptStateTransitions, boundary: KSICollectionAuditStore,
+		verifier: KSIVerifierStateObservation, property: KSIPropertyStateTransitionBinding,
+	},
+	"deterministicGraderResultsVerified": {
+		artifact: KSIArtifactGraderResults, boundary: KSICollectionEvalResults,
+		verifier: KSIVerifierDeterministicGrader, property: KSIPropertyEvidenceContentAddressing,
+	},
+	"ksiHistoryFreshness": {
+		artifact: KSIArtifactHistorySnapshots, boundary: KSICollectionHistoryStore,
+		verifier: KSIVerifierHistorical, property: KSIPropertyFreshness,
+	},
 }
 
-// TestPhase0MethodInventory_EveryRegisteredMethodClassified validates that
-// every method bound in DefaultMethods has a corresponding inventory entry
-// with a valid classification.
-func TestPhase0MethodInventory_EveryRegisteredMethodClassified(t *testing.T) {
-	deps := EvaluatorDeps{
-		Audit:       &mockAuditReader{},
-		Ledger:      &mockLedgerReader{},
-		Commitments: &mockCommitmentReader{},
-	}
-	registered := DefaultMethods(deps)
-
-	valid := map[MethodClassification]bool{
-		MethodClassExistence:           true,
-		MethodClassStructural:          true,
-		MethodClassCryptographic:       true,
-		MethodClassStateObservation:    true,
-		MethodClassHistorical:          true,
-		MethodClassCustomerAttestation: true,
-		MethodClassUnsupported:         true,
-	}
-
-	// Build a lookup of (KSIID, MethodName) -> entry from the inventory.
-	lookup := make(map[string]MethodInventoryEntry)
-	for _, e := range phase0MethodInventory {
-		lookup[e.KSIID+"|"+e.MethodName] = e
-		assert.True(t, valid[e.Classification],
-			"inventory entry %s/%s has invalid classification %q",
-			e.KSIID, e.MethodName, e.Classification)
-	}
-
-	// Every registered method must appear in the inventory. We cannot match
-	// closures by name, so we verify by count: the inventory must have exactly
-	// as many method entries as DefaultMethods registers.
-	inventoryMethodCount := 0
-	for _, e := range phase0MethodInventory {
-		if e.MethodName != "" {
-			inventoryMethodCount++
-		}
-	}
-
+func TestDefaultMethods_EveryMethodHasTypedIndependenceMetadata(t *testing.T) {
+	registered := DefaultMethods(EvaluatorDeps{})
+	seenNames := make(map[string]bool, len(expectedDefaultMethodMetadata))
 	totalRegistered := 0
-	for _, methods := range registered {
-		totalRegistered += len(methods)
-	}
 
-	assert.Equal(t, totalRegistered, inventoryMethodCount,
-		phase0RegressionBeforeFix+
-			": inventory method count must match DefaultMethods registered count; "+
-			"inventory=%d registered=%d", inventoryMethodCount, totalRegistered)
-
-	// Verify the lookup keys are unique (no duplicate KSI|method pairs).
-	assert.Equal(t, len(lookup), inventoryMethodCount,
-		"inventory contains duplicate KSI|method entries")
-}
-
-// TestPhase0MethodInventory_NoCryptographicOrStateObservationMethods documents
-// that the current method set contains zero cryptographic, zero
-// state-observation, zero historical, and zero customer-attestation methods.
-// Every method is existence or structural. This is the baseline gap that
-// Phase 3 closes.
-func TestPhase0MethodInventory_NoCryptographicOrStateObservationMethods(t *testing.T) {
-	counts := make(map[MethodClassification]int)
-	for _, e := range phase0MethodInventory {
-		if e.MethodName != "" {
-			counts[e.Classification]++
+	for ksiID, methods := range registered {
+		independenceKeys := make(map[string]bool, len(methods))
+		for _, method := range methods {
+			require.NoError(t, method.validate(), "%s/%s", ksiID, method.Name)
+			expected, ok := expectedDefaultMethodMetadata[method.Name]
+			require.True(t, ok, "unexpected method metadata for %s/%s", ksiID, method.Name)
+			assert.Equal(t, expected.artifact, method.ArtifactIdentity)
+			assert.Equal(t, expected.boundary, method.CollectionBoundary)
+			assert.Equal(t, expected.verifier, method.VerifierFamily)
+			assert.Equal(t, expected.property, method.MeasuredProperty)
+			if method.Name == "ksiHistoryFreshness" {
+				assert.Equal(t, KSIOutcomeStaleEvidence, method.UnsatisfiedOutcome)
+			} else {
+				assert.Equal(t, KSIOutcomeInvalidEvidence, method.UnsatisfiedOutcome)
+			}
+			assert.False(t, independenceKeys[method.independenceKey()], "%s contains methods that restate the same fact", ksiID)
+			independenceKeys[method.independenceKey()] = true
+			seenNames[method.Name] = true
+			totalRegistered++
 		}
 	}
 
-	assert.Equal(t, 0, counts[MethodClassCryptographic],
-		phase0RegressionBeforeFix+
-			": no registered KSI method performs cryptographic signature verification; "+
-			"Phase 3 adds protocol-owned receipt and persistence-attestation verification")
-	assert.Equal(t, 0, counts[MethodClassStateObservation],
-		phase0RegressionBeforeFix+
-			": no registered KSI method performs independent state observation; "+
-			"Phase 3 adds boundary-specific state collectors")
-	assert.Equal(t, 0, counts[MethodClassHistorical],
-		phase0RegressionBeforeFix+
-			": no registered KSI method performs historical freshness analysis; "+
-			"Phase 6 adds evidence-window completeness and missingness")
-	assert.Equal(t, 0, counts[MethodClassCustomerAttestation],
-		phase0RegressionBeforeFix+
-			": no registered KSI method imports customer attestations; "+
-			"Phase 7 adds signed scoped attestation import")
-
-	assert.Greater(t, counts[MethodClassExistence], 0,
-		"inventory must contain existence-check methods (the current baseline)")
-	assert.Greater(t, counts[MethodClassStructural], 0,
-		"inventory must contain structural-check methods (the current baseline)")
+	assert.Equal(t, 20, totalRegistered)
+	assert.Equal(t, len(expectedDefaultMethodMetadata), len(seenNames))
 }
 
-// TestPhase0MethodInventory_UnregisteredKSIsAreUnsupported documents that the
-// 21 KSIs in the catalog without registered methods are classified as
-// unsupported. These KSIs fail-closed during Class C evaluation because the
-// method count is below the minimum. Phase 3 and Phase 7 add methods for the
-// automatable subset.
-func TestPhase0MethodInventory_UnregisteredKSIsAreUnsupported(t *testing.T) {
-	catalog := testCatalog()
-	deps := EvaluatorDeps{
-		Audit:       &mockAuditReader{},
-		Ledger:      &mockLedgerReader{},
-		Commitments: &mockCommitmentReader{},
+func TestDefaultMethods_IncludeEvidenceBackedVerifierFamilies(t *testing.T) {
+	counts := make(map[KSIVerifierFamily]int)
+	for _, methods := range DefaultMethods(EvaluatorDeps{}) {
+		for _, method := range methods {
+			counts[method.VerifierFamily]++
+		}
 	}
-	registered := DefaultMethods(deps)
 
-	// The test catalog has 4 KSIs; the full catalog has 31. Count unregistered
-	// KSIs in the test catalog and verify they have no methods.
+	assert.Greater(t, counts[KSIVerifierCryptographic], 1)
+	assert.Greater(t, counts[KSIVerifierStateObservation], 0)
+	assert.Greater(t, counts[KSIVerifierHistorical], 0)
+	assert.Greater(t, counts[KSIVerifierDeterministicGrader], 0)
+	assert.Greater(t, counts[KSIVerifierExistence], 0)
+	assert.Greater(t, counts[KSIVerifierStructural], 0)
+}
+
+func TestDefaultMethods_UnregisteredKSIsRemainUnsupported(t *testing.T) {
+	catalog := testCatalog()
+	registered := DefaultMethods(EvaluatorDeps{})
 	unregistered := 0
 	for _, ksi := range catalog.KSIs {
 		if len(registered[ksi.ID]) == 0 {
@@ -206,32 +129,5 @@ func TestPhase0MethodInventory_UnregisteredKSIsAreUnsupported(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, unregistered, 0,
-		phase0RegressionBeforeFix+
-			": the catalog must contain KSIs with no registered methods (unsupported); "+
-			"these fail-closed during Class C evaluation")
-}
-
-// TestPhase0MethodInventory_ClassCIndependenceIsNotEnforced documents that the
-// current evaluator does not verify that Class C's two required methods are
-// independent. Two methods that inspect the same unchecked field (e.g. two
-// existence checks against the same store) count as two methods even though
-// they derive the same fact from the same artifact. Phase 3 adds independence
-// validation that rejects methods restating the same unchecked fact.
-func TestPhase0MethodInventory_ClassCIndependenceIsNotEnforced(t *testing.T) {
-	catalog := testCatalog()
-	eval := NewKSIEvaluator(catalog)
-	eval.RegisterDefaultMethods(EvaluatorDeps{
-		Audit:       &mockAuditReader{},
-		Ledger:      &mockLedgerReader{},
-		Commitments: &mockCommitmentReader{},
-	})
-
-	// KSI-CMT-01 has two existence methods (auditEventsExist + ledgerCommitsExist).
-	// The evaluator reports MethodCount=2, satisfying the Class C minimum, but
-	// neither method independence nor method classification is checked.
-	assert.Equal(t, 2, eval.MethodCount("KSI-CMT-01"),
-		phase0RegressionBeforeFix+
-			": Class C minimum is 2 methods; KSI-CMT-01 has exactly 2 existence checks "+
-			"with no independence verification")
+	assert.Greater(t, unregistered, 0)
 }

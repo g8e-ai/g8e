@@ -22,6 +22,7 @@ from g8e_evals.schema import (
     CanaryScrubbingAssertion,
     ArtifactLeakageAssertion,
     CitationBackedAssertion,
+    EconomicsPerformanceAssertion,
     EvidencePreservationAssertion,
     FactualQAAssertion,
     FORBIDDEN_METADATA_KEYS,
@@ -32,6 +33,7 @@ from g8e_evals.schema import (
     PartialMilestoneAssertion,
     PayloadTamperingAssertion,
     PolicyAttackAssertion,
+    ReliabilityAssertion,
     SignerDefectAssertion,
     L3ProofTransplantAssertion,
     RevokedCredentialAssertion,
@@ -120,6 +122,8 @@ class TaskMetadata(BaseModel):
     factual_qa_assertions: list[FactualQAAssertion] = Field(default_factory=list)
     citation_backed_assertions: list[CitationBackedAssertion] = Field(default_factory=list)
     partial_milestone_assertions: list[PartialMilestoneAssertion] = Field(default_factory=list)
+    reliability_assertions: list[ReliabilityAssertion] = Field(default_factory=list)
+    economics_performance_assertions: list[EconomicsPerformanceAssertion] = Field(default_factory=list)
     unsupported_exclusions: list[UnsupportedExclusion] = Field(default_factory=list)
     # IFEval-specific fields
     instruction_id_list: list[str] = Field(default_factory=list)

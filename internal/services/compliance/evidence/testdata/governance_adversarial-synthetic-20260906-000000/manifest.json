@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.40.0",
+  "run_id": "76e3f2fc-5080-45ad-9cfb-caa5662c5195",
+  "suite_id": "governance_adversarial",
+  "suite_version": "db717e59ef6d",
+  "created_at": "2026-09-06T14:03:54.002602Z",
+  "orchestrator_version": "",
+  "experiment_preregistration_hash": null,
+  "source_revision": "",
+  "source_tree_state_hash": "",
+  "content_hashes": [
+    {
+      "name": "dataset",
+      "sha256": "db717e59ef6dcaf683ac5b4034f68406d7b8f98de865c15a842c828e4b6f9b01",
+      "byte_length": 6851
+    },
+    {
+      "name": "prompt_bundle",
+      "sha256": "10d0d7d5e0acb1c270081627b512425eee93ba0c88ef35964da1bd11d3b933bc",
+      "byte_length": 104
+    },
+    {
+      "name": "grader_bundle",
+      "sha256": "95767db24acb55dd2af01223afd5bb4d8c1b68ea0e984f2c217ae611b9f8b65e",
+      "byte_length": 56
+    }
+  ],
+  "arms": [
+    {
+      "arm_id": "direct",
+      "requested_posture": "none",
+      "uses_g8ee": false,
+      "uses_gateway": false,
+      "receipt_binding": false,
+      "is_production_posture": false
+    }
+  ],
+  "role_to_model": {
+    "primary": null,
+    "assistant": null,
+    "lite": null,
+    "judge": null
+  },
+  "sampling": {
+    "max_output_tokens": null,
+    "top_p": null,
+    "top_k": null,
+    "temperature": null,
+    "stop_sequences": [],
+    "seed": null
+  },
+  "context_limits": {},
+  "stack_environment": {
+    "os": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+    "arch": "x86_64",
+    "cpu": "",
+    "ram": "",
+    "gpu": "",
+    "runtime_version": "3.12.3",
+    "network_mode": "",
+    "stack_image_digests": {}
+  },
+  "redacted_config": {}
+}
