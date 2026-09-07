@@ -716,6 +716,29 @@ const (
 	KSIHistorySchemaVersion                = "1.3.0"
 	KSIUnavailableIntervalsFilename        = "ksi-unavailable-intervals.jsonl"
 	KSIUnavailableIntervalReferencePrefix  = "ksi-unavailable"
+
+	// OSCAL validator identity and embedded schema metadata. The official
+	// unmodified NIST OSCAL 1.1.2 assessment-results JSON Schema is embedded
+	// into the protocol library so validation is offline and available in
+	// air-gapped builds. The pinned SHA-256 rejects any schema bytes that do
+	// not match the authenticated NIST release artifact.
+	OSCALValidatorID                 = "g8e-oscal-validator"
+	OSCALValidatorVersion            = "1.0.0"
+	OSCALSchemaVersion               = "1.1.2"
+	OSCALSchemaID                    = "http://csrc.nist.gov/ns/oscal/1.1.2/oscal-ar-schema.json"
+	OSCALSchemaJSONDraft             = "draft-07"
+	OSCALSchemaByteLength            = 133015
+	OSCALSchemaSHA256                = "d033da70154cf6625ae46a746199e88e58f2928b1387dfac051d381b92f41b0d"
+	OSCALSchemaFilename              = "oscal_assessment-results_schema.json"
+	OSCALSchemaProvenanceFilename    = "provenance.json"
+	OSCALSchemaRelativePath          = "oscal/v1.1.2/" + "oscal_assessment-results_schema.json"
+	OSCALProvenanceRelativePath      = "oscal/v1.1.2/" + "provenance.json"
+	OSCALValidatorMaxDocumentBytes   = 16 << 20
+	OSCALValidatorMaxDepth           = 256
+	OSCALValidatorMaxProperties      = 4096
+	OSCALValidatorMaxItems           = 4096
+	OSCALValidatorMaxRefDepth        = 64
+	OSCALValidatorMaxFailures        = 256
 )
 
 // Demo scope identifiers. Each demo org binds its typed scenario results to a

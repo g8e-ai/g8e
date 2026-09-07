@@ -1238,4 +1238,14 @@ var (
 	ErrDemoDatalinkRestoration   = errors.New("demo: coalition datalink restoration failed")
 	ErrDemoEvidencePersistFailed = errors.New("demo: typed evidence persistence failed")
 	ErrDemoRunIDMissing          = errors.New("demo: run ID is required")
+
+	// OSCAL validator errors
+	ErrOSCALSchemaDigestMismatch    = errors.New("oscal: embedded schema digest mismatch")
+	ErrOSCALSchemaCompileFailed     = errors.New("oscal: schema compilation failed")
+	ErrOSCALValidationFailed        = errors.New("oscal: assessment-results validation failed")
+	ErrOSCALSemanticValidationFailed = errors.New("oscal: semantic validation failed")
+	ErrOSCALSchemaUnsupported       = errors.New("oscal: unsupported schema version or type")
+	ErrJSONSchemaCompileFailed      = errors.New("jsonschema: schema compilation failed")
+	ErrJSONSchemaValidationFailed   = errors.New("jsonschema: instance validation failed")
+	ErrJSONSchemaResourceLimit      = errors.New("jsonschema: resource limit exceeded")
 )
