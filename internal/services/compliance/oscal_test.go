@@ -103,9 +103,9 @@ func TestOSCALExporter_GenerateComponentDefinition(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, compDef)
 
-	// UUID must be non-empty and look like a UUID.
+	// UUID must be a deterministic RFC 4122 UUID v5.
 	assert.NotEmpty(t, compDef.UUID)
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
 
 	// Metadata.
 	assert.Equal(t, "g8e Platform Component Definition", compDef.Metadata.Title)
@@ -432,18 +432,20 @@ func TestOSCALExporter_GenerateComponentDefinition_NoControlRefs(t *testing.T) {
 	assert.Contains(t, err.Error(), "no control refs")
 }
 
-// TestGenerateUUID_RandomV4 verifies that generateUUID produces unique
-// RFC 4122 UUID v4 strings with the correct format.
-func TestGenerateUUID_RandomV4(t *testing.T) {
-	u1 := generateUUID()
-	u2 := generateUUID()
+// TestGenerateUUID_DeterministicV5 verifies stable identity-bound RFC 4122 UUID v5 generation.
+func TestGenerateUUID_DeterministicV5(t *testing.T) {
+	u1 := generateUUID("finding", "analysis-1", "control-1")
+	u2 := generateUUID("finding", "analysis-1", "control-1")
+	u3 := generateUUID("finding", "analysis-1", "control-2")
 
-	assert.NotEqual(t, u1, u2, "two calls should produce different UUIDs")
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u1)
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u2)
+	assert.Equal(t, u1, u2)
+	assert.Equal(t, "b4ef8d41-bebd-5517-aae7-9522a1963b1e", u1)
+	assert.NotEqual(t, u1, u3)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u1)
 
-	_, err := uuid.Parse(u1)
-	assert.NoError(t, err)
+	parsed, err := uuid.Parse(u1)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(5), parsed.Version())
 }
 
 func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEvidenceResources(t *testing.T) {

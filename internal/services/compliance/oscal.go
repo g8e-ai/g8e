@@ -10,6 +10,7 @@ package compliance
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -161,6 +162,8 @@ type OSCALProp struct {
 // Exporter
 // ---------------------------------------------------------------------------
 
+const oscalUUIDNamespaceName = "g8e.ai/compliance/oscal/v1"
+
 // OSCALExporter generates component definitions from the KSI catalog and assessment results from canonical compliance analysis.
 type OSCALExporter struct {
 	catalog *KSICatalog
@@ -229,7 +232,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 			}
 		}
 		controlImpls = append(controlImpls, OSCALControlImplementation{
-			UUID:                generateUUID(),
+			UUID:                generateUUID("control-implementation", e.catalog.Source, e.catalog.Version, string(cat)),
 			Source:              "FedRAMP 20x KSI catalog (CR26)",
 			Description:         "g8e control implementations for KSI category " + string(cat),
 			ImplementedControls: implemented,
@@ -237,7 +240,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 	}
 
 	return &OSCALComponentDefinition{
-		UUID: generateUUID(),
+		UUID: generateUUID("component-definition", e.catalog.Source, e.catalog.Version),
 		Metadata: OSCALMetadata{
 			Title:        "g8e Platform Component Definition",
 			Published:    now,
@@ -247,7 +250,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 		},
 		Components: []OSCALComponent{
 			{
-				UUID:                   generateUUID(),
+				UUID:                   generateUUID("component", e.catalog.Source, e.catalog.Version, "g8e-platform"),
 				Type:                   "software",
 				Title:                  "g8e Zero-Trust Execution Platform",
 				Description:            "g8e is a zero-trust execution platform for agentic infrastructure. Mutations are typed, signed, state-bound, and verified through a 5-layer gauntlet.",
@@ -257,7 +260,7 @@ func (e *OSCALExporter) GenerateComponentDefinition() (*OSCALComponentDefinition
 		BackMatter: OSCALBackMatter{
 			Resources: []OSCALResource{
 				{
-					UUID:        generateUUID(),
+					UUID:        generateUUID("catalog-resource", e.catalog.Source, e.catalog.Version),
 					Title:       "FedRAMP 20x KSI Catalog",
 					Description: "CR26 Key Security Indicators reference catalog",
 					Props: []OSCALProp{
@@ -293,7 +296,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 	}
 	generatedAt := analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339)
 	return &OSCALAssessmentResults{
-		UUID: generateUUID(),
+		UUID: generateUUID("assessment-results", analysis.GetAnalysisId()),
 		Metadata: OSCALMetadata{
 			Title:        "g8e Compliance Assessment Results",
 			Published:    generatedAt,
@@ -302,7 +305,7 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 			OscalVersion: "1.1.2",
 		},
 		Results: []OSCALResult{{
-			UUID:         generateUUID(),
+			UUID:         generateUUID("result", analysis.GetAnalysisId(), analysis.GetScopeRef()),
 			Title:        "Compliance Assessment for " + analysis.GetScopeRef(),
 			Description:  "Canonical cross-framework compliance analysis " + analysis.GetAnalysisId(),
 			Start:        generatedAt,
@@ -354,7 +357,7 @@ func buildOSCALEvidenceResources(analysis *compliancev1.ComplianceAnalysis) ([]O
 			return nil, nil, fmt.Errorf("%w: duplicate evidence resource %s", constants.ErrEvidenceDuplicateID, evidenceResource.GetArtifactId())
 		}
 		resource := OSCALResource{
-			UUID:        generateUUID(),
+			UUID:        generateUUID("evidence-resource", analysis.GetAnalysisId(), evidenceResource.GetArtifactId()),
 			Title:       evidenceResource.GetArtifactType() + " evidence",
 			Description: "Content-addressed evidence produced by " + evidenceResource.GetProducerIdentity(),
 			Props:       oscalEvidenceProps(evidenceResource),
@@ -454,12 +457,12 @@ func buildOSCALObservations(analysis *compliancev1.ComplianceAnalysis, resourceI
 			methodID += "@" + assessment.GetVerifierRef().GetVersion()
 		}
 		observations = append(observations, OSCALObservation{
-			UUID:        generateUUID(),
+			UUID:        generateUUID("observation", analysis.GetAnalysisId(), assessment.GetAssessmentId(), assessment.GetAssertionRef().GetId(), assessment.GetAssertionRef().GetVersion()),
 			Title:       "Assertion " + assessment.GetAssertionRef().GetId() + " Assessment",
 			Description: fmt.Sprintf("%s at evidence level %s with %s evidence", assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetFreshnessStatus()),
 			Methods:     []OSCALMethodRef{{MethodID: methodID}},
 			Subjects: []OSCALSubject{{
-				SubjectUUID: generateUUID(),
+				SubjectUUID: generateUUID("assertion-subject", analysis.GetAnalysisId(), assessment.GetAssessmentId(), assessment.GetAssertionRef().GetId(), assessment.GetAssertionRef().GetVersion()),
 				Type:        "assessment-target",
 				Title:       assessment.GetAssessmentId(),
 			}},
@@ -491,7 +494,7 @@ func buildOSCALFindings(analysis *compliancev1.ComplianceAnalysis) ([]OSCALFindi
 			}
 		}
 		findings = append(findings, OSCALFinding{
-			UUID:        generateUUID(),
+			UUID:        generateUUID("finding", analysis.GetAnalysisId(), assessment.GetAssessmentId(), assessment.GetFrameworkRef().GetId(), assessment.GetFrameworkRef().GetVersion(), assessment.GetControlId()),
 			Title:       assessment.GetFrameworkRef().GetId() + " " + assessment.GetControlId() + " Finding",
 			Description: fmt.Sprintf("%s at evidence level %s; responsibility: %s", assessment.GetStatus(), assessment.GetEvidenceLevel(), assessment.GetResponsibility()),
 			Target: OSCALFindingTarget{
@@ -527,8 +530,17 @@ func oscalFindingStatus(status string) string {
 	}
 }
 
-// generateUUID produces a random RFC 4122 UUID v4 string using crypto/rand
-// via the google/uuid package. Each call returns a unique UUID.
-func generateUUID() string {
-	return uuid.New().String()
+// generateUUID derives a deterministic RFC 4122 UUID v5 from a record kind and length-delimited canonical identities.
+func generateUUID(kind string, identities ...string) string {
+	var name strings.Builder
+	name.WriteString(strconv.Itoa(len(kind)))
+	name.WriteByte(':')
+	name.WriteString(kind)
+	for _, identity := range identities {
+		name.WriteString(strconv.Itoa(len(identity)))
+		name.WriteByte(':')
+		name.WriteString(identity)
+	}
+	namespace := uuid.NewSHA1(uuid.NameSpaceOID, []byte(oscalUUIDNamespaceName))
+	return uuid.NewSHA1(namespace, []byte(name.String())).String()
 }
