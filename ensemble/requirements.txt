@@ -17,7 +17,7 @@ httpx==0.28.1
 cryptography==50.0.1
 
 # Protocol Buffers (runtime parsing + build-time stub generation)
-protobuf==7.36.0
+protobuf==7.36.1
 grpcio-tools==1.83.0
 
 # g8e Protocol Library
