@@ -233,6 +233,93 @@ message ComplianceVerificationReport {
   string reproduced_checksum_root = 7;
 }
 
+// ---------------------------------------------------------------------------
+// Canonical compliance analysis (COMP-4)
+// ---------------------------------------------------------------------------
+
+message EvidenceWindowCompleteness {
+  string scope_id = 1;
+  int32 expected_evidence_count = 2;
+  int32 actual_evidence_count = 3;
+  repeated string missing_evidence_refs = 4;
+  repeated string stale_evidence_refs = 5;
+  string completeness_status = 6;
+  string window_start_ref = 7;
+  string window_end_ref = 8;
+}
+
+message ComplianceGap {
+  string gap_id = 1;
+  string assertion_ref = 2;
+  string framework_ref = 3;
+  string control_id = 4;
+  string gap_type = 5;
+  string description = 6;
+  string responsibility = 7;
+}
+
+message EvidenceLink {
+  string source_ref = 1;
+  string target_ref = 2;
+  string link_type = 3;
+}
+
+message ComplianceFinding {
+  string finding_id = 1;
+  string subject_ref = 2;
+  string severity = 3;
+  string description = 4;
+  string related_assertion_ref = 5;
+  string related_control_id = 6;
+}
+
+message ComplianceRemediation {
+  string remediation_id = 1;
+  string finding_ref = 2;
+  string action = 3;
+  string priority = 4;
+  string owner = 5;
+}
+
+message ControlSection {
+  string section_id = 1;
+  string title = 2;
+  string responsibility = 3;
+  string status_filter = 4;
+  repeated string control_assessment_refs = 5;
+  string description = 6;
+}
+
+message ComplianceAnalysis {
+  string analysis_id = 1;
+  string analysis_schema_version = 2;
+  string scope_ref = 3;
+  google.protobuf.Timestamp generated_at = 4;
+  string generator_identity = 5;
+  string generator_version = 6;
+  EvidenceWindowCompleteness evidence_window_completeness = 7;
+  repeated ControlAssertionAssessment assertion_assessments = 8;
+  repeated FrameworkControlAssessment framework_assessments = 9;
+  repeated ComplianceGap gaps = 10;
+  repeated EvidenceLink evidence_links = 11;
+  repeated string limitations = 12;
+  repeated ComplianceFinding findings = 13;
+  repeated ComplianceRemediation remediation = 14;
+  repeated ControlSection sections = 15;
+  repeated string evidence_graph_failures = 16;
+  bool evidence_graph_valid = 17;
+}
+
+message FrameworkProfile {
+  string profile_id = 1;
+  VersionedReference framework_ref = 2;
+  string profile_version = 3;
+  google.protobuf.Timestamp generated_at = 4;
+  string analysis_ref = 5;
+  repeated FrameworkControlAssessment control_assessments = 6;
+  repeated string limitations = 7;
+}
+
 message FrameworkControlReference {
   VersionedReference framework_ref = 1;
   string control_id = 2;
