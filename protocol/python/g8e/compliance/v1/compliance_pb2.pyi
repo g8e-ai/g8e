@@ -351,6 +351,50 @@ class ReportSignature(_message.Message):
     signature: str
     def __init__(self, key_id: _Optional[str] = ..., algorithm: _Optional[str] = ..., signed_sha256: _Optional[str] = ..., signature: _Optional[str] = ...) -> None: ...
 
+class ComplianceReportSigningKeyMetadata(_message.Message):
+    __slots__ = ("key_id", "algorithm", "purpose", "public_key_sha256", "created_at", "expires_at")
+    KEY_ID_FIELD_NUMBER: _ClassVar[int]
+    ALGORITHM_FIELD_NUMBER: _ClassVar[int]
+    PURPOSE_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_SHA256_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    EXPIRES_AT_FIELD_NUMBER: _ClassVar[int]
+    key_id: str
+    algorithm: str
+    purpose: str
+    public_key_sha256: str
+    created_at: _timestamp_pb2.Timestamp
+    expires_at: _timestamp_pb2.Timestamp
+    def __init__(self, key_id: _Optional[str] = ..., algorithm: _Optional[str] = ..., purpose: _Optional[str] = ..., public_key_sha256: _Optional[str] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., expires_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceReportTrustedKey(_message.Message):
+    __slots__ = ("metadata", "public_key", "assessment_id", "assessor_identity", "assessed_at", "allowed_scope_refs", "revoked_at")
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSESSOR_IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSED_AT_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_SCOPE_REFS_FIELD_NUMBER: _ClassVar[int]
+    REVOKED_AT_FIELD_NUMBER: _ClassVar[int]
+    metadata: ComplianceReportSigningKeyMetadata
+    public_key: str
+    assessment_id: str
+    assessor_identity: str
+    assessed_at: _timestamp_pb2.Timestamp
+    allowed_scope_refs: _containers.RepeatedScalarFieldContainer[str]
+    revoked_at: _timestamp_pb2.Timestamp
+    def __init__(self, metadata: _Optional[_Union[ComplianceReportSigningKeyMetadata, _Mapping]] = ..., public_key: _Optional[str] = ..., assessment_id: _Optional[str] = ..., assessor_identity: _Optional[str] = ..., assessed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., allowed_scope_refs: _Optional[_Iterable[str]] = ..., revoked_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceReportTrustPolicy(_message.Message):
+    __slots__ = ("policy_id", "policy_version", "trusted_keys")
+    POLICY_ID_FIELD_NUMBER: _ClassVar[int]
+    POLICY_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TRUSTED_KEYS_FIELD_NUMBER: _ClassVar[int]
+    policy_id: str
+    policy_version: str
+    trusted_keys: _containers.RepeatedCompositeFieldContainer[ComplianceReportTrustedKey]
+    def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceReportTrustedKey, _Mapping]]] = ...) -> None: ...
+
 class ComplianceReportManifest(_message.Message):
     __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]

@@ -616,7 +616,9 @@ func (v *Validator) validateFindings(doc map[string]any, path string, sc *semant
 				continue
 			}
 			targetID, _ := target["target-id"].(string)
-			if _, exists := reviewedControlIDs[targetID]; !exists && !includeAll {
+			targetType, _ := target["type"].(string)
+			controlID := findingTargetControlID(targetID, targetType)
+			if _, exists := reviewedControlIDs[controlID]; !exists && !includeAll {
 				sc.add(SemanticFailure{
 					Reason:      SemanticFindingTargetMissing,
 					Message:     fmt.Sprintf("finding target %q is not in reviewed controls", targetID),
@@ -689,6 +691,14 @@ func (v *Validator) validateObservations(doc map[string]any, path string, sc *se
 				subject, _ := subjectValue.(map[string]any)
 				subjectUUID, _ := subject["subject-uuid"].(string)
 				subjectType, _ := subject["type"].(string)
+				// When the document defines no subjects of the declared type
+				// locally, the subject may be defined in an externally
+				// imported assessment plan (import-ap with a non-fragment
+				// href). Skip resolution in that case rather than failing
+				// on a reference the validator cannot reach.
+				if len(subjectIDs[subjectType]) == 0 {
+					continue
+				}
 				if !subjectIDs[subjectType][subjectUUID] {
 					sc.add(SemanticFailure{
 						Reason:      SemanticObsSubjectMissing,
@@ -804,6 +814,28 @@ func resultReviewedControlsIncludeAll(result map[string]any) bool {
 	reviewed, _ := result["reviewed-controls"].(map[string]any)
 	selections, _ := reviewed["control-selections"].([]any)
 	return reviewedControlsIncludeAll(selections)
+}
+
+// findingTargetControlID derives the parent control ID from a finding
+// target-id. OSCAL finding targets use three target types: "control-id"
+// (the target-id is the control ID directly), "objective-id" (the
+// target-id has the form "<control-id>_obj"), and "statement-id" (the
+// target-id has the form "<control-id>_smt.<suffix>" or
+// "<control-id>_smt"). For any other target type, the target-id is
+// returned unchanged and the caller decides whether it must match a
+// reviewed control.
+func findingTargetControlID(targetID, targetType string) string {
+	switch targetType {
+	case "objective-id":
+		if idx := strings.LastIndex(targetID, "_obj"); idx > 0 {
+			return targetID[:idx]
+		}
+	case "statement-id":
+		if idx := strings.Index(targetID, "_smt"); idx > 0 {
+			return targetID[:idx]
+		}
+	}
+	return targetID
 }
 
 func parseSemanticTime(value any) (time.Time, bool) {

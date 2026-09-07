@@ -201,6 +201,31 @@ message ReportSignature {
   string signature = 4;
 }
 
+message ComplianceReportSigningKeyMetadata {
+  string key_id = 1;
+  string algorithm = 2;
+  string purpose = 3;
+  string public_key_sha256 = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message ComplianceReportTrustedKey {
+  ComplianceReportSigningKeyMetadata metadata = 1;
+  string public_key = 2;
+  string assessment_id = 3;
+  string assessor_identity = 4;
+  google.protobuf.Timestamp assessed_at = 5;
+  repeated string allowed_scope_refs = 6;
+  google.protobuf.Timestamp revoked_at = 7;
+}
+
+message ComplianceReportTrustPolicy {
+  string policy_id = 1;
+  string policy_version = 2;
+  repeated ComplianceReportTrustedKey trusted_keys = 3;
+}
+
 message ComplianceReportManifest {
   string report_id = 1;
   string report_schema_version = 2;

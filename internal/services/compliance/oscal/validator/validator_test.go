@@ -24,6 +24,7 @@ import (
 
 // minimalValidOSCAL is a minimal valid OSCAL 1.1.2 assessment-results
 // document that passes both structural and semantic validation.
+//
 //go:embed testdata/ifa_assessment-results-example-min.json
 var officialNISTAssessmentResults []byte
 
@@ -31,19 +32,19 @@ var officialNISTAssessmentResults []byte
 var officialNISTAssessmentResultsProvenance []byte
 
 type officialFixtureProvenance struct {
-	FixtureType     string `json:"fixture_type"`
-	SchemaVersion   string `json:"schema_version"`
-	SourceURL       string `json:"source_url"`
+	FixtureType      string `json:"fixture_type"`
+	SchemaVersion    string `json:"schema_version"`
+	SourceURL        string `json:"source_url"`
 	SourceRepository string `json:"source_repository"`
-	SourceRevision  string `json:"source_revision"`
-	SourceBlob      string `json:"source_blob"`
-	SourcePath      string `json:"source_path"`
-	License         string `json:"license"`
-	ByteLength      int    `json:"byte_length"`
-	SHA256          string `json:"sha256"`
-	RetrievedAt     string `json:"retrieved_at"`
-	RetrievalMethod string `json:"retrieval_method"`
-	IntegrityNote   string `json:"integrity_note"`
+	SourceRevision   string `json:"source_revision"`
+	SourceBlob       string `json:"source_blob"`
+	SourcePath       string `json:"source_path"`
+	License          string `json:"license"`
+	ByteLength       int    `json:"byte_length"`
+	SHA256           string `json:"sha256"`
+	RetrievedAt      string `json:"retrieved_at"`
+	RetrievalMethod  string `json:"retrieval_method"`
+	IntegrityNote    string `json:"integrity_note"`
 }
 
 const minimalValidOSCAL = `{

@@ -12,6 +12,9 @@
     - [ComplianceGap](#g8e-compliance-v1-ComplianceGap)
     - [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation)
     - [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest)
+    - [ComplianceReportSigningKeyMetadata](#g8e-compliance-v1-ComplianceReportSigningKeyMetadata)
+    - [ComplianceReportTrustPolicy](#g8e-compliance-v1-ComplianceReportTrustPolicy)
+    - [ComplianceReportTrustedKey](#g8e-compliance-v1-ComplianceReportTrustedKey)
     - [ComplianceVerificationReport](#g8e-compliance-v1-ComplianceVerificationReport)
     - [ComponentInventoryEntry](#g8e-compliance-v1-ComponentInventoryEntry)
     - [ControlAssertionAssessment](#g8e-compliance-v1-ControlAssertionAssessment)
@@ -247,6 +250,64 @@
 | evidence_index_ref | [string](#string) |  |  |
 | checksum_root | [string](#string) |  |  |
 | signature | [ReportSignature](#g8e-compliance-v1-ReportSignature) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportSigningKeyMetadata"></a>
+
+### ComplianceReportSigningKeyMetadata
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key_id | [string](#string) |  |  |
+| algorithm | [string](#string) |  |  |
+| purpose | [string](#string) |  |  |
+| public_key_sha256 | [string](#string) |  |  |
+| created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| expires_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportTrustPolicy"></a>
+
+### ComplianceReportTrustPolicy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| policy_id | [string](#string) |  |  |
+| policy_version | [string](#string) |  |  |
+| trusted_keys | [ComplianceReportTrustedKey](#g8e-compliance-v1-ComplianceReportTrustedKey) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportTrustedKey"></a>
+
+### ComplianceReportTrustedKey
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| metadata | [ComplianceReportSigningKeyMetadata](#g8e-compliance-v1-ComplianceReportSigningKeyMetadata) |  |  |
+| public_key | [string](#string) |  |  |
+| assessment_id | [string](#string) |  |  |
+| assessor_identity | [string](#string) |  |  |
+| assessed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| allowed_scope_refs | [string](#string) | repeated |  |
+| revoked_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 
 
 

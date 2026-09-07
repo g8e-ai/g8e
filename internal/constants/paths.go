@@ -708,6 +708,8 @@ const (
 	AnalysisBuilderVersion                 = "1.2.0"
 	AnalysisSchemaVersion                  = "1.2.0"
 	FrameworkProfileVersion                = "1.0.0"
+	ComplianceReportSignatureAlgorithm     = "ed25519"
+	ComplianceReportSigningPurpose         = "compliance-report-bundle"
 	KSIMethodDefinitionVersion             = "1.0.0"
 	KSIMethodVerifierID                    = "g8e-ksi-method-verifier"
 	KSIMethodVerifierVersion               = "1.0.0"
