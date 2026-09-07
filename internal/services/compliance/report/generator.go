@@ -30,6 +30,7 @@ type GenerationRequest struct {
 
 type GenerationResult struct {
 	Analysis    *compliancev1.ComplianceAnalysis
+	Profiles    []*compliancev1.FrameworkProfile
 	GraphReport *evidence.EvidenceGraphReport
 }
 
@@ -88,6 +89,14 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 	if err != nil {
 		return result, fmt.Errorf("compliance report: build analysis: %w", err)
 	}
+	profiles, err := evidence.BuildFrameworkProfiles(ctx, evidence.FrameworkProfileRequest{
+		Analysis:   analysis,
+		Frameworks: request.Frameworks,
+	})
+	if err != nil {
+		return result, fmt.Errorf("compliance report: build framework profiles: %w", err)
+	}
 	result.Analysis = analysis
+	result.Profiles = profiles
 	return result, nil
 }

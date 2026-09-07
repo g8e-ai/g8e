@@ -1,8 +1,8 @@
 # Proof-Backed Compliance Evidence
 
-**Document Version:** 2.1.3
-**Last Updated:** 2026-09-02
-**Platform:** g8e v2.1.3
+**Document Version:** 2.1.6
+**Last Updated:** 2026-09-07
+**Platform:** g8e v2.1.6
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -172,7 +172,7 @@ The verifier independently checks:
 - Typed metric source, grader, and grade reproduction
 - Artifact directory integrity and root directory enforcement
 
-Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. The verifier shares receipt, persistence, deterministic-stage, metric, and state-observation verification primitives with the eval complete-bundle verifier rather than maintaining a competing verifier.
+Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. Demo, eval, standalone receipt and persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed-attestation importers use shared evidence-graph and cryptographic verification primitives. The complete eval-bundle and report-bundle verifier remains outstanding.
 
 ---
 
@@ -193,60 +193,40 @@ This demonstrates L3 evidence (real-stack scenario with verified receipts and in
 
 ## What is not yet available
 
-The following capabilities are planned and not yet exposed through the CLI or produced by the pipeline at v2.1.3:
+The canonical analysis and rendering path is available through `g8e compliance report generate`, but the following capabilities remain outstanding:
 
-- **Full signed compliance report bundle generation** — The `g8e compliance report generate` command and the complete bundle layout (manifest, scope, framework catalogs, assertions, crosswalks, assessments, evidence index, OSCAL, analysis, gaps, renderers, checksums, signatures) are not yet implemented. The current verifier covers persisted demo evidence runs only.
-- **Cross-framework OSCAL rendering** — The typed OSCAL model remains in the compliance package, but the superseded flat live-state OSCAL export command is not exposed by `g8e compliance`. OSCAL generation from the canonical analysis is planned.
-- **Cryptographic KSI methods** — The existing KSI evaluator uses existence and structural methods. Replacement with protocol-owned cryptographic receipt and final-persistence verification, deterministic grader results, independent state observations, commitment verification, and historical freshness is planned.
-- **Historical effectiveness evidence** — Recurring evidence collection, evidence-window completeness calculations, assertion and control history stores, and release-gate profiles are planned.
-- **Cross-framework crosswalks** — Only the FedRAMP 20x and NIST SP 800-53 crosswalk is in the canonical catalog. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG crosswalks reuse the same assertions but are not yet cataloged.
+- **Complete signed report bundles** — Bundle assembly, dedicated report-signing trust, checksum and signature roots, public and restricted profiles, and `g8e compliance report verify <bundle>` are not implemented.
+- **Complete eval-bundle offline verification** — Eval import and evidence-graph validation are implemented, but complete bundle verification remains outstanding and shares future bundle primitives with report verification.
+- **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
+- **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
 - **Manual notary real-topology verification** — The `fedramp-escalate` and `dhs-release` passkey flows are implemented and unit-tested but have not been run against their real notary topologies.
 
 ---
 
 ## Roadmap
 
-The proof-backed reporting pipeline is implemented in phases. Phases 0, 1, and 2 are complete at v2.1.3. Phases 3 through 7 are planned.
+Phases 0 through 3 are complete. Phase 4 implements assertion grading, framework grading, canonical analysis, content-addressed OSCAL evidence resources, deterministic OSCAL UUIDv5 identities, shared JSON/OSCAL/Markdown/HTML/CLI rendering, explicit responsibility and outcome sections, and deterministic framework profiles. Its remaining work is the canonical vector, golden renderer, renderer-equality, framework aggregation, OSCAL schema, and evidence-link resolution verification matrix.
 
-### Complete at v2.1.3
+**Phase 5 — Signed and independently verified complete bundles.** This phase adds a dedicated compliance-report signing identity, checksums for every protected public and restricted artifact, signed manifest and checksum roots, explicit assessed trust metadata, and complete offline report verification.
 
-**Phase 0 — Freeze semantics and reproduce baseline gaps.** Twenty regression and inventory tests across seven files document every known baseline gap. The typed claim and KSI-method inventories classify every `compliance-alignment.md` claim and every registered KSI method, establishing the responsibility and evidence-classification baseline. Key findings locked in by Phase 0: zero KSI methods perform cryptographic, state-observation, historical, or customer-attestation verification; every registered method is existence or structural; Class C method independence is not enforced; OSCAL UUIDs are random v4; and OSCAL evidence anchors are non-content-addressed fragment strings.
+**Phase 6 — Recurring evidence, release gates, and historical effectiveness.** This phase adds scheduled evidence collection, assertion and control history, release-gate profiles, failed-run denominator preservation, and bridge assessments for version changes.
 
-**Phase 1 — Protocol-owned assertion, scope, crosswalk, and assessment models.** Typed protobuf records for assertion catalogs, framework definitions, crosswalks, assessment scope, evidence references, assertion and control assessments, report manifests, checksums, signatures, and verification reports are added with generated Go and Python bindings, cross-language canonicalization vectors, centralized errors, and path constants. The canonical content-addressed assertion, framework, and crosswalk catalogs are added with strict loaders, validators, and contract tests. The superseded flat live-state `compliance export` command is removed.
-
-**Phase 2 — Evidence-grade demo definitions and results.** Protocol-owned `DemoManifest`, `DemoScenarioDefinition`, `DemoStepResult`, `DemoScenarioResult`, `DemoMetricEvidence`, and `DemoScenarioCatalog` messages are added. All 14 active demo scenarios produce evidence-grade results with typed boundary collectors, authoritative identity retention, canonical persistence, and independent demo-run verification. The demo scenario catalog is expanded, reviewed against harness implementations and doctrines, and crosswalk-validated.
-
-### Planned
-
-**Phase 3 — Evidence graph and strengthened KSI evaluation.** Read-only evidence importers for eval reports, demo reports, audit records, receipts, commitments, ledger state, KSI history, build provenance, configuration attestations, and customer attestations. A content-addressed evidence graph that rejects duplicate IDs, missing references, cycles, cross-scope evidence, and path traversal. KSI evidence extends from string references to typed content-addressed references. Signature-presence methods are replaced with protocol-owned cryptographic verification. Independence requirements for Class C automated methods are enforced.
-
-**Phase 4 — Canonical cross-framework assessments and OSCAL.** Versioned assertion graders consume only verified evidence references. Framework evaluators combine assertion results according to crosswalk mapping, responsibility, applicability, evidence-level, and freshness rules. One canonical `ComplianceAnalysis` record is generated before any presentation format. OSCAL generation consumes the canonical analysis and emits resolvable evidence resources. Random output identifiers are replaced with deterministic namespace-derived identifiers. Markdown, HTML, JSON, OSCAL, and CLI views render from the same canonical analysis.
-
-**Phase 5 — Signed and independently verified complete bundles.** A dedicated compliance-report signing identity and typed key metadata are defined. Checksums are generated for every protected public and restricted artifact, and the manifest root and checksum root are signed. `g8e compliance report verify` is implemented as a complete offline verifier. Public-bundle verification requires no access to restricted plaintext; restricted-bundle verification authenticates encrypted metadata and plaintext digests. Trust anchors are verified from explicit assessed key metadata; a key packaged inside a bundle is never trusted solely by inclusion.
-
-**Phase 6 — Recurring evidence, release gates, and historical effectiveness.** Machine-resource evidence is scheduled at least every seven days and non-machine evidence at least every 90 days according to declared framework rules. Recurring collection is CI-driven: a scheduled workflow invokes report generation against the live deployment and appends typed results to assertion and control history stores. Typed evidence-window completeness and missingness calculations, release-gate profiles, and bridge assessments for version changes are added.
-
-**Phase 7 — Expanded framework and domain coverage.** NIST SP 800-53 technical mappings are completed from the FedRAMP/NIST foundation. SOC 2 Trust Services Criteria, HIPAA Security Rule, PCI DSS, ISO 27001 Annex A, NIST SP 800-63B, GDPR technical measures, and NSA ZIG activity and maturity mappings are added with explicit design versus operating-effectiveness requirements, responsibility models, and framework-specific tests. Customer-attestation and assessor-attestation import formats and framework drift tooling are added.
+**Phase 7 — Expanded framework and domain coverage.** This phase extends reviewed catalogs and crosswalks beyond the current FedRAMP 20x and NIST SP 800-53 foundation and adds framework drift tooling and expanded customer and assessor attestation support.
 
 ---
 
 ## CLI commands
 
-The compliance CLI exposes read-only evaluation and verification commands. Full report bundle generation and signing are not yet exposed.
+The compliance CLI exposes read-only evaluation, evidence-graph verification, demo verification, and canonical analysis generation:
 
-- `g8e compliance ksi --class C` evaluates KSIs and prints the result set as JSON.
+- `g8e compliance ksi --class C --scope-id <scope> --run-id <run> --window-start-unix-ms <start> --window-end-unix-ms <end>` evaluates KSIs with an explicit assessment binding and prints the result set as JSON.
 - `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
-- `g8e compliance demo-run verify <run-id> [--project-root <dir>]` reads `.g8e/data/compliance/demo-evidence/<run-id>/`, verifies its canonical manifest, scenario results, provenance, content-addressed artifacts, signatures, protocol chains, state observations, healthcare threshold metrics, and directory integrity, then emits a canonical `ComplianceVerificationReport`. The verifier is read-only and exits nonzero when the report is invalid.
+- `g8e compliance demo-run verify <run-id> [--project-root <dir>]` independently verifies one persisted demo run and emits a canonical `ComplianceVerificationReport`.
+- `g8e compliance evidence-graph verify --demo-run <run-id> --eval-run <run-id>` imports and validates persisted runs as one typed content-addressed graph.
+- `g8e compliance report generate --scope-id <scope> --demo-run <run-id> --eval-run <run-id> --window-start-unix-ms <start> --window-end-unix-ms <end> --format <json|oscal|markdown|html|cli>` grades verified evidence, constructs canonical analysis and framework profiles, and writes the selected analysis view to standard output.
 
-Planned commands (not yet implemented):
-
-- `g8e compliance report generate --framework <framework@version> --class <class> --scope <scope-manifest> --demo-run <run-id> --eval-bundle <dir> --window-start <timestamp> --window-end <timestamp> --profile <public|restricted> --out <relative-runtime-path>`
-- `g8e compliance report verify <bundle>`
-- `g8e compliance report controls <bundle>`
-- `g8e compliance report evidence <bundle> --control <control-id>`
-- `g8e compliance report gaps <bundle>`
-- `g8e compliance report history --control <control-id>`
+Complete bundle generation, signing, and `g8e compliance report verify <bundle>` are not implemented.
 
 ---
 
@@ -268,12 +248,13 @@ Planned commands (not yet implemented):
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | Compliance catalogs | `protocol/constants/compliance/`, `internal/services/compliance/catalog/` | Digest-verified assertion, framework, crosswalk, and demo-scenario definitions with fail-closed validation |
-| Demo evidence verifier | `internal/services/compliance/evidence/`, `internal/cli/cmd/compliance_demo_run.go` | Read-only verification of persisted demo manifests, scenario results, provenance, content-addressed artifacts, signatures, protocol chains, state observations, and healthcare threshold metrics |
-| Compliance CLI | `internal/cli/cmd/compliance.go` | `ksi`, `ksi-history`, `overlay`, and `demo-run verify` subcommands |
-| KSI evaluator | `internal/services/compliance/ksi_evaluator.go` | Binary KSI status derivation from live audit state |
+| Evidence import and verification | `internal/services/compliance/evidence/` | Read-only typed importers, content-addressed evidence graph validation, cryptographic verification, assertion and framework grading, canonical analysis, and deterministic framework profiles |
+| Compliance report service | `internal/services/compliance/report/` | Canonical analysis orchestration and shared JSON, OSCAL, Markdown, HTML, and CLI rendering |
+| Compliance CLI | `internal/cli/cmd/compliance.go` | KSI evaluation/history, overlay validation, demo verification, evidence-graph verification, release evidence, and canonical report generation |
+| KSI evaluator | `internal/services/compliance/ksi_evaluator.go` | Scope-bound KSI outcomes from typed cryptographic, grader, state, commitment, ledger, and historical evidence methods |
 | KSI history store | `internal/services/compliance/ksi_history.go` | KSI snapshot persistence and historical metrics retention |
 | COSAiS overlay loader | `internal/services/compliance/overlay_loader.go` | AI control overlay ingestion and KSI reference validation |
-| OSCAL renderer model | `internal/services/compliance/oscal.go` | Typed OSCAL component-definition and assessment-results generation retained for the proof-backed bundle renderer |
+| OSCAL renderer | `internal/services/compliance/oscal.go` | Deterministic OSCAL component-definition and assessment-results generation from canonical analysis with resolvable content-addressed evidence resources |
 | Receipt evidence resolution | `internal/tools/agent_harness/scenarios/receipt_evidence.go` | Canonical receipt query, final-persistence waiting, signature verification, and content-addressed evidence propagation |
 | Protocol-chain grader | `internal/tools/agent_harness/scenarios/protocol_chain_grader.go` | Deterministic-stage normalization and protocol-chain grading |
 | Demo manifest builder | `internal/cli/cmd/demo_manifest.go` | Typed `DemoManifest` construction, provenance hashing, and canonical persistence |
@@ -295,11 +276,9 @@ Planned commands (not yet implemented):
 
 ---
 
-## Relationship to the Compliance Alignment Report
+## Relationship to Compliance Alignment
 
-The [Compliance Alignment Report](./compliance-alignment.md) documents g8e's control mappings to SOC 2, ISO 27001, GDPR, HIPAA, NIST SP 800-53, PCI DSS, NIST SP 800-63B, NSA ZIG, and FedRAMP 20x. This evidence document does not duplicate those mappings. It describes the pipeline that binds the FedRAMP 20x and NIST SP 800-53 mappings to immutable, independently verifiable evidence and the roadmap for extending that binding to the remaining frameworks.
-
-The alignment report's FedRAMP 20x section documents the 31-KSI catalog, Certification Classes A-D, KSI evaluation, historical metrics retention, COSAiS overlay alignment, doctrine KSI linkage, and the demo-run verifier. This evidence document provides the assertion catalog, crosswalk, evidence-level, and demo-scenario context that the alignment report references but does not expand on. The two documents are maintained together; the alignment report describes what g8e aligns to, and this document describes how that alignment is proven.
+[Compliance Alignment](./compliance-alignment.md) identifies the canonical catalog and crosswalk sources, defines status and responsibility semantics, links generated evidence, and explains how to resolve an assessment. It does not maintain a parallel prose control matrix or current status table. This document describes the evidence production, verification, grading, and reporting architecture behind those generated outcomes.
 
 ---
 
@@ -314,6 +293,7 @@ For compliance evidence questions, audit support, or independent verification as
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 2.1.3 | 2026-09-02 | Lateralus Labs | Initial proof-backed compliance evidence document; documented the protocol-owned assertion, framework, crosswalk, and demo-scenario catalogs, 14 evidence-grade demo scenarios, independent demo-run verification, demonstrated evidence at the v2.1.3 release boundary, and the Phase 3-7 roadmap |
+| 2.1.6 | 2026-09-07 | Lateralus Labs | Reconciled completed evidence-graph, KSI, canonical analysis, OSCAL, shared renderer, control-section, and framework-profile capabilities; retained complete signed bundles, recurring effectiveness, and expanded frameworks as outstanding work |
 
 ---
 

@@ -707,6 +707,7 @@ const (
 	AnalysisBuilderID                      = "g8e-compliance-analysis-builder"
 	AnalysisBuilderVersion                 = "1.1.0"
 	AnalysisSchemaVersion                  = "1.1.0"
+	FrameworkProfileVersion                = "1.0.0"
 	KSIMethodDefinitionVersion             = "1.0.0"
 	KSIMethodVerifierID                    = "g8e-ksi-method-verifier"
 	KSIMethodVerifierVersion               = "1.0.0"
