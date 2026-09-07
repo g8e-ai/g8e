@@ -95,7 +95,7 @@ the graph is invalid or any importer fails.`,
 				return err
 			}
 
-			report := evidence.BuildAndValidateGraph(ctx, importers, time.Time{}, time.Time{}, time.Now().UTC())
+			_, report := evidence.BuildAndValidateGraph(ctx, importers, time.Time{}, time.Time{}, time.Now().UTC())
 
 			body, err := json.Marshal(report)
 			if err != nil {
