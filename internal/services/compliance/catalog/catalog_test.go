@@ -147,6 +147,14 @@ func TestValidateAssertionCatalogRejectsUnknownVerifierAndGraderVersions(t *test
 	}
 }
 
+func TestValidateFrameworkDefinitionAcceptsPlannedControl(t *testing.T) {
+	framework := validFramework()
+	framework.Controls[0].SupportStatus = "planned"
+	framework.Controls[0].SupportRationale = "A future catalog version maps this control."
+
+	assert.NoError(t, catalog.ValidateFrameworkDefinition(framework))
+}
+
 func TestValidateFrameworkDefinitionRejectsMalformedDefinitions(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -156,7 +164,7 @@ func TestValidateFrameworkDefinitionRejectsMalformedDefinitions(t *testing.T) {
 		{name: "duplicate control", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls = append(f.Controls, f.Controls[0]) }},
 		{name: "invalid control responsibility", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].Responsibility = "vendor" }},
 		{name: "missing support status", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportStatus = "" }},
-		{name: "invalid support status", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportStatus = "planned" }},
+		{name: "invalid support status", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportStatus = "deferred" }},
 		{name: "missing support rationale", mutate: func(f *compliancev1.FrameworkDefinition) { f.Controls[0].SupportRationale = "" }},
 	}
 

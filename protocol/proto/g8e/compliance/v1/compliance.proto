@@ -288,6 +288,7 @@ message ControlSection {
   string status_filter = 4;
   repeated string control_assessment_refs = 5;
   string description = 6;
+  repeated FrameworkControlReference control_refs = 7;
 }
 
 message ComplianceAnalysis {

@@ -2442,13 +2442,14 @@ func (x *ComplianceRemediation) GetOwner() string {
 }
 
 type ControlSection struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	SectionId             string                 `protobuf:"bytes,1,opt,name=section_id,json=sectionId,proto3" json:"section_id,omitempty"`
-	Title                 string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Responsibility        string                 `protobuf:"bytes,3,opt,name=responsibility,proto3" json:"responsibility,omitempty"`
-	StatusFilter          string                 `protobuf:"bytes,4,opt,name=status_filter,json=statusFilter,proto3" json:"status_filter,omitempty"`
-	ControlAssessmentRefs []string               `protobuf:"bytes,5,rep,name=control_assessment_refs,json=controlAssessmentRefs,proto3" json:"control_assessment_refs,omitempty"`
-	Description           string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	state                 protoimpl.MessageState       `protogen:"open.v1"`
+	SectionId             string                       `protobuf:"bytes,1,opt,name=section_id,json=sectionId,proto3" json:"section_id,omitempty"`
+	Title                 string                       `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Responsibility        string                       `protobuf:"bytes,3,opt,name=responsibility,proto3" json:"responsibility,omitempty"`
+	StatusFilter          string                       `protobuf:"bytes,4,opt,name=status_filter,json=statusFilter,proto3" json:"status_filter,omitempty"`
+	ControlAssessmentRefs []string                     `protobuf:"bytes,5,rep,name=control_assessment_refs,json=controlAssessmentRefs,proto3" json:"control_assessment_refs,omitempty"`
+	Description           string                       `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	ControlRefs           []*FrameworkControlReference `protobuf:"bytes,7,rep,name=control_refs,json=controlRefs,proto3" json:"control_refs,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -2523,6 +2524,13 @@ func (x *ControlSection) GetDescription() string {
 		return x.Description
 	}
 	return ""
+}
+
+func (x *ControlSection) GetControlRefs() []*FrameworkControlReference {
+	if x != nil {
+		return x.ControlRefs
+	}
+	return nil
 }
 
 type ComplianceAnalysis struct {
@@ -3997,7 +4005,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"findingRef\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\x1a\n" +
 	"\bpriority\x18\x04 \x01(\tR\bpriority\x12\x14\n" +
-	"\x05owner\x18\x05 \x01(\tR\x05owner\"\xec\x01\n" +
+	"\x05owner\x18\x05 \x01(\tR\x05owner\"\xbd\x02\n" +
 	"\x0eControlSection\x12\x1d\n" +
 	"\n" +
 	"section_id\x18\x01 \x01(\tR\tsectionId\x12\x14\n" +
@@ -4005,7 +4013,8 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x0eresponsibility\x18\x03 \x01(\tR\x0eresponsibility\x12#\n" +
 	"\rstatus_filter\x18\x04 \x01(\tR\fstatusFilter\x126\n" +
 	"\x17control_assessment_refs\x18\x05 \x03(\tR\x15controlAssessmentRefs\x12 \n" +
-	"\vdescription\x18\x06 \x01(\tR\vdescription\"\x94\t\n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\x12O\n" +
+	"\fcontrol_refs\x18\a \x03(\v2,.g8e.compliance.v1.FrameworkControlReferenceR\vcontrolRefs\"\x94\t\n" +
 	"\x12ComplianceAnalysis\x12\x1f\n" +
 	"\vanalysis_id\x18\x01 \x01(\tR\n" +
 	"analysisId\x126\n" +
@@ -4226,43 +4235,44 @@ var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	16, // 25: g8e.compliance.v1.ComplianceReportManifest.signature:type_name -> g8e.compliance.v1.ReportSignature
 	35, // 26: g8e.compliance.v1.ComplianceVerificationReport.verified_at:type_name -> google.protobuf.Timestamp
 	18, // 27: g8e.compliance.v1.ComplianceVerificationReport.failures:type_name -> g8e.compliance.v1.VerificationFailure
-	35, // 28: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
-	20, // 29: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
-	13, // 30: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
-	14, // 31: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	21, // 32: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
-	22, // 33: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
-	23, // 34: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
-	24, // 35: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
-	25, // 36: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
-	12, // 37: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
-	0,  // 38: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 39: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
-	14, // 40: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	0,  // 41: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 42: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
-	0,  // 43: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
-	1,  // 44: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	28, // 45: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	0,  // 46: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	28, // 47: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	35, // 48: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	35, // 49: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
-	0,  // 50: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 51: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	35, // 52: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
-	0,  // 53: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	28, // 54: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	31, // 55: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	0,  // 56: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 57: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	0,  // 58: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	30, // 59: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
-	60, // [60:60] is the sub-list for method output_type
-	60, // [60:60] is the sub-list for method input_type
-	60, // [60:60] is the sub-list for extension type_name
-	60, // [60:60] is the sub-list for extension extendee
-	0,  // [0:60] is the sub-list for field type_name
+	28, // 28: g8e.compliance.v1.ControlSection.control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	35, // 29: g8e.compliance.v1.ComplianceAnalysis.generated_at:type_name -> google.protobuf.Timestamp
+	20, // 30: g8e.compliance.v1.ComplianceAnalysis.evidence_window_completeness:type_name -> g8e.compliance.v1.EvidenceWindowCompleteness
+	13, // 31: g8e.compliance.v1.ComplianceAnalysis.assertion_assessments:type_name -> g8e.compliance.v1.ControlAssertionAssessment
+	14, // 32: g8e.compliance.v1.ComplianceAnalysis.framework_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	21, // 33: g8e.compliance.v1.ComplianceAnalysis.gaps:type_name -> g8e.compliance.v1.ComplianceGap
+	22, // 34: g8e.compliance.v1.ComplianceAnalysis.evidence_links:type_name -> g8e.compliance.v1.EvidenceLink
+	23, // 35: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
+	24, // 36: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
+	25, // 37: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
+	12, // 38: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	0,  // 39: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 40: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
+	14, // 41: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	0,  // 42: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 43: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	0,  // 44: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
+	1,  // 45: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	28, // 46: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	0,  // 47: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	28, // 48: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	35, // 49: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	35, // 50: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	0,  // 51: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 52: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	35, // 53: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	0,  // 54: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	28, // 55: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	31, // 56: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
+	0,  // 57: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 58: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	0,  // 59: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	30, // 60: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	61, // [61:61] is the sub-list for method output_type
+	61, // [61:61] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }

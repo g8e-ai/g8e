@@ -22,7 +22,7 @@ import (
 )
 
 var responsibilities = []string{"platform", "customer", "shared", "inherited", "assessor"}
-var supportStatuses = []string{"mapped", "unsupported"}
+var supportStatuses = []string{"mapped", "planned", "unsupported"}
 var mappingTypes = []string{"full", "partial", "supporting", "not_applicable"}
 var assessmentStatuses = []string{"satisfied", "not_satisfied", "not_applicable", "unverifiable", "customer_attestation_required"}
 var evidenceLevels = []string{"L0", "L1", "L2", "L3", "L4", "L5"}

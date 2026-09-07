@@ -422,6 +422,7 @@
 | status_filter | [string](#string) |  |  |
 | control_assessment_refs | [string](#string) | repeated |  |
 | description | [string](#string) |  |  |
+| control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
 
 
 
