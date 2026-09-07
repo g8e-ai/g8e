@@ -46,20 +46,20 @@ import (
 type SemanticReasonCode string
 
 const (
-	SemanticUUIDInvalid       SemanticReasonCode = "oscal.uuid_invalid"
-	SemanticUUIDDuplicate     SemanticReasonCode = "oscal.uuid_duplicate"
-	SemanticRefUnresolved     SemanticReasonCode = "oscal.ref_unresolved"
-	SemanticImportAPMissing   SemanticReasonCode = "oscal.import_ap_missing"
-	SemanticReviewedControls  SemanticReasonCode = "oscal.reviewed_controls_invalid"
-	SemanticObsSubjectMissing SemanticReasonCode = "oscal.observation_subject_missing"
-	SemanticObsEvidenceUnresolved SemanticReasonCode = "oscal.observation_evidence_unresolved"
-	SemanticFindingTargetMissing SemanticReasonCode = "oscal.finding_target_missing"
-	SemanticFindingStatusInvalid  SemanticReasonCode = "oscal.finding_status_invalid"
+	SemanticUUIDInvalid               SemanticReasonCode = "oscal.uuid_invalid"
+	SemanticUUIDDuplicate             SemanticReasonCode = "oscal.uuid_duplicate"
+	SemanticRefUnresolved             SemanticReasonCode = "oscal.ref_unresolved"
+	SemanticImportAPMissing           SemanticReasonCode = "oscal.import_ap_missing"
+	SemanticReviewedControls          SemanticReasonCode = "oscal.reviewed_controls_invalid"
+	SemanticObsSubjectMissing         SemanticReasonCode = "oscal.observation_subject_missing"
+	SemanticObsEvidenceUnresolved     SemanticReasonCode = "oscal.observation_evidence_unresolved"
+	SemanticFindingTargetMissing      SemanticReasonCode = "oscal.finding_target_missing"
+	SemanticFindingStatusInvalid      SemanticReasonCode = "oscal.finding_status_invalid"
 	SemanticBackMatterResourceMissing SemanticReasonCode = "oscal.back_matter_resource_missing"
-	SemanticMediaTypeInvalid  SemanticReasonCode = "oscal.media_type_invalid"
-	SemanticTimestampInvalid  SemanticReasonCode = "oscal.timestamp_invalid"
-	SemanticOSCALVersionInvalid SemanticReasonCode = "oscal.version_invalid"
-	SemanticContentAddressInvalid SemanticReasonCode = "oscal.content_address_invalid"
+	SemanticMediaTypeInvalid          SemanticReasonCode = "oscal.media_type_invalid"
+	SemanticTimestampInvalid          SemanticReasonCode = "oscal.timestamp_invalid"
+	SemanticOSCALVersionInvalid       SemanticReasonCode = "oscal.version_invalid"
+	SemanticContentAddressInvalid     SemanticReasonCode = "oscal.content_address_invalid"
 )
 
 // SemanticFailure is a typed OSCAL semantic validation failure.
@@ -95,13 +95,13 @@ func (fs SemanticFailures) Error() string {
 // version, schema digest, structural failures, semantic failures, and an
 // overall valid flag.
 type ValidationResult struct {
-	ValidatorID      string                       `json:"validator_id"`
-	ValidatorVersion string                       `json:"validator_version"`
-	SchemaVersion    string                       `json:"schema_version"`
-	SchemaDigest     string                       `json:"schema_digest"`
-	StructuralFailures jsonschema.Failures        `json:"structural_failures,omitempty"`
-	SemanticFailures  SemanticFailures            `json:"semantic_failures,omitempty"`
-	Valid             bool                         `json:"valid"`
+	ValidatorID        string              `json:"validator_id"`
+	ValidatorVersion   string              `json:"validator_version"`
+	SchemaVersion      string              `json:"schema_version"`
+	SchemaDigest       string              `json:"schema_digest"`
+	StructuralFailures jsonschema.Failures `json:"structural_failures,omitempty"`
+	SemanticFailures   SemanticFailures    `json:"semantic_failures,omitempty"`
+	Valid              bool                `json:"valid"`
 }
 
 // Validator is the OSCAL assessment-results validator. It performs
@@ -188,7 +188,11 @@ func (v *Validator) Validate(data []byte) (*ValidationResult, error) {
 		return result, nil
 	}
 
-	semanticFailures := v.validateSemantics(doc)
+	assessmentResults, ok := doc["assessment-results"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("oscal validator: decode assessment-results root: %w", constants.ErrOSCALValidationFailed)
+	}
+	semanticFailures := v.validateSemantics(assessmentResults)
 	result.SemanticFailures = semanticFailures
 
 	result.Valid = len(structuralFailures) == 0 && len(semanticFailures) == 0
@@ -200,13 +204,13 @@ func (v *Validator) Validate(data []byte) (*ValidationResult, error) {
 func (v *Validator) validateSemantics(doc map[string]any) SemanticFailures {
 	var failures SemanticFailures
 	collector := &semanticCollector{}
-	v.validateUUIDs(doc, "", collector)
-	v.validateReferences(doc, "", collector)
-	v.validateTimestamps(doc, "", collector)
-	v.validateOSCALVersion(doc, "", collector)
-	v.validateBackMatter(doc, "", collector)
-	v.validateFindings(doc, "", collector)
-	v.validateObservations(doc, "", collector)
+	v.validateUUIDs(doc, "/assessment-results", collector)
+	v.validateReferences(doc, "/assessment-results", collector)
+	v.validateTimestamps(doc, "/assessment-results", collector)
+	v.validateOSCALVersion(doc, "/assessment-results", collector)
+	v.validateBackMatter(doc, "/assessment-results", collector)
+	v.validateFindings(doc, "/assessment-results", collector)
+	v.validateObservations(doc, "/assessment-results", collector)
 	failures = collector.failures
 	// Sort failures deterministically
 	for i := 1; i < len(failures); i++ {
@@ -304,7 +308,7 @@ func (v *Validator) validateReferences(doc map[string]any, path string, sc *sema
 	walk = func(n any, p string) {
 		switch val := n.(type) {
 		case map[string]any:
-			if href, ok := val["href"].(string); ok {
+			if href, ok := val["href"].(string); ok && p != path+"/import-ap" {
 				// Back-matter references use the form #<uuid>
 				if strings.HasPrefix(href, "#") {
 					refID := href[1:]
@@ -335,13 +339,13 @@ func (v *Validator) validateReferences(doc map[string]any, path string, sc *sema
 // validateTimestamps checks that timestamp fields are valid RFC 3339.
 func (v *Validator) validateTimestamps(doc map[string]any, path string, sc *semanticCollector) {
 	timestampFields := map[string]bool{
-		"published":    true,
+		"published":     true,
 		"last-modified": true,
-		"modified":     true,
-		"start":        true,
-		"end":          true,
-		"collected":    true,
-		"expires":      true,
+		"modified":      true,
+		"start":         true,
+		"end":           true,
+		"collected":     true,
+		"expires":       true,
 	}
 	var walk func(n any, p string)
 	walk = func(n any, p string) {
@@ -404,11 +408,14 @@ func (v *Validator) validateBackMatter(doc map[string]any, path string, sc *sema
 		}
 		rPath := fmt.Sprintf("%s/back-matter/resources/%d", path, i)
 		// Check that resources have a title or description
-		if _, hasTitle := res["title"]; !hasTitle {
-			if _, hasDesc := res["description"]; !hasDesc {
-				// Resources should have at least a title or description
-				// (not strictly required by schema, but semantically important)
-			}
+		_, hasTitle := res["title"]
+		_, hasDescription := res["description"]
+		if !hasTitle && !hasDescription {
+			sc.add(SemanticFailure{
+				Reason:      SemanticBackMatterResourceMissing,
+				Message:     "back-matter resource is missing a title and description",
+				InstancePtr: rPath,
+			})
 		}
 		// Check media-type if present
 		if props, ok := res["props"].([]any); ok {
@@ -573,7 +580,7 @@ func isValidUUID(s string) bool {
 		if i == 8 || i == 13 || i == 18 || i == 23 {
 			continue
 		}
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
 			return false
 		}
 	}

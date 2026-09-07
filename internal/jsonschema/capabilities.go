@@ -33,34 +33,34 @@ type Keyword string
 
 const (
 	// Meta keywords
-	KeywordSchema       Keyword = "$schema"
-	KeywordID           Keyword = "$id"
-	KeywordRef          Keyword = "$ref"
-	KeywordComment      Keyword = "$comment"
-	KeywordDefinitions  Keyword = "definitions"
+	KeywordSchema      Keyword = "$schema"
+	KeywordID          Keyword = "$id"
+	KeywordRef         Keyword = "$ref"
+	KeywordComment     Keyword = "$comment"
+	KeywordDefinitions Keyword = "definitions"
 
 	// Type and value keywords
-	KeywordType        Keyword = "type"
-	KeywordEnum        Keyword = "enum"
-	KeywordConst       Keyword = "const"
+	KeywordType  Keyword = "type"
+	KeywordEnum  Keyword = "enum"
+	KeywordConst Keyword = "const"
 
 	// Object keywords
-	KeywordProperties          Keyword = "properties"
-	KeywordPatternProperties   Keyword = "patternProperties"
+	KeywordProperties           Keyword = "properties"
+	KeywordPatternProperties    Keyword = "patternProperties"
 	KeywordAdditionalProperties Keyword = "additionalProperties"
-	KeywordPropertyNames       Keyword = "propertyNames"
-	KeywordRequired            Keyword = "required"
-	KeywordDependencies        Keyword = "dependencies"
-	KeywordMinProperties       Keyword = "minProperties"
-	KeywordMaxProperties       Keyword = "maxProperties"
+	KeywordPropertyNames        Keyword = "propertyNames"
+	KeywordRequired             Keyword = "required"
+	KeywordDependencies         Keyword = "dependencies"
+	KeywordMinProperties        Keyword = "minProperties"
+	KeywordMaxProperties        Keyword = "maxProperties"
 
 	// Array keywords
-	KeywordItems          Keyword = "items"
+	KeywordItems           Keyword = "items"
 	KeywordAdditionalItems Keyword = "additionalItems"
-	KeywordContains       Keyword = "contains"
-	KeywordMinItems       Keyword = "minItems"
-	KeywordMaxItems       Keyword = "maxItems"
-	KeywordUniqueItems    Keyword = "uniqueItems"
+	KeywordContains        Keyword = "contains"
+	KeywordMinItems        Keyword = "minItems"
+	KeywordMaxItems        Keyword = "maxItems"
+	KeywordUniqueItems     Keyword = "uniqueItems"
 
 	// String keywords
 	KeywordMinLength Keyword = "minLength"
@@ -101,13 +101,13 @@ const (
 // impose validation constraints. The compiler accepts them but the validator
 // does not evaluate them.
 var AnnotationKeywords = map[Keyword]bool{
-	KeywordTitle:       true,
-	KeywordDescription: true,
-	KeywordDefault:     true,
-	KeywordExamples:    true,
-	KeywordReadOnly:      true,
-	KeywordWriteOnly:     true,
-	KeywordComment:       true,
+	KeywordTitle:            true,
+	KeywordDescription:      true,
+	KeywordDefault:          true,
+	KeywordExamples:         true,
+	KeywordReadOnly:         true,
+	KeywordWriteOnly:        true,
+	KeywordComment:          true,
 	KeywordContentEncoding:  true,
 	KeywordContentMediaType: true,
 }
@@ -125,39 +125,39 @@ var MetaKeywords = map[Keyword]bool{
 // constraints. The validator evaluates every one of these that appears in a
 // compiled schema node.
 var ValidationKeywords = map[Keyword]bool{
-	KeywordType:                true,
-	KeywordEnum:                true,
-	KeywordConst:               true,
-	KeywordProperties:          true,
-	KeywordPatternProperties:   true,
+	KeywordType:                 true,
+	KeywordEnum:                 true,
+	KeywordConst:                true,
+	KeywordProperties:           true,
+	KeywordPatternProperties:    true,
 	KeywordAdditionalProperties: true,
-	KeywordPropertyNames:       true,
-	KeywordRequired:            true,
-	KeywordDependencies:        true,
-	KeywordMinProperties:       true,
-	KeywordMaxProperties:       true,
-	KeywordItems:               true,
-	KeywordAdditionalItems:     true,
-	KeywordContains:            true,
-	KeywordMinItems:            true,
-	KeywordMaxItems:            true,
-	KeywordUniqueItems:         true,
-	KeywordMinLength:           true,
-	KeywordMaxLength:           true,
-	KeywordPattern:             true,
-	KeywordFormat:              true,
-	KeywordMinimum:             true,
-	KeywordMaximum:             true,
-	KeywordExclusiveMinimum:    true,
-	KeywordExclusiveMaximum:    true,
-	KeywordMultipleOf:          true,
-	KeywordAllOf:               true,
-	KeywordAnyOf:               true,
-	KeywordOneOf:               true,
-	KeywordNot:                 true,
-	KeywordIf:                  true,
-	KeywordThen:                true,
-	KeywordElse:                true,
+	KeywordPropertyNames:        true,
+	KeywordRequired:             true,
+	KeywordDependencies:         true,
+	KeywordMinProperties:        true,
+	KeywordMaxProperties:        true,
+	KeywordItems:                true,
+	KeywordAdditionalItems:      true,
+	KeywordContains:             true,
+	KeywordMinItems:             true,
+	KeywordMaxItems:             true,
+	KeywordUniqueItems:          true,
+	KeywordMinLength:            true,
+	KeywordMaxLength:            true,
+	KeywordPattern:              true,
+	KeywordFormat:               true,
+	KeywordMinimum:              true,
+	KeywordMaximum:              true,
+	KeywordExclusiveMinimum:     true,
+	KeywordExclusiveMaximum:     true,
+	KeywordMultipleOf:           true,
+	KeywordAllOf:                true,
+	KeywordAnyOf:                true,
+	KeywordOneOf:                true,
+	KeywordNot:                  true,
+	KeywordIf:                   true,
+	KeywordThen:                 true,
+	KeywordElse:                 true,
 }
 
 // Format is a typed enumeration of every string format asserted by the OSCAL
@@ -199,10 +199,10 @@ const (
 // declares its keyword, a human-readable description, and whether the OSCAL
 // 1.1.2 schema exercises it.
 type Capability struct {
-	Keyword       Keyword  `json:"keyword"`
-	Feature       string   `json:"feature"`
-	Description   string   `json:"description"`
-	ExercisedByOSCAL bool  `json:"exercised_by_oscal"`
+	Keyword          Keyword `json:"keyword"`
+	Feature          string  `json:"feature"`
+	Description      string  `json:"description"`
+	ExercisedByOSCAL bool    `json:"exercised_by_oscal"`
 }
 
 // OSCALCapabilityInventory is the complete typed inventory of Draft-07
@@ -262,18 +262,18 @@ var OSCALCapabilityInventory = []Capability{
 // the maximum nesting depth, the number of top-level definitions, and
 // whether recursive definitions exist.
 type OSCALSchemaProfile struct {
-	SchemaVersion       string         `json:"schema_version"`
-	SchemaID            string         `json:"schema_id"`
-	JSONSchemaDraft     string         `json:"json_schema_draft"`
-	KeywordCounts       map[Keyword]int `json:"keyword_counts"`
-	Formats             []Format        `json:"formats"`
-	RefForms            map[RefForm]int `json:"ref_forms"`
-	BooleanSchemaCount  int             `json:"boolean_schema_count"`
-	MaxNestingDepth     int             `json:"max_nesting_depth"`
-	DefinitionCount     int             `json:"definition_count"`
-	HasRecursiveDefs    bool            `json:"has_recursive_defs"`
-	PatternCount        int             `json:"pattern_count"`
-	TotalRefCount       int             `json:"total_ref_count"`
+	SchemaVersion      string          `json:"schema_version"`
+	SchemaID           string          `json:"schema_id"`
+	JSONSchemaDraft    string          `json:"json_schema_draft"`
+	KeywordCounts      map[Keyword]int `json:"keyword_counts"`
+	Formats            []Format        `json:"formats"`
+	RefForms           map[RefForm]int `json:"ref_forms"`
+	BooleanSchemaCount int             `json:"boolean_schema_count"`
+	MaxNestingDepth    int             `json:"max_nesting_depth"`
+	DefinitionCount    int             `json:"definition_count"`
+	HasRecursiveDefs   bool            `json:"has_recursive_defs"`
+	PatternCount       int             `json:"pattern_count"`
+	TotalRefCount      int             `json:"total_ref_count"`
 }
 
 // OSCALProfile is the typed profile of the embedded OSCAL 1.1.2 schema. It
@@ -285,26 +285,26 @@ var OSCALProfile = OSCALSchemaProfile{
 	SchemaID:        "http://csrc.nist.gov/ns/oscal/1.1.2/oscal-ar-schema.json",
 	JSONSchemaDraft: "draft-07",
 	KeywordCounts: map[Keyword]int{
-		KeywordSchema:      1,
-		KeywordID:          69,
-		KeywordRef:         413,
-		KeywordComment:     1,
-		KeywordDefinitions: 1,
-		KeywordType:        377,
-		KeywordEnum:        29,
-		KeywordMinimum:     2,
-		KeywordProperties:  95,
+		KeywordSchema:               1,
+		KeywordID:                   69,
+		KeywordRef:                  413,
+		KeywordComment:              1,
+		KeywordDefinitions:          1,
+		KeywordType:                 377,
+		KeywordEnum:                 29,
+		KeywordMinimum:              2,
+		KeywordProperties:           95,
 		KeywordAdditionalProperties: 96,
-		KeywordRequired:    85,
-		KeywordItems:       206,
-		KeywordMinItems:    206,
-		KeywordPattern:     7,
-		KeywordFormat:      4,
-		KeywordAllOf:       11,
-		KeywordAnyOf:       21,
-		KeywordTitle:       312,
-		KeywordDescription: 323,
-		KeywordContentEncoding: 1,
+		KeywordRequired:             85,
+		KeywordItems:                206,
+		KeywordMinItems:             206,
+		KeywordPattern:              7,
+		KeywordFormat:               4,
+		KeywordAllOf:                11,
+		KeywordAnyOf:                21,
+		KeywordTitle:                312,
+		KeywordDescription:          323,
+		KeywordContentEncoding:      1,
 	},
 	Formats: []Format{FormatDateTime, FormatURI, FormatURIReference, FormatEmail},
 	RefForms: map[RefForm]int{

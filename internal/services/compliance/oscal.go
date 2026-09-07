@@ -348,6 +348,17 @@ func (e *OSCALExporter) GenerateAssessmentResults(analysis *compliancev1.Complia
 	if err := validateOSCALAssessmentResults(document); err != nil {
 		return nil, err
 	}
+	validator, err := NewOSCALDocumentValidator()
+	if err != nil {
+		return nil, err
+	}
+	validation, err := validator.ValidateAssessmentResults(document)
+	if err != nil {
+		return nil, err
+	}
+	if !validation.GetValid() {
+		return nil, fmt.Errorf("%w: %d structural failures and %d semantic failures", constants.ErrOSCALValidationFailed, len(validation.GetStructuralFailures()), len(validation.GetSemanticFailures()))
+	}
 	return document, nil
 }
 

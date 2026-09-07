@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
@@ -88,6 +89,9 @@ func GenerateComplianceAnalysis(ctx context.Context, request GenerationRequest) 
 	})
 	if err != nil {
 		return result, fmt.Errorf("compliance report: build analysis: %w", err)
+	}
+	if _, err := compliance.NewOSCALExporter(nil).GenerateAssessmentResults(analysis); err != nil {
+		return result, fmt.Errorf("compliance report: validate OSCAL projection: %w", err)
 	}
 	profiles, err := evidence.BuildFrameworkProfiles(ctx, evidence.FrameworkProfileRequest{
 		Analysis:   analysis,

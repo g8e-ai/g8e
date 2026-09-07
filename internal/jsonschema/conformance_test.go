@@ -389,12 +389,7 @@ func TestFocused_MalformedSchemaRejection(t *testing.T) {
 	for _, src := range malformed {
 		t.Run(src, func(t *testing.T) {
 			c := NewCompiler()
-			_, err := c.Compile([]byte(src))
-			// Should return an error, not panic
-			if err == nil {
-				// Some malformed values might be silently ignored;
-				// the important thing is no panic
-			}
+			_, _ = c.Compile([]byte(src))
 		})
 	}
 }

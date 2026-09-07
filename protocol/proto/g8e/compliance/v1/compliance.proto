@@ -233,6 +233,28 @@ message ComplianceVerificationReport {
   string reproduced_checksum_root = 7;
 }
 
+message OSCALValidatorIdentity {
+  string validator_id = 1;
+  string validator_version = 2;
+  string schema_version = 3;
+  string schema_digest = 4;
+}
+
+message OSCALValidationFailure {
+  string code = 1;
+  string message = 2;
+  string instance_ptr = 3;
+  string schema_ptr = 4;
+  string keyword = 5;
+}
+
+message OSCALValidationResult {
+  OSCALValidatorIdentity validator = 1;
+  bool valid = 2;
+  repeated OSCALValidationFailure structural_failures = 3;
+  repeated OSCALValidationFailure semantic_failures = 4;
+}
+
 // ---------------------------------------------------------------------------
 // Canonical compliance analysis (COMP-4)
 // ---------------------------------------------------------------------------

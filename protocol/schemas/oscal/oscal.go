@@ -114,21 +114,21 @@ func ProvenanceBytes() []byte {
 
 // Provenance is the typed view over the embedded provenance.json metadata.
 type Provenance struct {
-	SchemaType        string `json:"schema_type"`
-	SchemaVersion     string `json:"schema_version"`
-	SourceURL         string `json:"source_url"`
-	SourceRepository  string `json:"source_repository"`
-	SourceTag         string `json:"source_tag"`
-	SourcePath        string `json:"source_path"`
-	SchemaID          string `json:"schema_id"`
-	JSONSchemaDraft   string `json:"json_schema_draft"`
-	License           string `json:"license"`
-	LicenseSummary    string `json:"license_summary"`
-	ByteLength        int    `json:"byte_length"`
-	SHA256            string `json:"sha256"`
-	RetrievedAt       string `json:"retrieved_at"`
-	RetrievalMethod   string `json:"retrieval_method"`
-	IntegrityNote     string `json:"integrity_note"`
+	SchemaType       string `json:"schema_type"`
+	SchemaVersion    string `json:"schema_version"`
+	SourceURL        string `json:"source_url"`
+	SourceRepository string `json:"source_repository"`
+	SourceTag        string `json:"source_tag"`
+	SourcePath       string `json:"source_path"`
+	SchemaID         string `json:"schema_id"`
+	JSONSchemaDraft  string `json:"json_schema_draft"`
+	License          string `json:"license"`
+	LicenseSummary   string `json:"license_summary"`
+	ByteLength       int    `json:"byte_length"`
+	SHA256           string `json:"sha256"`
+	RetrievedAt      string `json:"retrieved_at"`
+	RetrievalMethod  string `json:"retrieval_method"`
+	IntegrityNote    string `json:"integrity_note"`
 }
 
 // LoadProvenance decodes the embedded provenance metadata and verifies that

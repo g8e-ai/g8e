@@ -36,6 +36,9 @@
     - [FrameworkDefinition](#g8e-compliance-v1-FrameworkDefinition)
     - [FrameworkProfile](#g8e-compliance-v1-FrameworkProfile)
     - [NamedDigest](#g8e-compliance-v1-NamedDigest)
+    - [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure)
+    - [OSCALValidationResult](#g8e-compliance-v1-OSCALValidationResult)
+    - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
@@ -791,6 +794,61 @@
 | ----- | ---- | ----- | ----------- |
 | name | [string](#string) |  |  |
 | sha256 | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-OSCALValidationFailure"></a>
+
+### OSCALValidationFailure
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| code | [string](#string) |  |  |
+| message | [string](#string) |  |  |
+| instance_ptr | [string](#string) |  |  |
+| schema_ptr | [string](#string) |  |  |
+| keyword | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-OSCALValidationResult"></a>
+
+### OSCALValidationResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator | [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity) |  |  |
+| valid | [bool](#bool) |  |  |
+| structural_failures | [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure) | repeated |  |
+| semantic_failures | [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-OSCALValidatorIdentity"></a>
+
+### OSCALValidatorIdentity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator_id | [string](#string) |  |  |
+| validator_version | [string](#string) |  |  |
+| schema_version | [string](#string) |  |  |
+| schema_digest | [string](#string) |  |  |
 
 
 

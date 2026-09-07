@@ -63,13 +63,3 @@ func resolveJSONPointer(root any, ptr string) (any, error) {
 	}
 	return current, nil
 }
-
-// jsonPointerFromTokens builds a JSON Pointer string from tokens.
-func jsonPointerFromTokens(tokens ...string) string {
-	var b strings.Builder
-	for _, t := range tokens {
-		b.WriteByte('/')
-		b.WriteString(escapeJSONPointerToken(t))
-	}
-	return b.String()
-}

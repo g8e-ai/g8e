@@ -31,7 +31,7 @@ type Schema struct {
 	Enum []any
 
 	// Const is the required constant value, if any.
-	Const any
+	Const    any
 	HasConst bool
 
 	// Properties maps property names to their subschemas.
@@ -43,7 +43,7 @@ type Schema struct {
 	// AdditionalProperties is the schema for properties not in Properties
 	// or PatternProperties. nil means no constraint. A boolean false means
 	// reject. A schema means validate against that schema.
-	AdditionalProperties *Schema
+	AdditionalProperties     *Schema
 	AdditionalPropertiesBool *bool
 
 	// PropertyNames is the schema that every property name must validate
@@ -66,7 +66,7 @@ type Schema struct {
 
 	// AdditionalItems is the schema for items beyond those covered by
 	// tuple-form Items. nil means no constraint.
-	AdditionalItems *Schema
+	AdditionalItems     *Schema
 	AdditionalItemsBool *bool
 
 	// Contains is the schema that at least one array item must match.

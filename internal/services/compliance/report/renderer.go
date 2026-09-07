@@ -86,6 +86,19 @@ func RenderComplianceAnalysis(analysis *compliancev1.ComplianceAnalysis, format 
 	if err != nil {
 		return nil, fmt.Errorf("compliance report: render %s: %w", format, err)
 	}
+	if format == FormatOSCAL {
+		validator, err := compliance.NewOSCALDocumentValidator()
+		if err != nil {
+			return nil, err
+		}
+		validation, err := validator.ValidateBytes(body)
+		if err != nil {
+			return nil, err
+		}
+		if !validation.GetValid() {
+			return nil, fmt.Errorf("%w: rendered OSCAL has %d structural failures and %d semantic failures", constants.ErrOSCALValidationFailed, len(validation.GetStructuralFailures()), len(validation.GetSemanticFailures()))
+		}
+	}
 	return &RenderedAnalysis{Format: format, MediaType: mediaType, Body: body}, nil
 }
 

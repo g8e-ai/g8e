@@ -409,6 +409,44 @@ class ComplianceVerificationReport(_message.Message):
     reproduced_checksum_root: str
     def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ...) -> None: ...
 
+class OSCALValidatorIdentity(_message.Message):
+    __slots__ = ("validator_id", "validator_version", "schema_version", "schema_digest")
+    VALIDATOR_ID_FIELD_NUMBER: _ClassVar[int]
+    VALIDATOR_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    validator_id: str
+    validator_version: str
+    schema_version: str
+    schema_digest: str
+    def __init__(self, validator_id: _Optional[str] = ..., validator_version: _Optional[str] = ..., schema_version: _Optional[str] = ..., schema_digest: _Optional[str] = ...) -> None: ...
+
+class OSCALValidationFailure(_message.Message):
+    __slots__ = ("code", "message", "instance_ptr", "schema_ptr", "keyword")
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    INSTANCE_PTR_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_PTR_FIELD_NUMBER: _ClassVar[int]
+    KEYWORD_FIELD_NUMBER: _ClassVar[int]
+    code: str
+    message: str
+    instance_ptr: str
+    schema_ptr: str
+    keyword: str
+    def __init__(self, code: _Optional[str] = ..., message: _Optional[str] = ..., instance_ptr: _Optional[str] = ..., schema_ptr: _Optional[str] = ..., keyword: _Optional[str] = ...) -> None: ...
+
+class OSCALValidationResult(_message.Message):
+    __slots__ = ("validator", "valid", "structural_failures", "semantic_failures")
+    VALIDATOR_FIELD_NUMBER: _ClassVar[int]
+    VALID_FIELD_NUMBER: _ClassVar[int]
+    STRUCTURAL_FAILURES_FIELD_NUMBER: _ClassVar[int]
+    SEMANTIC_FAILURES_FIELD_NUMBER: _ClassVar[int]
+    validator: OSCALValidatorIdentity
+    valid: bool
+    structural_failures: _containers.RepeatedCompositeFieldContainer[OSCALValidationFailure]
+    semantic_failures: _containers.RepeatedCompositeFieldContainer[OSCALValidationFailure]
+    def __init__(self, validator: _Optional[_Union[OSCALValidatorIdentity, _Mapping]] = ..., valid: _Optional[bool] = ..., structural_failures: _Optional[_Iterable[_Union[OSCALValidationFailure, _Mapping]]] = ..., semantic_failures: _Optional[_Iterable[_Union[OSCALValidationFailure, _Mapping]]] = ...) -> None: ...
+
 class EvidenceWindowCompleteness(_message.Message):
     __slots__ = ("scope_id", "expected_evidence_count", "actual_evidence_count", "missing_evidence_refs", "stale_evidence_refs", "completeness_status", "window_start_ref", "window_end_ref")
     SCOPE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -488,20 +526,22 @@ class ComplianceRemediation(_message.Message):
     def __init__(self, remediation_id: _Optional[str] = ..., finding_ref: _Optional[str] = ..., action: _Optional[str] = ..., priority: _Optional[str] = ..., owner: _Optional[str] = ...) -> None: ...
 
 class ControlSection(_message.Message):
-    __slots__ = ("section_id", "title", "responsibility", "status_filter", "control_assessment_refs", "description")
+    __slots__ = ("section_id", "title", "responsibility", "status_filter", "control_assessment_refs", "description", "control_refs")
     SECTION_ID_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
     RESPONSIBILITY_FIELD_NUMBER: _ClassVar[int]
     STATUS_FILTER_FIELD_NUMBER: _ClassVar[int]
     CONTROL_ASSESSMENT_REFS_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_REFS_FIELD_NUMBER: _ClassVar[int]
     section_id: str
     title: str
     responsibility: str
     status_filter: str
     control_assessment_refs: _containers.RepeatedScalarFieldContainer[str]
     description: str
-    def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ...) -> None: ...
+    control_refs: _containers.RepeatedCompositeFieldContainer[FrameworkControlReference]
+    def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ...) -> None: ...
 
 class ComplianceAnalysis(_message.Message):
     __slots__ = ("analysis_id", "analysis_schema_version", "scope_ref", "generated_at", "generator_identity", "generator_version", "evidence_window_completeness", "assertion_assessments", "framework_assessments", "gaps", "evidence_links", "limitations", "findings", "remediation", "sections", "evidence_graph_failures", "evidence_graph_valid", "evidence_resources")

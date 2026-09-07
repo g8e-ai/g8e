@@ -20,50 +20,50 @@ type ReasonCode string
 
 // Compile-time reason codes.
 const (
-	ReasonCompileUnrecognizedKeyword   ReasonCode = "compile.unrecognized_keyword"
-	ReasonCompileUnresolvedRef         ReasonCode = "compile.unresolved_ref"
-	ReasonCompileDuplicateID           ReasonCode = "compile.duplicate_id"
-	ReasonCompileInvalidRegex          ReasonCode = "compile.invalid_regex"
-	ReasonCompileInvalidKeywordValue   ReasonCode = "compile.invalid_keyword_value"
-	ReasonCompileUnsupportedFormat     ReasonCode = "compile.unsupported_format"
-	ReasonCompileRefCycle              ReasonCode = "compile.ref_cycle"
-	ReasonCompileInvalidJSON           ReasonCode = "compile.invalid_json"
-	ReasonCompileDuplicateKey          ReasonCode = "compile.duplicate_key"
-	ReasonCompileTrailingData          ReasonCode = "compile.trailing_data"
-	ReasonCompileResourceLimit         ReasonCode = "compile.resource_limit"
-	ReasonCompileInvalidType           ReasonCode = "compile.invalid_type"
+	ReasonCompileUnrecognizedKeyword ReasonCode = "compile.unrecognized_keyword"
+	ReasonCompileUnresolvedRef       ReasonCode = "compile.unresolved_ref"
+	ReasonCompileDuplicateID         ReasonCode = "compile.duplicate_id"
+	ReasonCompileInvalidRegex        ReasonCode = "compile.invalid_regex"
+	ReasonCompileInvalidKeywordValue ReasonCode = "compile.invalid_keyword_value"
+	ReasonCompileUnsupportedFormat   ReasonCode = "compile.unsupported_format"
+	ReasonCompileRefCycle            ReasonCode = "compile.ref_cycle"
+	ReasonCompileInvalidJSON         ReasonCode = "compile.invalid_json"
+	ReasonCompileDuplicateKey        ReasonCode = "compile.duplicate_key"
+	ReasonCompileTrailingData        ReasonCode = "compile.trailing_data"
+	ReasonCompileResourceLimit       ReasonCode = "compile.resource_limit"
+	ReasonCompileInvalidType         ReasonCode = "compile.invalid_type"
 )
 
 // Validation reason codes.
 const (
-	ReasonValueTypeMismatch      ReasonCode = "validate.type_mismatch"
-	ReasonValueEnumMismatch      ReasonCode = "validate.enum_mismatch"
-	ReasonValueConstMismatch     ReasonCode = "validate.const_mismatch"
-	ReasonValueRequiredMissing   ReasonCode = "validate.required_missing"
-	ReasonValueAdditionalProp    ReasonCode = "validate.additional_property"
-	ReasonValueMinItems          ReasonCode = "validate.min_items"
-	ReasonValueMaxItems          ReasonCode = "validate.max_items"
-	ReasonValueMinProperties     ReasonCode = "validate.min_properties"
-	ReasonValueMaxProperties     ReasonCode = "validate.max_properties"
-	ReasonValueMinLength         ReasonCode = "validate.min_length"
-	ReasonValueMaxLength         ReasonCode = "validate.max_length"
-	ReasonValuePatternMismatch   ReasonCode = "validate.pattern_mismatch"
-	ReasonValueFormatMismatch    ReasonCode = "validate.format_mismatch"
-	ReasonValueMinimum           ReasonCode = "validate.minimum"
-	ReasonValueMaximum           ReasonCode = "validate.maximum"
-	ReasonValueExclusiveMinimum  ReasonCode = "validate.exclusive_minimum"
-	ReasonValueExclusiveMaximum  ReasonCode = "validate.exclusive_maximum"
-	ReasonValueMultipleOf        ReasonCode = "validate.multiple_of"
-	ReasonValueUniqueItems       ReasonCode = "validate.unique_items"
-	ReasonValueAllOfFailed       ReasonCode = "validate.all_of_failed"
-	ReasonValueAnyOfFailed       ReasonCode = "validate.any_of_failed"
-	ReasonValueOneOfFailed       ReasonCode = "validate.one_of_failed"
-	ReasonValueNotFailed         ReasonCode = "validate.not_failed"
-	ReasonValueIfThenFailed      ReasonCode = "validate.if_then_failed"
-	ReasonValueIfElseFailed      ReasonCode = "validate.if_else_failed"
+	ReasonValueTypeMismatch       ReasonCode = "validate.type_mismatch"
+	ReasonValueEnumMismatch       ReasonCode = "validate.enum_mismatch"
+	ReasonValueConstMismatch      ReasonCode = "validate.const_mismatch"
+	ReasonValueRequiredMissing    ReasonCode = "validate.required_missing"
+	ReasonValueAdditionalProp     ReasonCode = "validate.additional_property"
+	ReasonValueMinItems           ReasonCode = "validate.min_items"
+	ReasonValueMaxItems           ReasonCode = "validate.max_items"
+	ReasonValueMinProperties      ReasonCode = "validate.min_properties"
+	ReasonValueMaxProperties      ReasonCode = "validate.max_properties"
+	ReasonValueMinLength          ReasonCode = "validate.min_length"
+	ReasonValueMaxLength          ReasonCode = "validate.max_length"
+	ReasonValuePatternMismatch    ReasonCode = "validate.pattern_mismatch"
+	ReasonValueFormatMismatch     ReasonCode = "validate.format_mismatch"
+	ReasonValueMinimum            ReasonCode = "validate.minimum"
+	ReasonValueMaximum            ReasonCode = "validate.maximum"
+	ReasonValueExclusiveMinimum   ReasonCode = "validate.exclusive_minimum"
+	ReasonValueExclusiveMaximum   ReasonCode = "validate.exclusive_maximum"
+	ReasonValueMultipleOf         ReasonCode = "validate.multiple_of"
+	ReasonValueUniqueItems        ReasonCode = "validate.unique_items"
+	ReasonValueAllOfFailed        ReasonCode = "validate.all_of_failed"
+	ReasonValueAnyOfFailed        ReasonCode = "validate.any_of_failed"
+	ReasonValueOneOfFailed        ReasonCode = "validate.one_of_failed"
+	ReasonValueNotFailed          ReasonCode = "validate.not_failed"
+	ReasonValueIfThenFailed       ReasonCode = "validate.if_then_failed"
+	ReasonValueIfElseFailed       ReasonCode = "validate.if_else_failed"
 	ReasonValueDependenciesFailed ReasonCode = "validate.dependencies_failed"
-	ReasonValueContainsMissing   ReasonCode = "validate.contains_missing"
-	ReasonValuePropertyNames     ReasonCode = "validate.property_names"
+	ReasonValueContainsMissing    ReasonCode = "validate.contains_missing"
+	ReasonValuePropertyNames      ReasonCode = "validate.property_names"
 )
 
 // Failure is a typed validation or compilation failure. It carries a stable
@@ -71,11 +71,11 @@ const (
 // validation failures), the schema location, and the keyword that produced
 // the failure.
 type Failure struct {
-	Reason       ReasonCode `json:"reason"`
-	Message      string     `json:"message"`
-	InstancePtr  string     `json:"instance_ptr,omitempty"`
-	SchemaPtr    string     `json:"schema_ptr,omitempty"`
-	Keyword      string     `json:"keyword,omitempty"`
+	Reason      ReasonCode `json:"reason"`
+	Message     string     `json:"message"`
+	InstancePtr string     `json:"instance_ptr,omitempty"`
+	SchemaPtr   string     `json:"schema_ptr,omitempty"`
+	Keyword     string     `json:"keyword,omitempty"`
 }
 
 func (f Failure) Error() string {
@@ -193,22 +193,6 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return e.Failures.Error()
-}
-
-// decodeJSON decodes JSON bytes using a decoder that rejects duplicate
-// object keys and trailing data. It returns the decoded value as
-// interface{}/map[string]interface{}/[]interface{} etc.
-func decodeJSON(data []byte) (any, error) {
-	dec := json.NewDecoder(strings.NewReader(string(data)))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("%w: %v", err, err)
-	}
-	if dec.More() {
-		return nil, fmt.Errorf("trailing data after JSON document")
-	}
-	return v, nil
 }
 
 // decodeJSONStrict decodes JSON bytes and rejects duplicate object keys.

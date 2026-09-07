@@ -316,6 +316,9 @@ func TestOSCALExporter_GenerateAssessmentResults_RejectsInvalidGraphAndEvidenceR
 		}, target: constants.ErrUnresolvedReference},
 		{name: "cross scope evidence", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].ScopeId = "scope-2" }, target: constants.ErrEvidenceScopeMismatch},
 		{name: "missing bundle path", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].BundlePath = "" }, target: constants.ErrUnresolvedReference},
+		{name: "invalid OSCAL media type", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceResources[0].MediaType = "invalid/media-type"
+		}, target: constants.ErrOSCALValidationFailed},
 		{name: "missing assertion assessment", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.FrameworkAssessments[0].AssertionAssessmentRefs = []string{"missing"}
 		}, target: constants.ErrUnresolvedReference},

@@ -118,13 +118,27 @@ func TestRenderComplianceAnalysis_TextRenderersEscapeAnalysisContent(t *testing.
 }
 
 func TestRenderComplianceAnalysis_RejectsInvalidInput(t *testing.T) {
+	invalidOSCALAnalysis := rendererTestAnalysis()
+	invalidOSCALAnalysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
+		ArtifactId:         "action-receipt:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ArtifactType:       "action-receipt",
+		Sha256:             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		MediaType:          "invalid/media-type",
+		SchemaRef:          "g8e.operator.v1.ActionReceipt",
+		ProducerIdentity:   "gateway",
+		ScopeId:            invalidOSCALAnalysis.GetScopeRef(),
+		VerificationStatus: "verified",
+		BundlePath:         constants.EvalRunReceiptsFilename,
+	}}
 	tests := []struct {
 		name     string
 		analysis *compliancev1.ComplianceAnalysis
 		format   Format
+		target   error
 	}{
-		{name: "nil analysis", format: FormatJSON},
-		{name: "unsupported format", analysis: rendererTestAnalysis(), format: Format("yaml")},
+		{name: "nil analysis", format: FormatJSON, target: constants.ErrValidationFailed},
+		{name: "unsupported format", analysis: rendererTestAnalysis(), format: Format("yaml"), target: constants.ErrValidationFailed},
+		{name: "OSCAL validation failure", analysis: invalidOSCALAnalysis, format: FormatOSCAL, target: constants.ErrOSCALValidationFailed},
 	}
 
 	for _, test := range tests {
@@ -132,7 +146,7 @@ func TestRenderComplianceAnalysis_RejectsInvalidInput(t *testing.T) {
 			rendered, err := RenderComplianceAnalysis(test.analysis, test.format)
 
 			require.Error(t, err)
-			assert.ErrorIs(t, err, constants.ErrValidationFailed)
+			assert.ErrorIs(t, err, test.target)
 			assert.Nil(t, rendered)
 		})
 	}

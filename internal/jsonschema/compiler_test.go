@@ -52,7 +52,7 @@ func TestCompiler_RejectsInvalidJSON(t *testing.T) {
 
 func TestCompiler_RejectsTrailingData(t *testing.T) {
 	c := NewCompiler()
-	_, err := c.Compile([]byte(`{}`+"\n" + `{}`))
+	_, err := c.Compile([]byte(`{}` + "\n" + `{}`))
 	require.Error(t, err)
 }
 

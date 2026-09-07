@@ -40,9 +40,6 @@ type Compiler struct {
 	// idPaths maps $id values to their JSON Pointer path within the root.
 	idPaths map[string]string
 
-	// definitions are the top-level definitions, for JSON Pointer refs.
-	definitions map[string]any
-
 	// compiled tracks already-compiled schema nodes by their JSON Pointer
 	// path, to handle recursive definitions without infinite recursion.
 	compiled map[string]*Schema
@@ -247,62 +244,7 @@ func (c *Compiler) compileNode(node any, path string, depth int) *Schema {
 		return s
 	}
 
-	// type
-	if t, ok := obj["type"]; ok {
-		switch tv := t.(type) {
-		case string:
-			s.Type = tv
-		case []any:
-			// Draft-07 allows type to be an array of strings
-			// For OSCAL, type is always a single string, but we handle
-			// the array form for completeness
-			if len(tv) > 0 {
-				types := make([]string, 0, len(tv))
-				for _, item := range tv {
-					if str, ok := item.(string); ok {
-						types = append(types, str)
-					}
-				}
-				if len(types) == 1 {
-					s.Type = types[0]
-				} else {
-					// Store as anyOf of type checks — but for simplicity,
-					// we store the first type and note the rest.
-					// The validator will handle multi-type via a separate field.
-					// For now, OSCAL only uses single-string types.
-					s.Type = types[0]
-					// TODO: handle multi-type properly in the validator
-				}
-			}
-		default:
-			c.addFailure(Failure{
-				Reason:    ReasonCompileInvalidKeywordValue,
-				Message:   fmt.Sprintf("type must be a string or array of strings, got %T", t),
-				SchemaPtr: path,
-				Keyword:   "type",
-			})
-		}
-	}
-
-	// enum
-	if enum, ok := obj["enum"]; ok {
-		if arr, ok := enum.([]any); ok {
-			s.Enum = arr
-		} else {
-			c.addFailure(Failure{
-				Reason:    ReasonCompileInvalidKeywordValue,
-				Message:   "enum must be an array",
-				SchemaPtr: path,
-				Keyword:   "enum",
-			})
-		}
-	}
-
-	// const
-	if constVal, ok := obj["const"]; ok {
-		s.Const = constVal
-		s.HasConst = true
-	}
+	c.compileScalarKeywords(s, obj, path)
 
 	// properties
 	if props, ok := obj["properties"]; ok {
@@ -442,47 +384,6 @@ func (c *Compiler) compileNode(node any, path string, depth int) *Schema {
 		s.UniqueItems = ui
 	}
 
-	// minLength / maxLength
-	s.MinLength = parseIntPtr(obj["minLength"])
-	s.MaxLength = parseIntPtr(obj["maxLength"])
-
-	// pattern
-	if pat, ok := obj["pattern"].(string); ok {
-		re, err := regexp.Compile(pat)
-		if err != nil {
-			c.addFailure(Failure{
-				Reason:    ReasonCompileInvalidRegex,
-				Message:   fmt.Sprintf("pattern %q is not a valid regex: %v", pat, err),
-				SchemaPtr: path,
-				Keyword:   "pattern",
-			})
-		} else {
-			s.Pattern = re
-		}
-	}
-
-	// format
-	if fmtVal, ok := obj["format"].(string); ok {
-		f := Format(fmtVal)
-		if !SupportedFormats[f] {
-			c.addFailure(Failure{
-				Reason:    ReasonCompileUnsupportedFormat,
-				Message:   fmt.Sprintf("unsupported format %q", fmtVal),
-				SchemaPtr: path,
-				Keyword:   "format",
-			})
-		} else {
-			s.Format = f
-		}
-	}
-
-	// Numeric constraints
-	s.Minimum = parseFloatPtr(obj["minimum"])
-	s.Maximum = parseFloatPtr(obj["maximum"])
-	s.ExclusiveMinimum = parseFloatPtr(obj["exclusiveMinimum"])
-	s.ExclusiveMaximum = parseFloatPtr(obj["exclusiveMaximum"])
-	s.MultipleOf = parseFloatPtr(obj["multipleOf"])
-
 	// Conditional subschemas
 	if allOf, ok := obj["allOf"].([]any); ok {
 		for i, item := range allOf {
@@ -521,6 +422,71 @@ func (c *Compiler) compileNode(node any, path string, depth int) *Schema {
 	}
 
 	return s
+}
+
+func (c *Compiler) compileScalarKeywords(s *Schema, obj map[string]any, path string) {
+	c.compileTypeKeyword(s, obj, path)
+	if enum, ok := obj["enum"]; ok {
+		if values, valid := enum.([]any); valid {
+			s.Enum = values
+		} else {
+			c.addFailure(Failure{Reason: ReasonCompileInvalidKeywordValue, Message: "enum must be an array", SchemaPtr: path, Keyword: "enum"})
+		}
+	}
+	if value, ok := obj["const"]; ok {
+		s.Const = value
+		s.HasConst = true
+	}
+	s.MinLength = parseIntPtr(obj["minLength"])
+	s.MaxLength = parseIntPtr(obj["maxLength"])
+	if pattern, ok := obj["pattern"].(string); ok {
+		compiled, err := regexp.Compile(pattern)
+		if err != nil {
+			c.addFailure(Failure{Reason: ReasonCompileInvalidRegex, Message: fmt.Sprintf("pattern %q is not a valid regex: %v", pattern, err), SchemaPtr: path, Keyword: "pattern"})
+		} else {
+			s.Pattern = compiled
+		}
+	}
+	if format, ok := obj["format"].(string); ok {
+		if !SupportedFormats[Format(format)] {
+			c.addFailure(Failure{Reason: ReasonCompileUnsupportedFormat, Message: fmt.Sprintf("unsupported format %q", format), SchemaPtr: path, Keyword: "format"})
+		} else {
+			s.Format = Format(format)
+		}
+	}
+	s.Minimum = parseFloatPtr(obj["minimum"])
+	s.Maximum = parseFloatPtr(obj["maximum"])
+	s.ExclusiveMinimum = parseFloatPtr(obj["exclusiveMinimum"])
+	s.ExclusiveMaximum = parseFloatPtr(obj["exclusiveMaximum"])
+	s.MultipleOf = parseFloatPtr(obj["multipleOf"])
+}
+
+func (c *Compiler) compileTypeKeyword(s *Schema, obj map[string]any, path string) {
+	value, ok := obj["type"]
+	if !ok {
+		return
+	}
+	switch typed := value.(type) {
+	case string:
+		s.Type = typed
+	case []any:
+		if len(typed) == 0 {
+			c.addFailure(Failure{Reason: ReasonCompileInvalidKeywordValue, Message: "type array must contain at least one string", SchemaPtr: path, Keyword: "type"})
+			return
+		}
+		for _, item := range typed {
+			typeName, valid := item.(string)
+			if !valid {
+				c.addFailure(Failure{Reason: ReasonCompileInvalidKeywordValue, Message: "type array must contain only strings", SchemaPtr: path, Keyword: "type"})
+				return
+			}
+			if s.Type == "" {
+				s.Type = typeName
+			}
+		}
+	default:
+		c.addFailure(Failure{Reason: ReasonCompileInvalidKeywordValue, Message: fmt.Sprintf("type must be a string or array of strings, got %T", value), SchemaPtr: path, Keyword: "type"})
+	}
 }
 
 func (c *Compiler) addFailure(f Failure) {
