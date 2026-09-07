@@ -291,6 +291,79 @@ Per-release compliance evidence for vX.Y.Z is in [vX.Y.Z-compliance-evidence.md]
 
 ---
 
+## Stage 1 Real-Agent README Evidence
+
+A release may publish a Stage 1 real-agent diagnostic after the version-bearing release candidate is built and before the public evidence snapshot is promoted. Stage 1 covers one complete five-task `ifeval_subset` run through the `doctrine` arm with one repetition, no task limit, a 180-second idle timeout, real provider identities for the primary, assistant, and lite roles, and all terminal outcomes retained. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, broad model quality, statistical significance, compliance, certification, or production suitability.
+
+The v2.1.5 release-owner profile uses `gemma4:12b` for primary, `gemma4:e4b` for assistant, and `gemma4:e2b` for lite through an Ollama endpoint classified publicly as `self-hosted-lan`. Reproducing operators set their own reachable endpoint and may substitute locally available model tags, but the reproduction manifest records every substitution and does not describe different tags or model revisions as byte-identical reproduction.
+
+### Attended collection
+
+Collection is a local, side-effecting release-preparation step. It requires a running and enrolled full stack, an authenticated CLI context, a reachable Ollama endpoint, a new private campaign directory, and an owner-only 32-byte evidence key. The operator sets these variables without placing the endpoint or private paths in the public candidate:
+
+```bash
+export PRIVATE_CAMPAIGN_DIR='<new-private-campaign-directory>'
+export EVIDENCE_KEY_FILE="${PRIVATE_CAMPAIGN_DIR}/evidence-key.json"
+export OLLAMA_ENDPOINT='<operator-reachable-ollama-endpoint>'
+export PRIMARY_MODEL='gemma4:12b'
+export ASSISTANT_MODEL='gemma4:e4b'
+export LITE_MODEL='gemma4:e2b'
+mkdir -p "${PRIVATE_CAMPAIGN_DIR}/reports"
+umask 077
+python3 -c 'import base64,json,secrets; print(json.dumps({"version":1,"key_id":"readme-stage1-owner","key_b64":base64.b64encode(secrets.token_bytes(32)).decode()}))' > "${EVIDENCE_KEY_FILE}"
+curl --fail --silent --show-error "${OLLAMA_ENDPOINT}/api/tags" > "${PRIVATE_CAMPAIGN_DIR}/ollama-tags.json"
+```
+
+Inspect the retained inventory and stop if any declared tag is absent. Build the release candidate, start and enroll the full stack through the [Sovereignty Gauntlet guide](../guides/sovereignty_gauntlet.md), refresh the CLI identity, and run the fixed profile once:
+
+```bash
+REPO_ROOT="$PWD"
+./g8e auth refresh
+export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
+cd ensemble/evals
+uv sync --locked --extra test
+uv run g8e-evals run \
+  --suite ifeval_subset \
+  --arm doctrine \
+  --provider ollama \
+  --model "${PRIMARY_MODEL}" \
+  --assistant-provider ollama \
+  --assistant-model "${ASSISTANT_MODEL}" \
+  --lite-provider ollama \
+  --lite-model "${LITE_MODEL}" \
+  --primary-endpoint "${OLLAMA_ENDPOINT}" \
+  --assistant-endpoint "${OLLAMA_ENDPOINT}" \
+  --lite-endpoint "${OLLAMA_ENDPOINT}" \
+  --idle-timeout 180 \
+  --g8ee-url http://localhost:8000 \
+  --g8e-cli "${REPO_ROOT}/g8e" \
+  --auth-project-root "${REPO_ROOT}" \
+  --evidence-key-file "${EVIDENCE_KEY_FILE}" \
+  --output-dir "${PRIVATE_CAMPAIGN_DIR}/reports"
+```
+
+Do not pass `--limit`, do not add a judge, do not rerun only failed tasks, and do not modify the private report after completion. A complete candidate has exactly the task IDs `1001`, `1019`, `1051`, `1072`, and `1075`, one terminal attempt per task, one bound deterministic `ifeval_subset_verifier` metric per task, and at least one real provider-boundary model call per attempt. Failures and timeouts remain in the denominator. Zero receipts are an unavailable receipt result, not a pass.
+
+### Candidate projection and approval
+
+Return to the repository root and project the completed private report into a new candidate. The projection command strips raw prompts, raw outputs, exact endpoints, local paths, credentials, keys, encrypted payload locations, and private topology; emits safe manifest, task, attempt, stage, metric, summary, evidence-index, reproduction-manifest, and zero-receipt projections; computes all checksums; and validates the result with the offline README reader.
+
+```bash
+python3 scripts/project_readme_evidence.py \
+  '<private-report-directory>' \
+  docs/evidence/readme/candidates/v2.1.5 \
+  --release-version 2.1.5 \
+  --eval-cli-version 0.3.0 \
+  --idle-timeout 180
+```
+
+The release owner reviews every candidate file and README sentence before promotion. Promotion is explicit and separate from projection. After approval, replace `docs/evidence/readme/current/` with the reviewed candidate, run `make readme`, and verify with `make readme-test`, `make readme-check`, relevant eval tests and lint, platform tests, and the release checks. CI only validates the checked-in snapshot and README drift; it does not start Ollama, run agents, possess evidence keys, collect evidence, select a candidate, or promote it.
+
+A hotfix either runs the same complete minimum profile or publishes the current release with Stage 1 evidence explicitly unavailable. It never relabels evidence from an older release as current evidence.
+
+---
+
 ## Version-Bearing Files
 
 After the change inventory and documentation reconciliation are complete, bump the version files. `VERSION` is the single source of truth; `make release` auto-syncs all derived files from it.

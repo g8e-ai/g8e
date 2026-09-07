@@ -38,6 +38,7 @@ from g8e.receipts import (
     verify_action_receipt_signature,
     verify_receipt_persistence_attestation,
 )
+from g8e_evals import __version__ as EVALS_VERSION
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.graders import (
@@ -797,6 +798,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         run_id=run_id,
         suite_id=suite_id,
         suite_version=suite_version,
+        orchestrator_version=EVALS_VERSION,
         arms=[arm_entry],
         content_hashes=content_hashes,
         role_to_model=RoleToModelMapping(
@@ -2899,6 +2901,7 @@ async def _run_synthetic_suite(
         run_id=run_id,
         suite_id=suite_id,
         suite_version=suite_version,
+        orchestrator_version=EVALS_VERSION,
         arms=[arm_entry],
         content_hashes=content_hashes,
         role_to_model=RoleToModelMapping(),
