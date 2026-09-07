@@ -308,6 +308,7 @@ message ComplianceAnalysis {
   repeated ControlSection sections = 15;
   repeated string evidence_graph_failures = 16;
   bool evidence_graph_valid = 17;
+  repeated ComplianceEvidenceReference evidence_resources = 18;
 }
 
 message FrameworkProfile {

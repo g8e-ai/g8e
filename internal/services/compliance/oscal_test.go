@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -485,4 +486,64 @@ func TestGenerateUUID_RandomV4(t *testing.T) {
 
 	_, err := uuid.Parse(u1)
 	assert.NoError(t, err)
+}
+
+func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEvidenceResources(t *testing.T) {
+	const digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	artifactID := "action-receipt:sha256:" + digest
+	generatedAt := time.Date(2026, time.September, 7, 12, 0, 0, 0, time.UTC)
+	analysis := &compliancev1.ComplianceAnalysis{
+		AnalysisId:            "compliance-analysis:sha256:" + digest,
+		AnalysisSchemaVersion: constants.AnalysisSchemaVersion,
+		ScopeRef:              "scope-1",
+		GeneratedAt:           timestamppb.New(generatedAt),
+		GeneratorIdentity:     constants.AnalysisBuilderID,
+		GeneratorVersion:      constants.AnalysisBuilderVersion,
+		AssertionAssessments: []*compliancev1.ControlAssertionAssessment{{
+			AssessmentId:    "assertion-assessment:sha256:" + digest,
+			ScopeId:         "scope-1",
+			AssertionRef:    &compliancev1.VersionedReference{Id: "G8E-GOV-BLOCK-001", Version: "1.0.0"},
+			Status:          "satisfied",
+			EvidenceLevel:   "L3",
+			EvaluatedAt:     timestamppb.New(generatedAt),
+			VerifierRef:     &compliancev1.VersionedReference{Id: constants.AssertionGraderID, Version: constants.AssertionGraderVersion},
+			EvidenceRefs:    []string{artifactID},
+			FreshnessStatus: "fresh",
+		}},
+		FrameworkAssessments: []*compliancev1.FrameworkControlAssessment{{
+			AssessmentId:            "framework-assessment:sha256:" + digest,
+			ScopeId:                 "scope-1",
+			FrameworkRef:            &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"},
+			ControlId:               "KSI-MLA-07",
+			Status:                  "satisfied",
+			Responsibility:          "platform",
+			AssertionAssessmentRefs: []string{"assertion-assessment:sha256:" + digest},
+			EvidenceLevel:           "L3",
+		}},
+		EvidenceResources: []*compliancev1.ComplianceEvidenceReference{{
+			ArtifactId:         artifactID,
+			ArtifactType:       "action-receipt",
+			Sha256:             digest,
+			MediaType:          constants.MediaTypeJSON,
+			SchemaRef:          "g8e.operator.v1.ActionReceipt",
+			ProducerIdentity:   "gateway",
+			ScopeId:            "scope-1",
+			VerificationStatus: "verified",
+			VerifierId:         constants.ReceiptEvidenceVerifierID,
+			VerifierVersion:    constants.ReceiptEvidenceVerifierVersion,
+			BundlePath:         constants.EvalRunReceiptsFilename,
+		}},
+		EvidenceGraphValid: true,
+	}
+
+	doc, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
+	require.NoError(t, err)
+	require.Len(t, doc.BackMatter.Resources, 1)
+	resource := doc.BackMatter.Resources[0]
+	assert.Equal(t, artifactID, oscalPropValue(resource.Props, "artifact-id"))
+	assert.Equal(t, digest, oscalPropValue(resource.Props, "sha256"))
+	require.Len(t, doc.Results, 1)
+	require.Len(t, doc.Results[0].Observations, 1)
+	require.Len(t, doc.Results[0].Observations[0].RelevantEvidence, 1)
+	assert.Equal(t, "#"+resource.UUID, doc.Results[0].Observations[0].RelevantEvidence[0].Href)
 }

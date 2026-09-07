@@ -2526,24 +2526,25 @@ func (x *ControlSection) GetDescription() string {
 }
 
 type ComplianceAnalysis struct {
-	state                      protoimpl.MessageState        `protogen:"open.v1"`
-	AnalysisId                 string                        `protobuf:"bytes,1,opt,name=analysis_id,json=analysisId,proto3" json:"analysis_id,omitempty"`
-	AnalysisSchemaVersion      string                        `protobuf:"bytes,2,opt,name=analysis_schema_version,json=analysisSchemaVersion,proto3" json:"analysis_schema_version,omitempty"`
-	ScopeRef                   string                        `protobuf:"bytes,3,opt,name=scope_ref,json=scopeRef,proto3" json:"scope_ref,omitempty"`
-	GeneratedAt                *timestamppb.Timestamp        `protobuf:"bytes,4,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
-	GeneratorIdentity          string                        `protobuf:"bytes,5,opt,name=generator_identity,json=generatorIdentity,proto3" json:"generator_identity,omitempty"`
-	GeneratorVersion           string                        `protobuf:"bytes,6,opt,name=generator_version,json=generatorVersion,proto3" json:"generator_version,omitempty"`
-	EvidenceWindowCompleteness *EvidenceWindowCompleteness   `protobuf:"bytes,7,opt,name=evidence_window_completeness,json=evidenceWindowCompleteness,proto3" json:"evidence_window_completeness,omitempty"`
-	AssertionAssessments       []*ControlAssertionAssessment `protobuf:"bytes,8,rep,name=assertion_assessments,json=assertionAssessments,proto3" json:"assertion_assessments,omitempty"`
-	FrameworkAssessments       []*FrameworkControlAssessment `protobuf:"bytes,9,rep,name=framework_assessments,json=frameworkAssessments,proto3" json:"framework_assessments,omitempty"`
-	Gaps                       []*ComplianceGap              `protobuf:"bytes,10,rep,name=gaps,proto3" json:"gaps,omitempty"`
-	EvidenceLinks              []*EvidenceLink               `protobuf:"bytes,11,rep,name=evidence_links,json=evidenceLinks,proto3" json:"evidence_links,omitempty"`
-	Limitations                []string                      `protobuf:"bytes,12,rep,name=limitations,proto3" json:"limitations,omitempty"`
-	Findings                   []*ComplianceFinding          `protobuf:"bytes,13,rep,name=findings,proto3" json:"findings,omitempty"`
-	Remediation                []*ComplianceRemediation      `protobuf:"bytes,14,rep,name=remediation,proto3" json:"remediation,omitempty"`
-	Sections                   []*ControlSection             `protobuf:"bytes,15,rep,name=sections,proto3" json:"sections,omitempty"`
-	EvidenceGraphFailures      []string                      `protobuf:"bytes,16,rep,name=evidence_graph_failures,json=evidenceGraphFailures,proto3" json:"evidence_graph_failures,omitempty"`
-	EvidenceGraphValid         bool                          `protobuf:"varint,17,opt,name=evidence_graph_valid,json=evidenceGraphValid,proto3" json:"evidence_graph_valid,omitempty"`
+	state                      protoimpl.MessageState         `protogen:"open.v1"`
+	AnalysisId                 string                         `protobuf:"bytes,1,opt,name=analysis_id,json=analysisId,proto3" json:"analysis_id,omitempty"`
+	AnalysisSchemaVersion      string                         `protobuf:"bytes,2,opt,name=analysis_schema_version,json=analysisSchemaVersion,proto3" json:"analysis_schema_version,omitempty"`
+	ScopeRef                   string                         `protobuf:"bytes,3,opt,name=scope_ref,json=scopeRef,proto3" json:"scope_ref,omitempty"`
+	GeneratedAt                *timestamppb.Timestamp         `protobuf:"bytes,4,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
+	GeneratorIdentity          string                         `protobuf:"bytes,5,opt,name=generator_identity,json=generatorIdentity,proto3" json:"generator_identity,omitempty"`
+	GeneratorVersion           string                         `protobuf:"bytes,6,opt,name=generator_version,json=generatorVersion,proto3" json:"generator_version,omitempty"`
+	EvidenceWindowCompleteness *EvidenceWindowCompleteness    `protobuf:"bytes,7,opt,name=evidence_window_completeness,json=evidenceWindowCompleteness,proto3" json:"evidence_window_completeness,omitempty"`
+	AssertionAssessments       []*ControlAssertionAssessment  `protobuf:"bytes,8,rep,name=assertion_assessments,json=assertionAssessments,proto3" json:"assertion_assessments,omitempty"`
+	FrameworkAssessments       []*FrameworkControlAssessment  `protobuf:"bytes,9,rep,name=framework_assessments,json=frameworkAssessments,proto3" json:"framework_assessments,omitempty"`
+	Gaps                       []*ComplianceGap               `protobuf:"bytes,10,rep,name=gaps,proto3" json:"gaps,omitempty"`
+	EvidenceLinks              []*EvidenceLink                `protobuf:"bytes,11,rep,name=evidence_links,json=evidenceLinks,proto3" json:"evidence_links,omitempty"`
+	Limitations                []string                       `protobuf:"bytes,12,rep,name=limitations,proto3" json:"limitations,omitempty"`
+	Findings                   []*ComplianceFinding           `protobuf:"bytes,13,rep,name=findings,proto3" json:"findings,omitempty"`
+	Remediation                []*ComplianceRemediation       `protobuf:"bytes,14,rep,name=remediation,proto3" json:"remediation,omitempty"`
+	Sections                   []*ControlSection              `protobuf:"bytes,15,rep,name=sections,proto3" json:"sections,omitempty"`
+	EvidenceGraphFailures      []string                       `protobuf:"bytes,16,rep,name=evidence_graph_failures,json=evidenceGraphFailures,proto3" json:"evidence_graph_failures,omitempty"`
+	EvidenceGraphValid         bool                           `protobuf:"varint,17,opt,name=evidence_graph_valid,json=evidenceGraphValid,proto3" json:"evidence_graph_valid,omitempty"`
+	EvidenceResources          []*ComplianceEvidenceReference `protobuf:"bytes,18,rep,name=evidence_resources,json=evidenceResources,proto3" json:"evidence_resources,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -2695,6 +2696,13 @@ func (x *ComplianceAnalysis) GetEvidenceGraphValid() bool {
 		return x.EvidenceGraphValid
 	}
 	return false
+}
+
+func (x *ComplianceAnalysis) GetEvidenceResources() []*ComplianceEvidenceReference {
+	if x != nil {
+		return x.EvidenceResources
+	}
+	return nil
 }
 
 type FrameworkProfile struct {
@@ -3997,7 +4005,7 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\x0eresponsibility\x18\x03 \x01(\tR\x0eresponsibility\x12#\n" +
 	"\rstatus_filter\x18\x04 \x01(\tR\fstatusFilter\x126\n" +
 	"\x17control_assessment_refs\x18\x05 \x03(\tR\x15controlAssessmentRefs\x12 \n" +
-	"\vdescription\x18\x06 \x01(\tR\vdescription\"\xb5\b\n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\"\x94\t\n" +
 	"\x12ComplianceAnalysis\x12\x1f\n" +
 	"\vanalysis_id\x18\x01 \x01(\tR\n" +
 	"analysisId\x126\n" +
@@ -4017,7 +4025,8 @@ const file_g8e_compliance_v1_compliance_proto_rawDesc = "" +
 	"\vremediation\x18\x0e \x03(\v2(.g8e.compliance.v1.ComplianceRemediationR\vremediation\x12=\n" +
 	"\bsections\x18\x0f \x03(\v2!.g8e.compliance.v1.ControlSectionR\bsections\x126\n" +
 	"\x17evidence_graph_failures\x18\x10 \x03(\tR\x15evidenceGraphFailures\x120\n" +
-	"\x14evidence_graph_valid\x18\x11 \x01(\bR\x12evidenceGraphValid\"\x8a\x03\n" +
+	"\x14evidence_graph_valid\x18\x11 \x01(\bR\x12evidenceGraphValid\x12]\n" +
+	"\x12evidence_resources\x18\x12 \x03(\v2..g8e.compliance.v1.ComplianceEvidenceReferenceR\x11evidenceResources\"\x8a\x03\n" +
 	"\x10FrameworkProfile\x12\x1d\n" +
 	"\n" +
 	"profile_id\x18\x01 \x01(\tR\tprofileId\x12J\n" +
@@ -4226,33 +4235,34 @@ var file_g8e_compliance_v1_compliance_proto_depIdxs = []int32{
 	23, // 34: g8e.compliance.v1.ComplianceAnalysis.findings:type_name -> g8e.compliance.v1.ComplianceFinding
 	24, // 35: g8e.compliance.v1.ComplianceAnalysis.remediation:type_name -> g8e.compliance.v1.ComplianceRemediation
 	25, // 36: g8e.compliance.v1.ComplianceAnalysis.sections:type_name -> g8e.compliance.v1.ControlSection
-	0,  // 37: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 38: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
-	14, // 39: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
-	0,  // 40: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 41: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
-	0,  // 42: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
-	1,  // 43: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
-	28, // 44: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	0,  // 45: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	28, // 46: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	35, // 47: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
-	35, // 48: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
-	0,  // 49: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 50: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
-	35, // 51: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
-	0,  // 52: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
-	28, // 53: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
-	31, // 54: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
-	0,  // 55: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
-	35, // 56: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
-	0,  // 57: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
-	30, // 58: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
-	59, // [59:59] is the sub-list for method output_type
-	59, // [59:59] is the sub-list for method input_type
-	59, // [59:59] is the sub-list for extension type_name
-	59, // [59:59] is the sub-list for extension extendee
-	0,  // [0:59] is the sub-list for field type_name
+	12, // 37: g8e.compliance.v1.ComplianceAnalysis.evidence_resources:type_name -> g8e.compliance.v1.ComplianceEvidenceReference
+	0,  // 38: g8e.compliance.v1.FrameworkProfile.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 39: g8e.compliance.v1.FrameworkProfile.generated_at:type_name -> google.protobuf.Timestamp
+	14, // 40: g8e.compliance.v1.FrameworkProfile.control_assessments:type_name -> g8e.compliance.v1.FrameworkControlAssessment
+	0,  // 41: g8e.compliance.v1.FrameworkControlReference.framework_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 42: g8e.compliance.v1.DemoManifest.generated_at:type_name -> google.protobuf.Timestamp
+	0,  // 43: g8e.compliance.v1.DemoManifest.scenario_definition_refs:type_name -> g8e.compliance.v1.VersionedReference
+	1,  // 44: g8e.compliance.v1.DemoManifest.provenance_hashes:type_name -> g8e.compliance.v1.NamedDigest
+	28, // 45: g8e.compliance.v1.DemoManifest.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	0,  // 46: g8e.compliance.v1.DemoScenarioDefinition.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	28, // 47: g8e.compliance.v1.DemoScenarioDefinition.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	35, // 48: g8e.compliance.v1.DemoStepResult.started_at:type_name -> google.protobuf.Timestamp
+	35, // 49: g8e.compliance.v1.DemoStepResult.completed_at:type_name -> google.protobuf.Timestamp
+	0,  // 50: g8e.compliance.v1.DemoScenarioResult.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 51: g8e.compliance.v1.DemoScenarioResult.started_at:type_name -> google.protobuf.Timestamp
+	35, // 52: g8e.compliance.v1.DemoScenarioResult.completed_at:type_name -> google.protobuf.Timestamp
+	0,  // 53: g8e.compliance.v1.DemoScenarioResult.assertion_refs:type_name -> g8e.compliance.v1.VersionedReference
+	28, // 54: g8e.compliance.v1.DemoScenarioResult.framework_control_refs:type_name -> g8e.compliance.v1.FrameworkControlReference
+	31, // 55: g8e.compliance.v1.DemoScenarioResult.step_results:type_name -> g8e.compliance.v1.DemoStepResult
+	0,  // 56: g8e.compliance.v1.DemoMetricEvidence.scenario_ref:type_name -> g8e.compliance.v1.VersionedReference
+	35, // 57: g8e.compliance.v1.DemoMetricEvidence.evaluated_at:type_name -> google.protobuf.Timestamp
+	0,  // 58: g8e.compliance.v1.DemoMetricEvidence.grader_ref:type_name -> g8e.compliance.v1.VersionedReference
+	30, // 59: g8e.compliance.v1.DemoScenarioCatalog.definitions:type_name -> g8e.compliance.v1.DemoScenarioDefinition
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_g8e_compliance_v1_compliance_proto_init() }

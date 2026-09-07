@@ -124,6 +124,7 @@
 | sections | [ControlSection](#g8e-compliance-v1-ControlSection) | repeated |  |
 | evidence_graph_failures | [string](#string) | repeated |  |
 | evidence_graph_valid | [bool](#bool) |  |  |
+| evidence_resources | [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) | repeated |  |
 
 
 

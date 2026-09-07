@@ -24,8 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import collect_readme_provenance as crp
 import generate_readme as gr
 import project_readme_evidence as pre
+import promote_readme_evidence as promote
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "readme"
@@ -675,6 +677,37 @@ class TestRenderReadme(unittest.TestCase):
         self.assertIn("unsupported claim label", str(ctx.exception))
 
 
+class TestCollectReadmeProvenance(unittest.TestCase):
+    def test_collects_deterministic_source_and_runtime_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "b.txt").write_text("beta\n")
+            (root / "a.txt").write_text("alpha\n")
+            profile = {
+                "schema_version": "1.0.0",
+                "profile_id": "readme-stage2-v2.1.6",
+                "release_version": "2.1.6",
+                "task_ids": ["1001", "1019", "1051", "1072", "1075"],
+            }
+            components = [{"name": "g8e", "version": "2.1.6", "sha256": "a" * 64}]
+            images = [{"service": "g8e-gateway", "image": "g8e-gateway", "sha256": "b" * 64}]
+            first = crp.collect(root, ["b.txt", "a.txt"], profile, components, images, {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+            second = crp.collect(root, ["a.txt", "b.txt"], profile, components, images, {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+        self.assertEqual(first, second)
+        self.assertEqual([row["path"] for row in first["source_tree"]["files"]], ["a.txt", "b.txt"])
+        self.assertEqual(first["campaign_profile"]["profile_id"], "readme-stage2-v2.1.6")
+        self.assertRegex(first["source_tree"]["state_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_rejects_source_path_outside_declared_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            with self.assertRaises(crp.ProvenanceError) as ctx:
+                crp.collect(root, ["../secret"], {"schema_version": "1.0.0", "profile_id": "readme-stage2-v2.1.6", "release_version": "2.1.6"}, [], [], {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+        self.assertIn("relative source path", str(ctx.exception))
+
+
 class TestProjectReadmeEvidence(unittest.TestCase):
     def test_projects_private_report_to_deterministic_safe_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -708,6 +741,29 @@ class TestProjectReadmeEvidence(unittest.TestCase):
             with self.assertRaises(pre.ProjectionError) as ctx:
                 pre.project(private_report, candidate, "2.1.5", "0.3.0", 180)
         self.assertIn("already exists", str(ctx.exception))
+
+
+class TestPromoteReadmeEvidence(unittest.TestCase):
+    def test_promotes_only_candidate_bound_to_approved_tree_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = _make_stage1_snapshot(tmp)
+            current = Path(tmp) / "current"
+            shutil.copytree(VALID, current)
+            approved = promote.candidate_tree_sha256(candidate)
+            promote.promote(candidate, current, approved)
+            self.assertEqual(promote.candidate_tree_sha256(current), approved)
+
+    def test_digest_mismatch_preserves_current_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = _make_stage1_snapshot(tmp)
+            current = Path(tmp) / "current"
+            shutil.copytree(VALID, current)
+            before = promote.candidate_tree_sha256(current)
+            with self.assertRaises(promote.PromotionError) as ctx:
+                promote.promote(candidate, current, "0" * 64)
+            after = promote.candidate_tree_sha256(current)
+        self.assertIn("approved candidate tree digest", str(ctx.exception))
+        self.assertEqual(after, before)
 
 
 class TestGenerate(unittest.TestCase):

@@ -105,6 +105,7 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		Sections:                   sections,
 		EvidenceGraphFailures:      graphFailures,
 		EvidenceGraphValid:         request.Graph.Valid(),
+		EvidenceResources:          buildEvidenceResources(request),
 	}
 	return analysis, nil
 }
@@ -188,6 +189,18 @@ func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.Evid
 		StaleEvidenceRefs:     stale,
 		CompletenessStatus:    status,
 	}
+}
+
+func buildEvidenceResources(request AnalysisRequest) []*compliancev1.ComplianceEvidenceReference {
+	nodes := append([]*EvidenceNode(nil), request.Graph.NodesByScope(request.ScopeID)...)
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].ArtifactID < nodes[j].ArtifactID
+	})
+	resources := make([]*compliancev1.ComplianceEvidenceReference, 0, len(nodes))
+	for _, node := range nodes {
+		resources = append(resources, node.ToProto())
+	}
+	return resources
 }
 
 func buildEvidenceLinks(request AnalysisRequest) []*compliancev1.EvidenceLink {
