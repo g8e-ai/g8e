@@ -240,6 +240,33 @@ message ComplianceReportManifest {
   string evidence_index_ref = 11;
   string checksum_root = 12;
   ReportSignature signature = 13;
+  string bundle_profile = 14;
+  string manifest_sha256 = 15;
+}
+
+message BundleArtifact {
+  string bundle_path = 1;
+  string sha256 = 2;
+  string media_type = 3;
+  string profile = 4;
+  int64 byte_length = 5;
+  EvidenceEncryptionMetadata encryption = 6;
+}
+
+message RenderedFormatEntry {
+  string format = 1;
+  string media_type = 2;
+  string bundle_path = 3;
+}
+
+message ComplianceReportBundle {
+  ComplianceReportManifest manifest = 1;
+  repeated BundleArtifact artifacts = 2;
+  ComplianceAnalysis analysis = 3;
+  repeated FrameworkProfile profiles = 4;
+  repeated RenderedFormatEntry rendered_formats = 5;
+  string checksum_root = 6;
+  ReportSignature checksum_root_signature = 7;
 }
 
 message VerificationFailure {

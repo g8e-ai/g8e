@@ -5,12 +5,14 @@
 
 - [g8e/compliance/v1/compliance.proto](#g8e_compliance_v1_compliance-proto)
     - [AssessmentScope](#g8e-compliance-v1-AssessmentScope)
+    - [BundleArtifact](#g8e-compliance-v1-BundleArtifact)
     - [ChecksumEntry](#g8e-compliance-v1-ChecksumEntry)
     - [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis)
     - [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference)
     - [ComplianceFinding](#g8e-compliance-v1-ComplianceFinding)
     - [ComplianceGap](#g8e-compliance-v1-ComplianceGap)
     - [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation)
+    - [ComplianceReportBundle](#g8e-compliance-v1-ComplianceReportBundle)
     - [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest)
     - [ComplianceReportSigningKeyMetadata](#g8e-compliance-v1-ComplianceReportSigningKeyMetadata)
     - [ComplianceReportTrustPolicy](#g8e-compliance-v1-ComplianceReportTrustPolicy)
@@ -42,6 +44,7 @@
     - [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure)
     - [OSCALValidationResult](#g8e-compliance-v1-OSCALValidationResult)
     - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
+    - [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
@@ -83,6 +86,26 @@
 | assessment_window_end | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | excluded_components | [string](#string) | repeated |  |
 | customer_responsibilities | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-BundleArtifact"></a>
+
+### BundleArtifact
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| bundle_path | [string](#string) |  |  |
+| sha256 | [string](#string) |  |  |
+| media_type | [string](#string) |  |  |
+| profile | [string](#string) |  |  |
+| byte_length | [int64](#int64) |  |  |
+| encryption | [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata) |  |  |
 
 
 
@@ -229,6 +252,27 @@
 
 
 
+<a name="g8e-compliance-v1-ComplianceReportBundle"></a>
+
+### ComplianceReportBundle
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| manifest | [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest) |  |  |
+| artifacts | [BundleArtifact](#g8e-compliance-v1-BundleArtifact) | repeated |  |
+| analysis | [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis) |  |  |
+| profiles | [FrameworkProfile](#g8e-compliance-v1-FrameworkProfile) | repeated |  |
+| rendered_formats | [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry) | repeated |  |
+| checksum_root | [string](#string) |  |  |
+| checksum_root_signature | [ReportSignature](#g8e-compliance-v1-ReportSignature) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-ComplianceReportManifest"></a>
 
 ### ComplianceReportManifest
@@ -250,6 +294,8 @@
 | evidence_index_ref | [string](#string) |  |  |
 | checksum_root | [string](#string) |  |  |
 | signature | [ReportSignature](#g8e-compliance-v1-ReportSignature) |  |  |
+| bundle_profile | [string](#string) |  |  |
+| manifest_sha256 | [string](#string) |  |  |
 
 
 
@@ -910,6 +956,23 @@
 | validator_version | [string](#string) |  |  |
 | schema_version | [string](#string) |  |  |
 | schema_digest | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-RenderedFormatEntry"></a>
+
+### RenderedFormatEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| format | [string](#string) |  |  |
+| media_type | [string](#string) |  |  |
+| bundle_path | [string](#string) |  |  |
 
 
 

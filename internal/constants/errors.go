@@ -1217,6 +1217,12 @@ var (
 	ErrEvidenceProducerUnverified   = errors.New("compliance: evidence producer identity not verified")
 	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
 
+	// Compliance report bundle assembly errors
+	ErrBundleAssemblyFailed    = errors.New("compliance: report bundle assembly failed")
+	ErrBundleProfileUnsupported = errors.New("compliance: unsupported bundle profile")
+	ErrBundleArtifactMissing   = errors.New("compliance: bundle artifact content is missing")
+	ErrBundleChecksumRootFailed = errors.New("compliance: bundle checksum root computation failed")
+
 	// Compliance KSI history errors
 	ErrKSIHistoryWriteFailed     = errors.New("KSI history: write failed")
 	ErrKSIHistoryReadFailed      = errors.New("KSI history: read failed")

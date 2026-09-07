@@ -396,7 +396,7 @@ class ComplianceReportTrustPolicy(_message.Message):
     def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceReportTrustedKey, _Mapping]]] = ...) -> None: ...
 
 class ComplianceReportManifest(_message.Message):
-    __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature")
+    __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature", "bundle_profile", "manifest_sha256")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]
     REPORT_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -410,6 +410,8 @@ class ComplianceReportManifest(_message.Message):
     EVIDENCE_INDEX_REF_FIELD_NUMBER: _ClassVar[int]
     CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
     SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    BUNDLE_PROFILE_FIELD_NUMBER: _ClassVar[int]
+    MANIFEST_SHA256_FIELD_NUMBER: _ClassVar[int]
     report_id: str
     report_schema_version: str
     generated_at: _timestamp_pb2.Timestamp
@@ -423,7 +425,53 @@ class ComplianceReportManifest(_message.Message):
     evidence_index_ref: str
     checksum_root: str
     signature: ReportSignature
-    def __init__(self, report_id: _Optional[str] = ..., report_schema_version: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., framework_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., assertion_catalog_ref: _Optional[str] = ..., crosswalk_refs: _Optional[_Iterable[str]] = ..., assessment_refs: _Optional[_Iterable[str]] = ..., evidence_index_ref: _Optional[str] = ..., checksum_root: _Optional[str] = ..., signature: _Optional[_Union[ReportSignature, _Mapping]] = ...) -> None: ...
+    bundle_profile: str
+    manifest_sha256: str
+    def __init__(self, report_id: _Optional[str] = ..., report_schema_version: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., framework_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., assertion_catalog_ref: _Optional[str] = ..., crosswalk_refs: _Optional[_Iterable[str]] = ..., assessment_refs: _Optional[_Iterable[str]] = ..., evidence_index_ref: _Optional[str] = ..., checksum_root: _Optional[str] = ..., signature: _Optional[_Union[ReportSignature, _Mapping]] = ..., bundle_profile: _Optional[str] = ..., manifest_sha256: _Optional[str] = ...) -> None: ...
+
+class BundleArtifact(_message.Message):
+    __slots__ = ("bundle_path", "sha256", "media_type", "profile", "byte_length", "encryption")
+    BUNDLE_PATH_FIELD_NUMBER: _ClassVar[int]
+    SHA256_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    PROFILE_FIELD_NUMBER: _ClassVar[int]
+    BYTE_LENGTH_FIELD_NUMBER: _ClassVar[int]
+    ENCRYPTION_FIELD_NUMBER: _ClassVar[int]
+    bundle_path: str
+    sha256: str
+    media_type: str
+    profile: str
+    byte_length: int
+    encryption: EvidenceEncryptionMetadata
+    def __init__(self, bundle_path: _Optional[str] = ..., sha256: _Optional[str] = ..., media_type: _Optional[str] = ..., profile: _Optional[str] = ..., byte_length: _Optional[int] = ..., encryption: _Optional[_Union[EvidenceEncryptionMetadata, _Mapping]] = ...) -> None: ...
+
+class RenderedFormatEntry(_message.Message):
+    __slots__ = ("format", "media_type", "bundle_path")
+    FORMAT_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    BUNDLE_PATH_FIELD_NUMBER: _ClassVar[int]
+    format: str
+    media_type: str
+    bundle_path: str
+    def __init__(self, format: _Optional[str] = ..., media_type: _Optional[str] = ..., bundle_path: _Optional[str] = ...) -> None: ...
+
+class ComplianceReportBundle(_message.Message):
+    __slots__ = ("manifest", "artifacts", "analysis", "profiles", "rendered_formats", "checksum_root", "checksum_root_signature")
+    MANIFEST_FIELD_NUMBER: _ClassVar[int]
+    ARTIFACTS_FIELD_NUMBER: _ClassVar[int]
+    ANALYSIS_FIELD_NUMBER: _ClassVar[int]
+    PROFILES_FIELD_NUMBER: _ClassVar[int]
+    RENDERED_FORMATS_FIELD_NUMBER: _ClassVar[int]
+    CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
+    CHECKSUM_ROOT_SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    manifest: ComplianceReportManifest
+    artifacts: _containers.RepeatedCompositeFieldContainer[BundleArtifact]
+    analysis: ComplianceAnalysis
+    profiles: _containers.RepeatedCompositeFieldContainer[FrameworkProfile]
+    rendered_formats: _containers.RepeatedCompositeFieldContainer[RenderedFormatEntry]
+    checksum_root: str
+    checksum_root_signature: ReportSignature
+    def __init__(self, manifest: _Optional[_Union[ComplianceReportManifest, _Mapping]] = ..., artifacts: _Optional[_Iterable[_Union[BundleArtifact, _Mapping]]] = ..., analysis: _Optional[_Union[ComplianceAnalysis, _Mapping]] = ..., profiles: _Optional[_Iterable[_Union[FrameworkProfile, _Mapping]]] = ..., rendered_formats: _Optional[_Iterable[_Union[RenderedFormatEntry, _Mapping]]] = ..., checksum_root: _Optional[str] = ..., checksum_root_signature: _Optional[_Union[ReportSignature, _Mapping]] = ...) -> None: ...
 
 class VerificationFailure(_message.Message):
     __slots__ = ("code", "subject_ref", "reason")

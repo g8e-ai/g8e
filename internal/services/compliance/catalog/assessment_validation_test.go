@@ -288,6 +288,7 @@ func TestValidateReportManifestRejectsInvalidReferences(t *testing.T) {
 			AssessmentRefs:      []string{path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename)},
 			EvidenceIndexRef:    path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename),
 			ChecksumRoot:        validSHA256,
+			ManifestSha256:      validSHA256,
 			Signature:           &compliancev1.ReportSignature{KeyId: "key-1", Algorithm: "ed25519", SignedSha256: validSHA256, Signature: "signature"},
 		}
 	}
