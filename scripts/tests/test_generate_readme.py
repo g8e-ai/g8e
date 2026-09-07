@@ -24,8 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import collect_readme_provenance as crp
 import generate_readme as gr
 import project_readme_evidence as pre
+import promote_readme_evidence as promote
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "readme"
@@ -222,6 +224,61 @@ def _make_private_stage1_report(tmp: str) -> Path:
         row["sha256"] = row.pop("plaintext_sha256")
     _write_jsonl(evidence_index_path, evidence_rows)
     return report
+
+
+def _make_stage2_provenance(tmp: str) -> dict:
+    source = Path(tmp) / "source"
+    source.mkdir()
+    (source / "VERSION").write_text("v2.1.6\n")
+    profile = {
+        "schema_version": "1.0.0",
+        "profile_id": "readme-stage2-v2.1.6",
+        "release_version": "2.1.6",
+        "suite_id": "ifeval_subset",
+        "arm_id": "doctrine",
+        "task_ids": ["1001", "1019", "1051", "1072", "1075"],
+        "repetitions": 1,
+        "task_limit": None,
+        "idle_timeout_seconds": 180,
+        "endpoint_class": "self-hosted-lan",
+        "roles": {
+            "primary": {"provider": "ollama", "model": "gemma4:12b", "endpoint_class": "self-hosted-lan"},
+            "assistant": {"provider": "ollama", "model": "gemma4:e4b", "endpoint_class": "self-hosted-lan"},
+            "lite": {"provider": "ollama", "model": "gemma4:e2b", "endpoint_class": "self-hosted-lan"},
+        },
+    }
+    components = [{"name": "g8e", "version": "2.1.6", "sha256": "a" * 64}, {"name": "g8e-evals", "version": "0.3.0", "sha256": "b" * 64}]
+    images = [{"service": service, "image": f"g8e-{service}:2.1.6", "sha256": character * 64} for service, character in (("gateway", "c"), ("operator", "d"), ("ensemble", "e"), ("dashboard", "f"))]
+    return crp.collect(source, ["VERSION"], profile, components, images, {"os": "linux", "arch": "x86_64", "hardware": "same-local-host", "python": "3.12.11", "container_runtime": "docker-28.3.3"})
+
+
+def _make_stage2_snapshot(tmp: str) -> Path:
+    baseline_root = Path(tmp) / "baseline-root"
+    baseline_root.mkdir()
+    baseline = _make_stage1_snapshot(str(baseline_root))
+    reproduction_root = Path(tmp) / "reproduction-root"
+    reproduction_root.mkdir()
+    private_report = _make_private_stage1_report(str(reproduction_root))
+    old_run_id = "run-2026-09-01-synthetic-a"
+    new_run_id = "run-2026-09-07-stage2-reproduction"
+    for path in private_report.iterdir():
+        if path.suffix not in {".json", ".jsonl"}:
+            continue
+        path.write_text(path.read_text().replace(old_run_id, new_run_id))
+    candidate = Path(tmp) / "stage2-candidate"
+    pre.project_stage2(baseline, private_report, _make_stage2_provenance(tmp), candidate, "2.1.6", "0.3.0", 180)
+    return candidate
+
+
+def _rewrite_stage2_artifact(snapshot_dir: Path, reference: str, mutate) -> None:
+    index_path = snapshot_dir / "index.json"
+    index = json.loads(index_path.read_text())
+    artifact = snapshot_dir / index["stage2"][f"{reference}_path"]
+    value = json.loads(artifact.read_text())
+    mutate(value)
+    artifact.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
+    index["stage2"][f"{reference}_sha256"] = gr._sha256_file(artifact)
+    index_path.write_text(json.dumps(index))
 
 
 class TestLoadSnapshot(unittest.TestCase):
@@ -675,6 +732,37 @@ class TestRenderReadme(unittest.TestCase):
         self.assertIn("unsupported claim label", str(ctx.exception))
 
 
+class TestCollectReadmeProvenance(unittest.TestCase):
+    def test_collects_deterministic_source_and_runtime_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            (root / "b.txt").write_text("beta\n")
+            (root / "a.txt").write_text("alpha\n")
+            profile = {
+                "schema_version": "1.0.0",
+                "profile_id": "readme-stage2-v2.1.6",
+                "release_version": "2.1.6",
+                "task_ids": ["1001", "1019", "1051", "1072", "1075"],
+            }
+            components = [{"name": "g8e", "version": "2.1.6", "sha256": "a" * 64}]
+            images = [{"service": "g8e-gateway", "image": "g8e-gateway", "sha256": "b" * 64}]
+            first = crp.collect(root, ["b.txt", "a.txt"], profile, components, images, {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+            second = crp.collect(root, ["a.txt", "b.txt"], profile, components, images, {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+        self.assertEqual(first, second)
+        self.assertEqual([row["path"] for row in first["source_tree"]["files"]], ["a.txt", "b.txt"])
+        self.assertEqual(first["campaign_profile"]["profile_id"], "readme-stage2-v2.1.6")
+        self.assertRegex(first["source_tree"]["state_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_rejects_source_path_outside_declared_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "source"
+            root.mkdir()
+            with self.assertRaises(crp.ProvenanceError) as ctx:
+                crp.collect(root, ["../secret"], {"schema_version": "1.0.0", "profile_id": "readme-stage2-v2.1.6", "release_version": "2.1.6"}, [], [], {"os": "linux", "arch": "x86_64", "hardware": "local-host", "python": "3.12", "container_runtime": "docker"})
+        self.assertIn("relative source path", str(ctx.exception))
+
+
 class TestProjectReadmeEvidence(unittest.TestCase):
     def test_projects_private_report_to_deterministic_safe_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -708,6 +796,118 @@ class TestProjectReadmeEvidence(unittest.TestCase):
             with self.assertRaises(pre.ProjectionError) as ctx:
                 pre.project(private_report, candidate, "2.1.5", "0.3.0", 180)
         self.assertIn("already exists", str(ctx.exception))
+
+
+class TestStage2ReadmeEvidence(unittest.TestCase):
+    def test_projects_valid_two_run_snapshot_deterministically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first_root = Path(tmp) / "first"
+            first_root.mkdir()
+            first = _make_stage2_snapshot(str(first_root))
+            second_root = Path(tmp) / "second"
+            second_root.mkdir()
+            second = _make_stage2_snapshot(str(second_root))
+            snapshot = gr.load_snapshot(first)
+            first_files = {path.relative_to(first): path.read_bytes() for path in first.rglob("*") if path.is_file()}
+            second_files = {path.relative_to(second): path.read_bytes() for path in second.rglob("*") if path.is_file()}
+        self.assertEqual(first_files, second_files)
+        self.assertEqual(snapshot.manifest.publication_schema_version, "3.0.0")
+        self.assertEqual(len(snapshot.eval_runs), 2)
+        self.assertEqual(snapshot.stage2.comparison.baseline_maturity, "stage1")
+        self.assertEqual(snapshot.stage2.comparison.reproduction_maturity, "stage2")
+
+    def test_rejects_missing_stage2_campaign_profile_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            index_path = snapshot_dir / "index.json"
+            index = json.loads(index_path.read_text())
+            del index["stage2"]["campaign_profile_path"]
+            index_path.write_text(json.dumps(index))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("campaign_profile_path", str(ctx.exception))
+
+    def test_rejects_profile_timeout_drift_from_reproduction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            _rewrite_stage2_artifact(snapshot_dir, "campaign_profile", lambda value: value.__setitem__("idle_timeout_seconds", 90))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("campaign profile", str(ctx.exception))
+
+    def test_rejects_mismatched_source_state_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            index = json.loads((snapshot_dir / "index.json").read_text())
+            reproduction_ref = next(ref for ref in index["eval_runs"] if ref["maturity"] == "stage2")
+            reproduction_path = snapshot_dir / reproduction_ref["reproduction_manifest_path"]
+            reproduction = json.loads(reproduction_path.read_text())
+            reproduction["source_state_sha256"] = "0" * 64
+            reproduction_path.write_text(json.dumps(reproduction))
+            reproduction_ref["reproduction_manifest_sha256"] = gr._sha256_file(reproduction_path)
+            (snapshot_dir / "index.json").write_text(json.dumps(index))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("source state", str(ctx.exception))
+
+    def test_rejects_incomplete_comparison_population(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            _rewrite_stage2_artifact(snapshot_dir, "comparison", lambda value: value["tasks"].pop())
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("complete five-task", str(ctx.exception))
+
+    def test_rejects_baseline_maturity_relabeling(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            _rewrite_stage2_artifact(snapshot_dir, "comparison", lambda value: value.__setitem__("baseline_maturity", "stage2"))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("baseline maturity", str(ctx.exception))
+
+    def test_rejects_missing_component_and_image_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage2_snapshot(tmp)
+            _rewrite_stage2_artifact(snapshot_dir, "provenance", lambda value: (value.__setitem__("components", []), value.__setitem__("images", [])))
+            with self.assertRaises(gr.ReadmeError) as ctx:
+                gr.load_snapshot(snapshot_dir)
+        self.assertIn("component and image", str(ctx.exception))
+
+    def test_renders_stage2_provenance_and_noncausal_comparison(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage2_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Stage 2: Reproduction and provenance", rendered)
+        self.assertIn("original run remains Stage 1", rendered)
+        self.assertIn("same local operator environment", rendered)
+        self.assertIn("No causal or statistical attribution", rendered)
+        self.assertIn("campaign-profile.json", rendered)
+        self.assertIn("provenance.json", rendered)
+        self.assertIn("comparison.json", rendered)
+
+
+class TestPromoteReadmeEvidence(unittest.TestCase):
+    def test_promotes_only_candidate_bound_to_approved_tree_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = _make_stage1_snapshot(tmp)
+            current = Path(tmp) / "current"
+            shutil.copytree(VALID, current)
+            approved = promote.candidate_tree_sha256(candidate)
+            promote.promote(candidate, current, approved)
+            self.assertEqual(promote.candidate_tree_sha256(current), approved)
+
+    def test_digest_mismatch_preserves_current_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = _make_stage1_snapshot(tmp)
+            current = Path(tmp) / "current"
+            shutil.copytree(VALID, current)
+            before = promote.candidate_tree_sha256(current)
+            with self.assertRaises(promote.PromotionError) as ctx:
+                promote.promote(candidate, current, "0" * 64)
+            after = promote.candidate_tree_sha256(current)
+        self.assertIn("approved candidate tree digest", str(ctx.exception))
+        self.assertEqual(after, before)
 
 
 class TestGenerate(unittest.TestCase):

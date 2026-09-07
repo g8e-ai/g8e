@@ -267,7 +267,7 @@ If you only need the g8e wire protocol for your own client or service, consume t
 **Go module** (requires Go 1.26+):
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.5
+go get github.com/g8e-ai/g8e/v2@v2.1.6
 ```
 
 **Python package** (requires Python 3.10+):
@@ -303,17 +303,17 @@ The following sections present bounded evidence from the checksum-bound machine-
 
 ### Evidence Identity
 
-**Stage 1: Real-agent diagnostic.** This evidence covers one complete five-task `ifeval_subset` diagnostic through g8ee with declared real-provider configuration and retained terminal outcomes. It does not establish receipt coverage, governed mutation, persistence, complete bundle verification, statistical significance, compliance, certification, or production suitability.
+**Stage 2: Reproduction and provenance.** This snapshot compares the complete original diagnostic with one fresh, separately invoked reproduction and binds the reproduction to a versioned campaign profile, deterministic source inclusion manifest, component and image digests, and public environment identities. The original run remains Stage 1. Both executions used the same local operator environment, so this establishes independent execution state rather than independent hardware, organizational control, trust roots, or external audit. No causal or statistical attribution is supported.
 
 | Property | Value |
 | --- | --- |
-| Evidence cutoff | 2026-09-07T01:00:46.005138Z |
-| Platform version | 2.1.5 |
-| Publication schema | 2.0.0 |
-| README evidence version | 2.0.0 |
+| Evidence cutoff | 2026-09-07T13:03:14.209059Z |
+| Platform version | 2.1.6 |
+| Publication schema | 3.0.0 |
+| README evidence version | 3.0.0 |
 | Eval schema version | 1.40.0 |
 | Suite version | 5eee4bb14500 |
-| Selected eval runs | e4e947da-b48f-49eb-9211-898cbe747018 |
+| Selected eval runs | 53af9df7-2d37-4d76-9d1d-4a5a6687874a, e4e947da-b48f-49eb-9211-898cbe747018 |
 | Selected demo runs |  |
 | Source revision | (not populated) |
 | Source tree hash | (not populated) |
@@ -333,13 +333,34 @@ Configured role mappings come from the public manifest. A role is labeled observ
 | assistant | ollama | gemma4:e4b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl) |
 | lite | ollama | gemma4:e2b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl) |
 
+#### Configured and Observed Model Roles
+
+Configured role mappings come from the public manifest. A role is labeled observed only when retained provider-boundary stage telemetry matches its configured provider and model.
+
+| Role | Provider | Model | Endpoint class | Observation | Sources |
+| --- | --- | --- | --- | --- | --- |
+| primary | ollama | gemma4:12b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/stages.jsonl) |
+| assistant | ollama | gemma4:e4b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/stages.jsonl) |
+| lite | ollama | gemma4:e2b | self-hosted-lan | Observed model call | [manifest.json](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/manifest.json); [stages.jsonl](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/stages.jsonl) |
+
+#### Stage 2 Reproduction Comparison
+
+The fixed profile is recorded in [campaign-profile.json](docs/evidence/readme/current/stage2/campaign-profile.json), reproduction source and runtime provenance in [provenance.json](docs/evidence/readme/current/stage2/provenance.json), and the complete task-level comparison in [comparison.json](docs/evidence/readme/current/stage2/comparison.json). No causal or statistical attribution is made for observed differences.
+
+| Execution | Maturity | Run ID | Deterministic result | Population |
+| --- | --- | --- | --- | --- |
+| Original | Stage 1 | e4e947da-b48f-49eb-9211-898cbe747018 | 4/5 | Complete five-task population |
+| Reproduction | Stage 2 | 53af9df7-2d37-4d76-9d1d-4a5a6687874a | 3/5 | Complete five-task population |
+
+Reproduction source state: `53b0135b0cb6965f27a25d94487f0d2b7f314dac301208a9366dadc4fb2ea054`. Bound components: 2. Bound images: 4. Same local operator environment: yes.
+
 ### Eval Metrics
 
 Metrics aggregate eligible, verified observations from the selected eval runs. Values link to the metrics artifact in `docs/evidence/readme/current/`.
 
 | Metric | Version | Arm | Unit | Value | Denominator | Rate | Status | Tasks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/metrics.jsonl) | 1.0.0 | doctrine | boolean | 4 | 5 | 80.0% | verified | 5 |
+| [ifeval_subset_verifier](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/metrics.jsonl) | 1.0.0 | doctrine | boolean | 7 | 10 | 70.0% | verified | 10 |
 
 The following candidate metrics are absent from the selected evidence and are omitted: receipt_integrity, protocol_chain, policy_outcome, final_state_accuracy, canary_scrubbing, independent_state_accuracy, model_boundary_raw_secret_rate, exact_local_rehydration, secret_detection_precision, secret_detection_recall, unauthorized_mutation.
 
@@ -347,18 +368,18 @@ The following candidate metrics are absent from the selected evidence and are om
 
 | Status | Count |
 | --- | --- |
-| completed | 5 |
+| completed | 10 |
 
 Assigned task definitions: [tasks.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/tasks.jsonl). Population and terminal outcomes: [attempts.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/attempts.jsonl). Observed model-call telemetry: [stages.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/stages.jsonl). Derived orientation summary: [summary.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/summary.json). Private-evidence hash metadata: [evidence-index.jsonl](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/evidence-index.jsonl).
 
 ### Receipt Verification
 
-**Receipt evidence is unavailable for this Stage 1 campaign.** The answer-only tasks produced zero receipts, so this diagnostic supports no receipt-signature, mutation, persistence, or state claim.
+**Receipt evidence is unavailable for this Stage 2 comparison.** The answer-only tasks produced zero receipts, so this evidence supports no receipt-signature, mutation, persistence, or state claim.
 
 
 ### Governance and State Proof
 
-**Governance and state evidence is unavailable for this Stage 1 campaign.** The answer-only diagnostic contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.
+**Governance and state evidence is unavailable for this Stage 2 comparison.** The answer-only evidence contains no eligible receipt-bound mutation, persistence, independently observed state, or compliance evidence.
 
 
 ### Independently Verified Demonstrations
@@ -375,7 +396,7 @@ CI status is a live external signal, not a frozen pass claim.
 | [CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) | workflow_status |
 | [Latest Release](https://github.com/g8e-ai/g8e/releases) | release_link |
 
-The portable Stage 1 run profile is recorded in [reproduction-manifest.json](docs/evidence/readme/current/eval/runs/e4e947da-b48f-49eb-9211-898cbe747018/reproduction-manifest.json). Set `OLLAMA_ENDPOINT`, `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL` to values reachable by the process running `g8e-evals`; substitutions remain comparable only when recorded and are not byte-identical model reproductions.
+The portable Stage 2 profile is recorded in [campaign-profile.json](docs/evidence/readme/current/stage2/campaign-profile.json) and its executed substitutions and provenance bindings are recorded in [reproduction-manifest.json](docs/evidence/readme/current/eval/runs/53af9df7-2d37-4d76-9d1d-4a5a6687874a/reproduction-manifest.json). Set `OLLAMA_ENDPOINT`, `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL` to values reachable by the process running `g8e-evals`; substitutions remain comparable only when recorded and are not byte-identical model reproductions.
 
 Local verification commands:
 
@@ -399,9 +420,10 @@ make lint
 ```
 
 **Evidence caveats**
-- Stage 1 covers one complete five-task real-agent diagnostic and does not establish broad model quality or statistical significance.
-- The answer-only campaign produced zero receipts and supports no receipt, mutation, persistence, state, governance, or compliance claim.
-- Raw prompts, outputs, exact endpoints, local paths, credentials, and evidence keys remain private.
+- The original run remains Stage 1; stronger source, component, image, and environment provenance applies only to the fresh Stage 2 reproduction.
+- The two complete five-task populations support a deterministic reproduction comparison, not causal attribution, statistical significance, broad model quality, or independent external validation.
+- Both executions used the same local operator environment; independent execution state does not establish independent hardware, organizational control, trust roots, or audit.
+- Both answer-only campaigns produced zero receipts and support no receipt, mutation, persistence, state, governance, or compliance claim.
 
 ## Contributing
 

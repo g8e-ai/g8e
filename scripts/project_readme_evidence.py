@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import tempfile
 from collections import Counter
 from pathlib import Path
@@ -381,6 +382,148 @@ def project(private_report: Path, candidate_dir: Path, release_version: str, eva
         os.replace(root, candidate_dir)
 
 
+def _comparison_task_rows(run_dir: Path) -> dict[str, tuple[str, str, float]]:
+    attempts = {row["task_id"]: row for row in _load_jsonl(run_dir / "attempts.jsonl")}
+    metrics = {row["task_id"]: row for row in _load_jsonl(run_dir / "metrics.jsonl") if row.get("metric_id") == "ifeval_subset_verifier"}
+    if set(attempts) != readme.STAGE1_TASK_IDS or set(metrics) != readme.STAGE1_TASK_IDS:
+        raise ProjectionError("comparison input does not contain the complete five-task population")
+    return {task_id: (_required_string(attempts[task_id], "attempt_id", "comparison attempt"), _required_string(attempts[task_id], "terminal_status", "comparison attempt"), float(metrics[task_id]["value"])) for task_id in sorted(readme.STAGE1_TASK_IDS)}
+
+
+def project_stage2(baseline_candidate: Path, private_report: Path, provenance: dict[str, Any], candidate_dir: Path, release_version: str, eval_cli_version: str, idle_timeout_seconds: int) -> None:
+    if candidate_dir.exists():
+        raise ProjectionError(f"candidate directory already exists: {candidate_dir}")
+    if not candidate_dir.parent.is_dir():
+        raise ProjectionError(f"candidate parent directory does not exist: {candidate_dir.parent}")
+    baseline_snapshot = readme.load_snapshot(baseline_candidate)
+    if baseline_snapshot.manifest.publication_schema_version != "2.0.0" or len(baseline_snapshot.manifest.eval_runs) != 1:
+        raise ProjectionError("Stage 2 baseline must be one validated Stage 1 publication")
+    campaign_profile = provenance.get("campaign_profile")
+    if not isinstance(campaign_profile, dict) or campaign_profile.get("release_version") != release_version:
+        raise ProjectionError("Stage 2 provenance campaign profile does not match the release version")
+    if campaign_profile.get("idle_timeout_seconds") != idle_timeout_seconds:
+        raise ProjectionError("Stage 2 provenance campaign profile does not match the idle timeout")
+    with tempfile.TemporaryDirectory(prefix="readme-stage2-", dir=candidate_dir.parent) as temp:
+        temporary = Path(temp)
+        reproduction_candidate = temporary / "reproduction"
+        project(private_report, reproduction_candidate, release_version, eval_cli_version, 180)
+        reproduction_index = _load_json(reproduction_candidate / "index.json")
+        reproduction_ref = reproduction_index["eval_runs"][0]
+        reproduction_run_id = reproduction_ref["run_id"]
+        baseline_ref = baseline_snapshot.manifest.eval_runs[0]
+        if baseline_ref.run_id == reproduction_run_id:
+            raise ProjectionError("Stage 2 reproduction requires a new run ID")
+        reproduction_manifest_path = reproduction_candidate / reproduction_ref["reproduction_manifest_path"]
+        reproduction_manifest = _load_json(reproduction_manifest_path)
+        source_tree = provenance.get("source_tree")
+        components = provenance.get("components")
+        images = provenance.get("images")
+        environment = provenance.get("environment")
+        if not isinstance(source_tree, dict) or not isinstance(components, list) or not isinstance(images, list) or not isinstance(environment, dict):
+            raise ProjectionError("Stage 2 provenance is incomplete")
+        command_arguments = reproduction_manifest["command"]["arguments"]
+        timeout_index = command_arguments.index("--idle-timeout") + 1
+        command_arguments[timeout_index] = str(idle_timeout_seconds)
+        reproduction_manifest.update({
+            "schema_version": "2.0.0",
+            "idle_timeout_seconds": idle_timeout_seconds,
+            "campaign_profile_sha256": hashlib.sha256(_canonical_json(campaign_profile).encode()).hexdigest(),
+            "source_state_sha256": _required_string(source_tree, "state_sha256", "source tree"),
+            "component_sha256s": {str(row["name"]): str(row["sha256"]) for row in components},
+            "image_sha256s": {str(row["service"]): str(row["sha256"]) for row in images},
+            "environment": environment,
+        })
+        _write(reproduction_manifest_path, _canonical_json(reproduction_manifest))
+        reproduction_ref["reproduction_manifest_sha256"] = _sha256(reproduction_manifest_path)
+
+        root = temporary / "candidate"
+        baseline_index = _load_json(baseline_candidate / "index.json")
+        baseline_ref_raw = dict(baseline_index["eval_runs"][0])
+        baseline_ref_raw["maturity"] = "stage1"
+        for field, value in baseline_ref_raw.items():
+            if not field.endswith("_path") or not isinstance(value, str):
+                continue
+            source = baseline_candidate / value
+            destination = root / value
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        reproduction_ref["maturity"] = "stage2"
+        for field, value in reproduction_ref.items():
+            if not field.endswith("_path") or not isinstance(value, str):
+                continue
+            source = reproduction_candidate / value
+            destination = root / value
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+
+        baseline_run_dir = root / Path(baseline_ref_raw["manifest_path"]).parent
+        reproduction_run_dir = root / Path(reproduction_ref["manifest_path"]).parent
+        baseline_tasks = _comparison_task_rows(baseline_run_dir)
+        reproduction_tasks = _comparison_task_rows(reproduction_run_dir)
+        comparison = {
+            "schema_version": "1.0.0",
+            "baseline_run_id": baseline_ref.run_id,
+            "baseline_maturity": "stage1",
+            "reproduction_run_id": reproduction_run_id,
+            "reproduction_maturity": "stage2",
+            "same_operator_environment": True,
+            "causal_attribution": False,
+            "statistical_claim": False,
+            "declared_differences": ["release_version", "source_state", "component_digests", "image_digests", "execution_state", "runtime_environment"],
+            "tasks": [
+                {
+                    "task_id": task_id,
+                    "baseline_attempt_id": baseline_tasks[task_id][0],
+                    "baseline_status": baseline_tasks[task_id][1],
+                    "baseline_value": baseline_tasks[task_id][2],
+                    "reproduction_attempt_id": reproduction_tasks[task_id][0],
+                    "reproduction_status": reproduction_tasks[task_id][1],
+                    "reproduction_value": reproduction_tasks[task_id][2],
+                }
+                for task_id in sorted(readme.STAGE1_TASK_IDS)
+            ],
+        }
+        stage2_dir = root / "stage2"
+        campaign_profile_path = stage2_dir / "campaign-profile.json"
+        provenance_path = stage2_dir / "provenance.json"
+        comparison_path = stage2_dir / "comparison.json"
+        _write(campaign_profile_path, _canonical_json(campaign_profile))
+        _write(provenance_path, _canonical_json(provenance))
+        _write(comparison_path, _canonical_json(comparison))
+        receipt_source = reproduction_candidate / reproduction_index["receipt_verification"]["result_path"]
+        receipt_destination = root / reproduction_index["receipt_verification"]["result_path"]
+        receipt_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(receipt_source, receipt_destination)
+        index = {
+            "publication_schema_version": "3.0.0",
+            "readme_evidence_version": "3.0.0",
+            "evidence_cutoff": reproduction_index["evidence_cutoff"],
+            "platform_version": release_version,
+            "eval_runs": [baseline_ref_raw, reproduction_ref],
+            "stage2": {
+                "campaign_profile_path": "stage2/campaign-profile.json",
+                "campaign_profile_sha256": _sha256(campaign_profile_path),
+                "provenance_path": "stage2/provenance.json",
+                "provenance_sha256": _sha256(provenance_path),
+                "comparison_path": "stage2/comparison.json",
+                "comparison_sha256": _sha256(comparison_path),
+            },
+            "receipt_verification": reproduction_index["receipt_verification"],
+            "demo_reports": [],
+            "ci_links": reproduction_index["ci_links"],
+            "claim_labels": reproduction_index["claim_labels"],
+            "caveats": [
+                "The original run remains Stage 1; stronger source, component, image, and environment provenance applies only to the fresh Stage 2 reproduction.",
+                "The two complete five-task populations support a deterministic reproduction comparison, not causal attribution, statistical significance, broad model quality, or independent external validation.",
+                "Both executions used the same local operator environment; independent execution state does not establish independent hardware, organizational control, trust roots, or audit.",
+                "Both answer-only campaigns produced zero receipts and support no receipt, mutation, persistence, state, governance, or compliance claim.",
+            ],
+        }
+        _write(root / "index.json", _canonical_json(index))
+        readme.load_snapshot(root)
+        os.replace(root, candidate_dir)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("private_report", type=Path)
@@ -388,9 +531,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--release-version", required=True)
     parser.add_argument("--eval-cli-version", required=True)
     parser.add_argument("--idle-timeout", type=int, default=180)
+    parser.add_argument("--baseline-candidate", type=Path)
+    parser.add_argument("--provenance", type=Path)
     args = parser.parse_args(argv)
     try:
-        project(args.private_report, args.candidate_dir, args.release_version, args.eval_cli_version, args.idle_timeout)
+        if (args.baseline_candidate is None) != (args.provenance is None):
+            raise ProjectionError("Stage 2 projection requires both --baseline-candidate and --provenance")
+        if args.baseline_candidate is not None and args.provenance is not None:
+            project_stage2(args.baseline_candidate, args.private_report, _load_json(args.provenance), args.candidate_dir, args.release_version, args.eval_cli_version, args.idle_timeout)
+        else:
+            project(args.private_report, args.candidate_dir, args.release_version, args.eval_cli_version, args.idle_timeout)
     except (ProjectionError, readme.ReadmeError) as exc:
         print(f"error: {exc}")
         return 1

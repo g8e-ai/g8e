@@ -6,7 +6,11 @@
 - [g8e/compliance/v1/compliance.proto](#g8e_compliance_v1_compliance-proto)
     - [AssessmentScope](#g8e-compliance-v1-AssessmentScope)
     - [ChecksumEntry](#g8e-compliance-v1-ChecksumEntry)
+    - [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis)
     - [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference)
+    - [ComplianceFinding](#g8e-compliance-v1-ComplianceFinding)
+    - [ComplianceGap](#g8e-compliance-v1-ComplianceGap)
+    - [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation)
     - [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest)
     - [ComplianceVerificationReport](#g8e-compliance-v1-ComplianceVerificationReport)
     - [ComponentInventoryEntry](#g8e-compliance-v1-ComponentInventoryEntry)
@@ -15,6 +19,7 @@
     - [ControlAssertionDefinition](#g8e-compliance-v1-ControlAssertionDefinition)
     - [ControlCrosswalk](#g8e-compliance-v1-ControlCrosswalk)
     - [ControlCrosswalkCatalog](#g8e-compliance-v1-ControlCrosswalkCatalog)
+    - [ControlSection](#g8e-compliance-v1-ControlSection)
     - [DemoManifest](#g8e-compliance-v1-DemoManifest)
     - [DemoMetricEvidence](#g8e-compliance-v1-DemoMetricEvidence)
     - [DemoScenarioCatalog](#g8e-compliance-v1-DemoScenarioCatalog)
@@ -22,11 +27,14 @@
     - [DemoScenarioResult](#g8e-compliance-v1-DemoScenarioResult)
     - [DemoStepResult](#g8e-compliance-v1-DemoStepResult)
     - [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata)
+    - [EvidenceLink](#g8e-compliance-v1-EvidenceLink)
+    - [EvidenceWindowCompleteness](#g8e-compliance-v1-EvidenceWindowCompleteness)
     - [FrameworkCatalog](#g8e-compliance-v1-FrameworkCatalog)
     - [FrameworkControlAssessment](#g8e-compliance-v1-FrameworkControlAssessment)
     - [FrameworkControlDefinition](#g8e-compliance-v1-FrameworkControlDefinition)
     - [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference)
     - [FrameworkDefinition](#g8e-compliance-v1-FrameworkDefinition)
+    - [FrameworkProfile](#g8e-compliance-v1-FrameworkProfile)
     - [NamedDigest](#g8e-compliance-v1-NamedDigest)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
@@ -91,6 +99,38 @@
 
 
 
+<a name="g8e-compliance-v1-ComplianceAnalysis"></a>
+
+### ComplianceAnalysis
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| analysis_id | [string](#string) |  |  |
+| analysis_schema_version | [string](#string) |  |  |
+| scope_ref | [string](#string) |  |  |
+| generated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| generator_identity | [string](#string) |  |  |
+| generator_version | [string](#string) |  |  |
+| evidence_window_completeness | [EvidenceWindowCompleteness](#g8e-compliance-v1-EvidenceWindowCompleteness) |  |  |
+| assertion_assessments | [ControlAssertionAssessment](#g8e-compliance-v1-ControlAssertionAssessment) | repeated |  |
+| framework_assessments | [FrameworkControlAssessment](#g8e-compliance-v1-FrameworkControlAssessment) | repeated |  |
+| gaps | [ComplianceGap](#g8e-compliance-v1-ComplianceGap) | repeated |  |
+| evidence_links | [EvidenceLink](#g8e-compliance-v1-EvidenceLink) | repeated |  |
+| limitations | [string](#string) | repeated |  |
+| findings | [ComplianceFinding](#g8e-compliance-v1-ComplianceFinding) | repeated |  |
+| remediation | [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation) | repeated |  |
+| sections | [ControlSection](#g8e-compliance-v1-ControlSection) | repeated |  |
+| evidence_graph_failures | [string](#string) | repeated |  |
+| evidence_graph_valid | [bool](#bool) |  |  |
+| evidence_resources | [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference) | repeated |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-ComplianceEvidenceReference"></a>
 
 ### ComplianceEvidenceReference
@@ -117,6 +157,66 @@
 | verified_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | bundle_path | [string](#string) |  |  |
 | encryption | [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceFinding"></a>
+
+### ComplianceFinding
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| finding_id | [string](#string) |  |  |
+| subject_ref | [string](#string) |  |  |
+| severity | [string](#string) |  |  |
+| description | [string](#string) |  |  |
+| related_assertion_ref | [string](#string) |  |  |
+| related_control_id | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceGap"></a>
+
+### ComplianceGap
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| gap_id | [string](#string) |  |  |
+| assertion_ref | [string](#string) |  |  |
+| framework_ref | [string](#string) |  |  |
+| control_id | [string](#string) |  |  |
+| gap_type | [string](#string) |  |  |
+| description | [string](#string) |  |  |
+| responsibility | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceRemediation"></a>
+
+### ComplianceRemediation
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| remediation_id | [string](#string) |  |  |
+| finding_ref | [string](#string) |  |  |
+| action | [string](#string) |  |  |
+| priority | [string](#string) |  |  |
+| owner | [string](#string) |  |  |
 
 
 
@@ -302,6 +402,26 @@
 | catalog_version | [string](#string) |  |  |
 | sha256 | [string](#string) |  |  |
 | mappings | [ControlCrosswalk](#g8e-compliance-v1-ControlCrosswalk) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ControlSection"></a>
+
+### ControlSection
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| section_id | [string](#string) |  |  |
+| title | [string](#string) |  |  |
+| responsibility | [string](#string) |  |  |
+| status_filter | [string](#string) |  |  |
+| control_assessment_refs | [string](#string) | repeated |  |
+| description | [string](#string) |  |  |
 
 
 
@@ -495,6 +615,45 @@
 
 
 
+<a name="g8e-compliance-v1-EvidenceLink"></a>
+
+### EvidenceLink
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| source_ref | [string](#string) |  |  |
+| target_ref | [string](#string) |  |  |
+| link_type | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-EvidenceWindowCompleteness"></a>
+
+### EvidenceWindowCompleteness
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| scope_id | [string](#string) |  |  |
+| expected_evidence_count | [int32](#int32) |  |  |
+| actual_evidence_count | [int32](#int32) |  |  |
+| missing_evidence_refs | [string](#string) | repeated |  |
+| stale_evidence_refs | [string](#string) | repeated |  |
+| completeness_status | [string](#string) |  |  |
+| window_start_ref | [string](#string) |  |  |
+| window_end_ref | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-FrameworkCatalog"></a>
 
 ### FrameworkCatalog
@@ -594,6 +753,27 @@
 | catalog_sha256 | [string](#string) |  |  |
 | effective_date | [string](#string) |  |  |
 | controls | [FrameworkControlDefinition](#g8e-compliance-v1-FrameworkControlDefinition) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-FrameworkProfile"></a>
+
+### FrameworkProfile
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| profile_id | [string](#string) |  |  |
+| framework_ref | [VersionedReference](#g8e-compliance-v1-VersionedReference) |  |  |
+| profile_version | [string](#string) |  |  |
+| generated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| analysis_ref | [string](#string) |  |  |
+| control_assessments | [FrameworkControlAssessment](#g8e-compliance-v1-FrameworkControlAssessment) | repeated |  |
+| limitations | [string](#string) | repeated |  |
 
 
 
