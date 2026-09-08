@@ -6,13 +6,13 @@ g8e is a zero-trust execution platform for agentic infrastructure. We welcome co
 
 Before contributing, ensure you understand the core platform architecture:
 
-- **g8e Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP).
+- **g8e Gateway (g8eg)**: The central Policy Decision Point (PDP) for identity, policy admission, and posture-aware governance.
 - **g8e Operator (g8eo)**: The host-side Policy Execution Point (PEP) and MCP server.
 - **g8e Protocol**: The canonical protocol definitions (protobuf schemas and constant registries).
 - **5-Layer Verification Gauntlet**:
     - **L1 Doctrine (L1Doctrine)**: Technical hard gates (forbidden patterns, threat detection).
     - **L2 Consensus (L2Consensus)**: Multi-agent consensus via Ed25519 signatures.
-    - **L3 Notary (L3Notary)**: Human-in-the-loop authorization (WebAuthn/mTLS).
+    - **L3 Notary (L3Notary)**: Human-in-the-loop authorization through WebAuthn or signed CLI proofs.
     - **L4 Warden (L4Warden)**: Pre-dispatch verification gate (transaction hash, expiry, nonce, state root).
     - **L5 Actuator (L5Actuator)**: Execution boundary issuing signed `ActionReceipts`.
 
@@ -36,20 +36,21 @@ When [filing an issue](https://github.com/g8e-ai/g8e/issues/new), please include
 4. **Reproduction**: A minimal set of steps to reproduce the behavior.
 5. **Expected vs Actual**: Clear description of what you expected to see and what happened instead.
 
-Security vulnerabilities should be reported directly to security@g8e.ai.
+Security vulnerabilities should be reported through the [Security Policy](SECURITY.md), not through a public issue.
 
 ## Documentation Contributions
 
-Documentation is treated as code. If you are updating documentation, follow the **`updatedocs`** workflow:
+Documentation is treated as code. Follow the [Documentation Guide](../docs/devs/docs.md), which defines the complete audit workflow, source-of-truth matrix, generated-document ownership, first-party documentation catalog, cross-linking rules, version policy, and validation matrix.
 
-1. **Source of Truth**: Locate canonical implementation in `protocol/proto/`, `protocol/constants/*.json`, or `internal/services/`.
-2. **Trace Code Path**: Verify that the documented behavior matches the actual execution path through L1-L5 layers.
-3. **Terminology**: Use exact Go symbols and proto definitions (e.g., `GovernanceEnvelope`, `ActionReceipt`).
-4. **No Redundancy**: Each fact lives in exactly one place; cross-link rather than repeat.
+1. **Audit end to end**: Read the complete affected document and verify every behavioral claim, example, link, and limitation.
+2. **Trace ownership**: Locate the owning implementation, schema, registry, configuration, test, generator, or scope-bound evidence rather than relying on existing prose.
+3. **Update related documents**: Keep one canonical explanation and cross-link every affected current-state summary or component index.
+4. **Generate and validate**: Update templates, annotations, schemas, or reviewed evidence inputs before generated outputs, then run the owning checks.
+5. **Version last**: Update document date and version metadata only after the complete audit and related-document reconciliation.
 
 ## Coding Standards
 
-Please read the [Developer Guidelines](docs/devs/devs.md) before submitting patches. Key directives include:
+Please read the [Developer Guidelines](../docs/devs/devs.md) before submitting patches. Key directives include:
 
 - **Rip and Replace**: Delete/replace broken paths. **No backwards compatibility** for technical debt.
 - **Fail-Closed**: If a validation or security check fails, the system must halt.

@@ -19,12 +19,12 @@ import (
 func TestPhase0OSCAL_EvidenceAnchorsResolveToContentAddressedResources(t *testing.T) {
 	doc, err := NewOSCALExporter(nil).GenerateAssessmentResults(oscalTestAnalysis())
 	require.NoError(t, err)
-	resources := make(map[string]OSCALResource, len(doc.BackMatter.Resources))
-	for _, resource := range doc.BackMatter.Resources {
+	resources := make(map[string]OSCALResource, len(doc.AssessmentResults.BackMatter.Resources))
+	for _, resource := range doc.AssessmentResults.BackMatter.Resources {
 		resources[resource.UUID] = resource
 	}
 	require.NotEmpty(t, resources)
-	for _, observation := range doc.Results[0].Observations {
+	for _, observation := range doc.AssessmentResults.Results[0].Observations {
 		for _, relevantEvidence := range observation.RelevantEvidence {
 			resource, exists := resources[strings.TrimPrefix(relevantEvidence.Href, "#")]
 			assert.True(t, exists, phase0RegressionAfterFix+": evidence anchor must resolve to an OSCAL back-matter resource")
@@ -38,8 +38,8 @@ func TestPhase0OSCAL_EvidenceResourcesPreserveTypedArtifactMetadata(t *testing.T
 	analysis := oscalTestAnalysis()
 	doc, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
-	require.Len(t, doc.BackMatter.Resources, len(analysis.GetEvidenceResources()))
-	for _, resource := range doc.BackMatter.Resources {
+	require.Len(t, doc.AssessmentResults.BackMatter.Resources, len(analysis.GetEvidenceResources()))
+	for _, resource := range doc.AssessmentResults.BackMatter.Resources {
 		assert.NotEmpty(t, oscalPropValue(resource.Props, "artifact-type"), phase0RegressionAfterFix)
 		assert.Len(t, oscalPropValue(resource.Props, "sha256"), 64, phase0RegressionAfterFix)
 		assert.NotEmpty(t, oscalPropValue(resource.Props, "producer-identity"), phase0RegressionAfterFix)

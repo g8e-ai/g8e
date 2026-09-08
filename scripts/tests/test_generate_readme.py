@@ -606,6 +606,17 @@ class TestRenderReadme(unittest.TestCase):
         self.assertIn("### Evidence Identity", rendered)
         self.assertIn("### CI and Reproducibility", rendered)
 
+    def test_template_keeps_proof_first_and_all_components_first_class(self) -> None:
+        snapshot = gr.load_snapshot(VALID)
+        rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertLess(rendered.index("## Proof, not promises"), rendered.index("## How it works"))
+        self.assertLess(rendered.index("## Run the suite"), rendered.index("## How it works"))
+        for component in ("g8eg, Governance Gateway", "g8eo, Governed Operator", "g8ee, Agentic Ensemble", "g8ed, Dashboard"):
+            self.assertIn(component, rendered)
+        self.assertIn("<summary>Inspect machine-generated eval evidence and reproduction details</summary>", rendered)
+        self.assertNotIn("## Domain Applications", rendered)
+        self.assertLess(len(TEMPLATE.read_text().splitlines()), 180)
+
     def test_missing_marker_fails(self) -> None:
         snapshot = gr.load_snapshot(VALID)
         template = "{{EVAL_METRICS}}"

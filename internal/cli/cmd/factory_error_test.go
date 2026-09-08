@@ -9,6 +9,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
 
@@ -595,11 +597,17 @@ func TestComplianceReportGenerateCmdWithConfig_FileSvcFactoryError(t *testing.T)
 		func(string) evidence.ProvenanceSource {
 			panic("provenance source should not be created when fileSvcFactory fails")
 		},
+		func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+			panic("signing identity should not be loaded when fileSvcFactory fails")
+		},
 	)
 	require.NoError(t, cmd.Flags().Set("scope-id", "scope-1"))
 	require.NoError(t, cmd.Flags().Set("window-start-unix-ms", "1700000000000"))
 	require.NoError(t, cmd.Flags().Set("window-end-unix-ms", "1700000001000"))
 	require.NoError(t, cmd.Flags().Set("demo-run", "any-run"))
+	require.NoError(t, cmd.Flags().Set("report-id", "report-1"))
+	require.NoError(t, cmd.Flags().Set("signing-metadata", constants.ComplianceReportSigningMetadataTestFilename))
+	require.NoError(t, cmd.Flags().Set("signing-private-key", constants.ComplianceReportSigningPrivateKeyTestFilename))
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

@@ -2,144 +2,132 @@
 
 ## Overview
 
-g8ee includes a standalone evidence-grade evaluation package at `ensemble/evals/`. It compares raw provider inference, ensemble orchestration, and the canonical doctrine, consensus, and notary experiment arms while preserving the configuration, model identity, stage telemetry, receipts, and immutable inputs needed to reproduce and audit a run. Ratify is a supported gateway posture but does not have a standalone arm in this five-arm experiment design.
+g8ee includes a standalone evaluation package in `ensemble/evals/`. It supports live model evaluation across raw inference, ensemble orchestration, and governed execution, plus deterministic synthetic benchmarks for privacy, governance, utility, reliability, and economics. The package has its own Python 3.12 environment, locked dependencies, CLI, tests, linting, type checking, and CI job.
 
-The package is separate from the g8ee application package and has its own locked environment, CLI, type checking, linting, tests, and CI job. Python 3.12 or later is required.
+The CLI writes typed, versioned report bundles that bind tasks, attempts, metrics, receipts, stage telemetry, and indexed evidence by stable identifiers. Report consumers must validate those links and treat missing or inconsistent evidence as invalid rather than partially accepting a run.
 
-## Experiment Arms
+## Evaluation modes
 
-The CLI exposes five typed arms:
+### Live model evaluation
 
-| Arm | Execution path | Requested posture | Receipt binding |
+`g8e-evals run` currently runs the curated `ifeval_subset` benchmark. The suite contains five tasks selected from a pinned upstream IFEval revision, preserves the selected source lines, and records dataset, prompt-bundle, and grader-bundle hashes in the run manifest. An optional LLM judge adds separate model-call and grading records; it does not replace deterministic IFEval grading.
+
+The command exposes five experiment arms:
+
+| Arm | Execution path | Requested posture | Receipt expectation |
 | --- | --- | --- | --- |
-| `direct` | Provider API only | none | no |
-| `ensemble_ungoverned` | Real g8ee chat pipeline without gateway governance | none | no |
-| `doctrine` | g8ee, gateway, and operator | L1 enforced; L2/L3 audited | when the turn emits an `ActionReceipt` |
-| `consensus` | g8ee, gateway, and operator | L1/L2 enforced; L3 audited | when the turn emits an `ActionReceipt` |
-| `notary` | g8ee, gateway, and operator | L1/L2/L3 enforced | when the turn emits an `ActionReceipt` |
+| `direct` | Provider API only | None | None |
+| `ensemble_ungoverned` | g8ee chat pipeline without the Gateway or Operator | None | None |
+| `doctrine` | g8ee, Gateway, and Operator | L1 enforced; L2 and L3 audited | Collected when the turn produces an `ActionReceipt` |
+| `consensus` | g8ee, Gateway, and Operator | L1 and L2 enforced; L3 audited | Collected when the turn produces an `ActionReceipt` |
+| `notary` | g8ee, Gateway, and Operator | L1 and L2 enforced; L3 enforced for mutation-classified actions | Collected when the turn produces an `ActionReceipt` |
 
-The posture-only comparisons are `consensus - doctrine` and `notary - consensus`. The ensemble orchestration comparison is `ensemble_ungoverned - direct`; a direct-versus-governed comparison combines orchestration and governance effects.
+The Gateway, not the requested arm, is the posture authority. Governed attempts record the posture observed from the Gateway health surface, including an unobserved result when posture discovery fails. `ratify` remains a supported Gateway posture but is not a standalone arm in this experiment design.
 
-## Evidence Model
+Compare `ensemble_ungoverned` with `direct` to isolate the ensemble orchestration difference. Compare `consensus` with `doctrine`, or `notary` with `consensus`, to isolate adjacent requested-posture differences. A direct-versus-governed comparison combines orchestration and governance effects.
 
-Each run writes an immutable manifest before execution. The manifest records the source revision and tree hash, benchmark and grader hashes, exact role-to-model mapping, sampling settings, stack environment, selected arm, requested posture, and redacted configuration. The runner independently observes the gateway's effective posture instead of treating the requested CLI argument as evidence.
+Current reports label L2 in the `consensus` and `notary` arms as `deterministic_replicated_doctrine`. This label distinguishes the current replicated deterministic doctrine evaluation from heterogeneous model reasoning.
 
-Attempt records normalize the full execution into typed stages, including model inference, Tribunal generation and auditing, deterministic doctrine, protocol L2, L3 ceremony, L4 verification, L5 execution, scrubbing, receipt persistence, commitment append, and grading. Provider telemetry records monotonic timing, token usage, retries, finish reasons, hashes of model-boundary inputs and outputs, and privacy attestations containing only scanner identity, the input hash, sensitive-occurrence counts, and detected types. Usage reconciliation reports missing provider usage instead of inventing estimates.
+### Deterministic synthetic benchmarks
 
-Governed arms collect canonical `ActionReceipt` protobuf messages and verify the receipt signature and final persistence attestation with protocol-owned helpers. Receipt stage evidence carries transaction and identity bindings, state roots, doctrine metadata, signature digests, commitment hashes, audit record IDs, and parent-child relationships. Unknown, duplicated, cyclic, incomplete, or unverifiable evidence fails the attempt closed as invalid evidence.
+`g8e-evals bench-synthetic` runs local production-shaped simulators and deterministic observers without an LLM provider, g8ee, the Gateway, the Operator, or an authentication context. Synthetic reports use the `direct` analytical arm because they do not traverse the live governance stack. They validate observer, evidence-linking, and grader behavior; they do not demonstrate live platform enforcement.
 
-The runner grades authoritative evidence with versioned deterministic graders. Receipt-integrity grading requires exactly one verified primary receipt matching the expected action class and its verified final-persistence stage. Protocol-chain grading verifies stage identity and transaction bindings, ordering, posture-specific L2/L3 statuses, parent relationships, execution status, and state roots. Policy-outcome grading compares the signed L4 allow/block result and rejection layer with typed task expectations. Receipt-bound final-state grading evaluates typed `state_root_changed` or `state_root_unchanged` assertions. Canary grading binds expected sensitive values by hash to scrubbing-stage input and output hashes, and model-boundary grading measures raw sensitive occurrences without retaining the values.
+The command supports these suites:
 
-The harness also defines injected observer contracts for evidence collected outside the system under test. A configured state observer records typed file, document, workload-side-effect, or ledger-consistency values and binds them to fixture hashes and source evidence. Configured secret-detection and rehydration observers record confusion-matrix counts or exact token restoration at the local runtime boundary. The corresponding deterministic graders reject missing, duplicated, unbound, unsupported, or internally inconsistent observations. The standard `g8e-evals run` command does not construct these observers; integrations that use these task assertions supply them through `SUTConfig`.
+| Area | Suites | Scope |
+| --- | --- | --- |
+| Privacy | `privacy_token_lifecycle`, `privacy_boundary_leakage` | Encrypted token persistence, expiry and failure behavior, rehydration, exfiltration resistance, and report artifact leakage |
+| Governance and security | `governance_adversarial`, `policy_attack`, `benign_overblock` | Replay, signed-field and payload tampering, stale state roots, identity and nonce failures, signer defects, proof transplant, revoked credentials, evidence preservation, policy attacks, and benign overblocking |
+| Utility | `tool_sequence`, `factual_qa`, `citation_backed`, `partial_milestone`, `final_state`, `ledger_consistency` | Tool order, factual answers, citation support, partial completion, receipt-bound final state, and independently observed ledger state |
+| Reliability | `reliability` | Deterministic reliability scenarios and their declared evidence |
+| Economics and performance | `economics_performance` | Deterministic cost and performance scenarios and their declared evidence |
 
-Raw prompts, model outputs, and observer source material are restricted evidence. The runner requires an owner-only key file and writes captured prompt and model-output artifacts as AES-256-GCM envelopes with authenticated index metadata, plaintext and ciphertext hashes, byte lengths, key IDs, and named-key-holder access policy. Analytical records contain hashes, counts, types, and references rather than raw sensitive values.
+Each synthetic task must declare at least one typed assertion with a registered deterministic grader. The command rejects tasks with no applicable grader or attempts that produce no metrics. It persists content-addressed source evidence, validates observation hashes and lengths, and scans the completed report for raw synthetic canaries and the per-run encryption key.
 
-## Benchmark Support
+## Evidence and grading
 
-The current CLI supports the curated `ifeval_subset` suite. Its dataset has a provenance manifest, deterministic instruction verifiers, and content hashes included in each run manifest. An optional secondary LLM judge records its model calls and scores as separate grading stages rather than replacing deterministic grading.
+### Live run evidence
 
-## Running Evals
+The live runner completes authentication and provider preflight before creating a report directory. It then writes `manifest.json` before task execution and records the suite identity, eval package version, selected arm, requested posture, role-to-model mapping, runtime environment, and content hashes. The manifest schema also defines source revision, source tree state, sampling, context-limit, preregistration, and redacted-configuration fields, but the current CLI does not populate those fields. A report therefore does not establish source-state or sampling provenance unless a separate reviewed process binds it.
 
-Create an owner-only evidence key file containing a random 32-byte key:
+Attempts use typed terminal states for completion, model failure, governance rejection, human denial, timeout, infrastructure failure, and invalid evidence. Normalized stages cover model inference, Tribunal generation and auditing, L1 doctrine, protocol L2, L3 ceremony, L4 verification, L5 execution, scrubbing, rehydration, receipt persistence, commitment append, and grading. Model stages record available timing, usage, retry, finish-reason, boundary-hash, and privacy-attestation data; missing provider usage remains missing rather than being estimated.
 
-```json
-{"version":1,"key_id":"eval-owner-1","key_b64":"<32-byte-base64>"}
-```
+Governed attempts collect canonical `ActionReceipt` protobuf messages produced and signed by L5 Actuators. Receipt grading verifies the signature, final persistence attestation, expected action class, transaction and identity bindings, stage ordering, posture-specific L2 and L3 status, execution result, state roots, and parent relationships. Policy, final-state, canary, rehydration, secret-detection, mutation, tampering, replay, identity, and evidence-preservation graders run only when the task declares the corresponding typed assertion and supplies the required evidence.
 
-Run the CLI from `ensemble/evals/` through the locked environment. Governed and ensemble arms load the canonical local CLI identity through `g8e auth context`; `--auth-project-root` identifies the project runtime containing that identity, and `--g8e-cli` identifies the repository binary. Refresh the CLI identity after Operator enrollment so its session is bound to the active Operator session. The command returns `operator_session_id`, `cli_session_id`, `user_id`, `operator_id`, `client_cert`, and `client_key`. The certificate and key values are filesystem paths, not credential contents. g8ee validates the session tuple with the Gateway before admitting the request context. Set both trust-bundle variables explicitly when the eval working directory does not contain the project runtime; transport fails closed if either trust bundle is unavailable.
+Integrations can inject boundary-specific observers through the evaluation harness. The standard live CLI does not configure those observers, so an assertion that depends on an absent observer cannot become verified evidence merely from task configuration.
 
-```bash
-REPO_ROOT="$PWD"
-./g8e auth refresh
-export G8E_APP_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
-export G8E_GATEWAY_TRUST_BUNDLE="${REPO_ROOT}/.g8e/pki/trust/g8eg-ca-bundle.pem"
-cd ensemble/evals
-uv sync --locked --extra test
-uv run g8e-evals run \
-  --suite ifeval_subset \
-  --arm doctrine \
-  --g8ee-url http://localhost:8000 \
-  --g8e-cli "${REPO_ROOT}/g8e" \
-  --auth-project-root "${REPO_ROOT}" \
-  --evidence-key-file /path/to/owner-only-evidence-key.json
-```
+Raw prompts, model outputs, and agent trails are restricted evidence. The live runner requires an owner-only key file and stores these artifacts as AES-256-GCM envelopes with authenticated index metadata. Analytical records retain hashes, lengths, counts, types, and evidence references instead of raw restricted values.
 
-Provider, model, endpoint, API-key, judge, output, task-limit, and headless approval options are available through `g8e-evals run --help`. Local providers and the deterministic fake provider do not require API keys.
+### Metric contract
 
-### Stage 1 release diagnostic
+Every metric is registered by metric ID and version with its unit, direction, eligible population, denominator semantics, missing-value policy, aggregation method, uncertainty method, evidence requirements, grader class, and any release threshold. The runner rejects unregistered metrics and rows whose unit or grader class does not match the registry. Consumers aggregate only eligible rows according to each metric definition and keep unsupported exclusions out of the denominator.
 
-The Stage 1 README profile is a bounded real-agent diagnostic, not a broad benchmark or governance proof. It runs task IDs `1001`, `1019`, `1051`, `1072`, and `1075` exactly once through the `doctrine` arm with no `--limit`, no judge, primary/assistant/lite roles configured to real providers, and a 180-second idle timeout. Every assigned task remains in the denominator whether it completes, fails, errors, or times out. A publishable run contains one terminal attempt and one bound deterministic `ifeval_subset_verifier` metric for each task plus real provider-boundary model telemetry for every attempt.
+## Run live evaluations
 
-The public snapshot separates configured roles from observed calls. `manifest.json` declares all three role mappings, while `stages.jsonl` establishes observation only when provider-boundary telemetry matches the configured provider and model. A configured role without matching telemetry is `Configured but unobserved`; configuration alone never proves use.
+1. From the repository root, set `REPO_ROOT="$PWD"` and set `EVIDENCE_KEY_FILE` to the evidence key file location before changing directories. Create the key file as a JSON object with `version` set to `1`, a non-empty `key_id`, and `key_b64` set to exactly 32 bytes of base64-encoded random key material. Make the file owner-only with `chmod 600`; symlinks and files with group or other permission bits are rejected.
+2. Start the required local stack and refresh the canonical CLI identity with `./g8e auth refresh` after Operator enrollment.
+3. Set `G8E_APP_TRUST_BUNDLE` and `G8E_GATEWAY_TRUST_BUNDLE` to the canonical `.g8e/pki/trust/g8eg-ca-bundle.pem` when the eval process cannot resolve that runtime-relative path from its working directory.
+4. Enter `ensemble/evals/` and install the locked environment with `uv sync --locked --extra test`.
+5. Run the suite, for example: `uv run --locked g8e-evals run --suite ifeval_subset --arm doctrine --g8ee-url http://localhost:8000 --g8e-cli "$REPO_ROOT/g8e" --auth-project-root "$REPO_ROOT" --evidence-key-file "$EVIDENCE_KEY_FILE"`.
 
-Raw report directories remain private because `tasks.jsonl`, encrypted evidence metadata, local paths, and runtime configuration can expose information that is not eligible for public release. `scripts/project_readme_evidence.py` consumes one immutable completed report and creates a new checksum-bound candidate using an explicit allowlist. The candidate contains safe projections of `manifest.json`, `tasks.jsonl`, `attempts.jsonl`, `stages.jsonl`, `metrics.jsonl`, `summary.json`, `evidence-index.jsonl`, a portable `reproduction-manifest.json`, an empty `receipts.jsonl` for the answer-only profile, and `index.json`. It excludes raw prompts, raw outputs, encryption keys, encrypted payloads and their storage locations, credentials, exact provider endpoints, machine-specific paths, and private-network topology.
+Every `run` invocation currently requires `--g8ee-url`, `--auth-project-root`, a valid result from `g8e auth context`, and an evidence key, including the `direct` arm. The direct arm bypasses g8ee, the Gateway, and the Operator during task execution, but the current CLI still performs the common authentication setup before selecting that execution path.
 
-`summary.json` is a deterministic orientation view derived from typed attempts and metrics, not an independent source of truth. The safe evidence index publishes only attempt-bound artifact identity, media type, plaintext hash, byte length, and the fact that restricted evidence remains private. The reproduction manifest records the fixed suite, arm, task population, timeout, endpoint class, role-model mapping, environment class, CLI version, and a command expressed with replaceable endpoint and model variables. The offline README reader recomputes population, outcome, metric, role, and checksum consistency and rejects mismatches or undeclared artifacts.
+The direct arm requires an explicit primary provider and model. g8ee arms can obtain role settings from the running application or from CLI options and `G8E_TEST_LLM_*` environment variables. OpenAI, Anthropic, and Gemini require applicable credentials; Ollama, llama.cpp, and the deterministic fake provider are keyless. Use `uv run --locked g8e-evals run --help` for role, endpoint, judge, timeout, output, task-limit, and headless approval options.
 
-The release-owner v2.1.5 profile uses Ollama with `gemma4:12b` for primary, `gemma4:e4b` for assistant, and `gemma4:e2b` for lite. Reproducing operators provide their own reachable `OLLAMA_ENDPOINT` and may substitute `PRIMARY_MODEL`, `ASSISTANT_MODEL`, and `LITE_MODEL`; they record substitutions and do not represent different tags or model revisions as byte-identical reproduction. The attended command sequence and candidate approval boundary are in [Release Process](../devs/release_process.md#stage-1-real-agent-readme-evidence).
+## Run synthetic benchmarks
 
-A zero-receipt answer-only run is valid Stage 1 diagnostic evidence but provides no receipt, mutation, persistence, independently observed state, governance, or compliance evidence. Receipt and governance sections render unavailable rather than passed. Later evidence stages do not change the meaning of a published Stage 1 claim.
+Install the locked environment as described above, then run a suite without stack credentials or an external evidence key. For example: `uv run --locked g8e-evals bench-synthetic --suite governance_adversarial --output-dir reports`.
 
-### Stage 2 reproduction and provenance
+Use `--gold-set` to replace the suite dataset and `--limit` to run only the leading tasks. A custom task still requires typed assertions recognized by the selected suite and its registered graders.
 
-The v2.1.6 Stage 2 profile runs the same complete five-task population through a fresh invocation and new immutable report while retaining the v2.1.5 run as the original Stage 1 baseline. The reproduction uses the same fixed suite, arm, repetitions, task limit, model-role mapping, and real-provider requirements. Its preregistered 600-second idle timeout differs from the Stage 1 baseline's 180-second timeout and prevents the 12B primary-model call from being discarded before provider-boundary telemetry completes. The comparison includes every task and terminal outcome from both runs and binds each status and deterministic value directly to its attempt and metric record. It reports declared profile, source, component, image, operating system, architecture, hardware, and runtime differences without attributing score changes to any variable.
+## Report bundle contract
 
-`scripts/collect_readme_provenance.py` produces a deterministic private provenance record from a versioned campaign profile, an explicit source inclusion list, executable component digests, image digests, and public environment identities. Its canonical source manifest records each relative path, byte length, and SHA-256 digest and derives a root hash over the ordered rows. The Stage 2 reproduction manifest binds that profile hash, source state hash, component digests, image digests, and environment record to the fresh run.
+The schema version comes from `manifest.json`. Readers reject unsupported versions, unknown fields, duplicate identities, missing references, invalid parent-stage graphs, digest mismatches, and incomplete evidence.
 
-`scripts/project_readme_evidence.py` accepts the promoted Stage 1 baseline, one new immutable private report, and the collected provenance to emit publication schema `3.0.0`. The candidate preserves the baseline's original release and Stage 1 maturity, labels only the fresh run Stage 2, and adds typed `campaign-profile.json`, `provenance.json`, and `comparison.json` artifacts. Reprojecting identical verified inputs produces byte-identical files. `scripts/promote_readme_evidence.py` installs a reviewed candidate only when its canonical tree digest exactly matches the release-owner-approved digest.
+Both live and synthetic reports contain:
 
-Both executions use the same local operator environment unless retained evidence establishes otherwise. A separate invocation and new run state do not establish independent hardware, organizational control, trust roots, or external audit. The two five-task populations do not support causal attribution, statistical significance, broad model quality, governance effectiveness, compliance, certification, or production suitability. Zero receipts continue to render receipt, mutation, persistence, state, governance, and compliance evidence unavailable.
+- `manifest.json`: Run identity, selected analytical arm, environment metadata, and content hashes.
+- `tasks.jsonl`: Typed task definitions, assertions, compatible arms, and grader references.
+- `attempts.jsonl`: Terminal outcomes and references to receipts, observations, stages, metrics, and evidence.
+- `receipts.jsonl`: Typed receipt observations; this file can be empty.
+- `stages.jsonl`: Normalized stage records; synthetic suites currently write an empty file.
+- `metrics.jsonl`: Versioned metric observations linked to attempts and evidence.
+- `evidence-index.jsonl`: Content hashes, lengths, classifications, storage locations, and access metadata for indexed artifacts.
+- Assertion-specific `*-observations.jsonl` files: Typed observations for the boundaries supported by that command. Supported but unused observation files are present and empty.
 
-The attended provenance, projection, review, exact-digest approval, and promotion commands are in [Release Process](../devs/release_process.md#stage-2-reproduction-and-provenance).
+Live reports additionally contain encrypted evidence envelopes, `results.jsonl`, and `summary.json`. The latter two are compatibility views derived from typed records and are not independent evidence sources. Synthetic reports instead contain content-addressed files under `evidence/` and any local simulator state needed by the selected suite; they do not write `results.jsonl` or `summary.json`.
 
-## Evidence Bundle Contract
+The external live evidence key is never embedded in the report. Retaining it allows named key holders to decrypt restricted evidence out of band; deleting it makes those encrypted artifacts unrecoverable.
 
-The persisted record schema version is defined as `SCHEMA_VERSION` in `ensemble/evals/g8e_evals/schema.py` and is recorded in every run `manifest.json`; consumers must read the schema version from the manifest and reject unsupported versions rather than copying a prose value. Every typed record rejects unknown fields and carries stable run, task, attempt, receipt, state, rehydration, secret-detection, stage, metric, or evidence identifiers used to link the bundle without relying on file order. Task definitions use typed receipt-bound final-state assertions, independently observed state fixtures, canary annotations, rehydration assertions, secret-detection assertions, allow/block outcomes, and rejection layers. Validation rejects duplicate assertion IDs, malformed hashes, inconsistent counts and types, and inconsistent policy expectations. Readers must reject unsupported schema versions, missing references, duplicate identities, invalid parent-stage graphs, hash mismatches, and incomplete evidence rather than partially accepting a report.
+## Verify receipts
 
-A report directory contains:
+Reverify receipts with `uv run --locked g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>`. The PKI directory must contain each producing signer's `*Actuator_pub.pem` file. Add `--json` for a machine-readable result bound to the run ID in a valid manifest.
 
-- `manifest.json` — immutable run configuration and input hashes, written before execution begins.
-- `tasks.jsonl` — immutable benchmark task definitions and provenance.
-- `attempts.jsonl` — terminal attempt outcomes and record linkage.
-- `receipts.jsonl` — typed receipt observations containing canonical `ActionReceipt` messages.
-- `final-state-observations.jsonl` — receipt-bound state-root observations linked to typed task assertions.
-- `state-observations.jsonl` — independently collected typed state observations linked to fixture assertions and source evidence.
-- `rehydration-observations.jsonl` — local-runtime token restoration observations supplied by a configured observer.
-- `secret-detection-observations.jsonl` — typed scanner confusion-matrix observations supplied by a configured observer.
-- `stages.jsonl` — normalized model, governance, privacy, persistence, commitment, and grading stages.
-- `metrics.jsonl` — typed measurements linked to attempts and evidence.
-- `evidence-index.jsonl` — authenticated metadata, hashes, locations, classifications, and access policy for encrypted restricted evidence.
-- Encrypted evidence files — AES-256-GCM envelopes containing captured raw prompts and model outputs.
-- `results.jsonl` and `summary.json` — compatibility reporting views derived from the typed records.
+The verifier derives each key ID, matches it to `signer_key_id`, and verifies the canonical receipt signature and final persistence attestation. A receipt-verification claim requires a nonzero receipt count, no missing keys, no failures, and verified counts equal to the total. A zero-receipt report is not evidence that receipt verification passed.
 
-The evidence key file is versioned JSON containing a key ID and exactly 32 bytes of base64-encoded key material. It must be a regular, non-symlink file with no group or other permission bits. The runner never embeds the key in the report. The `named_key_holders` policy means only principals explicitly given the corresponding key out of band can decrypt restricted evidence; deleting that external key makes the ciphertext unrecoverable, while retaining it requires the owner to protect and rotate it outside the bundle lifecycle.
+This command does not validate the complete report graph, dataset hashes, encrypted evidence, commitment ledger, or trustworthiness of supplied public keys. It is a receipt verifier, not a complete offline bundle verifier.
 
-Verify receipts in an existing report bundle with a directory containing every producing actuator's `*Actuator_pub.pem` file:
+## Published README evidence
 
-```bash
-uv run g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>
-```
+The reviewed snapshot under `docs/evidence/readme/current/` contains hash-safe projections rather than private report directories. The current publication preserves the v2.1.5 five-task Stage 1 diagnostic and adds a separately invoked v2.1.6 Stage 2 reproduction with campaign, source, component, image, and environment provenance. Both runs used the same local operator environment and produced no receipts, so the snapshot supports deterministic instruction-following comparison and independent execution state, not receipt, mutation, persistence, governance, compliance, causal, statistical, or external-audit claims.
 
-`verify-receipts` derives a key ID from each discovered actuator public key, selects the key matching each receipt's `signer_key_id`, and verifies both the canonical receipt signature and final persistence attestation. It exits non-zero when no public keys are available, a receipt has no matching signer key, or a parsed receipt fails verification. A report with no bound receipts produces a zero-receipt result, not a receipt-verification pass; require a non-zero total, no missing keys, zero failures, and equal verified and total counts before making a receipt-verification claim. The command does not validate the manifest and dataset hashes, decrypt restricted evidence, reconcile all stage or metric links, verify the commitment ledger, or establish trust in the supplied public keys; complete offline report validation must perform those checks separately and fail closed on any missing or inconsistent record.
+The projection, provenance collection, exact-digest approval, and promotion procedures are documented in [Release Process](../devs/release_process.md#stage-1-real-agent-readme-evidence). `scripts/generate_readme.py` validates the promoted snapshot and renders `README.md`; it does not run evaluations, decrypt evidence, or verify signatures.
 
-The public README evidence snapshot under `docs/evidence/readme/current/` contains only reviewed synthetic or hash-safe projections. `scripts/generate_readme.py` validates the snapshot checksums and shapes, aggregates eligible metric rows, projects receipt and demo verification results, and renders `README.md` from `docs/templates/README.md.tmpl`. It does not run live evals, start the platform, decrypt restricted evidence, or recompute cryptographic signatures; evidence refresh is a separate reviewed operation.
+## Tests and lint
 
-## Tests and Lint
+From the repository root, run:
 
-From the repository root:
+- `make evals-test`: Tier 1 and Tier 2 tests.
+- `make evals-test-unit`: Tier 1 tests with no filesystem, process, network, database, or provider dependencies.
+- `make evals-test-integration`: Tier 2 tests with local files, subprocesses, or in-process dependencies.
+- `make evals-lint`: Ruff and Pyright checks for the standalone package.
 
-```bash
-make evals-test
-make evals-test-unit
-make evals-test-integration
-make evals-lint
-```
-
-Tier 1 tests have no filesystem, process, network, database, or provider dependencies. Tier 2 tests may use local files, subprocesses, or in-process dependencies. Live stack or provider evaluations are Tier 3 and are not part of the offline test targets.
+Live stack and provider evaluations are Tier 3 and are not part of the offline test targets.
 
 ## Related
 
-- [Testing](tests.md) — g8ee and standalone eval test boundaries
-- [Architecture](../architecture/ensemble.md) — g8ee's role in the platform
-- [Protocol Library](../architecture/protocol.md) — canonical receipt parsing and verification
-- [Headless UX Smoke Test](../guides/ux_smoke_test.md) — bringing up a governed local stack
+- [Testing](tests.md): g8ee and standalone eval test boundaries.
+- [Governance](governance.md): the five-layer execution pipeline and posture behavior.
+- [Architecture](../architecture/ensemble.md): g8ee's role in the platform.
+- [Protocol Library](../architecture/protocol.md): canonical receipt parsing and verification.
+- [Headless UX Smoke Test](../guides/ux_smoke_test.md): starting a governed local stack.

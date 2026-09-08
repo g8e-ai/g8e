@@ -1,185 +1,132 @@
 # Governance
 
-## Overview
+## Scope
 
-The g8e platform enforces zero-trust autonomous infrastructure management through a five-layer verification pipeline (L1 through L5). AI clients and agentic ensembles are treated as untrusted principals: they formulate operational intent, but cannot directly execute mutations against target hosts. All state changes, tool executions, and data modifications must be encapsulated in typed, deterministic `GovernanceEnvelope` transactions and pass through fail-closed verification gates before execution.
+The g8e Agentic Ensemble (`g8ee`) is an optional first-party client of the g8e governance platform. It generates and evaluates operational intent, but it remains outside the trusted execution boundary. Tribunal agreement, Auditor review, application risk classification, and user approval inside g8ee do not authorize a platform transaction by themselves.
 
-The governance architecture divides responsibilities between two primary components:
+An operation becomes governed when g8ee submits typed intent through a g8e ingress. The Gateway constructs or accepts a canonical `GovernanceEnvelope`, and the executing Warden and Actuator apply the verification required by the envelope's posture. Native client tools, direct filesystem access, network access, and other paths that do not traverse a g8e ingress are outside this boundary.
 
-- **Governance Gateway (Policy Decision Point / PDP)** — The central coordinator that enforces transport security, manages PKI, runs L1 Doctrine validation, brokers L2 Consensus deliberation, and manages L3 Notary human-in-the-loop authorization. See [Gateway Architecture](../architecture/gateway.md) and [Governance Pipeline](../architecture/governance.md).
-- **Governed Operator (Policy Execution Point / PEP)** — The host-side agent that maintains local sovereignty, re-verifies all proofs, runs the L4 Warden pre-dispatch gate, and executes actions within the isolated L5 Actuator boundary. See [Operator Architecture](../architecture/operator.md).
+See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for all supported agent integration paths and their limits.
 
-The g8e Agentic Ensemble (`g8ee`) acts as a first-party producer within this framework. Internally, `g8ee` runs an multi-agent generation and auditing pipeline (Tribunal, Auditor, and Warden risk analyzers) to synthesize and sanitize commands. Externally, `g8ee` dispatches host-level operations via `CommandIntent` messages and executes platform mutations directly via `GovernanceClient` using signed `GovernanceEnvelope` transactions.
+## Trust and Execution Boundaries
 
-## The Five-Layer Verification Pipeline
+The **Governance Gateway** is the Policy Decision Point. It authenticates clients, enforces transport and channel authorization, owns the active governance posture and current state root, constructs envelopes for intent-based client protocols, coordinates L2 consensus and L3 approval on supported ingress paths, and routes work to an execution site.
 
-Every mutation passing through the platform traverses the five-layer interlock sequence in strict order. Universal checks and proofs required by the active posture fail closed: any failed required validation check or missing required proof immediately rejects the transaction and releases any reserved nonces. Optional L2 and L3 results remain audit evidence and do not gate execution.
+The **Governed Operator** is the Policy Execution Point on a managed host. It opens an outbound mTLS connection to the Gateway, receives envelopes for its exact Operator session, verifies each envelope locally, and executes accepted operations through the L5 Actuator. The Gateway also has an in-process Operator substrate for locally executed MCP, A2A, and direct-envelope operations.
 
+The posture is embedded in each envelope so the executing Warden applies the Gateway-selected policy. Missing or invalid posture metadata fails closed.
+
+## Application Controls Before Governance
+
+For host command generation, g8ee applies application-level controls before publishing intent to the platform. These controls improve command quality and reduce unsafe proposals, but they are not protocol governance proofs.
+
+### Intent and command separation
+
+Sage describes the requested outcome without supplying shell syntax. Five Tribunal members independently generate candidate commands from that intent and the available Operator context. Each candidate is normalized and passes deterministic command-safety checks before voting.
+
+### Tribunal voting
+
+Tribunal members have equal vote weight. A candidate reaches the minimum threshold when at least two members produce the same normalized command. If multiple candidates tie, voting first prefers the shortest command and then a candidate without Nemesis support. A remaining tie or a round with no two matching commands triggers a second generation round using anonymized first-round clusters; failure to reach agreement in the second round stops command generation.
+
+Tribunal voting is application-level model agreement. It does not produce the Ed25519 signatures required by platform L2 Consensus and cannot satisfy a `consensus` or `notary` posture.
+
+### Command risk and audit
+
+When a response analyzer is configured, the command-risk Warden evaluates the winning command before the Auditor. An unavailable model, empty response, analysis error, or inconclusive command-risk result inside that analyzer becomes `HIGH` risk and blocks the command. The first high-risk result returns contextual feedback so Sage can propose a safer alternative; a second high-risk result for the same investigation reports an agent conflict and requires human intervention. If no response analyzer is configured, g8ee skips this stage.
+
+When enabled, the Auditor reviews the winning command and anonymized alternatives after command-risk analysis. It can accept the winner, revise it, or select another candidate. A successful audit creates a reputation commitment; failure to create that commitment stops the verdict.
+
+File writes and replacements use a separate file-risk analysis and g8ee approval flow before dispatch. A file-risk analysis failure is logged and the operation continues to the approval gate. Error analysis classifies failed commands and controls bounded retry or escalation. These application approval and retry decisions are distinct from L3 Notary authorization.
+
+See [Agents](agents.md) for the complete persona roster and [Architecture](architecture.md) for the ensemble workflow.
+
+## Platform Verification
+
+Every governed operation reaches the same L4 and L5 boundary. The logical interlock is:
+
+```text
+L1 Doctrine -> L2 Consensus -> L3 Notary -> L4 Warden -> L5 Actuator
 ```
-L1 Doctrine (Bedrock) → L2 Consensus → L3 Notary → L4 Warden → L5 Actuator
-```
 
-### L1: Technical Bedrock (Doctrine)
+- **L1 Doctrine** decodes the typed protobuf payload, applies field constraints and forbidden-pattern rules, and runs MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture and executes as part of Warden verification.
+- **L2 Consensus** verifies Ed25519 votes over the transaction hash and decision against an enabled policy and trusted member keys. Required postures enforce quorum from distinct affirmative signers. Application Tribunal votes have no authority at this layer.
+- **L3 Notary** verifies human authorization for mutation-classified actions under `ratify` and `notary`. Supported Gateway MCP and A2A flows can suspend a transaction for WebAuthn approval. Outbound execution verifies the corresponding approved suspended transaction and Ed25519 proof. Read-only actions do not require L3.
+- **L4 Warden** reserves the nonce for replay prevention, checks expiry, validates the action type and payload, recomputes the transaction hash, verifies the current state root, runs L1, and evaluates posture-required L2 and L3 evidence. A failed universal check or required proof prevents dispatch.
+- **L5 Actuator** signs and persists an `EXECUTING` receipt before invoking the action handler, appends a signed commitment when the SQL commitment ledger is active, rehydrates scrubbed payload data at the execution site, mints a transaction-bound capability, invokes the handler, dissolves the capability, and signs and persists the final result and persistence attestation.
 
-L1 Doctrine is the deterministic, non-negotiable hard gate enforced via protobuf reflection and pattern-matching engines. It operates before any consensus deliberation or human authorization:
-
-- **Pattern Matching and Rule Sets** — Evaluates execution payloads against compiled blacklist patterns, whitelist rules, OWASP Core Rule Set (CRS) definitions, and MCP vector rules.
-- **MITRE ATT&CK Threat Detection** — Detects malicious behaviors including reverse shell patterns, privilege escalation heuristics, unsanctioned network listeners, and destructive disk commands.
-- **Stateless Validation** — Enforces action type schemas, required fields, and structural payload integrity.
-- **Enforcement Scope** — Enforced as a mandatory fail-closed gate in every governance posture. The Governed Operator re-evaluates L1 Doctrine locally before execution to prevent gateway tampering.
-
-### L2: Multi-Agent Consensus
-
-L2 Consensus verifies cryptographic multi-signature approval over the transaction payload. It ensures that critical actions receive distributed consensus before reaching human review or execution:
-
-- **Tribunal Evaluation** — Enrolled consensus members independently evaluate the envelope payload against doctrine and policy rules.
-- **Ed25519 Vote Signing** — Each member signs an Ed25519 vote over the canonical transaction hash and decision string: `<transaction_hash>|<decision>`.
-- **Quorum Enforcement** — The Gateway and Operator verify that affirmative votes meet the configured quorum threshold (`K-of-N`) from distinct, trusted keys enrolled in the signer store.
-- **Postures** — Enforced as a fail-closed requirement under `consensus` and `notary` postures; verified and recorded as an audited proof under `doctrine` and `ratify` postures.
-
-### L3: Notary Authorization
-
-L3 Notary provides human-in-the-loop authorization and cryptographic session binding for state-changing operations:
-
-- **WebAuthn / FIDO2 Passkeys** — In gateway browser sessions, human operators provide hardware-bound cryptographic assertions over the transaction hash to authorize high-risk mutations.
-- **mTLS Transport Proofs** — In CLI and agent workloads, L3 notary proofs are bound to the SHA-256 certificate fingerprint (`mtls_cert_fingerprint`) of the authenticated client mTLS transport certificate.
-- **Suspended Transaction Flow** — When an L3 proof is required but absent, the Gateway suspends the transaction, issues an out-of-band approval challenge URL, and resumes processing once approved.
-- **Mutation Scoping** — Enforced for state-changing mutations under `ratify` and `notary` postures. Read-only actions (such as filesystem inspection or log queries) do not require L3 authorization.
-
-### L4: Warden Pre-Dispatch Gate
-
-The L4 Warden runs on the Governed Operator (and in-process on the Gateway for local actions) as the final pre-dispatch verification gate:
-
-- **In-Flight Tracking** — Rejects concurrent transaction submissions bearing the same nonce to prevent double-spend attacks.
-- **Nonce Reservation and Expiry** — Atomically reserves the unique 32-byte nonce in durable storage and validates that the transaction has not expired (`expires_at > now_utc`).
-- **Transaction Hash Integrity** — Recomputes the deterministic SHA-256 transaction hash across canonical fields and verifies an exact match with the envelope `id`.
-- **State Merkle Root Verification** — Compares the envelope's `state_merkle_root` against the operator's current local state ledger, rejecting stale transactions (`TX_STATE_MISMATCH`).
-- **Posture-Gated Proof Evaluation** — Enforces L2 Consensus and L3 Notary verification according to the active `GovernancePosture`.
-
-### L5: Actuator Execution Boundary
-
-The L5 Actuator is the singular execution boundary authorized to interact with the underlying host:
-
-- **Initial Receipt Signing** — Signs an initial `ActionReceipt` with status `EXECUTING` and commits it to the local audit vault before executing any instruction; execution halts if signing fails.
-- **PII Scrubbing and Rehydration** — Sensitive credentials and host parameters scrubbed at the gateway boundary are rehydrated strictly inside the local operator vault using host-local keys.
-- **Just-in-Time Capability Minting** — Mints a short-lived, single-action capability scoped precisely to the transaction hash and dissolves it immediately upon completion.
-- **Tool Dispatch** — Executes the requested tool inside a memory-safe, isolated execution boundary.
-- **Final Receipt Production** — Mints a final signed `ActionReceipt` containing execution results, exit codes, state root transitions (`state_root_before`, `state_root_after`), and L2/L3 governance audit status, signed with the operator's private Ed25519 actuator key.
+See [Governance Pipeline](../architecture/governance.md) for the full platform transaction flow.
 
 ## Governance Postures
 
-Platform governance enforcement is configured at startup via the `--posture <doctrine|consensus|ratify|notary>` flag. Postures define which verification layers operate as blocking fail-closed gates versus audited proofs.
+The Gateway posture is selected at startup with `--posture <doctrine|consensus|ratify|notary>`. L1 and the universal L4 checks remain mandatory in every posture.
 
-| Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use Case |
-| --- | --- | --- | --- | --- |
-| **`doctrine`** | Enforced | Audited | Audited | Local development, test environments, and automated CI pipelines |
-| **`consensus`** | Enforced | Enforced | Audited | Multi-agent automated operations requiring distributed consensus |
-| **`ratify`** | Enforced | Audited | Enforced (mutations) | Human-authorized operations without L2 consensus |
-| **`notary`** | Enforced | Enforced | Enforced (mutations) | Production environments requiring consensus and human oversight for host mutations |
+| Posture | L1 | Protocol L2 | L3 for mutations |
+| --- | --- | --- | --- |
+| `doctrine` | Required | Not required | Not required |
+| `consensus` | Required | Required | Not required |
+| `ratify` | Required | Not required | Required |
+| `notary` | Required | Required | Required |
 
-Universal baseline checks—including L1 Doctrine, deterministic transaction hash verification, nonce replay defense, expiry validation, state Merkle root integrity, action type validation, and payload decoding—fail closed across all postures.
+Optional L2 and L3 evidence is verified when the required verifier is available and recorded when valid, but its absence does not gate a posture that does not require it. Platform enrollment bootstrap actions are exempt from the L2 requirement that they establish.
 
-## Ensemble Pre-Governance Pipeline
+The ingress path matters. A posture does not cause every transport to acquire missing proofs automatically. g8ee must use a path that coordinates the required proofs or submit an envelope that already contains them.
 
-Before any command reaches the platform governance pipeline, `g8ee` runs an internal multi-agent generation, consensus, and risk assessment gauntlet.
+## Host Operations Through `CommandIntent`
 
-### 1. Intent vs. Command Separation
+The ensemble uses `CommandIntent` for host commands, file operations, filesystem reads, log and history queries, and other outbound Operator work:
 
-Reasoning agents such as Sage formulate high-level intent (`SageOperatorRequest`) without proposing raw shell syntax. This separation ensures that strategic planning cannot inject arbitrary or unsafe shell constructs directly into execution pipelines.
+1. g8ee serializes the typed Operator protobuf payload and publishes a `CommandIntent` to the exact `cmd:<operator_id>:<operator_session_id>` channel.
+2. The Gateway authenticates the app publisher, enforces the channel ACL, checks that the intent targets the same Operator and session as the channel, and validates that the session is active.
+3. The Gateway adds the current state root, posture, nonce, expiry, transport-derived app identity, requestor identity, and application context, then computes the canonical transaction hash and publishes the resulting `GovernanceEnvelope` to the Operator.
+4. The Operator runs L1 and L4 verification locally. Accepted operations execute through L5, while rejected operations do not reach the action handler.
+5. The Operator publishes the command result to the result channel and relays its signed receipt to the Gateway. The local receipt is authoritative; the Gateway mirror is best-effort.
 
-### 2. Tribunal Consensus Generation
+The `CommandIntent` relay does not perform protocol L2 deliberation or L3 suspension and does not attach L2 votes or an L3 proof. Consequently:
 
-The natural-language intent is dispatched to the 5-member Tribunal (`role="arbitrator"`). All five members evaluate the intent independently and in parallel under strict Information Isolation:
+- `doctrine` accepts otherwise valid read and mutation intents without L2 or L3.
+- `consensus` rejects ordinary relayed intents because they do not contain protocol L2 votes.
+- `ratify` accepts otherwise valid read-only intents but rejects mutation intents without an L3 proof.
+- `notary` rejects ordinary relayed intents because L2 is required, and mutations also require L3.
 
-- **Axiom (`axiom`)** — Composition lens focusing on cohesive multi-stage shell pipelines.
-- **Concord (`concord`)** — Safety lens prioritizing defensive flags, explicit paths, and fail-safe pipeline chaining.
-- **Variance (`variance`)** — Edge-case lens handling environment hazards, file path spaces, null delimiters, and locale boundaries.
-- **Pragma (`pragma`)** — Convention lens selecting idiomatic modern tooling (`ss`, `journalctl`, `kubectl`).
-- **Nemesis (`nemesis`)** — Adversary lens proposing stress-testing edge cases or cleanly abstaining when commands are sound.
+Use Gateway MCP or A2A when the Gateway must coordinate protocol consensus or human approval. See [Build Apps](../guides/build_apps.md) for integration-path selection.
 
-### 3. Weighted Voting and Peer Review
+## Direct Governance Envelopes
 
-Candidate command strings are clustered and evaluated using `weighted_vote()`:
+For governed platform records such as cases, investigations, memories, and agent activity, g8ee uses its `GovernanceClient` to submit a complete envelope to the synchronous governance endpoint. This is a privileged, Operator-credential path in the unified deployment, not the normal public app ingress.
 
-- **Threshold Enforcement** — Requires a consensus strength meeting `TRIBUNAL_MIN_CONSENSUS` (minimum 3 agreeing members).
-- **Round 2 Peer Review** — If consensus strength is insufficient in Round 1, an anonymized summary of candidate clusters is distributed for a second round of peer review.
-- **Consensus Failure** — If agreement cannot be reached after Round 2, the pipeline fails closed with `TribunalConsensusFailedError`.
+The client obtains the current state root, serializes the typed payload, generates replay and expiry fields, binds requestor and acting-app attribution into the transaction hash, and submits canonical JSON over mTLS. The Gateway binds the envelope identity to the certificate SPIFFE identity, supplies the active posture when the envelope omits it, and sends the envelope through the in-process Warden and Actuator.
 
-### 4. Machine-Domain Auditor
+The client serializes submissions to reduce state-root races. If the Gateway rejects a submission because another transaction changed the state root, the client fetches the new root, rebuilds the envelope, and retries up to three times after the initial attempt.
 
-The Auditor (`auditor`, `model_tier="primary"`) reviews the winning candidate cluster against Sage's intent, operator context, whitelists, and blacklists. The Auditor stakes reputation and returns one of three verdicts:
+This client does not acquire protocol L2 votes or perform a WebAuthn ceremony. A certificate fingerprint alone is transport metadata, not a complete L3 authorization proof. The direct mutation path therefore succeeds only when the active posture does not require proofs absent from the envelope, which is normally `doctrine` for g8ee's current platform-record submissions.
 
-- `ok` — Approves the candidate command unchanged.
-- `revised:<command>` — Corrects syntax errors, missing flags, or whitelist constraints.
-- `swap:<cluster_id>` — Selects a superior dissenting candidate cluster.
+A successful submission returns a signed `ActionReceipt`. `GovernanceClient` exposes receipt-signature verification using the configured Actuator public key, but submission does not invoke that verification automatically.
 
-### 5. LLM Risk Filter (Warden Sub-Agents)
+## Transaction Integrity
 
-Three specialized risk analyzers evaluate operational blast radius and stake reputation on their assessments:
+The canonical transaction hash binds action type, target resource, typed payload, state root, nonce, expiry, structured intent, requestor identity, and acting-app identity. Both the envelope ID and transaction hash must equal the recomputed SHA-256 digest. L3 proof and posture metadata are outside this hash because L2 signs the transaction before human authorization and the Gateway supplies posture as policy metadata.
 
-- **`warden_command_risk`** — Evaluates shell command blast radius, reversibility, and system impact (`LOW`, `MEDIUM`, `HIGH`).
-- **`warden_file_risk`** — Assesses file mutation risks based on target path sensitivity and Git tracking state.
-- **`warden_error`** — Classifies execution failures into recovery strategies (`AUTO_FIXABLE`, `ESCALATE`, `RETRY_LIMIT`).
+The Warden also requires a known action type, a decodable payload, a current state root, a live expiry, and a nonce that is neither reserved nor previously consumed. These checks fail closed in every posture. See [Protocol](protocol.md) for the canonical envelope and hashing rules.
 
-Ambiguous or indeterminate risk evaluations fail closed to `HIGH` risk.
+## Security Properties and Limits
 
-## Transaction Dispatch Mechanisms
-
-`g8ee` interacts with the g8e platform through two distinct dispatch paths depending on the operational target.
-
-### Operator Command Intent Dispatch
-
-For host-side actions (shell execution, file reads, file edits, directory listings):
-
-1. `g8ee` packages the verified instruction into a protobuf payload (`CommandRequested`, `FileEditRequested`, `FsReadRequested`, etc.) and encodes it as base64 ASCII.
-2. `g8ee` publishes a `CommandIntent` model to the operator's dedicated pub/sub channel: `cmd:<operator_id>:<operator_session_id>`.
-3. The Gateway consumes the `CommandIntent`, verifies the operator session binding, fetches the current state Merkle root, constructs the canonical `GovernanceEnvelope`, and routes it through L1–L3 gates.
-4. The governed envelope is published to the operator's command queue for L4 Warden validation and L5 Actuator execution.
-
-### Direct Governance Envelope Submission
-
-For platform-level state mutations (creating or updating cases, investigations, memories, and reputation records):
-
-1. **State Root Acquisition** — `GovernanceClient` (`app/clients/governance_client.py`) fetches the current state Merkle root from the Gateway (`GET /healthz`).
-2. **Deterministic Construction** — Builds a `GovernanceEnvelope` containing normalized timestamps, a random 32-byte nonce, base64-encoded protobuf payload, and the computed transaction hash.
-3. **Transport Proof Binding** — Binds the mTLS client certificate SHA-256 fingerprint into the L3 notary metadata.
-4. **Submission and State Retry** — Posts the envelope to `POST /api/v1/governance/envelopes`. If a concurrent transaction changes the state root before submission, producing a `TX_STATE_MISMATCH` (HTTP 403), `GovernanceClient` automatically re-fetches the updated state root and retries up to three times (`_STATE_ROOT_MAX_RETRIES`).
-5. **Receipt Verification** — Upon successful execution, `GovernanceClient` verifies the Ed25519 signature on the returned `ActionReceipt` against the platform actuator public key (`verify_receipt_signature()`).
-
-## Deterministic Transaction Hashing
-
-The `GovernanceEnvelope.id` must match the deterministic SHA-256 hash computed over canonicalized fields in strict protocol order:
-
-```
-action_type|target_resource|payload|state_merkle_root|nonce|expires_at|intent_data|requestor_user_id|acting_app_id|
-```
-
-The hashing algorithm adheres to strict canonicalization rules:
-
-- **Field Omission** — Empty strings, `None` values, or empty dictionaries are omitted entirely without placeholder tokens or trailing separators.
-- **Pipe Separation** — Exactly one pipe delimiter (`|`) is appended after each present field.
-- **Timestamp Normalization** — `expires_at` is normalized to fixed 6-digit microsecond UTC format (`YYYY-MM-DDTHH:MM:SS.ffffffZ`).
-- **Intent Canonicalization** — `intent_data` dictionaries are serialized into sorted, comma-delimited `key=value` strings.
-- **L3 Proof Exclusion** — L3 notary metadata is intentionally excluded from the transaction hash so that L2 consensus members can sign the payload before human authorization is requested.
-
-## Security and Sovereignty Guarantees
-
-- **Fail-Closed by Design** — Every verification layer, risk analyzer, and cryptographic check fails closed on errors or ambiguous data.
-- **Host Sovereignty** — Raw operational data and detailed audit logs remain on the sovereign host. The gateway and external clients receive only sanitized, signed execution receipts and Merkle root commitments.
-- **Zero Standing Privileges** — The operator possesses no permanent execution privileges; execution capabilities are minted just-in-time per transaction hash and dissolved immediately upon completion.
-- **Cryptographic Audit Trail** — Every executed mutation produces a hash-chained audit record and a signed `ActionReceipt` verifiable with Ed25519 public keys.
-- **Workload Identity Binding** — All network communications require mutual TLS, and the Gateway verifies that envelope identity claims match the SPIFFE URI SANs embedded in client transport certificates.
+- g8ee model output has no authority to bypass L1, replay protection, state binding, or posture-required proofs.
+- Application Tribunal voting is independent of protocol L2 and cannot substitute for trusted signer votes.
+- g8ee approval prompts are independent of L3 and cannot substitute for a valid Notary proof.
+- Operator command channels bind work to one authenticated Operator session; mismatched targets are dropped.
+- A remote Operator independently verifies each envelope before changing its host.
+- L5 signs and persists admitted execution outcomes, and the executing Operator retains the authoritative local receipt. A transaction rejected before execution does not produce an L5 receipt on the synchronous direct-envelope path.
+- Signed receipts attest only to operations that traversed the governed path. They do not attest to activity performed through native tools or other client side channels.
 
 ## Related
 
-- [Governance Pipeline](../architecture/governance.md) — Platform-level five-layer verification pipeline and governance posture reference
-- [Gateway Architecture](../architecture/gateway.md) — Gateway PDP design, PKI authority, and transaction validation
-- [Operator Architecture](../architecture/operator.md) — Operator PEP design, L4 Warden, and L5 Actuator execution boundary
-- [Agents](agents.md) — Multi-agent roster, persona models, and Tribunal consensus roles
-- [Architecture](architecture.md) — Platform components, protocol surfaces, and model hierarchy
-- [Protocol](protocol.md) — Canonical `GovernanceEnvelope` schemas, dispatch models, and hashing specifications
-- [Thinking](thinking.md) — Provider reasoning tokens and cryptographic thought signatures
-- [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment
-- [Storage](storage.md) — State Merkle roots, local audit vaults, and data sovereignty
-- [Evals](evals.md) — Benchmark evaluation suites and Judge scoring rubrics
-- [Constants](constants.md) — Protocol constant registries and action types
+- [AI Agents and the g8e Governance Boundary](../architecture/agents.md): Agent ingress paths, launcher behavior, and governance limits.
+- [Governance Pipeline](../architecture/governance.md): Platform verification, postures, transaction flow, and receipts.
+- [Gateway Architecture](../architecture/gateway.md): Gateway ingress, identity binding, consensus coordination, and approval suspension.
+- [Operator Architecture](../architecture/operator.md): Outbound Operator transport, local verification, execution, and audit storage.
+- [Authentication and Authorization](../architecture/auth.md): mTLS identities, delegated credentials, sessions, and WebAuthn.
+- [Consensus](../architecture/consensus.md): Protocol L2 policy, enrollment, deliberation, and vote verification.
+- [Agents](agents.md): g8ee personas, Tribunal members, Auditor, and application Warden.
+- [Architecture](architecture.md): Ensemble components, protocol surfaces, and runtime flow.
+- [Protocol](protocol.md): Ensemble-facing protocol models and transaction hashing.
+- [Storage](storage.md): Ensemble data services and governed platform records.

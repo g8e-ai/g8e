@@ -81,9 +81,7 @@ func (f *attestationImporterFixture) writeRecords(t *testing.T) {
 }
 
 func (f *attestationImporterFixture) importer() *AttestationImporter {
-	importer := NewAttestationImporter(f.reader, f.trust, f.binding)
-	importer.nowFunc = func() time.Time { return f.now }
-	return importer
+	return NewAttestationImporter(f.reader, f.trust, f.binding, f.now)
 }
 
 func TestAttestationImporter_SourceID(t *testing.T) {
@@ -172,12 +170,13 @@ func TestAttestationImporter_Import_RejectsInvalidConfiguration(t *testing.T) {
 		importer *AttestationImporter
 	}{
 		{name: "nil importer", importer: nil},
-		{name: "nil reader", importer: NewAttestationImporter(nil, fixture.trust, fixture.binding)},
-		{name: "nil trust", importer: NewAttestationImporter(fixture.reader, nil, fixture.binding)},
-		{name: "invalid reference", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: "invalid", Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID})},
-		{name: "unsafe path", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: filepath.Join(constants.PathParentDir, constants.ComplianceBundleAttestationsFilename), ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID})},
-		{name: "empty scope", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, RunID: fixture.binding.RunID})},
-		{name: "empty run", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID})},
+		{name: "nil reader", importer: NewAttestationImporter(nil, fixture.trust, fixture.binding, fixture.now)},
+		{name: "nil trust", importer: NewAttestationImporter(fixture.reader, nil, fixture.binding, fixture.now)},
+		{name: "invalid reference", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: "invalid", Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID}, fixture.now)},
+		{name: "unsafe path", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: filepath.Join(constants.PathParentDir, constants.ComplianceBundleAttestationsFilename), ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID}, fixture.now)},
+		{name: "empty scope", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, RunID: fixture.binding.RunID}, fixture.now)},
+		{name: "empty run", importer: NewAttestationImporter(fixture.reader, fixture.trust, AttestationImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID}, fixture.now)},
+		{name: "empty verification time", importer: NewAttestationImporter(fixture.reader, fixture.trust, fixture.binding, time.Time{})},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -289,7 +288,7 @@ func TestAttestationImporter_Import_PropagatesTrustAndReadFailures(t *testing.T)
 	assert.ErrorIs(t, err, trustErr)
 
 	readErr := fmt.Errorf("attestation source unavailable")
-	_, err = NewAttestationImporter(&failingArtifactReader{err: readErr}, fixture.trust, fixture.binding).Import(context.Background())
+	_, err = NewAttestationImporter(&failingArtifactReader{err: readErr}, fixture.trust, fixture.binding, fixture.now).Import(context.Background())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceImporterFailed)
 	assert.ErrorIs(t, err, readErr)

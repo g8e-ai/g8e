@@ -3,250 +3,244 @@ title: Position Paper
 parent: Core
 ---
 
-# Position Paper
+# Governing Agentic Execution Without Surrendering Data Custody
 
-## The Custody Problem
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-Every contemporary agent architecture makes the same trade: give the cloud custody of your data to get frontier reasoning. The model needs context to reason. Context is your data. So your data goes to the model. The provider accumulates it, persists it, and may train on it. You get reasoning in exchange for custody. This trade is presented as inevitable. It is not.
+## Abstract
 
-The trade exists because current architectures conflate two functions that should be separated: reasoning and state. The model reasons. The host remembers. When both live in the cloud, the provider holds custody by construction. When the host remembers and the cloud only reasons, custody stays with the data owner. The model receives tokenized projections and cryptographic commitments, never raw data. It returns conclusions. The host verifies, executes, and records.
+AI agents combine probabilistic reasoning with access to data, tools, credentials, and persistent state. This combination creates a structural security problem: a model output can become an infrastructure action before an independent authority has established that the action is authentic, permitted, current, and attributable. Empirical studies of tool-integrated agents document successful indirect prompt injection, memory poisoning, and tool misuse across model families, while current guidance identifies data privacy, authorization, and human oversight as unresolved deployment concerns [1–7]. Improving model behavior is necessary, but it does not create an adequate execution boundary.
 
-g8e implements this separation. The canonical unit of work is the `GovernanceEnvelope`, a protobuf message that binds identity, intent, state, and governance proofs into a single transaction. The envelope carries the action type, target resource, payload, nonce, expiration timestamp, state Merkle root, and structured intent data. It is the atom of the system: every mutation, every tool call, every file edit is wrapped in one. The cloud functions as a stateless reasoning co-processor that consumes and produces envelopes. The host maintains canonical state, encryption keys, and the audit ledger. The boundary between them carries proofs in one direction and commitments in the other, never custody.
+g8e takes the position that an AI system may propose an action but does not authorize its own execution. The platform separates reasoning from authority, keeps authoritative state and evidence at the data owner's boundary, represents governed mutations as typed and state-bound transactions, and independently verifies each transaction where execution occurs. This paper defines that position, relates it to zero-trust and least-privilege principles, describes the g8e reference architecture, and separates implemented mechanisms from measured evidence and open research questions. The claim is deliberately narrow: operations that traverse the g8e boundary receive the controls and evidence described here; g8e does not govern tools or side channels that bypass that boundary.
 
-## The Sovereignty Inversion
+## 1. Introduction
 
-The architectural mechanism is an inversion of control over state and trust. The gateway can live in the cloud. The operator lives at the site of the data owner. The data owner trusts nobody: not the cloud provider, not the gateway, not the network between them.
+The central problem in agentic computing is not that language models sometimes produce incorrect text. It is that systems increasingly convert model output into consequential action. An agent may read an email, retrieve a document, call an API, edit a file, execute a command, or approve a workflow. Once reasoning and execution share the same ambient credentials and mutable context, a prompt-level failure can become a confidentiality, integrity, or availability failure.
 
-The operator opens a single outbound mTLS connection to the gateway, authenticated via SPIFFE workload identities issued by an internal PKI. It listens on no ports. It accepts no inbound connections. It can sit behind NAT, firewalls, or air gaps. The gateway cannot reach into the operator; the operator pulls work when it chooses. No installation is required beyond a single static binary. No firewall rules need to be opened. No listening ports need to be configured on the managed host.
+This risk is not hypothetical. InjecAgent evaluated 30 tool-integrated agent configurations across 1,054 test cases and reported a 24% attack success rate for a ReAct-prompted GPT-4 agent under its base indirect-prompt-injection setting [1]. AgentDojo introduced 97 realistic tasks and 629 security test cases in stateful environments and found that contemporary agents and defenses did not jointly provide reliable task completion and security [2]. Agent Security Bench evaluated attacks and defenses across 10 scenarios, more than 400 tools, and 13 model backbones; its tested attacks reached a highest average success rate of 84.30% [3]. These results are benchmark-specific and do not estimate universal field failure rates, but they establish that model instructions alone are not a dependable authorization mechanism.
 
-<<<<<<< Updated upstream
-When the operator retrieves an envelope from the gateway, it does not trust the gateway's verification. The `L4Warden` re-derives every proof from scratch against the operator's own local state. The verification pipeline is sequential and fail-closed. First, early tracking and durable nonce reservation prevent replay after verifying the expiration timestamp. Then stateless validation decodes the payload, recomputes the transaction hash via `GenerateMessageID`, and evaluates L1 doctrine rules against the payload, action type, and target resource. Then stateful validation compares the envelope's `state_merkle_root` against the operator's current ledger state. Finally, posture-aware checks verify L2 consensus signatures and L3 human authorization proofs. If any proof is stale, tampered, or missing, the transaction is rejected. The gateway is a relay, not an authority. The operator is the authority, and the operator lives where the data lives.
-=======
-When the operator retrieves an envelope from the gateway, it does not trust the gateway's verification. The `L4Warden` re-derives every proof from scratch against the operator's own local state. The verification pipeline is sequential and fail-closed. First, an early nonce reservation prevents replay. Then stateless validation decodes the payload, recomputes the transaction hash via `GenerateMessageID`, and evaluates L1 doctrine rules against the action type and target resource. Then stateful validation checks the expiration timestamp and compares the envelope's `state_merkle_root` against the operator's current ledger state. Finally, posture-aware checks verify L2 consensus signatures and L3 human authorization proofs. If any proof is stale, tampered, or missing, the transaction is rejected. The gateway is a relay, not an authority. The operator is the authority, and the operator lives where the data lives.
->>>>>>> Stashed changes
+NIST's Generative AI Profile similarly treats prompt injection, data privacy, information security, and human–AI configuration as system-level risks rather than isolated model defects [4]. The 2026 International AI Safety Report concludes that agents heighten reliability risks because autonomous action can reduce the opportunity for human intervention before harm occurs [5]. NIST's 2026 concept paper on software and AI agent identity frames identification, authentication, authorization, auditing, and non-repudiation as prerequisites for reducing agent deployment risk [6].
 
-This inversion is what makes the cloud safe to use as a reasoning utility. A compromised gateway cannot inject actions because the operator re-verifies everything. A compromised cloud provider cannot decrypt host data because vault keys were never shared. A compromised network cannot intercept raw data because only tokenized projections cross the mTLS boundary.
+This paper advances three propositions:
 
-## Commitments, Not Custody
+1. **Reasoning is not authority.** A model, agent, or ensemble produces proposals. A separately controlled execution system decides whether a proposal may affect real state.
+2. **Governance attaches to the action.** Identity, intent, target, payload, state, freshness, policy evidence, and authorization belong to one verifiable transaction rather than to an open-ended session.
+3. **Claims follow evidence.** Signed receipts and independently reproducible verification establish what occurred on the governed path; architecture descriptions and successful demonstrations do not become claims of certification, universal safety, or production suitability.
 
-The cloud reasoning layer receives commitments, not data. A commitment is a cryptographic binding to a specific state of the world at a specific moment. The transaction hash binds the intent. The state Merkle root binds the host state. The nonce and expiration timestamp bind the moment. Together, these form a commitment that the model can reason over without ever seeing the underlying values.
+The g8e architecture operationalizes these propositions. Its design vocabulary includes Gateways, Operators, Doctrine, Consensus, Notary, Warden, and Actuator. These names identify concrete protocol and service roles; they are not claims of artificial personhood or institutional authority.
 
-Before any intent material crosses the sovereignty boundary, it is tokenized and scrubbed. The `ScrubbingService` applies a sequence of pattern-based scrubbers — API keys, JWTs, cloud provider credentials, private keys, connection strings, email addresses, phone numbers, credit card numbers, IBANs, and custom patterns defined in doctrine — replacing each match with an opaque `{{UEI_N}}` token. The mapping is persisted to an encrypted `TokenStore` with a 24-hour TTL so tokens survive operator restarts. When persistence is required but unavailable, the service fails closed: the token is not issued and the operation is rejected. The transaction hash is computed over the tokenized payload. The model upstream reasons over a safe projection of reality. It sees structure without substance. It can infer, plan, and recommend, but it cannot exfiltrate what it cannot read.
+## 2. Practitioner Origin and Research Position
 
-<<<<<<< Updated upstream
-Rehydration happens only at the `L5Actuator`, at the instant of execution, on the host where the data already lives. The actuator inspects the incoming `CommandMessage` payload and calls `RehydratePayload` to recursively replace every `{{UEI_N}}` token with its original value throughout the JSON structure. If rehydration fails, the operation fails closed. The rehydrated payload is injected back into the command message. The actuator executes the verified action and records the result. The real values never leave the host. The cloud model never sees them. The gateway never sees them. Only the operator, running at the site of the data owner, with keys owned by the data owner, performs rehydration.
-=======
-Rehydration happens only at the `L5Actuator`, at the instant of execution, on the host where the data already lives. If the command message implements the `Rehydratable` interface, the actuator calls `RehydratePayload` to recursively replace every `{{UEI_N}}` token with its original value throughout the JSON structure. The rehydrated payload is injected back into the command message. The actuator executes the verified action and records the result. The real values never leave the host. The cloud model never sees them. The gateway never sees them. Only the operator, running at the site of the data owner, with keys owned by the data owner, performs rehydration.
->>>>>>> Stashed changes
+This position originates in a practitioner method developed over thirty years of operating and protecting remote data systems. In production incidents, trust did not arise because an expert sounded confident. It arose because the expert worked inside the customer's controls, gathered evidence from the affected systems, explained the next action, used authority supplied for that purpose, verified the result, and left a record that others could examine.
 
-This is the mechanism that reduces cloud providers to co-processors. The provider supplies reasoning. The host supplies state, keys, and execution. The provider cannot reconstruct the data because it only ever held tokens. The provider cannot replay the action because the commitment is bound to a specific transaction hash, state root, and nonce. The provider cannot escalate because the permissions minted from the envelope are scoped to a single action and dissolved on completion.
+The [About g8e](./about.md) page describes this method as “Danny as Code”: gather broad context, reduce uncertainty with focused questions, converge on a justified next step, present that step to the person with the most at stake, bind any required approval to the exact action, execute through a constrained local boundary, and preserve evidence through completion. The phrase supplies design history, not empirical validation. The research position is that this operating method can be expressed as a machine-verifiable separation among proposal, authorization, execution, and evidence.
 
-## The Unified Context and Control Plane
+The human motivation remains important. Good automation reduces operational burden without asking a person to surrender control. In this model, an AI system can perform substantial investigative and planning work, but confidence, fluency, or apparent expertise never substitutes for authorization. Trust is constructed from bounded authority and inspectable evidence.
 
-Current agent architectures separate the control plane (what actions are permitted) from the data plane (what the agent knows). The control plane enforces policy. The data plane provides context. When these are separate, the data plane is a trusted storage layer that can be poisoned, and the control plane is a gate that can be bypassed if the data plane is compromised.
+## 3. The Coupling Problem in Agent Architectures
 
-<<<<<<< Updated upstream
-g8e unifies them. The `CommitmentLedger` — a SQLite-backed, hash-chained attestation store — governs execution and serves as the context substrate. Every admitted action produces a commitment attestation containing the transaction ID, transaction hash, state root at commit, L2 signature digest, Warden intent signature digest, human signature digest, action type, and target resource. The `AppendCommitment` builder selects the current head, signs the new attestation, and appends it while SQLite holds the write lock, preventing concurrent writers from chaining to the same predecessor. Every admitted action also writes the complete signed `ActionReceipt`, its deterministic governance-stage evidence, and a final persistence attestation to a host-local audit store, while file mutations are recorded in a git-backed ledger before and after execution. This Local-First Audit Architecture (LFAA) is the enforcement record of the write path and the verifiable memory of the read path. Agents derive context from this chain and verify it against live host state through governed tools.
-=======
-g8e unifies them. The `CommitmentLedger` — a SQLite-backed, hash-chained attestation store — governs execution and serves as the context substrate. Every admitted action produces a commitment attestation containing the transaction ID, transaction hash, state root at commit, L2 signature digest, actuator intent signature digest, human signature digest, action type, and target resource. The attestation is appended atomically: the `AppendCommitmentJSON` method verifies that the `prior_commitment_hash` matches the current ledger head inside a database transaction, preventing two concurrent attestations from chaining to the same predecessor. Every admitted action also writes a signed `ActionReceipt` to a host-local, git-backed ledger before the side effect is executed. This ledger is the enforcement record of the write path and the verifiable memory of the read path. Agents derive context from this chain and verify it against live host state through governed tools.
->>>>>>> Stashed changes
+### 3.1 Reasoning, context, and authority
 
-Context delivery and action governance are the same operation on the same object. An agent whose actions are gated by cryptographic proof and whose beliefs are derived from a verifiable ledger has no trusted storage to poison. The ledger is tamper-evident: each commitment is hash-chained to the previous commitment, and the chain root is included in every subsequent transaction's state binding. An attacker who modifies a historical entry breaks the chain. An attacker who injects a fabricated entry cannot produce a valid Ed25519 signature from the actuator's signing key.
+A useful agent needs context. A useful tool needs authority. A conventional implementation often gives one agent process both: it reads application data into model context and carries credentials broad enough to execute the resulting tool calls. Persistent memory may then retain selected observations and outputs. This design couples four distinct concerns:
 
-The ledger never leaves the host. The cloud provider sees commitments (transaction hashes, state roots) but not the ledger contents. The gateway sees envelopes but not the audit vault. The audit vault is encrypted at rest with AES-256-GCM using keys owned by the data owner. The ledger is memory, and memory is sovereign.
+- **Epistemic state:** what the model has observed or inferred.
+- **Authoritative state:** what the managed system currently contains.
+- **Execution authority:** what the process is permitted to change.
+- **Evidence:** what can later establish which action was requested, admitted, attempted, and completed.
 
-## Proof of Human Presence
+The coupling is dangerous because model context is both data and instruction surface. Indirect prompt injection exploits this ambiguity by placing adversarial instructions in content an agent is expected to read [1,2]. Memory poisoning extends the effect across later interactions [3]. Tool misuse turns a valid tool and valid credential toward an invalid purpose. A more capable model can improve task performance while leaving this architectural ambiguity intact.
 
-High-risk mutations require proof that a human authorized the exact action being executed. g8e uses a layered L3 Notary model. The `gatewayNotary` requires WebAuthn/FIDO2 passkey assertions as the primary authorization layer. The passkey verifier validates the WebAuthn assertion using the transaction hash as the challenge — the human signs the exact bytes of one transaction. The assertion is bound to the transaction hash, the nonce, the expiration timestamp, and the state Merkle root. It cannot be transplanted to a different action, replayed against a later request, or harvested from a live session.
+### 3.2 Custody as an architectural variable
 
-For CLI callers, a second layer provides transport authentication: if the `L3Proof` includes an mTLS certificate fingerprint, the `CLISessionVerifier` checks user active status, session ownership, fingerprint match via constant-time comparison, and certificate revocation. This is a layered model: passkey proves human presence, mTLS proves transport identity. Browser-only sessions skip the mTLS layer entirely. In outbound mode, the notary verifies a suspended transaction lookup, explicit approval status, a 30-minute approval window, and an Ed25519 signature over the transaction hash against a stored public key.
+Cloud inference does not inherently require cloud custody of all authoritative state. A deployment can instead keep raw values, keys, execution state, and authoritative evidence beside the systems that own them while sending a minimized projection to a remote reasoning service. The remote model returns a proposal; the local execution boundary verifies and applies it.
 
-This is distinct from session-based authentication. A session token grants ongoing authority to act on behalf of a user. A passkey assertion over a transaction hash grants authority for one action, at one moment, against one state of the host. The approval expires with the transaction. There is no standing authorization to revoke because there was never standing authorization to begin with.
+This separation does not imply zero disclosure. A model can only reason from information it receives, and some tasks require semantically meaningful data. Scrubbing and reversible placeholders reduce selected disclosures but cannot prove that every prompt is free of sensitive information. The defensible claim is therefore path- and deployment-specific: g8e provides bounded scrubbing and local rehydration mechanisms for governed paths, while the deployment owner remains responsible for model inputs, enabled tools, local account privileges, external credentials, and bypass channels. The [AI agent boundary](../architecture/agents.md) and [encryption architecture](../architecture/encryption.md) define these limits.
 
-<<<<<<< Updated upstream
-Human signatures are rare and expensive. Each one requires a physical interaction with a hardware-backed key: a touch, a face scan, a PIN entry. This cost is intentional. It makes human authorization a non-recoverable bond. When a human signs a transaction, they are expressing genuine belief that the action should proceed. The system does not ask for this belief often, and it does not accept it cheaply. The L3 Notary is fail-closed under ratify and notary postures: the `L4Warden`'s `verifyL3Posture` rejects mutations without a valid human proof before execution is dispatched.
-=======
-Human signatures are rare and expensive. Each one requires a physical interaction with a hardware-backed key: a touch, a face scan, a PIN entry. This cost is intentional. It makes human authorization a non-recoverable bond. When a human signs a transaction, they are expressing genuine belief that the action should proceed. The system does not ask for this belief often, and it does not accept it cheaply. The L3 Notary is fail-closed under notary posture: the `L4Warden`'s `verifyL3Posture` rejects mutations without a valid human proof before execution is dispatched.
->>>>>>> Stashed changes
+### 3.3 Session authority and action authority
 
-## Zero Standing Privileges
+Session-based authorization answers whether a principal may use a service over a period of time. Agentic execution requires a narrower question: may this principal perform this exact mutation, against this target and state, before this expiry, with these policy proofs? A broad bearer credential does not answer that question.
 
-The operator holds no permanent administrative credentials. Permissions are minted just-in-time from the verified intent inside the governance envelope. The `L5Actuator` calls `MintCapability` to produce a `Capability` struct scoped to a single action: one tool call, one file edit, one command execution. The capability binds the action type, target resource, transaction hash, operator identity, operator session, expiry timestamp, and a random single-use token signed by the actuator's Ed25519 key. It is injected into the execution context via `ContextWithCapability` so downstream handlers can verify it. The capability is dissolved the moment the action completes — `cap.Dissolve()` is called immediately after the handler returns, whether the action succeeded or failed. There is no credential store to compromise, no token to steal, no role to assume.
+NIST SP 800-207 defines zero trust around least-privilege, per-request access decisions in a network assumed to be compromised [7]. The classic principle of least privilege likewise limits a subject to the privileges necessary for a task [8]. g8e applies these principles to agentic actions: identity establishes who or what proposed work, but authority is derived for one verified transaction rather than inferred from the proposer's identity or network location.
 
-This applies to every layer. The gateway does not hold execution authority; it relays envelopes. The operator does not hold standing admin rights; it mints scoped capabilities per action. The human does not hold a session; they sign one transaction. The model does not hold data; it reasons over commitments. No component in the system accumulates privilege over time.
+## 4. Design Requirements
 
-A compromise of any single layer cannot exfiltrate persistent credentials because none exist. A compromised gateway cannot execute actions because it has no execution path. A compromised operator cannot escalate beyond the scoped capability minted from the verified envelope. A compromised cloud provider cannot decrypt host data because the vault keys were never shared. The system's security does not depend on the integrity of any single component. It depends on the fact that no component holds enough privilege to cause harm in isolation.
+The preceding problem statement yields six requirements for governed agentic execution.
 
-## Cryptographic Binding
+### 4.1 Treat every proposer as untrusted
 
-Every proof in the system is rigidly attached to one action, one moment, and one host. The transaction hash is computed by `GenerateMessageID`, which builds a canonical string representation of the governance envelope in protobuf field definition order: action type, target resource, payload (base64-encoded), state Merkle root, nonce, expiration timestamp (UTC RFC3339), intent data (recursively canonicalized), requestor user ID, and acting app ID. Fields are pipe-delimited, absent optional fields are omitted, and the result is hashed with SHA-256 and hex-encoded. Changing any field changes the hash. Changing the hash invalidates every signature attached to it.
+Humans, models, ensembles, applications, MCP clients, and A2A clients may request work. None receives execution authority merely because it generated a plausible plan. This rule removes model alignment from the trusted computing base for authorization.
 
-<<<<<<< Updated upstream
-The L3 proof is intentionally excluded from the transaction hash. The protocol ordering is L1 → L2 → L3 → L4: the consensus signs the transaction hash before the human is asked. Including L3 in the hash would create a circular dependency — L2 could not sign until the human had already acted, violating the invariant that the human is never bothered until all machine-checkable layers pass. Tamper-evidence for L3 is provided by `verifyL3Posture`, which checks the proof against the envelope's transaction hash at verification time.
-=======
-The L3 proof is intentionally excluded from the transaction hash. The protocol ordering is L1 → L2 → L3 → L4: the tribunal signs the transaction hash before the human is asked. Including L3 in the hash would create a circular dependency — L2 could not sign until the human had already acted, violating the invariant that the human is never bothered until all machine-checkable layers pass. Tamper-evidence for L3 is provided by `verifyL3Posture`, which checks the proof against the envelope's transaction hash at verification time.
->>>>>>> Stashed changes
+### 4.2 Bind policy to canonical intent
 
-This binding prevents replay, tampering, and substitution. A proof valid for one transaction is invalid for every other transaction. A proof valid at one moment is invalid at any other moment because the expiration timestamp is part of the hash. A proof valid against one state of the host is invalid against any other state because the state Merkle root is part of the hash. The operator re-derives the state root from its local state and compares it to the root in the envelope. If the host state has changed since the envelope was created, the proof is stale and the transaction is rejected.
+The governed object must encode the action type, target resource, typed payload, requesting identities, state binding, nonce, expiry, and required governance evidence. Canonical serialization and hashing must make changes detectable so that signatures over one transaction cannot authorize another.
 
-The state Merkle root is the mechanism that binds proofs to the host's actual state. The `GitLedgerService` returns the current git HEAD commit hash as the state Merkle root via `GetStateMerkleRoot`. When an action executes, files change, a new commit is created, and the root changes. The next transaction must commit to the new root. This creates a chain: each transaction is bound to the state that resulted from all previous transactions. An attacker cannot insert a transaction between two existing ones because the state roots would not chain. An attacker cannot modify a past transaction because the hash would change and break the chain.
+### 4.3 Verify at the execution site
 
-## The Ledger as Memory
+A remote admission decision cannot force a local mutation. The component beside the managed system must independently verify freshness, replay state, canonical intent, policy, state, and posture-required approvals before dispatch.
 
-The hash-chained ledger serves two roles simultaneously. It is the enforcement record of the write path: every admitted action, every rejection, every receipt. It is also the verifiable memory of the read path: the context substrate from which agents derive beliefs about the host.
+### 4.4 Minimize standing authority
 
-These two roles are unified in a single data structure because they are the same data. The history of what was done is the context for what to do next. An agent that reads the ledger knows what actions were attempted, which succeeded, which were rejected, and what state resulted. An agent that verifies the ledger knows the chain is intact, the signatures are valid, and the state roots are consistent. An agent that extends the ledger must produce a valid envelope, clear the admission pipeline, and receive a signed receipt. Reading, verifying, and writing are governed by the same cryptographic primitives.
+Execution handlers receive authority scoped to the admitted transaction. The model does not carry host credentials, and admission does not create a reusable authorization session. Operating-system privileges and external credentials remain deployment controls and must be constrained independently.
 
-The ledger is git-backed via `GitLedgerService`. Every file mutation triggers a two-phase commit: a pre-mutation snapshot and a post-mutation snapshot, each recorded as a git commit in the `files/` repository under the ledger directory. This provides rollback capability and a tamper-evident history trail. The ledger is encrypted at rest. File contents are encrypted with AES-256-GCM before storage, with the `.enc` suffix appended to ciphertext files. A compromised host disk does not reveal file contents. A compromised backup does not reveal file contents. Only the operator, with an unlocked vault, can read the ledger.
+### 4.5 Preserve evidence before and after dispatch
 
-<<<<<<< Updated upstream
-The `L5Actuator` enforces fail-closed receipt persistence for every execution. Before dispatch, it signs an `EXECUTING` `ActionReceipt` whose signature binds the canonical receipt fields and deterministic governance-stage evidence, persists it, and atomically appends a signed commitment. If any of those steps fail, the handler does not execute. After execution, the actuator adds L5 outcome evidence, signs and persists the final `COMPLETED` or `FAILED` receipt, then attaches a signed `ReceiptPersistenceAttestation` that binds the receipt-signature digest to the durable audit record and persists that complete receipt. The canonical receipt and commitment provide independently verifiable evidence of admission, execution, chain linkage, and durable storage.
-=======
-The `L5Actuator` enforces a dual-receipt model for every execution. Before dispatch, it signs an initial `ActionReceipt` with status `EXECUTING` and logs it to the audit store. This is the intent-to-execute record. If receipt signing or audit logging fails, the handler is not executed — the system fails closed. After execution, the actuator signs a final `ActionReceipt` with the completion status, result summary, state root before and after, and L2/L3 validation status. If the final signing fails, the initial `EXECUTING` receipt is returned as evidence that execution was attempted. The mutation already happened; evidence must be preserved.
->>>>>>> Stashed changes
+A system that records only successful outcomes cannot distinguish “never executed” from “executed but failed to report.” The execution boundary must preserve signed pre-execution and final evidence, with durable-persistence evidence where supported, and must refuse dispatch when required pre-execution evidence cannot be persisted.
 
-The ledger never leaves the host. The cloud provider sees commitments but not ledger contents. The gateway sees envelopes but not the audit vault. The audit vault is the host's memory, and memory is sovereign.
+### 4.6 Make the claim boundary explicit
 
-## Encryption as a Sovereignty Guarantee
+A receipt proves activity on the governed route. It does not prove the absence of direct shell access, client-native tools, another MCP server, compromised operating-system privileges, or any other side channel. Security evaluation must test the complete deployed topology rather than infer safety from the presence of a governance component.
 
-All sensitive data at rest is encrypted with AES-256-GCM using keys that never leave the host in plaintext. The vault architecture uses a layered key hierarchy: the operator's private key wraps a key encryption key (KEK), the KEK wraps data encryption keys (DEKs), and DEKs encrypt payloads. Key rotation is supported through rekey operations that re-wrap KEKs without re-encrypting underlying data.
+## 5. The g8e System Model
 
-The encryption layer is mandatory, not optional. Storage services fail to initialize without an unlocked vault. The `GitLedgerService` constructor returns an error if `EncryptionVault` is nil. The vault must be unlocked at startup with the master key. If the vault is locked, the operator cannot read the audit store, cannot read the ledger, cannot read the execution vault, cannot read the token store. The system fails closed rather than operating without encryption.
+### 5.1 Roles and trust boundaries
 
-This is the mechanism that makes the data owner's key ownership meaningful. The keys are generated on the host, stored on the host, and never shared with the gateway or cloud provider. A compromised cloud cannot decrypt host data. A compromised gateway cannot decrypt host data. A subpoena to the platform vendor yields no data because the vendor never held the keys. The data owner retains sole control over who can read their data.
+g8e implements a Policy Decision Point and Policy Execution Point pattern consistent with zero-trust architecture [7]:
 
-## The Gateway-Operator Relationship
+- The **Governance Gateway (g8eg)** authenticates callers, constructs and admits canonical envelopes, applies L1 Doctrine, coordinates posture-required L2 Consensus and L3 Notary workflows, and routes work. It cannot bypass downstream verification.
+- The **Governed Operator (g8eo)** runs beside managed systems, initiates an outbound mTLS connection, pulls work, performs L4 verification, dispatches accepted transactions through L5, and retains authoritative local evidence.
+- A **reasoning application**, including the optional g8ee ensemble or a third-party client, gathers context and proposes actions. It remains outside the trusted execution boundary.
+- A **human authorizer** supplies transaction-bound approval when the active governance posture requires it. Approval proves authorization of the bound transaction under the configured ceremony; it does not prove that the person understood every consequence.
 
-The gateway and the operator are two roles implemented by the same binary. The gateway is the Policy Decision Point (PDP): it admits signed envelopes, manages PKI, and enforces freshness and replay defense. The operator is the Policy Execution Point (PEP): it re-verifies proofs locally, executes actions, and maintains the audit ledger. The gateway does not execute. The operator does not admit. The separation is architectural, not configurational.
+The Gateway and Operator roles are implemented in the same statically linked Go binary but run in separate modes. Their separation is logical and operational: the Gateway admits and routes; the outbound Operator re-verifies and executes. The Gateway process also contains an in-process Operator substrate for work executed on the Gateway host, and that path still traverses L4 and L5. A remote Operator exposes no inbound management port to the Gateway and can remain behind NAT or restrictive firewall policy. The [platform overview](../architecture/overview.md) defines the complete topology.
 
-<<<<<<< Updated upstream
-The `L5Actuator` is the execution boundary. It dispatches verified transactions to the `ExecutionHandler` interface — a single method, `ExecuteVerifiedTransaction`, that receives the execution context carrying the just-in-time capability, event type, and command message. The actuator does not re-verify L2 or L3 proofs; by design, the `L4Warden` performs all pre-dispatch verification and embeds the results in a `VerifiedTransaction`. L5 trusts that structure, records the L2/L3 status in the `ActionReceipt` for audit, and focuses on execution safety: fail-closed receipt signing, JIT capability minting, fail-closed payload rehydration, and audit logging. The separation between L4 (verification) and L5 (execution) is the defense-in-depth boundary — two independent components with distinct responsibilities.
-=======
-The `L5Actuator` is the execution boundary. It dispatches verified transactions to the `ExecutionHandler` interface — a single method, `ExecuteVerifiedTransaction`, that receives the event type and command message. The actuator does not re-verify L2 or L3 proofs; by design, the `L4Warden` performs all pre-dispatch verification and embeds the results in a `VerifiedTransaction`. L5 trusts that structure, records the L2/L3 status in the `ActionReceipt` for audit, and focuses on execution safety: fail-closed receipt signing, JIT capability minting, and audit logging. The separation between L4 (verification) and L5 (execution) is the defense-in-depth boundary — two independent components with distinct responsibilities.
->>>>>>> Stashed changes
+### 5.2 GovernanceEnvelope
 
-The gateway can run in the cloud. The operator runs at the site of the data owner. The operator initiates a single outbound mTLS connection to the gateway. The gateway does not initiate connections to the operator. The operator pulls work when it chooses and can disconnect at any time. When disconnected, the operator continues to serve the host from its local state. The gateway queues envelopes; the operator retrieves them when connectivity is restored.
+The canonical unit of governed work is the protobuf `GovernanceEnvelope`. It carries typed intent, requesting identities, target, payload, nonce, expiry, state root, transaction hash, active posture, and available governance proofs. Its canonical transaction hash binds the action type, target, payload, state root, nonce, expiry, structured intent, requesting user, and acting application. Posture remains explicit policy metadata outside that hash, while posture-required proofs are verified against the transaction at L4.
 
-This relationship is what makes the platform deployable in environments where inbound connectivity is impossible or prohibited. A hospital network that blocks inbound connections to clinical systems can still run an operator: the operator dials out to the gateway, retrieves pending envelopes, and executes them locally. A tactical edge network with intermittent connectivity can still run an operator: the operator caches work, executes when connected, and syncs receipts when bandwidth is available. An air-gapped facility can still run an operator: the operator runs standalone with locally configured doctrine, and envelopes are transferred via physical media.
+This action-centric representation is the main architectural move. Policy evaluation, consensus votes, human approval, local verification, execution capability, receipts, and commitments refer to one transaction. They do not refer to an agent's conversational confidence or to an indefinitely reusable authorization grant. The [protocol specification](../../protocol/docs/spec.md) owns the wire contract and canonicalization rules.
 
-The gateway and the operator share no filesystem, no database, no memory. They communicate exclusively through the mTLS channel and the governance envelope. The gateway sees envelopes and commitments. The operator sees envelopes, state, and raw data. The gateway's compromise does not expose data. The operator's compromise does not expose the gateway's PKI. Each component's failure domain is isolated.
+### 5.3 Five-layer verification and execution
 
-## The Economics of Governance
+Every governed operation reaches the L4 Warden and L5 Actuator boundary. The active posture determines whether L2 and L3 are required gates or recorded, non-gating evidence:
 
-The standard objection to multi-agent consensus before execution is cost: if every mutation requires a quorum of models to deliberate, the inference bill multiplies with the layer count. The objection is empirically grounded — for homogeneous frontier ensembles. Published measurements of multi-agent debate architectures show a 2.1×–3.4× token cost multiplier over single-agent self-correction, frequently for accuracy that is statistically comparable to or worse than the non-communicative baseline, with sycophantic convergence intensifying as model scale increases ([arXiv:2605.00914](https://arxiv.org/pdf/2605.00914)). Running consensus on N copies of the same frontier model buys correlated failure at N times the price.
+1. **L1 Doctrine** decodes typed payloads and applies field constraints, forbidden-pattern rules, and threat-oriented checks. L1 applies in every posture.
+2. **L2 Consensus** verifies Ed25519 votes from enrolled members against the configured policy and quorum when the posture requires multi-agent authorization.
+3. **L3 Notary** verifies transaction-bound human authorization for mutations when the posture requires it. Gateway workflows use WebAuthn; outbound Operator workflows use signed approval proofs.
+4. **L4 Warden** reserves the nonce, checks expiry and replay state, recomputes the transaction hash, validates state and payload, reruns Doctrine, and verifies posture-required L2 and L3 evidence.
+5. **L5 Actuator** persists signed pre-execution evidence, appends a commitment when the SQL commitment ledger is available, rehydrates explicitly registered protected values at the execution site, mints a transaction-bound capability, dispatches the handler, dissolves the capability, and persists the signed final outcome.
 
-g8e's admission pipeline inverts the cost structure the same way it inverts custody. The pipeline is heterogeneous by construction: small language models (2–4B effective parameters, self-hosted, g8e-conformant) handle the narrow, structured decisions — triage classification, intent interrogation, and the L2 consensus votes — while frontier models are reserved for the two roles where generalist reasoning is load-bearing: planning and risk audit. This is the architecture NVIDIA's research arm now argues is the correct default for agentic systems generally — SLM-first, LLM-on-demand — on the observation that serving a ~7B model is 10–30× cheaper in latency, energy, and FLOPs than a 70–175B model on narrow, repetitive tasks ([Belcak et al., arXiv:2506.02153](https://arxiv.org/pdf/2506.02153)). A structured admission vote over a scrubbed, tokenized envelope is precisely such a task.
+The ordering reduces unnecessary human interruption: deterministic and machine-checkable gates run before a required human ceremony. It also separates verification from side effects. L4 produces a verified transaction; L5 executes only that typed result. The [governance architecture](../architecture/governance.md) is the canonical source for posture semantics and receipt flow.
 
-### Where the Tokens Go
+### 5.4 Local state, minimized disclosure, and rehydration
 
-The modeled token budget below reflects a moderate-complexity mutation clearing the full pipeline. These are planning estimates, not gateway telemetry; envelope sizes vary by domain and doctrine configuration, and the model should be re-run against measured means for any specific deployment.
+For outbound Operator execution, authoritative host state and local audit evidence remain at the managed boundary. Governed read and tool outputs pass through bounded scrubbing paths before return. Explicitly registered sensitive values can be replaced with reversible placeholders and rehydrated at L5, where the target data and keys already reside.
 
-| Pipeline stage | Inference calls | Input tokens | Output tokens | Model class |
-| --- | --- | --- | --- | --- |
-| Triage classification | 1 | 1,500 | 50 | SLM (~2B) |
-| Intent interrogation | 1 | 1,000 | 200 | SLM (~2B) |
-| Planning (Sage) | 1 | 8,000 | 1,500 | Frontier LLM |
-| L2 consensus (5 agents × 2 rounds) | 10 | 30,000 | 3,000 | SLM (~4B) |
-| Risk audit (Auditor) | 1 | 5,000 | 800 | Frontier LLM |
-| L3 Notary / L4 Warden / L5 Actuator | 0 | 0 | 0 | Human / deterministic |
-| **Total** | **14** | **45,500** | **5,550** | |
+This mechanism supports a “commitments and projections, not custody by default” deployment pattern. It does not guarantee that every application prompt is tokenized, that every sensitive value is detected, or that a cloud model receives no meaningful information. Those are measurable properties of a specific integration and workload. g8e's compliance evidence model accordingly defines separate assertions for sensitive-data detection, model-boundary leakage, and local rehydration rather than collapsing them into a single “zero leakage” claim.
 
-The distribution is the point. The consensus layer — the part of the pipeline that looks expensive on an architecture diagram — accounts for roughly 70% of input tokens and 10 of the 14 inference calls, and it runs entirely on the cheapest compute in the system. The frontier spend is confined to two calls totaling ~13K input / ~2.3K output tokens. Governance is verification-heavy and reasoning-light, and the topology prices it accordingly.
+### 5.5 Transaction-bound human authorization
 
-### Cost per Governed Action
+L3 binds human authorization to the transaction hash instead of treating login as approval for all later actions. In Gateway workflows, the WebAuthn assertion signs authenticator data and a hash of client data containing the server-supplied challenge [12]. g8e uses the transaction identity in that challenge and verifies the returned assertion against the pending transaction. Outbound Operator workflows verify a signed approval proof associated with the suspended transaction.
 
-Reference API rates, July 2026 (published list prices, per million input/output tokens): Claude Opus 4.8 $5/$25, Claude Sonnet 5 $3/$15, Gemini 3.1 Pro $2/$12, Gemini 3.5 Flash $1.50/$9. Self-hosted SLM cost on a single 24 GB consumer GPU is dominated by hardware amortization, not energy — marginal electricity for a 2–4B-class model runs on the order of $0.001 per million tokens, with fully amortized cost near $0.10 per million tokens at moderate utilization, and lower with batching.
+This construction provides cryptographic transaction binding within the g8e protocol. Plain WebAuthn does not, by itself, guarantee that an authenticator displayed the complete transaction or that the person understood it. Interface design, approval text, origin security, and organizational procedure remain part of the human authorization system. The [authentication architecture](../architecture/auth.md) defines the implemented ceremonies.
 
-| Configuration | Frontier tokens (in/out) | Cost / action | Cost / 10K actions·mo |
+### 5.6 Receipts, commitments, and accountable memory
+
+L5 signs and persists an `EXECUTING` receipt before dispatch and a final receipt after the handler returns. The final record binds the result and governance evidence; a persistence attestation can bind the receipt signature to durable storage. When configured, the commitment ledger adds hash-chained attestations, and governed file operations retain file evidence.
+
+These records serve two related purposes. Operationally, they support diagnosis, audit, and result verification. Epistemically, they provide a more defensible memory substrate than unverified conversational summaries: future reasoning can distinguish proposed, rejected, executing, completed, and failed work by reference to signed records. In that limited sense, memory is sovereign—it remains controlled and verifiable at the boundary that owns the affected state. This phrase describes custody and provenance, not infallibility. A valid receipt can faithfully record a bad but authorized outcome, and a ledger cannot observe actions taken outside its path.
+
+## 6. Evidence and Claim Discipline
+
+### 6.1 External evidence motivating the architecture
+
+The literature supports the need for an execution boundary, but it does not validate g8e itself.
+
+| Source | Reported result | Relevance | Limitation |
 | --- | --- | --- | --- |
-| A. All-frontier pipeline (Opus 4.8 everywhere) | 45.5K / 5.55K | $0.366 | $3,660 |
-| B. g8e topology — Sage + Auditor on Opus 4.8 | 13K / 2.3K | $0.126 | $1,260 |
-| B′. g8e topology — Sage + Auditor on Gemini 3.1 Pro | 13K / 2.3K | $0.054 | $540 |
-| C. Roadmap — Auditor on SLM + vector retrieval; Sage only frontier | 8K / 1.5K | $0.035 | $350 |
-| D. Fully local (4B-class planner, degraded reasoning) | 0 / 0 | ~$0.005 | ~$50 |
+| InjecAgent [1] | 1,054 cases, 30 agent configurations, and 24% attack success for ReAct-prompted GPT-4 in the reported base setting | Untrusted tool content can redirect an agent toward direct harm or data exfiltration | Benchmark result for specified agents, attacks, and tools; not a universal incident rate |
+| AgentDojo [2] | 97 realistic tasks and 629 security test cases in stateful tool environments | Utility and security must be evaluated together against environment state | The benchmark does not test g8e's protocol or deployed boundary |
+| Agent Security Bench [3] | 10 scenarios, more than 400 tools, 13 backbones, and a highest average attack success rate of 84.30% among tested attacks | Vulnerabilities span prompts, tools, planning, and memory; no single prompt filter covers the system | The maximum is benchmark- and attack-specific, not an average across deployed agents |
+| NIST AI 600-1 [4] | Identifies prompt injection, data privacy, information security, and human–AI configuration as generative-AI risk categories | Risk management applies across the system lifecycle | Guidance, not an empirical product evaluation |
+| International AI Safety Report 2026 [5] | Synthesizes evidence that agent autonomy can make intervention before harm more difficult | Consequential actions require controls outside model behavior | Broad scientific synthesis; it does not prescribe or assess this architecture |
 
-```mermaid
-xychart-beta
-    title "Cost per governed action (USD, modeled)"
-    x-axis ["A: All-frontier", "B: g8e (Opus)", "B': g8e (Gemini Pro)", "C: Roadmap", "D: Fully local"]
-    y-axis "USD per action" 0 --> 0.40
-    bar [0.366, 0.126, 0.054, 0.035, 0.005]
-```
+### 6.2 Published g8e evidence
 
-Three observations fall out of the table.
+The repository publishes bounded evidence rather than treating implementation claims as measured outcomes:
 
-First, the local ensemble's share of the bill in configurations B and C is approximately $0.004 per action — about 3% of the total. The entire five-agent, two-round consensus mechanism, plus triage and interrogation, costs less per action than a single frontier API call's tool-use overhead. The multi-agent cost multiplier that the debate literature measures at 2.1×–3.4× collapses to noise when the quorum runs on hardware whose marginal cost rounds to zero.
+- A clean v2.1.7 acceptance run used a fresh, network-disabled, read-only Linux container with all capabilities dropped and `no-new-privileges`. The candidate reproduced a signed compliance bundle and passed 10 verification checks. Four separate mutations—to protected ledger source, protected build/configuration source, rendered Markdown, and the manifest signature—each failed closed. This demonstrates one candidate and one point-in-time assessment scope; it is not certification or recurring operating effectiveness ([acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md)).
+- The current public eval snapshot contains two complete five-task runs with all 10 terminal attempts retained. Their deterministic results are 4/5 and 3/5, or 7/10 in aggregate, on a curated instruction-following diagnostic using a declared local model cohort. The tasks produced no receipts, so the snapshot supports no mutation, governance, persistence, state, or compliance claim ([README evidence](../../README.md#current-public-eval-snapshot)).
+- The compliance evidence model defines 13 typed control assertions and 14 evidence-grade scenarios. Its current FedRAMP 20x and NIST SP 800-53 catalog classifies 131 controls: 34 mapped and 97 unsupported. Catalog coverage is not customer compliance, authorization, or external attestation ([compliance evidence](../reference/compliance-evidence.md)).
 
-Second, the frontier line item is further compressible through prompt caching. The planner's system prompt, doctrine context, and tool schemas are static across transactions; cached input bills at roughly 10% of the list rate across providers. Realistic cached operation lands configuration B near $0.08 per action and B′ near $0.04.
+This evidence is meaningful partly because it contains non-passing and unsupported results. A research program that reports only positive demonstrations cannot reveal the boundary of its claims. g8e's evidence model distinguishes documented, implemented, deterministically evaluated, demonstrated, continuously evidenced, and externally attested levels; the current pipeline does not claim to produce the last two.
 
-Third, the delta between configuration C and an ungoverned single-model agent is the honest headline number. A bare frontier agent making one planning call per action costs ~$0.030 at Gemini 3.1 Pro rates. The fully governed pipeline in configuration C costs ~$0.035. Full five-layer admission — deterministic doctrine, heterogeneous consensus, human notarization, fail-closed re-verification, and tamper-evident receipts — adds roughly $0.005 and 15% to the cost of the reasoning it governs.
+### 6.3 What the evidence does not establish
 
-### Comparables
+The published record does not establish a universal sensitive-data leakage rate, resistance to every prompt injection, broad model quality, production availability, complete regulatory compliance, operating effectiveness across an assessment period, or independent external validation. It also does not establish that an Operator host is secure when its operating-system account or external credentials are overprivileged.
 
-| System / study | Architecture | Reported economics |
-| --- | --- | --- |
-| Homogeneous multi-agent debate ([arXiv:2605.00914](https://arxiv.org/pdf/2605.00914)) | N frontier-class agents, iterative debate | 2.1×–3.4× token cost vs. single-agent self-correction; accuracy comparable or worse; sycophancy up to 95.4% at 32B scale |
-| Multi-Agent Judge ([arXiv:2511.06396](https://arxiv.org/pdf/2511.06396)) | Debate-based safety judging on 14B open-weight backbones | κ = 0.7331, within 0.026 of GPT-4o agreement, at 46% of GPT-4o's per-query cost |
-| SLM-first agentic systems ([arXiv:2506.02153](https://arxiv.org/pdf/2506.02153)) | Heterogeneous SLM/LLM routing | 10–30× cost reduction on narrow subtasks; recommended default architecture |
-| g8e admission pipeline (modeled, this paper) | 5-agent heterogeneous SLM quorum + 2 frontier roles | Consensus ≈ 3% of per-action cost; full governance overhead ≈ $0.005/action |
+These exclusions are not rhetorical caveats. They define falsifiable work. A deployment claim about leakage requires provider-boundary observations and canary-based measurement. A claim about unauthorized mutation requires adversarial attempts, verified receipts, and independent terminal-state observation. A claim about durable accountability requires signature, chain, and persistence verification under fault injection. The [proof-backed compliance model](../reference/compliance-evidence.md) defines the artifact and evidence-level distinctions used for such evaluations.
 
-The Multi-Agent Judge result is the closest published analogue to the L2 layer — heterogeneous small-model consensus rendering a verdict before a decision is committed — and it demonstrates that small-backbone quorums can match frontier single-judge agreement at half the cost even at 14B scale, on an open-ended judging task. The g8e vote is narrower still: a signed, single-round verdict over a canonical SHA-256 transaction hash and a scrubbed payload, not an iterative debate over free text. Narrower task, smaller viable model, lower cost. The heterogeneity of the quorum is also the documented mitigation for the conformity collapse that degrades homogeneous ensembles: agents with different weights do not share failure modes, which is the property that makes k-of-n voting meaningful in the first place.
+## 7. Reasoning Topology and the Economics of Governance
 
-### Latency
+Governance need not mean that every check invokes a frontier model. Doctrine evaluation, canonical hashing, signature verification, nonce reservation, state comparison, capability scoping, and receipt verification are deterministic. L2 is model-assisted only when the selected posture requires consensus. L3 is a human authorization ceremony, not an inference call. The expensive general-purpose reasoning role can therefore remain separate from the enforcement path.
 
-| Stage | Modeled latency | Notes |
-| --- | --- | --- |
-| Triage + interrogation | < 1 s | 2B-class, ~200 output tokens combined |
-| L2 consensus | 3–6 s | 5 agents concurrent, 2 sequential rounds, 100–200 tok/s per agent |
-| Planning (frontier) | 5–15 s | ~1.5K output tokens |
-| Risk audit | 3–8 s frontier; sub-second on roadmap SLM + retrieval | Retrieval replaces reasoning over the risk corpus |
-| Machine-layer total (pre-L3) | ~10–25 s | |
-| L3 human notarization | Unbounded | Dominates wall-clock for high-risk mutations by design |
+Belcak et al. argue that small language models are often more suitable for repetitive, specialized agent subtasks and that heterogeneous systems should reserve larger models for work requiring general-purpose capabilities [9]. This is a position paper rather than proof of g8e's economics, but it supports evaluating each reasoning role independently rather than assigning one frontier model to every stage.
 
-The latency budget clarifies why the consensus layer is effectively free in time as well as money. For any mutation that reaches the L3 Notary, wall-clock time is bounded by a human touching a hardware key — an interval measured in minutes or hours, not seconds. Spending 3–6 seconds of that interval on ten additional verification calls costs nothing the transaction would otherwise recover. The pipeline's expensive resource is human attention, and the machine layers exist to spend it as rarely as possible; the protocol ordering (L1 → L2 → L3) guarantees the human is never asked until every machine-checkable layer has passed.
+The consensus literature also cautions against assuming that more agents automatically produce better decisions. Bertalanič and Fortuna report that homogeneous teams of ten 7–8B models engaged in unguided three-round debate consumed 2.1–3.4 times more tokens than isolated self-correction for equal or lower accuracy, with modal adoption reaching 85.5% in their experiments [10]. By contrast, Lin et al. report gains from structured critic, defender, and judge roles on a human-annotated safety-evaluation benchmark [11]. These findings are not contradictory: they suggest that task structure, role separation, model diversity, quorum design, and communication protocol are experimental variables, not decorative complexity.
 
-The economics and the sovereignty argument are the same argument. The consensus quorum runs on the operator's hardware because that is where trust is cheapest to establish and where inference is cheapest to run. The frontier model runs in the cloud because that is where generalist reasoning is cheapest to rent — and because the scrubbing and commitment architecture makes it safe to rent. Verification is local, abundant, and nearly free. Reasoning is remote, metered, and minimized. The pipeline routes each to where its economics are best, and the result is that governing an action costs a rounding error more than performing it.
+Accordingly, g8e makes no general claim that consensus is cheaper or more accurate than a single model. Its protocol gives consensus votes authority only when they come from enrolled members and satisfy a configured policy and quorum. Whether a specific member set improves decision quality, latency, or cost must be measured for that doctrine and workload. The current public 7/10 instruction-following snapshot does not evaluate L2 consensus and cannot support such a conclusion.
 
-## Domain Applications
+## 8. Scope, Limitations, and Research Agenda
 
-The gateway-operator architecture is domain-agnostic. The same binary, the same protocol, and the same five-layer verification pipeline governs actions across industries. What changes between domains is the doctrine configuration, the target data, and the governance posture. The data owner configures these to match their regulatory and operational requirements.
+### 8.1 Governed-path scope
 
-In healthcare, the operator governs clinical AI actions on electronic health record systems. Doctrine rules enforce PHI scrubbing patterns and prior authorization workflow gates. The `ScrubbingService` replaces diagnoses, procedures, and identifiers with `{{UEI_N}}` tokens before any data crosses the boundary. The cloud model reasons over tokenized clinical data and returns treatment recommendations. The operator rehydrates tokens locally via `RehydratePayload`, executes the verified action against the EHR, and records the result in an encrypted, tamper-evident ledger. Patient data never leaves the hospital network. The cloud provider never sees PHI. The gateway never sees clinical notes.
+g8e governs operations that enter an implemented Gateway or Operator path and reach the verification and execution boundary. It does not sandbox an AI client. Client-native shell access, direct filesystem access, ungoverned APIs, other MCP servers, and compromised host accounts remain outside the receipt boundary. A secure deployment removes or separately constrains bypasses rather than assuming that the governed path is the only path.
 
-In government and defense, the operator governs actions on classified document stores and tactical sensor systems. Doctrine rules enforce classification markings, exfiltration prevention, GPS spoofing defense, and weapons safety constraints. The operator runs on tactical edge hardware with intermittent connectivity. The gateway runs in a secure cloud or on-premises. Sensor data, RF environment data, and payload manifests remain on the edge. The cloud model reasons over tokenized projections and returns targeting or cueing recommendations. The operator re-verifies all proofs locally before any actuator command is dispatched.
+### 8.2 Data minimization limits
 
-In financial services, the operator governs algorithmic trading actions. Doctrine rules enforce trade limits, dual-control triggers, and counterparty exposure constraints. The cloud model reasons over tokenized market data and position information. The operator executes verified trades locally and records every action in a tamper-evident ledger that satisfies regulatory audit requirements. Trading positions and counterparty information never leave the trading floor.
+Pattern detection and registered reversible placeholders reduce disclosure but can produce false negatives and false positives. Semantic secrets, transformed identifiers, images, embeddings, and domain-specific values require workload-specific detection and evaluation. Model-boundary telemetry must itself avoid becoming a new sensitive-data store.
 
-In critical infrastructure, the operator governs process control actions on SCADA and industrial control systems. Doctrine rules enforce safety interlocks, configuration change controls, and operational boundaries. The operator runs on the plant floor. The gateway runs in a corporate or cloud environment. Process data, operational telemetry, and facility configurations remain on the plant network. The cloud model reasons over tokenized projections and returns optimization recommendations. The operator re-verifies all proofs before any control command is dispatched to the physical system.
+### 8.3 Human authorization limits
 
-In each domain, the same architectural invariants hold: state remains local, keys are owned by the data owner, the cloud is a stateless reasoning co-processor, and every action is governed by the same five-layer verification pipeline. The platform does not need domain-specific code. It needs domain-specific doctrine, which is data, not code. The data owner writes the rules. The platform enforces them.
+A transaction-bound signature proves that a configured credential approved a bound challenge under a verified ceremony. It does not prove comprehension, voluntariness, or correct risk assessment. Approval interfaces must present intelligible action details, avoid habituation, and reserve interruption for decisions where human judgment changes the outcome.
 
-## The Inversion in Practice
+### 8.4 Endpoint and key compromise
 
-Consider a hospital that wants to use a frontier model to assist with prior authorization decisions. The model runs in the cloud. The patient records live in the hospital's EHR system. Current architectures require the hospital to send patient data to the cloud so the model can reason over it. The hospital must trust the cloud provider with PHI. The hospital must accept that the provider may persist, log, or train on that data.
+Local custody concentrates responsibility at the Operator boundary. If the host, signing keys, vault unlock path, operating-system account, or external service credentials are compromised, protocol-level verification cannot restore endpoint integrity. Hardware-backed keys, platform attestation, credential minimization, host hardening, and independent monitoring remain complementary controls.
 
-With g8e, the hospital deploys an operator on the hospital network. The operator connects outbound via mTLS to a gateway, which may also run on the hospital network or in a cloud the hospital controls. The clinical AI agent submits a prior authorization request as a `GovernanceEnvelope`. The envelope contains the tokenized clinical context: diagnoses and procedures are represented as `{{UEI_N}}` tokens, not raw text. The `ScrubbingService` replaced every PHI element before the envelope crossed the boundary. The transaction hash was computed over the tokenized payload via `GenerateMessageID`. The model in the cloud reasons over the tokenized context and returns a recommendation. The recommendation is wrapped in a governance envelope and sent to the operator.
+### 8.5 Evaluation priorities
 
-<<<<<<< Updated upstream
-The operator's `L4Warden` re-derives the transaction hash, evaluates L1 doctrine, checks the expiration and state Merkle root against the local ledger state, and verifies L2 consensus and L3 notary proofs according to the configured posture. If the posture requires human authorization, the attending physician signs a WebAuthn passkey assertion over the transaction hash. The `L5Actuator` signs and persists an initial `EXECUTING` `ActionReceipt`, appends a signed commitment to the hash-chained ledger, rehydrates the tokens to real clinical values via `RehydratePayload`, mints a JIT capability scoped to this single action, executes the prior authorization against the EHR, dissolves the capability, signs and persists the final receipt, and attaches a signed persistence attestation.
-=======
-The operator's `L4Warden` re-derives the transaction hash, evaluates L1 doctrine, checks the expiration and state Merkle root against the local git-backed ledger, and verifies L2 consensus and L3 notary proofs according to the configured posture. If the posture requires human authorization, the attending physician signs a WebAuthn passkey assertion over the transaction hash. The `L5Actuator` signs an initial `ActionReceipt` with status `EXECUTING`, rehydrates the tokens to real clinical values via `RehydratePayload`, mints a JIT capability scoped to this single action, executes the prior authorization against the EHR, dissolves the capability, signs the final `ActionReceipt`, and appends a commitment to the hash-chained ledger.
->>>>>>> Stashed changes
+The next evidence-bearing evaluations follow from the architecture's strongest claims:
 
-The cloud model never saw the patient's name, diagnosis, or treatment plan. It saw tokens. The gateway never saw the clinical data. It saw envelopes. The operator, running on the hospital network, with keys owned by the hospital, performed the rehydration and execution. The audit ledger, encrypted with the hospital's AES-256-GCM vault keys, records exactly what was done, when, and by whose authority. If the cloud provider is compromised, the attacker finds tokens they cannot resolve. If the gateway is compromised, the attacker finds envelopes they cannot execute. If the network is intercepted, the attacker finds mTLS-encrypted traffic they cannot decrypt.
+1. Measure sensitive-data detection precision and recall, model-boundary raw-secret rate, and exact local rehydration across realistic modalities and domains.
+2. Exercise unauthorized-mutation attempts through every supported ingress path and verify both canonical receipts and independently observed terminal state.
+3. Fault-inject receipt signing, pre-execution persistence, final persistence, commitment append, network interruption, replay storage, and state-root changes.
+4. Compare single-model, homogeneous-consensus, and heterogeneous-consensus configurations under fixed tasks, policies, model versions, cost accounting, and latency budgets.
+5. Reproduce evidence on independently administered infrastructure with separate trust roots and publish negative results alongside successful runs.
+6. Evaluate approval comprehension and operator workload rather than treating ceremony completion as a proxy for meaningful human control.
 
-This is the sovereignty inversion in practice. The hospital gets frontier reasoning without surrendering custody. The cloud provider is reduced to a co-processor. The data owner retains state, keys, and audit. The platform enforces this not through policy or promise, but through cryptographic construction.
+## 9. Conclusion
+
+Agentic systems require a boundary between producing an answer and exercising authority. Prompt instructions, model alignment, and application-level confirmation remain useful, but empirical attack results and current risk guidance show that they do not substitute for independent authorization, least privilege, local verification, and durable evidence.
+
+g8e's position is that the data owner retains custody of authoritative state, keys, execution, and evidence while AI systems remain replaceable reasoning components. A proposal becomes executable only as a canonical, state-bound transaction that clears the controls required by the active posture and is independently verified where the side effect occurs. Human approval, when required, binds to that transaction. Execution receives a narrow capability. Signed evidence records the attempt and outcome.
+
+The architecture is not a claim that AI becomes trustworthy. It is a method for reducing how much trust consequential execution places in AI—or in any other proposer. The practitioner idea behind “Danny as Code” survives in a precise form: gather evidence, justify one next action, work inside the owner's controls, prove what happened, and carry the work through without taking custody away from the people who bear the consequences.
+
+## References
+
+1. Qiusi Zhan, Zhixiang Liang, Zifan Ying, and Daniel Kang. “[InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents](https://doi.org/10.18653/v1/2024.findings-acl.624).” *Findings of the Association for Computational Linguistics: ACL 2024*, 2024.
+2. Edoardo Debenedetti, Jie Zhang, Mislav Balunović, Luca Beurer-Kellner, Marc Fischer, and Florian Tramèr. “[AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents](https://doi.org/10.52202/079017-2636).” *Advances in Neural Information Processing Systems 37*, Datasets and Benchmarks Track, 2024.
+3. Hanrong Zhang, Jingyuan Huang, Kai Mei, Yifei Yao, Zhenting Wang, Chenlu Zhan, Hongwei Wang, and Yongfeng Zhang. “[Agent Security Bench (ASB): Formalizing and Benchmarking Attacks and Defenses in LLM-based Agents](https://openreview.net/forum?id=V4y0CpX4hK).” *International Conference on Learning Representations*, 2025.
+4. Chloe Autio, Reva Schwartz, Jesse Dunietz, Shomik Jain, Martin Stanley, Elham Tabassi, Patrick Hall, and Kamie Roberts. “[Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile](https://doi.org/10.6028/NIST.AI.600-1).” NIST AI 600-1, 2024.
+5. Yoshua Bengio et al. “[International AI Safety Report 2026](https://internationalaisafetyreport.org/publication/international-ai-safety-report-2026).” DSIT 2026/001, 2026.
+6. National Cybersecurity Center of Excellence. “[Accelerating the Adoption of Software and Artificial Intelligence Agent Identity and Authorization](https://csrc.nist.gov/pubs/other/2026/02/05/accelerating-the-adoption-of-software-and-ai-agent/ipd).” NIST concept paper, 2026.
+7. Scott Rose, Oliver Borchert, Stu Mitchell, and Sean Connelly. “[Zero Trust Architecture](https://doi.org/10.6028/NIST.SP.800-207).” NIST Special Publication 800-207, 2020.
+8. Jerome H. Saltzer and Michael D. Schroeder. “[The Protection of Information in Computer Systems](https://doi.org/10.1109/PROC.1975.9939).” *Proceedings of the IEEE* 63, no. 9, 1975.
+9. Peter Belcak, Greg Heinrich, Shizhe Diao, Yonggan Fu, Xin Dong, Saurav Muralidharan, Yingyan Celine Lin, and Pavlo Molchanov. “[Small Language Models are the Future of Agentic AI](https://doi.org/10.48550/arXiv.2506.02153).” arXiv, 2025.
+10. Blaž Bertalanič and Carolina Fortuna. “[The Cost of Consensus: Isolated Self-Correction Prevails Over Unguided Homogeneous Multi-Agent Debate](https://doi.org/10.48550/arXiv.2605.00914).” arXiv, 2026.
+11. Dachuan Lin, Guobin Shen, Zihao Yang, Tianrong Liu, Dongcheng Zhao, and Yi Zeng. “[Efficient LLM Safety Evaluation through Multi-Agent Debate](https://doi.org/10.48550/arXiv.2511.06396).” arXiv, 2025, revised 2026.
+12. World Wide Web Consortium. “[Web Authentication: An API for Accessing Public Key Credentials, Level 3](https://www.w3.org/TR/webauthn-3/).” W3C Recommendation, 2026.
 
 ## Related Documentation
 
-- [About g8e](./about.md): Platform overview and architectural differentiators.
-- [Gateway Architecture](../architecture/gateway.md): Gateway role, capabilities, and port topology.
-- [Operator Architecture](../architecture/operator.md): Operator role, native tools, and local audit.
-- [Authentication](../architecture/auth.md): mTLS, SPIFFE, PKI, and the five-layer verification sequence.
-- [Encryption](../architecture/encryption.md): Vault architecture, key hierarchy, and cryptographic primitives.
-- [Storage Architecture](../architecture/storage.md): Audit store, ledger, execution vault, and data flow.
-- [Network Architecture](../architecture/network.md): PKI, mTLS, enrollment, and outbound-only connectivity.
-- [Governance](../architecture/governance.md): Five-layer pipeline, posture configurations, and transaction flow.
-- [Consensus](../architecture/consensus.md): L2 multi-agent consensus deliberation and vote verification.
-- [AI Agents](../architecture/agents.md): Untrusted AI client surface, MCP/A2A boundary, and five-layer interlock.
-- [Protocol Specification](../../protocol/docs/spec.md): Wire contract, schemas, and verification rules.
+- [About g8e](./about.md): Practitioner origin, platform scope, and current reference implementation.
+- [Platform Overview](../architecture/overview.md): Components, trust boundaries, and end-to-end transaction flow.
+- [Governance](../architecture/governance.md): Five-layer verification, posture semantics, and receipt flow.
+- [AI Agents and the g8e Governance Boundary](../architecture/agents.md): Governed ingress paths, guarantees, and bypass limits.
+- [Authentication and Authorization](../architecture/auth.md): mTLS, workload identity, WebAuthn, and outbound approval proofs.
+- [Encryption Architecture](../architecture/encryption.md): Vault, keystore, scrubbing, rehydration, and key-custody limits.
+- [Storage Architecture](../architecture/storage.md): Audit, commitment, execution-vault, and file-evidence ownership.
+- [Consensus Architecture](../architecture/consensus.md): Enrollment, deliberation, signatures, policy, and quorum.
+- [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md): Evidence levels, typed assertions, verification, and claim boundaries.
+- [Protocol Specification](../../protocol/docs/spec.md): Canonical messages, hashes, proofs, and wire rules.

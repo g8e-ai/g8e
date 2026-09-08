@@ -1,0 +1,5 @@
+Contact: mailto:founders@g8e.ai
+Expires: 2027-05-07T19:47:00.000Z
+Preferred-Languages: en
+Canonical: https://g8e.ai/.well-known/security.txt
+Policy: https://github.com/g8e-ai/g8e/blob/main/SECURITY.md

@@ -14,7 +14,7 @@ Version: v1.7.6
 
 A Cloudflare Tunnel securely exposes the g8e Gateway's HTTPS console to the internet without opening firewall ports or managing public DNS records. The tunnel runs `cloudflared` as a separate foreground process on the same host as the gateway. Cloudflare terminates TLS at the edge; the tunnel forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
 
-For integrating a [Lovable](https://lovable.dev) frontend with the g8e Gateway, see the [Lovable Frontend Integration guide](./lovable.md).
+For a Lovable app running in a browser on the same computer as the Gateway, see [Connect a Lovable App](./lovable.md) before configuring a tunnel.
 
 ### Architecture
 
@@ -248,7 +248,7 @@ curl -s https://console.g8e.ai/api/v1/health \
 
 ## Lovable Frontend Integration
 
-When configuring the gateway for a Lovable frontend, add the Lovable app's origin to `--cors-origin` (or `G8E_ALLOWED_ORIGINS`) in addition to the tunnel hostname. The `http2Origin: true` setting in the tunnel config ensures SSE streaming works through the tunnel. For full frontend enrollment, WebAuthn flows, and API reference, see the [Lovable Frontend Integration guide](./lovable.md).
+When configuring the Gateway for a Lovable frontend, use the Lovable app's exact origin for `--cors-origin` and `--passkey-rp-origin`, use its hostname for `--passkey-rp-id`, and use the tunnel URL for `--public-base-url`. The `http2Origin: true` setting supports SSE streaming through the tunnel. A tunnel is optional for a Lovable app running in a browser on the same computer as the Gateway; see [Connect a Lovable App](./lovable.md). For WebAuthn flows and the API reference, see [Build a g8e-Compatible Frontend](./build_frontend.md).
 
 ---
 
@@ -311,5 +311,5 @@ sudo dpkg -i /tmp/cloudflared.deb
 
 ## See Also
 
-- **[Lovable Frontend Integration](./lovable.md)**: Build a g8e Governance Console UI with Lovable.
+- **[Connect a Lovable App](./lovable.md)**: Connect a browser-hosted Lovable app directly to a local Gateway.
 - **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference for building g8e-compatible clients and services.

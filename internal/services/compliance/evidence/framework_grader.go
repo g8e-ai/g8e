@@ -70,13 +70,21 @@ func validateFrameworkGradingRequest(request FrameworkGradingRequest) error {
 	if err := catalog.ValidateAssertionCatalog(request.Assertions); err != nil {
 		return fmt.Errorf("framework grading assertions: %w", err)
 	}
+	assessmentIDs := make(map[string]struct{}, len(request.AssertionAssessments))
+	assertionRefs := make(map[string]struct{}, len(request.AssertionAssessments))
 	for _, assessment := range request.AssertionAssessments {
-		if assessment == nil || assessment.AssertionRef == nil {
-			return fmt.Errorf("%w: assertion assessment is incomplete", constants.ErrInvalidEvidenceGraph)
+		if err := catalog.ValidateAssertionAssessment(assessment, request.ScopeID, request.Assertions); err != nil {
+			return fmt.Errorf("framework grading assertion assessment: %w", err)
 		}
-		if assessment.ScopeId != request.ScopeID {
-			return fmt.Errorf("%w: assertion assessment %s belongs to scope %s", constants.ErrEvidenceScopeMismatch, assessment.AssessmentId, assessment.ScopeId)
+		if _, exists := assessmentIDs[assessment.GetAssessmentId()]; exists {
+			return fmt.Errorf("%w: duplicate assertion assessment %s", constants.ErrEvidenceDuplicateID, assessment.GetAssessmentId())
 		}
+		assessmentIDs[assessment.GetAssessmentId()] = struct{}{}
+		assertionRef := versionedReferenceKey(assessment.GetAssertionRef().GetId(), assessment.GetAssertionRef().GetVersion())
+		if _, exists := assertionRefs[assertionRef]; exists {
+			return fmt.Errorf("%w: duplicate assertion assessment reference %s", constants.ErrEvidenceDuplicateID, assertionRef)
+		}
+		assertionRefs[assertionRef] = struct{}{}
 	}
 	return nil
 }

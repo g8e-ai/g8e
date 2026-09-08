@@ -2,88 +2,134 @@
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) interacts with Large Language Models through a provider-agnostic abstraction layer and factory pattern. The LLM subsystem decouples agent reasoning, consensus evaluation, and tool execution from vendor-specific SDKs and APIs. All provider adapters implement a unified interface organized around three functional capacity tiers (`primary`, `assistant`, `lite`), normalize inputs and outputs through canonical data models (`app.llm.llm_types`), translate reasoning intensity through standardized thinking translators (`app.llm.thinking`), and map vendor exceptions to typed capability errors (`app.llm.providers._capability`).
+The g8e Agentic Ensemble (`g8ee`) uses a provider-neutral interface for model requests. The interface normalizes messages, streamed chunks, tool calls, structured responses, token usage, finish reasons, and provider reasoning into common application types. The provider factory selects a configured adapter for each model role and reuses its client across calls.
+
+The primary implementation entry points are `ensemble/app/llm/provider.py`, `ensemble/app/llm/factory.py`, and `ensemble/app/models/model_configs.py`.
+
+## Configure Model Roles
+
+g8ee has three independently configurable model roles:
+
+| Role | Use |
+| --- | --- |
+| `primary` | Complex chat turns, tool-capable agent loops, and primary reasoning work |
+| `assistant` | The model selected for simple chat turns |
+| `lite` | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+
+Configure a provider and model for every role that uses a distinct backend. If the assistant role has no provider, provider resolution falls back to primary. If the lite role has no provider, resolution falls back to assistant and then primary. Model resolution follows the same direction, with assistant falling back to primary and lite falling back to assistant and then primary.
+
+The main chat agent always uses the primary generation call shape because both simple and complex turns can enter the tool loop. Complex turns select the primary model and provider. Simple turns select the assistant model, while provider lookup follows the lite role, so the configured lite provider must accept the assistant model when those roles use different backends.
+
+### Environment bootstrap
+
+Environment variables provide the lowest-priority bootstrap values. Stored settings and request-specific role values replace them when present.
+
+Each role accepts `PROVIDER`, `MODEL`, `ENDPOINT`, and `API_KEY` variables under these prefixes:
+
+- `G8E_LLM_PRIMARY_*`
+- `G8E_LLM_ASSISTANT_*`
+- `G8E_LLM_LITE_*`
+
+Provider-level credentials and endpoints are also available through:
+
+- OpenAI: `G8E_LLM_OPENAI_API_KEY`, `G8E_LLM_OPENAI_ENDPOINT`
+- Anthropic: `G8E_LLM_ANTHROPIC_API_KEY`, `G8E_LLM_ANTHROPIC_ENDPOINT`
+- Gemini: `G8E_LLM_GEMINI_API_KEY`
+- Ollama: `G8E_LLM_OLLAMA_API_KEY`, `G8E_LLM_OLLAMA_ENDPOINT`
+- llama.cpp: `G8E_LLM_LLAMACPP_API_KEY`, `G8E_LLM_LLAMACPP_ENDPOINT`
+
+Role-specific credentials and endpoints take precedence over provider-level values. A model name remains required; the settings layer does not automatically select a provider's default model.
+
+### Generation and execution controls
+
+The LLM settings model also carries these cross-provider controls:
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `llm_max_tokens` | Unset | Overrides the registry output limit or the 20,000-token system fallback when set |
+| `llm_command_gen_enabled` | `true` | Enables Tribunal command generation; disabling it makes command requests fail closed |
+| `llm_command_gen_auditor` | `true` | Enables the Auditor stage after Tribunal candidate generation |
+| `llm_command_gen_passes` | `5` | Sets the number of Tribunal generation passes; runtime resolution enforces at least one pass |
+| `llm_parallel_tool_calls` | `true` | Executes multiple tool calls from one model turn concurrently; this controls g8ee execution rather than a provider request parameter |
 
 ## Supported Providers
 
-g8ee registers six concrete LLM providers in the central `LLMProvider` enum (`app.constants.config.LLMProvider`):
+| Provider | Configuration requirements | Adapter behavior |
+| --- | --- | --- |
+| Gemini (`gemini`) | API key; the Google SDK manages the endpoint | Uses `google-genai`; supports primary tools, Google Search grounding, structured assistant and lite output, streamed and non-streamed calls, thinking levels, usage metadata, and opaque thought-signature retention |
+| Anthropic (`anthropic`) | API key and endpoint; default endpoint is `https://api.anthropic.com` | Uses the Anthropic Messages API; supports primary tools, extended thinking, streamed and non-streamed calls, role alternation, and usage metadata; the adapter does not apply `response_format` for assistant or lite calls |
+| OpenAI (`openai`) | API key and endpoint; default endpoint is `https://api.openai.com/v1` | Uses Chat Completions; supports primary function calling, registered-model reasoning effort, JSON Schema response formats for assistant and lite calls, streaming, and usage metadata |
+| Ollama (`ollama`) | Endpoint; API key is optional; default endpoint is `http://localhost:11434` | Uses Ollama's native chat API; supports primary tools, per-model `think` toggles, JSON Schema formats for assistant and lite calls, streaming, and usage metadata; endpoints containing `/v1` are rejected |
+| llama.cpp (`llamacpp`) | Endpoint; API key is optional; default endpoint is `http://localhost:11444` | Uses the OpenAI-compatible adapter and appends `/v1` when absent; actual tool, schema, and streaming support depends on the server and loaded model |
+| Fake (`fake`) | No credentials or endpoint | Runs in process without network access; emits deterministic text, structured lite responses, and selected tool calls for CI, air-gapped tests, and scenarios |
 
-- **Gemini (`gemini`)** — Powered by `GeminiProvider` (`app.llm.providers.gemini`) wrapping the `google-genai` SDK. Supports native thinking levels (`minimal`, `low`, `medium`, `high`), cryptographic `ThoughtSignature` verification and retention across streaming parts and tool calls, structured JSON schema outputs via `ResponseFormat`, parallel tool use with `ToolGroup`, and multi-candidate generation responses.
-- **Anthropic (`anthropic`)** — Powered by `AnthropicProvider` (`app.llm.providers.anthropic`) wrapping the official `anthropic` SDK for Claude models (`claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`). Supports extended thinking token budgets (`thinking.budget_tokens`), automatic token headroom reservation (`thinking_output_reserve`), strict user/assistant message role alternation, tool use (`tool_use` and `tool_result` content blocks), and streaming chunks.
-- **OpenAI (`openai`)** — Powered by `OpenAIProvider` (`app.llm.providers.open_ai`) wrapping the `AsyncOpenAI` client for GPT models (`gpt-5.4-mini`, `gpt-4o`). Supports reasoning effort configuration (`reasoning.effort`), function calling (`tool_calls`), JSON schema structured outputs (`response_format`), and streaming completions.
-- **Ollama (`ollama`)** — Powered by `OllamaProvider` (`app.llm.providers.ollama`) wrapping the `ollama.AsyncClient` for self-hosted open-weight models (Qwen 3.5, GLM 5.1, Gemma 4, Nemotron 3, Llama 3.2). Supports per-model reasoning dialects (`ThinkingDialect.NATIVE_TOGGLE` via `think=True/False` vs `ThinkingDialect.NONE`), internal network mTLS / TLS verification using the platform trust bundle, function calling, and structured JSON outputs.
-- **llama.cpp (`llamacpp`)** — Powered by `LlamaCppProvider` (`app.llm.providers.llama_cpp`), which inherits directly from `OpenAIProvider` to communicate with local OpenAI-compatible HTTP servers without requiring API keys.
-- **Fake Provider (`fake`)** — Powered by `FakeProvider` (`app.llm.providers.fake`), a zero-dependency, in-process deterministic provider for CI, airgapped builds, and automated scenario evaluations (`LLMProvider.FAKE`). Pattern-matches user message instructions to emit deterministic tool calls (`file_create_on_operator`, `file_write_on_operator`) or low-risk structured outputs without making network calls.
+Provider validation runs for every configured role before chat starts. A configured model without a provider fails validation. OpenAI and Anthropic require both credentials and endpoints, Gemini requires credentials, Ollama and llama.cpp require endpoints, and the fake provider has no external requirements.
 
-## Capacity Tiers and Provider Interface
+The LLM adapters rely on their SDK transports for TLS verification. They do not attach the g8ee workload mTLS certificate or explicitly pass the platform trust bundle to model-provider connections. Custom HTTPS endpoints therefore require trust configuration that the selected SDK and its process environment recognize.
 
-All LLM provider implementations inherit from the abstract base class `LLMProvider` (`app.llm.provider.LLMProvider`). The interface defines streaming and non-streaming generation methods corresponding to the three operational tiers:
+## Generation Call Shapes
 
-- **Primary Tier (`PrimaryLLMSettings`)** — `generate_content_stream_primary` and `generate_content_primary`. Used by primary reasoning agents (Sage, Auditor) for multi-step investigation planning, evidence synthesis, tool execution, and thinking. Settings configure `system_instructions`, `tools`, `thinking_config`, `tool_config`, sampling controls (`top_p_nucleus_sampling`, `top_k_filtering`), and `max_output_tokens`.
-- **Assistant Tier (`AssistantLLMSettings`)** — `generate_content_stream_assistant` and `generate_content_assistant`. Used by fast-path responders and analytical support agents (Dash, Codex) for direct answers, memory building, and title generation. Settings support `system_instructions`, `response_format` for structured JSON schemas, and sampling controls without tool definitions.
-- **Lite Tier (`LiteLLMSettings`)** — `generate_content_stream_lite` and `generate_content_lite`. Used by high-throughput, low-latency agents (Triage, Warden risk analyzers, Scribe, Tribunal members) for fast classification, command generation, and structured risk analysis. Settings support `system_instructions`, strict `response_format` JSON schema enforcement, and sampling controls.
-- **Resource Lifecycle Management** — Providers implement `validate_config(api_key, endpoint)` for static configuration validation, `close()` and `force_close()` for HTTP client teardown, and async context management (`__aenter__` and `__aexit__`).
+All adapters implement streaming and non-streaming methods for the three call shapes:
 
-## Provider Factory and Caching
+- **Primary** supports system instructions, tools, tool-calling policy, thinking configuration, sampling controls, stop sequences, response modalities, and output limits.
+- **Assistant** supports system instructions, optional structured response format, sampling controls, stop sequences, and output limits. It does not accept tools or thinking configuration.
+- **Lite** has the same provider-facing fields as assistant and serves short, high-throughput, or structured tasks. It does not accept tools or thinking configuration.
 
-The factory entry point `get_llm_provider(settings, is_assistant=False, is_lite=False)` (`app.llm.factory`) instantiates and caches provider singletons based on the provided `LLMSettings` (`app.models.settings.LLMSettings`):
+OpenAI-compatible primary calls with tools use a non-streaming provider request and emit the completed response through the streaming interface. This avoids endpoints that stall when tools and streaming are combined.
 
-- **Role Resolution** — Evaluates the requested role (`primary`, `assistant`, or `lite`) via `settings.resolve(role)`, returning the configured provider type, API key, endpoint URL, and model name. Each tier can use a different provider and model.
-- **Singleton Caching** — Instantiated providers are cached in `_provider_cache` using a compound key derived from provider type, endpoint, and API key (`provider|endpoint|api_key`). Singletons are reused across agent turns to avoid repeated client initialization and TLS connection overhead.
-- **Cache Teardown** — Calling `clear_provider_cache()` during application shutdown or test cleanup forces the closure of all underlying HTTP sessions and resets the cache.
-- **Network and TLS Verification Strategy** — Gemini uses public Google APIs with standard trust bundles. Anthropic and OpenAI public cloud endpoints use default trust bundles, while custom proxy endpoints can use platform CA certificates. Ollama and llama.cpp endpoints on internal networks or Docker bridges utilize the platform trust bundle (`g8eg-ca-bundle.pem`) for mTLS and internal TLS verification.
+## Model Capability Registry
 
-## Model Configuration Registry
+The model registry supplies generation defaults and capability decisions for known model names. It records thinking levels, thinking budgets, output reserve, tool and structured-output support, context limits, output limits, stop sequences, and sampling defaults. Services use these profiles to decide whether to expose tools or request provider-enforced structured output.
 
-Model capabilities and operational limits are centralized in `app.models.model_configs` via frozen `LLModelConfig` instances registered in `MODEL_REGISTRY`:
+The registry contains these unique model names:
 
-- **Model Capabilities** — Each `LLModelConfig` defines context window bounds (`context_window_input`, `context_window_output`), output token limits (`max_output_tokens`), tool support (`supports_tools`), structured output support (`supports_structured_output`), stop sequences (`stop_sequences`), and default sampling parameters (`top_k`, `top_p`).
-- **Thinking Capabilities** — Encoded via `supported_thinking_levels` (`list[ThinkingLevel]`). An empty list indicates a non-reasoning model where thinking parameters are omitted from outbound requests. Opt-in reasoning models include `ThinkingLevel.OFF` alongside intensity levels (`LOW`, `MEDIUM`, `HIGH`). Always-on reasoning models omit `OFF`, requiring an explicit intensity level.
-- **Thinking Budgets and Reserves** — `thinking_budgets` specifies per-level integer token budgets for providers requiring exact token allocations (Anthropic). `thinking_output_reserve` specifies minimum visible response headroom (e.g., 4,096 tokens for Sonnet/Haiku, 8,192 tokens for Opus) added to `max_tokens` when extended thinking is active to prevent truncation of final answers.
-- **Scoped Test Overrides** — `MODEL_REGISTRY.override(name, **updates)` provides a context manager to install temporary capability overrides during unit tests and capability probes without mutating singleton state.
+| Provider family | Registered models | Thinking profile | Structured-output profile |
+| --- | --- | --- | --- |
+| Gemini | `gemini-3.1-pro-preview`, `gemini-3.1-pro-preview-customtools`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview` | Off plus low, medium, and high; flash lite also supports minimal | Enabled |
+| Anthropic | `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` | Opus and Sonnet support off, low, medium, and high; Haiku supports off, minimal, and low | Not declared |
+| OpenAI | `gpt-5.4`, `gpt-5.4-mini` | `gpt-5.4` has no declared thinking support; mini supports off, minimal, and low | Enabled |
+| Ollama | `gemma4:e4b`, `gemma4:e2b`, `llama3.2:3b`, `qwen3.5:2b` | All except Llama use an off/high native toggle; Llama has no thinking mode | Enabled for Gemma4 E4B and E2B |
 
-## Thinking and Reasoning Translation
+Adapters can send other model names to a backend, but unknown names use the shared unknown profile. That profile disables thinking and provider-enforced structured-output decisions while leaving tools enabled. Add a registered profile before relying on reasoning or structured output from a custom model.
 
-Application services request reasoning effort using the canonical `ThinkingLevel` enum (`app.constants.config.ThinkingLevel`): `OFF`, `MINIMAL`, `LOW`, `MEDIUM`, `HIGH`. Pure translator functions in `app.llm.thinking` map the requested level and `LLModelConfig` to provider-native representations after applying `clamp_thinking_level`:
+### Thinking translation
 
-- **Gemini (`translate_for_gemini`)** — Emits `GeminiThinkingTranslation` with `thinking_level` string enum (`minimal`, `low`, `medium`, `high`) and `include_thoughts` boolean. Inbound cryptographic thought signatures (`ThoughtSignature`) are preserved in base64 format and re-attached to outbound tool calls to satisfy Gemini 3+ protocol requirements.
-- **Anthropic (`translate_for_anthropic`)** — Emits `AnthropicThinkingTranslation` with `thinking={"type": "enabled", "budget_tokens": N}` and strips `top_k` and `top_p` sampling parameters when enabled. When disabled (`ThinkingLevel.OFF`), thinking parameters are omitted.
-- **OpenAI (`translate_for_openai`)** — Emits `OpenAIThinkingTranslation` with `reasoning.effort` set to the level string (`minimal`, `low`, `medium`, `high`). Omits the `reasoning` parameter when thinking is disabled.
-- **Ollama (`translate_for_ollama`)** — Evaluates `model_config.thinking_dialect`. Models declaring `ThinkingDialect.NATIVE_TOGGLE` pass `think=True` or `think=False` to `AsyncClient.chat()`. Models declaring `ThinkingDialect.NONE` omit thinking arguments entirely.
+Primary services request one of `off`, `minimal`, `low`, `medium`, or `high`. The registry clamps the request to the highest supported level at or below the requested intensity. A model with no thinking profile resolves to off; a model that cannot turn thinking off resolves an off request to its lowest supported intensity.
 
-## Model Capability Error Translation
+Providers translate the resolved level as follows:
 
-Provider adapters intercept vendor-specific SDK runtime errors at catch sites and pass them to `translate_capability_error` (`app.llm.providers._capability`). When an error message matches known capability-rejection fingerprints:
+- Gemini sends `thinking_level` and `include_thoughts`, or omits thinking configuration when off.
+- Anthropic sends an extended-thinking token budget. It removes sampling parameters while thinking is active and increases `max_tokens` when necessary to preserve visible-output headroom.
+- OpenAI sends `reasoning.effort`, or omits reasoning when off.
+- Ollama sends `think=true` or `think=false` for native-toggle models and omits the parameter for models without a thinking dialect.
 
-- **Thinking Incompatibility** — Rejections mentioning thinking configuration or unsupported reasoning parameters raise a typed `ThinkingNotSupportedError` (`app.errors.ThinkingNotSupportedError`).
-- **Tool Incompatibility** — Rejections mentioning unsupported function calling or tool use raise a typed `ToolsNotSupportedError` (`app.errors.ToolsNotSupportedError`).
-- **Typed Error Handling** — Downstream services catch typed capability exceptions with `isinstance` rather than parsing unstructured error strings, allowing automated fallback and escalation.
+Gemini and Anthropic may return opaque provider signatures with thinking content. g8ee preserves these tokens across message history and tool-result turns when the provider protocol requires them. g8ee does not cryptographically verify provider thought signatures. See [Thinking](thinking.md) for the reasoning lifecycle and signature handling rules.
 
-## Structured Output and Function Calling
+## Structured Output and Tools
 
-The LLM subsystem provides end-to-end typing for structured extraction and operator tool calling:
+Canonical tool declarations and JSON Schemas are converted at the provider boundary. Primary calls can expose tools when the model profile permits them. Assistant and lite calls can carry a response format, but enforcement depends on the adapter: Gemini, OpenAI-compatible providers, and Ollama pass a schema to the backend; Anthropic currently relies on prompt instructions because its adapter ignores the response format.
 
-- **Tool Group and Declarations** — Canonical `ToolGroup` and `ToolDeclaration` models define available tools and parameter schemas. Provider adapters convert these declarations to vendor formats (`_tools_to_openai`, `_tools_to_ollama`, Anthropic `tools` dictionaries, and Gemini function declarations).
-- **JSON Schema Generation** — `schema_from_model` (`app.llm.llm_schema`) converts Pydantic `G8eBaseModel` classes into canonical JSON schemas for structured extraction.
-- **Response Format Enforcement** — `ResponseFormat` with `ResponseJsonSchema` enforces structured output formatting for Warden risk assessments (`FileOperationRiskAnalysis`, `CommandRiskAnalysis`, `ErrorAnalysisResult`), Triage classifications (`TriageResult`), and evaluation scoring (`JudgeEvaluation`).
+Provider capability failures are translated only at catch sites that know the request asked for thinking or tools. Recognized rejection messages become typed thinking or tool capability errors; unrelated provider failures retain the original exception. This translation is concentrated on primary tool-capable calls rather than every assistant and lite request.
 
-## Provider Evidence Contract
+## Retries, Caching, and Shutdown
 
-Every Anthropic, Gemini, Ollama, OpenAI-compatible, and fake-provider model call exposes normalized evidence at the provider boundary. A record identifies the configured provider and exact model, captures monotonic start and end times in one clock domain, records retry count and terminal finish state, and hashes the canonical model-boundary input and output. Token usage is split into the provider values available for that call, including input, output, reasoning, cached, and total counts where supported.
+Gemini retries initial timeouts, HTTP 429 responses, and HTTP 503 responses for up to four attempts with exponential backoff. The OpenAI and Anthropic clients disable SDK retries, and the Ollama adapter does not add provider-level retries. Agent and evaluation services may apply their own retries around an adapter call.
 
-Adapters do not infer or fabricate unavailable usage. A provider that omits a count leaves it unavailable, and downstream reconciliation reports the missing field separately from measured usage. Retries preserve their attempt metadata rather than collapsing failed calls into a synthetic successful duration. Raw prompts and outputs are restricted evidence; analytical telemetry carries hashes and references instead of secret-bearing content.
+The factory caches provider clients by connection configuration, not by model. Gemini keys include provider and API key; OpenAI and Anthropic keys include provider, endpoint, and API key; Ollama and llama.cpp keys include provider, normalized endpoint, and API key; the fake provider uses one cache entry. Shutdown calls `clear_provider_cache()` to force-close cached clients.
+
+## Model Call Evidence
+
+Network adapters record a SHA-256 hash and a sensitive-data scan attestation for the exact outbound provider request. Service call sites can attach this input evidence to model-call telemetry with the agent role, provider class, model, monotonic timestamps, available token counts, finish reason, retry count, success state, error type, and an output hash. The fake provider does not record provider-boundary evidence because it does not cross a network boundary.
+
+Usage fields remain zero with `usage_reported=false` when a provider omits usage. Telemetry stores hashes and sensitivity findings rather than raw prompts and outputs. Evidence and retry telemetry are assembled by participating services, so direct adapter calls do not independently create complete model-call records.
 
 ## Related
 
-- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
-- [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
-- [Governance](governance.md) — Five-layer verification pipeline and envelope validation
-- [Agents](agents.md) — Agent persona definitions, capacity tiers, and Tribunal consensus
-- [Thinking](thinking.md) — L2 consensus, provider reasoning, and thought signatures
-- [Prompts](prompts.md) — System prompt assembly and persona templating
-- [Constants](constants.md) — Sourced protocol constants and application definitions
-- [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment
-- [Storage](storage.md) — Storage tiers and data sovereignty principles
-- [Development](devs.md) — Developer setup, guidelines, and coding standards
-- [Testing](tests.md) — Testing framework, test tiers, and practices
-- [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics
+- [Ensemble Architecture](../architecture/ensemble.md): Platform-level summary of g8ee's role
+- [Architecture](architecture.md): Ensemble components and request flow
+- [Agents](agents.md): Agent roles and model-tier assignments
+- [Thinking](thinking.md): Reasoning translation and provider signatures
+- [Prompts](prompts.md): Prompt assembly and persona templates
+- [PKI and Trust](pki.md): Workload identity and platform connections
+- [Testing](tests.md): Ensemble test tiers and commands
+- [Evals](evals.md): Evaluation evidence and Judge scoring

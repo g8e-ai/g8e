@@ -29,6 +29,12 @@ type BuildConfigImportBinding struct {
 	ProducerIdentity string
 }
 
+type BuildConfigSourceMetadata struct {
+	BuildIdentity    string
+	SourceRevision   string
+	ProducerIdentity string
+}
+
 type BuildConfigImporter struct {
 	reader  ArtifactReader
 	binding BuildConfigImportBinding
@@ -124,6 +130,33 @@ func (i *BuildConfigImporter) buildNodes(records []importedBuildConfigAttestatio
 func validBuildConfigBinding(binding BuildConfigImportBinding) bool {
 	_, _, referenceValid := ParseExpectedContentReference(binding.Reference, constants.BuildAttestationReferencePrefix)
 	return referenceValid && ValidRelativePath(binding.Path) && binding.ScopeID != "" && binding.RunID != "" && binding.BuildIdentity != "" && binding.SourceRevision != "" && binding.ProducerIdentity != ""
+}
+
+func InspectBuildConfigSource(body []byte) (BuildConfigSourceMetadata, error) {
+	for _, line := range bytes.Split(body, []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		if err := ValidateCanonicalJSON(line); err != nil {
+			return BuildConfigSourceMetadata{}, fmt.Errorf("%w: decode build or configuration attestation: %w", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(line))
+		decoder.DisallowUnknownFields()
+		var record buildConfigAttestationRecord
+		if err := decoder.Decode(&record); err != nil {
+			return BuildConfigSourceMetadata{}, fmt.Errorf("%w: decode build or configuration attestation: %w", constants.ErrEvidenceArtifactMalformed, err)
+		}
+		metadata := BuildConfigSourceMetadata{BuildIdentity: record.BuildIdentity, SourceRevision: record.SourceRevision, ProducerIdentity: record.ProducerIdentity}
+		binding := BuildConfigImportBinding{BuildIdentity: metadata.BuildIdentity, SourceRevision: metadata.SourceRevision, ProducerIdentity: metadata.ProducerIdentity, ScopeID: record.ScopeID, RunID: record.RunID}
+		if metadata.BuildIdentity == "" || metadata.SourceRevision == "" || metadata.ProducerIdentity == "" {
+			return BuildConfigSourceMetadata{}, fmt.Errorf("%w: build or configuration attestation binding is incomplete", constants.ErrEvidenceArtifactMalformed)
+		}
+		if _, err := decodeBuildConfigAttestations(body, binding); err != nil {
+			return BuildConfigSourceMetadata{}, err
+		}
+		return metadata, nil
+	}
+	return BuildConfigSourceMetadata{}, fmt.Errorf("%w: build and configuration attestation collection is empty", constants.ErrEvidenceArtifactMalformed)
 }
 
 func decodeBuildConfigAttestations(body []byte, binding BuildConfigImportBinding) ([]importedBuildConfigAttestation, error) {

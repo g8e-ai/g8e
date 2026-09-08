@@ -1,116 +1,153 @@
+---
+title: Storage Architecture
+parent: Architecture
+---
+
 # Storage Architecture
 
-Last Updated: 2026-08-30
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 ## Overview
 
-The g8e storage layer is the persistence foundation for the five-layer governance pipeline. It records every operator session, command execution, file change, governance transaction, and audit attestation so the platform can replay history, verify state, and prove what happened.
+g8e separates platform coordination state from host-local execution evidence. Each Gateway and outbound Operator has a local canonical SQLite database named `g8e.db`. The Gateway uses it for shared platform state and Gateway-executed audit evidence, while an outbound Operator uses its local copy for state services and authoritative evidence from operations executed on that host.
 
-The layer is split into specialized services. Sensitive services encrypt content at rest through the vault and fail closed when the vault is locked. Services that store public or non-sensitive data, such as replay nonces and suspended governance envelopes, do not require encryption.
+Additional stores have separate lifecycles. An outbound Operator maintains an execution vault, a replay database, and, when enabled, git-backed file ledgers. Both operating modes use a separate suspended-transaction database for pending L3 approvals. A remote Operator remains authoritative for its local execution evidence; its publication of signed receipts to the Gateway is a best-effort mirror.
 
-In gateway mode the canonical SQLite database `g8e.db` hosts the audit log, action receipts, commitment ledger, key-value store, document store, blob store, replay nonces, and SSE event buffer. The ledger, execution vault, and suspended transaction store use their own files. The operator-side replay store also uses a standalone SQLite database even in gateway mode; the g8e.db replay store services gateway-host transactions through the gateway's own governance pipeline. In outbound/operator mode the operator-side replay store, execution vault, and suspended transaction store run as standalone SQLite databases; the audit store and ledger remain local to the operator.
+See [Encryption Architecture](./encryption.md) for vault and keystore protection, [Gateway Architecture](./gateway.md) for Gateway service assembly, and [Operator Architecture](./operator.md) for host-local execution.
 
-See [Encryption Architecture](./encryption.md) for vault and key management, and [Gateway Architecture](./gateway.md) for service initialization in gateway mode.
+## Persistence Topology
 
-## Storage Services
+| Store | Gateway | Outbound Operator | Purpose |
+| --- | --- | --- | --- |
+| `g8e.db` | Yes | Yes | Platform documents, key-value and blob state, state roots, replay nonces, SSE events, audit events, receipts, and commitments |
+| Suspended-transaction database | Yes | Yes | Transactions and proof material awaiting L3 approval |
+| Execution vault | No separate Gateway service | Yes | Command output and file-diff content plus searchable execution metadata |
+| Replay database | Gateway replay uses `g8e.db` | Yes | Durable nonce reservation for the Operator's independent L4 verification |
+| File ledger | No Gateway service | Optional | Per-session file snapshots, commit history, diffs, and restoration |
 
-### Audit Store
+All of these files are local to the runtime that opens them. The presence of `g8e.db` on an outbound Operator does not make the Operator a central platform database, and the Gateway receipt mirror does not replace the Operator's local record.
 
-The audit store is the append-only record of operator sessions, events, file mutations, and signed action receipts. It stores event content, command output, searchable receipt fields, and the complete canonical protojson `ActionReceipt`, including deterministic stage evidence and the final persistence attestation. Sensitive fields are encrypted through the vault. New events must reference an existing session. Batch insertion is atomic. Records older than the configured retention window are pruned automatically.
+## Canonical Database
 
-### Ledger
+The canonical database opens in SQLite WAL mode with foreign-key enforcement, a busy timeout, bounded retries for lock contention, and incremental vacuum support. The shared SQLite layer attempts to apply private database-file permissions and logs a warning rather than failing startup if the permission change fails. Gateway and audit services use separate connection pools to the same `g8e.db` file.
 
-The ledger provides git-backed version control for all file modifications. Each operator session keeps an isolated repository. File changes follow a two-phase pattern: the ledger snapshots the pre-mutation state, the operator performs the write, delete, or create, and the ledger commits the post-mutation state and diff. File copies are encrypted when the vault is unlocked. The HEAD commit of the ledger is exposed as a verifiable state snapshot. The ledger also supports history queries, point-in-time retrieval, and restoration.
+### Platform Documents
 
-### Execution Vault
+The document store persists JSON records by collection and identifier. Gateway services use it for users, sessions, Operators, policies, consensus definitions, signer records, enrollment state, passkeys, revocations, and other platform resources. Document writes invalidate related key-value cache entries and advance the state version used to cache state-root calculations.
 
-The execution vault stores command results and file diffs. It encrypts then compresses content before writing, and it stores content hashes for integrity checks. It links execution records to workflow identifiers such as user, case, task, and investigation. Old records are pruned on a configurable schedule and when the database exceeds a size limit. Reads and writes fail closed if the vault is locked.
+### Key-Value and Blob State
 
-### Token Store
+The key-value store persists string values with optional expiration. The blob store persists binary content by namespace and identifier with content type, size, and optional expiration. Both stores distinguish bound state from observed state.
 
-The token store provides encrypted key-value persistence for Sentinel tokens used by the scrubbing service. It is an adapter over the shared gateway key-value store. Token values are encrypted through the vault before writing and fail closed when the vault is locked. Entries carry time-to-live values and are namespaced to avoid collisions.
+Bound documents, active bound key-value entries, and active bound blobs contribute to the state root that L4 verifies. Cache entries, replay nonces, and SSE events do not contribute to that root. Observed key-value entries and blobs are excluded from the admission root and can be hashed as a separate observed-state commitment.
 
-### Replay Store
+### Scrubbing Token Store
 
-The replay store provides nonce-based replay protection for governance transactions. Nonce reservation is atomic, using the database's uniqueness guarantees. Reserved nonces can be finalized when a transaction completes or released when a transaction fails. In gateway mode the store operates on the canonical `g8e.db` database and is cleaned as part of routine maintenance. In outbound mode it uses a standalone SQLite database and callers run cleanup.
+The scrubbing service stores reversible UEI token values through an encrypted adapter over the canonical key-value store. The adapter adds a dedicated namespace, marks entries as observed state, and applies their TTL. Token values are encrypted before persistence; reads and writes fail when the vault is locked.
 
-### Suspended Transaction Store
+### Replay Protection
 
-The suspended transaction store persists governance transactions awaiting [L3 approval](./auth.md). It stores the full envelope, approval metadata, and proof material. The store tracks approval status and supports both Ed25519 CLI and passkey WebAuthn proof types. It filters expired transactions, lists pending items, and prunes expired records automatically.
+The Gateway replay service reserves nonces in `g8e.db`. A uniqueness constraint makes concurrent reservation atomic, and database errors prevent admission rather than bypassing replay protection. Gateway maintenance removes expired reservations.
+
+An outbound Operator uses a standalone replay database because it independently performs L4 verification. Reservation also relies on a uniqueness constraint and first removes expired records. Validation failures release a reservation, while a successful transaction leaves its reservation in place until expiration in the current execution path.
+
+### SSE Event Buffer
+
+The SSE event buffer supports reconnection replay for authenticated browser and CLI sessions. Every event belongs to a user and exactly one session route. These events are delivery telemetry, not governance state, and maintenance removes events older than one hour.
+
+## Audit Evidence
+
+### SQL Audit Store
+
+The SQL audit store shares `g8e.db` with canonical platform persistence. It records Operator and app sessions, append-oriented events, file-mutation references, signed action receipts, and the commitment chain. Events require an associated session; single-event insertion creates an app session when necessary, while batch insertion requires every referenced session to exist and commits atomically.
+
+The vault encrypts event content, command standard output, and command standard error. Command text, event metadata, file paths, ledger hashes, receipt fields, and canonical receipt JSON remain structured and are not protected by field-level vault encryption. Output above the configured threshold is reduced to head and tail sections before encryption.
+
+A receipt row changes over the life of one transaction. L5 first persists the signed `EXECUTING` receipt, then replaces it with the signed final receipt, and finally replaces it again with the receipt that contains the signed persistence attestation. The complete canonical protojson receipt remains available alongside searchable identity, action, state-root, status, signer, and signature fields.
+
+For a remote Operator, the local audit store is authoritative. After execution, the Operator publishes the signed receipt to the Gateway receipt channel. The Gateway verifies the signer and mirrors an accepted receipt, but publication failure does not invalidate the already persisted local result.
 
 ### Commitment Ledger
 
-The commitment ledger stores signed `CommitmentAttestation` records with chain-integrity protection. Each new attestation is built and appended while SQLite holds the write lock, so concurrent writers select a unique chain head and cannot fork the prior-hash chain. It stores the canonical attestation JSON alongside structured fields extracted from it. The `commitment_ledger` table lives in `g8e.db` alongside the audit store tables. The L5 actuator appends a commitment before execution, records its hash and prior hash in deterministic stage evidence, and fails closed if persistence fails. Reporting and compliance tooling independently verify the chain, signatures, structured columns, and receipt cross-links. Commitments are permanent audit records and are not pruned.
+The commitment ledger is a permanent SQLite hash chain inside `g8e.db`, distinct from the git-backed file ledger. Before execution, L5 builds and signs a `CommitmentAttestation` against the current chain head while SQLite holds the write lock. This serialization prevents concurrent writers from selecting the same predecessor.
 
-### History Handler
+The commitment binds the transaction, state root, action and target, prior commitment hash, L2 and L3 signature digests, and the initial Warden-to-Actuator receipt signature digest. L5 records the commitment and prior hashes in deterministic stage evidence and does not execute when commitment persistence fails. Compliance tooling verifies the chain, signatures, structured fields, and links to receipts independently.
 
-The history handler is a coordinator that unifies the audit store and the ledger for history requests. It fetches audit events for a session and attaches file mutations for completed edits. File history, point-in-time retrieval, and file restoration are delegated to the ledger. All operations are scoped to an operator session.
+## Host-Local Evidence
 
-### Canonical Gateway Persistence
+### Execution Vault
 
-The canonical gateway database `g8e.db` provides shared persistence primitives for the gateway:
+An outbound Operator's execution vault stores command records and file-diff records in a standalone SQLite database. Standard output, standard error, and diff content are encrypted before compression; hashes cover the original content. Commands, file paths, sizes, hashes, exit status, timing, and workflow identifiers remain structured.
 
-- **Document Store**: JSON documents keyed by collection and identifier, with state-change tracking for Merkle root computation.
-- **Key-Value Store**: TTL-bearing key-value storage with pattern scanning, supporting both bound state and observed telemetry.
-- **Blob Store**: Binary attachments keyed by namespace, with TTL and observed-state support.
-- **SSE Event Buffer**: Per-routing-target event storage for reconnection replay across web sessions, CLI sessions, and user streams.
+The vault must be present, and protected writes fail while it is locked. Execution-vault persistence occurs after execution through the Operator result pipeline and is best-effort, so a storage error is logged but does not reverse an action that already completed.
+
+### File Ledger
+
+When file ledger support is enabled, the Operator maintains a default git repository and an isolated repository for each Operator session. A governed file mutation snapshots the pre-mutation state, performs the host operation, then copies and commits the resulting state. The resulting before and after commit hashes, diff summary, and diff content link file history to audit and execution-vault records.
+
+The ledger supports file history, point-in-time reads, and restoration. Host paths are normalized to stable repository-relative paths, and encrypted file copies are limited to 100 MiB. When the vault is unlocked, mirrored file content is encrypted and stored with an `.enc` suffix; the current ledger copy path writes plaintext when the supplied vault is locked, so the ledger does not provide the same fail-closed encryption behavior as the audit store, execution vault, and token adapter.
+
+### History Coordination
+
+The history service combines SQL audit events with file-mutation references for completed edits. File history, point-in-time reads, and restoration come from the session's file ledger. When the ledger is disabled, SQL event history remains available but file history and restoration do not.
+
+## Pending L3 Approvals
+
+The suspended-transaction store persists the canonical envelope, tool context, requestor and Operator identity, expiration, approval state, and either signed CLI or WebAuthn proof material. Reads and listings exclude expired records. Approval updates only an unexpired transaction, successful resumed execution removes the record, and a failed resumed execution leaves it available for the caller to inspect or retry according to the remaining validity window.
+
+This standalone database does not apply vault field encryption. Its envelopes and approval proof material therefore rely on runtime-directory access controls and database-file permissions at rest.
 
 ## Runtime File I/O
 
-The ledger and audit store use the runtime file service for all filesystem operations within the `.g8e/` directory. The service resolves paths relative to the runtime directory, prevents traversal outside it, and enforces consistent file and directory permissions. Other storage services use configured database paths or the shared `g8e.db` connection rather than direct filesystem I/O.
+`RuntimeFileService` is the canonical abstraction for paths and file operations inside the `.g8e/` runtime tree. The audit store uses it to establish and verify its data directory before opening the resolved SQLite path. The file ledger uses it for runtime directories and mirrored ledger files, while the execution boundary accesses governed host targets outside the runtime tree.
+
+Standalone SQLite services open their configured database paths through the shared SQLite layer. Under default configuration, those paths resolve beneath the runtime data directory.
 
 ## Retention and Maintenance
 
-Most storage services run a background maintenance task that deletes records older than the configured retention threshold and removes the oldest records when the database exceeds its configured size limit. Pruning reclaims space without requiring a full database lock. The replay store in outbound mode and the commitment ledger are not pruned; commitment records are permanent audit data. The canonical gateway maintenance task also cleans expired KV entries, blobs, nonces, and SSE events.
+Retention is service-specific rather than a single policy applied to every store:
 
-## Security Properties
+- **Audit store:** By default, an hourly task removes events, file-mutation links, and receipts older than 90 days, then removes sessions with no remaining events or receipts. Commitments are not removed. The configured audit database size value does not currently trigger size-based deletion.
+- **Execution vault:** By default, an hourly task removes execution and diff records older than 30 days. When the database exceeds 1 GiB, it removes the oldest tenth of each record set.
+- **Suspended transactions:** By default, a task runs every 30 minutes, removes expired records, and removes the oldest tenth when the database exceeds 256 MiB. Expiration, rather than the configured retention-days value, controls age-based deletion.
+- **Canonical Gateway stores:** Every 30 seconds, maintenance removes expired key-value entries, blobs, and nonces, plus SSE events older than one hour.
+- **Standalone Operator replay:** Expired nonces are removed during reservation. Additional stale-reservation and used-nonce pruning operations are available, but no background pruner runs for this database.
+- **Commitment and file ledgers:** Commitments are permanent, and file-ledger history has no automatic retention or size pruning.
 
-1. **Encryption at rest**: The audit store, execution vault, token store, and ledger encrypt sensitive content through the vault.
-2. **Fail-closed encryption**: Sensitive services return errors when the vault is locked; there is no plaintext fallback.
-3. **Fail-closed replay protection**: Nonce reservation returns an error on any failure, so replay protection is never silently bypassed.
-4. **Commitment chain integrity**: The production L5 path builds and appends each signed commitment against the latest chain head under one SQLite write lock. Offline verification recomputes the chain and cross-links commitments to canonical receipts.
-5. **Session validation**: Audit events must reference an existing session.
-6. **Path confinement**: Ledger and audit file operations are confined to the `.g8e/` runtime directory.
-7. **Size limits for encrypted copies**: The ledger caps encrypted file copies to prevent memory exhaustion during encryption.
-8. **Atomic nonce reservation**: Nonce reservation is atomic without application-level locking.
-9. **Cross-platform path safety**: Path normalization and validation keep file history consistent across platforms.
+The audit store, execution vault, and suspended-transaction store run incremental vacuum after scheduled pruning to reclaim free pages gradually.
 
-## Data Flows
+## Governance Transaction Flow
 
-### File Mutation Flow
+Every governed operation follows the [five-layer interlock](./governance.md):
 
-1. The ledger begins a two-phase commit and snapshots the pre-mutation state.
-2. The operator writes, deletes, or creates the file on the host filesystem.
-3. The ledger completes the commit, copies the post-mutation file, commits to git, and records the post-mutation hash, diff stat, and diff content.
-4. The audit store records the event with encrypted content.
-5. The audit store records the file mutation linked to the event.
-6. The execution vault stores the encrypted and compressed diff.
+1. **L1 Doctrine** validates the typed payload and applies hard gates, forbidden-pattern matching, and MITRE threat detection.
+2. **L2 Consensus** verifies Ed25519 consensus votes when the active posture requires them.
+3. **L3 Notary** verifies WebAuthn or signed CLI authorization for mutations when the active posture requires it; transactions awaiting Gateway-managed approval enter the suspended-transaction store.
+4. **L4 Warden** checks expiry, reserves the nonce, validates the payload and transaction hash, verifies the state root, and evaluates required L2 and L3 evidence. A failed validation releases the nonce reservation.
+5. **L5 Actuator** signs and persists the `EXECUTING` receipt, appends the signed commitment, rehydrates protected values, mints a transaction-bound capability, invokes the handler, dissolves the capability, and signs and persists the final receipt and persistence attestation.
 
-### Transaction Flow
+The initial receipt and commitment are execution gates. Final receipt persistence occurs after the mutation, so a final persistence failure is returned with the available receipt evidence but cannot roll back an external side effect. On a remote Operator, publication of the completed receipt to the Gateway is also best-effort.
 
-Each governance transaction passes through the [five-layer interlock](./auth.md): L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator. The storage layer participates as follows:
+## Security Properties and Limits
 
-1. The L4 Warden reserves a nonce through the replay store and emits deterministic evidence for each completed or failed verification stage.
-2. L5 signs and persists the executing receipt, then atomically appends a signed commitment against the latest ledger head.
-3. The execution vault stores the execution result.
-4. L5 adds execution evidence, signs and persists the final receipt, then adds and persists a signed receipt-persistence attestation.
-5. The audit APIs return the complete canonical receipt so consumers can verify stage evidence, receipt signatures, commitment linkage, and durable persistence.
-
-Reserved nonces are released on validation failure via `ReleaseNonce`; on successful execution the reservation persists until the nonce expires.
-
-### Approval Flow (L3)
-
-1. The suspended transaction store persists the transaction awaiting human [L3 approval](./auth.md).
-2. The CLI lists pending transactions for the user.
-3. The user approves with an Ed25519 CLI or passkey WebAuthn proof.
-4. The suspended transaction store marks the record as approved.
-5. The governance layer executes the approved transaction.
-6. The suspended transaction store removes the record after execution.
+- SQLite uniqueness constraints provide durable, concurrent nonce replay detection.
+- L5 does not dispatch when initial receipt signing or persistence fails, or when the commitment cannot be appended.
+- The commitment ledger serializes chain-head selection and supports independent offline verification.
+- The canonical state root binds active authoritative documents, key-value state, and blobs while excluding volatile delivery and replay data.
+- Field-level vault encryption protects selected audit content, execution output, file diffs, and scrubbing tokens. It does not encrypt complete databases or all metadata.
+- Suspended envelopes, approval proofs, platform documents, SSE payloads, commitment records, and structured metadata are not vault-encrypted.
+- Ledger copies are encrypted only while the vault is unlocked; the current ledger path can fall back to plaintext.
+- A remote Operator's local receipt is authoritative. Gateway receipt mirroring improves centralized visibility but is not a durability guarantee for remote evidence.
+- Retention removes audit receipts while commitments remain permanent, so long-term commitment verification can outlive the locally retained receipt cross-link.
 
 ## Related Documentation
 
-- [Authentication & Authorization](./auth.md): Governance sequence and L3 Interlock
-- [Encryption Architecture](./encryption.md): Vault subsystem and mandatory encryption at rest
-- [Gateway Architecture](./gateway.md): Canonical database service and gateway-mode service initialization
-- [Network Architecture](./network.md): Mutual TLS and identity binding
-- [g8e Protocol](../../protocol/docs/spec.md): The wire contract and governance hierarchy
+- [Governance](./governance.md): Five-layer verification and posture behavior
+- [Authentication and Authorization](./auth.md): Identity, sessions, and L3 approval
+- [Encryption Architecture](./encryption.md): Vault and keystore cryptography and operations
+- [Gateway Architecture](./gateway.md): Canonical database ownership and Gateway service assembly
+- [Operator Architecture](./operator.md): Host execution and local-first evidence
+- [SSE Streaming](./sse.md): Session routing and event replay
+- [Network Architecture](./network.md): mTLS and transport identity
+- [g8e Protocol](../../protocol/docs/spec.md): Canonical governance messages and wire contract

@@ -1,0 +1,17 @@
+{
+  "schema_type": "oscal-assessment-results",
+  "schema_version": "1.1.2",
+  "source_url": "https://github.com/usnistgov/OSCAL/releases/download/v1.1.2/json/schema/oscal_assessment-results_schema.json",
+  "source_repository": "https://github.com/usnistgov/OSCAL",
+  "source_tag": "v1.1.2",
+  "source_path": "json/schema/oscal_assessment-results_schema.json",
+  "schema_id": "http://csrc.nist.gov/ns/oscal/1.1.2/oscal-ar-schema.json",
+  "json_schema_draft": "draft-07",
+  "license": "NIST License (https://www.nist.gov/open/license)",
+  "license_summary": "NIST-developed software is publicly available under the NIST License, a permissive license that allows use, modification, and distribution without restriction.",
+  "byte_length": 133015,
+  "sha256": "d033da70154cf6625ae46a746199e88e58f2928b1387dfac051d381b92f41b0d",
+  "retrieved_at": "2026-09-07",
+  "retrieval_method": "direct download from official NIST OSCAL GitHub release v1.1.2; byte-for-byte verified against the release artifact",
+  "integrity_note": "The schema bytes are embedded unmodified. The Go embed package pins the SHA-256 digest and rejects any schema bytes that do not match, ensuring air-gapped builds validate against the authenticated NIST release."
+}

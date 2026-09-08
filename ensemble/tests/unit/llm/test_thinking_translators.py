@@ -37,7 +37,7 @@ from app.models.model_configs import (
     GEMINI_3_1_FLASH_LITE_CONFIG,
     GEMINI_3_FLASH_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
-    OLLAMA_QWEN3_5_122B_CONFIG,
+    OLLAMA_GEMMA4_E4B_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
     LLModelConfig,
@@ -265,19 +265,19 @@ class TestTranslateForOllama:
             assert translation.think is None, f"dialect=NONE must omit think for level={level}"
 
     def test_native_toggle_emits_true_when_thinking_requested(self):
-        """Qwen3 has dialect=NATIVE_TOGGLE; HIGH must send think=True."""
+        """Gemma4 E4B has dialect=NATIVE_TOGGLE; HIGH must send think=True."""
         translation = translate_for_ollama(
             ThinkingLevel.HIGH,
-            OLLAMA_QWEN3_5_122B_CONFIG,
+            OLLAMA_GEMMA4_E4B_CONFIG,
         )
         assert translation.enabled is True
         assert translation.think is True
 
     def test_native_toggle_emits_false_when_off(self):
-        """Qwen3 + OFF must send think=False to explicitly disable."""
+        """Gemma4 E4B + OFF must send think=False to explicitly disable."""
         translation = translate_for_ollama(
             ThinkingLevel.OFF,
-            OLLAMA_QWEN3_5_122B_CONFIG,
+            OLLAMA_GEMMA4_E4B_CONFIG,
         )
         assert translation.enabled is False
         assert translation.think is False

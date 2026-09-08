@@ -134,10 +134,11 @@ func ResolveReceiptEvidence(ctx context.Context, resolver ReceiptEvidenceResolve
 		if err := VerifyReceiptEvidenceSignatures(evidence, signerKey); err != nil {
 			return fmt.Errorf("verify receipt evidence signatures for transaction %s: %w", projection.TransactionID, err)
 		}
-		chainGrade, err := ValidateProtocolChain(receipt)
+		chain, err := governance.ValidateDeterministicProtocolChain(receipt)
 		if err != nil {
 			return fmt.Errorf("validate protocol chain for transaction %s: %w", projection.TransactionID, err)
 		}
+		chainGrade := &ProtocolChainGrade{Verified: true, Value: 1, StageEvidenceRef: chain.ContentReference, EvidenceRefs: []string{receipt.GetTransactionId()}}
 		evidence.ProtocolChainGrade = chainGrade
 		evidenceRecords = append(evidenceRecords, *evidence)
 		chainGrades = append(chainGrades, *chainGrade)

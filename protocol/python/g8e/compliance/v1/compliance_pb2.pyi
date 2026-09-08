@@ -2,12 +2,22 @@ import datetime
 
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    VERIFICATION_CHECK_STATUS_UNSPECIFIED: _ClassVar[VerificationCheckStatus]
+    VERIFICATION_CHECK_STATUS_PASSED: _ClassVar[VerificationCheckStatus]
+    VERIFICATION_CHECK_STATUS_FAILED: _ClassVar[VerificationCheckStatus]
+VERIFICATION_CHECK_STATUS_UNSPECIFIED: VerificationCheckStatus
+VERIFICATION_CHECK_STATUS_PASSED: VerificationCheckStatus
+VERIFICATION_CHECK_STATUS_FAILED: VerificationCheckStatus
 
 class VersionedReference(_message.Message):
     __slots__ = ("id", "version")
@@ -351,8 +361,86 @@ class ReportSignature(_message.Message):
     signature: str
     def __init__(self, key_id: _Optional[str] = ..., algorithm: _Optional[str] = ..., signed_sha256: _Optional[str] = ..., signature: _Optional[str] = ...) -> None: ...
 
+class ComplianceReportSigningKeyMetadata(_message.Message):
+    __slots__ = ("key_id", "algorithm", "purpose", "public_key_sha256", "created_at", "expires_at")
+    KEY_ID_FIELD_NUMBER: _ClassVar[int]
+    ALGORITHM_FIELD_NUMBER: _ClassVar[int]
+    PURPOSE_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_SHA256_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_FIELD_NUMBER: _ClassVar[int]
+    EXPIRES_AT_FIELD_NUMBER: _ClassVar[int]
+    key_id: str
+    algorithm: str
+    purpose: str
+    public_key_sha256: str
+    created_at: _timestamp_pb2.Timestamp
+    expires_at: _timestamp_pb2.Timestamp
+    def __init__(self, key_id: _Optional[str] = ..., algorithm: _Optional[str] = ..., purpose: _Optional[str] = ..., public_key_sha256: _Optional[str] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., expires_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceReportTrustedKey(_message.Message):
+    __slots__ = ("metadata", "public_key", "assessment_id", "assessor_identity", "assessed_at", "allowed_scope_refs", "revoked_at")
+    METADATA_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSESSOR_IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSED_AT_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_SCOPE_REFS_FIELD_NUMBER: _ClassVar[int]
+    REVOKED_AT_FIELD_NUMBER: _ClassVar[int]
+    metadata: ComplianceReportSigningKeyMetadata
+    public_key: str
+    assessment_id: str
+    assessor_identity: str
+    assessed_at: _timestamp_pb2.Timestamp
+    allowed_scope_refs: _containers.RepeatedScalarFieldContainer[str]
+    revoked_at: _timestamp_pb2.Timestamp
+    def __init__(self, metadata: _Optional[_Union[ComplianceReportSigningKeyMetadata, _Mapping]] = ..., public_key: _Optional[str] = ..., assessment_id: _Optional[str] = ..., assessor_identity: _Optional[str] = ..., assessed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., allowed_scope_refs: _Optional[_Iterable[str]] = ..., revoked_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceReportTrustPolicy(_message.Message):
+    __slots__ = ("policy_id", "policy_version", "trusted_keys")
+    POLICY_ID_FIELD_NUMBER: _ClassVar[int]
+    POLICY_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TRUSTED_KEYS_FIELD_NUMBER: _ClassVar[int]
+    policy_id: str
+    policy_version: str
+    trusted_keys: _containers.RepeatedCompositeFieldContainer[ComplianceReportTrustedKey]
+    def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceReportTrustedKey, _Mapping]]] = ...) -> None: ...
+
+class ComplianceEvidenceTrustedKey(_message.Message):
+    __slots__ = ("key_id", "public_key", "public_key_sha256", "assessment_id", "assessor_identity", "assessed_at", "valid_from", "valid_until", "allowed_scope_refs", "revoked_at")
+    KEY_ID_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_SHA256_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSESSOR_IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSED_AT_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_SCOPE_REFS_FIELD_NUMBER: _ClassVar[int]
+    REVOKED_AT_FIELD_NUMBER: _ClassVar[int]
+    key_id: str
+    public_key: str
+    public_key_sha256: str
+    assessment_id: str
+    assessor_identity: str
+    assessed_at: _timestamp_pb2.Timestamp
+    valid_from: _timestamp_pb2.Timestamp
+    valid_until: _timestamp_pb2.Timestamp
+    allowed_scope_refs: _containers.RepeatedScalarFieldContainer[str]
+    revoked_at: _timestamp_pb2.Timestamp
+    def __init__(self, key_id: _Optional[str] = ..., public_key: _Optional[str] = ..., public_key_sha256: _Optional[str] = ..., assessment_id: _Optional[str] = ..., assessor_identity: _Optional[str] = ..., assessed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_from: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., allowed_scope_refs: _Optional[_Iterable[str]] = ..., revoked_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceEvidenceTrustPolicy(_message.Message):
+    __slots__ = ("policy_id", "policy_version", "trusted_keys")
+    POLICY_ID_FIELD_NUMBER: _ClassVar[int]
+    POLICY_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TRUSTED_KEYS_FIELD_NUMBER: _ClassVar[int]
+    policy_id: str
+    policy_version: str
+    trusted_keys: _containers.RepeatedCompositeFieldContainer[ComplianceEvidenceTrustedKey]
+    def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceEvidenceTrustedKey, _Mapping]]] = ...) -> None: ...
+
 class ComplianceReportManifest(_message.Message):
-    __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature")
+    __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature", "bundle_profile", "manifest_sha256")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]
     REPORT_SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
     GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -366,6 +454,8 @@ class ComplianceReportManifest(_message.Message):
     EVIDENCE_INDEX_REF_FIELD_NUMBER: _ClassVar[int]
     CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
     SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    BUNDLE_PROFILE_FIELD_NUMBER: _ClassVar[int]
+    MANIFEST_SHA256_FIELD_NUMBER: _ClassVar[int]
     report_id: str
     report_schema_version: str
     generated_at: _timestamp_pb2.Timestamp
@@ -379,7 +469,53 @@ class ComplianceReportManifest(_message.Message):
     evidence_index_ref: str
     checksum_root: str
     signature: ReportSignature
-    def __init__(self, report_id: _Optional[str] = ..., report_schema_version: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., framework_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., assertion_catalog_ref: _Optional[str] = ..., crosswalk_refs: _Optional[_Iterable[str]] = ..., assessment_refs: _Optional[_Iterable[str]] = ..., evidence_index_ref: _Optional[str] = ..., checksum_root: _Optional[str] = ..., signature: _Optional[_Union[ReportSignature, _Mapping]] = ...) -> None: ...
+    bundle_profile: str
+    manifest_sha256: str
+    def __init__(self, report_id: _Optional[str] = ..., report_schema_version: _Optional[str] = ..., generated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., generator_identity: _Optional[str] = ..., generator_version: _Optional[str] = ..., scope_ref: _Optional[str] = ..., framework_refs: _Optional[_Iterable[_Union[VersionedReference, _Mapping]]] = ..., assertion_catalog_ref: _Optional[str] = ..., crosswalk_refs: _Optional[_Iterable[str]] = ..., assessment_refs: _Optional[_Iterable[str]] = ..., evidence_index_ref: _Optional[str] = ..., checksum_root: _Optional[str] = ..., signature: _Optional[_Union[ReportSignature, _Mapping]] = ..., bundle_profile: _Optional[str] = ..., manifest_sha256: _Optional[str] = ...) -> None: ...
+
+class BundleArtifact(_message.Message):
+    __slots__ = ("bundle_path", "sha256", "media_type", "profile", "byte_length", "encryption")
+    BUNDLE_PATH_FIELD_NUMBER: _ClassVar[int]
+    SHA256_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    PROFILE_FIELD_NUMBER: _ClassVar[int]
+    BYTE_LENGTH_FIELD_NUMBER: _ClassVar[int]
+    ENCRYPTION_FIELD_NUMBER: _ClassVar[int]
+    bundle_path: str
+    sha256: str
+    media_type: str
+    profile: str
+    byte_length: int
+    encryption: EvidenceEncryptionMetadata
+    def __init__(self, bundle_path: _Optional[str] = ..., sha256: _Optional[str] = ..., media_type: _Optional[str] = ..., profile: _Optional[str] = ..., byte_length: _Optional[int] = ..., encryption: _Optional[_Union[EvidenceEncryptionMetadata, _Mapping]] = ...) -> None: ...
+
+class RenderedFormatEntry(_message.Message):
+    __slots__ = ("format", "media_type", "bundle_path")
+    FORMAT_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_TYPE_FIELD_NUMBER: _ClassVar[int]
+    BUNDLE_PATH_FIELD_NUMBER: _ClassVar[int]
+    format: str
+    media_type: str
+    bundle_path: str
+    def __init__(self, format: _Optional[str] = ..., media_type: _Optional[str] = ..., bundle_path: _Optional[str] = ...) -> None: ...
+
+class ComplianceReportBundle(_message.Message):
+    __slots__ = ("manifest", "artifacts", "analysis", "profiles", "rendered_formats", "checksum_root", "checksum_root_signature")
+    MANIFEST_FIELD_NUMBER: _ClassVar[int]
+    ARTIFACTS_FIELD_NUMBER: _ClassVar[int]
+    ANALYSIS_FIELD_NUMBER: _ClassVar[int]
+    PROFILES_FIELD_NUMBER: _ClassVar[int]
+    RENDERED_FORMATS_FIELD_NUMBER: _ClassVar[int]
+    CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
+    CHECKSUM_ROOT_SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    manifest: ComplianceReportManifest
+    artifacts: _containers.RepeatedCompositeFieldContainer[BundleArtifact]
+    analysis: ComplianceAnalysis
+    profiles: _containers.RepeatedCompositeFieldContainer[FrameworkProfile]
+    rendered_formats: _containers.RepeatedCompositeFieldContainer[RenderedFormatEntry]
+    checksum_root: str
+    checksum_root_signature: ReportSignature
+    def __init__(self, manifest: _Optional[_Union[ComplianceReportManifest, _Mapping]] = ..., artifacts: _Optional[_Iterable[_Union[BundleArtifact, _Mapping]]] = ..., analysis: _Optional[_Union[ComplianceAnalysis, _Mapping]] = ..., profiles: _Optional[_Iterable[_Union[FrameworkProfile, _Mapping]]] = ..., rendered_formats: _Optional[_Iterable[_Union[RenderedFormatEntry, _Mapping]]] = ..., checksum_root: _Optional[str] = ..., checksum_root_signature: _Optional[_Union[ReportSignature, _Mapping]] = ...) -> None: ...
 
 class VerificationFailure(_message.Message):
     __slots__ = ("code", "subject_ref", "reason")
@@ -391,8 +527,24 @@ class VerificationFailure(_message.Message):
     reason: str
     def __init__(self, code: _Optional[str] = ..., subject_ref: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
 
+class VerificationCheckResult(_message.Message):
+    __slots__ = ("check_id", "status", "evidence_refs", "verifier_id", "verifier_version", "failures")
+    CHECK_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_REFS_FIELD_NUMBER: _ClassVar[int]
+    VERIFIER_ID_FIELD_NUMBER: _ClassVar[int]
+    VERIFIER_VERSION_FIELD_NUMBER: _ClassVar[int]
+    FAILURES_FIELD_NUMBER: _ClassVar[int]
+    check_id: str
+    status: VerificationCheckStatus
+    evidence_refs: _containers.RepeatedScalarFieldContainer[str]
+    verifier_id: str
+    verifier_version: str
+    failures: _containers.RepeatedCompositeFieldContainer[VerificationFailure]
+    def __init__(self, check_id: _Optional[str] = ..., status: _Optional[_Union[VerificationCheckStatus, str]] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ...) -> None: ...
+
 class ComplianceVerificationReport(_message.Message):
-    __slots__ = ("report_id", "valid", "verified_at", "verifier_id", "verifier_version", "failures", "reproduced_checksum_root")
+    __slots__ = ("report_id", "valid", "verified_at", "verifier_id", "verifier_version", "failures", "reproduced_checksum_root", "checks")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]
     VALID_FIELD_NUMBER: _ClassVar[int]
     VERIFIED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -400,6 +552,7 @@ class ComplianceVerificationReport(_message.Message):
     VERIFIER_VERSION_FIELD_NUMBER: _ClassVar[int]
     FAILURES_FIELD_NUMBER: _ClassVar[int]
     REPRODUCED_CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
+    CHECKS_FIELD_NUMBER: _ClassVar[int]
     report_id: str
     valid: bool
     verified_at: _timestamp_pb2.Timestamp
@@ -407,7 +560,46 @@ class ComplianceVerificationReport(_message.Message):
     verifier_version: str
     failures: _containers.RepeatedCompositeFieldContainer[VerificationFailure]
     reproduced_checksum_root: str
-    def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ...) -> None: ...
+    checks: _containers.RepeatedCompositeFieldContainer[VerificationCheckResult]
+    def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ..., checks: _Optional[_Iterable[_Union[VerificationCheckResult, _Mapping]]] = ...) -> None: ...
+
+class OSCALValidatorIdentity(_message.Message):
+    __slots__ = ("validator_id", "validator_version", "schema_version", "schema_digest")
+    VALIDATOR_ID_FIELD_NUMBER: _ClassVar[int]
+    VALIDATOR_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_DIGEST_FIELD_NUMBER: _ClassVar[int]
+    validator_id: str
+    validator_version: str
+    schema_version: str
+    schema_digest: str
+    def __init__(self, validator_id: _Optional[str] = ..., validator_version: _Optional[str] = ..., schema_version: _Optional[str] = ..., schema_digest: _Optional[str] = ...) -> None: ...
+
+class OSCALValidationFailure(_message.Message):
+    __slots__ = ("code", "message", "instance_ptr", "schema_ptr", "keyword")
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    INSTANCE_PTR_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_PTR_FIELD_NUMBER: _ClassVar[int]
+    KEYWORD_FIELD_NUMBER: _ClassVar[int]
+    code: str
+    message: str
+    instance_ptr: str
+    schema_ptr: str
+    keyword: str
+    def __init__(self, code: _Optional[str] = ..., message: _Optional[str] = ..., instance_ptr: _Optional[str] = ..., schema_ptr: _Optional[str] = ..., keyword: _Optional[str] = ...) -> None: ...
+
+class OSCALValidationResult(_message.Message):
+    __slots__ = ("validator", "valid", "structural_failures", "semantic_failures")
+    VALIDATOR_FIELD_NUMBER: _ClassVar[int]
+    VALID_FIELD_NUMBER: _ClassVar[int]
+    STRUCTURAL_FAILURES_FIELD_NUMBER: _ClassVar[int]
+    SEMANTIC_FAILURES_FIELD_NUMBER: _ClassVar[int]
+    validator: OSCALValidatorIdentity
+    valid: bool
+    structural_failures: _containers.RepeatedCompositeFieldContainer[OSCALValidationFailure]
+    semantic_failures: _containers.RepeatedCompositeFieldContainer[OSCALValidationFailure]
+    def __init__(self, validator: _Optional[_Union[OSCALValidatorIdentity, _Mapping]] = ..., valid: _Optional[bool] = ..., structural_failures: _Optional[_Iterable[_Union[OSCALValidationFailure, _Mapping]]] = ..., semantic_failures: _Optional[_Iterable[_Union[OSCALValidationFailure, _Mapping]]] = ...) -> None: ...
 
 class EvidenceWindowCompleteness(_message.Message):
     __slots__ = ("scope_id", "expected_evidence_count", "actual_evidence_count", "missing_evidence_refs", "stale_evidence_refs", "completeness_status", "window_start_ref", "window_end_ref")
@@ -488,20 +680,22 @@ class ComplianceRemediation(_message.Message):
     def __init__(self, remediation_id: _Optional[str] = ..., finding_ref: _Optional[str] = ..., action: _Optional[str] = ..., priority: _Optional[str] = ..., owner: _Optional[str] = ...) -> None: ...
 
 class ControlSection(_message.Message):
-    __slots__ = ("section_id", "title", "responsibility", "status_filter", "control_assessment_refs", "description")
+    __slots__ = ("section_id", "title", "responsibility", "status_filter", "control_assessment_refs", "description", "control_refs")
     SECTION_ID_FIELD_NUMBER: _ClassVar[int]
     TITLE_FIELD_NUMBER: _ClassVar[int]
     RESPONSIBILITY_FIELD_NUMBER: _ClassVar[int]
     STATUS_FILTER_FIELD_NUMBER: _ClassVar[int]
     CONTROL_ASSESSMENT_REFS_FIELD_NUMBER: _ClassVar[int]
     DESCRIPTION_FIELD_NUMBER: _ClassVar[int]
+    CONTROL_REFS_FIELD_NUMBER: _ClassVar[int]
     section_id: str
     title: str
     responsibility: str
     status_filter: str
     control_assessment_refs: _containers.RepeatedScalarFieldContainer[str]
     description: str
-    def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ...) -> None: ...
+    control_refs: _containers.RepeatedCompositeFieldContainer[FrameworkControlReference]
+    def __init__(self, section_id: _Optional[str] = ..., title: _Optional[str] = ..., responsibility: _Optional[str] = ..., status_filter: _Optional[str] = ..., control_assessment_refs: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., control_refs: _Optional[_Iterable[_Union[FrameworkControlReference, _Mapping]]] = ...) -> None: ...
 
 class ComplianceAnalysis(_message.Message):
     __slots__ = ("analysis_id", "analysis_schema_version", "scope_ref", "generated_at", "generator_identity", "generator_version", "evidence_window_completeness", "assertion_assessments", "framework_assessments", "gaps", "evidence_links", "limitations", "findings", "remediation", "sections", "evidence_graph_failures", "evidence_graph_valid", "evidence_resources")

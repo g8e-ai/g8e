@@ -57,6 +57,36 @@ const (
 	ArtifactTypeAssessorAttestation ArtifactType = "assessor-attestation"
 )
 
+func SupportedArtifactTypes() []ArtifactType {
+	return []ArtifactType{
+		ArtifactTypeDemoManifest,
+		ArtifactTypeDemoResult,
+		ArtifactTypeDemoStepResult,
+		ArtifactTypeDemoDefinition,
+		ArtifactTypeActionReceipt,
+		ArtifactTypeReceiptPersistence,
+		ArtifactTypeStateObservation,
+		ArtifactTypeDemoMetric,
+		ArtifactTypeProtocolChain,
+		ArtifactTypeEvalManifest,
+		ArtifactTypeEvalTask,
+		ArtifactTypeEvalAttempt,
+		ArtifactTypeEvalMetric,
+		ArtifactTypeEvalObservation,
+		ArtifactTypeEvalStage,
+		ArtifactTypeEvalReceipt,
+		ArtifactTypeAuditRecord,
+		ArtifactTypeLedgerCommit,
+		ArtifactTypeLedgerState,
+		ArtifactTypeCommitment,
+		ArtifactTypeKSIResult,
+		ArtifactTypeBuildAttestation,
+		ArtifactTypeConfigAttestation,
+		ArtifactTypeCustomerAttestation,
+		ArtifactTypeAssessorAttestation,
+	}
+}
+
 // VerificationStatus represents the independent verification state of a node.
 type VerificationStatus string
 

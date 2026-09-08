@@ -5,135 +5,168 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-09-07
-Version: v2.1.6
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 ---
 
 ## Overview
 
-A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the g8e Gateway exclusively through public ingress paths.
+A g8e-compatible application is an untrusted client of the g8e Gateway. It submits typed intent through a public Gateway ingress, receives governed results, and never sends mutations directly to a target host. The Gateway and the bound Governed Operator enforce the five-layer governance pipeline: L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator.
 
-Security operations including L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the g8e Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+The current Gateway supports three application integration patterns:
 
-This guide covers the full spectrum of g8e application development: from minimal envelope-producing clients to maximal agentic ensembles that implement multi-persona reasoning, Byzantine consensus, and signed governance envelope production. The [Building an Agentic System](#building-an-agentic-system) section documents the practical steps for building a g8e-compliant agentic ensemble, the reference pattern for anyone building an AI reasoning layer on top of the g8e protocol surface.
+| Pattern | Client sends | Gateway responsibility | Credential |
+| --- | --- | --- | --- |
+| **MCP or A2A** | JSON-RPC tool or skill intent | Builds the `GovernanceEnvelope`, binds current state, runs configured L2 deliberation, manages L3 suspension, and dispatches the action | Enrolled app or CLI mTLS certificate |
+| **CommandIntent over pub/sub** | Typed `CommandIntent` on `cmd:<operator_id>:<operator_session_id>` | Validates the target session, builds the envelope, binds current state and posture, and forwards the governed command | Enrolled app mTLS certificate and app policy |
+| **Direct envelope** | Complete canonical protojson `GovernanceEnvelope` | Verifies the supplied envelope and executes it synchronously; it does not add missing L2 votes | CLI or Operator mTLS certificate; app certificates are denied |
 
----
+MCP and A2A are the normal application-facing surfaces. Direct envelope submission is a privileged integration for clients that already possess an authorized CLI or Operator transport identity and can construct every posture-required proof correctly.
 
-## Application Architecture Spectrum
-
-The architecture of a g8e application varies based on how it satisfies the L2 Consensus requirement. All applications produce the canonical GovernanceEnvelope wire format.
-
-### Minimal Applications
-
-A minimal application constructs the mutation intent and builds a valid GovernanceEnvelope. This requires:
-
-- **Typed Payload Formatting**: Format the mutation intent according to the protocol schema.
-- **Transaction Hash Generation**: Generate a deterministic transaction hash from the envelope fields.
-- **Envelope Construction**: Append nonce, expiry, and fetched state root to the envelope.
-- **Submission**: Submit the envelope to the Gateway and consume the signed receipt.
-
-Minimal applications do not produce L2 Consensus evidence natively. They rely on the Gateway's protocol-agnostic MCP/A2A translation layer or a trusted upstream producer to fulfill the L2 requirement.
-
-### Maximal Applications
-
-A maximal application performs the identical intent formulation and envelope construction, while additionally producing its own L2 Consensus evidence. It executes an internal consensus mechanism and signs the envelope directly.
-
-A g8e-compatible agentic ensemble represents the reference implementation of a maximal application, generating the required consensus signatures.
+Application working memory remains application-owned. g8e governs mutations to platform and host state; it does not use the Gateway as an application memory store unless the application explicitly writes a governed platform record.
 
 ---
 
-## Structural Invariants
+## Choose an Integration Surface
 
-Two invariants apply to all g8e applications:
+### MCP
 
-### Identity and Authentication
-
-Application identity is established via an mTLS client certificate with SPIFFE-style URI SANs. The application authenticates cryptographically and receives no ambient trust. The g8e Gateway evaluates its envelope with identical rigor to any external client.
-
-### State Management
-
-Application-internal state remains the exclusive responsibility of the application. The g8e protocol governs and audits mutations to host reality; it does not manage or persist the application working memory. The Gateway maintains the canonical state root for replay defense and state binding.
-
----
-
-## Protocol Requirements
-
-### Canonical JSON Wire Format
-
-All client-facing interactions must use canonical JSON (protojson) as the wire format. Binary protobuf is reserved for internal storage.
-
-The envelope `id` must match the deterministic transaction hash computed from its content. The signature basis is always the deterministic transaction hash, regardless of wire encoding.
-
-### GovernanceEnvelope Structure
-
-A valid GovernanceEnvelope includes identity and routing fields, a typed protobuf payload with a structured JSON view of the intent, UAP-compatible action classification, state binding (Merkle root and nonce), governance metadata (L1, L2, and L3 proofs), delegation fields, and optional context (case, investigation, task identifiers, tenant ID, binding persona).
-
-### Typed Payloads
-
-The protocol defines canonical event types for all first-class operations, including shell commands, file edits, filesystem reads, MCP tool calls, A2A skill invocations, network checks, heartbeats, audit recording, and shutdown. The complete set of event type constants and payload schema definitions is available in the [Protocol Library](../architecture/protocol.md).
-
-### Protocol Library Dependencies
-
-Applications constructing `GovernanceEnvelope` transactions or parsing `ActionReceipt` responses should use the g8e Protocol Library, which is published as both a Go module and a Python package. Both share the same version number as the platform binary.
-
-#### Go Module
-
-The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
+Use MCP for standard tool discovery and invocation. The unified `/mcp` endpoint accepts JSON-RPC 2.0. For `tools/call`, the Gateway translates the request into a typed envelope and runs the governance flow.
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.6
+curl -X POST https://localhost:8443/mcp \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
-The Go package provides protobuf message types for governance envelopes, governance metadata (L1, L2, L3), and all typed payload messages for first-class operations. It also provides SPIFFE workload identity helpers for URI SAN generation and validation.
+For IDE integrations, `g8e mcp stdio` bridges stdio MCP to the Gateway. See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for credential resolution and [Connect Apps to Gateway](connect_apps_to_gateway.md) for the tool catalog.
 
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example programs.
+### A2A
 
-#### Python Package
-
-Install from PyPI:
+Use A2A for a configured downstream skill. The Gateway accepts the `a2a/call` JSON-RPC method at `/api/v1/a2a/call` and governs the resulting `A2ACallRequested` payload.
 
 ```bash
-pip install g8e==2.1.6
+curl -X POST https://localhost:8443/api/v1/a2a/call \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"file.read","payload":{"path":"/etc/hosts"},"execution_id":"task-1"}}'
 ```
 
-The package provides runtime loaders for JSON protocol constants, dynamic enum generation from those constants, and Pydantic v2 models for protocol data structures including request contexts, platform settings, SSE event wire models, and `GovernanceEnvelope` with deterministic transaction hash generation.
+The named skill must exist on the configured A2A server. A2A applies the same posture-aware governance flow as MCP.
 
-Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol constants directory. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example scripts.
+### CommandIntent over Pub/Sub
+
+An enrolled app can publish a canonical `CommandIntent` to a bound Operator channel. `CommandIntent` contains target identity, event and action classification, serialized protobuf payload bytes, and application context. It does not contain a nonce, expiry, state root, transaction hash, posture, or governance proofs. The Gateway supplies the envelope fields, current state root, posture, nonce, expiry, and hash when it transforms the intent into a `GovernanceEnvelope`; the current pub/sub relay does not run L2 deliberation or L3 suspension.
+
+This is the host-command path used by g8ee under the default `doctrine` posture. Under a posture that requires L2 or L3 for the requested action, an unproved relayed envelope fails closed at Operator verification. Use MCP or A2A when the Gateway must attach L2 votes or manage L3 approval. The Python protocol package provides `g8e.models.governance.CommandIntent` and `CommandIntent.from_payload_bytes()`.
+
+### Direct GovernanceEnvelope
+
+Use direct submission only when the client must control the complete envelope and already has an authorized CLI or Operator certificate. The Gateway’s privileged route registry rejects app SPIFFE identities at `/api/v1/governance/envelopes`, even when the app has a valid app policy.
+
+The direct endpoint verifies the envelope as supplied. Under `consensus` and `notary`, the client supplies valid L2 votes. Under `ratify` and `notary`, mutations also supply a valid L3 proof. The direct endpoint does not invoke the Gateway deliberator or create an approval suspension to fill missing proofs; use MCP or A2A when the Gateway needs to perform those steps.
 
 ---
 
-## Building a Minimal Application
+## Identity and Enrollment
 
-### Step 1: Obtain Client Certificate
+### Human and Development Credentials
 
-Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
+Run the CLI enrollment coordinator for local testing and human-authorized integrations:
 
 ```bash
+./g8e gw start
 ./g8e auth enroll user
 ```
 
-This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. CLI keys are file-backed ECDSA P-256 on all platforms. The Gateway must be running before enrollment (`./g8e gw start`).
+The coordinator creates or recovers the user and CLI session, generates a file-backed ECDSA P-256 key, and writes `.g8e/cli.crt` and `.g8e/cli.key`. It installs the Gateway Root CA in the OS trust store unless `--no-system-trust` is set. Passkey enrollment is required by notary posture and optional in postures that do not enforce L3.
 
-The command installs the gateway Root CA into the OS trust store before opening the browser for the passkey ceremony. Before installation, it checks for stale g8e Root CA anchors from previous gateway instances and prompts for removal if found. Use `--no-system-trust` only if an administrator has already installed the Root CA. After trust installation or stale anchor removal, close all open browser windows before clicking the enrollment link.
+The CLI certificate carries a SPIFFE identity of the form `spiffe://g8e.local/cli/<user_id>/<session_id>`. Direct mutation envelopes submitted with this certificate still bind a target `operator_id` or `operator_session_id`, and their `cli_session_id` must match the certificate identity.
 
-On Windows, the signed certificate is imported into the Windows Certificate Store for Windows Hello native API access.
+### External Application Credentials
 
-### Step 2: Fetch State Root
+External applications obtain short-lived delegated credentials from `POST /api/v1/pki/apps/delegated`. The request is authenticated by an enrolled human CLI certificate and contains a P-256 CSR, `app_name`, `app_type`, and optional `organization_id`. The returned certificate is valid for one hour and contains both the app and requesting-user SPIFFE identities. The Gateway also creates the default app policy needed by app authentication.
 
-Query the Gateway state endpoint for the current state root:
+Delegated enrollment establishes identity only. It does not grant L2 signing authority. An administrator separately enrolls trusted Ed25519 signer keys and a consensus policy when an external service produces protocol L2 votes.
+
+The reserved first-party names `g8ed`, `g8ee`, and `g8eo` use the owner-approved platform enrollment protocol instead of delegated enrollment. That resumable flow uses the request, status, and completion endpoints under `/api/v1/auth/platform-enrollments/`; the first owner reviews requests with:
 
 ```bash
-curl -X GET https://localhost:8443/api/v1/state \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key
+./g8e auth pending-platform-enrollments
+./g8e auth approve-platform-enrollment <request-id>
 ```
 
-The response includes the `state_merkle_root` field. The `/api/v1/health` endpoint also returns state root information.
+See [Authentication and Authorization](../architecture/auth.md) for both enrollment protocols and certificate lifetimes.
 
-### Step 3: Construct Typed Payload
+### App Authorization
 
-Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message:
+An app certificate is accepted only while its `AppPolicy` exists. The current authentication middleware blocks privileged routes and enforces configured request rate and payload-size limits; it also contains collection filtering for query routes, although app identities are currently denied those routes before filtering. `AppPolicy` stores allowed event types, intents, and an L3 requirement, but the current middleware does not enforce those three fields. App certificates cannot access privileged direct-envelope or query routes. Keep app and human/Operator credentials separate; do not treat a successful mTLS handshake as authorization for every endpoint.
+
+---
+
+## Protocol Libraries
+
+### Go
+
+The Go protocol packages are part of the platform module:
+
+```bash
+go get github.com/g8e-ai/g8e/v2@v2.1.7
+```
+
+Import generated types from `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The module includes `GovernanceEnvelope`, `CommandIntent`, `ActionReceipt`, typed operation payloads, and SPIFFE workload identity helpers.
+
+### Python
+
+Install the Python protocol package from PyPI:
+
+```bash
+pip install g8e==2.1.7
+```
+
+The package requires Python 3.10 or later. It includes generated protobuf modules, Pydantic models, protocol constants, deterministic transaction hashing, and receipt parsing and verification helpers. `G8E_PROTOCOL_DIR` overrides the bundled protocol constants directory for development.
+
+### Node
+
+The repository generates TypeScript protobuf bindings under `protocol/node/src/gen`, but `@g8e/protocol-node` is currently private and is not a published client dependency. Node applications generate from the schemas in `protocol/proto` or consume an explicitly packaged in-repository build.
+
+See the [g8e Protocol Library](../architecture/protocol.md) for package contents and code-generation details.
+
+---
+
+## Direct Envelope Construction
+
+### Canonical Wire Format
+
+Direct envelope requests use protobuf JSON mapping (`protojson`). The `payload` field is the base64 representation of a serialized typed protobuf message. MCP and A2A requests use their JSON-RPC contracts instead; they are not serialized `GovernanceEnvelope` messages.
+
+The canonical envelope schema is `g8e.common.v1.GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto`. It contains:
+
+- Transport and target identity: `source_component`, Operator, web, and CLI session IDs, `requestor_user_id`, and `acting_app_id`.
+- Intent: `event_type`, typed `payload`, `intent_data`, `action_type`, and `target_resource`.
+- State binding: `state_merkle_root`, `nonce`, `transaction_hash`, and `protocol_version`.
+- Governance evidence: L1 metadata, an L2 consensus set and votes, and an optional L3 proof.
+- Optional application context: case, investigation, task, system fingerprint, tenant, and binding persona.
+
+Clients leave `posture` empty. The Gateway is the posture authority and injects its configured posture before verification. Posture is not part of the transaction hash.
+
+### 1. Fetch the Current State Root
+
+The state endpoint is public so clients can bind an envelope before authenticated submission:
+
+```bash
+curl https://localhost:8443/api/v1/state
+```
+
+The response contains `state_merkle_root`. `/api/v1/health` also contains the root after the Gateway becomes governance-ready. Validate the Gateway TLS chain and fail if the endpoint is unavailable or returns an empty root. A root can become stale between fetch and submission; on `TX_STATE_MISMATCH`, fetch the new root and construct a new envelope with a fresh nonce, expiry, ID, hash, and signatures.
+
+### 2. Serialize a Typed Payload
+
+A shell request uses `g8e.operator.v1.CommandRequested`:
 
 ```json
 {
@@ -148,57 +181,68 @@ Format the mutation intent according to the protocol schema. For example, a shel
 }
 ```
 
-The payload must be serialized as protobuf bytes and base64-encoded in the final envelope.
+Construct the generated protobuf message, serialize it to bytes, and base64-encode those bytes for the JSON envelope. Do not base64-encode the JSON example itself.
 
-### Step 4: Generate Transaction Hash
+### 3. Compute the Transaction Hash
 
-Compute the deterministic transaction hash from the envelope's critical fields. The hash is a SHA-256 digest over the canonicalized action type, target resource, payload, state root, nonce, expiry, intent data, requestor user ID, and acting app ID.
+`id` and `transaction_hash` both equal the lowercase hexadecimal SHA-256 digest produced from these present fields in this order:
 
-The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked.
+1. `action_type`
+2. `target_resource`
+3. `payload`, represented as standard base64
+4. `state_merkle_root`
+5. `nonce`
+6. `expires_at`, normalized to fixed six-digit microsecond UTC
+7. `intent_data`, recursively canonicalized with sorted keys
+8. `requestor_user_id`
+9. `acting_app_id`
 
-### Step 5: Build Envelope
+Each present value is followed by `|`; absent and empty values are omitted. Numbers in `intent_data` use fixed-point decimal formatting. L3 and posture are excluded so L2 can sign before human authorization.
 
-Construct the GovernanceEnvelope:
+Use the protocol helper rather than reimplementing canonicalization:
 
-```json
-{
-  "id": "<transaction_hash>",
-  "timestamp": "<current_timestamp>",
-  "expires_at": "<expiry_timestamp>",
-  "source_component": "COMPONENT_CLIENT",
-  "operator_id": "<operator_id>",
-  "operator_session_id": "<operator_session_id>",
-  "web_session_id": "<web_session_id>",
-  "cli_session_id": "<cli_session_id>",
-  "event_type": "g8e.v1.operator.command.requested",
-  "payload": "<base64_encoded_protobuf_bytes>",
-  "intent_data": {
-    "command": "ls -la",
-    "working_directory": "/tmp",
-    "environment": {}
-  },
-  "action_type": "EXECUTE_BASH",
-  "target_resource": "/tmp",
-  "state_merkle_root": "<state_root>",
-  "nonce": "<unique_nonce>",
-  "transaction_hash": "<transaction_hash>",
-  "protocol_version": "1.0",
-  "requestor_user_id": "<requestor_user_id>",
-  "acting_app_id": "<acting_app_id>",
-  "governance": {
-    "l1": {
-      "validated": true,
-      "violations": []
-    },
-    "l2": {},
-    "l3": {}
-  }
-}
+```python
+from g8e.models.governance import compute_transaction_hash
+
+transaction_hash = compute_transaction_hash(
+    action_type="EXECUTE_BASH",
+    target_resource="/tmp",
+    payload=payload_b64,
+    state_merkle_root=state_root,
+    nonce=nonce,
+    expires_at=expires_at,
+    intent_data=intent_data,
+    requestor_user_id=user_id,
+    acting_app_id=app_id,
+)
 ```
 
-### Step 6: Submit to Gateway
+### 4. Attach Posture-Required Proofs
 
-Submit the envelope to the g8e Gateway:
+L1 is always enforced by the platform; a client-provided `l1.validated` value does not bypass Gateway or Operator validation.
+
+| Gateway posture | L2 | L3 for mutations |
+| --- | --- | --- |
+| `doctrine` | Audited, not required | Audited, not required |
+| `consensus` | Required | Audited, not required |
+| `ratify` | Audited, not required | Required |
+| `notary` | Required | Required |
+
+Each L2 vote contains `signer_key_id`, `decision`, and `consensus_signature`. The signature is lowercase hexadecimal Ed25519 over the UTF-8 string `<transaction_hash>|<decision>`, where the decision is `true` or `false`. `consensus_set_id` selects an enabled policy, signer IDs must be distinct policy members, and valid affirmative votes must meet quorum.
+
+The Gateway’s built-in consensus service can populate L2 for MCP, A2A, and other Gateway-owned construction paths. It does not populate L2 on direct envelope submission.
+
+### 5. Bind Transport Identity
+
+For mutations, set `operator_id` or `operator_session_id`; normally both identify the target Operator. The envelope identity must match a URI SAN on the certificate used for the HTTP request:
+
+- A CLI certificate matches `cli_session_id`.
+- An Operator certificate matches `operator_id` and `operator_session_id`.
+- App identities can match app-originated envelopes in internal verification, but app certificates are rejected by the privileged direct-envelope route before the handler runs.
+
+Identity mismatch returns HTTP 403 without execution.
+
+### 6. Submit
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
@@ -208,248 +252,124 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution. See [Gateway Architecture](../architecture/gateway.md) for the full pipeline description.
+The endpoint returns:
 
-### Step 7: Consume Receipt
+- `200 OK` with a canonical `ActionReceipt` when verification reaches execution. A failed underlying action still returns HTTP 200 with `receipt.status` set to failure because the receipt is the signed outcome.
+- `400 Bad Request` for malformed, empty, oversized, or undecodable input.
+- `403 Forbidden` for identity, hash, expiry, nonce, state, action, or required L2/L3 proof failures. No action executes and this direct HTTP surface does not return the internally recorded rejection receipt.
+- `503 Service Unavailable` when the envelope processor is unavailable.
 
-The Gateway returns a canonical protojson `ActionReceipt` containing deterministic governance-stage evidence and a final durable-persistence attestation. Parse and verify both signatures before consuming the result:
+---
+
+## Verify Action Receipts
+
+An `ActionReceipt` carries the transaction identity, execution status, state roots, deterministic stage evidence, signer key ID, receipt signature, and final durable-persistence attestation. Verify both signatures before trusting the result.
 
 ```python
 import json
 from pathlib import Path
 
-from g8e.receipts import parse_action_receipt, verify_action_receipt_signature, verify_receipt_persistence_attestation
+from g8e.receipts import (
+    parse_action_receipt,
+    verify_action_receipt_signature,
+    verify_receipt_persistence_attestation,
+)
 
 receipt = parse_action_receipt(json.loads(Path("receipt.json").read_text()))
-public_key = Path(".g8e/pki/warden_pub.pem").read_text()
+public_key = Path(".g8e/pki/Actuator_pub.pem").read_text()
+
 if not verify_action_receipt_signature(receipt, public_key):
     raise ValueError("invalid action receipt signature")
 if not verify_receipt_persistence_attestation(receipt, public_key):
     raise ValueError("invalid receipt persistence attestation")
 ```
 
-The application obtains the actuator public key through a trusted out-of-band channel; signature verification does not establish trust in the supplied key.
+Obtain actuator public keys through a trusted channel. Unified deployments can return receipts from multiple actuators, so select the public key whose derived key ID matches `receipt.signer_key_id`; do not assume one Gateway key verifies every Operator receipt. Supplying a public key in the same untrusted response does not establish trust.
 
 ---
 
-## Building a Maximal Application
+## External L2 Producers
 
-A maximal application adds L2 Consensus signature generation to the minimal application flow.
+An external L2 producer is separate from an authenticated application identity. It performs these steps:
 
-### Step 1: Execute Internal Consensus
+1. Creates an Ed25519 key for each independent consensus member.
+2. Registers each public key as an enabled `TrustedSigner`.
+3. Creates an enabled consensus policy whose member IDs match those signer IDs and whose quorum is valid.
+4. Evaluates the finalized envelope intent independently.
+5. Signs `<transaction_hash>|<decision>` with each member key and attaches the hex signatures to `governance.l2.votes`.
+6. Submits the complete envelope through an authorized direct-envelope transport or returns the populated envelope from the consensus deliberation contract.
 
-Run an internal consensus mechanism to generate L2 signatures. This typically involves:
-
-- Multiple independent agents analyzing the mutation intent.
-- Each agent generating a signature based on their analysis.
-- Aggregating signatures into a consensus proof.
-
-### Step 2: Attach Signatures to Envelope
-
-Add the L2 Consensus signatures to the envelope:
-
-```json
-{
-  "id": "<transaction_hash>",
-  "timestamp": "<current_timestamp>",
-  "expires_at": "<expiry_timestamp>",
-  "source_component": "COMPONENT_CLIENT",
-  "event_type": "g8e.v1.operator.command.requested",
-  "payload": "<base64_encoded_protobuf_bytes>",
-  "intent_data": {
-    "command": "ls -la",
-    "working_directory": "/tmp",
-    "environment": {}
-  },
-  "action_type": "EXECUTE_BASH",
-  "target_resource": "/tmp",
-  "state_merkle_root": "<state_root>",
-  "nonce": "<unique_nonce>",
-  "transaction_hash": "<transaction_hash>",
-  "protocol_version": "1.0",
-  "requestor_user_id": "<requestor_user_id>",
-  "acting_app_id": "<acting_app_id>",
-  "governance": {
-    "l1": {
-      "validated": true,
-      "violations": []
-    },
-    "l2": {
-      "consensus_set_id": "<consensus_set_id>",
-      "votes": [
-        {
-          "signer_key_id": "<key_id>",
-          "consensus_signature": "<ed25519_signature>",
-          "decision": true
-        }
-      ]
-    },
-    "l3": {}
-  }
-}
-```
-
-### Step 3: Submit to Gateway
-
-Submit the envelope with L2 signatures to the g8e Gateway. The Gateway verifies the signatures as part of the L2 Consensus check. See [Consensus Architecture](../architecture/consensus.md) for the signature verification and quorum policy details.
+The app enrollment endpoint deliberately grants no L2 authority. See [Consensus](../architecture/consensus.md) for declarative bootstrap, the admin API, quorum checks, and the remote `/consensus/v1/deliberate` contract.
 
 ---
 
-## Protocol Translation Integration
+## Building an Agentic Application
 
-Applications can leverage the g8e Gateway's MCP/A2A translation layer instead of constructing envelopes directly.
+An agentic application can add any internal reasoning, generation, voting, risk analysis, and memory architecture above the Gateway contract. Those application-level decisions are not protocol L2 evidence unless enrolled Ed25519 members sign the transaction hash and their votes satisfy the Gateway consensus policy.
 
-### MCP Integration
+The in-tree g8ee application currently uses two dispatch paths:
 
-For MCP-based applications, the Gateway accepts JSON-RPC tool calls and translates them into GovernanceEnvelope format:
+- For host operations, its five-member Tribunal generates candidate commands, requires two matching candidates, uses deterministic tie breaking, performs a second anonymized peer-review round when needed, runs Warden risk analysis, and sends the audited result as `CommandIntent` over pub/sub. The Gateway constructs the `GovernanceEnvelope` and owns protocol L2 deliberation.
+- For governed platform records such as cases, investigations, memories, and reputation state, `GovernanceClient` builds direct envelopes. Because app certificates cannot access the direct endpoint, the unified stack mounts the Operator certificate read-only for this dedicated governance transport. Normal g8ee traffic continues to use its enrolled `spiffe://g8e.local/app/g8ee` identity.
 
-```bash
-curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
-```
+This distinction is security-critical: g8ee’s Tribunal consensus improves command generation, but it does not currently emit protocol L2 signatures. The Gateway’s enrolled consensus service produces and verifies those votes according to posture.
 
-The Gateway translates the tool call into a GovernanceEnvelope and processes it through the full governance pipeline, including L1 Doctrine validation.
+When building a similar system:
 
-### A2A Integration
+1. Keep user intent separate from executable syntax.
+2. Serialize every operation with its canonical protobuf payload type.
+3. Prefer MCP or A2A when the Gateway must own state binding, L2 deliberation, and L3 suspension; use `CommandIntent` only when its proof-free relay is valid for the active posture.
+4. Treat internal model voting as advisory unless it is cryptographically enrolled as protocol L2.
+5. Stop on ambiguous intent and request clarification before dispatch.
+6. Fail closed on missing credentials, malformed results, receipt verification failure, or required governance rejection.
+7. Store only application-owned working state; consume host evidence through governed tools and signed receipts.
 
-For A2A-based applications, the Gateway accepts HTTP/JSON task invocations and translates them into GovernanceEnvelope format:
-
-```bash
-curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"read_file","payload":{"path":"/etc/hosts"},"execution_id":"task-1"}}'
-```
-
-The Gateway translates the skill invocation into a GovernanceEnvelope and processes it through the full governance pipeline, including L1 Doctrine validation.
+See the [g8ee documentation](../ensemble/index.md) for its personas, prompt assembly, Tribunal, SSE events, storage, and evaluation system.
 
 ---
 
 ## Testing
 
-Applications should test against the reference g8e Gateway to ensure compatibility:
+Test the exact surface and posture the application uses:
+
+- Confirm the certificate chain and expected SPIFFE URI SAN.
+- Confirm app-policy authorization separately from TLS authentication.
+- Exercise MCP/A2A or `CommandIntent` under each supported posture.
+- For direct envelopes, test hash mismatch, expired envelopes, nonce replay, stale state roots, transport identity mismatch, and missing or invalid L2/L3 proofs.
+- Verify successful and failed-execution receipts, including deterministic stage evidence and final persistence attestations.
+- Test multiple actuator keys when actions can execute on more than one host.
+- Confirm that no mutation occurs after any pre-execution rejection.
+
+Contributors to this repository run platform verification through the project wrapper rather than invoking Go tests directly:
 
 ```bash
-./g8e gw start
+./g8e test unit
+./g8e test integration
 ./g8e test e2e
+./g8e test lint
 ```
 
-Verify that:
-
-- Envelopes are accepted by the Gateway.
-- Receipts are returned with valid Ed25519 signatures.
-- Mutations are executed on connected Operators.
-- Audit entries are written to the audit vault.
-- The transaction hash matches the envelope ID.
+External application repositories use their own test runner against a real Gateway and Operator.
 
 ---
 
-## Security Considerations
+## Security Requirements
 
-### No Privileged Channels
-
-Applications must not attempt to establish privileged communication channels with the g8e Gateway or g8e Operators. All communication must go through public ingress paths.
-
-### Fail-Closed Behavior
-
-Applications must handle verification failures gracefully. If the g8e Gateway rejects an envelope, the application must not retry with modified parameters or attempt fallback paths.
-
-### Certificate Management
-
-Applications must manage their mTLS certificates securely. Certificates should be stored securely and rotated before expiry.
-
-### State Root Validation
-
-Applications must validate the state root returned by the g8e Gateway before using it in envelope construction. This prevents man-in-the-middle attacks.
-
----
-
-## Reference Implementation
-
-The reference implementation of a maximal g8e-compatible agentic ensemble is **g8ee** (the "g8e Agentic Ensemble"), a first-party Python / FastAPI agentic ensemble located in-tree at `ensemble/` in the repository root. g8ee is a first-class g8e client: it holds no privileged Gateway role, authenticates over mTLS, and produces signed governance envelopes like any other L2 consensus producer. It includes an internal consensus mechanism for L2 signature generation, envelope construction and submission using the canonical hash algorithm, receipt verification, and MCP/A2A integration. See the [g8ee documentation](../ensemble/index.md) for the full component reference — agents, governance, prompts, thinking, SSE, storage, and evals.
-
-The design patterns documented in the [Building an Agentic System](#building-an-agentic-system) section below are derived from g8ee as the canonical worked example.
-
----
-
-## Building an Agentic System
-
-This section documents the practical steps for building a g8e-compliant agentic ensemble. For the architecture-level overview of the g8e governance boundary and the agent client surface, see [AI Agents and the g8e Governance Boundary](../architecture/agents.md). For the consensus signature verification and quorum policy details, see [Consensus Architecture](../architecture/consensus.md).
-
-A g8e-compliant agentic system is an L2 consensus producer. It consumes the Gateway's protocol surface (MCP tool calls, A2A messaging, governance envelope submission) and produces typed, signed `GovernanceEnvelope` transactions. It has no privileged Gateway role: it is a client that produces consensus signatures.
-
-### Core Principles
-
-- **Intent-Driven Execution**: Reasoning agents never write shell commands directly. They articulate natural-language intent to a Consensus that translates it.
-- **Ensemble Consensus**: No single model has mutation authority. Commands are produced by an independent multi-member panel with unique technical lenses.
-- **Information Isolation**: Consensus members are blind to each other's candidates. The Auditor receives anonymized candidates to prevent source bias.
-- **Fail-Closed Verification**: Any missing signature, stale state root, or L1 violation results in immediate rejection.
-- **Host Sovereignty**: The Governed Operator distrusts all upstream inputs and re-verifies everything.
-- **Interrogation Gate**: Agents can pause execution to ask clarifying questions via structured interrogation blocks, preventing guessing when context is missing.
-
-### Persona Architecture
-
-The system uses a tiered persona architecture that separates reasoning (intent generation) from consensus (command translation) and defense (risk classification). Every persona is defined with a stable identifier, display name, functional role, model tier, authorized tools, identity block, mission statement, and autonomy boundary.
-
-The layers are:
-
-- **Reasoning Layer**: A triage classifier routes simple turns to a fast responder and complex turns to a primary reasoner. The primary reasoner plans investigations and articulates intent to the Consensus but never writes shell syntax. Security-sensitive requests are always classified as complex.
-- **Consensus Layer**: A five-member collective converts intent into commands through Byzantine consensus. A final auditor verifies the consensus output against the original intent and can approve, revise, or swap to a dissenting candidate.
-- **Defense Layer**: A coordinator orchestrates risk sub-agents that classify shell command risk, file operation risk, and failure recoverability into consolidated pre-execution verdicts.
-- **Utility Layer**: Support agents generate case titles, extract durable user preferences for cross-conversation memory, and evaluate benchmark performance.
-
-See [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for the platform boundary and client surface that constrains every g8e-compatible ensemble.
-
-### Consensus Cascade
-
-The Consensus converts natural-language intent into an executable shell command through a multi-stage cascade with Byzantine fault tolerance. Each stage is independently configurable across providers and models so a single compromised model cannot drive a mutation end-to-end.
-
-1. **Generation**: The intent is dispatched in isolation to five consensus members, each with a unique lens (composition, safety, edge cases, convention, adversary). Each member emits exactly one command string.
-2. **Voting**: Members vote with uniform weighting. Minimum consensus is two of five. Ties are broken by a deterministic ladder (shortest command, non-adversary preference, alphabetical fallback).
-3. **Round 2**: If round 1 fails to reach consensus, members re-emit with anonymized peer-review context. If round 2 also fails, the error routes back to the reasoner to re-articulate intent.
-4. **Risk Analysis**: A Warden coordinator classifies pre-execution risk through sub-agents. Any HIGH risk or inconclusive analysis routes back to the reasoner for a safer alternative. A two-strike circuit breaker forces human intervention on repeated HIGH verdicts.
-5. **Auditor Verification**: A final auditor verifies the winning candidate against the original intent and can approve, revise, or swap to a dissenting candidate.
-6. **L1 Re-validation**: Any revised or swapped command is re-checked against forbidden patterns before leaving the ensemble.
-7. **Envelope Wrap**: The verified command is packaged as a typed payload inside a `GovernanceEnvelope` signed by the L2 Consensus key.
-8. **Approval Pipeline**: State-changing operations trigger an approval request, halting execution until a human approves or auto-approval policy applies. L3 auto-approval never bypasses L1 or L2.
-9. **Gateway Admission**: The signed envelope is submitted over mTLS to the Gateway, which independently re-runs the full fail-closed validation gauntlet. The ensemble has no privileged channel.
-
-See [Consensus Architecture](../architecture/consensus.md) for the signature format, quorum policy, and posture-dependent enforcement details.
-
-### Memory Model
-
-The system maintains cross-conversation memory that personalizes subsequent turns without storing sensitive data. A background agent runs after each turn to extract durable signals such as communication preferences, technical background, and problem-solving approach from the latest conversation slice. All identifiers (hostnames, IPs, credentials) are redacted from summaries before storage. On subsequent turns, the memory is injected into the prompt assembly as learned context.
-
-The invariant is that the agent reconstructs its prompt from references and summaries, not by holding a database, filesystem, or host session. It receives the minimum useful projection for the current turn.
-
-### Data Sovereignty
-
-Scrubbing is the privacy-preserving default for cloud-model operation. Sensitive categories (API keys, tokens, passwords, private keys, OAuth secrets, credit cards, SSNs) are scrubbed before LLM delivery and before result publication back to the ensemble. Operational data (IPs, hostnames, file paths, URLs without embedded credentials, AWS ARNs) is preserved for troubleshooting. Raw host evidence stays in the Operator Raw Vault and is never AI-readable; AI-facing history comes from scrubbed vaults or typed result payloads.
-
-### Building Your Own
-
-The **g8ee** reference app is the canonical, native implementation of everything above. Read it alongside this guide when building your own ensemble. The steps are language- and provider-agnostic; g8ee is one concrete realization of them. See the [g8ee documentation](../ensemble/index.md) for the component-level reference covering agents, prompts, governance, thinking, and evals.
-
-To build a g8e-compliant agentic system in any language:
-
-1. **Implement the persona model**: Define your agents with stable identifiers, roles, model tiers, authorized tools, identity blocks, mission statements, and autonomy boundaries.
-2. **Assemble modular prompts**: Keep static sections first for prefix caching, append dynamic context last. Use structural boundaries to prevent prompt leakage.
-3. **Implement the ReAct loop**: Provider turn, tool dispatch, iteration. Route gated tools through your Consensus.
-4. **Implement the Consensus cascade**: Multi-member generation, voting, round 2, risk analysis, auditor verification, L1 re-validation, envelope wrap.
-5. **Sign envelopes**: Use Ed25519 to sign the transaction hash and decision with your L2 Consensus key. Register the public key as a trusted signer with the Gateway.
-6. **Submit over mTLS**: Send the signed `GovernanceEnvelope` to the Gateway's admission endpoint. The Gateway and Operator independently re-verify everything.
-7. **Handle results**: Receive pub/sub result envelopes, scrub output, feed back into the ReAct loop.
-8. **Maintain memory**: Run a background agent after each turn to extract durable preferences and scrubbed summaries.
-
-The g8e protocol does not care what language your ensemble is written in, what LLM provider you use, or how many agents you run. It cares that your envelopes are correctly signed, bound to the current state root, and pass all L1/L2/L3 gates. Everything above that line is yours to design.
+- Send all mutations through a governed Gateway ingress; never connect an application directly to a target host execution path.
+- Validate the Gateway TLS chain and protect private keys with least-privilege file or keystore access.
+- Keep app, CLI, and Operator identities separate. Never copy privileged credentials into a general application unless the deployment explicitly defines and protects that narrow transport, as the unified g8ee stack does.
+- Treat missing or empty state roots as errors. Rebuild a complete envelope after a stale-root rejection; never reuse the old nonce or signatures.
+- Do not weaken or silently rewrite intent after a doctrine, identity, or proof rejection. A retry is valid only when it addresses a transient condition such as a newly fetched state root while preserving the authorized intent.
+- Verify the receipt signature and final persistence attestation against a trusted actuator key before consuming results.
+- Rotate delegated app certificates before their one-hour expiry and revoke compromised identities immediately.
 
 ---
 
 ## Next Steps
 
-- **[Connect Apps to Gateway](connect_apps_to_gateway.md)**: Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Deploy and use a g8e Operator.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)**: Gateway ports, protocol surfaces, authentication, and operations.
+- **[g8e Protocol Library](../architecture/protocol.md)**: Generated types, models, constants, and receipt helpers.
+- **[AI Agents and the g8e Governance Boundary](../architecture/agents.md)**: Agent-facing trust boundary and execution flow.
+- **[Consensus](../architecture/consensus.md)**: L2 enrollment, deliberation, signatures, and quorum policy.
+- **[Authentication and Authorization](../architecture/auth.md)**: CLI, app, platform, mTLS, and L3 enrollment flows.
+- **[g8ee](../ensemble/index.md)**: In-tree reference agentic application.

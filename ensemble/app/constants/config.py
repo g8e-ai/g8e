@@ -353,15 +353,11 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS = "gemini-3.1-pro-preview-customtools"
 GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
 GEMINI_3_FLASH = "gemini-3-flash-preview"
 
-OLLAMA_QWEN3_5_122B = "qwen3.5:122b"
-OLLAMA_GLM_5_1 = "glm-5.1:cloud"
-OLLAMA_GEMMA4_26B = "gemma4:26b"
 OLLAMA_GEMMA4_E4B = "gemma4:e4b"
 OLLAMA_GEMMA4_E2B = "gemma4:e2b"
 # TODO: OLLAMA_GEMMA4_E2B_G8EA currently duplicates OLLAMA_GEMMA4_E2B value
 # This may be intentional (alias) or a copy-paste error. Verify intended behavior.
 OLLAMA_GEMMA4_E2B_G8EA = "gemma4:e2b"
-OLLAMA_NEMOTRON_3_30B = "nemotron-3-nano:30b"
 OLLAMA_LLAMA_3_2_3B = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B = "qwen3.5:2b"
 

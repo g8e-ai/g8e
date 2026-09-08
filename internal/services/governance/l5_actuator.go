@@ -556,6 +556,26 @@ func SignerPublicKey(keyID string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(decoded), nil
 }
 
+func DeterministicStageActionType(receipt *operatorv1.ActionReceipt) (string, error) {
+	if receipt == nil {
+		return "", fmt.Errorf("%w: action receipt is nil", constants.ErrEvidenceArtifactMalformed)
+	}
+	actionType := ""
+	for _, stage := range receipt.GetDeterministicStageEvidence() {
+		if stage.GetActionType() == "" {
+			continue
+		}
+		if actionType != "" && actionType != stage.GetActionType() {
+			return "", fmt.Errorf("%w: deterministic stages contain conflicting action types", constants.ErrEvidenceArtifactMalformed)
+		}
+		actionType = stage.GetActionType()
+	}
+	if actionType == "" {
+		return "", fmt.Errorf("%w: deterministic stages do not declare an action type", constants.ErrEvidenceArtifactMalformed)
+	}
+	return actionType, nil
+}
+
 func VerifyActionReceiptSignature(receipt *operatorv1.ActionReceipt, publicKey ed25519.PublicKey) error {
 	if receipt == nil {
 		return constants.ErrActionReceiptMissing

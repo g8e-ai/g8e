@@ -462,15 +462,9 @@ JSON files: `agents.json`, `api_paths.json`, `auth.json`, `channels.json`, `coll
 make generate
 ```
 
-Generates Go Protobuf code from `.proto` files using Buf.
+Generates Go, Python, and Node TypeScript Protobuf code from `.proto` files and refreshes downstream Python lockfiles. Go and Node generation use Buf; Python generation uses the canonical `grpcio-tools` generator.
 
-### Generate Python Protocol
-
-```bash
-make proto-python
-```
-
-Generates Python Protobuf code for the Python protocol SDK.
+Language-specific targets are available as `make proto-go`, `make proto-python`, and `make proto-node`.
 
 ## CI Integration
 

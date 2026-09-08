@@ -288,6 +288,7 @@ func TestValidateReportManifestRejectsInvalidReferences(t *testing.T) {
 			AssessmentRefs:      []string{path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename)},
 			EvidenceIndexRef:    path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename),
 			ChecksumRoot:        validSHA256,
+			ManifestSha256:      validSHA256,
 			Signature:           &compliancev1.ReportSignature{KeyId: "key-1", Algorithm: "ed25519", SignedSha256: validSHA256, Signature: "signature"},
 		}
 	}
@@ -438,4 +439,71 @@ func TestValidateVerificationReportEnforcesIntegrityResultConsistency(t *testing
 	invalid.Valid = false
 	invalid.Failures = []*compliancev1.VerificationFailure{{Code: "changed", SubjectRef: "manifest.json", Reason: "digest mismatch"}}
 	assert.NoError(t, catalog.ValidateVerificationReport(invalid))
+}
+
+func TestValidateVerificationReportEnforcesTypedCheckConsistency(t *testing.T) {
+	valid := func() *compliancev1.ComplianceVerificationReport {
+		return &compliancev1.ComplianceVerificationReport{
+			ReportId:               "report-1",
+			Valid:                  true,
+			VerifiedAt:             timestamppb.Now(),
+			VerifierId:             constants.ComplianceBundleVerifierID,
+			VerifierVersion:        constants.ComplianceBundleVerifierVersion,
+			ReproducedChecksumRoot: validSHA256,
+			Checks: []*compliancev1.VerificationCheckResult{{
+				CheckId:         constants.ComplianceBundleCheckCatalog,
+				Status:          compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED,
+				EvidenceRefs:    []string{constants.ComplianceBundleManifestPath},
+				VerifierId:      constants.ComplianceBundleVerifierID,
+				VerifierVersion: constants.ComplianceBundleVerifierVersion,
+			}},
+		}
+	}
+	failure := func() *compliancev1.VerificationFailure {
+		return &compliancev1.VerificationFailure{Code: constants.ErrChecksumMismatch.Error(), SubjectRef: constants.ComplianceBundleManifestPath, Reason: "digest mismatch"}
+	}
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ComplianceVerificationReport)
+	}{
+		{name: "nil check", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Checks[0] = nil }},
+		{name: "missing check identity", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Checks[0].CheckId = "" }},
+		{name: "duplicate check identity", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks = append(report.Checks, report.Checks[0])
+		}},
+		{name: "check verifier mismatch", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].VerifierId = constants.DemoRunVerifierID
+		}},
+		{name: "missing check evidence", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Checks[0].EvidenceRefs = nil }},
+		{name: "unspecified check status", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].Status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_UNSPECIFIED
+		}},
+		{name: "passed check contains failure", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].Failures = []*compliancev1.VerificationFailure{failure()}
+		}},
+		{name: "failed check lacks failure", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].Status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED
+		}},
+		{name: "check failure absent from report", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].Status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED
+			report.Checks[0].Failures = []*compliancev1.VerificationFailure{failure()}
+		}},
+		{name: "report validity disagrees with checks", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Valid = false
+			report.Failures = []*compliancev1.VerificationFailure{failure()}
+		}},
+	}
+
+	assert.NoError(t, catalog.ValidateVerificationReport(valid()))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			report := valid()
+			test.mutate(report)
+
+			err := catalog.ValidateVerificationReport(report)
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
+		})
+	}
 }

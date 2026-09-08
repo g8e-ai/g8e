@@ -1,10 +1,22 @@
 # g8e Dashboard (g8ed)
 
-Browser-based single-page application and static SPA host for the g8e platform. Vanilla JavaScript, no framework, no build step. The server is a minimal Express static host; all authentication and API calls go directly from the browser to the g8e Gateway over HTTPS.
+g8ed is the first-party browser interface for g8e. A Node.js 22 and Express 5 process serves a framework-free JavaScript single-page application from `public/`; the browser assets require no compilation or bundling step.
 
-g8ed is a first-party component of the g8e platform, shipped in-tree under `dashboard/`. It is the operator web UI for the gateway/operator binary — the same UI that was originally split out of the g8e repo for isolated hardening and is now reunited as part of the v2.0.0 monorepo.
+The browser performs passkey authentication and session requests directly against the g8e Gateway over HTTPS. Before Express starts listening, the dashboard also loads or enrolls an independent owner-approved `g8ed` workload identity through the Gateway's plain-HTTP enrollment surface. The current static host does not use that workload identity after startup.
 
-## Quick Start
+## Prerequisites
+
+- Node.js 22 or newer
+- npm 11 or newer
+- A running, bootstrapped g8e Gateway reachable from both the dashboard host and the browser
+- An enrolled owner who can approve the dashboard workload identity
+- A browser with WebAuthn support
+
+The Gateway must allow the dashboard's exact browser origin through credentialed CORS and use matching WebAuthn relying-party settings. The browser must trust the Gateway certificate.
+
+## Local development
+
+From `dashboard/`:
 
 ```bash
 npm ci
@@ -14,50 +26,60 @@ G8E_RUNTIME_DIR=/tmp/g8ed-runtime \
 npm run dev
 ```
 
-The server listens on `http://localhost:3000` and serves assets from `public/`. The browser makes active auth/API calls directly to the g8e Gateway configured by `G8E_GATEWAY_URL`. The server uses `G8E_GATEWAY_HTTP_URL` and `G8E_RUNTIME_DIR` to load or enroll its independent `g8ed` app workload identity before listening.
+A fresh runtime directory causes the dashboard to submit a platform enrollment request and wait before opening port `3000`. Approve the exact request through the Gateway console or with the repository-root `./g8e auth pending-platform-enrollments` and `./g8e auth approve-platform-enrollment <request-id> --yes` commands. After approval, the dashboard stores its identity under `G8E_RUNTIME_DIR` and serves the application at `http://localhost:3000`.
 
-## Prerequisites
+`G8E_GATEWAY_URL` is the HTTPS Gateway origin used by the browser. `G8E_GATEWAY_HTTP_URL` is the plain-HTTP Gateway origin used by the Node.js startup enrollment flow. See [Dashboard development](../docs/dashboard/development.md) for source organization and detailed setup guidance.
 
-- Node.js 22+
-- npm 11+
-- A running g8e Gateway reachable from the browser
+## Current runtime scope
 
-## Docker
+The active Express application publishes `G8E_GATEWAY_URL` through `/g8e-config.js`, applies browser security headers, serves static assets, and returns `index.html` for unknown HTML routes. It does not terminate TLS, manage browser sessions, proxy WebSockets, proxy Server-Sent Events, or mount the server-side routes retained under `routes/`.
 
-The dashboard ships with a Dockerfile rooted at the g8e repo root (build context `.`), so it can be built as part of the unified platform stack:
-
-```bash
-docker build -f dashboard/Dockerfile -t g8e-dashboard .
-```
-
-See the repo-root `docker-compose.yml` for the unified stack wiring (gateway + operator + ensemble + dashboard).
-
-## Documentation
-
-- [Dashboard documentation](../docs/dashboard/index.md): Detailed component architecture, authentication, gateway integration, SSE, operator surfaces, development, and tests.
-- [Platform-level architecture](../docs/architecture/dashboard.md): g8ed's role and boundaries in the complete g8e platform.
+Passkey registration, sign-in, session validation, and logout use the Gateway directly. The source tree also contains browser modules for chat, cases, Operator management, approvals, audit, settings, terminal activity, and Server-Sent Events. In the standard separate-origin deployment, these modules are not operational because their dashboard-origin API and relative event paths have no handlers in the running static host. See [Dashboard architecture](../docs/architecture/dashboard.md) for the current capability status and security boundaries.
 
 ## Scripts
 
 | Script | Description |
 | --- | --- |
-| `npm start` | Run the static SPA host (`node server.js`) |
-| `npm run dev` | Run with nodemon file-watching |
+| `npm start` | Run the static host with `node server.js` |
+| `npm run dev` | Run the static host with nodemon file watching |
+| `npm run lint` | Run ESLint across the dashboard source |
 | `npm test` | Run Vitest once |
 | `npm run test:watch` | Run Vitest in watch mode |
+| `npm run test:ui` | Open the Vitest UI |
 | `npm run test:coverage` | Run Vitest with V8 coverage |
 
-## Environment Variables
+From the repository root, `make dashboard-lint` runs ESLint, `make dashboard-test` runs the Vitest suite, and `make build-dashboard` builds the container image.
 
-| Variable | Default | Description |
+## Environment variables
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `3000` | HTTP port |
-| `G8E_GATEWAY_URL` | none | Required browser-facing HTTPS gateway origin |
-| `G8E_GATEWAY_HTTP_URL` | none | Required container-facing plain-HTTP app enrollment origin |
-| `G8E_RUNTIME_DIR` | none | Required writable root for the dashboard app identity |
-| `GATEWAY_HEALTH_URL` | `http://g8eg:8080` | Gateway health base URL used by the Docker entrypoint |
-| `GATEWAY_HEALTH_PATH` | `/api/v1/health` | Gateway health path used by the Docker entrypoint |
+| `PORT` | `3000` | Express listen port |
+| `G8E_GATEWAY_URL` | none | Required HTTPS Gateway origin reachable from the browser |
+| `G8E_GATEWAY_HTTP_URL` | none | Required plain-HTTP Gateway origin used for workload enrollment |
+| `G8E_RUNTIME_DIR` | none | Required writable root for dashboard identity and pending enrollment state |
+| `GATEWAY_HEALTH_URL` | `http://g8eg:8080` | Gateway readiness origin used by the container entrypoint |
+| `GATEWAY_HEALTH_PATH` | `/api/v1/health` | Gateway readiness path used by the container entrypoint |
+
+Missing required `G8E_*` configuration, an unexpected identity-read failure, or an enrollment failure prevents the server from listening.
+
+## Docker
+
+The Dockerfile uses the repository root as its build context:
+
+```bash
+docker build -f dashboard/Dockerfile -t g8e-dashboard .
+```
+
+The image runs as a non-root user, waits for Gateway health, and starts the static host on port `3000`. The repository-root `docker-compose.yml` supplies the required origins, mounts a persistent volume at `/data`, and configures that path as the runtime directory. For the complete Gateway, Operator, ensemble, and dashboard startup and approval flow, see the [Unified Docker Stack guide](../docs/guides/unified_stack.md).
+
+## Documentation
+
+- [Dashboard documentation](../docs/dashboard/index.md): Component architecture, authentication, Gateway integration, events, development, and testing.
+- [Platform dashboard architecture](../docs/architecture/dashboard.md): g8ed's role, boundaries, deployment flow, and current capability status.
+- [Dashboard testing](../docs/dashboard/tests.md): Vitest configuration, test scope, and verification commands.
+- [Documentation guide](../docs/devs/docs.md): Repository-wide audit, ownership, generation, cross-linking, and versioning rules.
 
 ## License
 
-Copyright (c) 2026 Lateralus Labs, LLC. Licensed under the Business Source License 1.1 — see [LICENSE](./LICENSE) for details. As of the Change Date (2030-08-18), this software converts to Apache License 2.0.
+Copyright (c) 2026 Lateralus Labs, LLC. Licensed under the Business Source License 1.1; see [LICENSE](./LICENSE). The Change License is Apache License 2.0; the license defines the applicable effective-date terms.

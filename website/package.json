@@ -1,0 +1,19 @@
+{
+  "name": "g8e-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.js",
+    "check": "node --test && node src/build.js --check",
+    "deploy": "npm run check && npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "markdown-it": "15.0.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.127.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -4,301 +4,429 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-Core terminology for the g8e protocol, Governance Gateway, Governed Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
+Core terminology for the g8e Governance Suite, including the protocol, Governance Gateway, Governed Operator, g8ee ensemble, g8ed dashboard, compliance evidence, and MCP and A2A integrations. Terms are organized alphabetically.
 
 ---
 
 ## A2A (Agent2Agent)
 
-A protocol for agent-to-agent communication and orchestration. g8e supports A2A as a payload type within the GovernanceEnvelope, enabling standard AI agents to interact with the Governed Operator through the g8e protocol translation layer.
+A JSON-RPC protocol surface for agent-to-agent skill invocation. The Gateway converts an `a2a/call` request into a typed `A2ACallRequested` payload inside a **Governance Envelope**, processes it through the governance pipeline, and returns either a signed receipt or a structured suspension response containing an approval URL. A configured downstream A2A server can execute the admitted request.
 
 ---
 
-## Actuator (L5Actuator)
+## Action Receipt
 
-The **L5Actuator** is the execution boundary in the Governed Operator that performs actual command execution after L4 Warden verification. It is the only component permitted to mutate host state. The Actuator ensures that every execution is preceded by a signed intent to execute and followed by a signed **ActionReceipt**. It also handles local rehydration of tokens just before execution.
+The canonical protobuf `g8e.operator.v1.ActionReceipt`, signed by the **L5 Actuator** as evidence of an executing, completed, or failed transaction. It binds the transaction ID and hash, execution status and summary, state roots before and after execution, L2 and L3 status, deterministic stage evidence, signer identity, and signature. L5 signs and persists an `EXECUTING` form before dispatch, then signs and persists the final form and attaches a **Receipt Persistence Attestation**.
 
 ---
 
 ## Acting App ID
 
-A field in the **GovernanceEnvelope** (`acting_app_id`) that identifies the application or tool acting on behalf of the user. This establishes a delegation chain for auditing and policy enforcement.
+The `acting_app_id` field in a **Governance Envelope**. It identifies the application or tool acting as the user's delegate and complements `requestor_user_id`, which identifies the human authority.
+
+---
+
+## Actuator (L5 Actuator)
+
+The singular execution boundary in the Operator substrate. After the **L4 Warden** returns a verified transaction, L5 persists a signed pre-execution **Action Receipt**, appends a signed **Commitment Attestation**, rehydrates scrubbed tokens locally, mints a just-in-time **Capability**, dispatches the action, dissolves the capability, and persists the signed final receipt and its persistence attestation. Signing, initial receipt persistence, or commitment persistence failure stops execution.
+
+---
+
+## Assessment Scope
+
+A typed compliance record that fixes the deployment, organization, product version, build identity, source revision, network topology, cryptographic mode, component inventory, configuration hashes, doctrine bundle hashes, consensus policy hashes, trust anchors, and assessment time window to which evidence and conclusions apply.
+
+---
+
+## Audit Store
+
+The append-only SQLite record of Operator sessions, events, file mutations, complete canonical **Action Receipts**, deterministic stage evidence, and persistence attestations. Sensitive content is encrypted through the local vault, records are scoped to valid Operator sessions, and retention rules prune eligible records. In gateway mode these tables are part of `g8e.db`; each remote Operator also retains its own authoritative local audit evidence.
+
+---
+
+## Bound State Root
+
+The admission-gating **State Root** computed from all documents, active bound-tier KV and blob rows, and the token keymap hash when the scrubbing service is attached. It excludes cache entries, nonces, SSE events, and observed-tier rows so telemetry does not continuously invalidate in-flight envelopes.
+
+---
+
+## Canonical Gateway Database
+
+The Gateway's SQLite database, `g8e.db`, opened in WAL mode and used by the document, KV, blob, audit, commitment-ledger, replay, and SSE-buffer services. It stores platform state such as users, organizations, sessions, operators, policies, consensus definitions, enrollment records, and revocations. It is not the only database in the system: the git-backed file ledger, execution vault, suspended-transaction store, and Operator-side stores remain separate where their lifecycle or sovereignty boundary requires it.
 
 ---
 
 ## Capability
 
-A just-in-time, single-action, self-dissolving permission derived from a verified governance envelope. The L5 Actuator mints a capability before execution and dissolves it immediately after, enforcing zero standing privileges. The capability binds the action type, target resource, transaction hash, and expiry. Downstream handlers can extract and verify the capability from the request context.
+A just-in-time, single-action permission minted by L5 from a verified transaction. It binds the transaction hash, action type, target resource, Operator identity and session, envelope expiry, a random single-use token, and the Actuator key identity. L5 places it in the execution context and dissolves it immediately after dispatch succeeds or fails; handlers can verify it before performing work.
 
 ---
 
-## Coordination Store
+## Command Intent
 
-The embedded SQLite database used by the Governance Gateway for durable storage of users, operators, and platform data. The Governance Gateway running in gateway mode is the single source of truth: a single SQLite database in WAL mode shared by all components via the Governance Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the Governance Gateway's HTTP API.
-
-Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, consensus, enrollment_tokens, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, account_locks, login_audit, auth_admin_audit, console_audit, operator_usage, passkey_challenges, settings, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
+The pre-governance protobuf `g8e.common.v1.CommandIntent` published by an app workload to a bound Operator's command channel. It carries routing identity, action classification, typed Operator payload bytes, and application context. The Gateway validates the Operator-session binding, obtains the current state root, and converts the intent into a **Governance Envelope**; a command intent is not itself authorization to execute.
 
 ---
 
-## Encrypted KV Adapter
+## Commitment Attestation
 
-A bridge between the canonical gateway DB's KV store and the TokenStore interface expected by the ScrubbingService. Values are encrypted at rest via the vault. Entries are written as `state_tier='observed'` so they do not participate in the bound state root hash. This replaced the standalone TokenStoreService and its separate `token_store.db` file.
-
----
-
-## Enrollment Token
-
-A one-time, cryptographically random token used for secure passkey enrollment. The gateway generates a 32-byte token with a 5-minute TTL and persists it with the user's session identifiers. The CLI opens a browser with the token in the URL fragment, and the console SPA submits it to the public validation endpoint. The token is consumed on first use and cleaned up after expiration, preventing exposure of raw session identifiers in browser history or referrer headers.
+The canonical protobuf `g8e.operator.v1.CommitmentAttestation`. Before execution, the L5 Auditor signs a record binding the transaction, state root, action and target, digests of L2, Warden-intent, and human signatures, and the prior commitment hash. Its canonical SHA-256 hash becomes the link used by the next attestation.
 
 ---
 
-## Execution Vault
+## Commitment Ledger
 
-An embedded SQLite database on the Governed Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution Vault Service provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
-
----
-
-## Governance Envelope
-
-The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8e protocol mutations. It binds identity, intent, state, and governance proofs into one transaction. Fields include:
-- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `requestor_user_id`, `acting_app_id`
-- Intent: `event_type`, `payload` (typed protobuf bytes), `intent_data` (structured JSON), `action_type`, `target_resource`
-- State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
-- Governance: `governance` (L1/L2/L3 metadata)
-- Context: `case_id`, `investigation_id`, `task_id`, `system_fingerprint`, `tenant_id`, `binding_persona`
-- Posture: `posture` (gateway governance posture at envelope construction time — doctrine, consensus, ratify, or notary; policy metadata, not included in the transaction hash)
-
-The wire format is canonical JSON (protojson) for client-facing surfaces; signing is based on the deterministic `transaction_hash` computed from normalized envelope fields.
+The permanent SQLite hash chain of signed **Commitment Attestations**. L5 builds and appends each commitment against the current head while holding the database write lock, preventing concurrent writers from selecting the same predecessor. Compliance and reporting tools independently verify chain order, hashes, signatures, structured columns, and receipt cross-links. This is distinct from the git-backed **Ledger** used for file snapshots.
 
 ---
 
-## Gateway Peer
+## Compliance Bundle
 
-A gateway instance in a federated deployment that can communicate with other gateways. Gateway peers have their own SPIFFE identity (`spiffe://g8e.local/gateway/<gateway_id>`) and PKI support for peer-to-peer mTLS connections. Gateway peer functionality is part of the federation architecture for multi-gateway deployments.
-
----
-
-## Governance Gateway
-
-The central coordinator that admits transactions, manages PKI, enforces the 5-layer governance pipeline, and brokers pub/sub channels to operators. The Gateway is an Operator with additional gateway services; its in-process Operator runs L1-L5 locally for operations on the gateway host. Serves as the Policy Decision Point (PDP).
-
----
-
-## Governance Posture
-
-A configuration that determines which governance layers are required for transaction verification. The four postures are:
-- **Doctrine**: Requires only L1 (Technical Bedrock) validation
-- **Consensus**: Requires L1 and L2 (Consensus) validation
-- **Ratify**: Requires L1 and L3 (Notary/Human) validation
-- **Notary**: Requires L1, L2, and L3 validation
-The posture is configured at startup and stamped into each GovernanceEnvelope at construction time (the `posture` field). The L4 Warden reads posture per-envelope at verification time — the warden has no posture of its own; the envelope is authoritative. Posture requirements are enforced by the L4 Warden via the GovernancePosture interface.
-
----
-
-## Governed Operator
-
-A single static binary deployed on target hosts. It requires no installation, opens no inbound ports, and initiates an outbound-only mTLS tunnel to the Governance Gateway. The operator pulls work from a unique pub/sub channel, re-verifies every proof locally against its own state, and is the only component authorized to mutate the host. Each remote Governed Operator runs L1-L5 locally for operations on its own host. Serves as the Policy Execution Point (PEP) and MCP server.
-
----
-
-## g8e Protocol
-
-The canonical protocol definitions (protobuf schemas, constant registries, governance invariants).
-
----
-
-## Heartbeat
-
-A periodic health telemetry message sent by the Governed Operator to the Governance Gateway. Contains system identity (hostname, OS, architecture), performance metrics (CPU, memory, disk usage), network information, uptime data, and environment details (pwd, lang, timezone, term, container detection, init system). Used for Governed Operator health monitoring and status determination.
-
----
-
-## L1 Doctrine (L1Doctrine)
-
-The foundational layer of g8e governance (Technical Bedrock). It implements hard-coded technical gates enforced via protobuf field options (forbidden_patterns) and real-time heuristics:
-- **Forbidden Patterns**: Regex patterns on protobuf fields (e.g., blocking `sudo`, `su`, `rm -rf /`)
-- **Threat Detection**: Command and MCP argument analysis against MITRE ATT&CK indicators via the `AnalyzeCommand` and `AnalyzeMCPArguments` methods.
-L1 is foundationally active for every command and cannot be bypassed.
-
----
-
-## L2 Consensus (L2Consensus)
-
-The second layer of g8e governance (Consensus). A multi-agent consensus system where independent agents vote on command candidates. L2 ensures every command executed is backed by a cryptographic quorum. The Consensus service deliberates on each governance envelope and produces signed votes. In the g8e protocol, an L2 vote is an Ed25519 signature over the `transaction_hash|decision` in the `GovernanceEnvelope`. Votes are verified by the L4 Warden against the consensus policy's quorum requirement. L2 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, ratify, notary).
-
----
-
-## L3 Notary (L3Notary)
-
-The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with two implementations:
-- **Gateway Notary**: The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2.
-- **Outbound Notary**: The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction.
-The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, ratify, notary). The mock L3 notary bypass (`G8E_L3_MOCK`) was removed in v1.6.7; the gateway always requires real WebAuthn proof for L3 notary approval.
-
----
-
-## L4 Warden (L4Warden)
-
-The fail-closed transaction verification gate that enforces L1/L2/L3 governance before any execution. The Warden runs in the Governance Gateway's in-process Operator and in each remote Governed Operator's outbound mode, ensuring every execution context re-verifies proofs locally. The Warden performs:
-- Envelope integrity and decoding validation
-- Typed payload validation and action type matching
-- L1 forbidden pattern validation via L1Doctrine
-- Transaction hash verification (both `id` and `transaction_hash` must match the computed hash)
-- Freshness (expiry) and replay protection (nonce)
-- State root matching
-- L2 signature verification (when required by posture)
-- L3 Notary proof verification (when required by posture)
-The Warden rejects transactions that fail any check; only verified transactions proceed to the L5 Actuator for execution.
-
----
-
-## Ledger
-
-The file-mutation audit layer of the Local-First Audit Architecture. The Governed Operator implements a Multi-Ledger Architecture: each Operator session receives its own isolated git repository at `.g8e/data/ledger/sessions/<operator_session_id>/`. Every file mutation follows a two-phase commit: the Ledger snapshots the file's state before mutation (`LedgerHashBefore`), the Governed Operator executes, then the Ledger snapshots the result (`LedgerHashAfter`). Each phase produces a git commit with a timestamped message referencing the Operator session ID. The resulting git hash pair provides a cryptographically verifiable diff, enabling time-travel, rollback, and cross-session forensic comparison.
-
----
-
-## Local-First Audit Architecture
-
-An architecture where the Governed Operator is the System of Record for all execution logs and file mutations. The Governance Gateway acts as a stateless relay with no sensitive operational data persisting in Gateway storage. Core philosophy: "The Governance Gateway handles routing. The Governed Operator handles retention."
-
----
-
-## MCP (Model Context Protocol)
-
-An open protocol for standardizing AI model interactions with tools and data sources. The Governed Operator exposes host tools as an MCP Server, enabling standard AI clients (OpenAI, Anthropic, LangChain, etc.) to execute commands through the g8e governance envelope. MCP tool calls are translated into GovernanceEnvelope transactions with typed `operator.proto` payloads.
-
----
-
-## Merkle Commitment
-
-A cryptographic artifact produced during L2 Consensus verification. It is a SHA-256 Merkle root computed over the sorted (agent_id, scalar) leaves of the Reputation Scoreboard. Each commitment includes the `prev_root` of the previous commitment, forming a tamper-evident hash chain of agent performance.
-
----
-
-## Mutual TLS (mTLS)
-
-Two-way TLS authentication where both client and server verify each other's certificates. Used between Governed Operators and the Governance Gateway to ensure g8e binary file authenticity and prevent forged connections. The Governance Gateway operates as a Certificate Authority (CA) issuing Operator certificates with SPIFFE URI SAN identity.
-
----
-
-## g8e binary file
-
-The pre-compiled g8e binary file that can be launched as a Governance Gateway or Governed Operator. The same artifact serves both roles, selected by command-line flags.
-
----
-
-## Operator Session
-
-A unique execution context for a running Governed Operator instance. Identified by `operator_session_id`. Each session has its own isolated git-backed ledger for file mutation tracking. The Execution Vault is keyed by Operator session ID and enforces session validation before recording events.
-
----
-
-## PKI (Public Key Infrastructure)
-
-The cryptographic infrastructure managed by the Governance Gateway for issuing and revoking Operator certificates. The Governance Gateway acts as a Certificate Authority (CA), issuing certificates with workload identity (URI SAN) for operators. Certificates are revoked via the Governance Gateway's revocation service, and operators fetch the revocation bundle to enforce revocation. TLS 1.3-only is enforced. The PKI also supports gateway peer certificates for federated deployments.
-
----
-
-## Replay Protection
-
-Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the Governance Gateway's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
-
----
-
-## Reputation Staking
-
-The mechanism by which L2 Consensus agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the Reputation Scoreboard. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
-
----
-
-## Requestor User ID
-
-A field in the **GovernanceEnvelope** (`requestor_user_id`) that identifies the human user who authorized the action. This is the ultimate authority in the delegation chain.
-
----
-
-## Observed-State Root
-
-A separate Merkle root commitment computed over observed-tier KV and blob entries in the canonical gateway DB. Observed-state rows (those with `state_tier='observed'`) are excluded from the bound state root to prevent churning in-flight envelopes. The observed-state root does not gate transaction admission but is chained into the audit ledger so observed evidence is tamper-evident without breaking the bound root. Computed by the StateRootService.
-
----
-
-## Scrubbed Vault
-
-A vault mode (`VaultModeScrubbed`) on the Governed Operator indicating that command outputs stored in the Execution Vault have been processed by the **Sovereign Execution Boundary** before persistence. Sensitive data (credentials, PII, network identifiers) is replaced with safe placeholders like `{{UEI_N}}` in-memory before the scrubbed output is written to the encrypted Execution Vault. This ensures that raw sensitive data never leaves the sovereign host. The counterpart mode is `VaultModeRaw`, which stores unscrubbed output.
-
----
-
-## Sovereign Execution Boundary
-
-The data sovereignty and scrubbing system running within the Governed Operator (PEP), implemented as the `ScrubbingService`. It provides:
-- **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.
-- **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only sees placeholders.
-- **Token Persistence**: Maintains consistent mapping of placeholders across sessions via the TokenStore interface, implemented by the EncryptedKVAdapter against the canonical gateway DB.
-
----
-
-## SSE (Server-Sent Events)
-
-The streaming protocol used to push real-time events from the Governance Gateway to clients. Used for command execution results, heartbeat updates, and approval completion notifications. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response, not pushed via SSE: A2A responses carry a structured `approval_url` field, while MCP responses embed the approval URL in the tool result text content. Approval completions are delivered as `approval.completed` events on the SSE stream.
-
----
-
-## State Root
-
-A Merkle root representing the current bound state of the Governance Gateway's canonical database (documents, kv_store, blobs). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state. Only bound-state rows (those with `state_tier='bound'`) are included in the state root computation. Observed-state rows are hashed separately in the observed-state root. The bound root also incorporates the token keymap hash from the ScrubbingService to bind rehydration mappings into the state.
-
----
-
-## System Fingerprint
-
-A unique identifier generated by each Governed Operator based on system characteristics including hostname, OS, architecture, CPU count, and machine ID. Used for Governed Operator identification and duplicate detection.
-
----
-
-## Time-Travel
-
-The ability to restore files to any previous state using the Ledger's git history. Users can rollback changes, view historical versions, and recover from unintended modifications by restoring files to specific git commits.
-
----
-
-## Tool Calling Loop
-
-The execution pattern where BYO AI clients generate tool calls to interact with the Governed Operator via MCP or A2A protocols, receive results, and generate subsequent calls based on the outcomes. The Governed Operator exposes host tools as an MCP Server, enabling standard AI clients to execute commands through the governance envelope.
+A portable, content-addressed package containing a canonical compliance report, assessments, evidence index, source artifacts, catalogs, crosswalks, trust material, and manifest. Bundle verification checks allowed paths, digests, signatures, references, scope, versions, and assessment consistency without trusting rendered Markdown, HTML, or terminal output.
 
 ---
 
 ## Consensus
 
-A multi-member deliberation service that produces L2 consensus votes for governance envelopes. Each consensus member is an enrolled principal with its own Ed25519 key. The consensus policy defines the member set, quorum threshold, and whether distinct signatures are required. When the gateway operates under consensus or notary posture, the consensus deliberates on each envelope and signs a vote indicating whether the action is safe. The gateway bootstraps the consensus at startup from a policy stored in the coordination store.
+A named L2 governance body defined by a `ConsensusPolicy`. Its enrolled members correspond to trusted signer identities, and the policy defines the member set, affirmative quorum, distinct-signature requirement, and enabled state. Members sign Ed25519 votes over `<transaction_hash>|<decision>`. L2 gates execution under `consensus` and `notary` postures and remains audited under `doctrine` and `ratify`.
 
 ---
 
-## Transaction Hash
+## Control Assertion
 
-A deterministic SHA-256 hash computed from normalized GovernanceEnvelope fields. The hash is used for replay protection, state binding, and L2/L3 signature verification. The `transaction_hash` field in the envelope must match the computed hash; mismatch causes rejection by the L4 Warden.
+A framework-neutral, atomic statement of technical behavior in the protocol compliance assertion catalog. Each assertion declares its scope, responsibility, applicable actions, required evidence and verifier types, minimum evidence level, validation cycle, missing-evidence policy, and passing rule. Typed crosswalks map these assertions to external framework controls without treating a supporting mapping as certification.
+
+---
+
+## Deterministic Stage Evidence
+
+The canonical protobuf `g8e.operator.v1.DeterministicStageEvidence`, which records a typed governance or execution stage with monotonic timing, outcome, transaction and identity bindings, state roots, signer and signature digests, doctrine bundle identity, audit references, and parent-stage linkage. Current stage kinds cover L1, protocol L2, L3, L4 verification, receipt persistence, commitment append, and L5 execution.
+
+---
+
+## Encrypted KV Adapter
+
+The adapter from the Gateway KV service to the token-store interface used by the scrubbing service. It namespaces and encrypts token values through the vault and writes them as observed-tier KV entries, excluding their encrypted storage rows from the bound state root. The deterministic in-memory token keymap hash is bound into the bound state root separately.
+
+---
+
+## Enrollment Token
+
+A one-time token used to transfer passkey enrollment from the CLI to the browser without placing raw session identifiers in a URL. The Gateway generates 32 cryptographically random bytes, encodes them as hexadecimal, stores the token with the user and CLI session, and applies a five-minute expiry. The browser receives it in the URL fragment, and validation consumes it once. This differs from the token used by **Platform Enrollment**.
+
+---
+
+## Evidence Graph
+
+The immutable, typed graph that connects assessment scope, control assertions, framework controls, content-addressed artifacts, verifier results, and assessments. Compliance graders and renderers consume this graph rather than scraping logs or inferring results from filenames.
+
+---
+
+## Evidence Level
+
+The strength assigned to compliance evidence: L0 documented, L1 implemented, L2 deterministically evaluated, L3 demonstrated against a real stack, L4 continuously evidenced across an assessment window, and L5 externally attested. A result does not inherit a higher level merely from lower-level evidence.
+
+---
+
+## Execution Vault
+
+A local SQLite service that stores command execution results and file diffs, links records to workflow identifiers, and records content hashes. It encrypts content through the local vault and then compresses it for storage, and it enforces configurable retention and database-size limits. Writes fail when content cannot be encrypted; reads log decryption or decompression failures and return the record without the unavailable decoded content.
+
+---
+
+## g8e Binary
+
+The statically linked Go executable that runs either as a **Governance Gateway** (`g8e gw`) or a **Governed Operator** (`g8e operator`). The selected command determines the role; both roles use the same protocol and Operator substrate.
+
+---
+
+## g8e Protocol
+
+The canonical wire contract and invariant set for g8e. It includes protobuf schemas, Go and Python protocol packages, JSON constant registries, JSON model schemas, doctrine definitions, SPIFFE workload-identity helpers, receipt verification, compliance types, and conformance vectors. Client-facing protobuf messages use protojson on the wire.
+
+---
+
+## g8ed
+
+The first-party browser dashboard. It provides passkey authentication and operator-facing visibility while remaining outside the governance and execution authority. The browser authenticates directly to the Gateway with WebAuthn and a Gateway-issued HttpOnly session cookie; the dashboard workload uses its own enrolled app identity.
+
+---
+
+## g8ee
+
+The first-party reference agentic ensemble. It converts user requests into governed intent, runs its multi-agent reasoning and Tribunal workflow, constructs conformant **Governance Envelopes**, and publishes typed progress and result events through the Gateway. It is a supported producer, not a required Gateway dependency.
+
+---
+
+## Gateway Peer
+
+A workload identity reserved for Gateway-to-Gateway trust, with SPIFFE form `spiffe://g8e.local/gateway/<gateway_id>`. The PKI creates a dedicated Gateway-peer intermediate CA and includes it in the canonical trust bundle. These identity and certificate primitives support federated deployments; they do not by themselves establish a federation protocol or peer replication behavior.
+
+---
+
+## Governance Envelope
+
+The canonical protobuf container `g8e.common.v1.GovernanceEnvelope` for governed mutations. It binds:
+
+- **Identity**: `id`, timestamps, source component, Operator and session IDs, `requestor_user_id`, and `acting_app_id`.
+- **Intent**: routing `event_type`, typed protobuf `payload`, structured `intent_data`, `action_type`, and `target_resource`.
+- **State and replay defense**: `state_merkle_root`, `nonce`, `transaction_hash`, and `protocol_version`.
+- **Governance**: L1, L2, and L3 metadata.
+- **Application context**: case, investigation, task, system fingerprint, tenant, and binding persona.
+- **Policy context**: the Gateway-selected governance `posture`.
+
+Client-facing surfaces serialize the envelope with protojson. The deterministic transaction hash covers normalized intent and identity fields; posture is policy metadata and is not part of that hash.
+
+---
+
+## Governance Gateway
+
+The platform coordinator and Policy Decision Point (PDP). It authenticates workloads, manages PKI, persists shared platform state, admits envelopes, runs L1 through L3 policy decisions, and brokers Operator pub/sub channels. For actions targeting the Gateway host, an in-process Operator substrate runs L4 and L5 locally. The Gateway does not hold a privileged path around the governance pipeline and does not initiate connections into remote Operators.
+
+---
+
+## Governance Posture
+
+The startup-selected policy that determines whether L2 and L3 are fail-closed gates or audited results. L1 and universal integrity checks are enforced in every posture.
+
+| Posture | L1 | L2 | L3 for mutations |
+| --- | --- | --- | --- |
+| **Doctrine** | Enforced | Audited | Audited |
+| **Consensus** | Enforced | Enforced | Audited |
+| **Ratify** | Enforced | Audited | Enforced |
+| **Notary** | Enforced | Enforced | Enforced |
+
+Read-only actions do not require L3 in any posture. The Gateway stamps the posture into each envelope, and the L4 Warden treats that envelope field as authoritative during verification.
+
+---
+
+## Governed Operator
+
+The Policy Execution Point (PEP) deployed on a target host. It opens no inbound service port, establishes an outbound-only mTLS connection to the Gateway, pulls work from its session-specific channel, and re-runs L1 and re-verifies L2 and L3 locally before L4 and L5. It is the only platform component authorized to mutate its host and retains host-local audit and file-history evidence.
+
+---
+
+## Heartbeat
+
+Periodic health telemetry sent by a Governed Operator to the Gateway. The typed payload reports identity, uptime, operating system and architecture, CPU, memory and disk details, network information, environment details, capability flags, and fingerprint details. The Gateway uses it to monitor Operator status.
+
+---
+
+## KSI (Key Security Indicator)
+
+A typed, evaluable security requirement used by the compliance subsystem, particularly the FedRAMP 20x catalog. A KSI declares methods, evidence requirements, certification class, and validation cycle; the evaluator derives status from registered methods and typed evidence rather than prose claims.
+
+---
+
+## L1 Doctrine (L1Doctrine)
+
+The technical hard-gate layer. It validates decoded typed payloads against protobuf forbidden-pattern options, bundled JSON doctrine sets, and deterministic command and MCP-argument threat analysis, including MITRE ATT&CK-oriented patterns. L1 is enforced in every posture and is re-run on the Operator before execution.
+
+---
+
+## L2 Consensus (L2Consensus)
+
+The multi-signature governance layer. Each enrolled member produces an Ed25519 vote over `<transaction_hash>|<decision>`, and L4 verifies signer trust, policy membership, signature validity, distinctness, and affirmative quorum. L2 is required only by `consensus` and `notary`; under `doctrine` and `ratify`, available L2 results are recorded without gating execution.
+
+---
+
+## L3 Notary (L3Notary)
+
+The human-authorization layer for mutations under `ratify` and `notary` postures. Gateway mode verifies a WebAuthn passkey assertion; CLI-originated proofs additionally bind the authenticated CLI session and certificate fingerprint. Outbound mode verifies an approved suspended transaction and its Ed25519 signature over the transaction hash. Read-only actions do not require L3, and `doctrine` and `consensus` audit L3 without requiring it.
+
+---
+
+## L4 Warden (L4Warden)
+
+The fail-closed pre-dispatch verifier on the Operator substrate. It validates envelope structure and typed payload/action agreement, reserves the nonce, checks expiry, recomputes and compares both transaction ID and hash, re-runs L1, verifies the current state root, and applies posture-dependent L2 and L3 checks. It returns a verified transaction and deterministic evidence to L5; it does not execute the action.
+
+---
+
+## L5 Actuator (L5Actuator)
+
+See **Actuator**.
+
+---
+
+## Ledger
+
+The git-backed file-mutation history maintained by the Governed Operator. Each Operator session uses an isolated repository beneath the runtime ledger directory. A governed file mutation snapshots and commits the pre-mutation state, performs the operation, then commits the post-mutation state and records the before and after hashes, diff stat, and diff content. The ledger supports history queries, point-in-time retrieval, and restoration. It is distinct from the SQLite **Commitment Ledger**.
+
+---
+
+## Local-First Audit Architecture (LFAA)
+
+The architecture in which each target host remains authoritative for raw execution evidence, file history, and the effects applied to that host. The local audit store, commitment ledger, execution vault, and git-backed ledger retain the evidence needed to reconstruct and verify execution. The Gateway is not entirely stateless: it persists platform coordination state and, in gateway mode, local or relayed receipt evidence; sovereignty depends on raw sensitive content remaining on the Operator and only scrubbed results and cryptographic commitments crossing the boundary.
+
+---
+
+## MCP (Model Context Protocol)
+
+The JSON-RPC tool protocol exposed by g8e for compatible AI clients. The Gateway supports tool discovery and calls, converts governed calls into typed Operator protobuf payloads and **Governance Envelopes**, and returns structured results or an approval suspension. Native Operator tools and configured downstream MCP servers execute only after governance admission.
+
+---
+
+## Mutual TLS (mTLS)
+
+TLS authentication in which both peers present and verify certificates. g8e uses mTLS and SPIFFE URI SANs to authenticate workload and session identities, encrypt transport, bind callers to envelope claims, and enforce certificate revocation. Binary provenance is a separate build-signing concern; mTLS authenticates the communicating workload, not the executable file itself. TLS 1.3 is required on protected transport surfaces.
+
+---
+
+## Observed-State Root
+
+A separate SHA-256 commitment over active observed-tier KV and blob rows. It does not gate transaction admission, so telemetry and environmental readings do not make in-flight envelopes stale. Audit evidence can chain this root to make observations tamper-evident.
+
+---
+
+## Operator Session
+
+The execution and authorization context of a running Governed Operator, identified by `operator_session_id`. It scopes the Operator workload identity, pub/sub channel, audit records, execution-vault records, and session-specific git ledger.
+
+---
+
+## OSCAL (Open Security Controls Assessment Language)
+
+The NIST machine-readable format supported by the compliance reporting subsystem. g8e projects its canonical typed assessment record into OSCAL assessment results and validates the output against the supported OSCAL 1.1.2 schema; OSCAL is an output representation, not an independent source of assessment decisions.
+
+---
+
+## PKI (Public Key Infrastructure)
+
+The Gateway-managed certificate hierarchy for protected platform communication. It creates root and intermediate authorities, issues workload certificates carrying SPIFFE URI SANs, publishes trust and revocation bundles, and supports Operator, CLI, app, user, hub, and Gateway-peer identities. Private keys for CSR-based enrollment are generated and retained by the enrolling workload.
+
+---
+
+## Platform Enrollment
+
+The owner-approved protocol for enrolling dashboard, ensemble, and Operator component instances. A component generates distinct app, Operator, and CLI keys as required, submits CSRs and fingerprints, and receives an approval or denial decision. To complete an approved request, the component proves possession of every CSR private key by signing a canonical transcript that binds the protocol version, request, token hash, component identity, and key fingerprints; the Gateway verifies those signatures before issuing certificates.
+
+---
+
+## Principal
+
+The human, AI agent, application, CI/CD workflow, or scheduled process that originates an intent. g8e governs the requested action rather than granting a trusted actor a bypass; the authenticated producer and any human delegator remain explicit in the envelope.
+
+---
+
+## Producer
+
+A client or service that translates a principal's intent into a conformant **Governance Envelope**. Producers include the Gateway's MCP and A2A translators, g8ee, and compatible native integrations. Producing an envelope does not authorize execution; the Gateway and bound Operator still verify it.
+
+---
+
+## Receipt Persistence Attestation
+
+The canonical protobuf `g8e.operator.v1.ReceiptPersistenceAttestation`, signed after the final receipt is durably stored. It binds the transaction ID, digest of the final receipt signature, persistence timestamp, audit record ID, signer key ID, and signature. Receipt relays verify both the receipt signature and this attestation.
+
+---
+
+## Replay Protection
+
+The nonce, expiry, transaction-hash, and in-flight controls that prevent a captured or concurrent transaction from executing again. L4 reserves each nonce atomically in durable storage before stateful verification, rejects duplicates and expired envelopes, and releases the reservation when verification fails.
+
+---
+
+## Reputation Commitment
+
+A g8ee Auditor record that binds a Tribunal verdict to the current agent-reputation scoreboard. It contains a SHA-256 Merkle root over sorted `(agent_id, scalar)` leaves, the preceding reputation root, leaf count, verdict identity, and an Auditor HMAC-SHA256 signature. This ensemble reputation chain is distinct from the L5 **Commitment Ledger**.
+
+---
+
+## Reputation Staking
+
+The g8ee mechanism that updates each agent's reputation scalar in the range 0.0 through 1.0 using an exponential moving average after outcomes resolve. Typed stake-resolution records capture rewards, slash tiers, and unbonding state; reputation affects ensemble influence, not L2 cryptographic signature validity in the platform Warden.
+
+---
+
+## Requestor User ID
+
+The `requestor_user_id` field in a **Governance Envelope**. It identifies the human delegator who authorized the action and pairs with `acting_app_id`, which identifies the delegated application or tool.
+
+---
+
+## Scrubbed Vault
+
+The `scrubbed` storage mode for execution and file-operation results whose sensitive content has passed through the **Sovereign Execution Boundary** before persistence. Sensitive values can become reversible UEI tokens or non-reversible typed redactions, depending on the detector and policy. `raw` mode stores the unsanitized local forensic form and does not make that content safe for model or cloud access.
+
+---
+
+## Sovereign Execution Boundary
+
+The Operator-local scrubbing and rehydration boundary implemented by the `ScrubbingService` and L5 integration. Egress scrubbing removes or tokenizes sensitive content before it leaves the host; persistent token mappings are encrypted; the token keymap hash can participate in the bound state root; and L5 rehydrates reversible tokens only on the execution host immediately before dispatch.
+
+---
+
+## SSE (Server-Sent Events)
+
+The Gateway event surface for real-time delivery from app workloads and internal Gateway producers to browser and CLI sessions. Apps push authenticated, session-scoped events with `POST /api/v1/sse/push`; consumers poll `/api/v1/sse/events` or stream `/api/v1/sse/stream` using mTLS or a web-session cookie. Approval and passkey completion events use this path. Governed Operator command transport uses pub/sub rather than SSE.
+
+---
+
+## State Root
+
+A deterministic SHA-256 digest representing the current authoritative bound state used for transaction freshness. The Gateway's `StateRootService` hashes documents, active bound-tier KV and blob rows, and the scrubbing token keymap hash when configured. The envelope carries this value in `state_merkle_root`, and L4 rejects a mismatch with the current authoritative root. See also **Bound State Root** and **Observed-State Root**.
 
 ---
 
 ## State Tier
 
-A classification for database entries in the canonical gateway DB that determines whether they participate in the bound state root. Two tiers exist:
-- **Bound State** (`state_tier='bound'`): Entries that affect transaction freshness and are included in the bound state root. In-flight envelopes depend on this root.
-- **Observed State** (`state_tier='observed'`): Entries that are evidence or telemetry data, excluded from the bound state root to prevent churning. These are hashed separately in the observed-state root for audit ledger chaining.
-The `state_tier` column was added to `kv_store` and `blobs` tables in v1.1.9.
+The classification that controls whether a Gateway KV or blob row participates in transaction freshness:
+
+- **Bound** (`state_tier='bound'`): authoritative state included in the admission-gating root.
+- **Observed** (`state_tier='observed'`): telemetry or evidence excluded from the bound root and hashed into the separate observed-state root.
+
+Documents are authoritative and always participate in the bound root; the `state_tier` column applies to KV and blob rows.
+
+---
+
+## Suspended Transaction
+
+A Governance Envelope paused while it awaits required L3 authorization. The suspended-transaction store retains the envelope, approval status, proof material, expiry, and caller binding. After successful approval, the Gateway resumes governance processing and removes the record after execution; expired records are pruned.
+
+---
+
+## System Fingerprint
+
+A stable SHA-256 host identifier derived from operating system, architecture, CPU count, machine identifier, and hostname. It supports Operator identification and duplicate detection and is carried in Operator records and envelope context.
+
+---
+
+## Time-Travel
+
+Point-in-time file retrieval and restoration using the git-backed **Ledger**. A caller can inspect file history or restore a governed file from a selected ledger commit; this term does not refer to rewriting the SQLite commitment chain.
+
+---
+
+## Tool Calling Loop
+
+The client pattern in which an AI model selects an MCP tool or A2A skill, submits arguments, consumes the governed result or approval state, and chooses the next call. Each state-changing iteration remains a separate governed transaction rather than inheriting authorization from the surrounding conversation.
+
+---
+
+## Transaction Hash
+
+The deterministic SHA-256 digest computed from normalized **Governance Envelope** fields. The envelope `id` and `transaction_hash` must both equal the computed value. L2 votes, L3 authorization, replay checks, capabilities, receipts, and commitment evidence bind to this hash. Policy metadata such as the envelope posture is excluded from hash canonicalization.
+
+---
+
+## Vault
+
+The local encryption service and key hierarchy used by storage and scrubbing components. Protected data uses AES-256-GCM, and services that require encryption fail closed when the vault is unavailable or locked rather than falling back to plaintext. The encryption vault is distinct from the **Execution Vault**, which is a SQLite data store.
 
 ---
 
 ## Workload Identity
 
-The identity of a Governed Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the Governed Operator and the Governance Gateway. The SPIFFE trust domain is `g8e.local`. Supported identity formats include:
+A SPIFFE-style identity encoded in a certificate URI SAN under the `g8e.local` trust domain. Current formats are:
+
 - Operator: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - CLI: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
 - App: `spiffe://g8e.local/app/<operator_id>`
 - User: `spiffe://g8e.local/user/<user_id>`
 - Hub: `spiffe://g8e.local/hub/operator-listen`
-- Gateway Peer: `spiffe://g8e.local/gateway/<gateway_id>`
+- Gateway peer: `spiffe://g8e.local/gateway/<gateway_id>`
+
+The transport and application layers match these identities to sessions, roles, and envelope claims.

@@ -22,7 +22,6 @@ g8ee is an agentic ensemble that acts as an L2 producer, emitting typed, signed 
 | [Development](devs.md) | Dev setup, guidelines, and coding standards |
 | [Testing](tests.md) | Testing framework and practices |
 | [Evals](evals.md) | Evaluation suite and benchmarks |
-| [Constants](constants.md) | Constants and configuration reference |
 
 ## Related Platform Documentation
 
@@ -37,3 +36,4 @@ g8ee is an agentic ensemble that acts as an L2 producer, emitting typed, signed 
 - [Getting Started Guide](../guides/getting_started.md) — Platform installation, quick start, and unified stack deployment
 - [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
 - [Dashboard (g8ed)](../dashboard/index.md) — First-party browser interface that consumes ensemble SSE events
+- [Documentation Guide](../devs/docs.md) — Repository-wide audit, ownership, generation, cross-linking, and versioning rules

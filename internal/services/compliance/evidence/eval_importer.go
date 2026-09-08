@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -171,6 +175,47 @@ type EvalBundleImporter struct {
 
 func NewEvalBundleImporter(reader ArtifactReader, runID, runDir string) *EvalBundleImporter {
 	return &EvalBundleImporter{reader: reader, runID: runID, runDir: runDir, nowFunc: time.Now}
+}
+
+func VerifyEvalRun(ctx context.Context, reader ArtifactReader, runID, runDir string, verifiedAt time.Time) (*compliancev1.ComplianceVerificationReport, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	report := &compliancev1.ComplianceVerificationReport{
+		ReportId: runID, VerifiedAt: timestamppb.New(verifiedAt), VerifierId: constants.EvalRunVerifierID,
+		VerifierVersion: constants.EvalRunVerifierVersion,
+	}
+	finalize := func() {
+		report.Valid = len(report.GetFailures()) == 0
+		report.Checks = []*compliancev1.VerificationCheckResult{NewVerificationCheckResult(constants.EvalRunVerificationCheck, constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, []string{runID}, report.GetFailures())}
+	}
+	if reader == nil || !ValidPathElement(runID) || !ValidRelativePath(runDir) || verifiedAt.IsZero() {
+		report.Failures = append(report.Failures, &compliancev1.VerificationFailure{Code: constants.ErrInvalidEvidenceGraph.Error(), SubjectRef: runID, Reason: "reader, canonical run ID, matching relative run directory, and verification time are required"})
+		finalize()
+		return report, nil
+	}
+	importer := NewEvalBundleImporter(reader, runID, runDir)
+	importer.nowFunc = func() time.Time { return verifiedAt }
+	_, graphReport := BuildAndValidateGraph(ctx, []EvidenceImporter{importer}, time.Time{}, time.Time{}, verifiedAt)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	for _, importerErr := range graphReport.ImporterErrors {
+		report.Failures = append(report.Failures, &compliancev1.VerificationFailure{Code: constants.ErrEvidenceImporterFailed.Error(), SubjectRef: runID, Reason: importerErr.Error})
+	}
+	for _, failure := range graphReport.Failures {
+		report.Failures = append(report.Failures, &compliancev1.VerificationFailure{Code: failure.Code.Error(), SubjectRef: failure.Subject, Reason: failure.Reason})
+	}
+	sort.Slice(report.Failures, func(i, j int) bool {
+		left := report.Failures[i].GetSubjectRef() + report.Failures[i].GetCode() + report.Failures[i].GetReason()
+		right := report.Failures[j].GetSubjectRef() + report.Failures[j].GetCode() + report.Failures[j].GetReason()
+		return left < right
+	})
+	finalize()
+	return report, nil
 }
 
 func (i *EvalBundleImporter) SourceID() string {
@@ -445,13 +490,14 @@ func (i *EvalBundleImporter) buildReceiptNodes(manifest evalRunManifest, scopeID
 		if err := compliancev1.UnmarshalCanonical(receiptObservation.ActionReceipt, receipt); err != nil {
 			return nil, nil, fmt.Errorf("%w: %s#%d: %w", constants.ErrEvidenceArtifactMalformed, constants.EvalRunReceiptsFilename, record.Line, err)
 		}
-		actionType, actionTypeErr := evalReceiptActionType(receipt)
+		actionType, actionTypeErr := ReceiptActionType(receipt)
 		if receipt.GetTransactionId() != receiptObservation.TransactionID || actionTypeErr != nil || actionType != receiptObservation.ActionType {
 			return nil, nil, fmt.Errorf("%w: %s#%d: receipt wrapper does not match action receipt", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
 		}
 		status := VerificationStatusFailed
 		publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
-		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil {
+		_, chainErr := governance.ValidateDeterministicProtocolChain(receipt)
+		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil && chainErr == nil {
 			status = VerificationStatusVerified
 		}
 		artifactID := ContentAddress(ArtifactTypeEvalReceipt, record.Bytes)
@@ -557,23 +603,6 @@ func resolveEvalReferences(refs []string, IDs map[string]string) ([]string, erro
 		resolved = append(resolved, artifactID)
 	}
 	return resolved, nil
-}
-
-func evalReceiptActionType(receipt *operatorv1.ActionReceipt) (string, error) {
-	actionType := ""
-	for _, stage := range receipt.GetDeterministicStageEvidence() {
-		if stage.GetActionType() == "" {
-			continue
-		}
-		if actionType != "" && actionType != stage.GetActionType() {
-			return "", constants.ErrEvidenceArtifactMalformed
-		}
-		actionType = stage.GetActionType()
-	}
-	if actionType == "" {
-		return "", constants.ErrEvidenceArtifactMalformed
-	}
-	return actionType, nil
 }
 
 func evalMetricKey(attemptID, metricID string) string {

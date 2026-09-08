@@ -103,9 +103,9 @@ func TestOSCALExporter_GenerateComponentDefinition(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, compDef)
 
-	// UUID must be non-empty and look like a UUID.
+	// UUID must be a deterministic RFC 4122 UUID v5.
 	assert.NotEmpty(t, compDef.UUID)
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, compDef.UUID)
 
 	// Metadata.
 	assert.Equal(t, "g8e Platform Component Definition", compDef.Metadata.Title)
@@ -156,26 +156,27 @@ func TestOSCALExporter_GenerateAssessmentResults(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, results)
 
-	assert.NotEmpty(t, results.UUID)
-	assert.Equal(t, "g8e Compliance Assessment Results", results.Metadata.Title)
-	assert.Equal(t, constants.AnalysisSchemaVersion, results.Metadata.Version)
-	assert.Equal(t, "1.1.2", results.Metadata.OscalVersion)
-	assert.Equal(t, analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339), results.Metadata.Published)
+	assert.NotEmpty(t, results.AssessmentResults.UUID)
+	assert.Equal(t, "g8e Compliance Assessment Results", results.AssessmentResults.Metadata.Title)
+	assert.Equal(t, constants.AnalysisSchemaVersion, results.AssessmentResults.Metadata.Version)
+	assert.Equal(t, "1.1.2", results.AssessmentResults.Metadata.OscalVersion)
+	assert.Equal(t, analysis.GetGeneratedAt().AsTime().UTC().Format(time.RFC3339), results.AssessmentResults.Metadata.Published)
 
-	require.Len(t, results.Results, 1)
-	result := results.Results[0]
+	require.Len(t, results.AssessmentResults.Results, 1)
+	result := results.AssessmentResults.Results[0]
 	assert.Contains(t, result.Title, analysis.GetScopeRef())
 	assert.NotEmpty(t, result.Start)
 	require.Len(t, result.Observations, 2)
 	assert.Contains(t, result.Observations[0].Title, "G8E-GOV-BLOCK-001")
-	assert.Equal(t, constants.AssertionGraderID+"@"+constants.AssertionGraderVersion, result.Observations[0].Methods[0].MethodID)
+	assert.Equal(t, "TEST", result.Observations[0].Methods[0])
+	assert.Equal(t, constants.AssertionGraderID+"@"+constants.AssertionGraderVersion, oscalPropValue(result.Observations[0].Props, "g8e-verifier"))
 	assert.Equal(t, analysis.GetAssertionAssessments()[0].GetAssessmentId(), result.Observations[0].Subjects[0].Title)
 	require.Len(t, result.Findings, 2)
-	assert.Equal(t, "satisfied", result.Findings[0].Target.Status)
+	assert.Equal(t, "satisfied", result.Findings[0].Target.Status.State)
 	assert.Equal(t, "KSI-CMT-01", result.Findings[0].Target.TargetID)
-	assert.Equal(t, "not-satisfied", result.Findings[1].Target.Status)
+	assert.Equal(t, "not-satisfied", result.Findings[1].Target.Status.State)
 	assert.Equal(t, "KSI-MLA-07", result.Findings[1].Target.TargetID)
-	require.Len(t, results.BackMatter.Resources, 2)
+	require.Len(t, results.AssessmentResults.BackMatter.Resources, 2)
 }
 
 // TestOSCALExporter_NilCatalog asserts that component generation requires a catalog while analysis rendering does not.
@@ -204,10 +205,9 @@ func TestOSCALExporter_EmptyAnalysisAssessments(t *testing.T) {
 	analysis.FrameworkAssessments = nil
 
 	results, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
-	require.NoError(t, err)
-	require.Len(t, results.Results, 1)
-	assert.Empty(t, results.Results[0].Observations)
-	assert.Empty(t, results.Results[0].Findings)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	assert.Nil(t, results)
 }
 
 // TestOSCALComponentDefinition_MarshalJSON verifies JSON serialization produces
@@ -259,22 +259,19 @@ func TestOSCALAssessmentResults_MarshalJSON(t *testing.T) {
 	data, err := json.Marshal(results)
 	require.NoError(t, err)
 
-	var raw map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(data, &raw))
-
-	assert.Contains(t, raw, "uuid")
-	assert.Contains(t, raw, "metadata")
-	assert.Contains(t, raw, "results")
-
-	// Verify results array.
-	var resArr []map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(raw["results"], &resArr))
-	require.Len(t, resArr, 1)
-	assert.Contains(t, resArr[0], "uuid")
-	assert.Contains(t, resArr[0], "title")
-	assert.Contains(t, resArr[0], "start")
-	assert.Contains(t, resArr[0], "observations")
-	assert.Contains(t, resArr[0], "findings")
+	var decoded OSCALAssessmentResults
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.NotEmpty(t, decoded.AssessmentResults.UUID)
+	assert.NotEmpty(t, decoded.AssessmentResults.Metadata.Title)
+	assert.NotEmpty(t, decoded.AssessmentResults.ImportAP.Href)
+	require.Len(t, decoded.AssessmentResults.Results, 1)
+	result := decoded.AssessmentResults.Results[0]
+	assert.NotEmpty(t, result.UUID)
+	assert.NotEmpty(t, result.Title)
+	assert.NotEmpty(t, result.Start)
+	assert.NotNil(t, result.ReviewedControls)
+	assert.NotEmpty(t, result.Observations)
+	assert.NotEmpty(t, result.Findings)
 }
 
 // TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses verifies OSCAL-compatible framework finding statuses.
@@ -286,7 +283,7 @@ func TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses(t *testin
 	}{
 		{name: "satisfied", status: "satisfied", expected: "satisfied"},
 		{name: "not satisfied", status: "not_satisfied", expected: "not-satisfied"},
-		{name: "not applicable", status: "not_applicable", expected: "not-applicable"},
+		{name: "not applicable", status: "not_applicable", expected: "not-satisfied"},
 		{name: "unverifiable", status: "unverifiable", expected: "not-satisfied"},
 		{name: "customer attestation required", status: "customer_attestation_required", expected: "not-satisfied"},
 	}
@@ -297,9 +294,9 @@ func TestOSCALExporter_GenerateAssessmentResults_MapsCanonicalStatuses(t *testin
 			analysis.FrameworkAssessments[0].Status = tt.status
 			results, err := NewOSCALExporter(nil).GenerateAssessmentResults(analysis)
 			require.NoError(t, err)
-			require.Len(t, results.Results[0].Findings, 1)
-			assert.Equal(t, tt.expected, results.Results[0].Findings[0].Target.Status)
-			assert.Contains(t, results.Results[0].Findings[0].Description, tt.status)
+			require.Len(t, results.AssessmentResults.Results[0].Findings, 1)
+			assert.Equal(t, tt.expected, results.AssessmentResults.Results[0].Findings[0].Target.Status.State)
+			assert.Contains(t, results.AssessmentResults.Results[0].Findings[0].Description, tt.status)
 		})
 	}
 }
@@ -319,12 +316,25 @@ func TestOSCALExporter_GenerateAssessmentResults_RejectsInvalidGraphAndEvidenceR
 		}, target: constants.ErrUnresolvedReference},
 		{name: "cross scope evidence", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].ScopeId = "scope-2" }, target: constants.ErrEvidenceScopeMismatch},
 		{name: "missing bundle path", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.EvidenceResources[0].BundlePath = "" }, target: constants.ErrUnresolvedReference},
+		{name: "invalid OSCAL media type", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceResources[0].MediaType = "invalid/media-type"
+		}, target: constants.ErrOSCALValidationFailed},
 		{name: "missing assertion assessment", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.FrameworkAssessments[0].AssertionAssessmentRefs = []string{"missing"}
 		}, target: constants.ErrUnresolvedReference},
 		{name: "missing evidence link target", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
 			analysis.EvidenceLinks = []*compliancev1.EvidenceLink{{SourceRef: analysis.EvidenceResources[0].ArtifactId, TargetRef: "missing", LinkType: "references"}}
 		}, target: constants.ErrUnresolvedReference},
+		{name: "missing evidence link source", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceLinks = []*compliancev1.EvidenceLink{{SourceRef: "missing", TargetRef: analysis.EvidenceResources[0].ArtifactId, LinkType: "references"}}
+		}, target: constants.ErrUnresolvedReference},
+		{name: "unsupported evidence link type", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.EvidenceLinks = []*compliancev1.EvidenceLink{{SourceRef: analysis.EvidenceResources[0].ArtifactId, TargetRef: analysis.EvidenceResources[1].ArtifactId, LinkType: "derived-from"}}
+		}, target: constants.ErrUnresolvedReference},
+		{name: "duplicate evidence link", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			link := &compliancev1.EvidenceLink{SourceRef: analysis.EvidenceResources[0].ArtifactId, TargetRef: analysis.EvidenceResources[1].ArtifactId, LinkType: "references"}
+			analysis.EvidenceLinks = []*compliancev1.EvidenceLink{link, link}
+		}, target: constants.ErrEvidenceDuplicateID},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -432,18 +442,20 @@ func TestOSCALExporter_GenerateComponentDefinition_NoControlRefs(t *testing.T) {
 	assert.Contains(t, err.Error(), "no control refs")
 }
 
-// TestGenerateUUID_RandomV4 verifies that generateUUID produces unique
-// RFC 4122 UUID v4 strings with the correct format.
-func TestGenerateUUID_RandomV4(t *testing.T) {
-	u1 := generateUUID()
-	u2 := generateUUID()
+// TestGenerateUUID_DeterministicV5 verifies stable identity-bound RFC 4122 UUID v5 generation.
+func TestGenerateUUID_DeterministicV5(t *testing.T) {
+	u1 := generateUUID("finding", "analysis-1", "control-1")
+	u2 := generateUUID("finding", "analysis-1", "control-1")
+	u3 := generateUUID("finding", "analysis-1", "control-2")
 
-	assert.NotEqual(t, u1, u2, "two calls should produce different UUIDs")
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u1)
-	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u2)
+	assert.Equal(t, u1, u2)
+	assert.Equal(t, "b4ef8d41-bebd-5517-aae7-9522a1963b1e", u1)
+	assert.NotEqual(t, u1, u3)
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, u1)
 
-	_, err := uuid.Parse(u1)
-	assert.NoError(t, err)
+	parsed, err := uuid.Parse(u1)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(5), parsed.Version())
 }
 
 func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEvidenceResources(t *testing.T) {
@@ -496,14 +508,90 @@ func TestOSCALExporter_GenerateAssessmentResultsFromCanonicalAnalysis_ResolvesEv
 
 	doc, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
-	require.Len(t, doc.BackMatter.Resources, 1)
-	resource := doc.BackMatter.Resources[0]
+	require.Len(t, doc.AssessmentResults.BackMatter.Resources, 1)
+	resource := doc.AssessmentResults.BackMatter.Resources[0]
 	assert.Equal(t, artifactID, oscalPropValue(resource.Props, "artifact-id"))
 	assert.Equal(t, digest, oscalPropValue(resource.Props, "sha256"))
-	require.Len(t, doc.Results, 1)
-	require.Len(t, doc.Results[0].Observations, 1)
-	require.Len(t, doc.Results[0].Observations[0].RelevantEvidence, 1)
-	assert.Equal(t, "#"+resource.UUID, doc.Results[0].Observations[0].RelevantEvidence[0].Href)
+	require.Len(t, doc.AssessmentResults.Results, 1)
+	require.Len(t, doc.AssessmentResults.Results[0].Observations, 1)
+	require.Len(t, doc.AssessmentResults.Results[0].Observations[0].RelevantEvidence, 1)
+	assert.Equal(t, "#"+resource.UUID, doc.AssessmentResults.Results[0].Observations[0].RelevantEvidence[0].Href)
+}
+
+func TestOSCALExporter_GenerateAssessmentResults_ResolvesEveryEvidenceLink(t *testing.T) {
+	analysis := oscalTestAnalysis()
+	analysis.EvidenceLinks = []*compliancev1.EvidenceLink{{SourceRef: analysis.EvidenceResources[0].ArtifactId, TargetRef: analysis.EvidenceResources[1].ArtifactId, LinkType: "references"}}
+	document, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(analysis)
+	require.NoError(t, err)
+	assert.Len(t, document.AssessmentResults.BackMatter.Resources, len(analysis.EvidenceResources))
+}
+
+func TestOSCALExporter_GenerateAssessmentResults_ConformsToV112RequiredShape(t *testing.T) {
+	document, err := NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(oscalTestAnalysis())
+	require.NoError(t, err)
+
+	assessmentResults := document.AssessmentResults
+	assert.NotEmpty(t, assessmentResults.UUID)
+	assert.NotEmpty(t, assessmentResults.ImportAP.Href)
+	require.Len(t, assessmentResults.Results, 1)
+	result := assessmentResults.Results[0]
+	require.NotNil(t, result.ReviewedControls)
+	require.NotEmpty(t, result.ReviewedControls.ControlSelections)
+	require.NotEmpty(t, result.Observations)
+	assert.NotEmpty(t, result.Observations[0].Collected)
+	require.NotEmpty(t, result.Findings)
+	for _, finding := range result.Findings {
+		assert.Equal(t, "objective-id", finding.Target.Type)
+		assert.Contains(t, []string{"satisfied", "not-satisfied"}, finding.Target.Status.State)
+	}
+
+	body, err := json.Marshal(document)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `"assessment-results"`)
+	assert.Contains(t, string(body), `"reviewed-controls"`)
+	assert.Contains(t, string(body), `"status":{"state":`)
+}
+
+func TestValidateOSCALAssessmentResults_RejectsSchemaViolations(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*OSCALAssessmentResults)
+		target error
+	}{
+		{name: "missing document", target: constants.ErrValidationFailed},
+		{name: "invalid root UUID", mutate: func(document *OSCALAssessmentResults) { document.AssessmentResults.UUID = "invalid" }, target: constants.ErrValidationFailed},
+		{name: "missing assessment plan import", mutate: func(document *OSCALAssessmentResults) { document.AssessmentResults.ImportAP.Href = "" }, target: constants.ErrValidationFailed},
+		{name: "missing reviewed controls", mutate: func(document *OSCALAssessmentResults) { document.AssessmentResults.Results[0].ReviewedControls = nil }, target: constants.ErrValidationFailed},
+		{name: "empty reviewed control selections", mutate: func(document *OSCALAssessmentResults) {
+			document.AssessmentResults.Results[0].ReviewedControls.ControlSelections = nil
+		}, target: constants.ErrValidationFailed},
+		{name: "missing observation collection time", mutate: func(document *OSCALAssessmentResults) {
+			document.AssessmentResults.Results[0].Observations[0].Collected = ""
+		}, target: constants.ErrValidationFailed},
+		{name: "invalid observation method", mutate: func(document *OSCALAssessmentResults) {
+			document.AssessmentResults.Results[0].Observations[0].Methods = []string{"AUTOMATED"}
+		}, target: constants.ErrValidationFailed},
+		{name: "invalid finding status", mutate: func(document *OSCALAssessmentResults) {
+			document.AssessmentResults.Results[0].Findings[0].Target.Status.State = "unknown"
+		}, target: constants.ErrValidationFailed},
+		{name: "unresolved relevant evidence", mutate: func(document *OSCALAssessmentResults) {
+			document.AssessmentResults.Results[0].Observations[0].RelevantEvidence[0].Href = "#00000000-0000-5000-8000-000000000000"
+		}, target: constants.ErrUnresolvedReference},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var document *OSCALAssessmentResults
+			if tt.mutate != nil {
+				var err error
+				document, err = NewOSCALExporter(oscalTestCatalog()).GenerateAssessmentResults(oscalTestAnalysis())
+				require.NoError(t, err)
+				tt.mutate(document)
+			}
+			err := validateOSCALAssessmentResults(document)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.target)
+		})
+	}
 }
 
 func oscalPropValue(props []OSCALProp, name string) string {

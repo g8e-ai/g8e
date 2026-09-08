@@ -410,7 +410,7 @@ func TestDemoRunImporter_Import_LoadsStateObservation(t *testing.T) {
 	}
 	require.NotNil(t, obsNode)
 	assert.Equal(t, ArtifactTypeStateObservation, obsNode.ArtifactType)
-	assert.Equal(t, VerificationStatusUnverified, obsNode.VerificationStatus)
+	assert.Equal(t, VerificationStatusFailed, obsNode.VerificationStatus)
 	assert.Equal(t, "scenario-1", obsNode.ScenarioID)
 }
 
@@ -432,6 +432,38 @@ func TestDemoRunImporter_Import_LoadsMetricWithSourceEvidenceRef(t *testing.T) {
 	require.NotNil(t, metricNode)
 	assert.Equal(t, ArtifactTypeDemoMetric, metricNode.ArtifactType)
 	assert.Contains(t, metricNode.References, obsRef)
+}
+
+func TestDemoRunImporter_Import_VerifiesHealthcareMetricAndSourceObservation(t *testing.T) {
+	reader, source, runID := validHealthcareMetricRunFixture(t)
+
+	nodes, err := NewDemoRunImporter(reader, runID, source).Import(context.Background())
+
+	require.NoError(t, err)
+	observations := nodesByType(nodes, ArtifactTypeStateObservation)
+	require.Len(t, observations, 1)
+	assert.Equal(t, VerificationStatusVerified, observations[0].VerificationStatus)
+	metrics := nodesByType(nodes, ArtifactTypeDemoMetric)
+	require.Len(t, metrics, 1)
+	assert.Equal(t, VerificationStatusVerified, metrics[0].VerificationStatus)
+	assert.Equal(t, []string{observations[0].ArtifactID}, metrics[0].References)
+}
+
+func TestDemoRunImporter_Import_FailsMetricWhenSourceObservationLosesStepBinding(t *testing.T) {
+	reader, source, runID := validHealthcareMetricRunFixture(t)
+	result := decodeOnlyResult(t, reader, runID)
+	result.StepResults[0].ProtocolResult = `{"tampered":true}`
+	writeOnlyResult(t, reader, runID, result)
+
+	nodes, err := NewDemoRunImporter(reader, runID, source).Import(context.Background())
+
+	require.NoError(t, err)
+	observations := nodesByType(nodes, ArtifactTypeStateObservation)
+	require.Len(t, observations, 1)
+	assert.Equal(t, VerificationStatusFailed, observations[0].VerificationStatus)
+	metrics := nodesByType(nodes, ArtifactTypeDemoMetric)
+	require.Len(t, metrics, 1)
+	assert.Equal(t, VerificationStatusFailed, metrics[0].VerificationStatus)
 }
 
 func TestDemoRunImporter_Import_RejectsStateObservationDigestMismatch(t *testing.T) {

@@ -5,153 +5,181 @@ parent: Architecture
 
 # AI Agents and the g8e Governance Boundary
 
-Last Updated: 2026-09-02
-Version: v2.1.3
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-## Overview
+## Scope
 
-g8e is a zero-trust execution platform that sits between AI agents, human operators, and target hosts. An AI agent never mutates a host directly. Instead, the agent formulates intent, and the g8e platform translates that intent into a typed, signed, verifiable `GovernanceEnvelope` that passes through five governance layers before execution. Universal checks and proofs required by the active posture fail closed.
+g8e uses the word "agent" for three related but distinct concepts:
 
-The platform treats every AI client as an untrusted principal. The agent's role is to describe what should happen and on which hosts. The gateway validates that description against doctrine, consensus, and human authorization. The governed operator on each host re-verifies every proof locally before it executes anything. This design keeps agents honest and hosts sovereign.
+- **External AI clients** are coding agents and other applications that call the Gateway through MCP or A2A.
+- **The agent launcher** is the `g8e mcp agent run` workflow that configures and starts a supported coding agent with g8e as its MCP server.
+- **The g8ee agentic ensemble** is the optional first-party application that performs triage, model reasoning, tool loops, command generation, memory management, and event publication.
 
----
-
-## Architecture at a Glance
-
-Two components define the security boundary:
-
-- **Governance Gateway (Policy Decision Point / PDP)**: The central coordinator that admits transactions, manages PKI, enforces L1 through L3 governance, and brokers pub/sub channels to operators. The gateway runs L4 Warden and L5 Actuator in-process for operations targeting the gateway host itself.
-- **Governed Operator (Policy Execution Point / PEP)**: The same static binary run in operator mode on target hosts. It requires no installation and opens no inbound ports. It initiates an outbound-only mTLS tunnel to the gateway, pulls work from a unique pub/sub channel, re-verifies every proof locally, and is the only component authorized to mutate the host.
-
-AI clients connect to the gateway over mTLS JSON. The gateway never reaches into operators; operators pull work when it is published to their channel. See [Gateway Architecture](./gateway.md) and [Operator Architecture](./operator.md) for the full service stacks.
+All three remain outside the trusted execution boundary. Model reasoning, prompts, internal voting, and application memory do not authorize host mutation. A governed operation becomes executable only after it enters the platform as typed intent or a canonical `GovernanceEnvelope` and passes the verification required by the active posture.
 
 ---
 
-## The AI Client Surface
+## Trust and Execution Boundaries
 
-g8e exposes two standard protocols for AI clients.
+The Governance Gateway is the Policy Decision Point. It authenticates clients, constructs envelopes for public client protocols, binds current state and posture, coordinates protocol L2 consensus when required, suspends transactions that need human approval, and exposes pub/sub channels for remote Operators.
 
-- **MCP (Model Context Protocol)**: A unified JSON-RPC endpoint that lets standard MCP clients such as Claude Code, Codex, Goose, or Gemini CLI discover tools, call them, and receive typed results. The gateway translates each MCP `tools/call` into a canonical `GovernanceEnvelope` and routes it through the governance pipeline. MCP `tools/call` accepts caller-supplied execution and investigation IDs, returns authoritative signed receipt references for completed calls and failed L1/L2 stages, and carries resumed receipt identity in human-approval completion events so callers can correlate the returned receipt with the original request without synthetic fallback references.
-- **A2A (Agent-to-Agent)**: A JSON-RPC endpoint for direct A2A skill invocations. The gateway wraps the skill request in an envelope and either executes it through a governed operator or forwards it to a configured downstream A2A server, depending on posture and authorization.
+The Governed Operator is the Policy Execution Point on a managed host. It opens an outbound mTLS connection to the Gateway, subscribes to its session-specific command channel, verifies each received envelope locally, and executes accepted operations through its L5 Actuator. It opens no inbound management port.
 
-The gateway also publishes signed execution results and out-of-band approval events over pub/sub. AI clients consume these results through MCP/A2A responses, SSE streams, or direct pub/sub channels. See [Network Architecture](./network.md) for the mTLS and port topology and [SSE Streaming](./sse.md) for the event surface.
+The Gateway also contains an in-process Operator substrate. MCP and A2A calls received by the Gateway execute through this local L4/L5 path, which can invoke built-in tools or configured downstream MCP and A2A services. Host commands sent by g8ee as `CommandIntent` use the outbound Operator path instead, so the Operator on the target host performs L4/L5 verification and execution.
 
----
-
-## Native Tool Playbook
-
-The governed operator ships with native, memory-safe tools that agents invoke through the MCP surface. These tools execute inside the operator's L5 boundary and return structured JSON. Examples span database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata lookup, Git operations, Kubernetes inspection, and shell execution.
-
-Each native tool accepts a typed request, performs read-only or governed-mutation operations, and returns a scrubbed result. The operator runs L1 doctrine analysis on the tool call, verifies the envelope, and only then executes. See [Operator Architecture](./operator.md) for the complete native tool playbook.
+This boundary governs only operations that traverse a g8e ingress. It does not sandbox an AI process or automatically govern native tools, network access, or other side channels that remain enabled in the client itself.
 
 ---
 
-## The Five-Layer Governance Pipeline
+## Agent Integration Paths
 
-Every agent-originated action passes through the same five layers. Universal checks and posture-required proofs fail closed, while optional L2 and L3 results remain audit evidence. The gateway owns L1-L3 as policy decisions; the operator owns L4-L5 as execution gates.
+| Path | Input | Governance behavior | Execution location |
+| --- | --- | --- | --- |
+| **Gateway MCP** | JSON-RPC methods at `/mcp` | Tool calls, resource reads, prompt retrieval, and A2A calls are translated into typed envelopes and processed through L1-L5. Discovery methods do not execute tools. | Gateway in-process Operator, built-in tool, or configured downstream MCP/A2A service |
+| **Gateway A2A** | JSON-RPC `a2a/call` at `/api/v1/a2a/call` | The Gateway constructs an `A2A_CALL` envelope, coordinates required proofs, and processes it through L1-L5. | Configured downstream A2A service through the Gateway Actuator path |
+| **Operator command relay** | Typed `CommandIntent` on the target Operator command channel | The Gateway validates the target session and adds identity, state, nonce, expiry, hash, and posture. The relay does not perform L2 deliberation or L3 suspension. | Bound outbound Operator |
+| **Direct envelope** | Complete canonical `GovernanceEnvelope` | The Gateway verifies the supplied envelope but does not add missing L2 or L3 proofs. This privileged route rejects app certificates. | Gateway in-process Operator |
+| **External MCP wrapper** | Stdio requests forwarded to an MCP subprocess or HTTP server | Only `tools/call` arguments receive inline L1 threat screening. No envelope, L2/L3/L4/L5 execution, signed receipt, or Gateway audit is added. | Wrapped external MCP server |
+
+MCP and A2A are the normal client-facing surfaces when the Gateway must construct the envelope, coordinate L2, or manage L3 approval. `CommandIntent` is suitable only when its proof-free relay satisfies the active posture. Direct envelope submission is reserved for clients that already possess an authorized CLI or Operator transport identity and can supply every required proof.
+
+See [Build Apps](../guides/build_apps.md) for choosing among these integration paths.
+
+---
+
+## MCP Agent Launcher
+
+`g8e mcp agent run <agent>` provides a managed local launch flow for Claude, Codex, Devin, Gemini, and Goose. It starts a local Gateway in `doctrine` posture when one is not already running, ensures the human CLI identity and passkey are enrolled, obtains a short-lived delegated app certificate for the selected agent, configures `g8e mcp stdio` as the agent's MCP server, verifies the generated interception configuration by default, and starts the agent.
+
+The delegated certificate binds the app identity and requesting human identity in its SPIFFE URI SANs. The stdio bridge presents that certificate to the Gateway, and the Gateway records both identities in the governed transaction. This creates per-agent attribution without trusting caller-supplied identity headers.
+
+### Tool Interception Limits
+
+The launcher disables or excludes native tools where the supported agent exposes a reliable control:
+
+- Claude and Codex receive a strict MCP configuration and native-tool exclusions.
+- Goose starts without profile extensions and loads g8e as the session extension.
+- Gemini receives an empty built-in tool allowlist and a g8e MCP server entry.
+- Devin receives g8e as its configured MCP server, but the launcher cannot disable Devin's native tools.
+
+For Devin, only operations sent through the g8e MCP server cross the governance boundary. The same limitation applies to any client that retains native tools, another MCP server, direct filesystem access, shell access, or unrestricted network access.
+
+### Wrapping an MCP Server
+
+When `g8e mcp agent run` receives `--url` or an arbitrary command instead of a supported agent name, it runs the external MCP wrapper. This mode screens `tools/call` arguments with L1 doctrine and forwards accepted requests directly to the downstream server. It is not equivalent to the named-agent launch path and does not provide L2-L5 governance.
+
+---
+
+## MCP Stdio Bridge and Credentials
+
+`g8e mcp stdio` is a credential-consuming stdio-to-HTTPS bridge. It answers the MCP initialization handshake locally, drops notifications that require no response, and proxies other requests to the Gateway over TLS 1.3. It does not enroll a user, install trust, open a passkey enrollment ceremony, or start the Gateway when invoked directly.
+
+Certificate and key pairs resolve in this order:
+
+1. Delegated app certificate and key flags.
+2. Delegated app certificate and key environment variables.
+3. CLI certificate and key flags.
+4. CLI certificate and key environment variables.
+5. Enrolled CLI credentials in the local runtime tree.
+
+Each tier must provide a complete certificate and key pair. An incomplete pair fails closed rather than mixing credentials across tiers. The CA bundle resolves from its flag, then its environment variable, then the enrolled trust bundle; the Gateway URL resolves from its flag, then its environment variable, then the default HTTPS MCP URL.
+
+When L3 approval is required, the stdio bridge opens the approval page, waits for the matching `approval.completed` event over the authenticated SSE stream, and retries the original request. There is no polling fallback, so this automatic flow requires enrolled CLI credentials and a CLI session even when the MCP request itself uses delegated app credentials.
+
+---
+
+## The Five-Layer Interlock
+
+Every governed operation reaches the same L4/L5 verification and execution boundary. The active posture determines whether L2 and L3 are required gates or non-gating evidence.
 
 ### L1 Doctrine
 
-L1 is the technical hard gate. It matches payloads against forbidden patterns and MITRE ATT&CK heuristics to detect threats such as reverse shells, privilege escalation, and destructive disk operations. Doctrine is enforced in every posture. The operator re-runs L1 validation locally before execution.
+L1 decodes the typed payload and applies protobuf field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is mandatory in every posture. The executing Warden performs this validation before dispatch.
 
 ### L2 Consensus
 
-L2 is multi-signature consensus over the transaction hash. The consensus service is an enrolled body of members, each with a distinct Ed25519 private key. The reference implementation shipped with g8e evaluates the transaction deterministically against the L1 Doctrine and signs an affirmative or negative vote over `<transaction_hash>|<decision>`. The L4 Warden verifies the votes against the configured policy and trusted signer store. A quorum of distinct, valid affirmative signatures is required under the `consensus` and `notary` postures. L2 remains audited under the `doctrine` and `ratify` postures.
+L2 verifies Ed25519 votes over the transaction hash against an enabled consensus policy and its trusted member keys. Required postures enforce the configured quorum of distinct affirmative signers. The Gateway-owned MCP and A2A construction paths request deliberation under `consensus` and `notary`; direct envelopes and the `CommandIntent` relay do not receive missing votes automatically.
 
-The protocol is designed to support heterogeneous consensus members, but the in-platform reference implementation uses deterministic L1 doctrine evaluation. Alternative consensus implementations can be enrolled as external producers. See [Consensus](./consensus.md) for enrollment, deliberation, and member key management.
+The protocol L2 service is separate from application-level multi-model voting. Internal model agreement is advisory unless enrolled consensus members emit valid Ed25519 votes that satisfy the Gateway policy. See [Consensus](./consensus.md).
 
 ### L3 Notary
 
-L3 provides human-in-the-loop authorization. Under `ratify` and `notary` postures, gateway mode requires a WebAuthn/FIDO2 passkey assertion over the transaction hash for mutations, and CLI callers additionally undergo mTLS session verification. In outbound operator mode, required L3 is satisfied by a suspended-transaction approval and Ed25519 signature over the transaction hash. L3 remains audited under `doctrine` and `consensus`; read-only actions do not require L3 in any posture. See [Authentication & Authorization](./auth.md) for the notary modes.
+L3 authorizes mutations under `ratify` and `notary`. Gateway MCP and A2A requests without the required proof suspend for a WebAuthn approval ceremony and resume with the resulting proof. Read-only actions do not require L3, and paths that do not implement suspension must arrive with the required proof already attached.
 
 ### L4 Warden
 
-The L4 Warden runs on the operator as the final pre-dispatch gate. It recomputes and compares the transaction hash, reserves the nonce, checks expiry, validates the state Merkle root, and verifies L2 and L3 proofs. Any universal mismatch or missing posture-required proof fails closed; optional proof failures remain non-gating audit evidence.
+L4 reserves the nonce for durable replay prevention, checks expiry, decodes and validates the typed payload, recomputes the transaction hash, verifies the current state root, and evaluates posture-required L2 and L3 evidence. The posture travels in the envelope so a remote Operator applies the Gateway-selected policy. Any universal check or required proof failure prevents dispatch and produces signed rejection evidence when the Actuator is available.
 
 ### L5 Actuator
 
-The L5 Actuator is the singular execution boundary. It persists a signed `EXECUTING` receipt containing L4 deterministic evidence, atomically appends a signed commitment against the current chain head, and records the chain linkage before execution. It then rehydrates scrubbed sensitive data at the execution site using local vault keys, mints a just-in-time capability bound to the transaction hash, dispatches the action, dissolves the capability, signs and persists the final `COMPLETED` or `FAILED` receipt, and attaches a signed durable-persistence attestation. See [Operator Architecture](./operator.md) for the execution boundary and [Encryption](./encryption.md) for PII scrubbing and rehydration.
+L5 signs and persists an `EXECUTING` receipt before invoking the handler. It appends a signed commitment when the SQL commitment ledger is available, rehydrates scrubbed payload data at the execution site, mints a transaction-bound just-in-time capability, invokes the selected handler, dissolves the capability, and signs and persists the final result with its durable-persistence attestation.
+
+| Posture | L1 | L2 | L3 for mutations |
+| --- | --- | --- | --- |
+| `doctrine` | Required | Not required | Not required |
+| `consensus` | Required | Required | Not required |
+| `ratify` | Required | Not required | Required |
+| `notary` | Required | Required | Required |
 
 ---
 
-## From Intent to Execution
+## First-Party Agentic Ensemble
 
-The practical flow for an AI client is:
+g8ee is an optional first-party client, not part of the Gateway or Operator trust boundary. It owns the conversational and model-facing concerns that the platform protocol intentionally leaves to applications:
 
-1. The AI client submits an intent through the MCP or A2A endpoint.
-2. The gateway translates the intent into a canonical `GovernanceEnvelope` carrying the typed payload, identity, nonce, expiry, and state root.
-3. Under `consensus` or `notary` posture, the gateway sends the envelope to the enrolled consensus for L2 votes; `doctrine` and `ratify` do not require this step.
-4. Under `ratify` or `notary` posture, if L3 is missing, the gateway suspends the transaction and sends an approval challenge to the human.
-5. After L1-L3 pass, the gateway publishes the envelope to the unique pub/sub channel for the bound operator.
-6. The bound operator pulls the envelope, and the L4 Warden re-verifies L1-L4 and emits deterministic stage evidence.
-7. The L5 Actuator persists the signed pre-execution receipt, appends the signed commitment, executes the action, persists the signed final receipt, and adds its persistence attestation.
-8. The operator publishes the complete receipt back to the gateway, which returns it through the original MCP/A2A response or SSE channel. The response carries the authoritative signed receipt reference bound to the caller-supplied execution and investigation IDs so the caller can resolve and verify the canonical receipt and persistence bodies without synthetic fallback references.
+1. Triage classifies a turn and selects the fast Dash path or the primary Sage path.
+2. The selected model streams a response and may request tools through a sequential ReAct loop.
+3. Host-command requests pass through the five-member Tribunal, candidate clustering and audit, and application-level Warden risk analysis before dispatch.
+4. The tool result returns to the model for another turn until the model stops requesting tools.
+5. Reaching the configured tool-turn limit requires an explicit continuation decision before the loop can continue.
+6. The ensemble publishes typed progress and result events through the Gateway SSE event bridge.
 
-Only the operator bound to the envelope receives the work. The gateway binds the envelope to the authenticated operator session and publishes to that operator's unique command channel. No broadcast occurs.
+The Tribunal improves command generation but does not produce protocol L2 signatures. For host operations, g8ee publishes `CommandIntent` to the bound Operator channel. For governed platform records, it constructs direct envelopes and uses the dedicated Operator-credential transport available in the unified deployment. It does not use the Gateway MCP endpoint for these internal paths.
 
----
-
-## Doctrine: Rules the AI Must Respect
-
-Doctrine files are JSON-defined pattern sets that specify what the platform will and will not execute. The bundled doctrine sets include blacklist, whitelist, OWASP CRS, Gitleaks, and MCP vector patterns. Doctrine is enforced regardless of agent behavior. The agent can see the doctrine as a courtesy to shape its requests, but the L1 gate rejects forbidden actions regardless of whether the agent complied. See [Governance](./governance.md) for the doctrine sources and loading pipeline.
+Conversation history, investigation context, generated memories, model telemetry, and retry state remain application-owned. g8e governs host and platform operations; the Gateway is not implicit agent memory. See [g8ee Agents](../ensemble/agents.md) for the persona roster and [Ensemble Architecture](./ensemble.md) for its connection model.
 
 ---
 
-## Local-First Audit and the SSE Event Bridge
+## Results, Receipts, and Events
 
-Every complete receipt is written to the operator's SQLite audit store, every admitted execution appends a signed attestation to the SQLite commitment hash chain, and governed file changes create snapshots in the git-backed ledger. These linked stores are the source of truth for what happened on a given host. The gateway sees transaction hashes and state roots, not raw operational data.
+A completed Gateway MCP tool call returns tool content plus an authoritative signed receipt reference. Calls rejected after signed L1 or L2 stage evidence return that reference in structured JSON-RPC error data. Caller-supplied execution and investigation identifiers are preserved when present; the Gateway generates them when absent.
 
-Agentic ensembles can also push telemetry and user-facing events to the gateway through the SSE push endpoint. These events are stored, indexed, and streamed to authorized CLI sessions and browser console sessions. This lets an external ensemble surface progress, questions, and results to the human without exposing raw host data. See [SSE Streaming](./sse.md) for the push, poll, and stream semantics.
+The executing Actuator stores the complete receipt in its local SQL audit store. A remote Operator also publishes signed receipts to the Gateway receipt channel; the Gateway verifies the signer and mirrors accepted receipts for centralized access. That mirror is best-effort and does not replace the Operator's local record.
 
----
+Governed file mutations record file-mutation evidence and ledger hashes when the file ledger is active. The SQL commitment chain covers admitted executions independently of the file ledger.
 
-## MCP Stdio Credential Resolution
+Two SSE mechanisms serve different purposes:
 
-When `g8e mcp stdio` is invoked directly from an IDE MCP config, credentials resolve in the following order:
+- The MCP endpoint supports MCP's streaming transport.
+- The platform SSE event bridge carries approval notifications and typed application events, including g8ee chat progress, questions, and results.
 
-1. **CLI flags** (`--client-cert`/`--client-key`, `--app-cert`/`--app-key`, `--ca-bundle`, `--gateway-url`): universally supported in IDE `args` arrays.
-2. **`G8E_*` environment variables** (`G8E_CLIENT_CERT`, `G8E_CLIENT_KEY`, `G8E_CA_BUNDLE`, `G8E_GATEWAY_URL`, `G8E_APP_CERT`, `G8E_APP_KEY`): injected by `g8e mcp agent run` into the agent subprocess.
-3. **Enrolled CLI credentials on disk**: loaded from the local client credential store, bootstrapping enrollment if needed.
-
-Cert and key are resolved as pairs per tier. Supplying only one half of a pair (for example, `--app-cert` without `--app-key`) fails closed instead of silently mixing tiers. The `--gateway-url` flag validates scheme (`https` only) and host to prevent plaintext traffic. See [Network Architecture](./network.md) for the full flag table.
+SSE events are delivery telemetry, not governance state, and do not alter the state root. See [SSE Streaming](./sse.md).
 
 ---
 
-## Security Boundaries Summary
+## Security Properties and Limits
 
-| Boundary | What It Enforces |
-| --- | --- |
-| **AI client → Gateway** | The client speaks canonical MCP/A2A and provides intent. The gateway constructs and governs the envelope. |
-| **L1 Doctrine** | Forbidden patterns and MITRE threats are rejected before consensus or execution. |
-| **L2 Consensus** | Multi-signature Ed25519 votes are verified against the transaction hash and trusted signer store. |
-| **L3 Notary** | Human presence or outbound approval is required for mutations under `ratify` and `notary`; L3 is audited under `doctrine` and `consensus`. |
-| **L4 Warden** | Hash, nonce, expiry, state root, and signatures are re-verified on the operator before execution. |
-| **L5 Actuator** | Execution is wrapped in signed receipts, PII rehydration, and just-in-time capabilities. |
-| **Operator → Host** | Only the operator mutates the host, and every action is written to the local ledger. |
-
----
-
-## Key Design Principles
-
-- **Do not trust the AI client.** The agent provides intent; the platform verifies and executes. The client has no privileged channel.
-- **Do not trust the consensus layer.** Votes are verified against trusted public keys and the transaction hash. A missing or invalid signature fails closed when L2 is required and remains non-gating audit evidence otherwise.
-- **Do not trust the gateway.** The operator re-derives every proof locally before execution.
-- **Multi-signature consensus.** L2 requires K-of-N Ed25519 affirmative votes from distinct members. The reference implementation signs deterministic L1-doctrine evaluations.
-- **Doctrine is enforced, not suggested.** Agents can be informed of doctrine, but the L1 gate rejects forbidden actions regardless of compliance.
-- **Scope is explicit.** The envelope is bound to the authenticated operator session, and only that operator's command channel receives the dispatched work.
-- **Sovereign hosts.** Every operator is authoritative for its own audit ledger and state root. The gateway never reaches into operators.
+- The AI client supplies intent but has no authority to bypass doctrine or required proofs.
+- Client identity comes from authenticated transport context, including SPIFFE identities in mTLS certificates, rather than trusted identity headers.
+- The transaction hash binds executable intent, target, state, replay controls, and requestor and app attribution.
+- A remote Operator independently verifies the envelope before changing its host.
+- L2 requires trusted signer keys and policy quorum; model agreement alone has no protocol authority.
+- L3 applies to mutation-classified actions under `ratify` and `notary`, not to every read operation.
+- Signed receipts prove the governed path's outcome, but they do not attest to activity performed through client-native tools or other bypass channels.
+- Operator command channels are scoped to an exact Operator and session. The Gateway rejects mismatched target identity and does not broadcast commands.
 
 ---
 
 ## Related Documentation
 
-- [Gateway Architecture](./gateway.md): Gateway role, MCP/A2A endpoints, pub/sub brokering, and the 5-layer pipeline.
-- [Operator Architecture](./operator.md): Operator execution boundary, native tools, and local audit.
-- [Governance](./governance.md): Five-layer verification pipeline and posture configurations.
-- [Consensus](./consensus.md): L2 consensus implementation, consensus enrollment, and deliberation flow.
-- [Authentication & Authorization](./auth.md): Identity, mTLS, WebAuthn notary, and session binding.
-- [Storage Architecture](./storage.md): LFAA ledger, audit store, and hash-chained commitment history.
-- [Encryption](./encryption.md): Vault architecture, PII scrubbing, and rehydration at the execution boundary.
-- [Network Architecture](./network.md): Outbound-only mTLS, pub/sub channels, and PKI.
-- [SSE Streaming](./sse.md): SSE push, poll, and stream endpoints for agentic ensembles.
-- [Build Apps](../guides/build_apps.md): Guide for building g8e-compatible applications, including maximal agentic ensembles.
+- [Gateway Architecture](./gateway.md): Gateway services, client ingress, governance coordination, and local execution.
+- [Operator Architecture](./operator.md): Outbound Operator transport, native tools, L4/L5 execution, and local audit.
+- [Governance](./governance.md): Five-layer verification and posture behavior.
+- [Consensus](./consensus.md): L2 policies, enrolled members, and vote verification.
+- [Authentication and Authorization](./auth.md): mTLS identities, delegated app credentials, CLI sessions, and WebAuthn.
+- [Network Architecture](./network.md): TLS surfaces, pub/sub transport, and Operator channels.
+- [SSE Streaming](./sse.md): Approval and application event delivery.
+- [Ensemble Architecture](./ensemble.md): The first-party g8ee deployment and connection model.
+- [g8ee Agents](../ensemble/agents.md): Persona hierarchy, Tribunal, Warden, and support agents.
+- [Build Apps](../guides/build_apps.md): Public integration paths and application-owned state.

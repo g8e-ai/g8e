@@ -3,105 +3,77 @@ title: Build Operator
 parent: Guides
 ---
 
-# Build a g8e Operator
+# Build and Run a g8e Operator
 
-Last Updated: 2026-09-07
-Version: v2.1.6
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 ---
 
 ## Overview
 
-A g8e-compatible Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
+The Governed Operator is the host-side Policy Execution Point (PEP). It opens an outbound mTLS WebSocket connection to a g8e Gateway, subscribes to its identity- and session-scoped command channel, decodes canonical protojson `GovernanceEnvelope` transactions, re-runs L1 Doctrine, verifies the universal transaction checks and posture-required L2 and L3 proofs in L4 Warden, and dispatches verified actions through L5 Actuator.
 
-The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via subcommands. Custom Operator implementations must implement the same protocol contracts and invariants.
+The reference Gateway and Operator compile into the same `g8e` binary. `g8e gw start` runs the Gateway Policy Decision Point (PDP), including the client-facing MCP and A2A endpoints. `g8e operator start` runs the outbound Operator worker. The outbound Operator does not expose an MCP or A2A listener; the Gateway translates client requests into governed transactions and publishes them to the bound Operator.
 
-### Role Selection
-
-The g8e binary uses a single cobra command tree. Gateway and Operator modes are invoked via subcommands.
-
-#### Gateway Mode (PDP)
-A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (background) or `gw start --follow` (foreground), specifying a posture via `--posture`. Use `gw start --interactive` to launch the onboarding wizard before starting:
-- `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
-- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--consensus-id` and `--consensus-url` to connect to an enrolled Consensus service for L2 deliberation.
-- `--posture ratify`, Enforces L1/L3; audits L2.
-- `--posture notary`, Enforces L1/L2/L3 strictly.
-
-Additional Gateway mode flags for consensus posture:
-- `--consensus-id <id>`, ID of the ConsensusPolicy for L2 consensus.
-- `--consensus-url <url>`, URL of the Consensus service for L2 deliberation.
-- `--consensus-bootstrap <path>`, Path to a JSON file that seeds a ConsensusPolicy and trusted signers at startup.
-
-#### Operator Mode (PEP)
-An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator start`:
-- `operator start -e, --endpoint <host>`, Connects to the specified Gateway.
-- `operator start -k, --key <path>`, Specifies the Operator private key.
-- `operator start --cert <path>`, Specifies the Operator certificate.
-- `operator start --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
-- `operator start --working-dir <path>`, Working directory for command execution.
-- `operator start -c, --cloud`, Cloud operator mode.
-- `operator start --provider <provider>`, Cloud provider (aws, gcp, azure).
-- `operator start -s, --execution-vault`, Enable execution vault (data stays in working directory).
-- `operator start -G, --no-git`, Disable Git integration.
-- `operator start -l, --log <level>`, Log level: info, error, debug.
-- `operator start --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
-- `operator start --lattice-endpoint <url>`, Lattice gRPC endpoint URL. Enables the Lattice adapter when set.
-- `operator start --lattice-client-id <id>`, OAuth2 client ID for Lattice authentication.
-- `operator start --lattice-client-secret <secret>`, OAuth2 client secret for Lattice authentication.
-- `operator start --lattice-sandboxes-token <token>`, Sandbox authorization token for Lattice.
-- `operator start --lattice-entity-name <name>`, Entity display name registered with Lattice.
-- `operator start --lattice-posture-floor <posture>`, Minimum governance posture (default: consensus).
-
-Run `g8e tui` to launch the Tactical Governance Console (TUI). Use `gw start` or `operator start` subcommands to launch worker processes.
+This guide covers building and running the reference Operator and identifies the public protocol surface available to independent implementations. For connection, enrollment, and day-two operations, see [Connect Operator to Gateway](connect_operator_to_gateway.md). For the complete service architecture, see [Operator Architecture](../architecture/operator.md).
 
 ---
 
-## Reference Implementation
+## Build the Reference Operator
 
 ### Prerequisites
 
-- **Go 1.26.6+**, required for building the reference operator.
-- **Make**, required to run build targets.
+- **Go 1.26.6 or later**, as declared by the root Go module.
+- **Make** on Linux and macOS.
+- **PowerShell** for the native Windows build script.
 
-> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
-> - **Linux:** `bash scripts/linux-setup.sh`
-> - **macOS:** `bash scripts/macos-setup.sh`
-> - **Windows:** `pwsh scripts/windows-setup.ps1`
+The repository setup scripts validate the development tools, offer to install missing tools, and run a build:
+
+- Linux: `bash scripts/linux-setup.sh`
+- macOS: `bash scripts/macos-setup.sh`
+- Windows: `pwsh scripts/windows-setup.ps1`
 
 ### Build from Source
 
-Clone the repository and build the g8e binary:
-
 ```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
 make build
 ```
 
-This produces the `g8e` binary in the repository root. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
+`make build` creates the platform-specific binary and checksum under `bin/`, copies the host binary to `./g8e` (or `./g8e.exe` on Windows), and copies it to `demos/bin/g8e`.
 
-**Self-Contained Deployment**: The compiled g8e binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary and is the sole source of truth.
+The build sets `CGO_ENABLED=0`, uses the `netgo` and `osusergo` build tags, strips symbol and debug data, and embeds the platform version, build ID, build time, and target platform. The resulting binary does not require a Go toolchain or a system SQLite library on the target host.
+
+The binary is self-contained, but the running Operator is stateful. It creates a `.g8e/` runtime tree below its launch directory, requires write access there, stores enrollment credentials and encrypted local state there, and requires network access to its Gateway. Use `--working-dir` to select the host execution directory; it does not relocate the `.g8e/` runtime tree.
 
 ### Build Targets
 
-The Makefile provides several build targets:
+| Target | Result |
+| --- | --- |
+| `make build` | Builds the current OS and architecture, writes `bin/g8e-<os>-<arch>`, and copies the host binary to the repository root. |
+| `make build-all` | Builds Linux amd64/arm64/386, Windows amd64/arm64, and Darwin amd64/arm64 binaries with SHA-256 checksum files. Linux variants use the pinned FIPS module. |
+| `make build-linux` | Builds `bin/g8e-linux-{amd64,arm64,386}` and checksum files. |
+| `make build-windows` | Builds `bin/g8e-windows-{amd64,arm64}.exe` and checksum files. |
+| `make build-darwin` | Builds `bin/g8e-darwin-{amd64,arm64}` and checksum files. |
+| `make build-compressed` | Builds the host binary and compresses it with UPX. This target requires UPX. |
+| `make build-fips` | Builds `bin/g8e-fips-linux-amd64` with `GOFIPS140=v1.0.0`. |
+| `make verify-fips` | Builds the FIPS variant and runs `g8e version --fips` with FIPS-only enforcement enabled. |
 
-- `make build`, Builds the g8e binary for the current platform.
-- `make build-all`, Builds the g8e binary for all platforms (linux, windows, darwin).
-- `make build-linux`, Builds the g8e binary for Linux (amd64, arm64, 386).
-- `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
-- `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
-- `make build-compressed`, Builds the g8e binary for the current platform and compresses it with UPX (requires UPX installed).
-- `make build-fips`, Builds the g8e binary with FIPS 140-3 approved mode (linux/amd64, GOFIPS140 v1.0.0).
-- `make verify-fips`, Builds the FIPS variant and runs the `g8e version --fips` self-check.
-- `make fmt`, Formats all Go source files (`gofmt -w .`).
-- `make up`, Builds and starts the full Docker Compose stack (`docker compose up -d --build`).
-- `make down`, Stops the stack, preserving volumes (`docker compose --profile bootstrapped down --remove-orphans`).
-- `make clean-docker`, Stops the stack and removes volumes (`docker compose --profile bootstrapped down -v --remove-orphans`).
-- `make clean`, Removes compiled binaries, test artifacts, and `.g8e/` runtime state.
+`make fmt`, `make up`, `make down`, and the cleanup targets are development and platform-management targets rather than Operator build variants. `make clean` also removes `.g8e/` runtime state, so do not use it to clean only build artifacts on a host with state that must be retained.
 
 ### Cross-Compilation
 
-To build for different target platforms:
+The dedicated platform targets are the simplest cross-compilation path:
+
+```bash
+make build-linux
+make build-darwin
+make build-windows
+```
+
+A single target can also be selected through the Go environment consumed by `make build`:
 
 ```bash
 GOOS=linux GOARCH=amd64 make build
@@ -109,232 +81,189 @@ GOOS=darwin GOARCH=arm64 make build
 GOOS=windows GOARCH=amd64 make build
 ```
 
-### Windows Build
-
-For cross-compilation from Linux/macOS to Windows:
-
-```bash
-GOOS=windows GOARCH=amd64 make build
-# Output: bin/g8e-windows-amd64.exe
-```
-
-The Makefile includes a dedicated Windows build target:
-
-```bash
-make build-windows
-```
-
-This builds for both amd64 and arm64 architectures. On Windows hosts, use the same Makefile targets with a Windows-compatible make implementation (such as MinGW make or WSL).
-
-### Deployment and Remote Management
-
-The `operator` subcommand provides tools for managing remote Operator instances:
-
-- `./g8e operator list`, Lists all Operators currently connected to the Gateway.
-- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll user` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
-- `./g8e operator stream [host...] [flags]`, Streams the binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming and advanced SSH configuration. Flags: `--arch` (target architecture: amd64, arm64, 386), `--hosts` (file of hosts, one per line, or `-` for stdin), `--concurrency` (max parallel SSH sessions, default: 50), `--timeout` (per-host dial and inject timeout in seconds, default: 60), `--endpoint` (platform endpoint; if set, starts Operator on each remote host), `--no-git` (disable ledger), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--binary-dir` (directory containing arch-specific Operator builds), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--preflight` (enable pre-flight SSH connectivity check).
-- `./g8e operator cp <target>`, Copies the binary to a local path.
-- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve`, `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
+On a native Windows host, use the repository's `build.ps1` workflow or WSL. The root Makefile itself directs Windows users to `build.ps1`.
 
 ---
 
-## Protocol Library Dependencies
+## Start the Reference Operator
 
-Custom operator implementations need the g8e Protocol Library for protobuf schema definitions, SPIFFE workload identity helpers, and JSON protocol constants. The protocol is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+### Start a Gateway
 
-### Go Module
-
-The protocol is part of the root Go module `github.com/g8e-ai/g8e/v2`. Add it to your project:
+The Operator requires a reachable Gateway for enrollment, bootstrap configuration, state-root verification, pub/sub, and receipt publication. Start the Gateway first:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.6
+./g8e gw start
 ```
 
-The Go module provides protobuf types for governance envelopes, operator service definitions, and SPIFFE workload identity helpers for mTLS identity binding. Import the common and operator protocol packages for envelope construction and verification, and the root protocol package for SPIFFE URI SAN generation and validation.
+The default Gateway posture is `doctrine`. The Gateway also supports `consensus`, `ratify`, and `notary`; the selected posture is written into each envelope and is authoritative for Operator-side L2 and L3 gating.
 
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and example programs covering governance envelope construction and SPIFFE workload identity generation.
+### Start and Enroll the Operator
 
-### Python Package
-
-For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
+On the target host, start the Operator with the Gateway discovery endpoint:
 
 ```bash
-pip install g8e==2.1.6
+./g8e operator start --endpoint <gateway-host>
 ```
 
-The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
+When no installed Operator credentials exist, `--endpoint` starts the owner-approved platform enrollment protocol. The Operator fetches the Gateway trust bundle from the HTTP discovery endpoint, creates Operator and CLI certificate requests, persists pending enrollment state, waits for Gateway-owner approval, verifies the completion transcript, and writes the issued credentials and canonical trust bundle into `.g8e/pki/`. Restarting the process resumes the same pending enrollment request and key material.
+
+After enrollment, the Operator loads `.g8e/pki/operator.crt` and `.g8e/pki/operator.key`, connects to the Gateway over mTLS, requests bootstrap configuration, initializes encrypted local services, subscribes to its command channel, and starts automatic heartbeats. The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`.
+
+For pre-provisioned credentials, pass explicit paths:
+
+```bash
+./g8e operator start \
+  --endpoint <gateway-host> \
+  --cert /path/to/operator.crt \
+  --key /path/to/operator.key \
+  --trust-bundle /path/to/g8eg-ca-bundle.pem
+```
+
+### Operator Start Options
+
+The current worker path applies these options:
+
+| Option | Behavior |
+| --- | --- |
+| `-e, --endpoint <host>` | Selects the Gateway discovery host. If omitted, the default is `localhost`; a missing local trust bundle then prevents startup. |
+| `--cert <path>` | Uses an explicit Operator client certificate instead of runtime-tree discovery or enrollment. |
+| `-k, --key <path>` | Uses the private key paired with `--cert`. |
+| `--trust-bundle <path>` | Loads an explicit CA trust bundle. With an endpoint and no local bundle, the Operator fetches the Gateway bundle from its well-known HTTP endpoint. |
+| `--working-dir <path>` | Sets the working directory used by command execution. The default comes from runtime configuration and resolves to the process working directory. |
+| `-c, --cloud` | Enables cloud Operator mode. |
+| `--provider <aws|gcp|azure>` | Sets the cloud provider recorded in cloud Operator configuration. |
+| `-s, --execution-vault` | Enables the execution vault and defaults to `true`. Outbound startup currently requires it; setting it to `false` fails closed during service initialization. |
+| `-G, --no-git` | Disables the git-backed file ledger while retaining the encrypted audit store. |
+| `-l, --log <level>` | Sets `info`, `error`, or `debug` logging. |
+| `--heartbeat-interval <seconds>` | Sets the heartbeat interval; the default is 30 seconds. |
+
+Use `./g8e operator start --help` as the command-surface reference. The Lattice-named flags currently appear in Cobra help but are not copied into `ServeOperatorOptions` by `operatorStartCmd`; setting those flags does not enable the adapter. The adapter's environment-variable path exists in the service layer, but its task handler currently records receipt of a task without dispatching it. Do not treat the Lattice path as an implemented Operator execution integration.
+
+### Local Runtime State
+
+The reference Operator creates and uses these runtime areas below `.g8e/`:
+
+- `pki/` for the Operator certificate, key, trust bundle, trusted L2 signers, and enrollment state.
+- `data/` for the canonical SQLite database, replay store, suspended transactions, execution vault, audit receipts, and commitment chain.
+- `vault/` for the encryption vault header and key.
+- `data/ledger/` for git-backed file history when Git integration is enabled.
+
+The canonical runtime file service creates the tree at startup. The canonical database service auto-initializes the vault on first use, writes `.g8e/vault/key`, and unlocks the vault before opening encrypted stores. Startup fails if an existing key cannot be read or cannot unlock the vault. A separate `g8e vault init` or `g8e vault unlock` step is not required before `operator start`.
+
+The `g8e vault` commands provide explicit administration:
+
+- `g8e vault init [--vault-dir <dir>] [--key-path <path>]`
+- `g8e vault unlock [--vault-dir <dir>] [--key-path <path>]`
+- `g8e vault status [--vault-dir <dir>]`
+- `g8e vault rekey [--vault-dir <dir>] [--key-path <path>] [--new-key-path <path>]`
+- `g8e vault export [--key-path <path>]`
+- `g8e vault import [--key-path <path>] [--key-hex <hex>]`
+- `g8e vault reset [--vault-dir <dir>] [--confirm]`
+
+`vault unlock` validates that a key opens the vault in that process; it does not leave a daemon or persistent unlocked process behind. `operator start` opens and unlocks its own vault instance.
 
 ---
 
-## Custom Operator Implementation
+## Current Operator Processing Contract
 
-To build a custom g8e-compatible Operator, your implementation must satisfy the following protocol contracts.
+### Ingress and Connectivity
 
-### Required Capabilities
+The outbound Operator listens on no inbound application port. It dials the Gateway's mTLS WebSocket pub/sub service, receives bootstrap configuration, and subscribes to `cmd:<operator_id>:<operator_session_id>`. The Gateway owns HTTP MCP, A2A, direct-envelope ingress, policy orchestration, and publication to that scoped channel.
 
-#### 1. Protocol Translation
+Governed command traffic uses canonical protobuf JSON for `g8e.common.v1.GovernanceEnvelope`. The envelope's `payload` field contains serialized bytes of the protobuf message selected by `action_type`. Unknown protojson fields, unknown action types, missing typed payloads, and non-canonical fallback transports are rejected.
 
-The Operator must act as a universal protocol translator. MCP JSON-RPC tool calls and A2A HTTP/JSON skill invocations are wrapped in GovernanceEnvelope format, using canonical JSON as the wire format for all client-facing interactions. Native requests map directly to governed action types defined in the protocol schemas.
+### L4 Warden Verification
 
-#### 2. Verification Sequence (L1-L4)
+The Operator reserves the nonce before expensive validation so a crash cannot reopen a replay window. It then performs:
 
-The Operator must implement a singular verification gate that enforces:
+1. Expiry and replay checks against the local replay store.
+2. Envelope structure, known action type, typed payload decoding, and L1 Doctrine validation.
+3. Recalculation of the transaction hash and equality checks against both `transaction_hash` and `id`.
+4. State binding against the current Gateway state root in outbound mode. The Operator fetches this root from the Gateway rather than treating its host-local ledger root as authoritative for the envelope.
+5. Parsing of the posture carried by the envelope and verification of L2 and L3 evidence. `consensus` and `notary` require L2. `ratify` and `notary` require L3 for mutation action types. Missing optional evidence is recorded as not required rather than treated as a failed gate.
 
-- **Integrity**: Verify the envelope identifier matches the deterministic hash computed from its content.
-- **Freshness**: Validate transaction expiry and reject replayed nonces.
-- **State Binding**: Verify the transaction state root matches the host's current local ledger root.
-- **L1Doctrine (Hard Gates)**: Enforce forbidden pattern matching and MITRE ATT&CK threat detection on the typed payload.
-- **L2Consensus**: Verify Consensus deliberation votes against a locally trusted signer store and the active ConsensusPolicy. Under consensus posture, the gateway delegates L2 deliberation to an enrolled Consensus service.
-- **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
-- **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
+A verification rejection produces deterministic stage evidence and a signed failed receipt when the Actuator and audit dependencies are available. Universal checks and posture-required checks fail closed.
 
-Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
+### L5 Actuator Execution
 
-#### 3. Execution Boundary (L5Actuator)
+For a verified transaction, L5 Actuator:
 
-The Operator must implement a single execution boundary permitted to mutate host state:
+1. Builds, signs, and persists an `EXECUTING` `ActionReceipt`. Execution does not begin if signing or initial persistence fails.
+2. Appends a signed `CommitmentAttestation` to the local SQLite commitment hash chain before execution.
+3. Rehydrates locally tokenized values and mints a short-lived capability bound to the verified transaction.
+4. Dispatches the typed action to the registered execution handler and dissolves the capability after the handler returns.
+5. Captures the resulting state root, signs and persists the final `COMPLETED` or `FAILED` receipt, and adds a signed receipt-persistence attestation.
+6. Publishes the final receipt to the Gateway on a best-effort basis. The host-local persisted receipt remains authoritative if this mirror publication fails.
 
-- **Pre-execution Receipt**: Sign a receipt with an executing status and commit it to the encrypted audit log. Abort execution if this write fails.
-- **Execution**: Dispatch the verified payload to the appropriate handler (shell, file edit, etc.).
-- **Sovereign Execution Boundary**: Process output to scrub sensitive PII, credentials, and connection strings before data leaves the boundary.
-- **Post-execution Receipt**: Update the receipt to completed or failed, capture the new state root, sign the result, and publish it back to the Gateway.
+Execution output and file-diff records use the encrypted execution vault. Sensitive outbound results pass through the scrubbing service, whose token store uses the encrypted canonical key-value store so token mappings survive process restarts.
 
-#### 4. Identity and PKI
+### Identity and Trust
 
-The Operator must establish workload identity via mTLS:
-
-- **SPIFFE URI SANs**: Use SPIFFE-style URI SANs for identity binding across operator and CLI session types.
-- **Certificate Revocation**: Enforce revocation on every handshake.
-- **Ed25519 Signing Key**: Possess a unique Ed25519 signing key used exclusively to sign receipts.
-
-#### 5. Local-First Audit Architecture (LFAA)
-
-The Operator must maintain the host as the authoritative source of truth:
-
-- **Encrypted Audit Log**: Append-only, encrypted log of every event and signed receipt. Fail-closed: reject events missing a valid operator session. Encryption at rest is mandatory.
-- **Git-backed Ledger**: Git-based version control for file mutations with two-phase commit and session-scoped restoration. Encryption at rest is mandatory.
-- **Execution Vault**: Encrypted storage for command execution results and file diffs. Encryption at rest is mandatory.
-- **Canonical State Store**: (Gateway mode only) Unified encrypted persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Encryption at rest is mandatory.
-
-#### 6. Outbound-Only Connectivity
-
-The Operator must establish outbound-only connectivity to the Gateway:
-
-- **mTLS Reverse Tunnel**: Dial out to the Gateway via mTLS WSS.
-- **No Inbound Ports**: Listen on nothing. No NAT traversal or remote attack surface on the execution boundary.
-- **Pub/Sub Subscription**: Subscribe to command events on the Gateway's Pub/Sub broker.
-
-#### 7. MCP Server
-
-The Operator must expose tools as a Model Context Protocol server:
-
-- **HTTP-based MCP**: Support HTTP-based MCP for all client integrations (IDEs, direct API access).
-- **Tool Registration**: Register available tools with the MCP client.
-
-### Protocol Invariants
-
-Your implementation must enforce these core invariants:
-
-1. **Transaction Integrity**: The envelope identifier must match the deterministic hash computed from its content.
-2. **State Binding**: Every transaction must include a state root and be verified against the current authoritative state.
-3. **Replay Defense**: Transaction nonces must be validated to prevent replay attacks.
-4. **Expiry Enforcement**: Transactions must be rejected if they have expired.
-5. **Fail-Closed Execution**: Any verification failure must result in a typed rejection and audit entry. No fallback paths or silent retries.
-6. **Sovereignty**: Sensitive data must be scrubbed before leaving the execution boundary.
-7. **Local-First Audit**: All audit entries must be written to the host-local encrypted audit log before execution.
-
-### Sovereign Execution Boundary
-
-The Operator must implement data sovereignty:
-
-- **Threat Detection Before Execution**: Run L1Doctrine threat detection before execution.
-- **Data Scrubbing During Execution**: Scrub sensitive data from outputs before publishing results back to the Gateway.
-- **Token Persistence**: Persist scrubbing tokens locally across restarts to prevent data leaks during crashes.
-
-### Canonical JSON Wire Format
-
-While schemas are defined via Protobuf, the canonical wire format for the operator's client-facing surfaces must be strictly canonical JSON. This guarantees ecosystem compatibility without breaking determinism for transaction integrity verification.
-
-### Strict Protocol Enforcement
-
-The Operator must drop stale JSON formats, raw HMAC structures, and outdated relay fallbacks. A transaction either fully complies with the current strict 5-layer verification protocol, or it is rejected.
+The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25519 Actuator key for `ActionReceipt` signatures. The local Auditor key signs commitment attestations. L2 votes are verified against the Operator's trusted signer store. The Gateway validates client certificate revocation in its authenticated request path; normal TLS chain and hostname validation also applies to the Operator's outbound connection.
 
 ---
 
-## Protocol Schema
+## Protocol Packages and Independent Implementations
 
-The GovernanceEnvelope schema is defined in the protocol protobuf files. Your implementation must:
+### Public Packages
 
-1. **Use the canonical protojson wire format** for all client-facing interactions.
-2. **Implement the typed payload validation** defined in the protocol schemas.
-3. **Support the canonical request payload mappings** for all first-class event types.
-
-Refer to the [Protocol Library documentation](../architecture/protocol.md) for the canonical schema definitions.
-
----
-
-## Testing
-
-A custom Operator implementation must pass the platform test suite to claim g8e compatibility. Run tests via `./g8e test` or make targets:
-
-- `make test-unit` or `./g8e test unit`, Runs Tier 1 unit tests with stubs and mocks (no external dependencies).
-- `make test-integration` or `./g8e test integration`, Runs Tier 2 in-process integration tests with local SQLite, PKI, and pub/sub.
-- `make test-docker` or `./g8e test e2e`, Runs Tier 3 E2E tests against a running platform. Start the platform first (`docker compose up -d --build` or `./g8e gw start`), then run `make test-docker` or `./g8e test e2e`. Use `./g8e test e2e --run <pattern>` to select specific scenario tests.
-- `make test-coverage` or `./g8e test coverage`, Runs the test suite and enforces the 75% coverage threshold.
-- `make lint` or `./g8e test lint`, Runs linters and static analysis.
-- `make ci`, Runs the full CI pipeline (proto generation, documentation validation, linting, vulnerability checks, and test suites).
-
----
-
-## Vault Setup
-
-The g8e Operator requires a vault for encryption at rest. The vault must be initialized and unlocked before the Operator can start.
-
-### Initialize Vault
+The public Go module is the repository root module:
 
 ```bash
-./g8e vault init
+go get github.com/g8e-ai/g8e/v2@v2.1.7
 ```
 
-This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/vault/key`.
+Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
 
-### Unlock Vault
+- `protocol/proto/g8e/common/v1` for `GovernanceEnvelope`, governance metadata, L2 votes, and L3 proofs.
+- `protocol/proto/g8e/operator/v1` for typed action payloads, `ActionReceipt`, commitment and persistence attestations, deterministic stage evidence, and the generated `OperatorService` gRPC definitions.
+- The root `protocol` package for SPIFFE workload-identity formatting, parsing, and matching.
 
-The vault is automatically unlocked when starting the Gateway or Operator. To manually unlock the vault:
+The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-./g8e vault unlock
+pip install g8e==2.1.7
 ```
 
-### Vault Configuration
+See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.
 
-When starting the Gateway with `gw start` or `gw start --follow`, the vault can be configured via CLI flags or environment variables:
+### Support Boundary
 
-- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
-- `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/key`)
+The protocol packages expose wire schemas and identity helpers; they do not expose the reference governance engine as a reusable Operator SDK. L1 Doctrine, L4 Warden, L5 Actuator, enrollment, pub/sub services, encrypted storage, and execution handlers are under Go `internal/` packages and cannot be imported by an external Go module.
 
-Environment variables:
-- `G8E_VAULT_DIR`: Override vault directory
-- `G8E_VAULT_KEY`: Override vault key path
+The repository also does not provide a standalone third-party Operator conformance harness or a compatibility certification command. The platform test suite validates the in-tree reference implementation. An independent Operator therefore requires a separate implementation of enrollment, scoped pub/sub, canonical protojson handling, transaction hashing, replay and expiry checks, Gateway state-root verification, posture-aware L2/L3 verification, signed receipts and commitment attestations, encrypted local persistence, scrubbing, and typed action dispatch. Schema compatibility alone does not establish behavioral compatibility.
 
-### Vault Management
+The generated `OperatorService` gRPC interface describes command operations, but the current outbound reference worker receives governed envelopes through Gateway pub/sub rather than serving that gRPC service on an inbound port. Independent implementations that interoperate with the current Gateway follow the pub/sub envelope and receipt flow implemented by the reference worker.
 
-Additional vault management commands:
+---
 
-- `init`, Initializes a new vault and saves the key to `.g8e/vault/key` (relative to the current working directory).
-- `unlock`, Unlocks the vault using the private key.
-- `rekey`, Re-encrypts the vault with a new key.
-- `status`, Displays initialization and lock state.
-- `reset`, Destroys all vault data (irreversible).
-- `export`, Exports the private key to stdout.
-- `import`, Imports a private key from hex string or stdin.
+## Verify the Reference Implementation
 
-For detailed vault architecture and security guarantees, see [Encryption Architecture](../architecture/encryption.md).
+Run platform tests through the `g8e test` command or the corresponding root targets:
+
+| Command | Scope |
+| --- | --- |
+| `./g8e test unit` | Tier 1 unit tests. |
+| `./g8e test integration` | Tier 2 in-process integration tests with SQLite, PKI, and local pub/sub. |
+| `./g8e test e2e` | Tier 3 Docker E2E tests against a running, enrolled platform. |
+| `./g8e test coverage` | Unit and integration coverage with the 75% threshold. |
+| `./g8e test lint` | Platform lint and quality checks. |
+
+The matching root targets are `make test-unit`, `make test-integration`, `make test-docker`, `make test-coverage`, and `make lint`. `make test` runs unit and integration tests. `make test-docker` runs the configured steady-state E2E subset and requires the Docker platform to be running and its enrollment requests approved. `make ci` runs the full platform, ensemble, dashboard, protocol-generation, documentation-generation, lint, vulnerability, and test pipeline.
+
+---
+
+## Deployment Commands
+
+`g8e operator cp <target>` copies the currently running binary to a local file or directory. `g8e operator scp <user@host:path>` invokes the system `scp` command and supports the flags shown by `g8e operator scp --help`.
+
+The current `operator deploy --background` implementation copies the binary and starts `gw start` on each remote host; it does not start `operator start`. The current Cobra wrapper for `operator stream` parses its public flags before calling the native stream parser, so options such as `--endpoint`, `--hosts`, and `--binary-dir` are not forwarded to the implementation. Do not use either command as an automated Operator rollout path in this version. Copy the binary with `cp`, `scp`, or an external deployment system, then run `g8e operator start --endpoint <gateway-host>` on the target.
 
 ---
 
 ## Next Steps
 
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Deploy and use a g8e Operator.
-- **[Build Apps](build_apps.md)**, Build g8e-compatible applications using a Gateway.
-- **[Protocol Library](../architecture/protocol.md)**, Go module and Python package API reference, constants, models, and usage examples.
+- [Connect Operator to Gateway](connect_operator_to_gateway.md) covers enrollment, connection, health checks, and operation.
+- [Operator Architecture](../architecture/operator.md) describes the service stack, execution boundary, audit stores, and tool handling.
+- [Protocol Library](../architecture/protocol.md) documents the public Go and Python protocol packages.
+- [Build Apps](build_apps.md) covers MCP, A2A, command-intent, and direct-envelope clients of the Gateway.

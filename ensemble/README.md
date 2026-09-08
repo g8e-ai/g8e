@@ -1,158 +1,102 @@
-# g8ee — g8e Ensemble
+# g8ee: g8e Ensemble
 
-g8ee is the first g8e-compatible agentic ensemble: a reference AI reasoning system for g8e infrastructure operations. It is a first-party component of the g8e platform, shipped in-tree under `ensemble/` alongside the gateway/operator Go binary and the operator dashboard (g8ed). It connects to the g8e gateway over mTLS, submits signed `GovernanceEnvelope` transactions through the five-layer admission pipeline, and derives context from the hash-chained ledger. See [docs/architecture/ensemble.md](../docs/architecture/ensemble.md) for the architecture and role of the ensemble in the platform.
+g8ee is the first-party Python and FastAPI reasoning service for the g8e platform. It enrolls a workload identity with the gateway, connects to gateway-hosted operator services over mTLS, runs the agent reasoning flow, and submits `GovernanceEnvelope` transactions for validation and execution through L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator. See the [Ensemble documentation](../docs/ensemble/index.md) for architecture, configuration, governance, and operating details.
 
-## Getting Started
+## Run the unified stack
+
+The supported Docker Compose flow starts the gateway, operator, ensemble, and dashboard. It also enrolls the first owner and guides that owner through approval of each workload enrollment request.
 
 ### Prerequisites
 
-- Python 3.12+ (per `pyproject.toml`; the `requires-python` field is the source of truth)
-- A running g8e gateway and operator (see the repo-root [Getting Started guide](../docs/guides/getting_started.md) or bring up the whole stack with `docker compose up` from the repo root)
+- Docker Engine with the Docker Compose v2 plugin
+- The repository-root `g8e` binary
+- Host ports 8080, 8443, 8000, and 3000 available when using the defaults
+- A browser with WebAuthn support, or a terminal that can complete headless owner enrollment
 
-### Setup (development)
-
-The ensemble depends on the in-tree `protocol/python/` package. Install the protocol package first, then the ensemble in editable mode:
+From the repository root, build the images and start the full stack:
 
 ```bash
-# From the g8e repo root
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install the in-tree g8e protocol package first
-pip install protocol/python
-
-# Install the ensemble with dev/test extras
-pip install -e "ensemble[dev,test]"
-
-# Or install from the ensemble requirements.txt
-pip install -r ensemble/requirements.txt
-
-# Copy environment template and configure
-cp ensemble/.env.example ensemble/.env
-# Edit ensemble/.env with your configuration
-
-# Generate protobuf stubs from g8e protocol definitions
-make -C ensemble proto
+./g8e docker build
+./g8e docker start --full
 ```
 
-### Running the Application
+The default Compose profile starts only the gateway. The `bootstrapped` profile contains the operator, ensemble, and dashboard, and those workloads remain pending until an enrolled owner approves them. The helper above manages that flow; see the [Unified Docker Stack guide](../docs/guides/unified_stack.md) for the manual commands and troubleshooting steps.
 
-The g8ee application requires connection to g8e operator services (DB, KV, PubSub, Blob, HTTP) and TLS certificates for secure communication.
+After enrollment completes, the ensemble health endpoint is available at `http://localhost:8000/health`. Set `G8E_ENSEMBLE_PORT` before starting Compose to publish a different host port.
 
-**Prerequisites for running:**
-- g8e operator services running and accessible
-- TLS certificates mounted at expected paths (configured via BootstrapService)
-- Valid operator session credentials
+## Development setup
 
-**Start the application:**
+### Prerequisites
+
+- Python 3.12 or later, as specified by `requires-python` in `pyproject.toml`
+- A running and enrolled g8e gateway and operator for application startup and live integration tests
+
+The ensemble depends on the in-tree `g8e` Python protocol package. From the repository root:
 
 ```bash
-# Using uvicorn directly
-uvicorn app.main:app --host 0.0.0.0 --port 8443 --reload
+cd ensemble
+python3 -m venv .venv
+source .venv/bin/activate
+make setup
+cp .env.example .env
+make proto
+```
 
-# Or run the module directly
+`make setup` installs `../protocol/python` and the ensemble with its development and test dependencies in editable mode. `make proto` verifies that the canonical Python protobuf stubs generated from the protocol definitions are current.
+
+Configure `.env` for the gateway, operator, and selected LLM provider. The ensemble reads `.env` without overriding variables already present in the process environment. See [LLM Providers](../docs/ensemble/llm-providers.md) for provider settings and [PKI and Trust](../docs/ensemble/pki.md) for workload identity and certificate requirements.
+
+## Run locally
+
+From `ensemble/` with the virtual environment active:
+
+```bash
 python -m app.main
 ```
 
-The application will:
-- Start on port 8443 (HTTPS)
-- Connect to operator services on startup
-- Load platform settings from the operator
-- Initialize all domain services
+The development entry point listens on HTTP at `0.0.0.0:8443` with reload enabled. Its outbound gateway and operator connections use mTLS. On startup, the ensemble loads or requests its app identity, connects the DB, KV, pub/sub, and blob transports, loads platform settings, and starts its domain services. A new identity remains pending until an enrolled owner approves the ensemble workload request.
 
-**Configuration:**
-- Local bootstrap settings are loaded from the operator volume
-- Platform settings are merged from the operator on startup
-- TLS certificate paths are configured via the BootstrapService
+Governed collection mutations require an operator-bound identity. The unified Compose stack mounts the operator credentials read-only and sets `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY`; a local deployment must provide equivalent paths or governed submissions fail closed.
 
-### Running in Docker
+## Test and validate
 
-The ensemble ships as a Docker image built from `ensemble/Dockerfile` (build context: g8e repo root). The repo-root `docker-compose.yml` includes an `ensemble` service that brings it up alongside the gateway and operator:
+Run the standard ensemble checks from the repository root:
 
 ```bash
-# From the g8e repo root — brings up gateway, operator, ensemble, and dashboard
-docker compose up
+make ensemble-test
+make ensemble-lint
 ```
 
-### Running Tests
+`make ensemble-test` runs Tier 1 unit tests and Tier 2 in-process integration tests without live LLM or external API calls. `make ensemble-lint` runs Ruff and Pyright against the application. Run `make ci-ensemble` to execute both checks.
+
+Tier 4 tests use live LLM providers or external APIs and run separately:
 
 ```bash
-# Unit tests (no external dependencies)
-pytest tests/ -v -m "not ai_integration and not requires_web_search and not requires_api and not e2e"
-
-# Evals tests
-pytest evals/tests/ -v
-
-# Full test suite
-pytest tests/ evals/tests/ -v
+make test-external
 ```
 
-### Development
+The evaluation harness is a standalone package under `ensemble/evals/` with its own locked environment. Run `make evals-test` and `make evals-lint` from the repository root. See [Testing](../docs/ensemble/tests.md) and [Evals](../docs/ensemble/evals.md) for test tiers, markers, credential gating, and eval commands.
 
-```bash
-# Lint with Ruff
-ruff check .
+## Project layout
 
-# Format with Ruff
-ruff format .
+- `app/`: FastAPI application, transport clients, typed models, LLM providers, agent services, security filters, storage adapters, and route handlers.
+- `config/`: Command validation allowlist, blocklist, and auto-approval configuration.
+- `tests/`: Unit, in-process integration, external, and end-to-end test suites, plus shared fakes and fixtures.
+- `evals/`: Standalone evaluation package, benchmark datasets, receipt verification, and reports.
+- `pyproject.toml`: Package metadata, dependencies, pytest settings, coverage settings, and Ruff configuration.
+- `Dockerfile`: Multi-stage runtime image built with the repository root as its build context.
+- `Makefile`: Ensemble-local setup, protobuf verification, formatting, linting, and test targets.
 
-# Type check with Pyright
-pyright
-
-# Run pre-commit hooks (if installed)
-pre-commit run --all-files
-
-# Install pre-commit hooks
-pre-commit install
-```
-
-## Project Structure
-
-```
-ensemble/
-├── app/                 # Main application code (FastAPI, services, models)
-│   ├── clients/         # External service clients
-│   ├── constants/       # Application constants
-│   ├── db/              # Database models and operations
-│   ├── llm/             # LLM provider implementations
-│   ├── models/          # Pydantic models
-│   ├── protocol/        # Protocol definitions
-│   ├── routers/         # FastAPI route handlers
-│   ├── services/        # Business logic services
-│   └── utils/           # Utility functions
-├── tests/               # Unit and integration tests (Tier 1, co-located)
-├── evals/               # Evaluation suite and benchmarks
-├── config/              # Configuration files
-├── scripts/             # Utility scripts
-├── pyproject.toml       # Python project configuration
-├── .env.example         # Environment variables template
-├── CONTRIBUTING.md      # Contribution guidelines
-├── CHANGELOG.md         # Changelog
-├── Dockerfile           # Docker image (build context: g8e repo root)
-└── README.md            # This file
-```
-
-## Development Extras
-
-The project supports optional dependency groups for different use cases:
-
-- `dev`: Development tools (ruff, pyright, pre-commit)
-- `test`: Testing framework (pytest, pytest-cov, etc.)
-- `docs`: Documentation tools (mkdocs, mkdocs-material)
-
-Install with:
-```bash
-pip install -e ".[dev,test,docs]"
-```
+Canonical shared protocol models and constants live in `../protocol/`; broader ensemble documentation lives in `../docs/ensemble/`.
 
 ## Contributing
 
-g8ee is a first-party component of the g8e platform. See [CONTRIBUTING.md](CONTRIBUTING.md) for ensemble-specific guidelines, and the repo-root [CONTRIBUTING.md](../.github/CONTRIBUTING.md) for platform-wide contribution guidelines.
+See the ensemble [contribution guide](CONTRIBUTING.md), the platform [contribution guide](../.github/CONTRIBUTING.md), the [ensemble development guide](../docs/ensemble/devs.md), and the repository [documentation guide](../docs/devs/docs.md).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the ensemble changelog. Platform-wide changes are documented in the repo-root [release notes](../docs/release_notes/).
+See the ensemble [changelog](CHANGELOG.md) and the platform [release notes](../docs/release_notes/).
 
 ## License
 
-Business Source License 1.1 (BSL 1.1). Converts to Apache 2.0 on 2030-08-18. See the [LICENSE](LICENSE) file in this directory and the repo-root [LICENSE](../LICENSE) file for details.
+The ensemble is licensed under the Business Source License 1.1. It converts to Apache License 2.0 on 2030-08-18. See the ensemble [license](LICENSE) and the repository-root [license](../LICENSE).

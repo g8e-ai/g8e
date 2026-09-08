@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -42,6 +43,12 @@ const (
 	sectionResponsibilityCustomer  = "customer"
 	sectionResponsibilityShared    = "shared"
 	sectionResponsibilityInherited = "inherited"
+	sectionStatusAssessorRequired  = "assessor_required"
+	sectionStatusPlanned           = "planned"
+	sectionStatusUnsupported       = "unsupported"
+	sectionStatusFailed            = "failed"
+	sectionStatusStale             = "stale"
+	sectionStatusUnverifiable      = "unverifiable"
 	evidenceLinkTypeReferences     = "references"
 )
 
@@ -88,7 +95,6 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 	graphFailures := buildGraphFailureMessages(request.Graph)
 
 	analysis := &compliancev1.ComplianceAnalysis{
-		AnalysisId:                 analysisID(request),
 		AnalysisSchemaVersion:      constants.AnalysisSchemaVersion,
 		ScopeRef:                   request.ScopeID,
 		GeneratedAt:                timestamppb.New(request.EvaluatedAt),
@@ -107,6 +113,11 @@ func BuildComplianceAnalysis(ctx context.Context, request AnalysisRequest) (*com
 		EvidenceGraphValid:         request.Graph.Valid(),
 		EvidenceResources:          buildEvidenceResources(request),
 	}
+	analysisID, err := analysisContentAddress(analysis)
+	if err != nil {
+		return nil, fmt.Errorf("compliance analysis: derive content address: %w", err)
+	}
+	analysis.AnalysisId = analysisID
 	return analysis, nil
 }
 
@@ -188,6 +199,8 @@ func buildEvidenceWindowCompleteness(request AnalysisRequest) *compliancev1.Evid
 		MissingEvidenceRefs:   missing,
 		StaleEvidenceRefs:     stale,
 		CompletenessStatus:    status,
+		WindowStartRef:        request.WindowStart.UTC().Format(time.RFC3339Nano),
+		WindowEndRef:          request.WindowEnd.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -360,23 +373,110 @@ func buildRemediation(findings []*compliancev1.ComplianceFinding) []*compliancev
 }
 
 func buildSections(request AnalysisRequest) []*compliancev1.ControlSection {
-	groups := make(map[string][]string)
+	type sectionGroup struct {
+		key            string
+		responsibility string
+		statusFilter   string
+		assessmentRefs map[string]struct{}
+		controlRefs    map[string]*compliancev1.FrameworkControlReference
+	}
+	groups := []*sectionGroup{
+		{key: sectionResponsibilityPlatform, responsibility: sectionResponsibilityPlatform},
+		{key: sectionResponsibilityCustomer, responsibility: sectionResponsibilityCustomer},
+		{key: sectionResponsibilityShared, responsibility: sectionResponsibilityShared},
+		{key: sectionResponsibilityInherited, responsibility: sectionResponsibilityInherited},
+		{key: sectionStatusAssessorRequired, statusFilter: sectionStatusAssessorRequired},
+		{key: sectionStatusPlanned, statusFilter: sectionStatusPlanned},
+		{key: sectionStatusUnsupported, statusFilter: sectionStatusUnsupported},
+		{key: sectionStatusFailed, statusFilter: sectionStatusFailed},
+		{key: sectionStatusStale, statusFilter: sectionStatusStale},
+		{key: sectionStatusUnverifiable, statusFilter: sectionStatusUnverifiable},
+	}
+	groupIndex := make(map[string]*sectionGroup, len(groups))
+	for _, group := range groups {
+		group.assessmentRefs = make(map[string]struct{})
+		group.controlRefs = make(map[string]*compliancev1.FrameworkControlReference)
+		groupIndex[group.key] = group
+	}
+	assessmentIndex := make(map[string]*compliancev1.FrameworkControlAssessment, len(request.FrameworkAssessments))
 	for _, assessment := range request.FrameworkAssessments {
+		assessmentIndex[frameworkControlKey(assessment)] = assessment
 		responsibility := assessment.GetResponsibility()
-		if responsibility == "" {
-			responsibility = sectionResponsibilityPlatform
+		if group := groupIndex[responsibility]; group != nil {
+			group.assessmentRefs[assessment.GetAssessmentId()] = struct{}{}
 		}
-		groups[responsibility] = append(groups[responsibility], assessment.GetAssessmentId())
+		if assessment.GetResponsibility() == "assessor" || assessment.GetStatus() == gapTypeCustomerAttestation {
+			groupIndex[sectionStatusAssessorRequired].assessmentRefs[assessment.GetAssessmentId()] = struct{}{}
+		}
+		switch assessment.GetStatus() {
+		case statusNotSatisfied:
+			groupIndex[sectionStatusFailed].assessmentRefs[assessment.GetAssessmentId()] = struct{}{}
+		case gapTypeUnverifiable:
+			groupIndex[sectionStatusUnverifiable].assessmentRefs[assessment.GetAssessmentId()] = struct{}{}
+		}
+	}
+	assertionFreshness := make(map[string]string, len(request.AssertionAssessments))
+	for _, assessment := range request.AssertionAssessments {
+		assertionFreshness[assessment.GetAssessmentId()] = assessment.GetFreshnessStatus()
+	}
+	for _, assessment := range request.FrameworkAssessments {
+		for _, assertionRef := range assessment.GetAssertionAssessmentRefs() {
+			if assertionFreshness[assertionRef] == freshnessStale {
+				groupIndex[sectionStatusStale].assessmentRefs[assessment.GetAssessmentId()] = struct{}{}
+				break
+			}
+		}
+	}
+	for _, framework := range request.Frameworks.GetFrameworks() {
+		for _, control := range framework.GetControls() {
+			controlRef := &compliancev1.FrameworkControlReference{
+				FrameworkRef: &compliancev1.VersionedReference{Id: framework.GetFrameworkId(), Version: framework.GetFrameworkVersion()},
+				ControlId:    control.GetControlId(),
+			}
+			controlKey := frameworkControlKeyFromParts(framework.GetFrameworkId(), framework.GetFrameworkVersion(), control.GetControlId())
+			if group := groupIndex[control.GetResponsibility()]; group != nil {
+				group.controlRefs[controlKey] = controlRef
+			}
+			if control.GetResponsibility() == "assessor" {
+				groupIndex[sectionStatusAssessorRequired].controlRefs[controlKey] = controlRef
+			}
+			switch control.GetSupportStatus() {
+			case sectionStatusPlanned:
+				groupIndex[sectionStatusPlanned].controlRefs[controlKey] = controlRef
+			case sectionStatusUnsupported:
+				groupIndex[sectionStatusUnsupported].controlRefs[controlKey] = controlRef
+			}
+			assessment := assessmentIndex[controlKey]
+			if assessment == nil {
+				continue
+			}
+			for _, key := range []string{sectionStatusAssessorRequired, sectionStatusFailed, sectionStatusStale, sectionStatusUnverifiable} {
+				if _, ok := groupIndex[key].assessmentRefs[assessment.GetAssessmentId()]; ok {
+					groupIndex[key].controlRefs[controlKey] = controlRef
+				}
+			}
+		}
 	}
 	sections := make([]*compliancev1.ControlSection, 0, len(groups))
-	for responsibility, refs := range groups {
-		sort.Strings(refs)
+	for _, group := range groups {
+		assessmentRefs := sortedKeys(group.assessmentRefs)
+		controlKeys := make([]string, 0, len(group.controlRefs))
+		for key := range group.controlRefs {
+			controlKeys = append(controlKeys, key)
+		}
+		sort.Strings(controlKeys)
+		controlRefs := make([]*compliancev1.FrameworkControlReference, 0, len(controlKeys))
+		for _, key := range controlKeys {
+			controlRefs = append(controlRefs, group.controlRefs[key])
+		}
 		sections = append(sections, &compliancev1.ControlSection{
-			SectionId:             sectionID(request.ScopeID, responsibility),
-			Title:                 sectionTitle(responsibility),
-			Responsibility:        responsibility,
-			ControlAssessmentRefs: refs,
-			Description:           sectionDescription(responsibility, len(refs)),
+			SectionId:             sectionID(request.ScopeID, group.key),
+			Title:                 sectionTitle(group.key),
+			Responsibility:        group.responsibility,
+			StatusFilter:          group.statusFilter,
+			ControlAssessmentRefs: assessmentRefs,
+			Description:           sectionDescription(group.key, len(assessmentRefs), len(controlRefs)),
+			ControlRefs:           controlRefs,
 		})
 	}
 	sort.Slice(sections, func(i, j int) bool {
@@ -396,7 +496,10 @@ func buildGraphFailureMessages(graph *EvidenceGraph) []string {
 }
 
 func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {
-	result := append([]*compliancev1.ControlAssertionAssessment(nil), assessments...)
+	result := make([]*compliancev1.ControlAssertionAssessment, 0, len(assessments))
+	for _, assessment := range assessments {
+		result = append(result, proto.Clone(assessment).(*compliancev1.ControlAssertionAssessment))
+	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].GetAssessmentId() < result[j].GetAssessmentId()
 	})
@@ -404,35 +507,23 @@ func sortedAssertionAssessments(assessments []*compliancev1.ControlAssertionAsse
 }
 
 func sortedFrameworkAssessments(assessments []*compliancev1.FrameworkControlAssessment) []*compliancev1.FrameworkControlAssessment {
-	result := append([]*compliancev1.FrameworkControlAssessment(nil), assessments...)
+	result := make([]*compliancev1.FrameworkControlAssessment, 0, len(assessments))
+	for _, assessment := range assessments {
+		result = append(result, proto.Clone(assessment).(*compliancev1.FrameworkControlAssessment))
+	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].GetAssessmentId() < result[j].GetAssessmentId()
 	})
 	return result
 }
 
-func analysisID(request AnalysisRequest) string {
-	assertionIDs := make([]string, 0, len(request.AssertionAssessments))
-	for _, a := range request.AssertionAssessments {
-		assertionIDs = append(assertionIDs, a.GetAssessmentId())
+func analysisContentAddress(analysis *compliancev1.ComplianceAnalysis) (string, error) {
+	canonical, err := compliancev1.MarshalCanonical(analysis)
+	if err != nil {
+		return "", err
 	}
-	sort.Strings(assertionIDs)
-	frameworkIDs := make([]string, 0, len(request.FrameworkAssessments))
-	for _, a := range request.FrameworkAssessments {
-		frameworkIDs = append(frameworkIDs, a.GetAssessmentId())
-	}
-	sort.Strings(frameworkIDs)
-	identity := strings.Join([]string{
-		request.ScopeID,
-		constants.AnalysisSchemaVersion,
-		constants.AnalysisBuilderID,
-		constants.AnalysisBuilderVersion,
-		request.EvaluatedAt.UTC().Format(time.RFC3339Nano),
-		strings.Join(assertionIDs, ","),
-		strings.Join(frameworkIDs, ","),
-	}, "\x00")
-	digest := sha256.Sum256([]byte(identity))
-	return "compliance-analysis:sha256:" + hex.EncodeToString(digest[:])
+	digest := sha256.Sum256(canonical)
+	return "compliance-analysis:sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 func gapID(scopeID, assertionRef, frameworkRef, controlID string) string {
@@ -452,8 +543,8 @@ func remediationID(findingRef string) string {
 	return "compliance-remediation:sha256:" + hex.EncodeToString(digest[:])
 }
 
-func sectionID(scopeID, responsibility string) string {
-	identity := strings.Join([]string{scopeID, responsibility}, "\x00")
+func sectionID(scopeID, key string) string {
+	identity := strings.Join([]string{scopeID, key}, "\x00")
 	digest := sha256.Sum256([]byte(identity))
 	return "control-section:sha256:" + hex.EncodeToString(digest[:])
 }
@@ -472,8 +563,8 @@ func remediationAction(finding *compliancev1.ComplianceFinding) string {
 	return fmt.Sprintf("provide verified evidence to satisfy assertion %s", finding.GetRelatedAssertionRef())
 }
 
-func sectionTitle(responsibility string) string {
-	switch responsibility {
+func sectionTitle(key string) string {
+	switch key {
 	case sectionResponsibilityPlatform:
 		return "Platform Controls"
 	case sectionResponsibilityCustomer:
@@ -482,11 +573,23 @@ func sectionTitle(responsibility string) string {
 		return "Shared Controls"
 	case sectionResponsibilityInherited:
 		return "Inherited Controls"
+	case sectionStatusAssessorRequired:
+		return "Assessor-Required Controls"
+	case sectionStatusPlanned:
+		return "Planned Controls"
+	case sectionStatusUnsupported:
+		return "Unsupported Controls"
+	case sectionStatusFailed:
+		return "Failed Controls"
+	case sectionStatusStale:
+		return "Stale Controls"
+	case sectionStatusUnverifiable:
+		return "Unverifiable Controls"
 	default:
-		return responsibility + " Controls"
+		return key + " Controls"
 	}
 }
 
-func sectionDescription(responsibility string, count int) string {
-	return fmt.Sprintf("%d control assessment(s) with %s responsibility", count, responsibility)
+func sectionDescription(key string, assessmentCount, controlCount int) string {
+	return fmt.Sprintf("%d catalog control(s) and %d control assessment(s) classified as %s", controlCount, assessmentCount, key)
 }

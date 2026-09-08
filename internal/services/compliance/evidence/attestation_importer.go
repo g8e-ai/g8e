@@ -28,10 +28,10 @@ type AttestationImportBinding struct {
 }
 
 type AttestationImporter struct {
-	reader  ArtifactReader
-	trust   AssessedSignerSource
-	binding AttestationImportBinding
-	nowFunc func() time.Time
+	reader     ArtifactReader
+	trust      AssessedSignerSource
+	binding    AttestationImportBinding
+	verifiedAt time.Time
 }
 
 type attestationRecord struct {
@@ -64,8 +64,8 @@ type importedAttestation struct {
 	schemaRef    string
 }
 
-func NewAttestationImporter(reader ArtifactReader, trust AssessedSignerSource, binding AttestationImportBinding) *AttestationImporter {
-	return &AttestationImporter{reader: reader, trust: trust, binding: binding, nowFunc: time.Now}
+func NewAttestationImporter(reader ArtifactReader, trust AssessedSignerSource, binding AttestationImportBinding, verifiedAt time.Time) *AttestationImporter {
+	return &AttestationImporter{reader: reader, trust: trust, binding: binding, verifiedAt: verifiedAt}
 }
 
 func (i *AttestationImporter) SourceID() string {
@@ -73,8 +73,8 @@ func (i *AttestationImporter) SourceID() string {
 }
 
 func (i *AttestationImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
-	if i == nil || i.reader == nil || i.trust == nil || !validAttestationBinding(i.binding) {
-		return nil, fmt.Errorf("%w: reader, assessed trust, content reference, path, scope, and run are required", constants.ErrInvalidEvidenceGraph)
+	if i == nil || i.reader == nil || i.trust == nil || !validAttestationBinding(i.binding) || i.verifiedAt.IsZero() {
+		return nil, fmt.Errorf("%w: reader, assessed trust, content reference, path, scope, run, and verification time are required", constants.ErrInvalidEvidenceGraph)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -136,14 +136,13 @@ func (i *AttestationImporter) verify(ctx context.Context, record importedAttesta
 		return "", "", "", time.Time{}, fmt.Errorf("%w: canonicalize attestation: %w", constants.ErrEvidenceArtifactMalformed, err)
 	}
 	signature, decodeErr := hex.DecodeString(record.record.Signature)
-	now := i.nowFunc()
 	valid := decodeErr == nil && len(signature) == ed25519.SignatureSize && ed25519.Verify(publicKey, payload, signature)
-	valid = valid && !record.record.Revoked && !now.Before(record.validFrom) && !now.After(record.validUntil)
+	valid = valid && !record.record.Revoked && !i.verifiedAt.Before(record.validFrom) && !i.verifiedAt.After(record.validUntil)
 	status := VerificationStatusVerified
 	if !valid {
 		status = VerificationStatusFailed
 	}
-	return status, constants.AttestationEvidenceVerifierID, constants.AttestationEvidenceVerifierVersion, now, nil
+	return status, constants.AttestationEvidenceVerifierID, constants.AttestationEvidenceVerifierVersion, i.verifiedAt, nil
 }
 
 func validAttestationBinding(binding AttestationImportBinding) bool {

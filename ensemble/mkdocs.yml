@@ -28,7 +28,6 @@ nav:
   - Development: devs.md
   - Testing: tests.md
   - Evals: evals.md
-  - Constants: constants.md
 
 # Theme configuration
 theme:

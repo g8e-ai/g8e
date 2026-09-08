@@ -55,20 +55,13 @@ Ensemble-specific models extend the protocol base models:
 - **Settings models** — Subclasses of protocol definitions from `g8e.models.settings` in `app.models.settings` (`CommandValidationSettings`, `SearchSettings`, `EvalJudgeSettings`, `LLMSettings`, `BatchExecutionSettings`, `G8eeUserSettings`).
 - **SSE wire models** — `SessionEventWire` and `BackgroundEventWire` in `app.models.events` subclass `g8e.models.events` to wrap internal `SessionEvent` and `BackgroundEvent` routing envelopes; all 11 SSE payload classes (`AiProcessingStoppedPayload`, `AIToolLifecyclePayload`, `ChatCitationsReadyPayload`, `ChatErrorPayload`, `ChatProcessingStartedPayload`, `ChatResponseChunkPayload`, `ChatResponseCompletePayload`, `ChatRetryPayload`, `ChatThinkingPayload`, `ChatTurnCompletePayload`, `TriageClarificationQuestionsPayload`) are re-exported from `g8e.models.events`.
 
-## Constants Sourcing
+## Constants
 
-Protocol constants and enums are sourced directly from `g8e.constants` accessors and `g8e.enums` dynamic loaders:
+The in-tree `g8e` Python package is the source of truth for constants and enums shared with the Gateway and Operator. Ensemble modules import collection names, document identifiers, key-value key patterns, channels, intents, prompt identifiers, Gateway API paths, HTTP headers, component names, and protocol enums from `g8e.constants` or `g8e.enums`. The dependency resolves to `protocol/python/` through `ensemble/pyproject.toml` during local development.
 
-- **DB collections** (`app/constants/collections.py`) — Sourced via `g8e.constants.collection()` for 17 shared collections (`settings`, `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `organizations`, `operators`, `operator_usage`, `cases`, `investigations`, `tasks`, `memories`, `revoked_certificates`, `agent_activity_metadata`, `reputation_state`, `reputation_commitments`, `stake_resolutions`); 2 g8ee-specific collections (`api_keys`, `tribunal_commands`); document IDs via `g8e.constants.document_id()` (`platform_settings`, `user_settings_prefix`).
-- **KV keys** (`app/constants/kv_keys.py`) — Sourced via `g8e.constants.kv_key()` for 24 accessor methods wrapping protocol keys and `CachePrefix`; 2 g8ee-specific keys (`cli_session`, `operator_slot_counter`); static prefixes derived via `KVKeyPrefix`. Key patterns use `sessions` (plural) per protocol convention.
-- **Channels** (`app/constants/channels.py`) — Sourced via `g8e.constants.channel()` for 9 shared channels (`Governance`, `OperatorIntent`, `OperatorDevice`, `SseEvent`, `StorageDocument`, `StorageKv`, `StorageBlob`, `Error`, `Message`); 7 g8ee-specific channels (`cmd`, `results`, `heartbeat`, `g8eo_results`, `operator_heartbeats`, `sse_events`, `system_events`); pubsub enums (`PubSubChannel`, `PubSubAuthPrefix`, `PubSubAction`, `PubSubWireEventType`, `PubSubField`, `PubSubMessageType`).
-- **Intents** (`app/constants/intents.py`) — Sourced via `g8e.constants.intent()` for all 52 `CloudIntent` values, alongside dependency mappings (`CLOUD_INTENT_DEPENDENCIES`), confirmation prompts (`CLOUD_INTENT_QUESTIONS`), and IAM verification actions (`CLOUD_INTENT_VERIFICATION_ACTIONS`).
-- **Prompts** (`app/constants/prompts.py`) — Sourced via `g8e.constants.prompt()` for 14 `PromptSection` values and 3 `AgentMode` values; 1 g8ee-specific section (`SENTINEL_MODE`); prompt file path mappings (`PromptFile`, `AGENT_MODE_PROMPT_FILES`); UI context labels (`InvestigationContextLabel`).
-- **API paths** (`app/constants/api_paths.py`) — `GatewayAPIPaths` class wraps `g8e.constants.API_PATHS` for Gateway route lookups; `InternalAPIPaths` provides typed access for g8ee-internal and client routing defined in `api_paths.json`.
-- **Protocol enums** (`app/constants/generated_status.py`, `app/constants/config.py`, `app/constants/platform.py`, `app/constants/errors.py`) — Sourced from `g8e.enums`, including `EventType` (297 members), `SessionType`, `ErrorCode`, `ErrorCategory`, `ErrorSeverity`, `AuthMethod`, `CloudSubtype`, `ConversationStatus`, `EscalationRisk`, `ExecutionStatus`, `FileOperation`, `HealthStatus`, `InfrastructureStatus`, `NetworkProtocol`, `AttachmentType`, `ToolDisplayCategory`, `ToolCallStatus`, `ThinkingActionType`, `ApprovalErrorType`, and `ApprovalType`.
-- **Operator tools** (`app/constants/generated_status.py`) — `OperatorToolName` re-exports 19 protocol tool names from `g8e.enums.OperatorToolName` extended with 2 ensemble-specific tool identifiers (`GRANT_INTENT`, `REVOKE_INTENT`).
-- **HTTP headers** (`app/constants/__init__.py`) — 32 canonical headers sourced from `g8e.constants` (`AUTHORIZATION`, `CASE_ID`, `INVESTIGATION_ID`, `SOURCE_COMPONENT`, `SYSTEM_FINGERPRINT`, `WEB_SESSION_ID`, `CLI_SESSION_ID`, `OPERATOR_ID`, etc.); 3 ensemble-local reverse-proxy headers (`X_PROXY_USER_EMAIL`, `X_PROXY_CLI_SESSION_ID`, `X_PROXY_WEB_SESSION_ID`).
-- **Component attribution** (`app/constants/generated_status.py`, `app/constants/config.py`) — `ComponentName` imported from `g8e.constants` (`CLIENT`, `G8EO`, `G8EO_GATEWAY`); `G8EE_COMPONENT = "g8ee"` defined locally for outbound requests.
+`ensemble/app/constants/` also contains values that belong only to the ensemble, including internal API paths, provider configuration, runtime path resolution, environment variable names, conversation sender identifiers, and mappings between protocol events and action types. A value remains local only when the shared protocol has no equivalent. Shared protocol strings are not duplicated locally.
+
+Tests in `ensemble/tests/unit/constants/` verify the ensemble accessors and protocol alignment. `ensemble/tests/test_constants_parity.py` validates the JSON registries in `protocol/constants/` against the ensemble's typed registry models.
 
 ## Protobuf Stubs
 
@@ -159,7 +152,6 @@ pip install -e ".[dev,test,docs]"
 - [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
 - [Governance](governance.md) — Five-layer verification pipeline and envelope validation
 - [Agents](agents.md) — Agent hierarchy, personas, and Tribunal consensus
-- [Constants](constants.md) — Sourced protocol constants and application definitions
 - [Prompts](prompts.md) — System prompt assembly and persona templating
 - [Thinking](thinking.md) — L2 consensus, provider reasoning, and thought signatures
 - [PKI & Trust](pki.md) — Public Key Infrastructure, trust bundles, and workload enrollment

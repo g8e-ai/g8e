@@ -61,11 +61,11 @@ class TestLLMSettingsResolvedAssistantModel:
         assert llm.resolved_assistant_model is None
 
     def test_does_not_fallback_to_primary_model(self):
-        llm = LLMSettings(primary_model="gemma3:27b")
+        llm = LLMSettings(primary_model="gemma3:12b")
         assert llm.resolved_assistant_model is None
 
     def test_independent_of_primary_model(self):
-        llm = LLMSettings(primary_model="gemma3:27b", assistant_model="gemma3:4b")
+        llm = LLMSettings(primary_model="gemma3:12b", assistant_model="gemma3:4b")
         assert llm.resolved_assistant_model == "gemma3:4b"
 
 
@@ -87,21 +87,21 @@ class TestLLMSettingsResolvedLiteModel:
         assert llm.resolved_lite_model == "gemma3:4b"
 
     def test_falls_back_to_primary_model_when_assistant_unset(self):
-        llm = LLMSettings(primary_model="gemma3:27b")
-        assert llm.resolved_lite_model == "gemma3:27b"
+        llm = LLMSettings(primary_model="gemma3:12b")
+        assert llm.resolved_lite_model == "gemma3:12b"
 
     def test_falls_back_to_primary_model_when_assistant_empty(self):
-        llm = LLMSettings(primary_model="gemma3:27b", assistant_model="")
-        assert llm.resolved_lite_model == "gemma3:27b"
+        llm = LLMSettings(primary_model="gemma3:12b", assistant_model="")
+        assert llm.resolved_lite_model == "gemma3:12b"
 
     def test_lite_model_takes_precedence_over_assistant_and_primary(self):
         llm = LLMSettings(
-            lite_model="gemma3:1b", assistant_model="gemma3:4b", primary_model="gemma3:27b"
+            lite_model="gemma3:1b", assistant_model="gemma3:4b", primary_model="gemma3:12b"
         )
         assert llm.resolved_lite_model == "gemma3:1b"
 
     def test_assistant_model_takes_precedence_over_primary(self):
-        llm = LLMSettings(assistant_model="gemma3:4b", primary_model="gemma3:27b")
+        llm = LLMSettings(assistant_model="gemma3:4b", primary_model="gemma3:12b")
         assert llm.resolved_lite_model == "gemma3:4b"
 
     def test_falls_back_to_lite_provider_default(self):
