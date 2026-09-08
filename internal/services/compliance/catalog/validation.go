@@ -32,7 +32,7 @@ var verificationStatuses = []string{"verified", "invalid", "unverifiable", "unsu
 var freshnessStatuses = []string{"fresh", "stale", "incomplete", "not_applicable"}
 var signatureAlgorithms = []string{"ed25519"}
 var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
-var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", "compliance_bundle@1.0.0", constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
+var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
 
 func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) error {
 	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Assertions) == 0 {

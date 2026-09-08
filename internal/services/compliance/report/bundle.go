@@ -88,6 +88,11 @@ type RestrictedArtifact struct {
 	Encryption *compliancev1.EvidenceEncryptionMetadata
 }
 
+type BundleArtifactBody struct {
+	BundlePath string
+	Body       []byte
+}
+
 // BundleAssemblyResult carries the assembled bundle with the manifest,
 // checksummed artifacts, analysis, profiles, rendered format entries, and the
 // checksum root. The manifest signature and checksum root signature are nil
@@ -95,6 +100,7 @@ type RestrictedArtifact struct {
 type BundleAssemblyResult struct {
 	Bundle          *compliancev1.ComplianceReportBundle
 	ChecksumEntries []*compliancev1.ChecksumEntry
+	ArtifactBodies  []BundleArtifactBody
 	ManifestBytes   []byte
 }
 
@@ -109,24 +115,27 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 	}
 	artifacts := make([]*compliancev1.BundleArtifact, 0, 16)
 	checksumEntries := make([]*compliancev1.ChecksumEntry, 0, 16)
+	artifactBodies := make([]BundleArtifactBody, 0, 16)
 
 	analysisBytes, err := compliancev1.MarshalCanonical(request.Analysis)
 	if err != nil {
-		return nil, fmt.Errorf("%w: canonicalize analysis: %v", constants.ErrBundleAssemblyFailed, err)
+		return nil, fmt.Errorf("%w: canonicalize analysis: %w", constants.ErrBundleAssemblyFailed, err)
 	}
 	if err := addArtifact(&artifacts, &checksumEntries, constants.ComplianceBundleAnalysisPath, analysisBytes, constants.MediaTypeJSON, constants.ComplianceBundleProfilePublic); err != nil {
 		return nil, err
 	}
+	artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: constants.ComplianceBundleAnalysisPath, Body: append([]byte(nil), analysisBytes...)})
 
 	for i, profile := range request.Profiles {
 		profileBytes, err := compliancev1.MarshalCanonical(profile)
 		if err != nil {
-			return nil, fmt.Errorf("%w: canonicalize framework profile %d: %v", constants.ErrBundleAssemblyFailed, i, err)
+			return nil, fmt.Errorf("%w: canonicalize framework profile %d: %w", constants.ErrBundleAssemblyFailed, i, err)
 		}
 		profilePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
 		if err := addArtifact(&artifacts, &checksumEntries, profilePath, profileBytes, constants.MediaTypeJSON, constants.ComplianceBundleProfilePublic); err != nil {
 			return nil, err
 		}
+		artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: profilePath, Body: append([]byte(nil), profileBytes...)})
 	}
 
 	renderedEntries := make([]*compliancev1.RenderedFormatEntry, 0, len(request.RenderedFormats))
@@ -138,8 +147,11 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 			if !bytes.Equal(rendered.Body, analysisBytes) {
 				return nil, fmt.Errorf("%w: rendered JSON does not match canonical analysis", constants.ErrBundleAssemblyFailed)
 			}
-		} else if err := addArtifact(&artifacts, &checksumEntries, rendered.BundlePath, rendered.Body, rendered.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
-			return nil, err
+		} else {
+			if err := addArtifact(&artifacts, &checksumEntries, rendered.BundlePath, rendered.Body, rendered.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
+				return nil, err
+			}
+			artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: rendered.BundlePath, Body: append([]byte(nil), rendered.Body...)})
 		}
 		renderedEntries = append(renderedEntries, &compliancev1.RenderedFormatEntry{
 			Format:     string(rendered.Format),
@@ -153,10 +165,12 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 			if err := addRestrictedArtifact(&artifacts, &checksumEntries, restricted); err != nil {
 				return nil, err
 			}
+			artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: restricted.BundlePath, Body: append([]byte(nil), restricted.Body...)})
 		}
 	}
 
 	sortArtifacts(artifacts, checksumEntries)
+	sort.Slice(artifactBodies, func(i, j int) bool { return artifactBodies[i].BundlePath < artifactBodies[j].BundlePath })
 
 	checksumRoot, err := computeChecksumRoot(checksumEntries)
 	if err != nil {
@@ -197,6 +211,7 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 	return &BundleAssemblyResult{
 		Bundle:          bundle,
 		ChecksumEntries: checksumEntries,
+		ArtifactBodies:  artifactBodies,
 		ManifestBytes:   manifestBytes,
 	}, nil
 }
@@ -216,7 +231,7 @@ func SignBundle(result *BundleAssemblyResult, identity *ComplianceReportSigningI
 	}
 	checksumRootSignature, err := identity.SignSHA256(result.Bundle.GetChecksumRoot())
 	if err != nil {
-		return fmt.Errorf("%w: sign checksum root: %v", constants.ErrReportSignatureFailed, err)
+		return fmt.Errorf("%w: sign checksum root: %w", constants.ErrReportSignatureFailed, err)
 	}
 	result.Bundle.ChecksumRootSignature = checksumRootSignature
 
@@ -224,13 +239,13 @@ func SignBundle(result *BundleAssemblyResult, identity *ComplianceReportSigningI
 	manifest.Signature = nil
 	manifestBytes, err := canonicalManifestBytes(manifest)
 	if err != nil {
-		return fmt.Errorf("%w: canonicalize manifest for signing: %v", constants.ErrBundleAssemblyFailed, err)
+		return fmt.Errorf("%w: canonicalize manifest for signing: %w", constants.ErrBundleAssemblyFailed, err)
 	}
 	manifestDigest := sha256.Sum256(manifestBytes)
 	manifest.ManifestSha256 = hex.EncodeToString(manifestDigest[:])
 	manifestSignature, err := identity.SignSHA256(manifest.ManifestSha256)
 	if err != nil {
-		return fmt.Errorf("%w: sign manifest root: %v", constants.ErrReportSignatureFailed, err)
+		return fmt.Errorf("%w: sign manifest root: %w", constants.ErrReportSignatureFailed, err)
 	}
 	manifest.Signature = manifestSignature
 	result.ManifestBytes = manifestBytes
@@ -268,7 +283,7 @@ func validateBundleAssemblyRequest(request BundleAssemblyRequest) error {
 		request.EvidenceIndexRef,
 		&compliancev1.FrameworkCatalog{Frameworks: collectFrameworkDefinitions(request.FrameworkRefs)},
 	); err != nil {
-		return fmt.Errorf("%w: manifest reference validation: %v", constants.ErrBundleAssemblyFailed, err)
+		return fmt.Errorf("%w: manifest reference validation: %w", constants.ErrBundleAssemblyFailed, err)
 	}
 	if len(request.RenderedFormats) == 0 {
 		return fmt.Errorf("%w: at least one rendered format is required", constants.ErrBundleAssemblyFailed)

@@ -712,6 +712,8 @@ const (
 	ComplianceReportSigningPurpose         = "compliance-report-bundle"
 	ComplianceBundleAssemblerID            = "g8e-compliance-bundle-assembler"
 	ComplianceBundleAssemblerVersion       = "1.0.0"
+	ComplianceBundleVerifierID             = "compliance_bundle"
+	ComplianceBundleVerifierVersion        = "1.0.0"
 	ComplianceBundleSchemaVersion          = "1.0.0"
 	ComplianceBundleProfilePublic          = "public"
 	ComplianceBundleProfileRestricted      = "restricted"

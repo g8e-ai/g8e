@@ -9,12 +9,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
@@ -40,10 +42,11 @@ func runComplianceReportGenerateCommand(t *testing.T, evalRuns []string) ([]byte
 	return bytes.TrimSpace(output.Bytes()), cmd.RunE(cmd, nil)
 }
 
-func TestComplianceReportCmd_ContainsGenerateSubcommand(t *testing.T) {
+func TestComplianceReportCmd_ContainsGenerateAndVerifySubcommands(t *testing.T) {
 	cmd := complianceReportCmd()
-	require.Len(t, cmd.Commands(), 1)
+	require.Len(t, cmd.Commands(), 2)
 	assert.Equal(t, "generate", cmd.Commands()[0].Name())
+	assert.Equal(t, "verify", cmd.Commands()[1].Name())
 }
 
 func TestComplianceReportGenerateCmdWithConfig_ProducesCanonicalAnalysisFromVerifiedEvalEvidence(t *testing.T) {
@@ -144,4 +147,87 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidEvidenceWindow(t *t
 	err := cmd.RunE(cmd, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T) {
+	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
+	loaderCalled := false
+	cmd := complianceReportVerifyCmdWithConfig(
+		func(_ context.Context, bundlePath, trustPolicyPath string) (complianceReportBundleInput, error) {
+			loaderCalled = true
+			assert.Equal(t, "bundle.json", bundlePath)
+			assert.Equal(t, "assessed-trust.json", trustPolicyPath)
+			return complianceReportBundleInput{}, nil
+		},
+		func(_ context.Context, request compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
+			assert.Equal(t, verifiedAt, request.VerifiedAt)
+			return &compliancev1.ComplianceVerificationReport{
+				ReportId:               "report-1",
+				Valid:                  true,
+				VerifiedAt:             requestTimestamp(verifiedAt),
+				VerifierId:             constants.ComplianceBundleVerifierID,
+				VerifierVersion:        constants.ComplianceBundleVerifierVersion,
+				ReproducedChecksumRoot: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			}, nil
+		},
+		func() time.Time { return verifiedAt },
+	)
+	require.NoError(t, cmd.Flags().Set("trust-policy", "assessed-trust.json"))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	require.NoError(t, cmd.RunE(cmd, []string{"bundle.json"}))
+	assert.True(t, loaderCalled)
+	report := &compliancev1.ComplianceVerificationReport{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(bytes.TrimSpace(output.Bytes()), report))
+	assert.True(t, report.GetValid())
+	assert.Equal(t, "report-1", report.GetReportId())
+}
+
+func TestComplianceReportVerifyCmdWithConfig_ReturnsFailureAfterPrintingInvalidReport(t *testing.T) {
+	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
+	cmd := complianceReportVerifyCmdWithConfig(
+		func(context.Context, string, string) (complianceReportBundleInput, error) {
+			return complianceReportBundleInput{}, nil
+		},
+		func(context.Context, compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
+			return &compliancev1.ComplianceVerificationReport{
+				ReportId:               "report-1",
+				Valid:                  false,
+				VerifiedAt:             requestTimestamp(verifiedAt),
+				VerifierId:             constants.ComplianceBundleVerifierID,
+				VerifierVersion:        constants.ComplianceBundleVerifierVersion,
+				ReproducedChecksumRoot: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Failures:               []*compliancev1.VerificationFailure{{Code: constants.ErrChecksumMismatch.Error(), SubjectRef: constants.ComplianceBundleAnalysisPath, Reason: "digest mismatch"}},
+			}, nil
+		},
+		func() time.Time { return verifiedAt },
+	)
+	require.NoError(t, cmd.Flags().Set("trust-policy", "assessed-trust.json"))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err := cmd.RunE(cmd, []string{"bundle.json"})
+
+	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
+	assert.Contains(t, output.String(), constants.ErrChecksumMismatch.Error())
+}
+
+func TestComplianceReportVerifyCmdWithConfig_RequiresExternalTrustPolicy(t *testing.T) {
+	cmd := complianceReportVerifyCmdWithConfig(
+		func(context.Context, string, string) (complianceReportBundleInput, error) {
+			t.Fatal("loader must not run without an explicit trust policy")
+			return complianceReportBundleInput{}, nil
+		},
+		compliancereport.VerifyComplianceReportBundle,
+		time.Now,
+	)
+
+	err := cmd.RunE(cmd, []string{"bundle.json"})
+
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func requestTimestamp(value time.Time) *timestamppb.Timestamp {
+	return timestamppb.New(value)
 }
