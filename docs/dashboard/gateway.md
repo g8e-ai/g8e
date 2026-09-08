@@ -1,63 +1,66 @@
 # Gateway Integration
 
-## Browser-Direct Contract
+The dashboard separates static application delivery from Gateway access. Its Node.js process serves the browser application over HTTP, while the browser sends supported authentication requests directly to the Gateway over HTTPS. The dashboard container also enrolls its own workload identity during startup, but that identity is separate from browser authentication.
 
-The active g8ed browser boundary calls the gateway directly. `server.js` injects the configured gateway origin into `/g8e-config.js` as `window.G8E_GATEWAY_URL`; `public/index.html` loads that script before the browser service client and application modules.
+## Runtime Boundaries
 
-`ServiceClient.getServiceEndpoints(ServiceName.GATEWAY)` fails if the injected origin is absent. There is no hardcoded gateway fallback. Every request includes `credentials: 'include'`, an abort timeout, and centralized non-success handling. Gateway requests do not receive synthetic bearer, session, cookie, or API-key headers because browser authentication is the gateway-issued HttpOnly cookie.
+The dashboard requires `G8E_GATEWAY_URL` before it starts. It publishes that browser-facing origin as runtime configuration, with no hardcoded fallback, and includes the same origin in the browser Content Security Policy. Browser requests to the configured Gateway include credentials so the browser can send the Gateway-issued HttpOnly session cookie; the dashboard does not create bearer tokens, API keys, or replacement session headers for those requests.
 
-## Active Endpoint Ownership
+The Node.js process is a static application host, not an API proxy. It does not provide live handlers for the retained operator, chat, approval, device-link, audit, settings, console, metrics, system, or documentation requests that the browser still directs to the dashboard origin. Those interfaces remain visible in parts of the application but are not operational in the current runtime.
 
-The current browser-direct migration covers these gateway endpoint families:
+## Current Browser Capabilities
 
-| Capability | Path family | Browser component |
-| --- | --- | --- |
-| Current user | `/api/v1/users/me` | `AuthManager` |
-| Current web session | `/api/v1/auth/sessions/me` | `AuthManager` |
-| Passkey list and revocation | `/api/v1/auth/passkeys` | Authentication and settings UI |
-| Passkey registration | `/api/v1/auth/passkeys/console/register/*` | `AuthManager` |
-| Passkey authentication | `/api/v1/auth/passkeys/console/authenticate/*` | `AuthManager` |
-| Logout | `/api/v1/auth/logout` | `AuthManager` |
-| SSE event access | `/api/v1/sse/*` | `SSEConnectionManager` |
+| Capability | Current behavior |
+| --- | --- |
+| Session restoration | Operational. On page load, the dashboard asks the Gateway for the current user and public web-session identifier. A valid Gateway cookie restores the in-memory dashboard session. |
+| Logout | Operational. The dashboard asks the Gateway to invalidate the cookie-backed session, disconnects event handling, and clears local session state. |
+| Passkey registration and sign-in | The browser calls the Gateway directly, but the normal dashboard sign-in flow does not currently supply the user identifier required by the Gateway. Interactive sign-in and first-passkey setup are therefore not operational. See [Authentication](auth.md#current-passkey-limitation). |
+| Passkey management | The current dashboard has no active controls for listing or revoking passkeys. |
+| Server-sent events | Not operational. The browser uses a relative URL that resolves against the static dashboard host, selects the Gateway polling endpoint instead of its live stream, and expects a different event envelope from the Gateway stream. See [Server-Sent Events](sse.md#current-url-resolution-constraint). |
+| Operator, chat, approvals, audit, settings, and console features | These requests target the dashboard origin, where the static host provides no API implementation. They are not operational in the current runtime. |
 
-Browser path builders live in `public/js/constants/api-paths.js`. They centralize endpoint strings but do not determine the destination origin; callers select either `ServiceName.GATEWAY` or `ServiceName.g8ed`.
+## Deployment Requirements
 
-## Retained g8ed-Origin Surface
+A browser deployment uses different addresses for browser traffic and container traffic:
 
-The same path registry retains operator, chat, approval, device-link, audit, settings, setup, console, metrics, system, and documentation paths. Callers for those features commonly select `ServiceName.g8ed`, which resolves to `window.location.origin`.
+1. Set `G8E_GATEWAY_URL` to the HTTPS Gateway origin reachable from the user's browser. Use an origin only, including the scheme, hostname, and optional port, without a path or trailing slash.
+2. Add the exact dashboard origin to the Gateway with `--cors-origin`. Cross-origin Gateway responses allow credentials only for configured origins.
+3. Add the dashboard origin with `--passkey-rp-origin`, and set `--passkey-rp-id` to the dashboard hostname or a valid registrable parent-domain suffix. The RP ID does not include a scheme or port.
+4. Use a Gateway certificate trusted by the user's browser. The dashboard must run in a WebAuthn secure context, either HTTPS or the browser's localhost development exception.
+5. Keep the Gateway plain-HTTP bootstrap surface reachable from the dashboard container for health checks and workload enrollment.
 
-The running Express application does not mount `dashboard/routes/`; it only serves static assets, `/g8e-config.js`, and the SPA fallback. Consequently, retained `/api/*` calls to the dashboard origin have no live API implementation in the current runtime. The route and service modules in the repository are not part of `createApp()` and are not presented as an active backend contract.
+When cross-origin access is configured, the Gateway issues its Secure, HttpOnly web-session cookie with `SameSite=None`; without configured cross-origin origins, it uses `SameSite=Lax`. The dashboard host allows browser connections only to itself and `G8E_GATEWAY_URL`; it does not allow browser WebSocket connections. Browser events use SSE because the Gateway WebSocket surface requires mTLS.
 
-This distinction is architectural rather than cosmetic: documentation and new browser integrations use the gateway-direct surface only where the caller explicitly selects `ServiceName.GATEWAY` or otherwise constructs the gateway origin.
+### Workstation Enrollment Instructions
 
-## Cross-Origin Requirements
+The dashboard landing page uses `G8E_GATEWAY_URL` to generate binary download and user-enrollment commands. It takes the HTTPS port from that variable, but it replaces the Gateway hostname with the hostname in the dashboard page URL and always uses plain-HTTP port `8080` for the binary download. Deployments that expose the dashboard and Gateway under different hostnames produce incorrect generated commands; users must replace the generated hostname or the deployment must present both surfaces under the dashboard hostname.
 
-The dashboard normally runs at an HTTP origin such as `http://localhost:3000`, while the gateway API runs at an HTTPS origin such as `https://localhost:8443`. The gateway configuration must therefore:
+## Container Startup
 
-- Permit the exact dashboard origin through CORS.
-- Allow credentialed requests rather than wildcard-origin responses.
-- Configure the WebAuthn RP ID and RP origin for the browser deployment.
-- Issue secure cross-origin session cookies with the required SameSite behavior.
-- Present a certificate trusted by the user's browser.
+The container entrypoint waits for the Gateway's plain-HTTP health surface before starting Node.js. The dashboard then loads an existing `g8ed` workload certificate or enrolls a new one through the plain-HTTP bootstrap surface. A missing `G8E_GATEWAY_URL`, an unavailable health surface, an unexpected identity-read failure, or a failed enrollment prevents the static host from starting.
 
-The static host's Content Security Policy includes the configured gateway origin in `connect-src`. It does not permit arbitrary network destinations or `ws:`/`wss:` connections.
+The enrolled workload identity is stored below `G8E_RUNTIME_DIR`. The current static host does not use it for server-to-server Gateway requests, and it never exposes the certificate or private key to the browser. See [Startup Enrollment](architecture.md#startup-enrollment) and [PKI & Trust](../ensemble/pki.md) for the enrollment and certificate lifecycle.
 
-## Server-Side Gateway Clients
+## Configuration
 
-The dashboard container enrolls an mTLS app identity at startup (see [Startup Enrollment](./architecture.md#startup-enrollment)) but `server.js` is a static SPA host and does not construct server-to-server gateway clients. The enrolled identity is resolved and returned by `runStartupEnrollment()`; no module-global holder stores it. See [PKI & Trust](../ensemble/pki.md) for the platform certificate lifecycle that backs the enrollment credential.
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `G8E_GATEWAY_URL` | Yes | None | Browser-reachable HTTPS Gateway origin and allowed browser connection destination |
+| `G8E_GATEWAY_HTTP_URL` | When the workload identity requires enrollment or renewal | None | Container-reachable plain-HTTP Gateway bootstrap origin |
+| `G8E_RUNTIME_DIR` | Yes | None | Writable, persistent root for pending and installed workload identity material |
+| `GATEWAY_HEALTH_URL` | No | `http://g8eg:8080` | Container-reachable plain-HTTP Gateway health origin |
+| `GATEWAY_HEALTH_PATH` | No | `/api/v1/health` | Gateway health path polled before dashboard startup |
+| `PORT` | No | `3000` | Dashboard static host port |
 
-## Configuration Surfaces
+The unified Docker deployment sets `G8E_GATEWAY_URL` from the browser-reachable hostname and HTTPS port. It uses the internal `g8eg` network alias for `G8E_GATEWAY_HTTP_URL` and `GATEWAY_HEALTH_URL`, and persists `G8E_RUNTIME_DIR` in the dashboard data volume.
 
-| Variable | Consumer | Meaning |
-| --- | --- | --- |
-| `G8E_GATEWAY_URL` | `server.js`, then browser | Browser-reachable HTTPS gateway origin; required with no fallback |
-| `G8E_GATEWAY_HTTP_URL` | `AppEnrollmentService` | Container-reachable plain-HTTP enrollment origin; required for startup enrollment |
-| `G8E_RUNTIME_DIR` | `AppEnrollmentService` | Writable root for pending and installed app identity material |
-| `GATEWAY_HEALTH_URL` | `entrypoint.sh` | Container-reachable plain-HTTP health origin |
-| `GATEWAY_HEALTH_PATH` | `entrypoint.sh` | Health endpoint path |
-| `PORT` | `server.js` | Static host port; defaults to `3000` |
+## Troubleshooting
 
-The browser-facing and container-facing gateway URLs are intentionally separate. In Docker, `G8E_GATEWAY_URL` uses a hostname reachable from the user's browser, while `G8E_GATEWAY_HTTP_URL` and `GATEWAY_HEALTH_URL` use the internal `g8eg` network alias.
+- If the container exits before the dashboard listens, verify the health URL, runtime directory permissions, workload enrollment status, and all required variables.
+- If browser requests fail with CORS errors, confirm that `--cors-origin` exactly matches the dashboard origin, including its scheme and port.
+- If the browser rejects passkey operations, confirm the Gateway certificate trust, secure-context status, RP ID, and RP origin before accounting for the [current dashboard sign-in limitation](auth.md#current-passkey-limitation).
+- If authentication succeeds but no events arrive, see the [current event integration constraints](sse.md#current-url-resolution-constraint). The browser currently uses the wrong origin, endpoint, and event envelope for the Gateway stream.
+- If operator, chat, approval, audit, settings, or console requests return the SPA document or a not-found response, the request is reaching the static dashboard host. Those retained interfaces have no live dashboard API backend.
 
 ## Related
 
@@ -65,11 +68,11 @@ The browser-facing and container-facing gateway URLs are intentionally separate.
 - [Authentication](auth.md)
 - [Server-Sent Events](sse.md)
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
-- [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md) — Workload enrollment and in-tree component onboarding
-- [Unified Docker Stack](../guides/unified_stack.md) — Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
-- [Docker Gateway Guide](../guides/docker_gateway.md) — Gateway container deployment and configuration
-- [Gateway Architecture](../architecture/gateway.md) — Gateway component design, protocol surfaces, and PKI authority
-- [Network Architecture](../architecture/network.md) — Gateway protocol surfaces, ports, and network topology
-- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts and Gateway API surfaces
-- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
-- [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment
+- [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md), workload enrollment and in-tree component onboarding
+- [Unified Docker Stack](../guides/unified_stack.md), Docker Compose deployment for Gateway, Operator, Ensemble, and Dashboard
+- [Docker Gateway Guide](../guides/docker_gateway.md), Gateway container deployment and configuration
+- [Gateway Architecture](../architecture/gateway.md), Gateway component design, protocol surfaces, and PKI authority
+- [Network Architecture](../architecture/network.md), Gateway protocol surfaces, ports, and network topology
+- [Protocol Reference](../architecture/protocol.md), canonical wire contracts and Gateway API surfaces
+- [Governance Pipeline](../architecture/governance.md), five-layer verification pipeline governing host mutations
+- [PKI & Trust](../ensemble/pki.md), platform PKI hierarchy, certificate lifecycle, and workload enrollment

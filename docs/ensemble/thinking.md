@@ -2,93 +2,95 @@
 
 ## Overview
 
-The g8e Agentic Ensemble (`g8ee`) integrates LLM provider reasoning capabilities (chain-of-thought, extended thinking tokens, and reasoning effort levels) into agent turn lifecycles. Provider thinking enables deep investigative planning and analysis by reasoning agents such as Sage while isolating internal scratchpad deliberation from durable memory and user-facing summaries. Provider-native thinking outputs, token budgets, and vendor context tokens (such as Gemini thought signatures) are normalized through a canonical vocabulary and pure translation layer before execution.
+The g8e Agentic Ensemble (`g8ee`) normalizes provider reasoning controls and reasoning output across Gemini, Anthropic, OpenAI-compatible services, and Ollama. A canonical thinking level selects the closest reasoning mode supported by the configured model, while each provider adapter translates that selection into its native request format. During a streamed agent turn, g8ee separates thought content from visible answer text, preserves provider context required by tool-call protocols, and reports the reasoning lifecycle to clients.
 
-## Canonical Thinking Abstraction
+The main implementation entry points are `ensemble/app/llm/thinking.py`, `ensemble/app/models/model_configs.py`, and `ensemble/app/services/ai/agent_turn.py`.
 
-The ensemble defines a provider-agnostic abstraction for thinking configuration across models and capacity tiers:
+## When Thinking Runs
 
-- **`ThinkingLevel` (`app.constants.ThinkingLevel`)** — Canonical internal vocabulary representing reasoning intensity: `OFF`, `MINIMAL`, `LOW`, `MEDIUM`, and `HIGH`. `OFF` explicitly disables thinking on models where thinking is opt-in.
-- **`ThinkingDialect` (`app.constants.ThinkingDialect`)** — On-the-wire dialect selector for self-hosted models (such as Ollama), supporting `NONE` (omits reasoning parameters) and `NATIVE_TOGGLE` (passes boolean `think` flags).
-- **`LLModelConfig` (`app.models.model_configs.LLModelConfig`)** — Immutable model configuration registry defining supported thinking capabilities:
-  - `supported_thinking_levels` — List of valid `ThinkingLevel` values. An empty list indicates no thinking support; a list containing `OFF` indicates opt-in thinking; a list omitting `OFF` indicates an always-on reasoning model.
-  - `thinking_budgets` — Optional per-model mapping from `ThinkingLevel` to integer token counts for providers requiring explicit token budgets.
-  - `thinking_dialect` — Declared wire dialect for self-hosted models.
-  - `thinking_output_reserve` — Minimum visible-output headroom (default: 4,096 tokens) reserved above token budgets for providers enforcing total output constraints (such as Anthropic).
-- **`clamp_thinking_level` (`app.models.model_configs.clamp_thinking_level`)** — Pure function that resolves a requested `ThinkingLevel` against a target model's `LLModelConfig`. Clamps unsupported levels down to the highest supported intensity, falls back to `OFF` when thinking is unsupported, and selects the lowest supported intensity when `OFF` is requested on always-on reasoning models.
+Thinking configuration is part of the primary generation call shape. The main chat agent uses this call shape for both simple and complex turns because either path can enter the tool loop. Primary settings request `high` reasoning and provider-returned thought content by default, then reduce that request to the selected model's supported level.
 
-## Provider-Specific Thinking Translators
+Assistant and lite generation call shapes do not accept thinking configuration. Triage, memory extraction, title generation, risk analysis, and other concise or structured helper calls therefore run without requested reasoning output. A provider can still behave outside its declared contract, but g8ee does not ask these call shapes to return thoughts.
 
-Provider adapters convert canonical `ThinkingLevel` settings into vendor-specific wire formats using pure translator functions defined in `app.llm.thinking`:
+## Canonical Levels and Model Profiles
 
-### Gemini 3+ (`translate_for_gemini`)
+`ThinkingLevel` defines five values: `off`, `minimal`, `low`, `medium`, and `high`. Each registered model declares its accepted values through `supported_thinking_levels`:
 
-Returns `GeminiThinkingTranslation(enabled, thinking_level, include_thoughts)`:
+- An empty list means that g8ee does not request thinking from the model.
+- A list containing `off` describes an opt-in model whose thinking can be disabled.
+- A list without `off` describes an always-on reasoning model. No built-in model profile currently uses this form.
 
-- Maps `ThinkingLevel` directly to Gemini SDK level strings (`minimal`, `low`, `medium`, `high`).
-- Couples thinking level with the `include_thoughts` boolean toggle.
-- When `ThinkingLevel.OFF` is selected, sets `enabled=False`, omitting the `thinking_config` payload from outbound requests.
+The level resolver returns the highest supported intensity at or below the requested intensity. If the request is lower than every supported intensity, it returns the model's lowest supported intensity. It resolves models without declared thinking support to `off`; for an always-on profile, an `off` request resolves to the lowest supported intensity.
 
-### Anthropic (`translate_for_anthropic`)
+Unknown model names use a shared conservative profile with thinking disabled. Custom or newly released models require a registered profile before g8ee requests reasoning from them. See [LLM Providers](llm-providers.md#model-capability-registry) for the current model list and supported levels.
 
-Returns `AnthropicThinkingTranslation(enabled, budget_tokens, level)`:
+## Provider Translation
 
-- Maps `ThinkingLevel` to token counts via model-specific `thinking_budgets` or fallback defaults in `ANTHROPIC_DEFAULT_THINKING_BUDGETS` (`MINIMAL`: 1,024; `LOW`: 2,048; `MEDIUM`: 8,192; `HIGH`: 16,384 tokens).
-- Emits `thinking={"type": "enabled", "budget_tokens": N}` and automatically strips `top_k` and `top_p` sampling parameters as required by the Anthropic Messages API.
-- Automatically increases `max_tokens` to `budget_tokens + thinking_output_reserve` to ensure adequate capacity for visible response generation.
-- When `ThinkingLevel.OFF` is selected, sets `enabled=False`, sets `budget_tokens=0`, omits the `thinking` key, and leaves sampling parameters intact.
+Provider adapters translate only the resolved level. They omit unsupported reasoning fields rather than sending a level that the model profile does not declare.
 
-### OpenAI (`translate_for_openai`)
+### Gemini
 
-Returns `OpenAIThinkingTranslation(enabled, reasoning_effort)`:
+Gemini receives `thinking_level` with `include_thoughts`. The level is one of `minimal`, `low`, `medium`, or `high`; the current Gemini Flash Lite profile is the only registered Gemini profile that accepts `minimal`. When the resolved level is `off`, g8ee omits the thinking configuration and does not request thought content.
 
-- Maps `ThinkingLevel` to the `reasoning.effort` parameter string (`low`, `medium`, `high`).
-- When `ThinkingLevel.OFF` is selected, sets `enabled=False` and omits the `reasoning` object from outbound requests.
+### Anthropic
 
-### Ollama (`translate_for_ollama`)
+Anthropic receives extended thinking with an integer token budget. The default budgets are 1,024 tokens for `minimal`, 2,048 for `low`, 8,192 for `medium`, and 16,384 for `high`. The Claude Opus profile overrides the supported budgets to 4,096 for `low`, 16,384 for `medium`, and 32,000 for `high`.
 
-Returns `OllamaThinkingTranslation(enabled, think)`:
+While extended thinking is active, the adapter omits `top_k`. It raises `max_tokens` when necessary so the total output limit is at least the thinking budget plus the model's visible-output reserve. The default reserve is 4,096 tokens, while the Claude Opus profile uses 8,192. When the resolved level is `off`, the adapter omits the thinking object, preserves `top_k`, and does not raise `max_tokens` for reasoning.
 
-- Evaluates `model_config.thinking_dialect` declared during model registration.
-- Under `ThinkingDialect.NATIVE_TOGGLE`, passes `think=True` or `think=False` to `AsyncClient.chat()`.
-- Under `ThinkingDialect.NONE`, sets `think=None`, omitting thinking parameters from the API call.
+### OpenAI
+
+OpenAI receives `reasoning.effort` with the resolved `minimal`, `low`, `medium`, or `high` value. The current registered reasoning profile, `gpt-5.4-mini`, accepts only `minimal` and `low` in addition to `off`. When the resolved level is `off`, g8ee omits the reasoning object.
+
+### Ollama
+
+Every registered Ollama profile declares a thinking dialect. Native-toggle models receive `think=true` when thinking is enabled and `think=false` when it is disabled. Profiles with the `none` dialect receive no `think` parameter. Current native-toggle profiles expose a binary `off` or `high` capability, so lower nonzero requests resolve to `high`.
+
+llama.cpp inherits the OpenAI-compatible translation and can send `reasoning.effort` when the selected model has a registered thinking profile. No llama.cpp-specific model profiles are registered, so unknown llama.cpp model names resolve thinking to `off`. The fake provider accepts primary settings for tests but does not emit thought content.
+
+## Reasoning Output and Tool Context
+
+Gemini, Anthropic, OpenAI, and Ollama adapters normalize provider reasoning output into thought parts. Gemini reads parts marked as thoughts, Anthropic reads thinking blocks, OpenAI reads `reasoning_content`, and Ollama reads the message's `thinking` field. The stream processor emits thought text separately from visible text and accumulates each contiguous thought block for the current model turn.
+
+The turn lifecycle follows these transitions:
+
+- The first thought chunk enters the active thinking phase.
+- Additional thought chunks extend the current block.
+- Visible text or a tool call ends the active phase before that output is processed.
+- End of stream also closes an active thinking phase.
+
+The completed thought block remains in the model response parts used by the in-memory ReAct tool loop. This allows the next provider request to retain reasoning context and any required signatures. Visible response assembly and interrogation detection read only non-thought text.
 
 ## Thought Signatures
 
-Gemini 3 and 2.5 models emit opaque, encrypted context tokens (`thought_signature`) on thinking-enabled responses, particularly when generating tool calls:
+Gemini and Anthropic can return opaque signatures with thinking output. These values are provider context tokens, not signatures that g8ee verifies cryptographically. g8ee preserves them so later tool-result turns can satisfy the originating provider's conversation protocol.
 
-- **Canonical Representation** — `ThoughtSignature` (`app.llm.llm_dataclasses.ThoughtSignature`) encapsulates the provider signature as an immutable dataclass, normalizing raw SDK byte buffers and strings into base64-encoded strings via `ThoughtSignature.from_sdk()`.
-- **Multi-Turn Tool Calling Contract** — The Gemini API requires that when a model response contains a tool call accompanied by a thought signature, subsequent requests containing tool execution results must echo that exact signature on the corresponding tool call `Part` in conversation history. Omitting the signature produces an HTTP 400 Bad Request error.
-- **Structural Invariants** — Signed parts cannot be merged with unsigned parts or other signed parts. Outbound adapters (`app.llm.providers.gemini._content_to_genai`) convert signature-only parts to empty-text parts to preserve context without injecting spurious text payloads.
+Gemini byte signatures are normalized to base64 strings at the provider boundary. A signed part remains a separate part during consolidation because merging it with unsigned content or another signed part would change the provider's required history structure. Signature-only Gemini parts become empty-text parts on the outbound request so the signature remains in context without adding visible text.
 
-## Stream Processing and Turn Lifecycle
+Anthropic thinking-block signatures remain attached to the corresponding thinking blocks when conversation history is converted back to the Messages API format.
 
-Thinking tokens and thought signatures are processed during streaming execution in `app.services.ai.agent_turn`:
+## Streaming Events
 
-- **Turn State Machine** — `TurnState` tracks streaming state transitions across three phases:
-  ```
-  INACTIVE → (thought chunk) → ACTIVE → (text or tool call chunk) → INACTIVE
-  ```
-- **Chunk Handling** — `handle_thought_chunk` captures incoming thinking text into `thinking_text_parts` and records any `thought_signature`. When the stream transitions to plain text or tool invocations, `flush_thinking_block` packages accumulated text into a `Part(text=..., thought=True, thought_signature=...)`.
-- **SSE Event Streaming** — `agent_sse.py` translates stream chunk transitions into Server-Sent Events for real-time frontend rendering:
-  - `g8e.v1.ai.llm.chat.iteration.thinking.started` (`ThinkingActionType.START`) — Initial thinking chunk received.
-  - `g8e.v1.ai.llm.chat.iteration.thinking.update` (`ThinkingActionType.UPDATE`) — Incremental thinking text received.
-  - `g8e.v1.ai.llm.chat.iteration.thinking.end` (`ThinkingActionType.END`) — Thinking phase completed prior to text or tool execution.
+The stream processor emits internal `THINKING` chunks for thought text and one `THINKING_END` chunk whenever it leaves an active thinking phase. The event layer publishes all three lifecycle actions under `g8e.v1.ai.llm.chat.iteration.thinking.started` using `ChatThinkingPayload.action_type`:
 
-## Scratchpad Isolation and Memory Sanitization
+- `start` carries the first thought chunk in a phase.
+- `update` carries each later thought chunk in that phase.
+- `end` carries no thought text and marks the transition to visible text, tool execution, or stream completion.
 
-Thinking content represents intermediate model scratchpad deliberation and is strictly isolated from durable system state:
+The protocol registry also defines `thinking.update` and `thinking.end` event identifiers, but the current ensemble runtime does not publish them.
 
-- **Memory Extraction Filtering** — `MemoryGenerationService` filters out messages containing thinking blocks (`is_thinking=True` or `thought=True`) when analyzing conversations for long-term user preferences and investigation insights.
-- **Context Hygiene** — Thinking tokens are separated from user-facing answer generation, preventing unverified chain-of-thought assumptions or raw internal syntax from polluting case histories or executive summaries.
+## Memory and Telemetry
+
+Durable memory generation skips conversation messages marked `is_thinking`. This filtering prevents a thinking-only message from becoming a user preference or investigation summary. The filter does not remove thought parts from the turn-local provider history, where they can be required for multi-turn tool calling.
+
+The agent records provider-reported input, output, cache, total, and thinking token counts in model-call telemetry and aggregates them into the completed response metadata. Gemini supplies a separate thought-token count. The current Anthropic, OpenAI, and Ollama adapters do not populate a separate thinking-token field, so `thinking_tokens` remains zero for those calls even when their output includes reasoning.
 
 ## Related
 
-- [Ensemble Architecture](../architecture/ensemble.md) — Platform-level summary of g8ee's role in the g8e platform
-- [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
-- [LLM Providers](llm-providers.md) — Provider implementations, capacity tiers, and error translation
-- [Agents](agents.md) — Agent persona definitions, capacity tiers, and Tribunal consensus
-- [Prompts](prompts.md) — System prompt assembly and persona templating
-- [Governance](governance.md) — Five-layer verification pipeline and envelope validation
-- [Constants](constants.md) — Sourced protocol constants and application definitions
-- [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics
+- [Ensemble Architecture](../architecture/ensemble.md): Platform-level summary of g8ee's role
+- [Architecture](architecture.md): System architecture, protocol surfaces, and model hierarchy
+- [LLM Providers](llm-providers.md): Provider implementations, model roles, and capability profiles
+- [Agents](agents.md): Agent persona definitions, model tiers, and Tribunal consensus
+- [Prompts](prompts.md): System prompt assembly and persona templating
+- [Governance](governance.md): Five-layer verification pipeline and envelope validation
+- [Evals](evals.md): Benchmark evaluation suite and Judge scoring rubrics

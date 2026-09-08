@@ -4,465 +4,126 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-09-05
+g8e uses four test tiers across the Go platform, Ensemble, evals, Dashboard, and protocol packages. Unit tests isolate code paths, integration tests use local platform infrastructure, live end-to-end tests exercise deployed services over their public interfaces, and external tests call third-party providers.
 
-g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
+## Test tiers
 
----
+| Tier | Scope | Selection | Dependencies |
+| --- | --- | --- | --- |
+| **Tier 1: Unit** | Go packages under `internal/` and `protocol/`, Ensemble unit tests, eval unit tests, and Dashboard unit tests | Untagged Go tests, pytest unit paths or markers, and Vitest | No live platform or third-party service |
+| **Tier 2: In-process integration** | Go integration tests under `internal/` and `test/`, Ensemble integration tests, and eval integration tests | Go `integration` build tag and pytest integration paths or markers | Local files, processes, SQLite, PKI, pub/sub, and in-process services |
+| **Tier 3: Live platform E2E** | Network assertions under `test/e2e/` | Go `e2e` build tag | Running Gateway, Operator, Ensemble, and Dashboard with local owner credentials |
+| **Tier 4: External** | Ensemble tests that call live LLM, search, or other provider APIs | `ai_integration`, `requires_web_search`, or `requires_api` pytest markers | Configured third-party credentials and endpoints |
 
-## Always
+The Go integration command enables the `integration` build tag across `./...`, so it runs untagged tests in addition to integration-tagged tests. The E2E command runs `test/e2e/` with the `e2e` tag and also executes untagged helper tests in that package.
 
-- **Use real infrastructure**: Tests use actual SQLite, PKI certificates, and pub/sub channels. Platform starts via `./g8e gw start`.
-- **Reproduce bugs first**: Write a failing test that reproduces the bug before fixing it.
-- **Use contract tests**: Enforce alignment between the Operator and `protocol/` constants/models with typed protobuf assertions.
-- **Let `NewGatewayFixture` handle cleanup**: `NewGatewayFixture` registers teardown internally via `t.Cleanup`. Callers do not need to defer or register any cleanup.
-- **Hold temp credential files for the whole test**: Register their removal with `t.Cleanup`, not `defer`, in any setup helper.
-- **Use path constants**: ALL filepath strings in test code must be defined as constants in `internal/constants/paths.go`. Use `paths.Infra.*` (from `internal/paths`) for runtime state paths. The only exception is `TestPaths` for isolated test environments, where the base directory must still come from a constant. Use `constants.PermFileReadOnly` and other `constants.Perm*` constants for file permission assertions in tests.
-- **Use `fileSvc.FileExists` instead of `os.IsNotExist`**: `RuntimeFileService` (`internal/services/fs`) is the canonical `.g8e/` file I/O abstraction. Check file existence via `fileSvc.FileExists(ctx, relPath)`, read content via `fileSvc.ReadFile`, and inspect metadata via `fileSvc.Stat`. Assert missing files with `errors.Is(err, constants.ErrNotFound)` instead of `os.IsNotExist`. The `RuntimeFileService` wraps `os.*` calls and returns typed `constants.Err*` errors.
-- **`testutil.TempDir` returns absolute paths**: `testutil.TempDir(t)` returns an absolute path to a temporary directory. Use it as the `baseDir` for `fs.NewRuntimeFileService` and `paths.InitWithBase`. Do not join it with `constants.RuntimeDirname` manually; the file service handles that.
-- **Do not set `DataDir`/`CredentialsDir` in test configs**: Test configs must use `RuntimeDir` and `fileSvc.Resolve(constants.*)` instead of `DataDir`/`CredentialsDir` fields. These fields have been removed from config structs. Pass `fileSvc` to services that need file I/O.
-- **Use typed error constants**: Check for typed constants from `internal/constants/` instead of hardcoded strings in assertions and error message checks.
-- **Use regression test markers**: Use standardized marker constants (`RegressionMarkerAfterFix`, `RegressionMarkerBeforeFix`, `RegressionMarkerIssue`) instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples.
-- **Enable race detection**: `-race` on all non-Windows platforms across all test targets.
-- **Use explicit cancellation contexts**: Goroutines require explicit cancellation contexts and clear channel ownership.
-- **Use the canonical trust bundle path**: `.g8e/pki/trust/g8eg-ca-bundle.pem`. Contains root CA, hub intermediate, Operator intermediate, and gateway peer CA.
-- **Use the shared consensus factory**: `consensus.NewConsensusFromPolicy` is used by both production `BootstrapConsensus` and test `SetupConsensus` to avoid duplication.
-- **Keep `storagetest.TestSQLAuditStore` in test code only**: Production code uses `storage.SQLAuditStore` from `audit_store.go`.
-- **Use descriptive test names**: Test function names must describe the specific behavior being verified, not generic categories. Good: `TestHandleFsReadRequest_ScrubbingRedactsSecrets`, `TestHandleEvalAnswerRequestSync_TruncatesAnswerExceedingMaxBytes`. Bad: `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`. Subtest names (`t.Run`) must describe the specific scenario, not just "success" or "error".
-- **Use descriptive test filenames**: Test filenames must describe their scope, not generic categories. Good: `file_ops_scrubbing_test.go`, `vault_writer_error_paths_test.go`. Bad: `edge_test.go`, `misc_test.go`, `coverage_test.go`. Do not use "coverage", "gap", or "edge" in test filenames; name the file after the behavior or component it tests.
+## Core rules
 
----
+- Reproduce a bug with a failing regression test before changing production code.
+- Use table-driven tests with `testify/assert` and `testify/require` where applicable.
+- Give test functions, subtests, and files names that state the behavior under test. Do not use generic names such as `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, `edge_test.go`, `coverage_test.go`, or `misc_test.go`.
+- Keep Tier 1 tests independent of a running platform and third-party services. Tier 2 and Tier 3 tests use real local platform boundaries instead of mocking internal services, database clients, or cross-component communication.
+- Do not use `t.Parallel()` in integration or E2E tests. The Go E2E runner also passes `-parallel=1` as a backstop.
+- Run Go platform suites through `./g8e test` or the repository Makefile targets. Do not invoke `go test` directly for platform tests.
+- Go test targets enable the race detector on non-Windows platforms and disable test caching with `-count=1` where the runner controls the invocation.
+- Give goroutines explicit cancellation contexts and clear ownership. Join long-running goroutines before the test completes.
+- Register resource and temporary credential cleanup with `t.Cleanup`. A setup helper must not defer cleanup that needs to remain active for the test body.
+- Use typed constants from `internal/constants/` in assertions instead of duplicating status values, reason strings, paths, or permissions.
+- Use contract tests to keep Go, Python, generated protobufs, JSON schemas, and `protocol/constants/` aligned.
 
-## Never
+## Running the Go platform suites
 
-- **Never mock internal services, database clients, or cross-component communication**: Integration tests use real wire paths. Tier 1 unit tests may use stubs/mocks for external dependencies only.
-- **Never use `t.Parallel()` in integration tests**: Each test gets its own isolated data directory and random port. Sequential execution avoids resource contention.
-- **Never use `defer` for fixture teardown in a setup helper**: A deferred cleanup fires when the helper returns, tearing the gateway down before the test body runs. `NewGatewayFixture` handles cleanup internally via `t.Cleanup`. Symptom of incorrect cleanup: `sql: database is closed` on the first gateway call.
-- **Never clean up twice**: `NewGatewayFixture` registers cleanup exactly once via `t.Cleanup`. Do not add additional cleanup calls that stop the gateway or close databases.
-- **Never hardcode filepath strings**: No dynamic path construction with `filepath.Join()` and string literals. No relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"` inline.
-- **Never use legacy trust bundle paths**: Tests fail closed if the canonical bundle is missing or malformed. Do not use `.g8e/g8e-gw-ca-bundle.pem` or `.g8e/pki/ca-bundle.pem`.
-- **Never mutate local PKI state in tests**: If trust bundle issues persist, restart the gateway and re-authenticate manually.
-- **Never use hand-rolled error strings**: Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
-- **Never use generic test names**: No `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, or any name that does not describe the specific behavior under test. The name must tell the reader what is being verified.
-- **Never use generic test filenames**: No `edge_test.go`, `misc_test.go`, `coverage_test.go`, or any filename that does not describe its scope. Do not use "coverage", "gap", or "edge" in test filenames.
+The `g8e test` command is the primary entry point:
 
----
+- `./g8e test unit` runs Tier 1 tests under `internal/` and `protocol/`.
+- `./g8e test integration` runs the repository with the `integration` build tag and local integration infrastructure.
+- `./g8e test e2e` runs Tier 3 tests against an already running platform.
+- `./g8e test e2e --run <regexp>` selects E2E tests compatible with the platform state prepared by the user.
+- `./g8e test e2e-full` starts the root Compose stack with the `bootstrapped` profile, waits for Gateway and Ensemble health, runs E2E tests, and tears the stack down with `docker compose down -v` when the command exits.
+- `./g8e test e2e-full --run <regexp>` limits the full-lifecycle command to a compatible scenario.
+- `./g8e test coverage` delegates to `make test-coverage`; `--pkg` narrows the package and `--verbose` enables verbose test output.
+- `./g8e test lint` runs `golangci-lint`. It installs the repository-pinned linter version if the binary is unavailable.
+- `./g8e test chaos` generates governance test events, and `./g8e test summary` reads the latest chaos run from the test vault.
 
-## cwd-Based `os.Chdir` Classification
+`e2e-full` removes Compose volumes during teardown. Use it only when discarding the stack state is intentional. It does not perform the interactive owner and component enrollment walkthrough, so the selected tests must match the state available to the started Compose stack.
 
-Tests must not use `os.Chdir` to align `.g8e/` runtime state. Instead, inject `fileSvcFactoryFor(fileSvc)` into `*WithConfig` functions using a temp-rooted `fileSvc` from `newCmdTestEnv(t)`.
+## Makefile targets
 
-### Legitimate `os.Chdir` (Retain with Justification)
+The root Makefile provides these test and quality entry points:
 
-- **Source-tree discovery**: Demo commands resolve `./demos/`, `compose.yml`, `doctrine/`, `target-data/` relative to cwd. These are not `.g8e/` runtime paths. Files: `demos_*test.go`.
-- **Config-layer tests**: `config.Load("")` reads from cwd by design. The config package is the layer that translates cwd into `fileSvc` baseDir. Files: `config/config_test.go`.
-- **Chaos tests**: `runChaos` calls `configLoad` which reads from cwd. Injecting `fileSvcFactory` would require config-layer injection. Files: `chaos_integration_test.go`.
+- `make test` runs `test-unit` followed by `test-integration`.
+- `make test-unit` runs the configured Tier 1 package set serially and excludes packages listed in `TEST_EXCLUDE_PKGS`.
+- `make test-integration` runs all Go packages serially with the `integration` build tag.
+- `make test-docker` runs the approved steady-state E2E subset through `./g8e test e2e`.
+- `make test-coverage` runs the configured Go package set with the `integration` tag, atomic coverage, repository exclusions, and a 75 percent minimum. `PKG` and `VERBOSE` customize the invocation.
+- `make test-airgap` validates the vendored Go build and pinned demo assets without downloading dependencies.
+- `make ensemble-test` runs Ensemble Tier 1 and non-external Tier 2 tests.
+- `make evals-test`, `make evals-test-unit`, and `make evals-test-integration` run the standalone eval package in its locked `uv` environment.
+- `make test-external` runs Tier 4 Ensemble tests selected by external-service markers.
+- `make dashboard-test` runs the Dashboard Vitest suite.
+- `make lint` runs the Go build check, vulnerability scan, doctrine and COSAiS validation, Swagger generation, and `golangci-lint`.
+- `make ci` aggregates the local platform, Ensemble, and Dashboard checks. GitHub Actions also runs protocol Python, conformance, eval, website, smoke, dependency, secret, and license jobs.
 
-Each retained `os.Chdir` file must have a file-level comment explaining why cwd usage is legitimate.
+The package and file exclusions in the Makefile are the source of truth for Go test discovery and coverage filtering. The CLI unit runner and `make test-unit` do not use identical package selection or timeout flags, so use the same entry point locally that the relevant CI job uses when reproducing a failure.
 
-### Illegitimate `os.Chdir` (Eliminate)
+## Runtime files and test paths
 
-Any test that aligns `.g8e/` runtime state for command tests must use `newCmdTestEnv(t)` + `fileSvcFactoryFor(fileSvc)` injection. This pattern returns a pre-aligned `(fileSvc, cfg)` pair where `cfg.RuntimeDir == fileSvc.Resolve("")`.
+`RuntimeFileService` in `internal/services/fs` is the canonical abstraction for `.g8e/` test I/O. Construct relative runtime paths from constants in `internal/constants/paths.go`, resolve absolute paths with `fileSvc.Resolve`, and convert absolute runtime paths back with the file service relative-path method.
 
----
+Use `fileSvc.ReadFile`, `fileSvc.WriteFile`, `fileSvc.Stat`, `fileSvc.Remove`, and `fileSvc.FileExists` instead of direct `os` file operations for `.g8e/` state. Missing runtime files return typed errors; assert `errors.Is(err, constants.ErrNotFound)` instead of using `os.IsNotExist`. Use `constants.Perm*` values for permission assertions.
 
-## Factory-Error Test Requirement
+`testutil.TempDir(t)` returns an absolute temporary base directory. Pass it directly to `fs.NewRuntimeFileService` and `paths.InitWithBase`; do not append the runtime directory name yourself. Use `TestPaths` for isolated environments and pass `fileSvc` explicitly to services that perform runtime I/O. CLI test configs use `RuntimeDir` and resolved paths; do not add `DataDir`, `CredentialsDir`, or `PKIDir` fields to those config structs.
 
-Every `fileSvcFactory` injection point in `internal/cli/cmd/` must have a corresponding `TestXxxCmdWithConfig_FileSvcFactoryError` test in `internal/cli/cmd/factory_error_test.go`. The test asserts that:
+The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`. Tests do not use legacy bundle paths or mutate the developer's local PKI state to repair a failure.
 
-1. The error is wrapped with `constants.ErrFileServiceInit`
-2. The underlying factory error is preserved via `errors.Is`
-3. Downstream dependencies are not called
+## CLI command tests
 
-Each test obtains a temp-rooted config from `newCmdTestEnv(t)`, constructs the command under test via its `*WithConfig` constructor wired with `configLoaderFor(cfg)` and `failingFileSvcFactory(errFactory)`, then calls `cmd.RunE` and asserts `errors.Is` against both `constants.ErrFileServiceInit` and the original factory error. See `internal/cli/cmd/factory_error_test.go` for the canonical pattern.
+Hermetic command tests use the shared environment and dependency-injection helpers in `internal/cli/cmd/testenv_test.go`. The environment pairs a temporary `RuntimeFileService` with a config whose `RuntimeDir` matches the service root, while injected config loaders, file-service factories, and client factories keep command tests independent of the developer's runtime tree and network.
 
-Helpers: `failingFileSvcFactory(err)` returns a factory that always errors. `panickingClientFactory()` returns a client factory that panics if called (proves downstream is not reached).
+Every command constructor that accepts a file-service factory has a corresponding initialization-error test in `internal/cli/cmd/factory_error_test.go`. The test asserts that the command wraps `constants.ErrFileServiceInit`, preserves the original error for `errors.Is`, and does not call downstream dependencies.
 
----
+### Working-directory changes
 
-## CLI Command Test Helpers
+Tests do not use `os.Chdir` to align `.g8e/` runtime state. Command tests inject a temporary file service and config instead.
 
-- **`newCmdTestEnv(t)`**: Returns `(fs.RuntimeFileService, *config.Config)` with a temp-rooted `fileSvc` and aligned `cfg`. Uses `setupTestConfig` internally, which calls `fileSvc.CreateRuntimeTree`, `config.Load`, and writes a dummy trust bundle via `fileSvc.WriteFile`.
-- **`fileSvcFactoryFor(fileSvc)`**: Returns a `fileSvcFactory` closure that always returns the given `fileSvc`. Used to inject a hermetic `fileSvc` into `*WithConfig` functions.
-- **`configLoaderFor(cfg)`**: Returns a config loader closure that always returns the given `cfg`.
-- **`mustRel(t, fileSvc, absPath)`**: Converts an absolute `.g8e/` path to a relative path, failing the test on error.
-- **`newAuthTestEnv(t)`**: Returns `(fileSvc, cfg)` with auth-specific fixture setup (temp-rooted `fileSvc` with runtime tree created, minimal config with `ProjectRoot`/`RuntimeDir`/`Paths.Host` set).
+A working-directory change is limited to behavior that explicitly discovers source-tree or configuration files from the current directory. Current examples include demo and Swagger source discovery, `config.Load("")`, chaos configuration loading, and E2E repository-root discovery. Each test file that changes the process working directory includes a file-level explanation, restores the original directory with `t.Cleanup` or equivalent cleanup, and does not run those tests in parallel.
 
----
+## Integration fixtures
 
-## CLI Enrollment Coordinator Tests
+`GatewayFixture` in `test/fixtures/gateway_fixture.go` starts a Gateway in-process with local SQLite, PKI, pub/sub, governance services, and an MCP or A2A downstream server. `NewGatewayFixture` registers shutdown through `t.Cleanup`; callers do not stop the Gateway, close its databases, or close its generated downstream server a second time.
 
-The `EnrollmentCoordinator` (`internal/cli/auth/enrollment.go`) owns the CLI enrollment state machine. It is unit-tested in `internal/cli/auth/enrollment_coordinator_test.go` with injected mocks for `EnrollmentGateway`, `SystemTrustInstaller`, `BrowserOpener`, and `PasskeyRegistrar`. The command adapter layer (`internal/cli/cmd`) is tested in `auth_enroll_test.go` via the `enrollerFactory` parameter injected through the `*WithConfig` command constructors; tests pass `mockEnrollerFactory(mock)` to inject a `mockEnroller` that returns canned `EnrollmentResult`s without network I/O.
+Fixture scaffolding uses temporary paths, while each Gateway data and vault run is written to a unique directory under `test-results/`. Cleanup stops services and joins the Gateway goroutine but intentionally leaves those result directories for inspection.
 
-### Coordinator-Level Tests (`internal/cli/auth/enrollment_coordinator_test.go`)
+`EnrollClientIdentity` creates an enrolled test identity, waits for the operator session to persist, and supports strict mTLS clients for authenticated requests. Integration tests use the generated PKI and session records instead of bypassing authentication. Consensus and notary postures use the shared consensus construction path so production and fixture wiring remain aligned.
 
-Full state machine coverage:
-- Healthy reuse (no rotation) — `LocalStateComplete` + `RotateCLI=false` → no gateway calls
-- Partial → recovery — `LocalStatePartial` → `CreateRecoveryRequest` called, `Bootstrap` not called
-- Expired → rotation — expiring CLI cert → `Rotate` called
-- Absent → bootstrap — `LocalStateAbsent` → `Bootstrap` called
-- `--no-system-trust` skip — `SystemTrustInstaller.Install` not called, `PasskeyRegistrar.Register` still called
-- System trust failure stops before browser — `SystemTrustInstaller` returns error → `BrowserOpener`/`PasskeyRegistrar` not called
-- `--rotate-cli` forces rotation — healthy identity + `RotateCLI=true` → `Rotate` called
+## Live E2E tests
 
-### CredentialStore Tests (`internal/cli/auth/credential_store_test.go`)
+`./g8e test e2e` performs network assertions only. `TestMain` loads owner credentials and endpoints from the local `.g8e/` runtime tree, constructs bounded public and mTLS clients with strict certificate verification, and fails non-zero if Gateway, Ensemble, or Dashboard preflight checks fail. The test package does not start, stop, restart, or inspect containers.
 
-6 tests exercising `CredentialStore` directly:
-- `TestCredentialStore_InterruptedCommitRetry` — cancelled-context Commit fails, second Stage+Commit succeeds, no orphaned tmp files
-- `TestCredentialStore_RollbackWritesNoCanonicalFiles` — Rollback writes no canonical files; `Rollback(nil)` is a safe no-op
-- `TestCredentialStore_CommittedFilePermissions` — CLI cert, CLI key, credentials JSON all have 0600 mode after Commit
-- `TestCredentialStore_ConcurrentStageCommitNoTornState` — two concurrent Stage+Commit sequences leave a complete, consistent identity (race-clean under `-race`)
-- `TestCredentialStore_ClearRetainsTrustBundle` — Clear removes local credentials but retains the runtime trust bundle (§4.3 ownership)
-- `TestCredentialStore_InspectBundleOnlyIsAbsent` — `Inspect` with only a trust bundle present does not promote local identity from `Absent` to `Partial`
+The suite contains both approved steady-state tests and tests that require pending, denied, restarted, or gateway-only states. No single deployment state satisfies every scenario, so select stateful tests with `--run` after preparing the required state. `make test-docker` selects the approved steady-state subset defined in the Makefile.
 
-### Command-Layer Tests (`internal/cli/cmd/auth_enroll_test.go`)
+The suite-level preflight requires Gateway, Ensemble, and Dashboard to be reachable. As a result, the current E2E entry point cannot successfully execute the gateway-only headless scenario in `test/e2e/platform_enrollment_headless_e2e_test.go`.
 
-Tests inject a `mockEnroller` via `mockEnrollerFactory(mock)` + `noopCheckOperatorRunning` stub:
-- `TestEnrollCmd_OptionPropagation` — defaults, `--no-system-trust`, `--rotate-cli`, both flags
-- `TestEnrollCmd_CoordinatorErrorPropagates` — command surfaces `ErrSystemTrustInstallFailed`
-- `TestEnrollCmd_HealthyReusedIdentityNoRotate` — Reused=true, RotateCLI=false
-- `TestEnrollCmd_RotateCLIFlagForcesRotation` — `--rotate-cli` wiring
-- `TestEnrollCmd_NoSystemTrustFlagWired` — `--no-system-trust` wiring
-- `TestEnrollCmd_SystemTrustInstalledOutput` — browser-close guidance printed
-- `TestEnrollCmd_StdinContinueInjected` — interactive `auth enroll user` supplies a stdin-reading `ContinueFunc` for the browser-restart gate
-- `TestLogoutCmd_OSRootCARetained` — OS root CA retained on logout
-- `TestMCPStdio_DoesNotInvokeEnrollment` — stdio never calls the coordinator factory
+`./g8e test e2e-full` owns Compose startup and teardown around the same network-only test binary. Its lifecycle wrapper does not change test assertions or make mutually exclusive stateful scenarios compatible.
 
-### Gateway-Side Recovery/Rotation Tests (`internal/services/gateway/`)
+## Protocol and cross-language tests
 
-- `cli_recovery_controller_test.go` — recovery request, status, browser approve, mTLS approve-cli (headless path: revoked cert rejection, inactive user rejection, one-time-use token, full lifecycle), complete (proof-of-possession, token expiry, replay)
-- `cli_recovery_service_test.go` — token hashing, atomic state transitions, cleanup
-- `cli_rotation_controller_test.go` — mTLS rotation, session replacement, cert revocation
-- `cli_session_service_test.go` — CLI session creation, replacement, deactivation, lookup by mTLS certificate
-- `dispatch_service_test.go` / `dispatch_service_integration_test.go` — `DispatchController` request validation, governance pipeline routing, dispatch response shape; integration variant uses a real gateway fixture
-- `operator_controller_test.go` — operator list, bind/unbind, target context, reauth, session lookup (`GET /api/v1/operators/session/{id}`)
-- `gateway_http_test.go` / `gateway_auth_test.go` — route removal assertions (`TestRemovedCLIEnrollRoute`, `TestRouteAuthRegistry_RotationAndRemovedEnroll`)
+Go protocol tests cover workload identities and canonicalization vectors. The Python package under `protocol/python/` tests constants, generated protobufs, typed models, receipt verification, compliance models, and package version consistency. The conformance suite under `protocol/conformance/` checks parity among Go definitions, Python runtime values, JSON schemas, constants registries, and shared hash or receipt vectors.
 
-### Governance Tests (`internal/services/governance/`)
+Integration tests for MCP and A2A use the shared adapter and case tables in `test/protocol_test_helpers_test.go`, `test/protocol_payload_test.go`, and `test/protocol_errors_test.go`. Add shared payload or malformed-request cases to those tables so both protocols receive the same assertions. Protocol-specific assertions use typed endpoint, status, and JSON-RPC constants.
 
-- `remote_state_root_provider_test.go` — `RemoteStateRootProvider` fetches the gateway state Merkle root from `/api/v1/state` over mTLS; covers success, HTTP error, malformed response, and network failure paths
+## Other component suites
 
-### E2E Tests (`test/e2e/`)
+The root test model also applies to first-party non-Go components:
 
-Tier 3 E2E tests are pure network assertion tests. The user starts the production platform (`docker compose up` or `./g8e gw start`), then runs `./g8e test e2e` or `make test-docker`. The test binary connects to the running platform and fails fast if it is not reachable. The test binary owns API requests and assertions only; it does not start, stop, restart, or inspect containers.
+- [Ensemble tests](../ensemble/tests.md) documents pytest paths, markers, fakes, external credential gating, and the standalone eval package.
+- [Dashboard tests](../dashboard/tests.md) documents Vitest configuration, browser helpers, server tests, and Dashboard coverage.
+- The website uses `npm run check` and `npm run build`; GitHub Actions also validates the Cloudflare deployment bundle with a dry run.
 
-`TestMain` loads configuration from the local `.g8e/` runtime tree, performs a bounded HTTP health check against the gateway, and exits non-zero if the platform is not reachable. There is no `t.Skip`, no `sharedFixture`, no Docker lifecycle, and no Compose override. A typed `E2EClient` owns bounded public and mTLS HTTP clients with strict TLS verification (no `InsecureSkipVerify`); the owner CLI certificate, CA bundle, and `ServerName` are resolved from the runtime tree.
+## Continuous integration
 
-Stateful scenarios require specific platform states that the user prepares manually before running the selected tests via `./g8e test e2e --run <pattern>`:
+The primary GitHub Actions workflow runs generated artifact checks, README drift checks, Go lint and vulnerability scanning, Tier 1 and Tier 2 Go tests, cross-compilation, static-link verification, protocol Python tests, protocol conformance, smoke tests, Ensemble tests, eval tests, Dashboard tests, website tests, secret scanning, dependency auditing, and license checks. Tier 3 live platform E2E and Tier 4 external-provider tests are not part of the primary CI workflow.
 
-- `gateway_e2e_test.go` — typed gateway health and CA bundle responses, health stability across probes
-- `auth_e2e_test.go` — owner mTLS authentication, missing-session-header rejection
-- `operator_registry_e2e_test.go` — active operator discovery via the typed list endpoint, heartbeat timestamp baseline
-- `pubsub_heartbeat_e2e_test.go` — heartbeat advancement proof via two typed `UpdatedAt` observations
-- `command_roundtrip_e2e_test.go` — full gateway-to-operator command dispatch roundtrip with typed `FsReadResult` protobuf decode
-- `ensemble_e2e_test.go` — ensemble health, detailed health with typed client map, dashboard index, gateway stability
-- `ensemble_chat_e2e_test.go` — ensemble chat file creation tool call roundtrip
-- `governance_document_e2e_test.go` — governed document update (partial merge) and deletion
-- `compliance_e2e_test.go` — typed audit receipts, summary, and events responses
-- `platform_bootstrap_e2e_test.go` — platform full bootstrap lifecycle
-- `platform_enrollment_pending_e2e_test.go` — pending discovery: all three component kinds appear, request IDs are unique, raw JSON excludes tokens and secret material
-- `platform_enrollment_denial_e2e_test.go` — denial: deny an exact request ID, verify terminal state, gateway remains healthy, no active operator
-- `platform_enrollment_restart_pending_e2e_test.go` — restart-during-pending: request-ID continuity after restart, no duplicate, approval succeeds, command roundtrip works
-- `platform_enrollment_headless_e2e_test.go` — headless: gateway-only deployment, health and CA bundle succeed, pending list and operator list are empty, ensemble and dashboard endpoints are absent
-- `approved_restart_e2e_test.go` — approved-restart: operator identity persists after restart, heartbeat advances, command roundtrip succeeds
-- `sse_observing_e2e_test.go` — live SSE stream observing during chat turns
+The FIPS workflow builds the Linux AMD64 FIPS variant, runs its self-check, runs Go Tier 1 and Tier 2 tests with `GOFIPS140=v1.0.0`, and verifies static linking. Release workflows separately verify binary checksums and signatures, clean Go installation, Python package metadata, and clean Python installation.
 
-MCP config-output assertions (`mcp agent show` JSON structure, TLS fields, transport type) are covered by hermetic CLI command tests in `internal/cli/cmd/mcp_config_output_test.go` as Tier 1 unit tests, not Tier 3 E2E tests.
-
----
-
-## Cross-Protocol Gateway Tests
-
-The MCP and A2A gateway protocols share the same suspension, approval, and error-handling mechanics but differ in wire shape (endpoint path, JSON-RPC method, params field names, response structure). Cross-protocol tests use a shared adapter pattern to avoid duplicating test logic.
-
-### `protocolAdapter` Interface
-
-Defined in `test/protocol_test_helpers_test.go` (build tag: `integration`). The interface abstracts the wire-level differences between protocols:
-
-- **`name()`**: Short identifier for subtest names (`"mcp"`, `"a2a"`)
-- **`endpoint()`**: Canonical API path from `constants.APIPaths` (no path literals)
-- **`callMethod()`**: JSON-RPC method (`"tools/call"` for MCP, `"a2a/call"` for A2A)
-- **`nameParamKey()`** / **`payloadParamKey()`**: JSON params field names (`"name"`/`"arguments"` for MCP, `"skill_name"`/`"payload"` for A2A)
-- **`makeCallBody(name, payload)`**: Builds a JSON-RPC request body. `payload` is `any` because payload-variation tests deliberately exercise arbitrary shapes (nested, unicode, large, empty, null) — this is the documented exception to the "no `Any` types for known shapes" rule in devs.md
-- **`parseSuspendedStatus(t, body)`**: Extracts the suspended-status signal from the response body for assertion against typed constants
-
-Implementations: `mcpAdapter` and `a2aAdapter`. The `bothAdapters()` helper returns `[]protocolAdapter{mcpAdapter{}, a2aAdapter{}}`.
-
-### Shared Test Tables
-
-Two table-driven tests iterate over `bothAdapters()` × a shared case table:
-
-- **`test/protocol_payload_test.go`** → `TestGatewayProtocols_PayloadVariationsSuspendExecution` + `payloadCases` (5 cases: nested, unicode, large 100KB, empty, null). Asserts `constants.MCPApprovalPausedPrefix` for MCP, `constants.GatewayResponseStatusSuspended` for A2A.
-- **`test/protocol_errors_test.go`** → `TestGatewayProtocols_MalformedRequestsReturnJSONRPCErrors` + `errorCases` (7 cases: invalid version, missing method, unknown method, malformed JSON, missing name, invalid payload, missing params). Malformed-JSON case asserts `constants.JSONRPCErrorCodeParseError` + `constants.JSONRPCErrorMessageParseError`.
-
-Subtest names follow `protocol/scenario` format (e.g. `mcp/unicode_and_special_characters`).
-
-### Rules
-
-- **Extend the shared tables, not per-protocol test functions**: New payload shapes or error scenarios are added to `payloadCases` or `errorCases` and automatically covered for both protocols. Do not add new per-protocol payload or error test functions to `mcp_gateway_test.go` or `a2a_gateway_test.go`.
-- **Use typed constants for assertions**: Assert against `constants.GatewayResponseStatusSuspended`, `constants.MCPApprovalPausedPrefix`, `constants.JSONRPCErrorCodeParseError`, and `constants.JSONRPCErrorMessageParseError` — not hardcoded strings.
-- **New protocols**: Add a new `protocolAdapter` implementation and register it in `bothAdapters()`. The shared tables cover it automatically.
-
-### Fixture Helpers
-
-The `adapterFixture` struct in `test/protocol_test_helpers_test.go` bundles a `GatewayFixture` with an enrolled identity and mTLS client. Helpers:
-
-- **`newAdapterFixture(t, testName, downstreamURL)`**: Creates a gateway fixture configured for both MCP and A2A downstream servers, enrolls a client identity, and returns an `adapterFixture`.
-- **`postAdapter(t, adapter, body)`**: Sends a raw request body to the adapter's endpoint. Used by error-case tests that send malformed bodies.
-- **`postAdapterWithStatus(t, adapter, body)`**: Same as `postAdapter` but also returns the HTTP status code.
-
----
-
-## Reference
-
-### Test Architecture (4-Tier Model)
-
-| Tier | Name | Target Directory | Build Tag / Marker | External Deps | Execution Time |
-| --- | --- | --- | --- | --- | --- |
-| **Tier 1** | **Unit Tests** | `internal/...` | *No tags* | None (stub-only, no files/network/DB) | < 10ms per test |
-| **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI, local pubsub (gateway in-process) | < 2s per suite |
-| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Running platform (user starts `docker compose up` or `./g8e gw start` first) | < 30s per suite |
-| **Tier 4** | **External** | `ensemble/tests/integration/` (and any future component tests with external deps) | `pytest.mark.ai_integration`, `pytest.mark.requires_web_search`, `pytest.mark.requires_api` | Real LLM providers, web search APIs, third-party services | seconds to minutes per test |
-
-### Tier 4 (External)
-
-Tier 4 covers tests that depend on resources outside the platform's own infrastructure: LLM provider APIs, web search APIs, and any third-party service. Tier 4 tests are gated on credentials and skip when the credentials are absent — they never fail CI for missing credentials, only for actual regressions when credentials are present. Tier 4 tests are not part of `make test` or `make ci`; they run via `make test-external` or explicitly via `pytest -m ai_integration`. Tier 2 (In-Process Integration) and Tier 3 (Docker E2E) do not make external calls; only Tier 4 does.
-
-### CLI Test Commands
-
-```bash
-./g8e test unit        # Tier 1 - no external dependencies
-./g8e test integration # Tier 2 - on-disk SQLite, local PKI
-./g8e test e2e         # Tier 3 - requires running gateway
-./g8e test coverage    # Coverage report (75% threshold enforced)
-./g8e test lint        # golangci-lint + quality checks
-./g8e demos scenarios list    # List demo scenarios
-./g8e demos scenarios run     # Run scenarios against real Gateway/Operator
-./g8e test chaos       # Generate governance events (70% Good, 20% Injection, 10% MitM)
-./g8e test summary     # View chaos test summary from test vault
-```
-
-### Makefile Targets
-
-```bash
-make test              # Tier 1 + Tier 2
-make test-unit         # Tier 1 only
-make test-integration  # Tier 2 only (integration build tag)
-make test-docker       # Tier 3 (e2e build tag, requires running platform)
-make test-coverage     # Coverage with -coverprofile and -covermode=atomic
-make test-airgap       # Verify vendored build works without network access
-make ensemble-test     # Ensemble pytest unit + in-process integration suite (Tier 1 + Tier 2)
-make test-external     # Ensemble external test suite (Tier 4: real LLM/API calls)
-make dashboard-lint    # Dashboard ESLint checks
-make dashboard-test    # Dashboard vitest suite
-make verify-fips       # FIPS 140-3 build and self-check
-make ci                # Full CI pipeline (proto, swagger, lint, vulncheck, tests)
-make lint              # golangci-lint + lint-no-embedded-newlines + vulncheck + validate-doctrines + validate-cosais + swagger-generate
-```
-
-### Workflow
-
-```bash
-# 1. Unit tests (no gateway required)
-./g8e test unit
-
-# 2. In-process integration tests (no separately running gateway required)
-./g8e test integration
-
-# 3. Docker E2E tests (start the platform first, then run tests)
-docker compose up     # or: ./g8e gw start
-make test-docker      # connects to the running platform
-
-# 4. Authenticate (required for non-demo mTLS tests; demo runs enroll inline)
-./g8e auth enroll user
-```
-
-**First-time setup**: if no users exist, the first login bootstraps the platform:
-
-```bash
-./g8e gw start
-./g8e auth enroll user
-```
-
-### Demo Scenarios
-
-The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity; the Gateway and Operator are real infrastructure.
-
-**30 scenarios total**: 7 MCP + 3 A2A + 5 governance + 4 ensemble + 5 DHS + 1 finance + 5 FedRAMP.
-
-The interactive demo runner (`g8e demos run <org> [scenario]`) provides 14 numbered platform demos across 5 environments: healthcare (4), finance (1), dhs (4), fedramp (4), frontend (1). These drive the real Gateway and Operator with posture switching. For notary demos (dhs, fedramp), `demos run` enrolls a host CLI session and registers a WebAuthn passkey inline before running scenarios. A browser window opens automatically for the passkey ceremony, with no separate terminal or manual `auth enroll user` step. The enrolled `user_id` and `cli_session_id` are threaded into the harness so the suspended transaction and the browser approver share the same user identity.
-
-**Testing postures**:
-- **Doctrine**: L1 enforced, L2/L3 audited
-- **Consensus**: L1/L2 enforced, L3 audited
-- **Notary**: L1/L2/L3 strictly enforced
-
-**Governance testing** uses cryptographic actors (per-member Ed25519 signers for L2 consensus, human browser approval for L3 notary) to exercise governance flows via `MCPToolsCall` (Path A). The gateway runs `L2ConsensusDeliberator` internally and suspends transactions requiring L3 notary approval. The harness drives the real out-of-band L3 flow via `WaitForHumanApproval` (`client/client.go`), which subscribes to the gateway's SSE stream for `approval.completed` events matching the transaction hash, blocks until a human completes the WebAuthn passkey ceremony in their browser, and verifies the approval status via the mTLS status endpoint.
-
-Each consensus member signs with its own distinct key derived from `member_seeds` in the bootstrap config, making `RequireDistinct` and quorum cryptographically meaningful. `SubmitMaximal`/`Ensemble` remain as conformance testing infrastructure only. Unit tests for `WaitForHumanApproval` (3 tests in `client_test.go`: success, SSE timeout, status endpoint error), `shellCommandMap` (`shell_command_test.go`), and `WaitForApprovalSSE` (`approval_sse_test.go`) provide coverage. A fail-closed regression test (`TestGatewayModeService_GetGovernanceDeps_AlwaysUsesRealNotary`) verifies the gateway always requires real WebAuthn proof.
-
-### MCP mTLS Authentication Flow
-
-1. `GatewayFixture` starts a fully configured gateway in-process
-2. `EnrollClientIdentity` performs CSR enrollment, generating certificates and operator session
-3. `CreateMTLSClient` creates an HTTP client with enrolled identity certificates
-4. All post-enrollment MCP calls target HTTPS port (8443) with mTLS enforced
-5. Gateway's `auth.Middleware` extracts `OperatorSessionID` from SPIFFE URI SAN (`spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`)
-6. Session ID validated against database
-
-**Key details**:
-- MCP routes are on HTTPS port (8443) only; HTTP port (8080) serves bootstrap endpoints (`/bootstrap`, `/.well-known/g8e/pki/*`), CLI recovery discovery (`/api/v1/auth/cli/recovery/{request,status,complete}`), deploy scripts, node binary download, and health checks. The old `handleCLIEnrollment` route (`/api/v1/auth/cli/enroll`) and per-platform trust-install script routes (`/web-cert.sh`, `/web-cert.ps1`, `/.well-known/g8e/pki/trust-windows`) were removed in v1.7.2; CLI enrollment is now driven client-side by the `EnrollmentCoordinator`.
-- `ExtractOperatorSessionID` in `protocol/workload_identity.go` parses the SPIFFE URI (path segment 6)
-- Tests include wait logic for operator session persistence before authenticated calls
-
-### Fixture Lifecycle
-
-`GatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (via `os.MkdirTemp`). This directory is **not** deleted; results accumulate for inspection. `test-results/` is gitignored. `NewGatewayFixture` registers cleanup internally via `t.Cleanup`, which stops the gateway and releases database locks but leaves data on disk.
-
-Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `CreateNoCertClient`, `SetupConsensus`, `WaitForReady`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
-
-### Docker E2E Architecture (Tier 3)
-
-The user owns Docker lifecycle; the Go test binary owns API requests and assertions. The user starts the production platform (`docker compose up` or `./g8e gw start`), then runs `./g8e test e2e` or `make test-docker`. The test binary connects to the running platform and fails fast if it is not reachable.
-
-`TestMain` in `test/e2e/main_test.go` loads configuration from the local `.g8e/` runtime tree, performs a bounded HTTP health check against the gateway, and exits non-zero with a concise error if the platform is not reachable. There is no `t.Skip`, no `sharedFixture`, no Docker lifecycle, and no Compose override. The test binary does not start, stop, restart, or inspect containers.
-
-Stateful scenarios (pending discovery, denial, restart-during-pending, headless, approved-restart) require specific platform states that the user prepares manually before running the selected tests via `./g8e test e2e --run <pattern>`. The scenario matrix is documented in the plan file (`.local.dev/docs/plans/in-progress/e2e-cleanup.md`).
-
-The `test/e2e/` package contains no Docker, Compose, process-control, dynamic-port-allocation, container-log, or container-filesystem code. All assertions are through typed gateway and workload APIs with strict mTLS. The `E2EClient` reads gateway URL and owner credentials from the local `.g8e/` runtime tree via `config.Load` and `RuntimeFileService`, same as the CLI.
-
-### Trust Bundle Troubleshooting
-
-If integration tests fail with `x509: certificate signed by unknown authority`:
-
-```bash
-# 1. Verify bundle exists
-ls -la .g8e/pki/trust/g8eg-ca-bundle.pem
-
-# 2. Regenerate if missing/corrupted
-./g8e gw stop
-rm -rf .g8e/pki
-./g8e gw start
-./g8e auth enroll user
-
-# 3. Verify bundle parses
-openssl crl2pkcs7 -nocrl -certfile .g8e/pki/trust/g8eg-ca-bundle.pem
-```
-
-### Infrastructure Ports
-
-From `protocol/constants/ports.json`:
-
-- `8080`: Gateway HTTP (bootstrap, CA bundle, console, health)
-- `8443`: Gateway HTTPS (mTLS API, MCP, public)
-
-### Python Test Suite
-
-The Python protocol package (`protocol/python/`) includes a pytest suite in `protocol/python/tests/` covering constants, generated protobufs, models, canonical receipt verification, and package versioning:
-
-- `test_constants.py`: Constant dict loading, value integrity, and namespace conventions
-- `test_constants_loader.py`: Fail-closed protocol JSON loader integrity, empty/whitespace env var fallback, and source-tree fallback elimination
-- `test_enums.py`: Enum generation, name conversion helpers, dynamic attribute access, and extra enum generation
-- `test_models.py`: Model instantiation, validation rules, serialization round-trips, and `G8eBaseModel` behavior
-- `test_receipts.py`: Generated protobuf parsing, canonical receipt and stage-evidence vectors, Ed25519 receipt signatures, and persistence-attestation verification
-- `test_version.py`: Version string consistency with `pyproject.toml` and semver format
-
-Run locally:
-```bash
-cd protocol/python
-pip install -e ".[dev]"
-python -m pytest tests/ -v
-```
-
-CI runs pytest on a Python 3.10-3.14 matrix (`python-tests` job).
-
-### Protocol Conformance Suite
-
-The conformance suite in `protocol/conformance/` enforces parity between Go constants, Python runtime values, canonical JSON in `protocol/constants/`, and shared cryptographic vectors:
-
-- `test_constants.py`: JSON file structure, `_go_const`/`_python_const` presence, value uniqueness, Go naming conventions, Python-JSON parity, event value namespace conventions
-- `test_models.py`: Model schema integrity, field parity between Python Pydantic models and JSON schemas, serialization round-trips, validation rules
-- `test_hash_parity.py`: Cross-language transaction hash parity using shared test vectors (`hash_vectors.json`), verifying Python `compute_transaction_hash` matches Go `GenerateMessageID` for standard, nested intent, unicode, empty payload, empty intent, optional omitted, and timestamp normalization cases
-- `protocol/action_receipt_canonicalization_test.go` and `protocol/python/tests/test_receipts.py`: Go/Python parity for `action_receipt_canonicalization.json`, `action_receipt_stage_evidence_canonicalization.json`, and `receipt_persistence_attestation_canonicalization.json`
-- `protocol/python/scripts/generate_protos.py --check`: CI synchronization check for generated Python `_pb2.py` modules and `.pyi` stubs
-
-Run locally:
-```bash
-pip install -e protocol/python/".[dev]"
-python -m pytest protocol/conformance/ -v
-```
-
-CI runs conformance tests on Python 3.14 (`conformance` job).
-
-### Performance Benchmarks
-
-Go benchmarks cover hot paths in 4 packages (19 benchmarks total):
-
-- `internal/services/sqliteutil/`: gzip compress/decompress at various payload sizes, SHA-256 hashing, compress+decompress round-trip (7 benchmarks)
-- `internal/constants/`: `ActionType.IsMutation` for mutation and non-mutation types (2 benchmarks)
-- `internal/services/mcp/`: JSON-RPC request/response marshal/unmarshal, tool call params parsing, tool result serialization (4 benchmarks)
-- `internal/services/gateway/`: auth cache get/set/invalidate/expiry, state root calculation with small and large datasets (6 benchmarks)
-
-Run benchmarks:
-```bash
-go test -bench=. -benchmem ./internal/services/sqliteutil/ ./internal/constants/ ./internal/services/mcp/ ./internal/services/gateway/
-```
-
-### Smoke Tests
-
-Two smoke test scripts verify that published packages work in clean environments:
-
-- `scripts/smoke-test-python.sh`: Creates a clean venv, installs the Python package, verifies README imports, and runs example scripts
-- `scripts/smoke-test-go.sh`: Creates a temp Go module, uses `go mod edit -replace` to point at the local repo, imports `protocol.NewWorkloadIdentity()`, and builds
-
-CI runs both scripts on every PR (`smoke-test` job).
-
-### Continuous Integration
-
-GitHub Actions (`.github/workflows/build-and-test.yml` and `.github/workflows/build-and-test-fips.yml`) enforces:
-
-**Core CI** (`ci` job, runs on `ubuntu-latest`):
-- Version sync verification (`VERSION` file vs `protocol/python/pyproject.toml` vs `protocol/python/g8e/__init__.py`)
-- Proto verification and doctrine validation
-- COSAiS overlay coverage validation (`make validate-cosais`)
-- Swagger generation and validation
-- golangci-lint
-- govulncheck
-- Unit tests and integration tests
-- Windows cross-compile (Linux runner only)
-- Static linking verification
-
-**Additional CI jobs**:
-- `python-tests`: Pytest on Python 3.10-3.14 matrix with version sync verification and examples smoke tests
-- `python-audit`: pip-audit `--skip-editable` for Python dependency vulnerability scanning
-- `conformance`: Protocol conformance suite (420 tests) on Python 3.14
-- `smoke-test`: Clean-environment install verification for both Python and Go packages
-- `secret-scan`: gitleaks full-history secret scanning
-- `license-check`: go-licenses report with forbidden copyleft license detection (GPL, AGPL, LGPL, SSPL, BUSL)
-- `ensemble-tests`: Ensemble (g8ee) unit and in-process integration tests (ruff, pyright, pytest) on Python 3.12. See [Ensemble Tests](../ensemble/tests.md) for the g8ee test framework and practices.
-- `dashboard-tests`: Dashboard (g8ed) ESLint checks and Vitest suite on Node 22. See [Dashboard Tests](../dashboard/tests.md) for the g8ed test layout, browser harness, and verification commands.
-
-**FIPS CI** (`.github/workflows/build-and-test-fips.yml`, `fips` job on `ubuntu-latest`):
-- FIPS 140-3 build and self-check (`make verify-fips`)
-- Unit tests and integration tests in FIPS approved mode (`GOFIPS140=v1.0.0`)
-- FIPS binary static linking verification
-
-**Local-only targets** (not run in CI):
-- `demo-verify`: Builds and runs all 5 demo environments via Docker Compose
-
-CI does **not** run Tier 3 Docker E2E tests.
-
-### Release Pipeline Verification
-
-**Binary releases** (`.github/workflows/release-binary.yml`, triggered by `v*` tags):
-- Cross-platform binary builds (linux/amd64/arm64/386, darwin/amd64/arm64, windows/amd64/arm64)
-- SHA-256 checksums
-- cosign/sigstore keyless artifact signing (`.sig` files uploaded with release)
-- Post-publish `verify-install` job: fresh `go install` on ubuntu/macos/windows with `--version` and `--help` verification
-
-**Python releases** (`.github/workflows/release-python-protocol.yml`, triggered by `protocol/v*` tags):
-- Package metadata validation (required fields, name, URLs)
-- Copy protocol constants and doctrine files into package (`protocol/constants/*.json` and `protocol/constants/doctrine/` into `g8e/_data/`)
-- `twine check` on built dist
-- Package includes `py.typed` PEP 561 marker for type checker support
-- Post-publish `verify-install` job: polls the PyPI JSON API (`https://pypi.org/pypi/g8e/json`) until the version appears in `releases`, then fresh `pip install --no-cache-dir g8e==<version>` on ubuntu/macos/windows with import verification. Polling the API (rather than pip's CDN-cached index) avoids spurious "No matching distribution" failures when a CDN edge has not yet propagated the new version.
+See [Documentation guidelines](./docs.md) for the standards used to maintain this document.

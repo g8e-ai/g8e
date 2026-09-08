@@ -1,8 +1,13 @@
 # g8e Release Process
 
-The primary purpose of a release is to **inventory every change since the last release and ensure the documentation accurately reflects the current state of the code.** Version bumps and CHANGELOG entries are mechanical byproducts of this work; the real value is in the change inventory and documentation reconciliation.
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-The protocol (Go + Python) and the platform binary share the same version number. There are no separate protocol releases.
+The primary purpose of a release is to inventory every change since the last release and ensure that all affected documentation accurately reflects the current state of the code. Version bumps and CHANGELOG entries follow this documentation reconciliation; they do not replace it.
+
+The [Developer Guidelines](devs.md) define the repository-wide engineering rules that every release follows. Their documentation rule points to the [Documentation Guide](docs.md), whose [Documentation Catalog](docs.md#documentation-catalog) enumerates every first-party prose, generated, machine-readable, component, evidence, and historical documentation surface that may require an update. A release preparer reviews that complete catalog against the change inventory instead of relying on a fixed list in this document.
+
+The protocol Go and Python packages and the platform binary share the same version number. There are no independently versioned protocol releases.
 
 > **`make release` handles version syncing, tagging, and pushing.** It does NOT build binaries, run lint or tests, or create GitHub releases; CI and GitHub Actions workflows handle those. Release prep changes are committed and opened as a PR; after merge, pull main and run `make release` to tag and push. See [Release Workflow](#release-workflow).
 
@@ -11,32 +16,33 @@ The protocol (Go + Python) and the platform binary share the same version number
 Release work is split between the **agent** (PR prep) and the **release owner** (merge, CI gate, tag/push). The agent never runs `make release`, never commits, and never pushes.
 
 **Agent (PR prep, on a feature branch):**
-1. Inventory the changes since the previous release tag
-2. Reconcile documentation with the code changes
-3. Write `docs/release_notes/vX.Y.x/vX.Y.Z.md`
+1. Receive the release owner's complete change inventory and inspect the current working tree as the source of truth for current behavior
+2. Map every change to the full documentation catalog, then audit each affected document end to end against its owning current code, configuration, schema, generator, test, or scope-bound evidence
+3. Update every inaccurate or incomplete affected document and all related current-state cross-links, record the audit, and write `docs/release_notes/vX.Y.x/vX.Y.Z.md`; defer document metadata until the release version is set
 4. Generate compliance evidence: run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags (see [Compliance Evidence Generation](#compliance-evidence-generation))
-5. Set `VERSION` to `vX.Y.Z`, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies) so CI's version sync and locked-environment checks pass on the PR
+5. Set `VERSION` to `vX.Y.Z`, finalize metadata for every edited document, add the `CHANGELOG.md` row, and sync the Python package files (`protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and the editable `g8e` package entry in `protocol/python/uv.lock`) to `X.Y.Z` (no `v` prefix). Then run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies) so CI's version sync and locked-environment checks pass on the PR
 6. Run the read-only [Verification](#verification) checks (all steps should pass, including step 4)
 7. Stop. The agent does NOT commit, push, open the PR, or run `make release`. Hand the prepared working tree back to the release owner.
 
-**Release owner (commits, merges, tags, pushes):**
-1. Review the prepared changes, then `git add`, `git commit`, `git push`, and open the PR on GitHub
-2. Merge the PR on GitHub
-3. Wait for CI on `main` to pass (lint, tests, version sync checks)
-4. `git checkout main && git pull` locally
-5. Run `make release` — this re-syncs the Python package files from `VERSION` (a no-op if the agent already synced them), then creates and pushes the `vX.Y.Z` and `protocol/vX.Y.Z` tags
-6. GitHub Actions workflows create the GitHub release, build and sign binaries, and publish the Python package to PyPI
+**Release owner (release range, commits, merges, tags, pushes):**
+1. Establish the previous-to-current release range, provide the complete change and changed-file inventory to the agent, and identify any release-specific evidence requirements
+2. Review the prepared code, documentation reconciliation record, release notes, and verification results, then `git add`, `git commit`, `git push`, and open the PR on GitHub
+3. Merge the PR on GitHub
+4. Wait for CI on `main` to pass (lint, tests, version sync checks)
+5. `git checkout main && git pull` locally
+6. Run `make release` — this re-syncs the Python package files from `VERSION` (a no-op if the agent already synced them), then creates and pushes the `vX.Y.Z` and `protocol/vX.Y.Z` tags
+7. GitHub Actions workflows create the GitHub release, build and sign binaries, and publish the Python package to PyPI
 
 The Python package files (`pyproject.toml`, `__init__.py`, and the editable package entry in `protocol/python/uv.lock`) are synced to the new version during PR prep by the agent (manually, since the agent cannot run `make release`) so CI's version sync and locked-environment checks pass on the PR. The downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies) are regenerated by `make proto` during PR prep for the same reason. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net. The agent never runs `make release`, never commits, and never pushes.
 
 ## How to Use This Document
 
-1. **Inventory the changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
-2. **Update documentation to match the code**: For every doc in scope, do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
+1. **Inventory the changes**: The release owner establishes the release range and categorizes every change (see [Change Inventory](#change-inventory)). This is the most important step; everything else depends on it.
+2. **Reconcile every affected documentation surface**: Start with the [Developer Guidelines](devs.md), then use the [complete Documentation Catalog](docs.md#documentation-catalog) to map every change to prose, generated, machine-readable, component, evidence, historical, legal, and repository-entry documentation. For every affected document, perform the full [end-to-end audit](docs.md#end-to-end-audit-workflow), update all factual defects and related cross-links, and run its owning validation. After reconciliation, set `VERSION`, finalize metadata for edited documents, and rerun affected validation (see [Documentation Reconciliation](#documentation-reconciliation)). This is where the real work is.
 3. **Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory (see [Release Notes](#release-notes)). The CHANGELOG entry is a summary of this.
 4. **Generate compliance evidence**: Run `g8e compliance release-evidence` to produce the per-release compliance evidence report and CSV alongside the release notes (see [Compliance Evidence Generation](#compliance-evidence-generation)). This captures demonstrated technical control operation at the release boundary.
 5. **Bump version files**: Set `VERSION`, sync the Python package files (`pyproject.toml`, `__init__.py`, and `protocol/python/uv.lock`) to match, run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/`, and add the CHANGELOG row (see [Version-Bearing Files](#version-bearing-files)). This is mechanical. The Python files and downstream lockfiles must be synced during PR prep so CI's version sync and locked-environment checks pass on the PR — `make release` re-syncs the `protocol/python` files after merge as a no-op safety net.
-6. **Run [Verification](#verification)** to catch any missed files — including docs modified in step 2 that didn't get their headers bumped.
+6. **Run [Verification](#verification)** to catch missed generated output, metadata, links, identifiers, and current-version installation guidance; verification supplements rather than replaces the audit record.
 7. **Hand the prepared working tree back to the release owner.** The agent stops here — it does NOT commit, push, open a PR, or run `make release`. See [Separation of Duties](#separation-of-duties).
 8. **Release owner**: commit, push, open and merge the PR; after CI on `main` passes, pull main and run `make release` to tag and push; GitHub Actions workflows create the release and upload assets (see [Release Workflow](#release-workflow)).
 
@@ -48,7 +54,7 @@ The Python package files (`pyproject.toml`, `__init__.py`, and the editable pack
 
 ### Determine the Release Range
 
-Find the previous release tag and diff from there to HEAD:
+The release owner finds the previous release tag, diffs the range to `HEAD`, and gives the agent the complete changed-file and change inventory. Repository history establishes release scope; the current working tree remains the source of truth for documented behavior:
 
 ```bash
 # Find the previous release tag
@@ -63,7 +69,7 @@ git log --oneline <prev-release-commit>..HEAD
 
 ### Categorize Every Change
 
-For each commit in the release range, review the diff and categorize it:
+The release owner reviews each commit in the release range and categorizes it. The resulting inventory must identify every changed file and affected public or internal contract before documentation reconciliation begins:
 
 ```bash
 # List all files changed
@@ -99,18 +105,16 @@ For every renamed, removed, or changed identifier, search the docs:
 # Search docs for identifiers that were removed or renamed
 grep -rnE 'OldName|old_command|OLD_CONSTANT|removedEndpoint' docs/ protocol/docs/ --include='*.md'
 
-# Find docs with explicit g8e version callouts (go get, pip install, pip download) that
-# reference the previous release version. These must be updated every release. The README
-# template (docs/templates/README.md.tmpl) is included because it carries the version
-# callout that `make readme` renders into README.md.
-grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md docs/templates/README.md.tmpl --include='*.md' --include='*.tmpl' \
+# Find explicit g8e version pins in maintained first-party documentation. Classify each
+# match as current-state installation guidance, generated content, or historical evidence.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/ dashboard/ ensemble/ demos/ internal/adapters/ README.md .github/ --include='*.md' --include='*.tmpl' \
   | grep -v release_notes | grep -v CHANGELOG
 
 # Check which docs were modified in the release range
 git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/
 ```
 
-Any doc that references something that was removed or renamed is stale and must be updated. Any doc that should document a new feature but doesn't is missing and must be added. Any doc with a version callout referencing the previous release version must be updated to the new release version, regardless of whether it was touched by a code change.
+Any current-state document that references removed or renamed behavior is stale and must be updated. Any affected public behavior without an owning document is missing and must be added to the appropriate existing documentation surface. A maintained current-state installation command must reference the intended current release; historical release notes and scope-bound evidence retain the version they describe.
 
 ---
 
@@ -125,7 +129,7 @@ This is the core work of a release. The change inventory from the previous secti
 1. **Inaccuracy**: The doc describes something that is no longer true (a renamed command, a removed endpoint, a changed default, a corrected behavior). Fix the inaccurate prose so it matches the code.
 2. **Missing feature**: The release adds a user-visible feature, command, endpoint, or config option that has no documentation at all. Add the missing documentation.
 3. **Stale reference**: The doc references something that was removed or renamed in this release (e.g., a deprecated alias, a deleted route, a renamed constant, a deleted file). Remove or update the reference.
-4. **Stale version callout**: The doc contains an explicit version callout — a `go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`, or any other install/fetch command that pins a specific release version — that references the previous release version. These callouts are version-bearing content and must be updated to the new release version in every release, regardless of whether the doc was touched by a code change. Bump the doc's `Version:`/`Last Updated:` headers in the same pass since the content changed.
+4. **Stale current-version callout**: A maintained current-state document contains a `go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`, or other install command that is intended to name the current release but still names the prior release. Audit the complete document, correct the callout, reconcile related documents, validate the result, and update metadata last. Historical and evidence-bearing documents retain the version in their declared scope.
 
 **Do NOT update a doc when:**
 
@@ -133,31 +137,33 @@ This is the core work of a release. The change inventory from the previous secti
 - The doc wasn't touched by any code change in this release and contains no stale version callouts; leave its version header and content alone.
 - You're tempted to "improve" prose that isn't wrong; cosmetic rewrites are not part of the release process.
 
-> **Principle: Fix what's broken, document what's missing, leave the rest alone.** The goal is accuracy, not thoroughness. A doc that correctly describes the current behavior is done; don't rewrite it just because you read it.
+> **Scope narrowly, audit completely.** The change inventory determines which documents are affected. Once a document is in scope or receives any edit, review it from beginning to end against the current implementation and correct every factual or structural defect found. Do not use cosmetic churn as a substitute for completeness.
 
 ### What to Review
 
-Review the following documentation areas against the change inventory. For each area, only make edits if you find an inaccuracy or a missing feature per the rules above.
+Start with the [Developer Guidelines](devs.md), then walk every category in the [Documentation Catalog](docs.md#documentation-catalog). The catalog is the authoritative inventory; this release process does not maintain a second list that can drift. For each release change, consider all of these ownership classes:
 
-- **Protocol specs** (`protocol/docs/spec.md`, `a2a.md`, `mcp.md`, `constants.md`): If the protocol surface changed (endpoints, JSON-RPC methods, message shapes, auth flows), update the spec prose, not just the date. The Python (`protocol/python/`) and Go (`protocol/proto/`, generated code) bindings must agree with what the spec documents.
-- **Architecture docs** (`docs/architecture/`): If components, data flows, or security boundaries were refactored, reconcile the prose and diagrams. Pay special attention to: controller/service names, struct names, dependency wiring, and security pipeline descriptions.
-- **Guides** (`docs/guides/`): If CLI commands, flags, env vars, or setup steps changed, update the affected guides and any embedded command examples.
-- **Glossary / compliance** (`docs/reference/`): If terminology or control mappings changed, reconcile them.
-- **Developer docs** (`docs/devs/`): If code structure changed (new files, renamed files, deleted files, new packages), update `docs/devs/codemap.md` and any other relevant dev docs.
-- **README template** (`docs/templates/README.md.tmpl`): If the README's version callouts or any narrative content changed, update the template then run `make readme` to regenerate `README.md`. The template is the source of truth; `README.md` is a generated artifact and should not be edited directly.
-- **CHANGELOG / release notes**: Ensure every user-visible change (added, changed, removed, deprecated, fixed, security) is captured.
+- Repository entry points, contribution and security policy, legal surfaces, and the generated root README.
+- Platform concept, architecture, guide, reference, developer, diagram, demo, adapter, Dashboard, Ensemble, and protocol documentation.
+- Component READMEs, indexes, contribution guides, changelogs, examples, and package documentation.
+- Protobuf comments and generated API references, Swagger annotations and generated OpenAPI, JSON registries and schemas, compliance catalogs, README evidence, and website output.
+- Current release notes, compliance evidence, and other scope-bound release artifacts. Historical release notes remain immutable unless a clearly identified correction is required.
+
+Map changes by impact, not only by matching file names. A changed route can affect authentication architecture, protocol documentation, a task guide, Swagger, examples, tests, and the README. A changed component capability can affect its component index, platform overview, deployment guide, and cross-links even when none contains the changed Go or Python symbol.
 
 ### How to Reconcile
 
-For each doc that falls in scope (any doc touched by a code change in the release, any doc that references an identifier that was renamed, removed, or changed, or any doc that contains a stale version callout per condition 4 above), do a **full review of the entire doc against the current code** — not just the specific stale reference that flagged it. Read the whole file, verify every claim, command, path, signature, and behavior description against the actual source, and update everything that is inaccurate or missing. The version header bump is part of this review, not a separate mechanical step: a doc whose content was reviewed and updated gets its `Version:` and `Last Updated:` headers bumped in the same pass.
+For each document that falls in scope or receives any edit, follow the complete [End-to-End Audit Workflow](docs.md#end-to-end-audit-workflow). The triggering stale sentence is only the starting point; the review covers the document's title, metadata, prose, tables, examples, diagrams, links, generated sections, behavioral claims, commands, paths, signatures, security boundaries, evidence limits, and related-document summaries.
 
-1. Open the doc file
-2. Read the entire doc end to end, checking every statement against the current code
-3. Update all inaccurate or missing prose to match the current code; use exact names, paths, and signatures from the actual source files
-4. Bump the `Version:` and `Last Updated:` headers on that file as part of the same edit (see [Documentation Headers](#documentation-headers)) — a reviewed-and-updated doc must carry the new version stamp
-5. Record the doc as modified; you'll need this list for verification
+1. Read the entire document before editing and classify its purpose.
+2. Verify every claim against the owning current code, configuration, schema, registry, generator, test, or scope-bound evidence. Existing prose is never evidence of current behavior.
+3. Update every inaccurate, incomplete, duplicated, or stale part of the document, not only the change that first brought it into scope.
+4. Search related current-state documents for the same concept. Update affected summaries and cross-links, choose one canonical explanation, and remove contradictions.
+5. Run the generator or focused validation owned by the changed surface, then read the final handwritten and generated output end to end.
+6. Update `Last Updated` and `Version` metadata last, after the audit and related-document reconciliation are complete, using the exact value in `VERSION` and preserving the document's existing metadata format.
+7. Record the document, owning sources inspected, related documents checked, and validations run for release-owner review.
 
-A doc that was flagged as in scope but, on full review, turns out to already be accurate (nothing to fix) does **not** get a version bump and is not recorded as modified — the header reflects the last time a human changed the content, not the last time a human read it.
+A document that was evaluated for scope but did not require an edit keeps its existing metadata. A document that was edited for any reason receives the complete audit; no wording-only, link-only, metadata-only, or generated-section exception exists.
 
 ---
 
@@ -435,7 +441,7 @@ Promotion validates the candidate offline, refuses a digest mismatch, verifies t
 
 ## Version-Bearing Files
 
-After the change inventory and documentation reconciliation are complete, bump the version files. `VERSION` is the single source of truth; `make release` auto-syncs all derived files from it.
+After the change inventory and documentation reconciliation are complete, bump the version files. `VERSION` is the single source of truth; `make release` synchronizes the three protocol Python version files listed below, while PR preparation updates the other version-bearing and generated files.
 
 ### Core Version Files
 
@@ -500,106 +506,18 @@ The following files read the version dynamically from `VERSION` at build time an
 
 ---
 
-## Documentation Headers
+## Documentation Metadata
 
-Every markdown file below carries a version and/or `Last Updated` header near the top. **Only update headers in docs that were actually reviewed or modified as part of this release.** Do not blanket-bump all headers at release time; a doc whose content hasn't changed should not get a new version stamp.
+The [Documentation Guide metadata rule](docs.md#end-to-end-audit-workflow) governs every maintained document. Metadata certifies a completed audit; it is never a mechanical release-wide replacement.
 
-To determine which docs need header updates, diff the release range:
+- A document that is edited for any reason is first reviewed end to end and reconciled with related current-state documentation.
+- After the audit, generated-output refresh, cross-link review, and focused validation are complete, update the document's existing `Last Updated`, `Version`, or `Document Version` fields while preserving its format.
+- Use the exact `vX.Y.Z` value from `VERSION` for `Version:` fields. Preserve a document's established no-`v` format only where that format already exists.
+- Do not add metadata to generated files whose source or evidence manifest owns version identity, including the root `README.md` and generated protobuf or OpenAPI references.
+- Do not blanket-bump untouched documents. A document evaluated for impact but not edited keeps its existing metadata.
+- Historical release notes and evidence artifacts retain the release, run, cutoff, and schema versions they describe.
 
-```bash
-git diff --name-only <previous-tag>..HEAD -- docs/ protocol/docs/
-```
-
-Any file in the output that carries a version/date header should have that header updated to the new version and release date. Files not in the output are left as-is.
-
-> **Header formats vary**: they are not uniform across the repo. The [Verification](#verification) grep is written to catch all of them, but when editing by hand watch for:
->
-> | Format | Example | Files |
-> |--------|---------|-------|
-> | Plain | `Version: vX.Y.Z` / `Last Updated: YYYY-MM-DD` | most architecture, guide, reference, and protocol docs |
-> | Bold | `**Version:** vX.Y.Z` / `**Last Updated:** YYYY-MM-DD` | (none currently) |
-> | Document Version (no `v`) | `**Document Version:** X.Y.Z` | `docs/reference/compliance-alignment.md` |
-
-#### Architecture Docs (`docs/architecture/`): 15 files
-
-| # | File |
-|---|------|
-| 1 | `docs/architecture/agents.md` |
-| 2 | `docs/architecture/auth.md` |
-| 3 | `docs/architecture/consensus.md` |
-| 4 | `docs/architecture/dashboard.md` |
-| 5 | `docs/architecture/encryption.md` |
-| 6 | `docs/architecture/ensemble.md` |
-| 7 | `docs/architecture/gateway.md` |
-| 8 | `docs/architecture/governance.md` |
-| 9 | `docs/architecture/network.md` |
-| 10 | `docs/architecture/operator.md` |
-| 11 | `docs/architecture/overview.md` |
-| 12 | `docs/architecture/protocol.md` |
-| 13 | `docs/architecture/scripts.md` |
-| 14 | `docs/architecture/sse.md` |
-| 15 | `docs/architecture/storage.md` |
-
-#### Guide Docs (`docs/guides/`): 13 files
-
-| # | File | Note |
-|---|------|------|
-| 16 | `docs/guides/air_gap.md` | |
-| 17 | `docs/guides/build_apps.md` | |
-| 18 | `docs/guides/build_frontend.md` | |
-| 19 | `docs/guides/build_gateway.md` | |
-| 20 | `docs/guides/build_operator.md` | |
-| 21 | `docs/guides/cloudflare_tunnel.md` | |
-| 22 | `docs/guides/connect_apps_to_gateway.md` | |
-| 23 | `docs/guides/connect_frontend_to_gateway.md` | |
-| 24 | `docs/guides/connect_operator_to_gateway.md` | |
-| 25 | `docs/guides/docker_gateway.md` | |
-| 26 | `docs/guides/getting_started.md` | |
-| 27 | `docs/guides/lovable.md` | |
-| 28 | `docs/guides/unified_stack.md` | |
-
-
-#### Reference Docs (`docs/reference/`): 3 files
-
-| # | File | Note |
-|---|------|------|
-| 29 | `docs/reference/glossary.md` | plain `Version:` header |
-| 30 | `docs/reference/compliance-alignment.md` | `**Document Version:**` (no `v` prefix) |
-| 31 | `docs/reference/fips140-3.md` | plain `Version:` header |
-
-#### Protocol Docs (`protocol/docs/`): 3 files
-
-| # | File | Note |
-|---|------|------|
-| 32 | `protocol/docs/spec.md` | has both `Version:` and `Last Updated:` |
-| 33 | `protocol/docs/a2a.md` | has both `Version:` and `Last Updated:` |
-| 34 | `protocol/docs/mcp.md` | has both `Version:` and `Last Updated:` |
-
-#### Update Pattern for Each Modified Doc
-
-For plain-format files, update the two header lines:
-
-```diff
--Last Updated: 2026-06-24
--Version: v1.3.0
-+Last Updated: YYYY-MM-DD
-+Version: vX.Y.Z
-```
-
-For bold-format and document-version files, update whichever of `Version`, `Document Version`, and `Last Updated` lines are present, preserving the existing markdown styling.
-
-> **Only update docs you actually reviewed.** If a doc's content didn't change in this release, leave its headers at the previous version. This keeps version stamps meaningful; they reflect the last time a human reviewed and updated the doc, not the last release tag.
-
-### Docs Without Version Headers (No Version Update Required)
-
-The following doc directories intentionally do **not** carry release `Version:` headers and do **not** need version bumps on release. They may still need *content* updates if the release changes their subject matter (see [Documentation Reconciliation](#documentation-reconciliation)):
-
-- `docs/core/`: Position papers, about page
-- `docs/devs/`: Developer documentation (including this file). Note: some devs docs (e.g., `docs/devs/tests.md`, `docs/devs/troubleshooting.md`) carry `Last Updated:` dates and/or `Version:` headers that track the doc's own content changes, **not** the release; only bump them if you changed the doc.
-- `docs/diagrams/`: Mermaid diagrams and flowcharts
-- `docs/release_notes/`: Historical release notes (past entries are immutable)
-- `demos/`: Demo configurations and doctrine files
-- `README.md`: Generated from `docs/templates/README.md.tmpl` by `make readme`. The README itself does not carry a `Version:` header, but the template contains a `go get ...@vX.Y.Z` version callout that must be updated every release. Edit the template, then run `make readme` to regenerate `README.md`. Do not edit `README.md` directly.
+Do not maintain a hard-coded list of versioned documents here. The [Documentation Catalog](docs.md#documentation-catalog) is the complete navigation inventory, and each affected document's existing header determines whether it carries metadata. The release reconciliation record identifies every edited document and confirms that its metadata was updated last.
 
 ---
 
@@ -607,21 +525,21 @@ The following doc directories intentionally do **not** carry release `Version:` 
 
 `make release` handles version syncing, tagging, and pushing (see [Release Workflow](#release-workflow)). The following must still be done manually:
 
-- [ ] **1. Inventory changes**: Diff the release range and categorize every change (see [Change Inventory](#change-inventory))
-- [ ] **2. Reconcile documentation**: For every doc in scope (touched by a code change, referencing a renamed/removed/changed identifier, or containing a stale version callout), do a full review of the entire doc against the current code. Fix inaccuracies, document missing features, remove stale references, update stale version callouts (`go get ...@vX.Y.Z`, `pip install g8e==X.Y.Z`, `pip download g8e==X.Y.Z`) to the new release version, and bump the `Version:`/`Last Updated:` headers in the same pass (see [Documentation Reconciliation](#documentation-reconciliation)). This includes the README template (`docs/templates/README.md.tmpl`), which carries a `go get ...@vX.Y.Z` callout; after updating the template, run `make readme` to regenerate `README.md`. Do not edit `README.md` directly — it is a generated artifact
+- [ ] **1. Inventory changes**: The release owner diffs the release range, categorizes every change, and provides the complete change and changed-file inventory to the agent (see [Change Inventory](#change-inventory))
+- [ ] **2. Reconcile documentation content**: Start with the [Developer Guidelines](devs.md), walk every surface in the [Documentation Catalog](docs.md#documentation-catalog), and map every release change to all affected documents. Fully audit each affected or edited document against current owning sources; correct every defect found; update all related current-state summaries and cross-links; run each generator or focused validation; and reread final output. Record every document, source, related document, and validation for release-owner review, but defer document metadata until step 8 after `VERSION` is set. If the README changes, edit `docs/templates/README.md.tmpl`, run `make readme`, and review the complete generated `README.md`; never edit the generated README directly
 - [ ] **3. Write release notes**: Create `docs/release_notes/vX.Y.x/vX.Y.Z.md` from the change inventory
 - [ ] **4. Generate compliance evidence**: Run `g8e compliance release-evidence` with the release version, output directory, assessment binding, and evidence-window flags to produce the per-release compliance evidence report and CSV (see [Compliance Evidence Generation](#compliance-evidence-generation))
 - [ ] **4b. Record clean offline acceptance when required**: Run the production report verifier in a fresh network-disabled environment using independently supplied report and evidence trust, reject the source, renderer, and signature mutations required by the release plan, and retain only privacy-safe identities, digests, commands, statuses, and failure codes
 - [ ] **5. `VERSION`**: Set to `vX.Y.Z`
 - [ ] **6. Sync Python files and regenerate downstream lockfiles**: Update `protocol/python/pyproject.toml` (`version = "X.Y.Z"`), `protocol/python/g8e/__init__.py` (`__version__ = "X.Y.Z"`), and the editable `g8e` package entry in `protocol/python/uv.lock` (`version = "X.Y.Z"`) to match `VERSION` (no `v` prefix). Then run `make proto` to regenerate the downstream `uv.lock` files in `ensemble/` and `ensemble/evals/` (which depend on `g8e` via directory dependencies and would otherwise fail `uv sync --locked` in CI). This is required so CI's version sync check passes and `uv run --locked` remains usable on the PR. The agent edits the `protocol/python` files manually; it cannot run `make release` to do it. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net; it does not regenerate the downstream lockfiles.
 - [ ] **7. `CHANGELOG.md`**: Add a table row to the major-version section (no `v` prefix in version column)
-- [ ] **8. Documentation headers (verify)**: Confirm that every doc modified in step 2 carries the new `Version:`/`Last Updated:` headers, and that no doc *not* modified in step 2 was bumped. Use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify the modified set. Do not blanket-bump all headers.
-- [ ] **9. Run [Verification](#verification)** to catch any missed files — including stale version callouts (step 8 of Verification)
+- [ ] **8. Finalize documentation metadata and verify the audit record**: After `VERSION` is set, update existing metadata in every edited document, rerun affected generators or focused validation, and reread the final output. Confirm that the reconciliation record covers every edited first-party documentation surface, each document was reviewed end to end, every related current-state document was checked, and owning sources and validation are named. The release owner compares this record with the changed-file inventory; do not blanket-bump untouched documents.
+- [ ] **9. Run [Verification](#verification)** to catch stale generated output, metadata, links, identifiers, and maintained current-version installation guidance
 - [ ] **10. Hand off**: The agent stops here. It does NOT `git add`, `git commit`, `git push`, open a PR, or run `make release`. The prepared working tree is handed back to the release owner.
 - [ ] **11. Release owner commits and opens PR**: `git add -A && git commit -m "release: vX.Y.Z"`, push, and open a PR on GitHub. CI runs lint, tests, and version sync checks.
 - [ ] **12. Release owner merges and releases**: After the PR is merged and CI on `main` passes, the release owner pulls main and runs `make release` to re-sync the Python package files (no-op if already synced), tag, and push; GitHub Actions workflows create the release and upload assets.
 
-**5 files need manual version edits during PR prep** (VERSION + CHANGELOG + pyproject.toml + `__init__.py` + `protocol/python/uv.lock`), all made by the agent, plus `make proto` to regenerate the downstream `ensemble/uv.lock` and `ensemble/evals/uv.lock` and `make readme` to regenerate `README.md` from the updated template. `make release` re-syncs the `protocol/python` files after merge as a no-op safety net and handles tagging/pushing — the release owner runs it, never the agent. Everything else is content-driven work: inventory, docs, release notes, and compliance evidence.
+Five files need manual release-version edits during PR prep: `VERSION`, `CHANGELOG.md`, `protocol/python/pyproject.toml`, `protocol/python/g8e/__init__.py`, and `protocol/python/uv.lock`. Run `make proto` to regenerate the downstream `ensemble/uv.lock` and `ensemble/evals/uv.lock`. Run `make readme` when its template or reviewed evidence inputs change. `make release` re-syncs the three `protocol/python` version files after merge as a no-op safety net and handles tagging and pushing; the release owner runs it, never the agent. Documentation reconciliation remains content-driven and is complete only when the catalog mapping and full-document audits are complete.
 
 > **Workflow note:** All release prep (steps 1-10) happens on a feature branch. The agent does steps 1-9 and stops; it does not commit, push, or open the PR. The release owner does steps 11-12 (commit, push, open PR, merge, wait for CI, pull main, run `make release`). GitHub Actions workflows handle release creation and asset uploads.
 
@@ -629,7 +547,7 @@ The following doc directories intentionally do **not** carry release `Version:` 
 
 ## Verification
 
-After making all updates, run these checks to catch any missed files. These are all read-only.
+After making all updates, run these checks to catch missed generated output and version synchronization. They supplement, but cannot prove, the required full-document audits. Before running them, the release owner compares the complete changed-file inventory with the documentation reconciliation record and rejects the release if any affected catalog surface, owning source, related-document check, final reread, metadata update, or focused validation is missing. These commands are read-only.
 
 ```bash
 RELEASE_VERSION=$(cat VERSION)        # e.g. v1.3.1
@@ -686,22 +604,17 @@ grep -rniE '^(\*\*)?last updated:' docs/ protocol/docs/ --include='*.md' --exclu
 #    renamed in this release and confirm no docs still reference them.
 grep -rnE 'OldName|old_command|OLD_CONSTANT' docs/ protocol/docs/ --include='*.md'
 
-# 8. Find any explicit g8e version callouts in docs that still reference a
-#    previous release version. These are install/fetch commands like
-#    `go get github.com/g8e-ai/g8e/v2@vX.Y.Z`, `pip install g8e==X.Y.Z`, and
-#    `pip download g8e==X.Y.Z`. Every such callout must be updated to the new
-#    release version in every release, regardless of whether the doc was touched
-#    by a code change. Should return nothing. Third-party tool version pins
-#    (e.g., `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`) are not g8e
-#    callouts and are excluded by the pattern. The README template
-#    (docs/templates/README.md.tmpl) is included because it is the source of the
-#    version callout rendered into README.md by `make readme`.
-grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/docs/ README.md protocol/README.md docs/templates/README.md.tmpl --include='*.md' --include='*.tmpl' \
+# 8. Find explicit g8e version pins in maintained first-party documentation that
+#    do not match the release. Review every match by document classification:
+#    current-state installation guidance uses the intended current version, while
+#    historical release notes and scope-bound evidence retain their own version.
+#    Third-party tool pins are excluded by this g8e-specific pattern.
+grep -rnE "g8e==[0-9]+\.[0-9]+\.[0-9]+|g8e-ai/g8e/v2@v[0-9]+\.[0-9]+\.[0-9]+" docs/ protocol/ dashboard/ ensemble/ demos/ internal/adapters/ README.md .github/ --include='*.md' --include='*.tmpl' \
   | grep -v release_notes | grep -v CHANGELOG \
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 ```
 
-If step 4 shows a mismatch, the Python files were not synced during PR prep — fix them manually (set all three version entries to `X.Y.Z` matching `VERSION`) before handing off to the release owner. If step 4b shows a mismatch, `make proto` was not run after bumping the `protocol/python` version — run `make proto` to regenerate the downstream lockfiles. If step 4c fails, the README template was updated but `make readme` was not run (or the template and README.md are otherwise out of sync) — run `make readme` to regenerate `README.md`. Steps 5 and 6 will show old versions/dates for docs not modified in this release; that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff). Step 7 should return nothing; if it finds stale references, fix them before committing. Step 8 should return nothing; any stale version callout must be updated to the new release version before committing, and the doc's `Version:`/`Last Updated:` headers bumped in the same pass.
+If step 4 shows a mismatch, sync all three Python version entries to `VERSION` before handoff. If step 4b shows a mismatch, run `make proto` to regenerate the downstream lockfiles. If step 4c fails, regenerate `README.md` from its canonical inputs with `make readme`. Steps 5 and 6 intentionally show older metadata for untouched documents; compare only the release owner's complete edited-document list, and confirm metadata was updated after each document's audit. Replace the step 7 placeholder identifiers with every renamed or removed identifier from the change inventory and resolve all current-state matches. Classify step 8 matches before changing them so historical and evidence versions remain intact. None of these searches replaces the documented catalog walk, source verification, related-document reconciliation, or final end-to-end read.
 
 ---
 
@@ -740,7 +653,7 @@ The `protocol/v*` tag is used only as a trigger for the Python PyPI release work
 For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
-2. Inventory the changes and reconcile documentation for the touched areas
+2. Inventory the changes, map them through the [Developer Guidelines](devs.md) and complete [Documentation Catalog](docs.md#documentation-catalog), and perform the same full-document audit, related-document reconciliation, validation, and metadata-finalization gates as a normal release
 3. Set `VERSION`, sync the Python package files to match, run `make proto` to regenerate the downstream `uv.lock` files, update `CHANGELOG.md`, write release notes, and generate compliance evidence with the release version, output directory, assessment binding, and evidence-window flags documented in [Compliance Evidence Generation](#compliance-evidence-generation)
 4. Hand off to the release owner, who commits, pushes, opens and merges the PR; after CI on `main` passes, pulls main locally, and runs `make release` to re-sync the Python files (no-op), tag, and push; GitHub Actions workflows create the release and upload assets
 
@@ -761,6 +674,8 @@ The only git operations not automated by `make release` are:
 
 ## References
 
+- [Developer Guidelines](devs.md)
+- [Documentation Guide and Catalog](docs.md)
 - [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - [GitHub Releases Documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)

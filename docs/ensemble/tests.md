@@ -2,171 +2,103 @@
 
 ## Overview
 
-g8ee uses pytest with marker-based test categorization. Tests are organized into suites aligned with the g8e 4-tier test model: Tier 1 (Unit), Tier 2 (In-Process Integration), Tier 3 (Docker E2E), and Tier 4 (External / Live LLM and APIs). Tier 1 and Tier 2 tests execute entirely offline using mocks, fakes, and in-process components. Tier 4 tests interact with live LLM providers and external search APIs, and are automatically skipped when required credentials or endpoints are absent.
+g8ee uses pytest and organizes tests by dependency level. The main ensemble suite contains unit, integration, and external-provider tests. A Tier 3 directory and marker are reserved for end-to-end tests, but the current ensemble suite does not contain Tier 3 test cases. The standalone eval package has its own locked environment, pytest configuration, and Tier 1 and Tier 2 suites.
 
-## Test Architecture
+Pytest probes the local Operator when every main ensemble test session starts, including sessions that select only unit tests. The probe loads platform settings when the Operator is available and falls back to local bootstrap settings when it is not. Unit test bodies remain isolated from live services, but starting a unit test session is not strictly free of network attempts because of this probe.
 
-| Tier | Name | Target Directory | Markers / Tags | External Dependencies | Execution Profile |
-| --- | --- | --- | --- | --- | --- |
-| **Tier 1** | **Unit Tests** | `ensemble/tests/unit/` | `unit` | None (pure stubs, fakes, and mocks) | Sub-second per file, isolated in-memory |
-| **Tier 2** | **In-Process Integration** | `ensemble/tests/integration/` | `integration`, `intent_workflow`, `operator_wire` | In-process fake services and mock gateway | 1-5 seconds per suite, no live external APIs |
-| **Tier 3** | **Docker E2E** | `ensemble/tests/e2e/` | `e2e` | Containerized platform (Gateway + Operator) | Full application lifecycle |
-| **Tier 4** | **External Tests** | `ensemble/tests/integration/` | `ai_integration`, `requires_web_search`, `requires_api` | Live LLM providers, Google Vertex AI Search API | Seconds to minutes, gated on credentials |
+## Test Tiers
 
-## Test Structure
+| Tier | Scope | Location | Selection | Dependencies |
+| --- | --- | --- | --- | --- |
+| Tier 1 | Unit tests | `ensemble/tests/unit/` | Directory selection and the `unit` marker | Test doubles and in-memory state in the test body |
+| Tier 2 | Integration tests | `ensemble/tests/integration/` | Directory selection and the `integration` marker | A mixture of in-process fakes, an HTTPS and WebSocket mock Gateway, and fixtures that connect to a locally configured Gateway or Operator |
+| Tier 3 | End-to-end tests | `ensemble/tests/e2e/` | `e2e` marker | Reserved for full-stack tests; no ensemble Tier 3 tests are currently implemented |
+| Tier 4 | External-provider tests | `ensemble/tests/integration/` | `ai_integration`, `requires_web_search`, or `requires_api` | Configured LLM or web search providers |
 
-```
-ensemble/
-├── tests/
-│   ├── unit/                    # Tier 1 unit tests (isolated, fast)
-│   │   ├── clients/             # DBClient, KVCacheClient, PubSubClient, HttpClient, GovernanceClient
-│   │   ├── config/              # Configuration loading, validation, and defaults
-│   │   ├── constants/           # API paths, channels, collections, intents, KV keys, prompts parity
-│   │   ├── db/                  # DB service, KV service, blob service, and model tests
-│   │   ├── llm/                 # LLM providers, prompt loaders, structured output, thinking translators
-│   │   ├── main/                # FastAPI lifespan, dependency injection, and startup routines
-│   │   ├── models/              # Pydantic schemas, event payloads, SSE wire models, persona models
-│   │   ├── routers/             # FastAPI HTTP routes, triage endpoints, and internal routers
-│   │   ├── security/            # Output sanitization, timestamp validation, sentinel scrubber
-│   │   └── services/            # Agent loops, tribunal consensus, auditor, judge, reputation, memory
-│   ├── integration/             # Tier 2 in-process integration and Tier 4 external tests
-│   │   ├── invariants/          # Structural invariants (such as Tribunal information isolation)
-│   │   └── test_*.py            # Multi-service integration, pipeline integrity, event contracts
-│   ├── e2e/                     # Tier 3 end-to-end tests
-│   ├── fakes/                   # In-memory fake service clients, providers, and test fixtures
-│   └── conftest.py              # Global pytest hooks, settings probes, and shared fixtures
-└── evals/                       # Standalone g8e-evals package with its own lockfile and configuration
-    ├── g8e_evals/               # Eval CLI, schemas, arms, evidence, SUTs, receipt verification, reports
-    └── tests/                   # Tier 1 and Tier 2 eval tests
-```
+The main suite also contains shared fakes and top-level parity tests under `ensemble/tests/`. The root `make ensemble-test` target and the ensemble CI job select only `tests/unit/` and `tests/integration/`, so they do not collect tests located directly under `tests/` or `tests/fakes/`. Running pytest against `tests/` collects those additional checks.
 
-## Running Tests
+## Set Up the Test Environment
 
-### Makefile Targets
+The main ensemble requires Python 3.12 or later, the in-tree Python protocol package, and the ensemble test dependencies. Follow [Development](devs.md) for environment setup. Run ensemble commands from the repository root unless a command explicitly says otherwise.
+
+The eval package uses `uv` and its own `uv.lock`. Its root Makefile targets invoke `uv run --locked --extra test`, so eval dependencies do not need to be installed into the main ensemble environment.
+
+## Run the Main Ensemble Suite
 
 From the repository root:
 
-```bash
-# Run Tier 1 + Tier 2 unit and in-process integration tests (no external dependencies)
-make ensemble-test
+- `make ensemble-test` runs `ensemble/tests/unit/` and `ensemble/tests/integration/` while excluding `ai_integration`, `requires_web_search`, and `requires_api` tests.
+- `make test-external` runs integration tests carrying at least one external marker. Missing configuration detected during collection skips the affected tests; invalid credentials, unavailable providers, and provider errors still fail tests that run.
+- `make ensemble-lint` runs Ruff and Pyright against `ensemble/app`.
+- `make ci-ensemble` runs `ensemble-lint` followed by `ensemble-test`. It does not run standalone eval checks.
 
-# Run Tier 4 external tests (real LLM/API calls, gated on credentials)
-make test-external
+From `ensemble/`:
 
-# Run linting and type checking (Ruff + Pyright) on the ensemble
-make ensemble-lint
+- `make test` runs pytest against all of `tests/` without an external-marker exclusion. If live provider settings are available, this command can make external calls.
+- `make lint` runs Ruff and Pyright against `app/`.
+- `make format` formats `app/` and `tests/` with Ruff and modifies files.
+- `make check` formats, lints, and then runs the unfiltered test target.
 
-# Run standalone eval Tier 1 + Tier 2 tests and quality checks
-make evals-test
-make evals-lint
+For focused pytest runs from `ensemble/`:
 
-# Run ensemble linting and testing in the CI pipeline
-make ci-ensemble
-```
+- `python -m pytest tests/unit/` runs the unit directory.
+- `python -m pytest tests/integration/ -m "not ai_integration and not requires_web_search and not requires_api"` runs integration tests without external-provider tests.
+- `python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not e2e"` runs all currently implemented non-external checks, including top-level parity and fake conformance tests.
+- `python -m pytest tests/integration/ -m ai_integration` runs live LLM tests.
+- `python -m pytest tests/integration/ -m "requires_web_search or requires_api"` runs live search tests.
 
-From the `ensemble/` directory:
+The repository `./g8e test` subcommands run the Go platform test suites. They do not run the Python ensemble or eval suites.
 
-```bash
-# Run all non-external tests via the ensemble Makefile
-make test
+## Run the Standalone Eval Tests
 
-# Run Ruff linter and Pyright type checker
-make lint
+From the repository root:
 
-# Format code with Ruff
-make format
+- `make evals-test` runs eval Tier 1 and Tier 2 tests.
+- `make evals-test-unit` runs tests marked `unit`.
+- `make evals-test-integration` runs tests marked `integration`. Some tests use local filesystem or subprocess dependencies, and CI builds the `g8e` binary before this tier.
+- `make evals-lint` runs Ruff over `g8e_evals` and its tests, then runs Pyright with the eval project configuration.
 
-# Run format, lint, and test sequentially
-make check
-```
+The eval package registers an `e2e` marker for tests that require a live stack or provider, but no current eval test uses that marker and the root eval targets do not select it.
 
-### Pytest Commands
+## Markers and External Configuration
 
-Direct pytest invocations from the `ensemble/` directory:
+The main suite registers markers in `ensemble/pyproject.toml` and enforces them with pytest strict marker checking. Directory selection defines the primary unit and integration suites. Markers further identify external dependencies or specialized behavior.
 
-```bash
-# Run Tier 1 and Tier 2 tests (skipping Tier 4 external and Tier 3 E2E tests)
-pytest tests/ -v -m "not ai_integration and not requires_web_search and not requires_api and not e2e"
+The active external markers are:
 
-# Run Tier 1 unit tests only
-pytest tests/unit/ -v
+- `ai_integration` identifies tests that call a configured LLM provider.
+- `requires_web_search` identifies tests that require complete Vertex AI Search configuration.
+- `requires_api` identifies tests that require an enabled external API configuration. The marker is registered and included by test filters, but no current ensemble test uses it.
 
-# Run Tier 2 integration tests only
-pytest tests/integration/ -v -m "not ai_integration and not requires_web_search and not requires_api"
+The suite also registers `unit`, `integration`, `e2e`, `slow`, `smoke`, `ai`, `aws`, `intent_workflow`, `thinking`, `tools`, `operator_wire`, and `requires_operator`. Some are reserved classifications and have no current usages. Run `python -m pytest --markers` from `ensemble/` for the descriptions pytest uses.
 
-# Run Tier 4 external AI integration tests
-pytest tests/integration/ -v -m "ai_integration"
+At session startup, the harness prints `operator: ok` when the settings probe succeeds or `operator: down` when it uses local bootstrap settings. Environment-based LLM configuration uses `G8E_TEST_LLM_PRIMARY_PROVIDER` with provider-appropriate credentials or endpoints; optional primary, assistant, and lite model settings refine the configuration. Environment-based web search configuration requires `G8E_TEST_WEB_SEARCH_PROJECT_ID`, `G8E_TEST_WEB_SEARCH_ENGINE_ID`, and `G8E_TEST_WEB_SEARCH_API_KEY`, with optional `G8E_TEST_WEB_SEARCH_LOCATION`.
 
-# Run Tier 4 external web search tests
-pytest tests/integration/ -v -m "requires_web_search or requires_api"
+Collection-time gating behaves as follows:
 
-# Run with test coverage report
-pytest --cov=app --cov-report=term-missing
-```
+1. When `G8E_TEST_LLM_PRIMARY_PROVIDER` is set, the harness validates the provider-specific key or endpoint before selecting `ai_integration` tests. Without that environment variable, the loaded LLM settings determine whether those tests run.
+2. `requires_web_search` tests run only when search is enabled and project ID, engine ID, and API key are present.
+3. `requires_api` tests run when external search is enabled.
 
-The eval package uses a separate locked environment. From the repository root:
+Credential gating prevents calls when required configuration is detectably absent. It does not convert authentication failures, provider outages, quota errors, or invalid configured values into skips.
 
-```bash
-# Run both standalone eval tiers
-make evals-test
+## Fixtures and Isolation
 
-# Run one standalone eval tier
-make evals-test-unit
-make evals-test-integration
+The shared harness provides unique investigation, user, case, operator, and session identifiers. It also provides task tracking that closes coroutines and cancels background tasks after each test, typed fakes for service boundaries, and an in-process mock Gateway that serves HTTPS and WebSocket protocol surfaces.
 
-# Run standalone eval Ruff and Pyright checks
-make evals-lint
-```
+Integration fixtures are not uniformly hermetic. Some construct services with fakes or the mock Gateway, while others connect through configured TLS credentials to local Gateway database, KV, or PubSub services. Check the fixtures used by a test before assuming that it runs without local platform state.
 
-## Test Markers and Credential Gating
+Protocol checks cover two separate concerns. Fake conformance tests verify that test doubles implement their declared Python protocols. Constants parity tests validate protocol JSON against the ensemble's typed constants models. Because these checks live outside the unit and integration directories, run pytest against all of `tests/` when changing shared fakes or protocol constants.
 
-The pytest suite registers markers in `pyproject.toml` to classify tests and control execution.
+## Coverage and Quality
 
-### Marker Reference
+Coverage configuration tracks branch coverage for `app/` and omits tests, package entry points, conftest files, and empty modules. The ensemble does not configure a coverage failure threshold. From `ensemble/`, `python -m pytest tests/ -m "not ai_integration and not requires_web_search and not requires_api and not e2e" --cov=app --cov-report=term-missing` produces a terminal report without making configured external-provider calls. Add `--cov-report=html` or `--cov-report=json` to write reports to the configured paths under `coverage-reports/g8ee/`.
 
-- `unit` — Fast, isolated unit tests without external dependencies.
-- `integration` — Integration tests verifying multi-component interaction.
-- `ai_integration` — Tier 4 tests requiring live LLM API access.
-- `requires_web_search` — Tier 4 tests requiring web search provider configuration.
-- `requires_api` — Tier 4 tests requiring external live API endpoints (e.g. Vertex AI Search).
-- `requires_operator` — Integration tests requiring a live g8e Gateway or Operator instance.
-- `operator_wire` — Integration tests publishing tool-call events directly to Operator PubSub.
-- `thinking` — Tests verifying provider thinking, reasoning tokens, and thought signatures.
-- `tools` — Tests verifying LLM function calling and tool execution workflows.
-- `intent_workflow` — Tests for intent-based permission workflows with the ensemble.
-- `e2e` — End-to-end full application flows.
-- `slow` — Tests taking longer than 1 second.
-- `smoke` — Quick verification tests for smoke testing.
-
-### Dynamic Credential Gating
-
-The test harness in `tests/conftest.py` inspects the runtime environment and Gateway status during test collection:
-
-1. **Operator Probe** — On startup, `pytest_configure` probes the local Operator to load platform settings. It prints `operator: ok` if connected or `operator: down` when falling back to local bootstrap settings.
-2. **LLM Credential Detection** — Tests marked with `ai_integration` check for LLM provider credentials via `G8E_TEST_LLM_*` environment variables (`G8E_TEST_LLM_PRIMARY_PROVIDER`, `G8E_TEST_LLM_PRIMARY_API_KEY`, `G8E_TEST_LLM_PRIMARY_ENDPOINT`, `G8E_TEST_LLM_PRIMARY_MODEL`, etc.) or configured user settings. If credentials are missing, tests are skipped with `reason="no llm creds"`.
-3. **Web Search Gating** — Tests marked with `requires_web_search` or `requires_api` check for Google Vertex AI Search settings (`G8E_TEST_WEB_SEARCH_PROJECT_ID`, `G8E_TEST_WEB_SEARCH_ENGINE_ID`, `G8E_TEST_WEB_SEARCH_API_KEY`). If unconfigured, tests are skipped with `reason="no web search"` or `reason="no vertex search"`.
-4. **Fail-Safe CI Execution** — External tests never fail CI due to missing credentials. They run only when the requisite environment variables or active provider endpoints are supplied.
-
-## Test Harness and Fixtures
-
-The test infrastructure provides reusable fixtures and fakes in `tests/conftest.py` and `tests/fakes/`:
-
-- **`TaskTracker` (`task_tracker`)** — Tracks coroutines and `asyncio.Task` instances created during test execution, guaranteeing proper cancellation and cleanup upon test completion to prevent resource leaks and `RuntimeWarning` errors.
-- **Isolation IDs** — `unique_investigation_id`, `unique_user_id`, `unique_case_id`, `unique_operator_id`, `unique_session_id`, and `unique_web_session_id` supply unique UUIDs to maintain test isolation.
-- **Service Mocks and Fakes** — `mock_governance_client`, `mock_cache_aside_service`, `fake_cache_aside_service`, `mock_blob_service`, `mock_event_service`, `mock_investigation_service`, `mock_client_http_client`, and `mock_operator_document` provide typed, spec-compliant mocks and in-memory test doubles.
-- **Protocol Conformance** — `tests/fakes/test_fakes_protocol_conformance.py` and `tests/test_constants_parity.py` assert that all fake services and Python constants remain synchronized with protocol specifications and Go constants.
-
-## Code Coverage and Quality Checks
-
-- **Coverage Configuration** — Coverage settings in `pyproject.toml` track branch coverage across the `app/` package, omitting test suites, entry points, and generated protobuf stubs. Reports can be generated in terminal, HTML (`coverage-reports/g8ee/index.html`), and JSON formats.
-- **Linting and Type Checking** — Code style and type constraints are validated with Ruff (`ruff check .` and `ruff format .`) and Pyright (`pyright`). Lint rules enforce strict error handling, naming standards, and clean import structures routing through `app.models.base`.
+Ruff checks only `app/` in the main ensemble Makefile and CI targets. Pyright also checks only `app/`. The standalone eval lint target checks both production and test code.
 
 ## Related
 
-- [Platform Testing](../devs/tests.md) — g8e platform 3-tier test model, test infrastructure, and verification commands
-- [Development](devs.md) — Development environment setup, protobuf generation, and coding standards
-- [Evals](evals.md) — Evaluation suite, benchmark datasets, and Judge scoring rubrics
-- [Architecture](architecture.md) — System architecture, protocol surfaces, and model hierarchy
-- [Governance](governance.md) — Five-layer verification pipeline and envelope validation
-- [Constants](constants.md) — Application constants and protocol synchronization
-
+- [Platform Testing](../devs/tests.md) describes the Go platform test model and `./g8e test` commands.
+- [Development](devs.md) covers ensemble environment setup and quality commands.
+- [Evals](evals.md) covers benchmark execution, evidence, and reports.
+- [Architecture](architecture.md) describes the ensemble's components and protocol surfaces.

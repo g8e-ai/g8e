@@ -1,86 +1,88 @@
 # Authentication
 
-## Two Independent Identity Surfaces
+## Identity Model
 
-g8ed uses separate identities for browser users and the dashboard container. They do not share credentials or substitute for one another.
+g8ed has separate identities for the browser user and the dashboard container. These credentials are not interchangeable.
 
-| Surface | Credential | Issuer and verifier | Purpose |
+| Surface | Credential | Authority | Current use |
 | --- | --- | --- | --- |
-| Browser | WebAuthn passkey plus HttpOnly `g8e_web_session_cookie` | g8e Gateway | User authentication and browser API authorization |
-| Container | ECDSA P-256 app certificate and private key with `spiffe://g8e.local/app/g8ed` | [g8e Gateway PKI](../ensemble/pki.md) | Prepared server-to-server mTLS clients |
+| Browser | WebAuthn passkey and HttpOnly `g8e_web_session_cookie` | g8e Gateway | Gateway user authentication and authorization for browser-accessible routes |
+| Container | ECDSA P-256 certificate and private key issued for the `g8ed` workload | [g8e Gateway PKI](../ensemble/pki.md) | Required startup enrollment; the running static host does not use the identity for outbound requests |
 
-The browser never receives the container certificate or private key. The container does not receive or forward the browser's session cookie.
-
-## Browser Session Startup
-
-`AuthManager.init()` validates the existing gateway session by requesting the current user and then the public session identifier. A valid response becomes a `WebSessionModel`, updates `webSessionService`, renders the authenticated profile, and emits authentication events. A missing or invalid session clears local UI state and renders the sign-in control.
-
-The cookie is HttpOnly. `ServiceClient` cannot read it and deliberately returns no authentication headers for `ServiceName.GATEWAY`. The browser attaches it because each request uses `credentials: 'include'`.
-
-## Passkey Registration
-
-`AuthManager.startPasskeyRegistration()` implements the browser half of registration:
-
-1. Request a registration challenge from `/api/v1/auth/passkeys/console/register/challenge` with `cli_session_id` set to `browser`.
-2. Decode the base64url challenge, user ID, and excluded credential IDs to `ArrayBuffer` values.
-3. Call `navigator.credentials.create()` with the gateway options.
-4. Serialize the credential response fields back to unpadded base64url.
-5. Submit the attestation and gateway-provided user ID to `/api/v1/auth/passkeys/console/register/verify`.
-6. Parse the returned user session and request its public web-session ID.
-
-The gateway owns challenge generation, relying-party policy, credential verification, user creation, and session issuance; see [Authentication & Authorization](../architecture/auth.md) for the platform-level WebAuthn and session model. g8ed only translates between JSON and the browser WebAuthn API.
-
-## Passkey Authentication
-
-`AuthManager.passkeyLogin()` uses a discoverable-credential ceremony:
-
-1. Request `/api/v1/auth/passkeys/console/authenticate/challenge` without a user ID.
-2. Decode the challenge and allowed credential IDs.
-3. Call `navigator.credentials.get()` and let the browser choose a resident passkey.
-4. Recover the user ID from the challenge response or assertion `userHandle`.
-5. Submit the serialized assertion to `/api/v1/auth/passkeys/console/authenticate/verify`.
-6. Install the returned UI session and fetch the public web-session ID.
-
-A cancelled browser ceremony is reported as a cancellation. Verification failures do not establish local session state.
-
-## Logout and Session Expiry
-
-Logout posts to `/api/v1/auth/logout`, disconnects the active SSE client, clears local session state, and navigates to the dashboard home route. The gateway invalidates and expires the authoritative cookie-backed session.
-
-The dashboard also treats terminal SSE failure after authentication as session expiry. It clears the UI session and emits `AUTH_SESSION_EXPIRED`; the next authenticated request remains subject to gateway validation.
-
-## Container App Enrollment
-
-`AppEnrollmentService` resolves configuration from `G8E_GATEWAY_HTTP_URL` and `G8E_RUNTIME_DIR`. It exposes two explicit paths:
-
-- `loadIdentity()` reads and validates installed material without network access. It rejects missing files, unparsable certificates, missing SPIFFE URI identity, expired certificates, and certificates within the seven-day renewal threshold.
-- `enroll()` contacts the gateway's plain-HTTP owner-approved enrollment surface. It resumes persisted pending state when present or generates a P-256 key and CSR, fetches trust material, submits an enrollment request, polls for approval, signs the completion transcript, validates the returned certificate, and installs the identity atomically. The platform PKI hierarchy and certificate lifecycle that back this flow are documented in [PKI & Trust](../ensemble/pki.md).
-
-Installed files use the dashboard runtime tree:
-
-| Relative path | Purpose | Permission |
-| --- | --- | --- |
-| `pki/issued/apps/g8ed.crt` | App leaf certificate and returned chain | `0600` |
-| `pki/issued/apps/g8ed.key` | App private key | `0600` |
-| `pki/trust/hub-bundle.pem` | Gateway trust bundle | `0644` |
-| `pki/pending-enrollment/g8ed.json` | Resumable enrollment state while pending | `0600` |
-
-`server.js` stores the resolved `AppIdentity` before listening. The live static host does not yet use it for outbound requests; the g8eg client classes accept the resulting certificate paths for future server-side wiring.
+The browser never receives the container certificate or private key. The Express host does not read, validate, or forward the browser session cookie.
 
 ## Deployment Requirements
 
-- The browser must reach the HTTPS gateway origin configured through `G8E_GATEWAY_URL`.
-- The gateway must allow the dashboard origin through its CORS configuration and use matching WebAuthn relying-party settings.
-- Cross-origin cookie use requires the gateway's secure cookie and allowed-origin behavior described in [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
-- The container must reach the plain-HTTP bootstrap origin in `G8E_GATEWAY_HTTP_URL` and have a writable `G8E_RUNTIME_DIR`.
-- Enrollment failure prevents Express from listening.
+Browser authentication requires all of the following:
+
+- `G8E_GATEWAY_URL` identifies an HTTPS Gateway origin that the user's browser can reach and trust.
+- The dashboard origin is an exact `--cors-origin` and `--passkey-rp-origin` on the Gateway.
+- `--passkey-rp-id` is the dashboard hostname or a valid registrable parent-domain suffix. It does not include a scheme or port.
+- The dashboard runs in a WebAuthn secure context, either HTTPS or the browser's localhost exception for local development.
+- The browser supports WebAuthn and allows credentialed cross-origin requests.
+
+The dashboard sends browser requests directly to `G8E_GATEWAY_URL` with credentials included. When the Gateway has one or more allowed cross-origin origins, it permits exact origin matches, allows credentials, and issues the session cookie with `SameSite=None`. Without cross-origin origins, the cookie uses `SameSite=Lax`. The cookie is always `Secure` and therefore is sent only to the Gateway over HTTPS.
+
+Container enrollment separately requires `G8E_GATEWAY_HTTP_URL`, a writable and persistent `G8E_RUNTIME_DIR`, and network access from the container to the Gateway's plain-HTTP bootstrap surface.
+
+## Container Startup Enrollment
+
+The dashboard resolves its workload identity before Express begins listening:
+
+1. It checks for an installed certificate and private key under `G8E_RUNTIME_DIR`.
+2. It reuses the certificate when it can parse the certificate, find a URI subject alternative name, and confirm that more than seven days remain before expiry.
+3. Otherwise, it resumes a persisted enrollment request or creates a P-256 key and certificate signing request.
+4. It submits the request through the Gateway's plain-HTTP bootstrap surface and waits for owner approval. If the Gateway has no owner yet, submission retries for up to 30 minutes while bootstrap completes.
+5. After approval, it proves possession of the generated private key, receives the issued credential, and installs the certificate, key, and returned trust bundle.
+6. Express starts only after identity loading or enrollment succeeds. Unexpected identity-read failures, denied or expired requests, and enrollment failures stop startup.
+
+The approval page is provided by the Gateway console because the dashboard is not available while its own enrollment is pending. Pending state survives process restarts so the dashboard can continue the same request without generating a new key. A denied or expired pending request remains on disk and requires operator intervention before a new request can be created.
+
+The runtime files are:
+
+| Relative path under `G8E_RUNTIME_DIR` | Purpose | Permission |
+| --- | --- | --- |
+| `pki/issued/apps/g8ed.crt` | App leaf certificate and returned certificate chain | `0600` |
+| `pki/issued/apps/g8ed.key` | App private key | `0600` |
+| `pki/trust/hub-bundle.pem` | Returned Gateway trust bundle | `0644` |
+| `pki/pending-enrollment/dashboard.json` | Resumable request token, private key, request metadata, and expiry | `0600` |
+
+Installed identity reuse does not currently verify that the private key matches the certificate, validate the certificate chain against the stored trust bundle, require the trust bundle to exist, or require the URI subject alternative name to equal the expected `g8ed` SPIFFE identity. Enrollment completion checks that the returned certificate contains a URI subject alternative name containing `g8ed`, but it does not perform those stronger validations before installation. The running static host retains the resolved file paths but does not currently construct an outbound mTLS client from them.
+
+## Browser Session Behavior
+
+On page startup, the dashboard asks the Gateway for the current user. If the Gateway accepts the session cookie, the dashboard also requests the public web-session identifier and keeps the returned user and session metadata in memory for display and event routing. JavaScript cannot read the HttpOnly cookie, and the dashboard does not add bearer tokens, session headers, API keys, or synthetic cookie headers to Gateway requests.
+
+The Gateway creates a session after successful passkey registration or authentication. Sessions expire after 24 hours. On every protected browser request, the Gateway looks up the session, checks its expiry, and verifies that the associated user remains valid. Reloading the dashboard reconstructs local display state from the Gateway; no browser session is persisted in local storage.
+
+## Current Passkey Limitation
+
+The current dashboard sign-in control does not complete a new passkey login. It requests an authentication challenge without a user ID in an attempt to use a discoverable credential, while the current Gateway requires a g8e user ID for that request. The request therefore fails before the browser can select a passkey.
+
+The sign-in modal is also intended to offer first-passkey setup when the Gateway reports that the selected user has no passkey. Because the dashboard does not supply a user ID, that response is not reached and the registration form is not exposed through the normal sign-in path. The dashboard source contains a first-owner registration ceremony that can create the initial user only while the Gateway has no users, but the live sign-in flow does not currently invoke it successfully.
+
+As a result, the active browser authentication behavior is limited to restoring and using an already valid Gateway session cookie, then logging that session out. Interactive registration and returning-user sign-in are not operational in the current g8ed interface. For the Gateway's supported browser flow and current user-ID requirement, see [Build a g8e-Compatible Frontend](../guides/build_frontend.md).
+
+## Logout and Expiry
+
+Logout asks the Gateway to delete the session referenced by the cookie and expire the cookie. The dashboard then disconnects its event client, clears its in-memory user state, and returns to the home route. The Gateway logout route is safe to call when no cookie exists.
+
+A protected request with a missing, unknown, expired, or otherwise invalid session receives an unauthorized response from the Gateway. The dashboard clears local state when its initial session check fails. It also treats a terminal event-stream failure after authentication as session expiry, even though an event-stream routing or network failure does not itself prove that the Gateway session expired.
+
+## Security Boundaries
+
+- The Gateway, not the dashboard host, authenticates browser users and authorizes browser-accessible API requests.
+- The HttpOnly session cookie remains scoped to the Gateway origin and is not exposed to dashboard JavaScript.
+- The workload private key remains in the dashboard runtime volume and is not published through browser configuration or static assets.
+- The workload certificate does not grant the browser access to mTLS-only Gateway routes.
+- Content Security Policy restricts browser connections to the dashboard origin and configured Gateway origin.
+- Dashboard authentication does not bypass governance. Supported operations that enter a governed Gateway path remain subject to the active [five-layer verification pipeline](../architecture/governance.md).
 
 ## Related
 
-- [Authentication & Authorization](../architecture/auth.md) — Platform-level mTLS, WebAuthn, SPIFFE workload identity, and trust bundles
-- [Protocol Reference](../architecture/protocol.md) — Canonical wire contracts for auth and session endpoints
-- [Governance Pipeline](../architecture/governance.md) — Five-layer verification pipeline governing host mutations
-- [PKI & Trust](../ensemble/pki.md) — Platform PKI hierarchy, certificate lifecycle, and workload enrollment
+- [Dashboard Architecture](architecture.md)
+- [Gateway Integration](gateway.md)
+- [Authentication and Authorization](../architecture/auth.md)
+- [PKI and Trust](../ensemble/pki.md)
 - [Build a g8e-Compatible Frontend](../guides/build_frontend.md)
 - [Connect Apps to Gateway](../guides/connect_apps_to_gateway.md)
-- [Gateway Integration](gateway.md)

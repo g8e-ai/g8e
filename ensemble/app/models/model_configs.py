@@ -46,14 +46,10 @@ from app.constants import (
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_FLASH,
     OLLAMA_DEFAULT_MODEL,
-    OLLAMA_GEMMA4_26B,
     OLLAMA_GEMMA4_E2B,
     OLLAMA_GEMMA4_E2B_G8EA,
     OLLAMA_GEMMA4_E4B,
-    OLLAMA_GLM_5_1,
     OLLAMA_LLAMA_3_2_3B,
-    OLLAMA_NEMOTRON_3_30B,
-    OLLAMA_QWEN3_5_122B,
     OLLAMA_QWEN3_5_2B,
     OPENAI_DEFAULT_MODEL,
     OPENAI_GPT_5_4_MINI,
@@ -187,44 +183,6 @@ GEMINI_3_FLASH_CONFIG = LLModelConfig(
 #   - Llama: no reasoning support; supported_thinking_levels=[].
 # =============================================================================
 
-OLLAMA_QWEN3_5_122B_CONFIG = LLModelConfig(
-    name=OLLAMA_QWEN3_5_122B,
-    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
-    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
-    supports_tools=True,
-    supports_structured_output=True,
-    context_window_input=256_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-OLLAMA_GLM_5_1_CONFIG = LLModelConfig(
-    name=OLLAMA_GLM_5_1,
-    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
-    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
-    supports_tools=True,
-    supports_structured_output=True,
-    context_window_input=256_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-OLLAMA_GEMMA4_26B_CONFIG = LLModelConfig(
-    name=OLLAMA_GEMMA4_26B,
-    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
-    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
 OLLAMA_GEMMA4_E4B_CONFIG = LLModelConfig(
     name=OLLAMA_GEMMA4_E4B,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
@@ -255,18 +213,6 @@ OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLModelConfig(
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-OLLAMA_NEMOTRON_3_30B_CONFIG = LLModelConfig(
-    name=OLLAMA_NEMOTRON_3_30B,
-    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
-    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
-    supports_tools=True,
-    context_window_input=128_000,
     context_window_output=8_192,
     top_k=40,
     top_p=1.0,
@@ -599,13 +545,9 @@ class LLModelRegistry(G8eBaseModel):
 # that a new model has no reasoning configured, so we fail loudly at import
 # time if any entry in this tuple forgot the field.
 _OLLAMA_CONFIGS: tuple[LLModelConfig, ...] = (
-    OLLAMA_QWEN3_5_122B_CONFIG,
-    OLLAMA_GLM_5_1_CONFIG,
-    OLLAMA_GEMMA4_26B_CONFIG,
     OLLAMA_GEMMA4_E4B_CONFIG,
     OLLAMA_GEMMA4_E2B_CONFIG,
     OLLAMA_GEMMA4_E2B_G8EA_CONFIG,
-    OLLAMA_NEMOTRON_3_30B_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_2B_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
@@ -628,13 +570,9 @@ MODEL_REGISTRY = LLModelRegistry(
         ANTHROPIC_DEFAULT_CONFIG,
         OPENAI_GPT_5_4_MINI_CONFIG,
         OPENAI_DEFAULT_CONFIG,
-        OLLAMA_QWEN3_5_122B_CONFIG,
-        OLLAMA_GLM_5_1_CONFIG,
-        OLLAMA_GEMMA4_26B_CONFIG,
         OLLAMA_GEMMA4_E4B_CONFIG,
         OLLAMA_GEMMA4_E2B_CONFIG,
         OLLAMA_GEMMA4_E2B_G8EA_CONFIG,
-        OLLAMA_NEMOTRON_3_30B_CONFIG,
         OLLAMA_LLAMA_3_2_3B_CONFIG,
         OLLAMA_QWEN3_5_2B_CONFIG,
         OLLAMA_DEFAULT_CONFIG,

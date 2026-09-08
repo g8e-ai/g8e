@@ -15,7 +15,6 @@ const SCRIPT_PATH = resolve(SOURCE_DIRECTORY, 'site.js');
 const REPOSITORY_URL = 'https://github.com/g8e-ai/g8e';
 const RAW_REPOSITORY_URL = 'https://raw.githubusercontent.com/g8e-ai/g8e/main';
 const LOCAL_IMAGES = new Map([
-  ['docs/media/jit-mcp-with-receipts.png', 'assets/jit-mcp-with-receipts.png'],
   ['docs/diagrams/g8e-diagram.png', 'assets/g8e-diagram.png']
 ]);
 

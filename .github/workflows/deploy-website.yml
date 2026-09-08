@@ -6,7 +6,6 @@ on:
     paths:
       - README.md
       - docs/diagrams/g8e-diagram.png
-      - docs/media/jit-mcp-with-receipts.png
       - website/**
       - .github/workflows/deploy-website.yml
   workflow_dispatch:

@@ -14,10 +14,10 @@ test('repositoryLink sends relative documents to the source repository', () => {
 });
 
 test('renderWebsite renders navigation, local images, and Mermaid diagrams', () => {
-  const readme = '# Suite\n\n## Architecture\n\n<img src="docs/media/jit-mcp-with-receipts.png">\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n[Guide](docs/guides/getting_started.md)';
+  const readme = '# Suite\n\n## Architecture\n\n<img src="docs/diagrams/g8e-diagram.png">\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n[Guide](docs/guides/getting_started.md)';
   const html = renderWebsite(readme, '<nav>{{TOC}}</nav><main>{{CONTENT}}</main>');
   assert.match(html, /href="#architecture"/);
-  assert.match(html, /src="\/assets\/jit-mcp-with-receipts\.png"/);
+  assert.match(html, /src="\/assets\/g8e-diagram\.png"/);
   assert.match(html, /<pre class="mermaid">/);
   assert.match(html, /github\.com\/g8e-ai\/g8e\/blob\/main\/docs\/guides\/getting_started\.md/);
 });

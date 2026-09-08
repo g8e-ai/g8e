@@ -1,494 +1,370 @@
 # Developer Troubleshooting
 
-Last Updated: 2026-08-31
-Version: v2.1.2
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-This page covers common setup failures, runtime friction, and operational caveats for contributors working on g8e from a fresh checkout. The platform runs host-native. For architecture-level context, see [Authentication & Authorization](../architecture/auth.md), [Encryption Architecture](../architecture/encryption.md), [Gateway Architecture](../architecture/gateway.md), [Governance](../architecture/governance.md), and [Network Architecture](../architecture/network.md).
+This guide covers common contributor setup, build, test, Gateway, authentication, governance, and local deployment failures. Run the commands from the repository root unless a section says otherwise. See the [Getting Started guide](../guides/getting_started.md) for the supported setup sequence, the [Code Map](codemap.md) for implementation ownership, and the [Documentation Guide](docs.md) for the standards used to maintain this page.
 
 ## First checks
 
-Run commands from the repository root:
+Confirm the working directory, binary version, and Go toolchain before diagnosing a deeper failure:
 
 ```bash
 pwd
-ls README.md g8e Makefile
+ls README.md g8e Makefile VERSION
+./g8e version
+go version
 ```
 
-Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The `Makefile` uses Bash, `sed`, and `curl`. The `g8e` binary at the repository root is a compiled Go executable; it does not depend on shell utilities beyond the system libc.
+The Go module currently requires Go 1.26.6. The root Makefile uses Bash and common host tools, with additional dependencies determined by the target. On Windows, use `build.ps1` where the Makefile help directs it rather than assuming every target runs in a native Windows shell.
 
-At minimum, install the tools for the component you are touching:
+The CLI resolves its project root from the current working directory. Running it elsewhere creates or reads a different `.g8e/` runtime tree. Return to the checkout root before inspecting status, credentials, logs, or local state.
 
-- Go 1.26.6 or later for the g8e Operator and protocol work.
-- Python 3.10 or later for protocol generation and demo scripts.
+## Build and generation failures
 
-## `make` targets fail with missing `curl`
+### `./g8e` is missing or not executable
 
-The `Makefile` uses `curl` to download Buf during `make buf-install` and in demo scripts. If `curl` is not installed, install it and retry:
+The repository-root `g8e` file is a compiled binary. Rebuild it when it is absent or older than the current source:
+
+```bash
+make build
+./g8e version
+```
+
+On Unix-like systems, restore execute permission if the file exists but the shell rejects it:
+
+```bash
+chmod +x g8e
+```
+
+`make build` compiles `cmd/g8e`, writes the platform binary under `bin/`, copies it to the repository root, and copies it into `demos/bin/`. The target uses `sha256sum` for the checksum and `pgrep` to detect a running host Gateway. Install compatible commands or use the owning platform build script when either is unavailable. Stop a running host Gateway before rebuilding if the target reports that it cannot replace the binary.
+
+### A Make target cannot find `curl`
+
+`curl` is used by targets that download tools or assets, including the Buf and optional protoc installation paths. Check the active shell's `PATH` before changing repository files:
 
 ```bash
 command -v curl
-make proto
 ```
 
-If the command exists in one terminal but not another, fix the shell `PATH` before changing project files.
+The core Go CLI does not require `jq`. Individual Make targets still require the tools named in their recipes.
 
-> Note: To support sovereign, agnostic, and air-gapped deployments, `jq` is completely eliminated as a host dependency. All JSON parsing and request assembly are handled internally by the Go CLI, allowing g8e to run on virtually any modern Linux environment without extra system package requirements.
+### `make proto` fails
 
-## `make proto` fails before generating files
-
-`make proto` runs `make buf-install`, then calls Buf to generate Go Protobuf code from the schema definitions in `protocol/proto/`.
-
-Check the local prerequisites first:
+`make proto` regenerates all owned protocol outputs, not only Go protobuf files. It runs the Go, Python, Node, and downstream Python lockfile stages. Check all required tools and Python modules:
 
 ```bash
 command -v go
-command -v buf
+command -v buf || test -x ./buf
+PYTHON=python3
+test ! -x .venv/bin/python || PYTHON="$PWD/.venv/bin/python"
+"$PYTHON" -c 'import grpc_tools'
+command -v npm
+command -v uv
 ```
 
-The `buf-install` target attempts to provision Buf in the following order:
+If Buf is absent, `make buf-install` first tries `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`; without Go it tries a direct download with `curl`. The Makefile selects `.venv/bin/python` when present and otherwise uses `python3`. The Node stage installs its pinned packages with `npm ci` when necessary. The Python stage requires `grpcio-tools`, and the lockfile stage requires `uv`.
 
-1. If Go is present on the host, it installs Buf via `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`.
-2. If Go is absent, it attempts to download the pre-compiled binary from Buf releases using `curl`.
-3. If neither succeeds, `make proto` exits with an error. The pre-generated `.pb.go` files committed under `protocol/proto/` allow `go build` to succeed without running `make proto`, but schema changes require a working Buf installation.
+A normal `make build` uses the generated files already present in the checkout and does not require `make proto`. Schema changes require the complete generation toolchain because `make proto` refreshes Go, Python, TypeScript, Markdown reference, and downstream lockfile outputs.
 
-If you are modifying `.proto` files in an offline environment, ensure that `buf` is installed globally on your path before running `make proto`.
+## Gateway startup and status
 
-For Python protocol generation, use the separate target:
+### `./g8e gw start` does not become healthy
 
-```bash
-make proto-python
-```
-
-## `./g8e gw start` does not become healthy
-
-The `gw start` command launches the g8e Gateway as a background process via `gateway serve`, then waits for the process to become healthy. Start with the status command and the log:
+Background startup copies the current executable to `.g8e/bin/`, starts `gw start --follow`, writes logs under `.g8e/logs/`, and polls the plain-HTTP health endpoint. Inspect both managed-process state and logs:
 
 ```bash
 ./g8e gw status
 ./g8e gw logs
 ```
 
-Common causes:
-
-- One of the local ports from `protocol/constants/ports.json` (HTTP 8080, HTTPS 8443) is already in use. The process manager in `internal/cli/platform/process.go` performs a preflight port check and reports conflicting PIDs.
-- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.6).
-- Runtime PKI or secrets were created by an older incompatible checkout.
-- Port collision prevention: the gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary. The HTTP surface (8080) serves plain HTTP for bootstrap and PKI discovery only; the HTTPS surface (8443) handles all API, MCP, console, and management routes. See [Network Architecture](../architecture/network.md) for port topology details.
-- Governance posture validation: when starting in `consensus` or `notary` posture, the gateway validates consensus prerequisites at startup before any services start. If the consensus ID is empty, the consensus policy does not exist in the database, or quorum is less than 1, the gateway exits with an error. See [Governance](../architecture/governance.md) for posture startup validation details.
-
-Stop the managed process before retrying. Use `gw restart` as a shortcut, or stop and start manually:
-
-```bash
-./g8e gw restart
-```
+Run in the foreground when the background command hides the first useful error:
 
 ```bash
 ./g8e gw stop
-./g8e gw start
+./g8e gw start --follow --log debug
 ```
 
-Use `./g8e gw reset` or `./g8e gw clean` only for disposable local state. They intentionally remove runtime data under `.g8e/`.
+Common causes include:
 
-If the gateway started but the HTTPS health endpoint reports `governance_ready: false`, the gateway is running in `consensus` or `notary` posture and no trusted L2 signers are registered. In `doctrine` posture, `governance_ready` is always `true`. To resolve, register trusted signers or switch to `doctrine` posture. See [Governance](../architecture/governance.md) for signer registration details.
+- The existing vault header cannot be unlocked because `.g8e/vault/key` is missing, malformed, or belongs to another vault.
+- A configured data, PKI, secrets, vault, doctrine, consensus-bootstrap, or network-identity path is invalid or inaccessible.
+- No free HTTP/HTTPS port pair is available in the search range, or the selected HTTP and HTTPS ports collide.
+- Existing SQLite state is locked by another process.
+- Runtime files came from an incompatible or partially removed local state tree.
 
-## Tests fail because the gateway is not running
+The configuration layer searches for an available HTTP/HTTPS pair by applying the same offset to the requested ports, starting from 8080 and 8443 by default. Background process startup also searches from the requested HTTP port and verifies the corresponding HTTPS port. Do not assume a collision on 8080 always causes startup to fail; inspect the startup output and log for the selected pair. `gw status` currently displays the default endpoint URLs, so it is not authoritative for a dynamically shifted pair.
 
-The test suite uses a tiered structure with different infrastructure requirements:
+The plain-HTTP surface serves health, state binding, CA discovery, bootstrap, recovery, workload enrollment, and binary/deploy discovery routes. Other requests redirect to HTTPS. The HTTPS surface serves authenticated API, MCP, A2A, Console, management, and SSE routes. See [Network Architecture](../architecture/network.md) for the route boundary.
 
-- **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`.
-- **Tier 2 (In-Process Integration)**: No external dependencies. Integration tests use in-process gateway fixtures (`test/fixtures/gateway_fixture.go`) that spin up the gateway within the test process. Run via `make test-integration`.
-- **Tier 3 (Docker E2E)**: Requires a running platform. Start the platform first (`docker compose up` or `./g8e gw start`), then run `make test-docker` or `./g8e test e2e`. The test binary connects to the running platform and fails fast if it is not reachable. Use `./g8e test e2e --run <pattern>` to select specific scenario tests that require particular platform states (pending, denied, headless, approved-restart).
+### `governance_ready` is false
 
-Tier 2 integration tests do not require a running external gateway. They construct the gateway in-process via `GatewayFixture`, which handles PKI enrollment and mTLS configuration automatically. If these tests fail, the cause is typically a port conflict or missing build dependencies, not a missing gateway process.
+`governance_ready` is true without trusted L2 signers in `doctrine` and `ratify` because those postures do not enforce L2. In `consensus` and `notary`, it becomes true after the signer store contains at least one trusted signer.
 
-If a test failure mentions missing trust bundles or client certificates, confirm that the test fixture has not been modified to skip enrollment. The `EnrollClientIdentity` helper in `test/fixtures/gateway_fixture.go` generates test PKI material at runtime.
+Missing `--consensus-id`, a missing policy, or a disabled policy does not currently stop the Gateway. Startup logs a warning, and L2-gated transactions fail closed at verification time until the policy and trusted signers exist. Check the active posture, consensus ID, policy, signer registration, and quorum rather than treating process health as proof that L2 is configured. See [Governance](../architecture/governance.md) for the canonical posture and enrollment flow.
 
-### Tier 3 E2E preflight failures
+### Restart does not preserve a non-default posture
 
-Tier 3 E2E tests (`./g8e test e2e` or `make test-docker`) require a running platform. The test binary's `TestMain` performs a bounded HTTP health check against the gateway and exits non-zero with `FATAL: E2E preflight failed` if the platform is not reachable. There is no skip and no false-green.
-
-Common causes:
-- The platform is not running. Start it first: `docker compose up` or `./g8e gw start`.
-- The gateway is running but the health endpoint is not responding. Check `./g8e gw status` and `./g8e gw logs`.
-- Owner credentials are missing or expired. Run `./g8e auth enroll user` to obtain a fresh CLI session. The test binary reads the owner CLI certificate, key, and session ID from the local `.g8e/` runtime tree.
-- The CLI session has expired (7-day TTL). Authenticated tests fail with `CLI session expired` (401). Re-enroll to obtain a fresh session.
-
-### Tier 3 scenario selection
-
-Stateful E2E tests require specific platform states. Use `./g8e test e2e --run <pattern>` to select the tests that match the current platform state:
-
-- `TestGateway|TestEnsemble|TestDashboard` — public-surface tests, any running platform with the full stack
-- `TestAuth|TestOperatorRegistry|TestPubSub|TestCommandRoundtrip|TestCompliance` — authenticated tests, approved stack with valid owner session
-- `TestPlatformEnrollment_PendingDiscovery` — full stack running, owner bootstrapped, no approvals
-- `TestPlatformEnrollment_Denial` — full stack running, owner bootstrapped, no approvals
-- `TestPlatformEnrollment_RestartDuringPending` — full stack running, owner bootstrapped, no approvals, operator restarted by user before running
-- `TestPlatformEnrollment_Headless` — gateway only, owner bootstrapped, no operator/dashboard/ensemble
-- `TestApprovedRestart` — full approved stack, operator restarted by user before running
-
-## Vault and encryption failures
-
-All sensitive data is encrypted at rest using AES-256-GCM via the vault subsystem. Services that handle sensitive content (audit store, execution vault, token store, ledger) fail closed when the vault is locked or not initialized. See [Encryption Architecture](../architecture/encryption.md) for vault lifecycle details.
-
-### Vault not initialized
-
-If services fail with "vault not initialized":
+The current `gw restart` path stops the managed process before reading the persisted posture, and stopping removes the posture file. As a result, restart falls back to `doctrine`. Restart a non-doctrine Gateway explicitly:
 
 ```bash
-./g8e vault init
-./g8e vault unlock --key-path .g8e/vault/key
-./g8e gw restart
+./g8e gw stop
+./g8e gw start --posture consensus --consensus-id <consensus-id>
 ```
 
-### Vault locked
+Include the other startup flags required by the deployment. Do not rely on `gw restart` to preserve custom ports, CORS origins, passkey settings, downstream URLs, or consensus bootstrap configuration.
 
-If services fail with "vault is locked":
+### `gw reset` and `gw clean` are destructive
+
+Treat both commands as destructive in the current implementation. `gw clean` stops the managed process, attempts to remove g8e root anchors from the OS trust store, and removes the entire local `.g8e/` runtime tree. `gw reset` delegates to `gw clean --force` and then starts a new Gateway, so it also removes PKI, CLI credentials, logs, databases, vault state, and trust material despite its command description saying that it preserves the CA.
+
+Use neither command to repair state that must be retained. Back up required state through its owning export workflow before cleanup. After cleanup, the new Gateway has a new trust root and requires enrollment again.
+
+## Test failures
+
+The canonical test model and commands live in [Testing g8e](tests.md). The short distinction is:
+
+- `./g8e test unit` runs Tier 1 without a live platform.
+- `./g8e test integration` runs Tier 2 with local files, SQLite, PKI, pub/sub, and in-process services; it does not require an externally running Gateway.
+- `./g8e test e2e` runs Tier 3 network tests against an already running platform.
+- Tier 4 Ensemble tests call external providers and require their configured credentials.
+
+Use `./g8e test` or the repository Make targets rather than invoking `go test` directly for platform suites.
+
+### Unit or integration tests report missing Gateway state
+
+Unit tests must not depend on the developer's `.g8e/` tree. Integration tests create isolated runtime roots and in-process services. A missing local trust bundle or developer Gateway is therefore not fixed by starting or modifying the developer's Gateway.
+
+For integration fixture failures, inspect the fixture setup, temporary PKI enrollment, port allocation, and the first service-construction error. `GatewayFixture` creates real SQLite, PKI, pub/sub, and Gateway services and owns cleanup through `t.Cleanup`.
+
+### Tier 3 E2E preflight fails
+
+`./g8e test e2e` loads owner credentials from the repository-root `.g8e/` tree and performs bounded preflight checks against Gateway, Ensemble, and Dashboard. It fails non-zero if any of those services is unreachable. A host-only `./g8e gw start` is insufficient for the general E2E suite because it does not start Ensemble or Dashboard.
+
+For an approved full stack, start the bootstrapped Compose profile according to the [Unified Stack guide](../guides/unified_stack.md), enroll or approve the workloads, and then run the steady-state subset:
 
 ```bash
-./g8e vault status
-./g8e vault unlock --key-path /path/to/vault/key
-./g8e gw restart
+make test-docker
 ```
 
-Without a vault key, the gateway starts but storage services fail closed on first use. Provide the vault key via `G8E_VAULT_KEY` or `--vault-key` to enable decryption.
+Use `./g8e test e2e --run <regexp>` only after preparing the state required by the selected test. Pending, denied, restarted, and approved scenarios are mutually exclusive deployment states. The suite-level preflight still requires Gateway, Ensemble, and Dashboard, so the current E2E entry point cannot successfully run the gateway-only headless scenario even when selected by `--run`.
 
-### Invalid or lost vault key
+If configuration loading fails before preflight, confirm that `.g8e/credentials`, `.g8e/cli.crt`, `.g8e/cli.key`, and `.g8e/pki/trust/g8eg-ca-bundle.pem` belong to the running Gateway. If the CLI session expired while the certificate remains valid, run:
 
-If vault unlock fails with an invalid key error:
+```bash
+./g8e auth refresh
+```
 
-- Verify the key path is correct and the key file is readable.
-- Check that the key is a 32-byte hex-encoded value.
-- If the key is lost, all encrypted data is unrecoverable. The only option is `./g8e vault reset --confirm`, which destroys the vault and all encrypted data, followed by `./g8e vault init` and a gateway restart.
+`./g8e test e2e-full` starts the root Compose stack with the `bootstrapped` profile and tears it down with `docker compose down -v`. It removes Compose volumes on exit and is appropriate only when discarding that stack state is intentional.
 
-### Platform keyring fallback
+## Vault and encrypted storage
 
-The keystore uses the OS-native credential store when available, with a file-based fallback. On Linux, GNOME Keyring via libsecret is used when present; otherwise, the master key is stored as a base64-encoded file with restrictive permissions. On macOS, Keychain is used. On Windows, only the file-based fallback is available. If the keyring service is unavailable, check the file-based fallback path in `.g8e/`.
+The Gateway requires an unlocked vault during construction. On the first start, if no vault header exists, it creates `.g8e/vault/`, generates a vault header and random key, stores the key at `.g8e/vault/key`, and unlocks the vault. If a header already exists, startup fails when the corresponding key cannot be read or cannot unlock it.
 
-## Authentication failures after gateway start
+### Validate an existing vault key
 
-The gateway requires explicit authentication before it can be used. After starting the gateway, enroll to bootstrap your credentials:
+Use the standalone command to validate the header and key pair:
+
+```bash
+./g8e vault unlock --vault-dir .g8e/vault --key-path .g8e/vault/key
+```
+
+`vault unlock` validates the pair only within that command process; it does not unlock a running or future Gateway process. Start the Gateway with the same key path, or set `G8E_VAULT_KEY`:
+
+```bash
+./g8e gw start --vault-key "$PWD/.g8e/vault/key"
+```
+
+Use an absolute `--vault-key` path for an explicit override; the Gateway resolves a relative override from its data directory. The key file contains 64 hexadecimal characters encoding 32 bytes, normally followed by a newline. A lost vault key makes data encrypted under that vault unrecoverable. Do not initialize or reset a vault over state that must be retained.
+
+`vault status` opens a new in-process vault object and therefore reports that object as locked even when a separately running Gateway has unlocked its own vault. Use Gateway health and logs to diagnose the running process; use `vault status` only to check whether the selected vault header exists.
+
+### Vault paths appear inconsistent
+
+The current runtime default is `.g8e/vault/key`. Some flag help and comments still describe `.g8e/secrets/key`; use the startup log and `--vault-key` explicitly when diagnosing a non-default deployment. Vault CLI paths must resolve within the active `.g8e/` runtime root.
+
+The keystore master key is separate from the vault key. On Linux the keystore uses libsecret when `secret-tool` is available and otherwise uses `.g8e/secrets/.master_key`; macOS uses Keychain; Windows uses the file backend. A keystore error and a vault-unlock error therefore have different recovery paths.
+
+## Authentication and enrollment
+
+### Local CLI credentials are missing or invalid
+
+Start the Gateway, then enroll from the same project root:
 
 ```bash
 ./g8e gw start
 ./g8e auth enroll user
 ```
 
-If authentication fails, check the following:
-- Ensure the gateway is running via `./g8e gw status`.
-- Verify the external IP displayed during gateway start matches your network interface.
-- For passkey authentication, ensure your hardware security key or platform authenticator is available.
-- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll user` command generates these files via the `EnrollmentCoordinator`, which drives CSR-based enrollment with the gateway CA. On all platforms (including Windows), CLI keys are file-backed EC P-256; the `--tpm` flag was removed in v1.7.2.
+The local CLI identity consists of `.g8e/credentials`, `.g8e/cli.crt`, `.g8e/cli.key`, and the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`. CLI private keys are file-backed ECDSA P-256 keys on every supported platform.
 
-### CLI recovery (new CLI against an existing gateway)
+`auth enroll user` inspects local state and chooses one path:
 
-If you are enrolling a new CLI against an already-bootstrapped gateway (e.g. a second workstation, or replacing a lost CLI), `auth enroll user` detects that the gateway is already bootstrapped and uses the **recovery flow** instead of bootstrap. The recovery flow requires a one-time human approval from an existing enrolled user, via either a browser or an already-enrolled CLI:
+- No local identity and no existing Gateway owner: bootstrap the first user.
+- No, partial, corrupt, expired, or stale-CA identity against a bootstrapped Gateway: human-approved recovery.
+- Complete identity with a valid session: reuse it.
+- Complete identity near certificate expiry, or `--rotate-cli`: rotate it over mTLS.
+- Valid certificate with an expired or invalid CLI session: stop and direct the user to `auth refresh`.
 
-1. The new CLI posts a CSR to the gateway and receives an opaque one-time token plus a browser approval URL.
-2. An existing user approves (or denies) the request via one of two paths:
-   - **Browser path (default):** open the approval URL in a browser and approve via the Console SPA (`POST /api/v1/auth/cli/recovery/approve`, web-session protected).
-   - **Headless path (`--headless`):** the new CLI prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The approver CLI posts to `POST /api/v1/auth/cli/recovery/approve-cli` (mTLS protected); the approver user ID is derived from the verified mTLS certificate URI SAN.
-3. The new CLI completes the recovery by proving possession of the CSR private key (signing the request ID) and receives a new CLI certificate.
+### Recover a CLI against an existing Gateway
 
-If recovery fails:
-- The token expires after a bounded TTL. If the approving user does not act in time, re-run `auth enroll user` to get a fresh token.
-- The opaque token is only returned once. If you lose it, re-run `auth enroll user`.
-- On the browser path, the approving user must have an active web session (cookie-based auth). If approval fails with 401, the approving user should re-authenticate in their browser.
-- On the headless path, the approver CLI must hold a valid, non-revoked CLI certificate bound to an active user. A revoked cert is rejected by the mTLS middleware (401) before the handler runs; a deactivated user is rejected by the handler (403).
-- Recovery is not available on an unbootstrapped gateway. Use the bootstrap endpoint instead.
+Recovery creates a CSR-bound request with a 10-minute lifetime. The opaque token is returned once and only its hash is stored. The default path opens an approval URL for an existing passkey-authenticated user. The CLI polls until approval and then proves possession of the CSR private key before receiving the new certificate.
 
-### `--headless` flag
+For a browserless new CLI, run:
 
-`--headless` on `auth enroll user` opts into a CLI-only identity that completes enrollment without a browser. It skips the passkey ceremony and OS trust installation (the `--no-system-trust` behavior is implied), and on the recovery branch it prints `g8e auth approve-recovery <token>` for an already-enrolled CLI to run instead of opening a browser. The resulting identity is mTLS-only: it can do everything the CLI could do before (MCP, A2A, governance, SSE, rotation) but cannot authenticate to the Console SPA because no browser passkey was registered. A browser passkey can be registered later from a browser if console access is desired.
+```bash
+./g8e auth enroll user --headless
+```
 
-`--headless` is distinct from the internal `SkipPasskey` field used by `mcp agent run` and demos: those callers set `SkipPasskey` directly and must NOT set `Headless`, because `Headless` also changes recovery output (printing the approve-recovery command instead of opening a browser), which those callers do not want.
+The command prints `g8e auth approve-recovery <token>` for an already enrolled CLI to run. `--headless` skips system-trust installation and passkey registration, so the resulting identity supports mTLS CLI access but not Console web-session authentication.
 
-### `--no-system-trust` flag
+If recovery expires, is denied, or the token is lost, rerun `auth enroll user` to create a new request. Browser approval requires an active web session; CLI approval requires a valid, non-revoked CLI certificate bound to an active user.
 
-`--no-system-trust` skips the OS trust store **installation** step. It is an **administrator-managed trust opt-out**, not a headless or passkey bypass. Use it only when an administrator has already installed the gateway root CA into the OS trust store. The passkey ceremony still runs. If you use `--no-system-trust` without pre-installing the root CA, browser-based WebAuthn will fail because the browser will not trust the gateway's TLS certificate.
+### Session expiry and certificate rotation
 
-As of v1.7.2, **stale-anchor detection still runs under `--no-system-trust`** — only the installation step is skipped. The user may have stale g8e root anchors from a previous gateway instance (e.g., after `gw clean`) that break the browser even when the CLI skips installation. When stale anchors are found, the removal prompt fires; on confirmation the stale anchors are removed and the blocking browser-restart gate fires (the user must close all browser windows and press Enter before the passkey ceremony), but no new anchor is installed.
+Web sessions last 24 hours. CLI sessions and CLI certificates last 7 days. Operator enrollment sessions are issued for one hour. Run `auth refresh` when the CLI session is expired but the CLI certificate is still valid. Refresh creates a new session without rotating the certificate.
 
-### Browser CA trust and WebAuthn failures
-
-The gateway uses self-signed certificates. Browser-based WebAuthn registration and console access require the platform Root CA to be trusted by the operating system. The `auth enroll user` command installs the Root CA into the OS trust store before opening the browser for the passkey ceremony. If automatic OS trust installation fails, `auth enroll user` stops before opening the browser and returns actionable remediation. Use `--no-system-trust` only when an administrator has already installed the Root CA on the host; it does not skip the passkey ceremony.
-
-After installing the Root CA (or removing stale anchors), `auth enroll user` **blocks until the user closes all open browser windows and presses Enter**. Browsers cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA. The blocking prompt ensures the browser restart happens before the passkey ceremony opens a fresh browser session. Firefox and other browser-private trust stores may require separate handling. This is the most common cause of console access failures on fresh setups.
-
-### Certificate expiry and rotation
-
-Leaf certificates (operator, CLI, app) have a 7-day validity period. If authentication fails with a certificate-related error, the CLI certificate may have expired. The `EnrollmentCoordinator` automatically detects expiring CLI certificates (within 24 hours of expiry) and rotates them via the mTLS-protected rotation endpoint (`/api/v1/auth/cli/rotate`).
-Rotation is a single transactional replacement: the new certificate is
-signed before the old session is deactivated, and the old certificate is revoked after the session replacement commits.
-
-To force rotation of a healthy CLI certificate (e.g. after a key compromise concern), use the `--rotate-cli` flag:
+The enrollment coordinator rotates a CLI certificate within 24 hours of expiry. Force rotation of a still-valid identity with:
 
 ```bash
 ./g8e auth enroll user --rotate-cli
 ```
 
-If the CLI certificate has already expired and rotation is not possible, re-enroll from scratch:
+An expired certificate cannot authenticate to the refresh or rotation endpoint; rerun `auth enroll user` and complete recovery. Gateway serving certificates last 90 days and the Gateway checks them in its renewal loop. The outbound Operator also runs a client-certificate renewal loop.
+
+`auth logout` removes local credentials, CLI certificate, and CLI key. It does not revoke the server-side session and does not remove the shared OS root CA.
+
+### OS trust and stale CA failures
+
+Browser passkey and Console flows require the Gateway root CA in the relevant system or browser trust store. By default, `auth enroll user` installs the live root before opening the passkey ceremony. When trust changes, enrollment waits for the user to close all browser windows and continue so a new browser process reloads trust.
+
+`--no-system-trust` skips installation only. It does not skip passkey registration, trust-bundle validation, or stale-anchor detection. Use it only when an administrator already installed the live Gateway root. `--headless` is the browserless option.
+
+Enrollment discovers the live CA over the plain-HTTP well-known endpoint. If the live root differs from the local bundle, it routes through recovery and removes stale g8e OS anchors before installing the new root. If discovery is unreachable, verify the discovery endpoint supplied by `--endpoint` and `--port`; an HTTPS-only route cannot replace the plain-HTTP discovery path.
+
+Firefox or another browser with a private trust store may require separate CA installation even when the operating-system store is correct.
+
+## Browser, CORS, and WebAuthn failures
+
+### Cross-origin requests lose the web session
+
+Start the Gateway with every exact allowed frontend origin and corresponding passkey origin. Both flags are repeatable:
 
 ```bash
-./g8e auth logout && ./g8e auth enroll user
+./g8e gw start \
+  --cors-origin https://app.example.com \
+  --passkey-rp-origin https://app.example.com \
+  --passkey-rp-id app.example.com \
+  --public-base-url https://app.example.com
 ```
 
-The gateway serving certificate has a 90-day validity period and is auto-rotated by the PKI authority. Operator certificates are auto-renewed by `RunClientCertRenewalLoop` in `internal/cli/serve/cert.go`, which periodically re-enrolls via the device-enroll handler before expiry.
+Browser `fetch` calls must use `credentials: 'include'`, and browser `EventSource` clients must use `withCredentials: true`. When CORS origins are configured, web-session cookies use `SameSite=None`; otherwise they use `SameSite=Lax`. Browser policy can still block cross-site cookies, so same-site deployment or a same-origin proxy may be required. See [Connect a Frontend](../guides/connect_frontend_to_gateway.md) for the complete browser contract.
 
-### g8e.local DNS resolution
+### WebAuthn reports an RP ID or origin mismatch
 
-The platform uses `g8e.local` as the default hostname for gateway connections. If `g8e.local` does not resolve via system DNS, the CLI automatically falls back to the machine's external interface IP. This fallback is implemented in `internal/cli/cmd/mcp.go`. No `/etc/hosts` changes or DNS configuration are required for basic operation.
+The RP ID must be a registrable-domain suffix of the page origin, and the exact page origin must be configured as a passkey origin. Do not use `localhost` as the RP ID for a public hostname. Include scheme and port in `--passkey-rp-origin`, but provide only the domain in `--passkey-rp-id`.
 
-### Session TTL
+TLS trust failures can surface as WebAuthn failures before the ceremony reaches the Gateway. Verify the live CA, close all browser processes after trust changes, and retry from a fresh browser process.
 
-Operator sessions have a 1-hour TTL by default. CLI sessions have a 7-day TTL, aligned with the CLI certificate validity period. If CLI commands fail with session-related errors after extended idle periods, re-enroll to obtain a fresh session. Operator sessions require a gateway restart to refresh.
+## L3 approval failures
 
-## L3 approval timeouts and transaction rejection
+`ratify` and `notary` enforce L3 proof for mutation-classified actions. A new suspended approval request lasts 2 minutes. After approval, the proof remains valid for up to 30 minutes for verification. The CLI SSE waiter uses a 3-minute timeout to cover the request window plus delivery margin.
 
-Under `ratify` and `notary` postures, mutation actions require L3 human authorization. The approval flow has two time windows that can cause transaction rejection:
+If approval times out:
 
-- **Request window (2 minutes)**: The passkey ceremony must be completed within 2 minutes of the transaction being suspended. If the passkey approval is not completed within this window, the request expires and the action must be retried.
-- **Dispatch window (30 minutes)**: After approval, the transaction must be dispatched within 30 minutes. Transactions not dispatched within that window must be re-approved.
+- Retry the original action to create a fresh suspended request.
+- Confirm the browser trusts the Gateway and has an active web session.
+- Confirm the CLI SSE client uses the current CLI session and HTTPS endpoint.
+- Check Gateway logs for an expired suspended transaction, ownership mismatch, or failed proof verification.
 
-The CLI SSE client in `internal/cli/auth/approval_sse.go` waits for `approval.completed` events with a 3-minute timeout, which covers the 2-minute gateway request window plus margin. If the SSE wait times out, the CLI reports the failure and the transaction must be resubmitted.
+Mutation classification is owned by `ActionType.IsMutation` in `internal/constants/action_types.go` and mirrored in `protocol/constants/status.json`. Do not maintain a copied action list in troubleshooting procedures; inspect those owners when a newly added action behaves unexpectedly.
 
-Common causes of approval failures:
-- The user did not complete the passkey ceremony in time.
-- The browser was not restarted after the Root CA was installed by `auth enroll user` (`auth enroll user` now blocks until the user closes all browser windows and presses Enter, but if the user dismissed the prompt or restarted into a stale browser session, the WebAuthn ceremony will fail with a TLS error).
-- The SSE stream was not accessible due to network or authentication issues.
-- The gateway posture was changed to `ratify` or `notary` without a configured L3 notary.
+## Consensus and notary transaction failures
 
-See [Authentication & Authorization](../architecture/auth.md) for the full approval flow and [SSE Streaming](../architecture/sse.md) for SSE event delivery details.
+For `consensus` and `notary`, confirm all of the following:
 
-## Governance posture startup failures
+- `--consensus-id` selects an enabled policy.
+- The policy has at least one member, quorum is at least one and does not exceed member count, and distinct-signer requirements can be met.
+- Every expected member has an enabled trusted signer and an available signing key.
+- `notary` also has a usable L3 approval path for mutations.
 
-The gateway posture is set at startup via `--posture <doctrine|consensus|ratify|notary>` and cannot be changed at runtime. Each posture has different runtime requirements:
+`--consensus-bootstrap <file>` seeds trusted signers, member private keys, and an enabled policy before service construction. The JSON requires `consensus_id`, non-empty `member_app_ids`, and `quorum >= 1`. Optional `member_seeds` supplies one Ed25519 seed per member. Optional `seed_hex` supplies a shared seed; if neither seed form is present, startup generates a shared key. Bootstrap is idempotent by consensus ID and skips an existing policy.
 
-- **Doctrine** (default): No consensus prerequisites. L2 and L3 are audited but not enforced.
-- **Consensus**: Requires a consensus policy to exist in the database with quorum >= 1. The Consensus service is bootstrapped in-process.
-- **Ratify**: Requires L3 human authorization for mutations and has no consensus prerequisite.
-- **Notary**: Same consensus requirements as consensus, plus L3 human authorization for mutations.
+Use per-member seeds when a policy requires distinct signatures. A shared seed registers the same public key for every member and cannot provide cryptographically distinct votes.
 
-If the gateway fails to start in `consensus` or `notary` posture, check:
+## State-root mismatch
 
-- The consensus ID is non-empty.
-- The consensus policy exists in the database and is enabled.
-- Quorum is >= 1 (valid for single-member ensembles).
-- For `ratify` or `notary` posture, the L3 notary is available. Without it, mutations fail closed.
+L4 rejects an envelope when its `state_merkle_root` is empty or differs from the current root. The in-process Gateway path carries a pre-fetched root through envelope construction and verification so concurrent mutations do not invalidate that local build window. External Operator verification fetches the current root at verification time.
 
-For declarative consensus seeding, use the `--consensus-bootstrap` flag with a JSON config file containing `consensus_id`, `member_app_ids`, `quorum`, and optional `seed_hex`. This is idempotent: if the consensus already exists, the bootstrap is skipped.
+A mismatch usually means an external client built an envelope from an old `/api/v1/state` response or state changed before the Operator verified it. Fetch a fresh root, rebuild and re-sign the complete envelope, and submit it promptly. Never patch only the root on an already hashed or signed envelope.
 
-Consensus members whose keys cannot be resolved during bootstrap are included without a private key and a warning is logged. They can participate in policy but cannot sign votes. If all members lack keys, L2 deliberation produces no votes and quorum fails.
+The Gateway root is persisted in SQLite; a restart alone does not imply a new root. The Operator root is derived from the embedded go-git ledger HEAD, so a ledger commit changes it while an unrelated working-tree edit does not itself change HEAD. See [Storage Architecture](../architecture/storage.md) and [Governance](../architecture/governance.md).
 
-See [Governance](../architecture/governance.md) for posture definitions and consensus bootstrap details.
+## Runtime paths and ledger copies
 
-### Governance envelope rate limiting
+All default runtime paths are rooted at `.g8e/` under the current working directory. CLI commands operating on another checkout or directory see another runtime. Prefer explicit command flags for intentional non-default data, PKI, secrets, vault, or key paths.
 
-The governance envelope submission endpoint (`POST /api/v1/governance/envelopes`) is rate-limited. If submissions fail with HTTP 429, reduce the submission frequency or batch multiple actions into fewer envelopes.
+The encrypted ledger mirror reads a file in full before AES-GCM encryption and rejects files larger than 100 MiB. Because the production ledger requires an encryption vault, treat 100 MiB as the effective mirror limit. The returned error is currently generic, so compare the source file size when a file mutation reaches ledger copy and fails without a more specific cause.
 
-### Outbound mode mutations fail closed
+Ledger paths normalize absolute host paths into repository-relative forward-slash paths and remove Windows drive prefixes for consistent history keys.
 
-The default posture for outbound (operator) mode is `doctrine`. When the operator receives `ratify` or `notary` posture, mutations require L3 human authorization. The outbound L3 notary (`governance.NewOutboundL3Notary` in `internal/services/governance/l3_notary.go`) is not nil in outbound mode: it suspends mutation transactions and requires CLI-based approval via the suspended transaction store. If operators reject all mutations with L3-related errors under `ratify` or `notary` posture, complete the CLI approval flow or use a posture that does not enforce L3.
+## SSE delivery failures
 
-The following action types are classified as mutations and require L3 proof under `ratify` and `notary` postures: `A2A_CALL`, `CANCEL`, `DOCUMENT_DELETE`, `DOCUMENT_UPDATE`, `EXECUTE_BASH`, `FILE_EDIT`, `MCP_CALL`, `PLATFORM_ENROLLMENT_CREATE_SESSION`, `PLATFORM_ENROLLMENT_DECIDE`, `PLATFORM_ENROLLMENT_ISSUE`, `PLATFORM_ENROLLMENT_PERSIST_POLICY`, `RESTORE_FILE`, `SHUTDOWN`. Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`) do not require L3 proof under either posture.
+SSE polling and streaming run on HTTPS and accept either mTLS CLI/Operator authentication or a browser web-session cookie. App certificates are not SSE consumer identities. Routing is derived from authenticated context, not caller-provided user or session query parameters.
 
-## State Merkle root mismatch
+When events are missing:
 
-The L4 Warden validates that the `state_merkle_root` in the GovernanceEnvelope matches the current state root of the gateway or operator. A mismatch causes the transaction to be rejected as stale.
+- Confirm the CLI sends `X-G8E-CLI-Session-ID`, or the browser sends its session cookie.
+- Confirm the authenticated user owns the selected CLI or web session.
+- Reconnect with `Last-Event-ID` or `since_id` to replay persisted rows.
+- Check for `replay_failed` or `truncated` sentinel events.
 
-Common causes:
-- Concurrent transactions modifying shared state between envelope creation and submission.
-- The gateway was restarted between envelope creation and submission, causing the state root to change.
-- The operator's git ledger HEAD changed due to external file modifications.
+Each live subscriber has a 100-entry drop-oldest buffer. Persisted replay returns at most 1,000 rows per stream connection and emits a truncation sentinel at that limit. The maintenance loop runs every 30 seconds and deletes SSE rows older than one hour. Reconnect promptly because dropped live entries are recoverable only while their persisted rows remain within that retention window. See [SSE Streaming](../architecture/sse.md).
 
-If this occurs frequently, ensure envelopes are submitted promptly after creation. The state root is derived from the git ledger HEAD commit hash on the operator and from the SQLite state version on the gateway. See [Storage Architecture](../architecture/storage.md) for state root details and [Governance](../architecture/governance.md) for Warden validation logic.
+## Rate-limit responses
 
-## Path resolution problems
+The Gateway's global token-bucket limiter is disabled when `--rate-limit-rps` is zero or negative. When enabled, it applies per remote IP to the plain-HTTP router and to selected HTTPS ingress handlers, including governance-envelope and MCP/A2A submission. `--rate-limit-burst` controls immediate burst capacity.
 
-The CLI resolves the project root using `config.FindProjectRoot()` in `internal/config/config.go`, which returns the current working directory (`os.Getwd()`). Run commands from the project root directory to ensure correct path resolution:
+An enrolled app can also have its own app-policy rate limit. For HTTP 429 responses, identify whether the log reports the remote-IP limiter or the app-policy limiter before changing configuration. Retrying a governance mutation is not equivalent to batching multiple actions into one envelope; preserve the intended transaction and governance semantics.
 
-```bash
-cd /path/to/g8e
-./g8e gw status
-```
+## Cloudflare Tunnel failures
 
-### Cross-platform path handling
-
-All storage services construct filesystem paths through a shared path utility layer that prevents a Windows-specific double-join issue: when two absolute paths are joined with standard library functions, the result is an invalid concatenated path (for example, `C:\temp\C:\temp\data.db`). The utility layer detects absolute paths in the joined elements and uses them as-is.
-
-Configuration paths for databases and directories can be either relative or absolute. Relative paths are resolved against a base data directory. Absolute paths are respected and used without modification, allowing operators to place individual databases on separate volumes or drives.
-
-The ledger additionally strips Windows drive letters and leading separators before constructing ledger-relative paths, ensuring that file history is consistent across platforms. See [Storage Architecture](../architecture/storage.md) for cross-platform path handling details.
-
-### Ledger file size limit
-
-The ledger enforces a 100 MB size limit on encrypted file copies to prevent out-of-memory during the full-read required by AES-256-GCM. Files larger than 100 MB cannot be encrypted and copied to the ledger. Unencrypted file copies are streamed to avoid loading entire files into memory. If a file operation fails with a size limit error, the file exceeds the encrypted copy cap.
-
-## `./g8e` command not found
-
-The `g8e` file at the repository root is a compiled Go binary. If you receive "command not found", ensure you are running from the repository root and the binary has execute permissions:
-
-```bash
-ls -l g8e
-chmod +x g8e
-./g8e gw status
-```
-
-If the binary is missing or outdated, rebuild it:
-
-```bash
-make build
-```
-
-The `make build` target compiles `cmd/g8e` and copies the resulting binary to the repository root as `g8e`. The target handles Windows builds natively, producing `g8e.exe` when run on Windows.
-
-## SSE event delivery issues
-
-The SSE streaming infrastructure provides real-time event delivery from app workloads to browser and CLI clients. Events are stored in the `sse_events` table and routed by `web_session_id`, `cli_session_id`, or `user_id`. See [SSE Streaming](../architecture/sse.md) for full details.
-
-### Events not received
-
-If SSE events are not reaching clients:
-
-- Verify the client is authenticated. SSE consumer endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) require dual auth: mTLS for CLI/operator clients, or web session cookie for browser clients.
-- Check that the routing identifier (`web_session_id`, `cli_session_id`, or `user_id`) matches the authenticated session. The `authorizeSSERoute` helper enforces ownership checks.
-- SSE endpoints are only available on the HTTPS port (8443), not on the HTTP bootstrap port (8080).
-
-### Event drops under high load
-
-The SSE stream uses a bounded drop-oldest buffer of 100 entries per subscriber. If the buffer is full when an event arrives, the oldest queued event is dropped (not the incoming event) with a back-pressure warning log. Consumers can recover evicted events via DB replay on reconnect. Consider batching events before pushing to reduce database load and buffer pressure.
-
-### Event retention
-
-The `sse_events` table is pruned automatically by the gateway maintenance loop every 30 seconds with a 1-hour retention window. Events older than 1 hour are deleted. If historical events are needed beyond 1 hour, query them before they expire.
-
-### State root impact
-
-SSE event inserts do not alter the state root. This is intentional to allow high-frequency event streaming without governance overhead. Events are considered ephemeral telemetry, not governance state.
-
-## CORS and cross-origin session issues
-
-Browser-based frontends connecting to the gateway require explicit CORS configuration. If API calls return 401 despite being logged in, or the browser console shows `Access-Control-Allow-Origin` errors, the gateway was not started with `--cors-origin` matching the frontend origin.
-
-Restart the gateway with the correct origin:
-
-```bash
-./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com
-```
-
-Ensure every `fetch` call includes `credentials: 'include'`. The gateway sets `SameSite=None` on session cookies only when `--cors-origin` is configured, which is required for cross-origin cookie delivery.
-
-For SSE connections from browser clients, construct `EventSource` with `withCredentials: true`. Without authenticated session cookies, the SSE endpoints return 401. Verify the `web_session_id` is valid via `GET /api/v1/auth/sessions/me`. See [Build a g8e-Compatible Frontend](../guides/build_frontend.md) for the full browser integration flow.
-
-## WebAuthn passkey RP ID mismatch
-
-If the WebAuthn ceremony fails with "RP ID is not a valid domain" or similar, the `--passkey-rp-id` flag does not match the frontend app's registrable domain. The RP ID must be a registrable domain suffix of the current page's origin. For example, when accessing the gateway via `console.g8e.ai`, the RP ID must be `console.g8e.ai`, not `localhost`.
-
-When accessing via a Cloudflare tunnel, set `--passkey-rp-id` to the tunnel hostname. See [Cloudflare Tunnel Integration](../guides/cloudflare_tunnel.md) for tunnel-specific configuration.
-
-## Stale trust bundle after PKI regeneration
-
-If the gateway PKI is regenerated (`gw clean`, PKI rotation, or gateway migration to a new host with a fresh CA) while a workstation holds a complete CLI identity from the old gateway, the local trust bundle and OS trust store are both stale in lockstep. Re-running `auth enroll user` previously failed with a raw TLS error during the passkey ceremony:
-
-```
-tls: failed to verify certificate: x509: certificate signed by unknown
-  authority (possibly because of "x509: ECDSA verification failure"
-  while trying to verify candidate authority certificate "g8e Root CA")
-```
-
-…with no diagnosable cause, because the coordinator trusted the local bundle as the source of truth and the OS store matched it.
-
-As of v1.7.2, `auth enroll user` now fetches the **live** gateway root CA from the unauthenticated discovery endpoint (`GET /.well-known/g8e/pki/ca-bundle` on the plain-HTTP port) before the reuse decision. When the live root fingerprint does not match the local bundle, the coordinator automatically:
-
-1. Prints `Local trust bundle does not match the live gateway root CA; using recovery flow.`
-2. Routes to the **recovery flow** (human-approved, plain-HTTP, token-scoped), which issues a fresh CLI certificate signed by the new CA. Rotation is impossible here because the old CLI cert cannot authenticate to the new gateway via mTLS.
-3. Detects the stale OS root anchor using the **live** fingerprint (not the stale local one), prompts for removal, and reinstalls the new root CA.
-
-So in the common case you no longer need to log out first — just re-run `auth enroll user` and approve the recovery in the browser:
-
-```bash
-./g8e auth enroll user
-```
-
-If the discovery endpoint is unreachable (e.g., the gateway is only reachable on the HTTPS port, or you are intentionally offline), the coordinator prints a diagnostic warning naming the `gw clean` scenario and the `--endpoint` flag, then proceeds. If the bundle is in fact stale, the subsequent mTLS call surfaces a TLS error — but with prior context. In that case, fall back to the manual flow:
-
-```bash
-./g8e auth logout && ./g8e auth enroll user
-```
-
-Note: `auth logout` removes local CLI credential material (CLI cert,
-CLI key, credentials JSON) but does **not** remove the shared OS root CA. This is intentional — the OS root CA is a shared system resource that may be trusted by other applications. If the root CA itself is stale (PKI was regenerated) and the automatic recovery routing did not remove it, remove it manually from the OS trust store before re-enrolling, or rely on `auth enroll user` which will detect the stale anchor via the live fingerprint and prompt for removal.
-
-## Cloudflare tunnel issues
-
-When exposing the gateway via a Cloudflare tunnel, additional failure modes apply beyond local gateway troubleshooting. See [Cloudflare Tunnel Integration](../guides/cloudflare_tunnel.md) for full setup instructions.
-
-### 502 Bad Gateway
-
-The tunnel is connected but the gateway is not running or not listening on `localhost:8443`. Verify the gateway health endpoint and tunnel status:
+Use the [Cloudflare Tunnel guide](../guides/cloudflare_tunnel.md) as the canonical setup procedure. For a local origin check:
 
 ```bash
 curl -sk https://localhost:8443/api/v1/health
-g8e gw tunnel status --hostname console.g8e.ai --name g8e
+./g8e gw tunnel status --hostname <public-hostname> --name <tunnel-name>
 ```
 
-### DNS record conflict
+A 502 usually means `cloudflared` cannot reach the configured local HTTPS port or cannot validate the origin certificate. `gw tunnel create` defaults to `noTLSVerify` unless `--ca-bundle` is supplied; when verification is enabled, `--origin-server-name` must match a serving-certificate SAN.
 
-If DNS routing fails with "record already exists," use `--skip-dns` with `g8e gw tunnel create` to skip the DNS step. Alternatively, delete the old DNS record in the Cloudflare dashboard or use a different hostname.
+If DNS routing reports an existing record, the create command already recognizes that condition and continues. Use `--skip-dns` when DNS is managed separately. Check `cloudflared --version` and its foreground output when the tunnel exists but does not connect.
 
-### Tunnel version outdated
+Public browser access also requires matching `--public-base-url`, `--passkey-rp-id`, `--passkey-rp-origin`, and `--cors-origin` Gateway settings.
 
-If the tunnel exhibits unexpected behavior, check and update `cloudflared`:
+## Receipt verification failures
 
-```bash
-cloudflared --version
-```
+Gateway and Operator L5 Actuators sign `ActionReceipt` messages with host-local Ed25519 keys and export `Actuator_pub.pem` and `Actuator_pub.json` under their runtime PKI directories. Verification requires the public key from the component that produced the receipt and must check both the receipt signature and final persistence attestation.
 
-If installed via dpkg, download and install the latest release from the Cloudflare GitHub releases page.
+The Python protocol package exposes typed parsing, canonicalization, signature verification, and persistence-attestation verification helpers in `g8e.receipts`. A key copied from the producing runtime enables cryptographic verification but does not independently establish trust in that key. Bind trusted verifier keys through a separately authenticated deployment or evidence workflow. See [Build Apps](../guides/build_apps.md) for a minimal verifier and [Encryption Architecture](../architecture/encryption.md) for key ownership.
 
-## Receipt signature verification
+## Demo and Docker failures
 
-The Gateway signs `ActionReceipt`s with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats.
+Run demo Compose commands from the demo directory that owns `compose.yml`, or pass `-f` explicitly. Running `docker compose ps` at the repository root inspects the unified stack, not a demo stack.
 
-No mechanism exists for distributing the Gateway's public key to Engine instances via an attested channel. Consumers must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. The g8e Python package exposes `parse_action_receipt`, `action_receipt_to_dict`, `canonicalize_action_receipt`, `verify_action_receipt_signature`, and `verify_receipt_persistence_attestation` in `g8e.receipts`; callers provide the trusted Ed25519 public key obtained through that out-of-band channel.
-
-See [Encryption Architecture](../architecture/encryption.md) for receipt signature details.
-
-## Docker demo issues
-
-### Demo port conflicts
-
-If multiple demos are running simultaneously, port conflicts may occur. Check which demos are running:
+For the healthcare Metabase dependency:
 
 ```bash
-docker compose ps
-```
-
-### Metabase startup failure (healthcare demo)
-
-Metabase requires the `reporting-db` PostgreSQL container to be healthy before it can initialize. If Metabase is stuck, verify the database status and restart Metabase:
-
-```bash
+cd demos/healthcare
 docker compose ps reporting-db
+docker compose logs reporting-db
 docker compose restart compliance-dashboard
 ```
 
-## Known platform limitations
+Use `./g8e demos scenarios list` and the owning demo README to identify scenario prerequisites. Multiple demo environments use different host-port mappings; inspect each demo's `compose.yml` rather than assuming root ports.
 
-- **No RBAC**: Role-based access control is in development. Authentication is binary (enrolled or not) without role
-differentiation.
-- **No Cloud SaaS**: The platform is designed for local deployment. A cloud-hosted SaaS version is not available.
-- **No external audits**: Third-party security assessments are planned but not yet completed.
-- **Receipt signature distribution**: No attested channel exists for distributing the Gateway's public key to Engine instances. See the Receipt Signature Verification section above.
+## Windows-specific failures
 
-## Windows-specific issues
+The CLI uses file-backed ECDSA P-256 keys on Windows. OS trust installation invokes the Windows Certificate Store through PowerShell, while browser passkeys create a separate web-session identity. The keystore uses `.g8e/secrets/.master_key` because the Windows backend is file-based.
 
-### CLI enrollment and file-backed keys
-
-On all platforms (including Windows), `g8e auth enroll user` uses file-backed EC P-256 keys for the CLI identity. The `--tpm` flag was removed in v1.7.2. The `EnrollmentCoordinator` handles the full enrollment state machine (bootstrap, recovery, rotation, reuse) and installs the gateway root CA into the OS trust store before opening the browser for the passkey ceremony. On Windows, trust installation uses the Windows Certificate Store via PowerShell. This is distinct from the browser-based WebAuthn passkey flow, which uses a cookie-based web session.
-
-### Keystore file-based fallback
-
-On Windows, the keystore uses only the file-based fallback for platform secrets. The master key is stored as a base64-encoded file with restrictive permissions. If the keyring is not functioning, check the file-based fallback path in `.g8e/`.
-
-### Path normalization
-
-Windows paths are normalized by converting forward slashes to backslashes and removing redundant separators. The shared path utility layer prevents double-joining of absolute paths. If database or directory paths appear malformed on Windows, ensure the configuration uses consistent path separators.
+Run the Windows binary as `g8e.exe`. Use `build.ps1` for native Windows build workflows identified by the repository help. Paths are resolved through the current working directory and normalized for ledger history; avoid mixing runtime trees created from different shells or working directories.

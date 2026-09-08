@@ -76,5 +76,4 @@ Prompt constants and identifiers are synchronized across the repository:
 - [Architecture](architecture.md) — System architecture and execution pipelines
 - [Governance](governance.md) — Five-layer verification gauntlet and envelope lifecycle
 - [Thinking](thinking.md) — Thinking budgets, reasoning tokens, and cryptographic signatures
-- [Constants](constants.md) — Protocol constants, enums, and collection registries
 - [LLM Providers](llm-providers.md) — Provider interfaces, generation configs, and structured outputs
