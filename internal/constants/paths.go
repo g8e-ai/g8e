@@ -738,6 +738,7 @@ const (
 	ComplianceBundleSourceProvenanceDirname       = "provenance"
 	ComplianceBundleSourceArtifactsDirname        = "artifacts"
 	ComplianceBundleSourceVerificationFilename    = "verification.json"
+	ComplianceBundleFrameworkProfileTestPath      = "profiles/profile:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json"
 	ComplianceBundleUnexpectedTestPath            = "unexpected.json"
 	ComplianceReportSigningMetadataTestFilename   = "signing-metadata.json"
 	ComplianceReportSigningPrivateKeyTestFilename = "signing-private-key.hex"

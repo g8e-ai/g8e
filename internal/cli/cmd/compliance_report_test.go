@@ -111,7 +111,7 @@ func TestComplianceReportCmd_ContainsGenerateAndVerifySubcommands(t *testing.T) 
 	assert.Equal(t, "verify", cmd.Commands()[1].Name())
 }
 
-func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleWithEveryProtectedRenderer(t *testing.T) {
+func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleAndRootedVerifierRejectsInventoryMutations(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	runID := persistMinimalEvidenceGraphEvalFixture(t, fileSvc)
 	scopeID := evidence.EvalScopeID("evidence-graph-suite")
@@ -191,6 +191,36 @@ func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleWithEveryProt
 	require.NoError(t, compliancev1.UnmarshalCanonical(bytes.TrimSpace(verificationOutput.Bytes()), verificationReport))
 	assert.True(t, verificationReport.GetValid())
 	assert.Empty(t, verificationReport.GetFailures())
+
+	bundleDir := path.Dir(descriptorPath)
+	nestedDir := path.Join(bundleDir, constants.TestNestedDirname)
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), nestedDir, constants.PermDirPrivate))
+	nestedUnexpectedPath := path.Join(constants.TestNestedDirname, constants.ComplianceBundleUnexpectedTestPath)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), path.Join(bundleDir, nestedUnexpectedPath), []byte(`{}`), constants.PermFilePublic))
+	input, err := loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath)
+	require.NoError(t, err)
+	unexpectedReport, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{Bundle: input.bundle, Reader: input.reader, TrustPolicy: input.trustPolicy, VerifiedAt: windowEnd})
+	require.NoError(t, err)
+	require.NoError(t, input.close())
+	assert.False(t, unexpectedReport.GetValid())
+	assertComplianceVerificationFailure(t, unexpectedReport, constants.ErrUnexpectedEvidenceArtifact, nestedUnexpectedPath)
+
+	bundle.Artifacts = append(bundle.Artifacts, &compliancev1.BundleArtifact{
+		BundlePath: constants.ComplianceBundleUnexpectedTestPath,
+		Sha256:     strings.Repeat("0", sha256.Size*2),
+		MediaType:  constants.MediaTypeJSON,
+		Profile:    constants.ComplianceBundleProfilePublic,
+	})
+	mutatedDescriptorBody, err := compliancev1.MarshalCanonical(bundle)
+	require.NoError(t, err)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), descriptorPath, mutatedDescriptorBody, constants.PermFilePublic))
+	input, err = loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath)
+	require.NoError(t, err)
+	missingReport, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{Bundle: input.bundle, Reader: input.reader, TrustPolicy: input.trustPolicy, VerifiedAt: windowEnd})
+	require.NoError(t, err)
+	require.NoError(t, input.close())
+	assert.False(t, missingReport.GetValid())
+	assertComplianceVerificationFailure(t, missingReport, constants.ErrBundleArtifactMissing, constants.ComplianceBundleUnexpectedTestPath)
 }
 
 func TestComplianceReportGenerateCmdWithConfig_PersistedEvalSourceMutationsFailIndependentReplay(t *testing.T) {
@@ -249,11 +279,68 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedEvalSourceMutationsFailI
 
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
-			codes := make([]string, 0, len(report.GetFailures()))
-			for _, failure := range report.GetFailures() {
-				codes = append(codes, failure.GetCode())
-			}
-			assert.Contains(t, codes, constants.ErrEvalRunVerificationFailed.Error())
+			assertComplianceVerificationFailure(t, report, constants.ErrEvalRunVerificationFailed, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename))
+		})
+	}
+}
+
+func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailIndependentReplay(t *testing.T) {
+	tests := []struct {
+		name         string
+		relativePath string
+		body         []byte
+	}{
+		{name: "verification report", relativePath: constants.ComplianceBundleSourceVerificationFilename, body: []byte(`{}`)},
+		{name: "run manifest", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename), body: []byte(`{}`)},
+		{name: "scenario results", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename), body: []byte("{}\n")},
+		{name: "provenance artifact", relativePath: path.Join(constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile), body: []byte("services: {tampered: true}")},
+		{name: "scenario definitions", relativePath: path.Join(constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename), body: []byte("{}\n")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileSvc, _ := newCmdTestEnv(t)
+			projectRoot := writeDemoProvenanceTree(t)
+			runID := persistMinimalDemoRunFixture(t, fileSvc, projectRoot)
+			scopeID := constants.DemoScopeFedRAMP
+			identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+			cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), func(string) evidence.ProvenanceSource {
+				return evidence.NewDemoDirectoryProvenanceSource(projectRoot)
+			}, func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+				return identity, nil
+			})
+			configureComplianceReportGenerateCommand(t, cmd)
+			windowStart := time.Unix(1_699_999_999, 0).UTC()
+			windowEnd := time.Unix(1_700_000_100, 0).UTC()
+			require.NoError(t, cmd.Flags().Set("scope-id", scopeID))
+			require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("demo-run", runID))
+			var output bytes.Buffer
+			cmd.SetOut(&output)
+			require.NoError(t, cmd.RunE(cmd, nil))
+			descriptorPath, err := fileSvc.Rel(string(bytes.TrimSpace(output.Bytes())))
+			require.NoError(t, err)
+			descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
+			require.NoError(t, err)
+			bundle := &compliancev1.ComplianceReportBundle{}
+			require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+			bundleDir := path.Dir(descriptorPath)
+			sourcePath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, test.relativePath)
+			require.NoError(t, fileSvc.WriteFile(context.Background(), sourcePath, test.body, constants.PermFileReadOnly))
+			root, err := os.OpenRoot(fileSvc.Resolve(bundleDir))
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+			report, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{
+				Bundle:      bundle,
+				Reader:      &complianceBundleRootReader{root: root},
+				TrustPolicy: policy,
+				VerifiedAt:  windowEnd,
+			})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			assertComplianceVerificationFailure(t, report, constants.ErrDemoRunVerificationFailed, path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename))
 		})
 	}
 }
@@ -594,6 +681,16 @@ func TestRecursiveDirectoryBudget_EnforcesDepthAndAggregateEntryLimits(t *testin
 			assert.Equal(t, tt.currentEntries+tt.newEntries, budget.entries)
 		})
 	}
+}
+
+func assertComplianceVerificationFailure(t *testing.T, report *compliancev1.ComplianceVerificationReport, code error, subject string) {
+	t.Helper()
+	for _, failure := range report.GetFailures() {
+		if failure.GetCode() == code.Error() && failure.GetSubjectRef() == subject {
+			return
+		}
+	}
+	assert.Fail(t, "expected compliance verification failure", "code=%q subject=%q failures=%v", code.Error(), subject, report.GetFailures())
 }
 
 func requestTimestamp(value time.Time) *timestamppb.Timestamp {

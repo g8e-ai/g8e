@@ -10,7 +10,6 @@ package evidence
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,7 +18,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -28,7 +26,6 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	"github.com/g8e-ai/g8e/v2/internal/tools/agent_harness/scenarios"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
@@ -81,7 +78,7 @@ func VerifyDemoRun(ctx context.Context, reader ArtifactReader, runID string, sou
 		VerifierVersion: constants.DemoRunVerifierVersion,
 	}
 	verifier := &demoRunVerifier{ctx: ctx, reader: reader, runID: runID, source: source, report: report}
-	if reader == nil || source == nil || !validPathElement(runID) {
+	if reader == nil || source == nil || !ValidPathElement(runID) {
 		verifier.fail(constants.ErrInvalidEvidenceGraph, runID, "reader, provenance source, and canonical run ID are required")
 		return report, nil
 	}
@@ -101,7 +98,7 @@ func (v *demoRunVerifier) loadManifest() *compliancev1.DemoManifest {
 	path := v.runPath(constants.DemoRunManifestFilename)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), path, err.Error())
+		v.fail(ClassifyReadError(err), path, err.Error())
 		return nil
 	}
 	manifest := &compliancev1.DemoManifest{}
@@ -127,7 +124,7 @@ func (v *demoRunVerifier) verifyManifest(manifest *compliancev1.DemoManifest) {
 	expectedRefs := make([]string, 0)
 	for _, definition := range scenarioCatalog.GetDefinitions() {
 		if strings.HasPrefix(definition.GetScenarioId(), manifest.GetDemoId()+"-") {
-			key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
+			key := VersionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
 			canonicalDefinitions[key] = definition
 			expectedRefs = append(expectedRefs, key)
 		}
@@ -140,7 +137,7 @@ func (v *demoRunVerifier) verifyManifest(manifest *compliancev1.DemoManifest) {
 	if err := catalog.ValidateDemoManifest(manifest, definitions, frameworks); err != nil {
 		v.fail(constants.ErrInvalidEvidenceGraph, constants.DemoRunManifestFilename, err.Error())
 	}
-	if manifest.GetRunId() != v.runID || manifest.GetScopeId() != demoScope(manifest.GetDemoId()) {
+	if manifest.GetRunId() != v.runID || manifest.GetScopeId() != DemoScope(manifest.GetDemoId()) {
 		v.fail(constants.ErrEvidenceScopeMismatch, constants.DemoRunManifestFilename, "manifest run or scope does not match the selected run")
 	}
 	if manifest.GetDemoVersion() != constants.DemoVersion || len(v.definitions) == 0 {
@@ -148,9 +145,9 @@ func (v *demoRunVerifier) verifyManifest(manifest *compliancev1.DemoManifest) {
 	}
 	actualRefs := make([]string, 0, len(manifest.GetScenarioDefinitionRefs()))
 	for _, reference := range manifest.GetScenarioDefinitionRefs() {
-		actualRefs = append(actualRefs, versionedKey(reference.GetId(), reference.GetVersion()))
+		actualRefs = append(actualRefs, VersionedKey(reference.GetId(), reference.GetVersion()))
 	}
-	if !equalStringSets(actualRefs, expectedRefs) {
+	if !EqualStringSets(actualRefs, expectedRefs) {
 		v.fail(constants.ErrUnresolvedReference, constants.DemoRunManifestFilename, "manifest scenario definitions do not match the canonical demo catalog")
 	}
 	v.verifyProvenance(manifest)
@@ -171,7 +168,7 @@ func (v *demoRunVerifier) loadDefinitions(manifest *compliancev1.DemoManifest, c
 			v.fail(constants.ErrEvidenceArtifactMalformed, subject, err.Error())
 			continue
 		}
-		key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
+		key := VersionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
 		canonicalDefinition, exists := canonical[key]
 		if !exists || !proto.Equal(definition, canonicalDefinition) {
 			v.fail(constants.ErrChecksumMismatch, subject, "scenario definition does not match the canonical demo catalog")
@@ -184,7 +181,7 @@ func (v *demoRunVerifier) loadDefinitions(manifest *compliancev1.DemoManifest, c
 		definitions[key] = definition
 		actualRefs = append(actualRefs, key)
 	}
-	if !equalStringSets(actualRefs, expectedRefs) {
+	if !EqualStringSets(actualRefs, expectedRefs) {
 		v.fail(constants.ErrUnresolvedReference, constants.DemoRunDefinitionsFilename, "scenario definition source is incomplete or contains unexpected entries")
 	}
 	return definitions
@@ -198,7 +195,7 @@ func (v *demoRunVerifier) verifyProvenance(manifest *compliancev1.DemoManifest) 
 	}
 	expected := make(map[string]string, len(artifacts))
 	for _, artifact := range artifacts {
-		if artifact.Name == "" || filepath.IsAbs(artifact.Name) || !validRelativePath(artifact.Name) {
+		if artifact.Name == "" || filepath.IsAbs(artifact.Name) || !ValidRelativePath(artifact.Name) {
 			v.fail(constants.ErrEvidenceArtifactMalformed, constants.DemoRunManifestFilename, "provenance source returned an invalid artifact name")
 			continue
 		}
@@ -223,7 +220,7 @@ func (v *demoRunVerifier) loadResults(manifest *compliancev1.DemoManifest) []*co
 	path := v.runPath(constants.DemoRunResultsFilename)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), path, err.Error())
+		v.fail(ClassifyReadError(err), path, err.Error())
 		return nil
 	}
 	lines := bytes.Split(body, []byte{'\n'})
@@ -245,7 +242,7 @@ func (v *demoRunVerifier) loadResults(manifest *compliancev1.DemoManifest) []*co
 			v.fail(constants.ErrEvidenceArtifactMalformed, subject, err.Error())
 			continue
 		}
-		key := versionedKey(result.GetScenarioRef().GetId(), result.GetScenarioRef().GetVersion())
+		key := VersionedKey(result.GetScenarioRef().GetId(), result.GetScenarioRef().GetVersion())
 		definition := v.definitions[key]
 		if err := catalog.ValidateDemoScenarioResult(result, definition, manifest.GetScopeId()); err != nil {
 			v.fail(constants.ErrInvalidEvidenceGraph, subject, err.Error())
@@ -275,7 +272,7 @@ func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results 
 		constants.DemoRunMetricsDirname: {},
 	}
 	for _, result := range results {
-		definition := v.definitions[versionedKey(result.GetScenarioRef().GetId(), result.GetScenarioRef().GetVersion())]
+		definition := v.definitions[VersionedKey(result.GetScenarioRef().GetId(), result.GetScenarioRef().GetVersion())]
 		resultRefs := make(map[string]struct{})
 		for _, refs := range [][]string{result.GetReceiptRefs(), result.GetStateObservationRefs(), result.GetMetricRefs(), result.GetProtocolChainRefs()} {
 			for _, ref := range refs {
@@ -287,7 +284,7 @@ func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results 
 		}
 		v.verifyStepReferences(result, resultRefs)
 		for _, ref := range result.GetReceiptRefs() {
-			prefix, digest, ok := parseContentReference(ref)
+			prefix, digest, ok := ParseContentReference(ref)
 			if !ok {
 				v.fail(constants.ErrEvidenceArtifactMalformed, ref, "receipt reference is not a canonical SHA-256 content address")
 				continue
@@ -303,7 +300,7 @@ func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results 
 			}
 		}
 		for _, ref := range result.GetStateObservationRefs() {
-			_, digest, ok := parseExpectedContentReference(ref, "state-observation")
+			_, digest, ok := ParseExpectedContentReference(ref, "state-observation")
 			if !ok {
 				v.fail(constants.ErrEvidenceArtifactMalformed, ref, "state observation reference is malformed")
 				continue
@@ -312,7 +309,7 @@ func (v *demoRunVerifier) verifyArtifacts(_ *compliancev1.DemoManifest, results 
 			v.verifyObservation(result, ref, digest)
 		}
 		for _, ref := range result.GetMetricRefs() {
-			_, digest, ok := parseExpectedContentReference(ref, "metric")
+			_, digest, ok := ParseExpectedContentReference(ref, "metric")
 			if !ok {
 				v.fail(constants.ErrEvidenceArtifactMalformed, ref, "metric reference is malformed")
 				continue
@@ -330,7 +327,7 @@ func (v *demoRunVerifier) verifyReceipt(result *compliancev1.DemoScenarioResult,
 	path := v.runPath(constants.DemoRunReceiptsDirname, digest+constants.FileExtJSON)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), ref, err.Error())
+		v.fail(ClassifyReadError(err), ref, err.Error())
 		return
 	}
 	receipt := &operatorv1.ActionReceipt{}
@@ -338,24 +335,24 @@ func (v *demoRunVerifier) verifyReceipt(result *compliancev1.DemoScenarioResult,
 		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
 		return
 	}
-	if !digestMatches(body, digest) {
+	if !VerifyDigest(body, digest) {
 		v.fail(constants.ErrChecksumMismatch, ref, "receipt content digest does not match its reference")
 	}
-	if !contains(result.GetTransactionIds(), receipt.GetTransactionId()) {
+	if !Contains(result.GetTransactionIds(), receipt.GetTransactionId()) {
 		v.fail(constants.ErrEvidenceScopeMismatch, ref, "receipt transaction is not bound to the scenario result")
 	}
-	if !receiptInvestigationBound(receipt, result.GetInvestigationIds()) && len(result.GetInvestigationIds()) > 0 {
+	if !ReceiptInvestigationBound(receipt, result.GetInvestigationIds()) && len(result.GetInvestigationIds()) > 0 {
 		v.fail(constants.ErrEvidenceScopeMismatch, ref, "receipt investigation is not bound to the scenario result")
 	}
-	publicKey, keyErr := signerPublicKey(receipt.GetSignerKeyId())
+	publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
 	if keyErr != nil {
 		v.fail(constants.ErrTrustedSignerKeyNotFound, ref, keyErr.Error())
 	} else {
-		if err := governance.VerifyActionReceiptSignature(receipt, publicKey); err != nil {
+		if err := VerifyReceiptSignature(receipt, publicKey); err != nil {
 			v.fail(constants.ErrActionReceiptSignatureInvalid, ref, err.Error())
 		}
-		if err := governance.VerifyReceiptPersistenceAttestation(receipt, publicKey); err != nil {
-			v.fail(receiptAttestationError(err), ref, err.Error())
+		if err := VerifyReceiptPersistence(receipt, publicKey); err != nil {
+			v.fail(ReceiptAttestationError(err), ref, err.Error())
 		}
 	}
 	attestation := receipt.GetFinalPersistenceAttestation()
@@ -368,10 +365,10 @@ func (v *demoRunVerifier) verifyReceipt(result *compliancev1.DemoScenarioResult,
 		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
 		return
 	}
-	persistenceRef := contentReferenceForBody("receipt-persistence", attestationBody)
-	_, persistenceDigest, _ := parseContentReference(persistenceRef)
+	persistenceRef := ContentReferenceForBody("receipt-persistence", attestationBody)
+	_, persistenceDigest, _ := ParseContentReference(persistenceRef)
 	expected[constants.DemoRunPersistenceDirname][persistenceDigest] = struct{}{}
-	if !contains(result.GetReceiptRefs(), persistenceRef) {
+	if !Contains(result.GetReceiptRefs(), persistenceRef) {
 		v.fail(constants.ErrUnresolvedReference, persistenceRef, "receipt persistence reference is absent from the scenario result")
 	}
 	v.verifyPersistence(attestation, persistenceRef, persistenceDigest)
@@ -379,7 +376,7 @@ func (v *demoRunVerifier) verifyReceipt(result *compliancev1.DemoScenarioResult,
 		grade, err := scenarios.GradeProtocolChain(receipt, definition.GetRequiredDeterministicStages())
 		if err != nil {
 			v.fail(constants.ErrInvalidEvidenceGraph, ref, fmt.Sprintf("protocol chain: %v", err))
-		} else if !contains(result.GetProtocolChainRefs(), grade.StageEvidenceRef) {
+		} else if !Contains(result.GetProtocolChainRefs(), grade.StageEvidenceRef) {
 			v.fail(constants.ErrUnresolvedReference, grade.StageEvidenceRef, "recomputed protocol-chain reference is absent from the scenario result")
 		}
 	}
@@ -389,7 +386,7 @@ func (v *demoRunVerifier) verifyPersistence(expected *operatorv1.ReceiptPersiste
 	path := v.runPath(constants.DemoRunPersistenceDirname, digest+constants.FileExtJSON)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), ref, err.Error())
+		v.fail(ClassifyReadError(err), ref, err.Error())
 		return
 	}
 	attestation := &operatorv1.ReceiptPersistenceAttestation{}
@@ -397,7 +394,7 @@ func (v *demoRunVerifier) verifyPersistence(expected *operatorv1.ReceiptPersiste
 		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
 		return
 	}
-	if !digestMatches(body, digest) {
+	if !VerifyDigest(body, digest) {
 		v.fail(constants.ErrChecksumMismatch, ref, "persistence content digest does not match its reference")
 	}
 	if !proto.Equal(expected, attestation) {
@@ -409,17 +406,17 @@ func (v *demoRunVerifier) verifyObservation(result *compliancev1.DemoScenarioRes
 	path := v.runPath(constants.DemoRunStateObservationsDirname, digest+constants.FileExtJSON)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), ref, err.Error())
+		v.fail(ClassifyReadError(err), ref, err.Error())
 		return
 	}
-	if !digestMatches(body, digest) {
+	if !VerifyDigest(body, digest) {
 		v.fail(constants.ErrChecksumMismatch, ref, "state-observation digest does not match its reference")
 	}
-	if err := validateCanonicalJSON(body); err != nil {
+	if err := ValidateCanonicalJSON(body); err != nil {
 		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
 	}
 	for _, step := range result.GetStepResults() {
-		if contains(step.GetEvidenceRefs(), ref) && step.GetProtocolResult() == string(body) {
+		if Contains(step.GetEvidenceRefs(), ref) && step.GetProtocolResult() == string(body) {
 			return
 		}
 	}
@@ -430,7 +427,7 @@ func (v *demoRunVerifier) verifyMetric(result *compliancev1.DemoScenarioResult, 
 	path := v.runPath(constants.DemoRunMetricsDirname, digest+constants.FileExtJSON)
 	body, err := v.read(path)
 	if err != nil {
-		v.fail(classifyReadError(err), ref, err.Error())
+		v.fail(ClassifyReadError(err), ref, err.Error())
 		return
 	}
 	metric := &compliancev1.DemoMetricEvidence{}
@@ -438,24 +435,24 @@ func (v *demoRunVerifier) verifyMetric(result *compliancev1.DemoScenarioResult, 
 		v.fail(constants.ErrEvidenceArtifactMalformed, ref, err.Error())
 		return
 	}
-	if !digestMatches(body, digest) {
+	if !VerifyDigest(body, digest) {
 		v.fail(constants.ErrChecksumMismatch, ref, "metric content digest does not match its reference")
 	}
-	_, observationDigest, ok := parseExpectedContentReference(metric.GetSourceEvidenceRef(), "state-observation")
-	if !ok || !contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+	_, observationDigest, ok := ParseExpectedContentReference(metric.GetSourceEvidenceRef(), "state-observation")
+	if !ok || !Contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
 		v.fail(constants.ErrUnresolvedReference, ref, "metric source observation is not declared by the scenario result")
 		return
 	}
 	observationBody, err := v.read(v.runPath(constants.DemoRunStateObservationsDirname, observationDigest+constants.FileExtJSON))
 	if err != nil {
-		v.fail(classifyReadError(err), metric.GetSourceEvidenceRef(), err.Error())
+		v.fail(ClassifyReadError(err), metric.GetSourceEvidenceRef(), err.Error())
 		return
 	}
 	if err := verifyDemoMetricEvidence(result, metric, observationBody); err != nil {
 		v.fail(constants.ErrInvalidEvidenceGraph, ref, err.Error())
 	}
 	for _, step := range result.GetStepResults() {
-		if contains(step.GetEvidenceRefs(), ref) && contains(step.GetEvidenceRefs(), metric.GetSourceEvidenceRef()) {
+		if Contains(step.GetEvidenceRefs(), ref) && Contains(step.GetEvidenceRefs(), metric.GetSourceEvidenceRef()) {
 			return
 		}
 	}
@@ -518,7 +515,7 @@ func verifyDemoMetricEvidence(result *compliancev1.DemoScenarioResult, metric *c
 		metric.GetGraderRef().GetId() != constants.DemoMetricGraderID || metric.GetGraderRef().GetVersion() != constants.DemoMetricGraderVersion {
 		return fmt.Errorf("%w: metric identity, scope, or grader binding is invalid", constants.ErrInvalidEvidenceGraph)
 	}
-	if contentReferenceForBody("state-observation", observationBody) != metric.GetSourceEvidenceRef() || !contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+	if ContentReferenceForBody("state-observation", observationBody) != metric.GetSourceEvidenceRef() || !Contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
 		return fmt.Errorf("%w: metric source observation binding is invalid", constants.ErrEvidenceScopeMismatch)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(observationBody))
@@ -574,7 +571,7 @@ func (v *demoRunVerifier) verifyArtifactDirectory(directory string, expected map
 		if errors.Is(err, constants.ErrNotFound) && len(expected) == 0 {
 			return
 		}
-		v.fail(classifyReadError(err), path, err.Error())
+		v.fail(ClassifyReadError(err), path, err.Error())
 		return
 	}
 	if len(entries) > constants.DemoRunMaxArtifactsPerDirectory {
@@ -596,7 +593,7 @@ func (v *demoRunVerifier) verifyRootEntries() {
 	path := v.runPath()
 	entries, err := v.reader.ReadDir(v.ctx, path)
 	if err != nil {
-		v.fail(classifyReadError(err), path, err.Error())
+		v.fail(ClassifyReadError(err), path, err.Error())
 		return
 	}
 	allowed := map[string]bool{
@@ -630,125 +627,4 @@ func (v *demoRunVerifier) fail(code error, subject, reason string) {
 func (v *demoRunVerifier) runPath(parts ...string) string {
 	base := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, v.runID)
 	return filepath.Join(append([]string{base}, parts...)...)
-}
-
-func parseContentReference(reference string) (string, string, bool) {
-	parts := strings.Split(reference, ":")
-	if len(parts) != 3 || parts[0] == "" || parts[1] != "sha256" || len(parts[2]) != sha256.Size*2 || strings.ToLower(parts[2]) != parts[2] {
-		return "", "", false
-	}
-	decoded, err := hex.DecodeString(parts[2])
-	return parts[0], parts[2], err == nil && len(decoded) == sha256.Size
-}
-
-func parseExpectedContentReference(reference, expectedPrefix string) (string, string, bool) {
-	prefix, digest, ok := parseContentReference(reference)
-	return prefix, digest, ok && prefix == expectedPrefix
-}
-
-func signerPublicKey(keyID string) (ed25519.PublicKey, error) {
-	return governance.SignerPublicKey(keyID)
-}
-
-func receiptInvestigationBound(receipt *operatorv1.ActionReceipt, investigationIDs []string) bool {
-	for _, stage := range receipt.GetDeterministicStageEvidence() {
-		if contains(investigationIDs, stage.GetInvestigationId()) {
-			return true
-		}
-	}
-	return false
-}
-
-func receiptAttestationError(err error) error {
-	for _, target := range []error{constants.ErrReceiptPersistenceAttestationMissing, constants.ErrReceiptPersistenceSignatureMismatch, constants.ErrReceiptPersistenceAttestationInvalid} {
-		if errors.Is(err, target) {
-			return target
-		}
-	}
-	return constants.ErrReceiptPersistenceAttestationInvalid
-}
-
-func validateCanonicalJSON(body []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	var raw json.RawMessage
-	if err := decoder.Decode(&raw); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("JSON contains trailing data")
-	}
-	var compact bytes.Buffer
-	if err := json.Compact(&compact, raw); err != nil {
-		return err
-	}
-	if !bytes.Equal(body, compact.Bytes()) {
-		return fmt.Errorf("JSON is not canonical compact encoding")
-	}
-	return nil
-}
-
-func contentReferenceForBody(prefix string, body []byte) string {
-	digest := sha256.Sum256(body)
-	return prefix + ":sha256:" + hex.EncodeToString(digest[:])
-}
-
-func digestMatches(body []byte, expected string) bool {
-	digest := sha256.Sum256(body)
-	return hex.EncodeToString(digest[:]) == expected
-}
-
-func classifyReadError(err error) error {
-	if errors.Is(err, constants.ErrNotFound) {
-		return constants.ErrUnresolvedReference
-	}
-	if errors.Is(err, constants.ErrEvidenceArtifactTooLarge) {
-		return constants.ErrEvidenceArtifactTooLarge
-	}
-	return constants.ErrInvalidEvidenceGraph
-}
-
-func demoScope(demoID string) string {
-	switch demoID {
-	case constants.DemosOrgFedRAMP:
-		return constants.DemoScopeFedRAMP
-	case constants.DemosOrgDHS:
-		return constants.DemoScopeDHS
-	case constants.DemosOrgFinance:
-		return constants.DemoScopeFinance
-	case constants.DemosOrgHealthcare:
-		return constants.DemoScopeHealthcare
-	default:
-		return ""
-	}
-}
-
-func versionedKey(id, version string) string { return id + "@" + version }
-
-func equalStringSets(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	left = append([]string(nil), left...)
-	right = append([]string(nil), right...)
-	sort.Strings(left)
-	sort.Strings(right)
-	return strings.Join(left, "\x00") == strings.Join(right, "\x00")
-}
-
-func validPathElement(value string) bool {
-	return value != "" && value != "." && value != ".." && filepath.Base(value) == value && !filepath.IsAbs(value)
-}
-
-func validRelativePath(value string) bool {
-	clean := filepath.Clean(value)
-	return clean != "." && clean != ".." && !filepath.IsAbs(clean) && !strings.HasPrefix(clean, ".."+string(os.PathSeparator))
-}
-
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

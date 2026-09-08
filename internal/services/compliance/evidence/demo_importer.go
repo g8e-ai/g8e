@@ -20,7 +20,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -186,7 +185,7 @@ func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *complia
 			return nil, nil, fmt.Errorf("%w: %s#%d: duplicate scenario definition %s", constants.ErrEvidenceArtifactMalformed, constants.ComplianceBundleDemoDefinitionsFilename, idx+1, definition.GetScenarioId())
 		}
 		seenIDs[artifactID] = true
-		key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
+		key := VersionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
 		definitionIndex[key] = artifactID
 		definitionNodes = append(definitionNodes, EvidenceNode{
 			ArtifactID:         artifactID,
@@ -209,7 +208,7 @@ func (i *DemoRunImporter) loadDefinitions(ctx context.Context, manifest *complia
 		})
 	}
 	for _, ref := range manifestRefs {
-		key := versionedKey(ref.GetId(), ref.GetVersion())
+		key := VersionedKey(ref.GetId(), ref.GetVersion())
 		if _, ok := definitionIndex[key]; !ok {
 			return nil, nil, fmt.Errorf("%w: manifest scenario definition %s is not in the source definition set", constants.ErrUnresolvedReference, key)
 		}
@@ -237,7 +236,7 @@ func (i *DemoRunImporter) loadResults(ctx context.Context, manifest *compliancev
 		if scenarioResult.GetRunId() != runID || scenarioResult.GetScopeId() != scopeID {
 			return nil, nil, fmt.Errorf("%w: %s#%d: result scope or run does not match manifest", constants.ErrEvidenceScopeMismatch, path, idx+1)
 		}
-		scenarioKey := versionedKey(scenarioResult.GetScenarioRef().GetId(), scenarioResult.GetScenarioRef().GetVersion())
+		scenarioKey := VersionedKey(scenarioResult.GetScenarioRef().GetId(), scenarioResult.GetScenarioRef().GetVersion())
 		definitionID, ok := definitionIndex[scenarioKey]
 		if len(definitionIndex) > 0 && !ok {
 			return nil, nil, fmt.Errorf("%w: %s#%d: result scenario %s is not in the manifest definition set", constants.ErrUnresolvedReference, path, idx+1, scenarioKey)
@@ -314,8 +313,8 @@ func (i *DemoRunImporter) loadReceipt(ctx context.Context, ref, digest string, r
 	verifiedAt := time.Time{}
 	publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
 	if keyErr == nil {
-		if sigErr := governance.VerifyActionReceiptSignature(receipt, publicKey); sigErr == nil {
-			if persistErr := governance.VerifyReceiptPersistenceAttestation(receipt, publicKey); persistErr == nil {
+		if sigErr := VerifyReceiptSignature(receipt, publicKey); sigErr == nil {
+			if persistErr := VerifyReceiptPersistence(receipt, publicKey); persistErr == nil {
 				verified = VerificationStatusVerified
 				verifierID = constants.DemoRunVerifierID
 				verifierVersion = constants.DemoRunVerifierVersion

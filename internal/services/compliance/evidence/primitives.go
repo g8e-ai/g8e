@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -170,11 +171,12 @@ func EqualStringSets(left, right []string) bool {
 	}
 	left = append([]string(nil), left...)
 	right = append([]string(nil), right...)
-	for i, v := range left {
-		if !Contains(right, v) {
+	sort.Strings(left)
+	sort.Strings(right)
+	for index := range left {
+		if left[index] != right[index] {
 			return false
 		}
-		_ = i
 	}
 	return true
 }

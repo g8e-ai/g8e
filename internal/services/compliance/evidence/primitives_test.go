@@ -213,11 +213,24 @@ func TestContains_FindsTarget(t *testing.T) {
 	assert.False(t, Contains([]string{}, "a"))
 }
 
-func TestEqualStringSets_OrderIndependent(t *testing.T) {
-	assert.True(t, EqualStringSets([]string{"a", "b", "c"}, []string{"c", "a", "b"}))
-	assert.True(t, EqualStringSets([]string{}, []string{}))
-	assert.False(t, EqualStringSets([]string{"a", "b"}, []string{"a", "b", "c"}))
-	assert.False(t, EqualStringSets([]string{"a", "b", "c"}, []string{"a", "b", "d"}))
+func TestEqualStringSets_RequiresEqualMultiplicityIndependentOfOrder(t *testing.T) {
+	tests := []struct {
+		name     string
+		left     []string
+		right    []string
+		expected bool
+	}{
+		{name: "same values in different order", left: []string{"a", "b", "c"}, right: []string{"c", "a", "b"}, expected: true},
+		{name: "both empty", left: []string{}, right: []string{}, expected: true},
+		{name: "different lengths", left: []string{"a", "b"}, right: []string{"a", "b", "c"}},
+		{name: "different values", left: []string{"a", "b", "c"}, right: []string{"a", "b", "d"}},
+		{name: "duplicate replaces distinct value", left: []string{"a", "a"}, right: []string{"a", "b"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, EqualStringSets(test.left, test.right))
+		})
+	}
 }
 
 func TestVersionedKey_ConcatenatesWithAtSign(t *testing.T) {

@@ -131,10 +131,29 @@ func (v *bundleVerifier) verifyBindings() {
 			v.fail(constants.ErrBundleProfileUnsupported, artifact.GetBundlePath(), "public bundle contains a restricted artifact")
 		}
 	}
+	manifestFrameworks := make(map[string]struct{}, len(manifest.GetFrameworkRefs()))
+	for _, reference := range manifest.GetFrameworkRefs() {
+		manifestFrameworks[versionedReferenceKey(reference)] = struct{}{}
+	}
+	profileFrameworks := make(map[string]struct{}, len(bundle.GetProfiles()))
 	for _, profile := range bundle.GetProfiles() {
-		if profile != nil && profile.GetAnalysisRef() != bundle.GetAnalysis().GetAnalysisId() {
-			bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		if profile == nil {
+			continue
+		}
+		bundlePath := fmt.Sprintf("%s/%s.json", constants.ComplianceBundleProfilesDirname, profile.GetProfileId())
+		if profile.GetAnalysisRef() != bundle.GetAnalysis().GetAnalysisId() {
 			v.fail(constants.ErrUnresolvedReference, bundlePath, "framework profile does not reference the bundled analysis")
+		}
+		frameworkKey := versionedReferenceKey(profile.GetFrameworkRef())
+		if _, exists := manifestFrameworks[frameworkKey]; !exists {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "framework profile does not reference a manifest framework")
+			continue
+		}
+		profileFrameworks[frameworkKey] = struct{}{}
+	}
+	for frameworkKey := range manifestFrameworks {
+		if _, exists := profileFrameworks[frameworkKey]; !exists {
+			v.fail(constants.ErrUnresolvedReference, constants.ComplianceBundleManifestPath, "manifest framework lacks a bundled framework profile")
 		}
 	}
 }
@@ -731,6 +750,13 @@ func classifyArtifactReadError(err error) error {
 		return constants.ErrBundleArtifactMissing
 	}
 	return constants.ErrFileReadFailed
+}
+
+func versionedReferenceKey(reference *compliancev1.VersionedReference) string {
+	if reference == nil {
+		return ""
+	}
+	return reference.GetId() + "\x00" + reference.GetVersion()
 }
 
 func frameworkCatalogForManifest(manifest *compliancev1.ComplianceReportManifest) *compliancev1.FrameworkCatalog {
