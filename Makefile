@@ -156,7 +156,7 @@ help:
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
-	@echo "  proto         Generate all Protobuf code (Go)"
+	@echo "  proto         Generate all Protobuf code (Go, Python, Node)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  protoc-install Install protoc compiler (optional; buf does not require it)"
 	@echo ""
@@ -265,15 +265,14 @@ generate: proto
 # Note: buf has its own built-in compiler (protocompile) and invokes the
 # protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
 .PHONY: proto
-proto: buf-install proto-python proto-lockfiles
-	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
-		echo "Generating Go Protobuf code with Buf..."; \
-		$(BUF) generate protocol/proto; \
-	else \
-		echo "Error: Buf not found. Network access required for initial setup." >&2; \
-		exit 1; \
-	fi
+proto: proto-go proto-python proto-node proto-lockfiles
 	@echo "Protobuf generation complete."
+
+.PHONY: proto-go
+proto-go: buf-install
+	@echo "Generating Go Protobuf code with Buf..."
+	@$(BUF) generate protocol/proto
+	@echo "Go Protobuf generation complete."
 
 .PHONY: proto-python
 proto-python:
@@ -282,15 +281,21 @@ proto-python:
 		echo "Error: grpc_tools not found in $(PYTHON). Install with: pip install grpcio-tools" >&2; \
 		exit 1; \
 	fi
-	@mkdir -p protocol/python/g8e_protocol
-	@$(PYTHON) -m grpc_tools.protoc \
-		--python_out=protocol/python/g8e_protocol \
-		--proto_path=protocol/proto \
-		protocol/proto/g8e/common/v1/common.proto \
-		protocol/proto/g8e/compliance/v1/compliance.proto \
-		protocol/proto/g8e/operator/v1/operator.proto \
-		protocol/proto/g8e/pubsub/v1/pubsub.proto
+	@$(PYTHON) protocol/python/scripts/generate_protos.py
 	@echo "Python Protobuf generation complete."
+
+.PHONY: proto-node-install
+proto-node-install:
+	@if [ ! -x "protocol/node/node_modules/.bin/protoc-gen-es" ]; then \
+		echo "Installing Node Protobuf generator..."; \
+		npm ci --prefix protocol/node; \
+	fi
+
+.PHONY: proto-node
+proto-node: buf-install proto-node-install
+	@echo "Generating Node TypeScript Protobuf code with Buf..."
+	@cd protocol/node && $(abspath $(BUF)) generate ../proto --template buf.gen.yaml
+	@echo "Node TypeScript Protobuf generation complete."
 
 # Regenerate downstream uv.lock files that depend on the protocol/python
 # package via directory dependencies. The g8e version in protocol/python is

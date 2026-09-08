@@ -47,6 +47,13 @@ jobs:
           sudo chmod +x /usr/local/bin/protoc
           rm /tmp/protoc.zip
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: protocol/node/package-lock.json
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:

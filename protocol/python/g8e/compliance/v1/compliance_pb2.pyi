@@ -405,6 +405,40 @@ class ComplianceReportTrustPolicy(_message.Message):
     trusted_keys: _containers.RepeatedCompositeFieldContainer[ComplianceReportTrustedKey]
     def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceReportTrustedKey, _Mapping]]] = ...) -> None: ...
 
+class ComplianceEvidenceTrustedKey(_message.Message):
+    __slots__ = ("key_id", "public_key", "public_key_sha256", "assessment_id", "assessor_identity", "assessed_at", "valid_from", "valid_until", "allowed_scope_refs", "revoked_at")
+    KEY_ID_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_FIELD_NUMBER: _ClassVar[int]
+    PUBLIC_KEY_SHA256_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_ID_FIELD_NUMBER: _ClassVar[int]
+    ASSESSOR_IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    ASSESSED_AT_FIELD_NUMBER: _ClassVar[int]
+    VALID_FROM_FIELD_NUMBER: _ClassVar[int]
+    VALID_UNTIL_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_SCOPE_REFS_FIELD_NUMBER: _ClassVar[int]
+    REVOKED_AT_FIELD_NUMBER: _ClassVar[int]
+    key_id: str
+    public_key: str
+    public_key_sha256: str
+    assessment_id: str
+    assessor_identity: str
+    assessed_at: _timestamp_pb2.Timestamp
+    valid_from: _timestamp_pb2.Timestamp
+    valid_until: _timestamp_pb2.Timestamp
+    allowed_scope_refs: _containers.RepeatedScalarFieldContainer[str]
+    revoked_at: _timestamp_pb2.Timestamp
+    def __init__(self, key_id: _Optional[str] = ..., public_key: _Optional[str] = ..., public_key_sha256: _Optional[str] = ..., assessment_id: _Optional[str] = ..., assessor_identity: _Optional[str] = ..., assessed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_from: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., allowed_scope_refs: _Optional[_Iterable[str]] = ..., revoked_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ComplianceEvidenceTrustPolicy(_message.Message):
+    __slots__ = ("policy_id", "policy_version", "trusted_keys")
+    POLICY_ID_FIELD_NUMBER: _ClassVar[int]
+    POLICY_VERSION_FIELD_NUMBER: _ClassVar[int]
+    TRUSTED_KEYS_FIELD_NUMBER: _ClassVar[int]
+    policy_id: str
+    policy_version: str
+    trusted_keys: _containers.RepeatedCompositeFieldContainer[ComplianceEvidenceTrustedKey]
+    def __init__(self, policy_id: _Optional[str] = ..., policy_version: _Optional[str] = ..., trusted_keys: _Optional[_Iterable[_Union[ComplianceEvidenceTrustedKey, _Mapping]]] = ...) -> None: ...
+
 class ComplianceReportManifest(_message.Message):
     __slots__ = ("report_id", "report_schema_version", "generated_at", "generator_identity", "generator_version", "scope_ref", "framework_refs", "assertion_catalog_ref", "crosswalk_refs", "assessment_refs", "evidence_index_ref", "checksum_root", "signature", "bundle_profile", "manifest_sha256")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]
