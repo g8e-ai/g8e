@@ -193,9 +193,8 @@ This demonstrates L3 evidence (real-stack scenario with verified receipts and in
 
 ## What is not yet available
 
-Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available. The following capabilities remain outstanding:
+Canonical analysis, signed report-bundle generation, protected-source replay, and offline complete-bundle verification are available. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the candidate, bundle, external trust, isolated environment, successful verification report, and four rejected mutation classes. The following capabilities remain outstanding:
 
-- **Clean isolated acceptance record** — The production verifier operates without network access, but v2.1.7 requires a separately recorded run in a fresh network-disabled environment before the release owner marks clean-environment acceptance complete.
 - **Eval-native signed release bundle** — Eval runs replay when represented in a signed compliance report bundle. A separate eval-native canonical analysis, statistical release gate, signing format, and complete eval verifier remain deferred.
 - **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
 - **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
@@ -211,7 +210,7 @@ The verifier reads all source bodies through the bundle root, enforces the signe
 
 ## Roadmap
 
-Phases 0 through 5 are complete for in-tree implementation and verification. The remaining Phase 5 release acceptance lane runs the production verifier in a fresh network-disabled environment and records privacy-safe binary, bundle, policy, verifier, environment, command, status, and report digests.
+Phases 0 through 5 are complete for in-tree implementation, verification, and the recorded v2.1.7 clean offline acceptance lane. The remaining roadmap begins with eval-native release evidence, then recurring operating-effectiveness evidence and additional reviewed framework catalogs and crosswalks.
 
 **Phase 6 — Recurring evidence, release gates, and historical effectiveness.** This phase adds scheduled evidence collection, assertion and control history, release-gate profiles, failed-run denominator preservation, and bridge assessments for version changes.
 

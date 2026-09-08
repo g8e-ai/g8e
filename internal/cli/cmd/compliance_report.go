@@ -663,21 +663,22 @@ type standaloneReportSourceInput struct {
 	buildConfig          string
 }
 
+func appendStandaloneReportSourceArtifact(artifacts *[]compliancereport.SourceArtifact, bundlePath string, body []byte) error {
+	for _, artifact := range *artifacts {
+		if artifact.BundlePath == bundlePath {
+			return fmt.Errorf("%w: duplicate standalone source path %s", constants.ErrEvidenceDuplicateID, bundlePath)
+		}
+	}
+	*artifacts = append(*artifacts, compliancereport.SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+	return nil
+}
+
 func buildStandaloneReportSources(ctx context.Context, input standaloneReportSourceInput) ([]evidence.EvidenceImporter, []compliancereport.SourceArtifact, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	importers := make([]evidence.EvidenceImporter, 0, 8)
 	artifacts := make([]compliancereport.SourceArtifact, 0, 10)
-	addArtifact := func(bundlePath string, body []byte) error {
-		for _, artifact := range artifacts {
-			if artifact.BundlePath == bundlePath {
-				return fmt.Errorf("%w: duplicate standalone source path %s", constants.ErrEvidenceDuplicateID, bundlePath)
-			}
-		}
-		artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
-		return nil
-	}
 	ksiRequested := input.ksiRunID != "" || input.ksiHistory != "" || input.ksiResults != ""
 	if ksiRequested {
 		if !evidence.ValidPathElement(input.ksiRunID) || input.ksiHistory == "" || input.ksiResults == "" {
@@ -702,10 +703,10 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 		resultsPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.ksiRunID, constants.ComplianceBundleKSIResultsFilename)
 		reader := &explicitSourceReader{bodies: map[string][]byte{historyPath: historyBody}}
 		importers = append(importers, evidence.NewKSIHistoryImporter(reader, evidence.KSIHistoryImportBinding{Reference: evidence.ContentReferenceForBody(constants.KSIHistoryReferencePrefix, historyBody), Path: historyPath, ScopeID: input.scopeID, RunID: input.ksiRunID, Class: resultSet.Class, ProducerIdentity: constants.KSIEvaluatorID, AssertionAssessments: resultSet.Binding.AssertionAssessments}))
-		if err := addArtifact(historyPath, historyBody); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, historyPath, historyBody); err != nil {
 			return nil, nil, err
 		}
-		if err := addArtifact(resultsPath, resultsBody); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, resultsPath, resultsBody); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -725,7 +726,7 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.commitmentRunID, constants.ComplianceBundleCommitmentsFilename)
 		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
 		importers = append(importers, evidence.NewCommitmentImporter(reader, input.evidenceTrust, evidence.CommitmentImportBinding{Reference: evidence.ContentReferenceForBody(constants.CommitmentReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.commitmentRunID, AttemptID: input.commitmentAttemptID, ScenarioID: input.commitmentScenarioID, TransactionID: attestation.GetTransactionId()}, input.verifiedAt))
-		if err := addArtifact(bundlePath, body); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, bundlePath, body); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -741,7 +742,7 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.attestationRunID, constants.ComplianceBundleAttestationsFilename)
 		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
 		importers = append(importers, evidence.NewAttestationImporter(reader, input.evidenceTrust, evidence.AttestationImportBinding{Reference: evidence.ContentReferenceForBody(constants.AttestationCollectionReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.attestationRunID}, input.verifiedAt))
-		if err := addArtifact(bundlePath, body); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, bundlePath, body); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -764,7 +765,7 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.auditRunID, constants.AuditRecordsDirname, digest+constants.FileExtJSON)
 			reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
 			importers = append(importers, evidence.NewAuditRecordImporter(reader, evidence.AuditRecordImportBinding{Reference: reference, Path: bundlePath, ScopeID: input.scopeID, RunID: input.auditRunID, AttemptID: input.auditAttemptID, ScenarioID: input.auditScenarioID, OperatorSessionID: event.GetOperatorSessionId()}))
-			if err := addArtifact(bundlePath, body); err != nil {
+			if err := appendStandaloneReportSourceArtifact(&artifacts, bundlePath, body); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -787,10 +788,10 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 		statePath := path.Join(base, constants.LedgerStateFilename)
 		reader := &explicitSourceReader{bodies: map[string][]byte{commitsPath: commitsBody, statePath: stateBody}}
 		importers = append(importers, evidence.NewLedgerImporter(reader, evidence.LedgerImportBinding{CommitsReference: evidence.ContentReferenceForBody(constants.LedgerCommitCollectionReferencePrefix, commitsBody), StateReference: evidence.ContentReferenceForBody(constants.LedgerStateReferencePrefix, stateBody), CommitsPath: commitsPath, StatePath: statePath, ScopeID: input.scopeID, RunID: input.ledgerRunID, AttemptID: input.ledgerAttemptID, ScenarioID: input.ledgerScenarioID}))
-		if err := addArtifact(commitsPath, commitsBody); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, commitsPath, commitsBody); err != nil {
 			return nil, nil, err
 		}
-		if err := addArtifact(statePath, stateBody); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, statePath, stateBody); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -810,7 +811,7 @@ func buildStandaloneReportSources(ctx context.Context, input standaloneReportSou
 		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.buildRunID, constants.BuildConfigAttestationsFilename)
 		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
 		importers = append(importers, evidence.NewBuildConfigImporter(reader, evidence.BuildConfigImportBinding{Reference: evidence.ContentReferenceForBody(constants.BuildAttestationReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.buildRunID, BuildIdentity: metadata.BuildIdentity, SourceRevision: metadata.SourceRevision, ProducerIdentity: metadata.ProducerIdentity}))
-		if err := addArtifact(bundlePath, body); err != nil {
+		if err := appendStandaloneReportSourceArtifact(&artifacts, bundlePath, body); err != nil {
 			return nil, nil, err
 		}
 	}

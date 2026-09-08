@@ -1565,7 +1565,11 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			require.NoError(t, err)
 			require.NotNil(t, report)
 			assert.False(t, report.GetValid())
-			assert.NotEmpty(t, report.GetFailures())
+			require.NotEmpty(t, report.GetFailures())
+			for _, failure := range report.GetFailures() {
+				assert.NotEmpty(t, failure.GetCode())
+				assert.NotEmpty(t, failure.GetSubjectRef())
+			}
 			assertVerificationFailure(t, report, test.failureCode, test.failureSubject)
 		})
 	}
@@ -1996,6 +2000,17 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 		{name: "missing state inventory", mutate: func(_ *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
 			request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.statePath)
 		}},
+		{name: "empty commit inventory", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.commitsPath, nil)
+		}},
+		{name: "empty state inventory", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.statePath, nil)
+		}},
+		{name: "duplicate resource identity under conflicting metadata", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
+			fixture.commits[1].CommitHash = fixture.commits[0].CommitHash
+			fixture.commits[1].Message = "conflicting duplicate"
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.commitsPath, marshalJSONLines(t, fixture.commits))
+		}},
 		{name: "orphaned inventory", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *ledgerReplayFixture) {
 			resources := request.Analysis.EvidenceResources[:0]
 			for _, resource := range request.Analysis.GetEvidenceResources() {
@@ -2015,10 +2030,10 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 			}
 			refreshBundleAnalysisArtifacts(t, request)
 		}},
-		{name: "wrong scope", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *ledgerReplayFixture) {
+		{name: "cross-scope path transplantation", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *ledgerReplayFixture) {
 			for _, resource := range request.Analysis.GetEvidenceResources() {
 				if resource.GetArtifactType() == string(evidence.ArtifactTypeLedgerCommit) {
-					resource.ScopeId = "other-scope"
+					resource.BundlePath = path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, constants.TestNestedDirname, resource.GetRunId(), constants.LedgerEvidenceDirname, constants.LedgerCommitsFilename)
 					break
 				}
 			}
@@ -2042,6 +2057,19 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 			}
 			refreshBundleAnalysisArtifacts(t, request)
 		}},
+		{name: "conflicting attempt binding", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *ledgerReplayFixture) {
+			for _, resource := range request.Analysis.GetEvidenceResources() {
+				if resource.GetArtifactType() == string(evidence.ArtifactTypeLedgerState) {
+					resource.AttemptId = "other-attempt"
+					break
+				}
+			}
+			refreshBundleAnalysisArtifacts(t, request)
+		}},
+		{name: "commit chain mismatch", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
+			fixture.commits[1].ParentHash = strings.Repeat("9", 40)
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.commitsPath, marshalJSONLines(t, fixture.commits))
+		}},
 		{name: "state root mismatch", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *ledgerReplayFixture) {
 			fixture.state.MerkleRoot = strings.Repeat("9", 40)
 			body, err := json.Marshal(fixture.state)
@@ -2058,7 +2086,11 @@ func TestVerifyComplianceReportBundle_RejectsLedgerInventoryAndBindingMutations(
 			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
-			assert.NotEmpty(t, report.GetFailures())
+			require.NotEmpty(t, report.GetFailures())
+			for _, failure := range report.GetFailures() {
+				assert.NotEmpty(t, failure.GetCode())
+				assert.NotEmpty(t, failure.GetSubjectRef())
+			}
 		})
 	}
 }
@@ -2071,6 +2103,13 @@ func TestVerifyComplianceReportBundle_RejectsBuildConfigurationInventoryAndBindi
 		{name: "missing inventory", mutate: func(_ *testing.T, request *BundleAssemblyRequest, fixture *buildConfigReplayFixture) {
 			request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.bundlePath)
 		}},
+		{name: "empty inventory", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *buildConfigReplayFixture) {
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, nil)
+		}},
+		{name: "duplicate build identity", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *buildConfigReplayFixture) {
+			fixture.records = append(fixture.records, fixture.records[0])
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, marshalJSONLines(t, fixture.records))
+		}},
 		{name: "orphaned inventory", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *buildConfigReplayFixture) {
 			resources := request.Analysis.EvidenceResources[:0]
 			for _, resource := range request.Analysis.GetEvidenceResources() {
@@ -2079,6 +2118,21 @@ func TestVerifyComplianceReportBundle_RejectsBuildConfigurationInventoryAndBindi
 				}
 			}
 			request.Analysis.EvidenceResources = resources
+			refreshBundleAnalysisArtifacts(t, request)
+		}},
+		{name: "source scope mutation", mutate: func(t *testing.T, request *BundleAssemblyRequest, fixture *buildConfigReplayFixture) {
+			for index := range fixture.records {
+				fixture.records[index].ScopeID = "other-scope"
+			}
+			replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, marshalJSONLines(t, fixture.records))
+		}},
+		{name: "wrong run", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *buildConfigReplayFixture) {
+			for _, resource := range request.Analysis.GetEvidenceResources() {
+				if resource.GetArtifactType() == string(evidence.ArtifactTypeConfigAttestation) {
+					resource.RunId = "other-run"
+					break
+				}
+			}
 			refreshBundleAnalysisArtifacts(t, request)
 		}},
 		{name: "wrong canonical path", mutate: func(t *testing.T, request *BundleAssemblyRequest, _ *buildConfigReplayFixture) {
@@ -2127,7 +2181,11 @@ func TestVerifyComplianceReportBundle_RejectsBuildConfigurationInventoryAndBindi
 			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
-			assert.NotEmpty(t, report.GetFailures())
+			require.NotEmpty(t, report.GetFailures())
+			for _, failure := range report.GetFailures() {
+				assert.NotEmpty(t, failure.GetCode())
+				assert.NotEmpty(t, failure.GetSubjectRef())
+			}
 		})
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -525,7 +526,16 @@ func TestComplianceReportGenerateCmdWithConfig_PersistedDemoSourceMutationsFailI
 			var output bytes.Buffer
 			cmd.SetOut(&output)
 			require.NoError(t, cmd.RunE(cmd, nil))
-			descriptorPath, err := fileSvc.Rel(string(bytes.TrimSpace(output.Bytes())))
+			descriptorAbsolutePath := string(bytes.TrimSpace(output.Bytes()))
+			trustBody, err := compliancev1.MarshalCanonical(policy)
+			require.NoError(t, err)
+			trustPath := filepath.Join(t.TempDir(), constants.ComplianceReportTrustPolicyTestFilename)
+			require.NoError(t, os.WriteFile(trustPath, trustBody, constants.PermFilePublic))
+			verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return windowEnd })
+			require.NoError(t, verifyCmd.Flags().Set("trust-policy", trustPath))
+			verifyCmd.SetOut(io.Discard)
+			require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorAbsolutePath}))
+			descriptorPath, err := fileSvc.Rel(descriptorAbsolutePath)
 			require.NoError(t, err)
 			descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
 			require.NoError(t, err)
@@ -759,6 +769,18 @@ func TestNewAssessedEvidenceTrust_ValidatesEveryAssessedSigner(t *testing.T) {
 		{name: "duplicate signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
 			policy.TrustedKeys = append(policy.TrustedKeys, policy.TrustedKeys[0])
 		}, wantErr: true},
+		{name: "nil signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0] = nil
+		}, wantErr: true},
+		{name: "invalid public key shape", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].PublicKey = "00"
+		}, wantErr: true},
+		{name: "assessment after signing", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].AssessedAt = timestamppb.New(signedAt.Add(time.Second))
+		}, wantErr: true},
+		{name: "not yet valid signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].ValidFrom = timestamppb.New(signedAt.Add(time.Second))
+		}, wantErr: true},
 		{name: "digest mismatch", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
 			policy.TrustedKeys[0].PublicKeySha256 = strings.Repeat("0", 64)
 		}, wantErr: true},
@@ -885,17 +907,32 @@ func TestComplianceBundleRootReader_RejectsSymlinkEntries(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrUnexpectedEvidenceArtifact)
 }
 
-func TestLoadComplianceReportBundleInput_RejectsTrustPolicyInsideBundle(t *testing.T) {
-	rootPath := t.TempDir()
-	bundlePath := filepath.Join(rootPath, constants.ComplianceBundleManifestPath)
-	trustPath := filepath.Join(rootPath, constants.ComplianceBundleUnexpectedTestPath)
+func TestLoadComplianceReportBundleInput_RejectsInBundleAndReusedTrustPaths(t *testing.T) {
+	bundleRoot := t.TempDir()
+	externalRoot := t.TempDir()
+	bundlePath := filepath.Join(bundleRoot, constants.ComplianceBundleManifestPath)
+	inBundleTrustPath := filepath.Join(bundleRoot, constants.ComplianceBundleUnexpectedTestPath)
+	externalTrustPath := filepath.Join(externalRoot, constants.ComplianceReportTrustPolicyTestFilename)
 	require.NoError(t, os.WriteFile(bundlePath, []byte(`{}`), constants.PermFilePublic))
-	require.NoError(t, os.WriteFile(trustPath, []byte(`{}`), constants.PermFilePublic))
+	require.NoError(t, os.WriteFile(inBundleTrustPath, []byte(`{}`), constants.PermFilePublic))
+	require.NoError(t, os.WriteFile(externalTrustPath, []byte(`{}`), constants.PermFilePublic))
+	tests := []struct {
+		name              string
+		reportTrustPath   string
+		evidenceTrustPath string
+	}{
+		{name: "report trust inside bundle", reportTrustPath: inBundleTrustPath},
+		{name: "evidence trust inside bundle", reportTrustPath: externalTrustPath, evidenceTrustPath: inBundleTrustPath},
+		{name: "report and evidence trust reuse one path", reportTrustPath: externalTrustPath, evidenceTrustPath: externalTrustPath},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, test.reportTrustPath, test.evidenceTrustPath)
 
-	input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath, "")
-
-	assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
-	assert.Nil(t, input.bundle)
+			assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
+			assert.Nil(t, input.bundle)
+		})
+	}
 }
 
 func TestComplianceBundleRootReader_RejectsDirectoryDepthLimit(t *testing.T) {

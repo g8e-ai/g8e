@@ -98,7 +98,7 @@ Verify one persisted demo run independently:
 g8e compliance demo-run verify <run-id>
 ```
 
-`compliance report generate` reads persisted demo and eval evidence plus explicit KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer. Clean network-disabled verification remains a separately recorded release-acceptance lane.
+`compliance report generate` reads persisted demo and eval evidence plus explicit KSI, commitment, customer or assessor attestation, audit, ledger, and build/configuration inputs without mutating assessed state. It copies exact source bytes into canonical protected paths, assembles canonical analysis, framework profiles, and rendered formats into an immutable signed bundle, persists protected bodies, and writes the canonical descriptor last. `compliance report verify` is read-only and offline: it requires report trust outside the bundle, independently requires evidence-signer trust for represented signed sources, verifies directory integrity, protected bodies, checksum roots, and both signatures, replays every represented source route through the registered verifier or importer, compares reproduced evidence with signed analysis, and reproduces every renderer. The [v2.1.7 clean offline acceptance record](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md) identifies the network-disabled environment, exact candidate and trust digests, successful verification report, and rejected source, renderer, and signature mutations.
 
 ## Generated artifacts
 
@@ -106,6 +106,7 @@ Assessment results belong in generated artifacts, not this document. The reposit
 
 - [v2.1.7 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.7-compliance-evidence.md)
 - [v2.1.7 release evidence (CSV)](../release_notes/v2.1.x/v2.1.7-compliance-evidence.csv)
+- [v2.1.7 clean offline acceptance](../release_notes/v2.1.x/v2.1.7-offline-acceptance.md)
 - [v2.1.5 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.5-compliance-evidence.md)
 - [v2.1.5 release evidence (CSV)](../release_notes/v2.1.x/v2.1.5-compliance-evidence.csv)
 - [v2.1.4 release evidence (Markdown)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.md)
