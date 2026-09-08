@@ -620,20 +620,11 @@ func TestBundleVerifier_SourceVerificationRejectsMalformedTimestamps(t *testing.
 		sourceDir       string
 		verifierID      string
 		verifierVersion string
-		verify          func(*bundleVerifier, string, []byte) *compliancev1.ComplianceVerificationReport
+		verificationErr error
+		source          string
 	}{
-		{
-			name: "demo source verification timestamp", sourceDir: constants.ComplianceBundleSourceDemosDirname, verifierID: constants.DemoRunVerifierID, verifierVersion: constants.DemoRunVerifierVersion,
-			verify: func(verifier *bundleVerifier, bundlePath string, body []byte) *compliancev1.ComplianceVerificationReport {
-				return verifier.verifyDemoSourceVerificationReport(bundlePath, body, "source-run-1")
-			},
-		},
-		{
-			name: "eval source verification timestamp", sourceDir: constants.ComplianceBundleSourceEvalsDirname, verifierID: constants.EvalRunVerifierID, verifierVersion: constants.EvalRunVerifierVersion,
-			verify: func(verifier *bundleVerifier, bundlePath string, body []byte) *compliancev1.ComplianceVerificationReport {
-				return verifier.verifyEvalSourceVerificationReport(bundlePath, body, "source-run-1")
-			},
-		},
+		{name: "demo source verification timestamp", sourceDir: constants.ComplianceBundleSourceDemosDirname, verifierID: constants.DemoRunVerifierID, verifierVersion: constants.DemoRunVerifierVersion, verificationErr: constants.ErrDemoRunVerificationFailed, source: "demo"},
+		{name: "eval source verification timestamp", sourceDir: constants.ComplianceBundleSourceEvalsDirname, verifierID: constants.EvalRunVerifierID, verifierVersion: constants.EvalRunVerifierVersion, verificationErr: constants.ErrEvalRunVerificationFailed, source: "eval"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -654,7 +645,7 @@ func TestBundleVerifier_SourceVerificationRejectsMalformedTimestamps(t *testing.
 				report:  &compliancev1.ComplianceVerificationReport{},
 			}
 
-			assert.Nil(t, test.verify(verifier, bundlePath, malformed))
+			assert.Nil(t, verifier.verifySourceVerificationReport(bundlePath, malformed, "source-run-1", test.verifierID, test.verifierVersion, test.verificationErr, test.source))
 			assertVerificationFailure(t, verifier.report, constants.ErrEvidenceArtifactMalformed, bundlePath)
 		})
 	}

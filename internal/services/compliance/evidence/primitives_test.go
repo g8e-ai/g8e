@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -259,4 +260,62 @@ func TestDemoScope_MapsKnownDemoIDs(t *testing.T) {
 
 func TestDemoScope_ReturnsEmptyForUnknownID(t *testing.T) {
 	assert.Equal(t, "", DemoScope("unknown"))
+}
+
+func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *testing.T) {
+	verifiedAt := time.Unix(1_700_000_000, 0).UTC()
+	valid := &compliancev1.ComplianceVerificationReport{
+		ReportId:        "run-1",
+		Valid:           true,
+		VerifiedAt:      timestamppb.New(verifiedAt),
+		VerifierId:      constants.DemoRunVerifierID,
+		VerifierVersion: constants.DemoRunVerifierVersion,
+	}
+	tests := []struct {
+		name      string
+		mutate    func(*compliancev1.ComplianceVerificationReport)
+		notAfter  time.Time
+		targetErr error
+	}{
+		{name: "valid bound report", notAfter: verifiedAt},
+		{name: "wrong report identity", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.ReportId = "run-2" }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "wrong verifier identity", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.VerifierId = constants.EvalRunVerifierID
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "wrong verifier version", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.VerifierVersion = "2.0.0" }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "invalid report", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Valid = false }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "report contains failures", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Failures = []*compliancev1.VerificationFailure{{Code: constants.ErrChecksumMismatch.Error()}}
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "missing verification time", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.VerifiedAt = nil }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "verification after cutoff", notAfter: verifiedAt.Add(-time.Nanosecond), targetErr: constants.ErrReportVerificationFailed},
+		{name: "missing cutoff", targetErr: constants.ErrReportVerificationFailed},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			report := proto.Clone(valid).(*compliancev1.ComplianceVerificationReport)
+			if test.mutate != nil {
+				test.mutate(report)
+			}
+			body, err := compliancev1.MarshalCanonical(report)
+			require.NoError(t, err)
+
+			decoded, err := ValidateVerificationReport(body, "run-1", constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, test.notAfter)
+			if test.targetErr != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, test.targetErr)
+				assert.Nil(t, decoded)
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, proto.Equal(report, decoded))
+		})
+	}
+}
+
+func TestValidateVerificationReport_RejectsNoncanonicalBody(t *testing.T) {
+	report, err := ValidateVerificationReport([]byte(`{"report_id": "run-1"}`), "run-1", constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, time.Unix(1_700_000_000, 0).UTC())
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+	assert.Nil(t, report)
 }

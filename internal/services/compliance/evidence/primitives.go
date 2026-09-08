@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -198,6 +199,10 @@ func VerifyReceiptPersistence(receipt *operatorv1.ActionReceipt, publicKey ed255
 	return governance.VerifyReceiptPersistenceAttestation(receipt, publicKey)
 }
 
+func ReceiptActionType(receipt *operatorv1.ActionReceipt) (string, error) {
+	return governance.DeterministicStageActionType(receipt)
+}
+
 // ReceiptInvestigationBound returns true if any deterministic stage evidence
 // in the receipt carries one of the given investigation IDs.
 func ReceiptInvestigationBound(receipt *operatorv1.ActionReceipt, investigationIDs []string) bool {
@@ -234,4 +239,15 @@ func DemoScope(demoID string) string {
 	default:
 		return ""
 	}
+}
+
+func ValidateVerificationReport(body []byte, reportID, verifierID, verifierVersion string, notAfter time.Time) (*compliancev1.ComplianceVerificationReport, error) {
+	report := &compliancev1.ComplianceVerificationReport{}
+	if err := compliancev1.UnmarshalCanonical(body, report); err != nil {
+		return nil, fmt.Errorf("%w: decode canonical verification report: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if reportID == "" || verifierID == "" || verifierVersion == "" || notAfter.IsZero() || report.GetReportId() != reportID || report.GetVerifierId() != verifierID || report.GetVerifierVersion() != verifierVersion || !report.GetValid() || len(report.GetFailures()) != 0 || report.GetVerifiedAt() == nil || report.GetVerifiedAt().CheckValid() != nil || report.GetVerifiedAt().AsTime().After(notAfter) {
+		return nil, fmt.Errorf("%w: verification report is invalid or does not match its declared binding", constants.ErrReportVerificationFailed)
+	}
+	return report, nil
 }

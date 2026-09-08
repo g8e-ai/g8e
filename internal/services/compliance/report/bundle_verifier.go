@@ -334,7 +334,7 @@ func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context
 				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo source verification path is unsupported")
 				continue
 			}
-			inventory.verificationReport = v.verifyDemoSourceVerificationReport(bundlePath, body, runID)
+			inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, runID, constants.DemoRunVerifierID, constants.DemoRunVerifierVersion, constants.ErrDemoRunVerificationFailed, "demo")
 		case constants.ComplianceBundleSourceRuntimeDirname:
 			if len(parts) < 5 {
 				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "demo runtime source path is incomplete")
@@ -420,7 +420,7 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source verification path is unsupported")
 				continue
 			}
-			inventory.verificationReport = v.verifyEvalSourceVerificationReport(bundlePath, body, runID)
+			inventory.verificationReport = v.verifySourceVerificationReport(bundlePath, body, runID, constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, constants.ErrEvalRunVerificationFailed, "eval")
 		case constants.ComplianceBundleSourceRuntimeDirname:
 			if len(parts) < 5 {
 				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is incomplete")
@@ -470,17 +470,17 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 	}
 }
 
-func (v *bundleVerifier) verifyEvalSourceVerificationReport(bundlePath string, body []byte, runID string) *compliancev1.ComplianceVerificationReport {
-	report := &compliancev1.ComplianceVerificationReport{}
-	if err := compliancev1.UnmarshalCanonical(body, report); err != nil {
-		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "eval source verification report is not canonical")
+func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body []byte, runID, verifierID, verifierVersion string, verificationErr error, source string) *compliancev1.ComplianceVerificationReport {
+	report, err := evidence.ValidateVerificationReport(body, runID, verifierID, verifierVersion, v.request.Bundle.GetManifest().GetGeneratedAt().AsTime())
+	if err == nil {
+		return report
+	}
+	if errors.Is(err, constants.ErrEvidenceArtifactMalformed) {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, source+" source verification report is not canonical")
 		return nil
 	}
-	if report.GetReportId() != runID || report.GetVerifierId() != constants.EvalRunVerifierID || report.GetVerifierVersion() != constants.EvalRunVerifierVersion || !report.GetValid() || len(report.GetFailures()) != 0 || report.GetVerifiedAt() == nil || report.GetVerifiedAt().CheckValid() != nil || report.GetVerifiedAt().AsTime().After(v.request.Bundle.GetManifest().GetGeneratedAt().AsTime()) {
-		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval source verification report is invalid or does not bind the declared run")
-		return nil
-	}
-	return report
+	v.fail(verificationErr, bundlePath, source+" source verification report is invalid or does not bind the declared run")
+	return nil
 }
 
 func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
@@ -497,19 +497,6 @@ func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID
 	if expectedErr != nil || replayedErr != nil || !replayed.GetValid() || !bytes.Equal(expectedBody, replayedBody) {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "replayed eval verification does not match the protected source verification report")
 	}
-}
-
-func (v *bundleVerifier) verifyDemoSourceVerificationReport(bundlePath string, body []byte, runID string) *compliancev1.ComplianceVerificationReport {
-	report := &compliancev1.ComplianceVerificationReport{}
-	if err := compliancev1.UnmarshalCanonical(body, report); err != nil {
-		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "demo source verification report is not canonical")
-		return nil
-	}
-	if report.GetReportId() != runID || report.GetVerifierId() != constants.DemoRunVerifierID || report.GetVerifierVersion() != constants.DemoRunVerifierVersion || !report.GetValid() || len(report.GetFailures()) != 0 || report.GetVerifiedAt() == nil || report.GetVerifiedAt().CheckValid() != nil || report.GetVerifiedAt().AsTime().After(v.request.Bundle.GetManifest().GetGeneratedAt().AsTime()) {
-		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "demo source verification report is invalid or does not bind the declared run")
-		return nil
-	}
-	return report
 }
 
 func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {

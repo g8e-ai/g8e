@@ -33,7 +33,7 @@ const protocolChainGraderIssue = "PHASE2: ISSUE: no Go-side deterministic-stage 
 func buildVerifiedChainStages(txID, txHash, investigationID string) []*operatorv1.DeterministicStageEvidence {
 	l4ID := txID + ":L4"
 	l5ID := txID + ":L5"
-	return []*operatorv1.DeterministicStageEvidence{
+	stages := []*operatorv1.DeterministicStageEvidence{
 		{
 			StageId: txID + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
 			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED,
@@ -78,13 +78,17 @@ func buildVerifiedChainStages(txID, txHash, investigationID string) []*operatorv
 			ParentStageId: "",
 		},
 	}
+	for _, stage := range stages {
+		stage.ActionType = "FILE_EDIT"
+	}
+	return stages
 }
 
 // buildRejectedChainStages constructs the deterministic stage chain for a
 // transaction rejected at L1: L1 failed, L4 failed, receipt status FAILED.
 func buildRejectedChainStages(txID, txHash, investigationID string) []*operatorv1.DeterministicStageEvidence {
 	l4ID := txID + ":L4"
-	return []*operatorv1.DeterministicStageEvidence{
+	stages := []*operatorv1.DeterministicStageEvidence{
 		{
 			StageId: txID + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE,
 			Outcome:       operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED,
@@ -98,6 +102,10 @@ func buildRejectedChainStages(txID, txHash, investigationID string) []*operatorv
 			ParentStageId: "",
 		},
 	}
+	for _, stage := range stages {
+		stage.ActionType = "FILE_EDIT"
+	}
+	return stages
 }
 
 func buildVerifiedChainReceipt() *operatorv1.ActionReceipt {
@@ -234,6 +242,16 @@ func TestNormalizeDeterministicStages_FailsClosedOnInvalidKindOrder(t *testing.T
 	receipt := buildVerifiedChainReceipt()
 	receipt.DeterministicStageEvidence[0], receipt.DeterministicStageEvidence[1] =
 		receipt.DeterministicStageEvidence[1], receipt.DeterministicStageEvidence[0]
+
+	_, err := NormalizeDeterministicStages(receipt)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
+}
+
+func TestNormalizeDeterministicStages_FailsClosedOnConflictingActionTypes(t *testing.T) {
+	receipt := buildVerifiedChainReceipt()
+	receipt.DeterministicStageEvidence[1].ActionType = "FILE_READ"
 
 	_, err := NormalizeDeterministicStages(receipt)
 

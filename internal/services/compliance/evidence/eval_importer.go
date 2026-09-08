@@ -484,7 +484,7 @@ func (i *EvalBundleImporter) buildReceiptNodes(manifest evalRunManifest, scopeID
 		if err := compliancev1.UnmarshalCanonical(receiptObservation.ActionReceipt, receipt); err != nil {
 			return nil, nil, fmt.Errorf("%w: %s#%d: %w", constants.ErrEvidenceArtifactMalformed, constants.EvalRunReceiptsFilename, record.Line, err)
 		}
-		actionType, actionTypeErr := evalReceiptActionType(receipt)
+		actionType, actionTypeErr := ReceiptActionType(receipt)
 		if receipt.GetTransactionId() != receiptObservation.TransactionID || actionTypeErr != nil || actionType != receiptObservation.ActionType {
 			return nil, nil, fmt.Errorf("%w: %s#%d: receipt wrapper does not match action receipt", constants.ErrEvidenceScopeMismatch, constants.EvalRunReceiptsFilename, record.Line)
 		}
@@ -596,23 +596,6 @@ func resolveEvalReferences(refs []string, IDs map[string]string) ([]string, erro
 		resolved = append(resolved, artifactID)
 	}
 	return resolved, nil
-}
-
-func evalReceiptActionType(receipt *operatorv1.ActionReceipt) (string, error) {
-	actionType := ""
-	for _, stage := range receipt.GetDeterministicStageEvidence() {
-		if stage.GetActionType() == "" {
-			continue
-		}
-		if actionType != "" && actionType != stage.GetActionType() {
-			return "", constants.ErrEvidenceArtifactMalformed
-		}
-		actionType = stage.GetActionType()
-	}
-	if actionType == "" {
-		return "", constants.ErrEvidenceArtifactMalformed
-	}
-	return actionType, nil
 }
 
 func evalMetricKey(attemptID, metricID string) string {

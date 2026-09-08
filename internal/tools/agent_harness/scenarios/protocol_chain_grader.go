@@ -13,6 +13,7 @@ import (
 	"fmt"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -92,6 +93,9 @@ func NormalizeDeterministicStages(receipt *operatorv1.ActionReceipt) ([]*operato
 	stages := receipt.GetDeterministicStageEvidence()
 	if len(stages) == 0 {
 		return nil, fmt.Errorf("%w: deterministic stage evidence is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if _, err := governance.DeterministicStageActionType(receipt); err != nil {
+		return nil, fmt.Errorf("%w: %v", constants.ErrInvalidEvidenceGraph, err)
 	}
 	txID := receipt.GetTransactionId()
 	txHash := receipt.GetTransactionHash()
