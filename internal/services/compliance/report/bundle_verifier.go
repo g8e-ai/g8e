@@ -88,7 +88,7 @@ func (v *bundleVerifier) verify(ctx context.Context) {
 	bundle := v.request.Bundle
 	frameworks := frameworkCatalogForManifest(bundle.GetManifest())
 	if err := catalog.ValidateComplianceReportBundle(bundle, frameworks); err != nil {
-		v.fail(err, constants.ComplianceBundleManifestPath, "bundle structure is invalid")
+		v.fail(err, constants.ComplianceBundleManifestPath, err.Error())
 	}
 	v.verifyManifestDigest()
 	v.verifyBindings()
@@ -142,7 +142,7 @@ func (v *bundleVerifier) verifyBindings() {
 func (v *bundleVerifier) verifyDirectoryInventory(ctx context.Context) {
 	paths, err := v.request.Reader.ListFiles(ctx)
 	if err != nil {
-		v.fail(constants.ErrDirectoryRead, constants.ComplianceBundleManifestPath, err.Error())
+		v.fail(classifyDirectoryReadError(err), constants.ComplianceBundleManifestPath, err.Error())
 		return
 	}
 	if len(paths) > constants.ComplianceBundleMaxArtifacts {
@@ -184,7 +184,7 @@ func (v *bundleVerifier) verifyArtifactBodies(ctx context.Context) {
 		}
 		body, err := v.request.Reader.ReadFile(ctx, artifact.GetBundlePath())
 		if err != nil {
-			v.fail(constants.ErrBundleArtifactMissing, artifact.GetBundlePath(), err.Error())
+			v.fail(classifyArtifactReadError(err), artifact.GetBundlePath(), err.Error())
 			continue
 		}
 		if int64(len(body)) > constants.ComplianceBundleMaxArtifactBytes {
@@ -662,7 +662,75 @@ func (v *bundleVerifier) verifyRenderedFormats() {
 }
 
 func (v *bundleVerifier) fail(code error, subject, reason string) {
-	v.report.Failures = append(v.report.Failures, &compliancev1.VerificationFailure{Code: code.Error(), SubjectRef: subject, Reason: reason})
+	stableCode := stableVerificationFailureCode(code)
+	v.report.Failures = append(v.report.Failures, &compliancev1.VerificationFailure{Code: stableCode.Error(), SubjectRef: subject, Reason: reason})
+}
+
+func stableVerificationFailureCode(err error) error {
+	knownCodes := [...]error{
+		constants.ErrUnsupportedFramework,
+		constants.ErrUnsupportedAssertion,
+		constants.ErrUnsupportedVerifier,
+		constants.ErrUnsupportedGrader,
+		constants.ErrFrameworkProfileInvalid,
+		constants.ErrStaleEvidence,
+		constants.ErrEvidenceScopeMismatch,
+		constants.ErrUnresolvedReference,
+		constants.ErrRendererMismatch,
+		constants.ErrChecksumMismatch,
+		constants.ErrReportSignatureFailed,
+		constants.ErrEvidenceArtifactMalformed,
+		constants.ErrUnexpectedEvidenceArtifact,
+		constants.ErrEvidenceArtifactTooLarge,
+		constants.ErrEvidenceDirectoryLimitExceeded,
+		constants.ErrDemoRunVerificationFailed,
+		constants.ErrEvalRunVerificationFailed,
+		constants.ErrEvidenceDuplicateID,
+		constants.ErrEvidenceDuplicateContent,
+		constants.ErrEvidenceCycleDetected,
+		constants.ErrEvidenceSchemaMismatch,
+		constants.ErrEvidenceMediaTypeUnsupported,
+		constants.ErrEvidenceTrustNotAssessed,
+		constants.ErrEvidenceEncryptionInvalid,
+		constants.ErrEvidenceImporterFailed,
+		constants.ErrEvidenceProducerUnverified,
+		constants.ErrEvidenceVerifierUnverified,
+		constants.ErrBundleAssemblyFailed,
+		constants.ErrBundlePersistenceFailed,
+		constants.ErrBundleProfileUnsupported,
+		constants.ErrBundleArtifactMissing,
+		constants.ErrBundleChecksumRootFailed,
+		constants.ErrDirectoryRead,
+		constants.ErrFileReadFailed,
+		constants.ErrInvalidEvidenceGraph,
+	}
+	for _, code := range knownCodes {
+		if errors.Is(err, code) {
+			return code
+		}
+	}
+	return constants.ErrReportVerificationFailed
+}
+
+func classifyDirectoryReadError(err error) error {
+	for _, code := range [...]error{constants.ErrEvidenceDirectoryLimitExceeded, constants.ErrEvidenceArtifactTooLarge, constants.ErrUnexpectedEvidenceArtifact} {
+		if errors.Is(err, code) {
+			return code
+		}
+	}
+	return constants.ErrDirectoryRead
+}
+
+func classifyArtifactReadError(err error) error {
+	for _, code := range [...]error{constants.ErrEvidenceArtifactTooLarge, constants.ErrUnexpectedEvidenceArtifact} {
+		if errors.Is(err, code) {
+			return code
+		}
+	}
+	if errors.Is(err, constants.ErrNotFound) {
+		return constants.ErrBundleArtifactMissing
+	}
+	return constants.ErrFileReadFailed
 }
 
 func frameworkCatalogForManifest(manifest *compliancev1.ComplianceReportManifest) *compliancev1.FrameworkCatalog {

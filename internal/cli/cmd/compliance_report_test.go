@@ -193,6 +193,71 @@ func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleWithEveryProt
 	assert.Empty(t, verificationReport.GetFailures())
 }
 
+func TestComplianceReportGenerateCmdWithConfig_PersistedEvalSourceMutationsFailIndependentReplay(t *testing.T) {
+	tests := []struct {
+		name         string
+		relativePath string
+		body         []byte
+	}{
+		{name: "verification report", relativePath: constants.ComplianceBundleSourceVerificationFilename, body: []byte(`{}`)},
+		{name: "run manifest", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunManifestFilename), body: []byte(`{}`)},
+		{name: "tasks", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunTasksFilename), body: []byte("{}\n")},
+		{name: "attempts", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunAttemptsFilename), body: []byte("{}\n")},
+		{name: "receipts", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunReceiptsFilename), body: []byte("{}\n")},
+		{name: "stages", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunStagesFilename), body: []byte("{}\n")},
+		{name: "metrics", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunMetricsFilename), body: []byte("{}\n")},
+		{name: "evidence index", relativePath: path.Join(constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunEvidenceIndexFilename), body: []byte("{}\n")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fileSvc, _ := newCmdTestEnv(t)
+			runID := persistMinimalEvidenceGraphEvalFixture(t, fileSvc)
+			scopeID := evidence.EvalScopeID("evidence-graph-suite")
+			identity, policy, _ := complianceReportSigningFixtureForTest(t, scopeID)
+			cmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+				return identity, nil
+			})
+			configureComplianceReportGenerateCommand(t, cmd)
+			windowStart := time.Unix(1_699_999_999, 0).UTC()
+			windowEnd := time.Unix(1_700_000_100, 0).UTC()
+			require.NoError(t, cmd.Flags().Set("scope-id", scopeID))
+			require.NoError(t, cmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(windowStart.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(windowEnd.UnixMilli(), 10)))
+			require.NoError(t, cmd.Flags().Set("eval-run", runID))
+			var output bytes.Buffer
+			cmd.SetOut(&output)
+			require.NoError(t, cmd.RunE(cmd, nil))
+			descriptorPath, err := fileSvc.Rel(string(bytes.TrimSpace(output.Bytes())))
+			require.NoError(t, err)
+			descriptorBody, err := fileSvc.ReadFile(context.Background(), descriptorPath)
+			require.NoError(t, err)
+			bundle := &compliancev1.ComplianceReportBundle{}
+			require.NoError(t, compliancev1.UnmarshalCanonical(descriptorBody, bundle))
+			bundleDir := path.Dir(descriptorPath)
+			sourcePath := path.Join(bundleDir, constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, test.relativePath)
+			require.NoError(t, fileSvc.WriteFile(context.Background(), sourcePath, test.body, constants.PermFileReadOnly))
+			root, err := os.OpenRoot(fileSvc.Resolve(bundleDir))
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+			report, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{
+				Bundle:      bundle,
+				Reader:      &complianceBundleRootReader{root: root},
+				TrustPolicy: policy,
+				VerifiedAt:  windowEnd,
+			})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			codes := make([]string, 0, len(report.GetFailures()))
+			for _, failure := range report.GetFailures() {
+				codes = append(codes, failure.GetCode())
+			}
+			assert.Contains(t, codes, constants.ErrEvalRunVerificationFailed.Error())
+		})
+	}
+}
+
 func TestBuildDemoVerificationArtifacts_EmbedsValidExistingVerifierResult(t *testing.T) {
 	fileSvc, _ := newCmdTestEnv(t)
 	projectRoot := writeDemoProvenanceTree(t)
@@ -365,6 +430,87 @@ func TestComplianceReportVerifyCmdWithConfig_RequiresExternalTrustPolicy(t *test
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
 
+func TestLoadComplianceReportBundleInput_RejectsMalformedAndOversizedInputs(t *testing.T) {
+	canonicalEmpty := []byte(`{}`)
+	noncanonicalEmpty := []byte("{\n}")
+	oversized := bytes.Repeat([]byte("x"), int(constants.ComplianceBundleMaxArtifactBytes)+1)
+	tests := []struct {
+		name           string
+		bundleBody     []byte
+		trustBody      []byte
+		expectedErrors []error
+	}{
+		{name: "noncanonical descriptor", bundleBody: noncanonicalEmpty, trustBody: canonicalEmpty, expectedErrors: []error{constants.ErrReportVerificationFailed}},
+		{name: "noncanonical trust policy", bundleBody: canonicalEmpty, trustBody: noncanonicalEmpty, expectedErrors: []error{constants.ErrEvidenceTrustNotAssessed}},
+		{name: "oversized descriptor", bundleBody: oversized, trustBody: canonicalEmpty, expectedErrors: []error{constants.ErrEvidenceArtifactTooLarge}},
+		{name: "oversized trust policy", bundleBody: canonicalEmpty, trustBody: oversized, expectedErrors: []error{constants.ErrEvidenceTrustNotAssessed, constants.ErrEvidenceArtifactTooLarge}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bundleRoot := t.TempDir()
+			trustRoot := t.TempDir()
+			bundlePath := filepath.Join(bundleRoot, constants.ComplianceBundleManifestPath)
+			trustPath := filepath.Join(trustRoot, constants.ComplianceReportTrustPolicyTestFilename)
+			require.NoError(t, os.WriteFile(bundlePath, test.bundleBody, constants.PermFilePublic))
+			require.NoError(t, os.WriteFile(trustPath, test.trustBody, constants.PermFilePublic))
+
+			input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath)
+
+			require.Error(t, err)
+			for _, expectedErr := range test.expectedErrors {
+				assert.ErrorIs(t, err, expectedErr)
+			}
+			assert.Nil(t, input.bundle)
+			assert.Nil(t, input.reader)
+		})
+	}
+}
+
+func TestComplianceBundleRootReader_ReadFileRejectsOversizedArtifactAndPreservesCancellation(t *testing.T) {
+	rootPath := t.TempDir()
+	artifactPath := filepath.Join(rootPath, constants.ComplianceBundleAnalysisPath)
+	require.NoError(t, os.WriteFile(artifactPath, bytes.Repeat([]byte("x"), int(constants.ComplianceBundleMaxArtifactBytes)+1), constants.PermFilePublic))
+	root, err := os.OpenRoot(rootPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+	reader := &complianceBundleRootReader{root: root}
+
+	_, err = reader.ReadFile(context.Background(), constants.ComplianceBundleAnalysisPath)
+	assert.ErrorIs(t, err, constants.ErrEvidenceArtifactTooLarge)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = reader.ReadFile(ctx, constants.ComplianceBundleAnalysisPath)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestComplianceBundleRootReader_ReadFileRejectsDirectory(t *testing.T) {
+	rootPath := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(rootPath, constants.TestNestedDirname), constants.PermDirPrivate))
+	root, err := os.OpenRoot(rootPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+	_, err = (&complianceBundleRootReader{root: root}).ReadFile(context.Background(), constants.TestNestedDirname)
+
+	assert.ErrorIs(t, err, constants.ErrReportVerificationFailed)
+}
+
+func TestComplianceBundleRootReader_ListsNestedUnexpectedArtifact(t *testing.T) {
+	rootPath := t.TempDir()
+	nestedPath := filepath.Join(rootPath, constants.TestNestedDirname)
+	require.NoError(t, os.Mkdir(nestedPath, constants.PermDirPrivate))
+	require.NoError(t, os.WriteFile(filepath.Join(nestedPath, constants.ComplianceBundleUnexpectedTestPath), []byte(`{}`), constants.PermFilePublic))
+	root, err := os.OpenRoot(rootPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+	paths, err := (&complianceBundleRootReader{root: root}).ListFiles(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{path.Join(constants.TestNestedDirname, constants.ComplianceBundleUnexpectedTestPath)}, paths)
+}
+
 func TestComplianceBundleRootReader_RejectsSymlinkEntries(t *testing.T) {
 	rootPath := t.TempDir()
 	targetPath := filepath.Join(rootPath, constants.ComplianceBundleAnalysisPath)
@@ -390,6 +536,64 @@ func TestLoadComplianceReportBundleInput_RejectsTrustPolicyInsideBundle(t *testi
 
 	assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
 	assert.Nil(t, input.bundle)
+}
+
+func TestComplianceBundleRootReader_RejectsDirectoryDepthLimit(t *testing.T) {
+	rootPath := t.TempDir()
+	currentPath := rootPath
+	for range constants.ComplianceBundleMaxDirectoryDepth + 1 {
+		currentPath = filepath.Join(currentPath, constants.TestNestedDirname)
+		require.NoError(t, os.Mkdir(currentPath, constants.PermDirPrivate))
+	}
+	root, err := os.OpenRoot(rootPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+	_, err = (&complianceBundleRootReader{root: root}).ListFiles(context.Background())
+
+	assert.ErrorIs(t, err, constants.ErrEvidenceDirectoryLimitExceeded)
+}
+
+func TestCollectRuntimeSourceArtifacts_RejectsDirectoryDepthLimit(t *testing.T) {
+	fileSvc, _ := newCmdTestEnv(t)
+	currentPath := constants.TestNestedDirname
+	require.NoError(t, fileSvc.MkdirAll(context.Background(), currentPath, constants.PermDirPrivate))
+	for range constants.ComplianceBundleMaxDirectoryDepth + 1 {
+		currentPath = path.Join(currentPath, constants.TestNestedDirname)
+		require.NoError(t, fileSvc.MkdirAll(context.Background(), currentPath, constants.PermDirPrivate))
+	}
+
+	_, err := collectRuntimeSourceArtifacts(context.Background(), fileSvc, constants.TestNestedDirname, constants.TestNestedDirname, constants.ComplianceBundleSourcesDirname, false)
+
+	assert.ErrorIs(t, err, constants.ErrEvidenceDirectoryLimitExceeded)
+}
+
+func TestRecursiveDirectoryBudget_EnforcesDepthAndAggregateEntryLimits(t *testing.T) {
+	tests := []struct {
+		name             string
+		depth            int
+		currentEntries   int
+		newEntries       int
+		expectedExceeded bool
+	}{
+		{name: "maximum depth and entry count accepted", depth: constants.ComplianceBundleMaxDirectoryDepth, currentEntries: constants.ComplianceBundleMaxEnumeratedEntries - 1, newEntries: 1},
+		{name: "depth above maximum rejected", depth: constants.ComplianceBundleMaxDirectoryDepth + 1, newEntries: 1, expectedExceeded: true},
+		{name: "aggregate entries above maximum rejected", currentEntries: constants.ComplianceBundleMaxEnumeratedEntries, newEntries: 1, expectedExceeded: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			budget := recursiveDirectoryBudget{entries: tt.currentEntries}
+
+			err := budget.consume(tt.depth, tt.newEntries)
+
+			if tt.expectedExceeded {
+				assert.ErrorIs(t, err, constants.ErrEvidenceDirectoryLimitExceeded)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.currentEntries+tt.newEntries, budget.entries)
+		})
+	}
 }
 
 func requestTimestamp(value time.Time) *timestamppb.Timestamp {

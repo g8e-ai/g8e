@@ -720,6 +720,8 @@ const (
 	ComplianceBundleProfileRestricted             = "restricted"
 	ComplianceBundleMaxArtifacts                  = 8192
 	ComplianceBundleMaxArtifactBytes              = 64 << 20
+	ComplianceBundleMaxDirectoryDepth             = 32
+	ComplianceBundleMaxEnumeratedEntries          = ComplianceBundleMaxArtifacts * 2
 	ComplianceBundleAnalysisPath                  = "analysis.json"
 	ComplianceBundleProfilesDirname               = "profiles"
 	ComplianceBundleOSCALPath                     = "oscal/assessment-results.json"

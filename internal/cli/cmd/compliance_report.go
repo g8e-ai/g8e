@@ -113,7 +113,25 @@ type complianceBundleRootReader struct {
 	root *os.Root
 }
 
-func (r *complianceBundleRootReader) ReadFile(_ context.Context, bundlePath string) ([]byte, error) {
+type recursiveDirectoryBudget struct {
+	entries int
+}
+
+func (b *recursiveDirectoryBudget) consume(depth, entries int) error {
+	if depth > constants.ComplianceBundleMaxDirectoryDepth {
+		return fmt.Errorf("%w: depth %d exceeds %d", constants.ErrEvidenceDirectoryLimitExceeded, depth, constants.ComplianceBundleMaxDirectoryDepth)
+	}
+	if b.entries+entries > constants.ComplianceBundleMaxEnumeratedEntries {
+		return fmt.Errorf("%w: entry count exceeds %d", constants.ErrEvidenceDirectoryLimitExceeded, constants.ComplianceBundleMaxEnumeratedEntries)
+	}
+	b.entries += entries
+	return nil
+}
+
+func (r *complianceBundleRootReader) ReadFile(ctx context.Context, bundlePath string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	file, err := r.root.Open(bundlePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrNotFound, err)
@@ -134,15 +152,19 @@ func (r *complianceBundleRootReader) ReadFile(_ context.Context, bundlePath stri
 
 func (r *complianceBundleRootReader) ListFiles(ctx context.Context) ([]string, error) {
 	paths := make([]string, 0)
-	if err := r.listFiles(ctx, ".", &paths); err != nil {
+	budget := recursiveDirectoryBudget{}
+	if err := r.listFiles(ctx, ".", 0, &budget, &paths); err != nil {
 		return nil, err
 	}
 	sort.Strings(paths)
 	return paths, nil
 }
 
-func (r *complianceBundleRootReader) listFiles(ctx context.Context, directory string, paths *[]string) error {
+func (r *complianceBundleRootReader) listFiles(ctx context.Context, directory string, depth int, budget *recursiveDirectoryBudget, paths *[]string) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := budget.consume(depth, 0); err != nil {
 		return err
 	}
 	file, err := r.root.Open(directory)
@@ -160,6 +182,9 @@ func (r *complianceBundleRootReader) listFiles(ctx context.Context, directory st
 	if len(entries) > constants.ComplianceBundleMaxArtifacts {
 		return constants.ErrEvidenceArtifactTooLarge
 	}
+	if err := budget.consume(depth, len(entries)); err != nil {
+		return err
+	}
 	for _, entry := range entries {
 		entryPath := entry.Name()
 		if directory != "." {
@@ -169,7 +194,7 @@ func (r *complianceBundleRootReader) listFiles(ctx context.Context, directory st
 			return fmt.Errorf("%w: symlink %s", constants.ErrUnexpectedEvidenceArtifact, entryPath)
 		}
 		if entry.IsDir() {
-			if err := r.listFiles(ctx, entryPath, paths); err != nil {
+			if err := r.listFiles(ctx, entryPath, depth+1, budget, paths); err != nil {
 				return err
 			}
 			continue
@@ -401,12 +426,23 @@ func buildEvalVerificationArtifacts(ctx context.Context, reader evidence.Artifac
 }
 
 func collectRuntimeSourceArtifacts(ctx context.Context, reader evidence.ArtifactReader, runtimeRoot, currentPath, bundleRoot string, allowEmpty bool) ([]compliancereport.SourceArtifact, error) {
+	budget := recursiveDirectoryBudget{}
+	return collectRuntimeSourceArtifactsRecursive(ctx, reader, runtimeRoot, currentPath, bundleRoot, allowEmpty, 0, &budget)
+}
+
+func collectRuntimeSourceArtifactsRecursive(ctx context.Context, reader evidence.ArtifactReader, runtimeRoot, currentPath, bundleRoot string, allowEmpty bool, depth int, budget *recursiveDirectoryBudget) ([]compliancereport.SourceArtifact, error) {
+	if err := budget.consume(depth, 0); err != nil {
+		return nil, err
+	}
 	entries, err := reader.ReadDir(ctx, currentPath)
 	if err != nil {
 		return nil, err
 	}
 	if len(entries) > constants.DemoRunMaxArtifactsPerDirectory {
 		return nil, constants.ErrEvidenceArtifactTooLarge
+	}
+	if err := budget.consume(depth, len(entries)); err != nil {
+		return nil, err
 	}
 	artifacts := make([]compliancereport.SourceArtifact, 0, len(entries))
 	for _, entry := range entries {
@@ -418,7 +454,7 @@ func collectRuntimeSourceArtifacts(ctx context.Context, reader evidence.Artifact
 		}
 		sourcePath := path.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			nested, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, sourcePath, bundleRoot, allowEmpty)
+			nested, err := collectRuntimeSourceArtifactsRecursive(ctx, reader, runtimeRoot, sourcePath, bundleRoot, allowEmpty, depth+1, budget)
 			if err != nil {
 				return nil, err
 			}

@@ -31,13 +31,14 @@ import (
 )
 
 type bundleArtifactReaderStub struct {
-	bodies map[string][]byte
-	err    error
+	bodies  map[string][]byte
+	listErr error
+	readErr error
 }
 
 func (r *bundleArtifactReaderStub) ReadFile(_ context.Context, bundlePath string) ([]byte, error) {
-	if r.err != nil {
-		return nil, r.err
+	if r.readErr != nil {
+		return nil, r.readErr
 	}
 	body, ok := r.bodies[bundlePath]
 	if !ok {
@@ -47,8 +48,8 @@ func (r *bundleArtifactReaderStub) ReadFile(_ context.Context, bundlePath string
 }
 
 func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) {
-	if r.err != nil {
-		return nil, r.err
+	if r.listErr != nil {
+		return nil, r.listErr
 	}
 	paths := make([]string, 0, len(r.bodies))
 	for bundlePath := range r.bodies {
@@ -242,6 +243,13 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 				bundle.Manifest.GeneratorIdentity = "unassessed-assembler"
 			},
 			failureCode: constants.ErrEvidenceProducerUnverified,
+		},
+		{
+			name: "unsupported manifest bundle profile",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Manifest.BundleProfile = "unsupported"
+			},
+			failureCode: constants.ErrBundleProfileUnsupported,
 		},
 		{
 			name: "analysis scope mismatch",
@@ -494,17 +502,31 @@ func TestVerifyComplianceReportBundle_OrdersFailuresDeterministically(t *testing
 	}
 }
 
-func TestVerifyComplianceReportBundle_ReportsArtifactReaderFailures(t *testing.T) {
-	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
-	readErr := errors.New("read failed")
-	reader.err = readErr
+func TestVerifyComplianceReportBundle_ReportsArtifactReaderFailuresWithStableCodes(t *testing.T) {
+	tests := []struct {
+		name         string
+		listErr      error
+		readErr      error
+		expectedCode error
+	}{
+		{name: "directory read failure", listErr: errors.New("read failed"), expectedCode: constants.ErrDirectoryRead},
+		{name: "directory resource limit", listErr: constants.ErrEvidenceDirectoryLimitExceeded, expectedCode: constants.ErrEvidenceDirectoryLimitExceeded},
+		{name: "artifact read failure", readErr: errors.New("read failed"), expectedCode: constants.ErrFileReadFailed},
+		{name: "oversized artifact read", readErr: constants.ErrEvidenceArtifactTooLarge, expectedCode: constants.ErrEvidenceArtifactTooLarge},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+			reader.listErr = test.listErr
+			reader.readErr = test.readErr
 
-	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
 
-	require.NoError(t, err)
-	assert.False(t, report.GetValid())
-	assert.Contains(t, failureCodes(report), constants.ErrDirectoryRead.Error())
-	assert.Contains(t, failureCodes(report), constants.ErrBundleArtifactMissing.Error())
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			assert.Contains(t, failureCodes(report), test.expectedCode.Error())
+		})
+	}
 }
 
 func TestVerifyComplianceReportBundle_RejectsInvalidVerifierConfiguration(t *testing.T) {
