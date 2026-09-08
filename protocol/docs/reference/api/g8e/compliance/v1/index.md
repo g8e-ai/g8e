@@ -9,6 +9,8 @@
     - [ChecksumEntry](#g8e-compliance-v1-ChecksumEntry)
     - [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis)
     - [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference)
+    - [ComplianceEvidenceTrustPolicy](#g8e-compliance-v1-ComplianceEvidenceTrustPolicy)
+    - [ComplianceEvidenceTrustedKey](#g8e-compliance-v1-ComplianceEvidenceTrustedKey)
     - [ComplianceFinding](#g8e-compliance-v1-ComplianceFinding)
     - [ComplianceGap](#g8e-compliance-v1-ComplianceGap)
     - [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation)
@@ -189,6 +191,47 @@
 | verified_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | bundle_path | [string](#string) |  |  |
 | encryption | [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceEvidenceTrustPolicy"></a>
+
+### ComplianceEvidenceTrustPolicy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| policy_id | [string](#string) |  |  |
+| policy_version | [string](#string) |  |  |
+| trusted_keys | [ComplianceEvidenceTrustedKey](#g8e-compliance-v1-ComplianceEvidenceTrustedKey) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceEvidenceTrustedKey"></a>
+
+### ComplianceEvidenceTrustedKey
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key_id | [string](#string) |  |  |
+| public_key | [string](#string) |  |  |
+| public_key_sha256 | [string](#string) |  |  |
+| assessment_id | [string](#string) |  |  |
+| assessor_identity | [string](#string) |  |  |
+| assessed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| valid_from | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| valid_until | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| allowed_scope_refs | [string](#string) | repeated |  |
+| revoked_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 
 
 

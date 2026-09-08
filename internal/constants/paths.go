@@ -732,6 +732,7 @@ const (
 	ComplianceBundleProfileRestricted             = "restricted"
 	ComplianceBundleMaxArtifacts                  = 8192
 	ComplianceBundleMaxArtifactBytes              = 64 << 20
+	ComplianceEvidenceTrustMaxKeys                = 4096
 	ComplianceBundleMaxDirectoryDepth             = 32
 	ComplianceBundleMaxEnumeratedEntries          = ComplianceBundleMaxArtifacts * 2
 	ComplianceBundleAnalysisPath                  = "analysis.json"
@@ -757,6 +758,8 @@ const (
 	ComplianceReportSigningMetadataTestFilename   = "signing-metadata.json"
 	ComplianceReportSigningPrivateKeyTestFilename = "signing-private-key.hex"
 	ComplianceReportTrustPolicyTestFilename       = "assessed-trust.json"
+	ComplianceEvidenceTrustPolicyTestFilename     = "assessed-evidence-trust.json"
+	AuditRecordTestFilename                       = "audit-record.json"
 	KSIMethodDefinitionVersion                    = "1.0.0"
 	KSIMethodVerifierID                           = "g8e-ksi-method-verifier"
 	KSIMethodVerifierVersion                      = "1.0.0"

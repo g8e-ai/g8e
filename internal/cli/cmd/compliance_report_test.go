@@ -14,6 +14,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path"
@@ -29,9 +30,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func complianceReportSigningFixtureForTest(t *testing.T, scopeID string) (*compliancereport.ComplianceReportSigningIdentity, *compliancev1.ComplianceReportTrustPolicy, ed25519.PrivateKey) {
@@ -109,6 +113,209 @@ func TestComplianceReportCmd_ContainsGenerateAndVerifySubcommands(t *testing.T) 
 	require.Len(t, cmd.Commands(), 2)
 	assert.Equal(t, "generate", cmd.Commands()[0].Name())
 	assert.Equal(t, "verify", cmd.Commands()[1].Name())
+}
+
+func TestBuildStandaloneReportSources_ProtectsReplayableLedgerAndBuildConfigurationBytes(t *testing.T) {
+	root := t.TempDir()
+	commitsPath := filepath.Join(root, constants.LedgerCommitsFilename)
+	statePath := filepath.Join(root, constants.LedgerStateFilename)
+	buildPath := filepath.Join(root, constants.BuildConfigAttestationsFilename)
+	commitsBody := []byte(`{"schema_version":"1.0.0","producer_identity":"gateway-1","commit_hash":"1111111111111111111111111111111111111111","parent_hash":"","timestamp_utc":"2026-09-06T10:00:00Z","message":"bootstrap","files_changed":1,"diff_stat":"1 file changed"}
+{"schema_version":"1.0.0","producer_identity":"gateway-1","commit_hash":"2222222222222222222222222222222222222222","parent_hash":"1111111111111111111111111111111111111111","timestamp_utc":"2026-09-06T10:01:00Z","message":"mutation","files_changed":1,"diff_stat":"1 file changed"}
+`)
+	stateBody := []byte(`{"schema_version":"1.0.0","producer_identity":"gateway-1","merkle_root":"2222222222222222222222222222222222222222","captured_at_utc":"2026-09-06T10:02:00Z"}`)
+	buildBody := []byte(`{"schema_version":"1.0.0","attestation_type":"build","producer_identity":"build-system-1","produced_at_utc":"2026-09-06T10:00:00Z","scope_id":"scope-1","run_id":"build-run-1","build_identity":"build-1","source_revision":"revision-1","image_digests":[{"name":"gateway","sha256":"1111111111111111111111111111111111111111111111111111111111111111"}],"component_inventory":[{"component_id":"gateway","component_type":"service","version":"2.1.7","digest":"2222222222222222222222222222222222222222222222222222222222222222"}]}
+{"schema_version":"1.0.0","attestation_type":"configuration","producer_identity":"build-system-1","produced_at_utc":"2026-09-06T10:01:00Z","scope_id":"scope-1","run_id":"build-run-1","build_identity":"build-1","source_revision":"revision-1","configuration_hashes":[{"name":"gateway","sha256":"3333333333333333333333333333333333333333333333333333333333333333"}]}
+`)
+	require.NoError(t, os.WriteFile(commitsPath, commitsBody, constants.PermFileReadOnly))
+	require.NoError(t, os.WriteFile(statePath, stateBody, constants.PermFileReadOnly))
+	require.NoError(t, os.WriteFile(buildPath, buildBody, constants.PermFileReadOnly))
+
+	importers, artifacts, err := buildStandaloneReportSources(context.Background(), standaloneReportSourceInput{scopeID: "scope-1", ledgerRunID: "ledger-run-1", ledgerCommits: commitsPath, ledgerState: statePath, buildRunID: "build-run-1", buildConfig: buildPath})
+
+	require.NoError(t, err)
+	require.Len(t, importers, 2)
+	assert.Len(t, artifacts, 3)
+	ledgerNodes, err := importers[0].Import(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, ledgerNodes, 3)
+	buildNodes, err := importers[1].Import(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, buildNodes, 2)
+	assert.Equal(t, commitsBody, artifacts[0].Body)
+	assert.Equal(t, stateBody, artifacts[1].Body)
+	assert.Equal(t, buildBody, artifacts[2].Body)
+}
+
+type standaloneAttestationRecord struct {
+	SchemaVersion    string   `json:"schema_version"`
+	AttestationID    string   `json:"attestation_id"`
+	AttesterType     string   `json:"attester_type"`
+	AttesterIdentity string   `json:"attester_identity"`
+	SignerKeyID      string   `json:"signer_key_id"`
+	IssuedAtUTC      string   `json:"issued_at_utc"`
+	ValidFromUTC     string   `json:"valid_from_utc"`
+	ValidUntilUTC    string   `json:"valid_until_utc"`
+	ScopeID          string   `json:"scope_id"`
+	RunID            string   `json:"run_id"`
+	AssertionIDs     []string `json:"assertion_ids"`
+	EvidenceRefs     []string `json:"evidence_refs,omitempty"`
+	Statement        string   `json:"statement"`
+	Revoked          bool     `json:"revoked"`
+	RevokedAtUTC     string   `json:"revoked_at_utc,omitempty"`
+	Signature        string   `json:"signature,omitempty"`
+}
+
+func TestBuildStandaloneReportSources_ProtectsEveryPlatformSourceClass(t *testing.T) {
+	root := t.TempDir()
+	scopeID := "scope-1"
+	verifiedAt := time.Date(2026, 9, 6, 10, 30, 0, 0, time.UTC)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	keyID := hex.EncodeToString(publicKey)
+	trust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{keyID: publicKey}}
+
+	binding := compliance.EvaluationBinding{ScopeID: scopeID, RunID: "ksi-run-1", WindowStartUnixMs: 1_699_999_000_000, WindowEndUnixMs: 1_700_001_000_000, EvaluatorID: constants.KSIEvaluatorID, EvaluatorVersion: constants.KSIEvaluatorVersion, MethodDefinitionID: constants.KSIMethodDefinitionVersion, AssertionAssessments: compliance.AssertionAssessmentScope{AssessmentIDs: []string{"assessment-1"}, AttemptIDs: []string{"attempt-1"}, ScenarioIDs: []string{"scenario-1"}, ActionIDs: []string{"action-1"}}}
+	ksi := compliance.KSIResultSet{Class: compliance.ClassC, EvaluatedAtMs: 1_700_000_000_000, Binding: binding, Results: []compliance.KSIResult{{ID: "KSI-CMT-01", Status: compliance.KSIStatusSatisfied, Outcome: compliance.KSIOutcomeSatisfied, LastValidatedUnixMs: 1_699_999_999_000, MethodCount: 1, Binding: binding}}}
+	ksiResultsBody, err := json.Marshal(ksi)
+	require.NoError(t, err)
+	ksiHistoryBody := append(append([]byte(nil), ksiResultsBody...), '\n')
+	ksiHistoryPath := filepath.Join(root, constants.ComplianceBundleKSIHistoryFilename)
+	ksiResultsPath := filepath.Join(root, constants.ComplianceBundleKSIResultsFilename)
+	require.NoError(t, os.WriteFile(ksiHistoryPath, ksiHistoryBody, constants.PermFileReadOnly))
+	require.NoError(t, os.WriteFile(ksiResultsPath, ksiResultsBody, constants.PermFileReadOnly))
+
+	commitment := &operatorv1.CommitmentAttestation{TransactionId: "transaction-1", TransactionHash: strings.Repeat("1", 64), PriorCommitmentHash: strings.Repeat("2", 64), StateRootAtCommit: strings.Repeat("3", 64), L2SignatureDigest: strings.Repeat("4", 64), WardenIntentSignatureDigest: strings.Repeat("5", 64), HumanSignatureDigest: strings.Repeat("6", 64), ActionType: "FILE_EDIT", TargetResource: constants.DemosTargetDataDir, CommittedAtUnixMs: 1_700_000_000_000, AuditorKeyId: keyID}
+	commitmentPayload, err := governance.CanonicalizeCommitmentAttestation(commitment)
+	require.NoError(t, err)
+	commitmentDigest := sha256.Sum256(commitmentPayload)
+	commitment.Hash = hex.EncodeToString(commitmentDigest[:])
+	commitment.Signature = hex.EncodeToString(ed25519.Sign(privateKey, commitmentPayload))
+	commitmentBody, err := compliancev1.MarshalCanonical(commitment)
+	require.NoError(t, err)
+	commitmentPath := filepath.Join(root, constants.ComplianceBundleCommitmentsFilename)
+	require.NoError(t, os.WriteFile(commitmentPath, commitmentBody, constants.PermFileReadOnly))
+
+	attestations := []standaloneAttestationRecord{
+		{SchemaVersion: constants.AttestationSchemaVersion, AttestationID: "customer-attestation-1", AttesterType: "customer", AttesterIdentity: "customer-1", SignerKeyID: keyID, IssuedAtUTC: "2026-09-06T10:00:00Z", ValidFromUTC: "2026-09-06T10:00:00Z", ValidUntilUTC: "2026-09-06T11:00:00Z", ScopeID: scopeID, RunID: "attestation-run-1", AssertionIDs: []string{"assertion-1"}, Statement: "Customer-operated control is in effect."},
+		{SchemaVersion: constants.AttestationSchemaVersion, AttestationID: "assessor-attestation-1", AttesterType: "assessor", AttesterIdentity: "assessor-1", SignerKeyID: keyID, IssuedAtUTC: "2026-09-06T10:01:00Z", ValidFromUTC: "2026-09-06T10:01:00Z", ValidUntilUTC: "2026-09-06T11:00:00Z", ScopeID: scopeID, RunID: "attestation-run-1", AssertionIDs: []string{"assertion-2"}, Statement: "Assessor reviewed the declared evidence."},
+	}
+	attestationLines := make([][]byte, 0, len(attestations))
+	for index := range attestations {
+		payload, err := json.Marshal(attestations[index])
+		require.NoError(t, err)
+		attestations[index].Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+		line, err := json.Marshal(attestations[index])
+		require.NoError(t, err)
+		attestationLines = append(attestationLines, line)
+	}
+	attestationBody := append(bytes.Join(attestationLines, []byte{'\n'}), '\n')
+	attestationPath := filepath.Join(root, constants.ComplianceBundleAttestationsFilename)
+	require.NoError(t, os.WriteFile(attestationPath, attestationBody, constants.PermFileReadOnly))
+
+	auditBody, err := compliancev1.MarshalCanonical(&operatorv1.AuditEvent{Id: 41, OperatorSessionId: "session-1", Timestamp: "2026-09-06T10:00:00Z", Type: string(constants.EventAppTaskCompleted)})
+	require.NoError(t, err)
+	auditPath := filepath.Join(root, constants.AuditRecordTestFilename)
+	require.NoError(t, os.WriteFile(auditPath, auditBody, constants.PermFileReadOnly))
+
+	commitsPath := filepath.Join(root, constants.LedgerCommitsFilename)
+	statePath := filepath.Join(root, constants.LedgerStateFilename)
+	buildPath := filepath.Join(root, constants.BuildConfigAttestationsFilename)
+	commitsBody := []byte(`{"schema_version":"1.0.0","producer_identity":"gateway-1","commit_hash":"1111111111111111111111111111111111111111","parent_hash":"","timestamp_utc":"2026-09-06T10:00:00Z","message":"bootstrap","files_changed":1,"diff_stat":"1 file changed"}
+{"schema_version":"1.0.0","producer_identity":"gateway-1","commit_hash":"2222222222222222222222222222222222222222","parent_hash":"1111111111111111111111111111111111111111","timestamp_utc":"2026-09-06T10:01:00Z","message":"mutation","files_changed":1,"diff_stat":"1 file changed"}
+`)
+	stateBody := []byte(`{"schema_version":"1.0.0","producer_identity":"gateway-1","merkle_root":"2222222222222222222222222222222222222222","captured_at_utc":"2026-09-06T10:02:00Z"}`)
+	buildBody := []byte(`{"schema_version":"1.0.0","attestation_type":"build","producer_identity":"build-system-1","produced_at_utc":"2026-09-06T10:00:00Z","scope_id":"scope-1","run_id":"build-run-1","build_identity":"build-1","source_revision":"revision-1","image_digests":[{"name":"gateway","sha256":"1111111111111111111111111111111111111111111111111111111111111111"}],"component_inventory":[{"component_id":"gateway","component_type":"service","version":"2.1.7","digest":"2222222222222222222222222222222222222222222222222222222222222222"}]}
+{"schema_version":"1.0.0","attestation_type":"configuration","producer_identity":"build-system-1","produced_at_utc":"2026-09-06T10:01:00Z","scope_id":"scope-1","run_id":"build-run-1","build_identity":"build-1","source_revision":"revision-1","configuration_hashes":[{"name":"gateway","sha256":"3333333333333333333333333333333333333333333333333333333333333333"}]}
+`)
+	require.NoError(t, os.WriteFile(commitsPath, commitsBody, constants.PermFileReadOnly))
+	require.NoError(t, os.WriteFile(statePath, stateBody, constants.PermFileReadOnly))
+	require.NoError(t, os.WriteFile(buildPath, buildBody, constants.PermFileReadOnly))
+
+	importers, artifacts, err := buildStandaloneReportSources(context.Background(), standaloneReportSourceInput{scopeID: scopeID, verifiedAt: verifiedAt, evidenceTrust: trust, ksiRunID: "ksi-run-1", ksiHistory: ksiHistoryPath, ksiResults: ksiResultsPath, commitmentRunID: "commitment-run-1", commitment: commitmentPath, attestationRunID: "attestation-run-1", attestations: attestationPath, auditRunID: "audit-run-1", auditRecords: []string{auditPath}, ledgerRunID: "ledger-run-1", ledgerCommits: commitsPath, ledgerState: statePath, buildRunID: "build-run-1", buildConfig: buildPath})
+
+	require.NoError(t, err)
+	require.Len(t, importers, 6)
+	assert.Len(t, artifacts, 8)
+	types := make(map[evidence.ArtifactType]int)
+	for _, importer := range importers {
+		nodes, err := importer.Import(context.Background())
+		require.NoError(t, err)
+		for _, node := range nodes {
+			types[node.ArtifactType]++
+		}
+	}
+	assert.Equal(t, 1, types[evidence.ArtifactTypeKSIResult])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeCommitment])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeCustomerAttestation])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeAssessorAttestation])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeAuditRecord])
+	assert.Equal(t, 2, types[evidence.ArtifactTypeLedgerCommit])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeLedgerState])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeBuildAttestation])
+	assert.Equal(t, 1, types[evidence.ArtifactTypeConfigAttestation])
+
+	fileSvc, _ := newCmdTestEnv(t)
+	reportPublicKey, reportPrivateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	reportKeyDigest := sha256.Sum256(reportPublicKey)
+	reportMetadata := &compliancev1.ComplianceReportSigningKeyMetadata{KeyId: "complete-report-key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, Purpose: constants.ComplianceReportSigningPurpose, PublicKeySha256: hex.EncodeToString(reportKeyDigest[:]), CreatedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), ExpiresAt: timestamppb.New(verifiedAt.Add(time.Hour))}
+	reportIdentity, err := compliancereport.NewComplianceReportSigningIdentity(reportMetadata, reportPrivateKey)
+	require.NoError(t, err)
+	reportPolicy := &compliancev1.ComplianceReportTrustPolicy{PolicyId: "complete-report-policy-1", PolicyVersion: "1.0.0", TrustedKeys: []*compliancev1.ComplianceReportTrustedKey{{Metadata: reportMetadata, PublicKey: hex.EncodeToString(reportPublicKey), AssessmentId: "report-assessment-1", AssessorIdentity: "assessor-1", AssessedAt: timestamppb.New(verifiedAt.Add(-time.Hour)), AllowedScopeRefs: []string{scopeID}}}}
+	publicKeyDigest := sha256.Sum256(publicKey)
+	evidencePolicy := &compliancev1.ComplianceEvidenceTrustPolicy{
+		PolicyId:      "evidence-policy-1",
+		PolicyVersion: "1.0.0",
+		TrustedKeys: []*compliancev1.ComplianceEvidenceTrustedKey{{
+			KeyId:            keyID,
+			PublicKey:        hex.EncodeToString(publicKey),
+			PublicKeySha256:  hex.EncodeToString(publicKeyDigest[:]),
+			AssessmentId:     "evidence-assessment-1",
+			AssessorIdentity: "assessor-1",
+			AssessedAt:       timestamppb.New(verifiedAt.Add(-time.Hour)),
+			ValidFrom:        timestamppb.New(verifiedAt.Add(-time.Hour)),
+			ValidUntil:       timestamppb.New(verifiedAt.Add(time.Hour)),
+			AllowedScopeRefs: []string{scopeID},
+		}},
+	}
+	evidencePolicyBody, err := compliancev1.MarshalCanonical(evidencePolicy)
+	require.NoError(t, err)
+	evidencePolicyPath := filepath.Join(root, constants.ComplianceEvidenceTrustPolicyTestFilename)
+	require.NoError(t, os.WriteFile(evidencePolicyPath, evidencePolicyBody, constants.PermFileReadOnly))
+	generateCmd := complianceReportGenerateCmdWithConfig(fileSvcFactoryFor(fileSvc), stubProvenanceSourceFactory(nil), func(context.Context, string, string) (*compliancereport.ComplianceReportSigningIdentity, error) {
+		return reportIdentity, nil
+	})
+	configureComplianceReportGenerateCommand(t, generateCmd)
+	require.NoError(t, generateCmd.Flags().Set("scope-id", scopeID))
+	require.NoError(t, generateCmd.Flags().Set("window-start-unix-ms", strconv.FormatInt(time.UnixMilli(1_699_999_000_000).UnixMilli(), 10)))
+	require.NoError(t, generateCmd.Flags().Set("window-end-unix-ms", strconv.FormatInt(verifiedAt.UnixMilli(), 10)))
+	for name, value := range map[string]string{
+		"evidence-trust": evidencePolicyPath, "ksi-run-id": "ksi-run-1", "ksi-history": ksiHistoryPath, "ksi-results": ksiResultsPath,
+		"commitment-run-id": "commitment-run-1", "commitment": commitmentPath, "attestation-run-id": "attestation-run-1", "attestations": attestationPath,
+		"audit-run-id": "audit-run-1", "audit-record": auditPath, "ledger-run-id": "ledger-run-1", "ledger-commits": commitsPath, "ledger-state": statePath,
+		"build-run-id": "build-run-1", "build-config-attestations": buildPath,
+	} {
+		require.NoError(t, generateCmd.Flags().Set(name, value))
+	}
+	var generated bytes.Buffer
+	generateCmd.SetOut(&generated)
+	require.NoError(t, generateCmd.RunE(generateCmd, nil))
+	descriptorPath := string(bytes.TrimSpace(generated.Bytes()))
+
+	reportPolicyBody, err := compliancev1.MarshalCanonical(reportPolicy)
+	require.NoError(t, err)
+	reportPolicyPath := filepath.Join(root, constants.ComplianceReportTrustPolicyTestFilename)
+	require.NoError(t, os.WriteFile(reportPolicyPath, reportPolicyBody, constants.PermFileReadOnly))
+	verifyCmd := complianceReportVerifyCmdWithConfig(loadComplianceReportBundleInput, compliancereport.VerifyComplianceReportBundle, func() time.Time { return verifiedAt })
+	require.NoError(t, verifyCmd.Flags().Set("trust-policy", reportPolicyPath))
+	require.NoError(t, verifyCmd.Flags().Set("evidence-trust", evidencePolicyPath))
+	var verified bytes.Buffer
+	verifyCmd.SetOut(&verified)
+	require.NoError(t, verifyCmd.RunE(verifyCmd, []string{descriptorPath}))
+	verificationReport := &compliancev1.ComplianceVerificationReport{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(bytes.TrimSpace(verified.Bytes()), verificationReport))
+	assert.True(t, verificationReport.GetValid(), verificationReport.GetFailures())
 }
 
 func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleAndRootedVerifierRejectsInventoryMutations(t *testing.T) {
@@ -197,7 +404,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleAndRootedVeri
 	require.NoError(t, fileSvc.MkdirAll(context.Background(), nestedDir, constants.PermDirPrivate))
 	nestedUnexpectedPath := path.Join(constants.TestNestedDirname, constants.ComplianceBundleUnexpectedTestPath)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), path.Join(bundleDir, nestedUnexpectedPath), []byte(`{}`), constants.PermFilePublic))
-	input, err := loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath)
+	input, err := loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath, "")
 	require.NoError(t, err)
 	unexpectedReport, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{Bundle: input.bundle, Reader: input.reader, TrustPolicy: input.trustPolicy, VerifiedAt: windowEnd})
 	require.NoError(t, err)
@@ -214,7 +421,7 @@ func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleAndRootedVeri
 	mutatedDescriptorBody, err := compliancev1.MarshalCanonical(bundle)
 	require.NoError(t, err)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), descriptorPath, mutatedDescriptorBody, constants.PermFilePublic))
-	input, err = loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath)
+	input, err = loadComplianceReportBundleInput(context.Background(), fileSvc.Resolve(descriptorPath), trustPath, "")
 	require.NoError(t, err)
 	missingReport, err := compliancereport.VerifyComplianceReportBundle(context.Background(), compliancereport.BundleVerificationRequest{Bundle: input.bundle, Reader: input.reader, TrustPolicy: input.trustPolicy, VerifiedAt: windowEnd})
 	require.NoError(t, err)
@@ -421,15 +628,18 @@ func TestComplianceReportGenerateCmdWithConfig_RejectsInvalidEvidenceWindow(t *t
 func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T) {
 	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
 	loaderCalled := false
+	expectedEvidenceTrust := &assessedEvidenceTrust{keys: map[string]ed25519.PublicKey{}}
 	cmd := complianceReportVerifyCmdWithConfig(
-		func(_ context.Context, bundlePath, trustPolicyPath string) (complianceReportBundleInput, error) {
+		func(_ context.Context, bundlePath, trustPolicyPath, evidenceTrustPath string) (complianceReportBundleInput, error) {
 			loaderCalled = true
 			assert.Equal(t, "bundle.json", bundlePath)
 			assert.Equal(t, "assessed-trust.json", trustPolicyPath)
-			return complianceReportBundleInput{}, nil
+			assert.Equal(t, "evidence-trust.json", evidenceTrustPath)
+			return complianceReportBundleInput{evidenceTrust: expectedEvidenceTrust}, nil
 		},
 		func(_ context.Context, request compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
 			assert.Equal(t, verifiedAt, request.VerifiedAt)
+			assert.Same(t, expectedEvidenceTrust, request.EvidenceTrust)
 			return &compliancev1.ComplianceVerificationReport{
 				ReportId:               "report-1",
 				Valid:                  true,
@@ -442,6 +652,7 @@ func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T
 		func() time.Time { return verifiedAt },
 	)
 	require.NoError(t, cmd.Flags().Set("trust-policy", "assessed-trust.json"))
+	require.NoError(t, cmd.Flags().Set("evidence-trust", "evidence-trust.json"))
 	var output bytes.Buffer
 	cmd.SetOut(&output)
 
@@ -456,7 +667,7 @@ func TestComplianceReportVerifyCmdWithConfig_PrintsTypedValidReport(t *testing.T
 func TestComplianceReportVerifyCmdWithConfig_ReturnsFailureAfterPrintingInvalidReport(t *testing.T) {
 	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
 	cmd := complianceReportVerifyCmdWithConfig(
-		func(context.Context, string, string) (complianceReportBundleInput, error) {
+		func(context.Context, string, string, string) (complianceReportBundleInput, error) {
 			return complianceReportBundleInput{}, nil
 		},
 		func(context.Context, compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
@@ -486,7 +697,7 @@ func TestComplianceReportVerifyCmdWithConfig_PropagatesReaderCloseFailure(t *tes
 	closeErr := errors.New("close failed")
 	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
 	cmd := complianceReportVerifyCmdWithConfig(
-		func(context.Context, string, string) (complianceReportBundleInput, error) {
+		func(context.Context, string, string, string) (complianceReportBundleInput, error) {
 			return complianceReportBundleInput{close: func() error { return closeErr }}, nil
 		},
 		func(context.Context, compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
@@ -504,7 +715,7 @@ func TestComplianceReportVerifyCmdWithConfig_PropagatesReaderCloseFailure(t *tes
 
 func TestComplianceReportVerifyCmdWithConfig_RequiresExternalTrustPolicy(t *testing.T) {
 	cmd := complianceReportVerifyCmdWithConfig(
-		func(context.Context, string, string) (complianceReportBundleInput, error) {
+		func(context.Context, string, string, string) (complianceReportBundleInput, error) {
 			t.Fatal("loader must not run without an explicit trust policy")
 			return complianceReportBundleInput{}, nil
 		},
@@ -515,6 +726,68 @@ func TestComplianceReportVerifyCmdWithConfig_RequiresExternalTrustPolicy(t *test
 	err := cmd.RunE(cmd, []string{"bundle.json"})
 
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestNewAssessedEvidenceTrust_ValidatesEveryAssessedSigner(t *testing.T) {
+	signedAt := time.Unix(1_700_000_000, 0).UTC()
+	newPolicy := func() *compliancev1.ComplianceEvidenceTrustPolicy {
+		publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		digest := sha256.Sum256(publicKey)
+		return &compliancev1.ComplianceEvidenceTrustPolicy{
+			PolicyId:      "evidence-policy-1",
+			PolicyVersion: "1.0.0",
+			TrustedKeys: []*compliancev1.ComplianceEvidenceTrustedKey{{
+				KeyId:            "evidence-key-1",
+				PublicKey:        hex.EncodeToString(publicKey),
+				PublicKeySha256:  hex.EncodeToString(digest[:]),
+				AssessmentId:     "assessment-1",
+				AssessorIdentity: "assessor-1",
+				AssessedAt:       timestamppb.New(signedAt.Add(-2 * time.Hour)),
+				ValidFrom:        timestamppb.New(signedAt.Add(-time.Hour)),
+				ValidUntil:       timestamppb.New(signedAt.Add(time.Hour)),
+				AllowedScopeRefs: []string{"scope-1"},
+			}},
+		}
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*compliancev1.ComplianceEvidenceTrustPolicy)
+		wantErr bool
+	}{
+		{name: "valid assessed signer"},
+		{name: "duplicate signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys = append(policy.TrustedKeys, policy.TrustedKeys[0])
+		}, wantErr: true},
+		{name: "digest mismatch", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].PublicKeySha256 = strings.Repeat("0", 64)
+		}, wantErr: true},
+		{name: "scope ineligible", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].AllowedScopeRefs = []string{"other-scope"}
+		}, wantErr: true},
+		{name: "expired signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].ValidUntil = timestamppb.New(signedAt.Add(-time.Second))
+		}, wantErr: true},
+		{name: "revoked signer", mutate: func(policy *compliancev1.ComplianceEvidenceTrustPolicy) {
+			policy.TrustedKeys[0].RevokedAt = timestamppb.New(signedAt)
+		}, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy := newPolicy()
+			if test.mutate != nil {
+				test.mutate(policy)
+			}
+			trust, err := newAssessedEvidenceTrust(policy, "scope-1", timestamppb.New(signedAt))
+			if test.wantErr {
+				assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
+				assert.Nil(t, trust)
+				return
+			}
+			require.NoError(t, err)
+			assert.NotNil(t, trust)
+		})
+	}
 }
 
 func TestLoadComplianceReportBundleInput_RejectsMalformedAndOversizedInputs(t *testing.T) {
@@ -541,7 +814,7 @@ func TestLoadComplianceReportBundleInput_RejectsMalformedAndOversizedInputs(t *t
 			require.NoError(t, os.WriteFile(bundlePath, test.bundleBody, constants.PermFilePublic))
 			require.NoError(t, os.WriteFile(trustPath, test.trustBody, constants.PermFilePublic))
 
-			input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath)
+			input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath, "")
 
 			require.Error(t, err)
 			for _, expectedErr := range test.expectedErrors {
@@ -619,7 +892,7 @@ func TestLoadComplianceReportBundleInput_RejectsTrustPolicyInsideBundle(t *testi
 	require.NoError(t, os.WriteFile(bundlePath, []byte(`{}`), constants.PermFilePublic))
 	require.NoError(t, os.WriteFile(trustPath, []byte(`{}`), constants.PermFilePublic))
 
-	input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath)
+	input, err := loadComplianceReportBundleInput(context.Background(), bundlePath, trustPath, "")
 
 	assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
 	assert.Nil(t, input.bundle)

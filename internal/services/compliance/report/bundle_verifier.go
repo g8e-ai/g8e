@@ -391,6 +391,47 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 	}
 }
 
+type evidenceVerificationRoute string
+
+const (
+	evidenceVerificationRouteDemo        evidenceVerificationRoute = "demo"
+	evidenceVerificationRouteEval        evidenceVerificationRoute = "eval"
+	evidenceVerificationRouteKSI         evidenceVerificationRoute = "ksi"
+	evidenceVerificationRouteCommitment  evidenceVerificationRoute = "commitment"
+	evidenceVerificationRouteAttestation evidenceVerificationRoute = "attestation"
+	evidenceVerificationRouteAudit       evidenceVerificationRoute = "audit"
+	evidenceVerificationRouteLedger      evidenceVerificationRoute = "ledger"
+	evidenceVerificationRouteBuildConfig evidenceVerificationRoute = "build-config"
+)
+
+var evidenceVerificationRoutes = map[evidence.ArtifactType]evidenceVerificationRoute{
+	evidence.ArtifactTypeDemoManifest:        evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeDemoResult:          evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeDemoStepResult:      evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeDemoDefinition:      evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeActionReceipt:       evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeReceiptPersistence:  evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeStateObservation:    evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeDemoMetric:          evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeProtocolChain:       evidenceVerificationRouteDemo,
+	evidence.ArtifactTypeEvalManifest:        evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalTask:            evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalAttempt:         evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalMetric:          evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalObservation:     evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalStage:           evidenceVerificationRouteEval,
+	evidence.ArtifactTypeEvalReceipt:         evidenceVerificationRouteEval,
+	evidence.ArtifactTypeAuditRecord:         evidenceVerificationRouteAudit,
+	evidence.ArtifactTypeLedgerCommit:        evidenceVerificationRouteLedger,
+	evidence.ArtifactTypeLedgerState:         evidenceVerificationRouteLedger,
+	evidence.ArtifactTypeCommitment:          evidenceVerificationRouteCommitment,
+	evidence.ArtifactTypeKSIResult:           evidenceVerificationRouteKSI,
+	evidence.ArtifactTypeBuildAttestation:    evidenceVerificationRouteBuildConfig,
+	evidence.ArtifactTypeConfigAttestation:   evidenceVerificationRouteBuildConfig,
+	evidence.ArtifactTypeCustomerAttestation: evidenceVerificationRouteAttestation,
+	evidence.ArtifactTypeAssessorAttestation: evidenceVerificationRouteAttestation,
+}
+
 type demoSourceInventory struct {
 	verificationReport *compliancev1.ComplianceVerificationReport
 	runtimeManifest    bool
@@ -400,11 +441,27 @@ type demoSourceInventory struct {
 }
 
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
+	v.verifyEvidenceArtifactRoutes()
 	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
 	v.verifyKSIHistorySources(ctx)
 	v.verifyCommitmentSources(ctx)
 	v.verifyAttestationSources(ctx)
+	v.verifyAuditRecordSources(ctx)
+	v.verifyLedgerSources(ctx)
+	v.verifyBuildConfigSources(ctx)
+}
+
+func (v *bundleVerifier) verifyEvidenceArtifactRoutes() {
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, constants.ComplianceBundleAnalysisPath, "analysis contains a nil evidence resource")
+			continue
+		}
+		if _, exists := evidenceVerificationRoutes[evidence.ArtifactType(resource.GetArtifactType())]; !exists {
+			v.fail(constants.ErrInvalidEvidenceGraph, resource.GetArtifactId(), "evidence artifact type has no complete-bundle verification route")
+		}
+	}
 }
 
 func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context) {
@@ -572,6 +629,216 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 		}
 		if complete && inventory.verificationReport != nil {
 			v.replayEvalSourceVerification(ctx, runID, inventory.verificationReport)
+		}
+	}
+}
+
+type ledgerSourceInventory struct {
+	commitsPath string
+	commitsBody []byte
+	statePath   string
+	stateBody   []byte
+	scopeID     string
+	runID       string
+	attemptID   string
+	scenarioID  string
+	resources   map[string]*compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyLedgerSources(ctx context.Context) {
+	inventories := make(map[string]*ledgerSourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || (resource.GetArtifactType() != string(evidence.ArtifactTypeLedgerCommit) && resource.GetArtifactType() != string(evidence.ArtifactTypeLedgerState)) {
+			continue
+		}
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "ledger evidence requires canonical scope and run identifiers")
+			continue
+		}
+		base := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.LedgerEvidenceDirname)
+		commitsPath := path.Join(base, constants.LedgerCommitsFilename)
+		statePath := path.Join(base, constants.LedgerStateFilename)
+		expectedPath := commitsPath
+		if resource.GetArtifactType() == string(evidence.ArtifactTypeLedgerState) {
+			expectedPath = statePath
+		}
+		if resource.GetBundlePath() != expectedPath {
+			v.fail(constants.ErrUnresolvedReference, resource.GetArtifactId(), "ledger evidence does not reference its canonical protected source")
+			continue
+		}
+		key := resource.GetScopeId() + "\x00" + resource.GetRunId()
+		inventory := inventories[key]
+		if inventory == nil {
+			inventory = &ledgerSourceInventory{commitsPath: commitsPath, statePath: statePath, scopeID: resource.GetScopeId(), runID: resource.GetRunId(), attemptID: resource.GetAttemptId(), scenarioID: resource.GetScenarioId(), resources: make(map[string]*compliancev1.ComplianceEvidenceReference)}
+			inventories[key] = inventory
+		}
+		if resource.GetAttemptId() != inventory.attemptID || resource.GetScenarioId() != inventory.scenarioID {
+			v.fail(constants.ErrInvalidEvidenceGraph, resource.GetArtifactId(), "ledger evidence inventory has conflicting attempt or scenario bindings")
+			continue
+		}
+		if _, exists := inventory.resources[resource.GetArtifactId()]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, resource.GetArtifactId(), "ledger evidence resource is duplicated")
+			continue
+		}
+		inventory.resources[resource.GetArtifactId()] = resource
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) < 5 || parts[4] != constants.LedgerEvidenceDirname {
+			continue
+		}
+		key := parts[2] + "\x00" + parts[3]
+		inventory := inventories[key]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "ledger source does not bind analysis evidence")
+			continue
+		}
+		switch bundlePath {
+		case inventory.commitsPath:
+			inventory.commitsBody = body
+		case inventory.statePath:
+			inventory.stateBody = body
+		default:
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "ledger source path is unsupported")
+		}
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.commitsBody) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, "ledger commit source inventory is missing or empty")
+			continue
+		}
+		if len(inventory.stateBody) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.statePath, "ledger state source inventory is missing or empty")
+			continue
+		}
+		v.replayLedgerSource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayLedgerSource(ctx context.Context, inventory *ledgerSourceInventory) {
+	binding := evidence.LedgerImportBinding{
+		CommitsReference: evidence.ContentReferenceForBody(constants.LedgerCommitCollectionReferencePrefix, inventory.commitsBody),
+		StateReference:   evidence.ContentReferenceForBody(constants.LedgerStateReferencePrefix, inventory.stateBody),
+		CommitsPath:      inventory.commitsPath,
+		StatePath:        inventory.statePath,
+		ScopeID:          inventory.scopeID,
+		RunID:            inventory.runID,
+		AttemptID:        inventory.attemptID,
+		ScenarioID:       inventory.scenarioID,
+	}
+	nodes, err := evidence.NewLedgerImporter(&bundledSourceArtifactReader{bodies: v.bodies}, binding).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, err.Error())
+		return
+	}
+	if len(nodes) != len(inventory.resources) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.commitsPath, "replayed ledger inventory does not match the protected analysis evidence count")
+		return
+	}
+	for index := range nodes {
+		resource := inventory.resources[nodes[index].ArtifactID]
+		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, nodes[index].BundlePath, "replayed ledger evidence does not match the protected analysis evidence")
+		}
+	}
+}
+
+type buildConfigSourceInventory struct {
+	path      string
+	body      []byte
+	scopeID   string
+	runID     string
+	resources map[string]*compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyBuildConfigSources(ctx context.Context) {
+	inventories := make(map[string]*buildConfigSourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || (resource.GetArtifactType() != string(evidence.ArtifactTypeBuildAttestation) && resource.GetArtifactType() != string(evidence.ArtifactTypeConfigAttestation)) {
+			continue
+		}
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "build and configuration evidence requires canonical scope and run identifiers")
+			continue
+		}
+		expectedPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.BuildConfigAttestationsFilename)
+		if resource.GetBundlePath() != expectedPath {
+			v.fail(constants.ErrUnresolvedReference, resource.GetArtifactId(), "build or configuration evidence does not reference its canonical protected source")
+			continue
+		}
+		key := resource.GetScopeId() + "\x00" + resource.GetRunId()
+		inventory := inventories[key]
+		if inventory == nil {
+			inventory = &buildConfigSourceInventory{path: expectedPath, scopeID: resource.GetScopeId(), runID: resource.GetRunId(), resources: make(map[string]*compliancev1.ComplianceEvidenceReference)}
+			inventories[key] = inventory
+		}
+		if _, exists := inventory.resources[resource.GetArtifactId()]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, resource.GetArtifactId(), "build or configuration evidence resource is duplicated")
+			continue
+		}
+		inventory.resources[resource.GetArtifactId()] = resource
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 5 || parts[4] != constants.BuildConfigAttestationsFilename {
+			continue
+		}
+		inventory := inventories[parts[2]+"\x00"+parts[3]]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "build and configuration source does not bind analysis evidence")
+			continue
+		}
+		inventory.body = body
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.body) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "build and configuration source inventory is missing or empty")
+			continue
+		}
+		v.replayBuildConfigSource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayBuildConfigSource(ctx context.Context, inventory *buildConfigSourceInventory) {
+	metadata, err := evidence.InspectBuildConfigSource(inventory.body)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
+		return
+	}
+	binding := evidence.BuildConfigImportBinding{
+		Reference:        evidence.ContentReferenceForBody(constants.BuildAttestationReferencePrefix, inventory.body),
+		Path:             inventory.path,
+		ScopeID:          inventory.scopeID,
+		RunID:            inventory.runID,
+		BuildIdentity:    metadata.BuildIdentity,
+		SourceRevision:   metadata.SourceRevision,
+		ProducerIdentity: metadata.ProducerIdentity,
+	}
+	nodes, err := evidence.NewBuildConfigImporter(&bundledSourceArtifactReader{bodies: v.bodies}, binding).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
+		return
+	}
+	if len(nodes) != len(inventory.resources) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build and configuration inventory does not match the protected analysis evidence count")
+		return
+	}
+	for index := range nodes {
+		resource := inventory.resources[nodes[index].ArtifactID]
+		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed build or configuration evidence does not match the protected analysis evidence")
 		}
 	}
 }
@@ -784,6 +1051,87 @@ func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory 
 		if !proto.Equal(resource, node.ToProto()) {
 			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation does not match the protected analysis evidence")
 		}
+	}
+}
+
+type auditRecordSourceInventory struct {
+	path     string
+	body     []byte
+	resource *compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyAuditRecordSources(ctx context.Context) {
+	inventories := make(map[string]*auditRecordSourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || resource.GetArtifactType() != string(evidence.ArtifactTypeAuditRecord) {
+			continue
+		}
+		bundlePath := resource.GetBundlePath()
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "audit record evidence requires canonical scope and run identifiers")
+			continue
+		}
+		expectedPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.AuditRecordsDirname, resource.GetSha256()+constants.FileExtJSON)
+		if bundlePath != expectedPath {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "audit record evidence does not reference its protected content-addressed source")
+			continue
+		}
+		if _, exists := inventories[bundlePath]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "audit record source binds multiple analysis resources")
+			continue
+		}
+		inventories[bundlePath] = &auditRecordSourceInventory{path: bundlePath, resource: resource}
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 6 || parts[4] != constants.AuditRecordsDirname {
+			continue
+		}
+		inventory := inventories[bundlePath]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "audit record source does not bind analysis evidence")
+			continue
+		}
+		inventory.body = body
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.body) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "audit record source is missing or empty")
+			continue
+		}
+		v.replayAuditRecordSource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayAuditRecordSource(ctx context.Context, inventory *auditRecordSourceInventory) {
+	resource := inventory.resource
+	binding := evidence.AuditRecordImportBinding{
+		Reference:         resource.GetArtifactId(),
+		Path:              inventory.path,
+		ScopeID:           resource.GetScopeId(),
+		RunID:             resource.GetRunId(),
+		AttemptID:         resource.GetAttemptId(),
+		ScenarioID:        resource.GetScenarioId(),
+		OperatorSessionID: resource.GetProducerIdentity(),
+	}
+	reader := &bundledSourceArtifactReader{bodies: v.bodies}
+	nodes, err := evidence.NewAuditRecordImporter(reader, binding).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, err.Error())
+		return
+	}
+	if len(nodes) != 1 {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not produce exactly one evidence resource")
+		return
+	}
+	if !proto.Equal(resource, nodes[0].ToProto()) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed audit record does not match the protected analysis evidence")
 	}
 }
 

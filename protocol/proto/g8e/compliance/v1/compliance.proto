@@ -226,6 +226,25 @@ message ComplianceReportTrustPolicy {
   repeated ComplianceReportTrustedKey trusted_keys = 3;
 }
 
+message ComplianceEvidenceTrustedKey {
+  string key_id = 1;
+  string public_key = 2;
+  string public_key_sha256 = 3;
+  string assessment_id = 4;
+  string assessor_identity = 5;
+  google.protobuf.Timestamp assessed_at = 6;
+  google.protobuf.Timestamp valid_from = 7;
+  google.protobuf.Timestamp valid_until = 8;
+  repeated string allowed_scope_refs = 9;
+  google.protobuf.Timestamp revoked_at = 10;
+}
+
+message ComplianceEvidenceTrustPolicy {
+  string policy_id = 1;
+  string policy_version = 2;
+  repeated ComplianceEvidenceTrustedKey trusted_keys = 3;
+}
+
 message ComplianceReportManifest {
   string report_id = 1;
   string report_schema_version = 2;

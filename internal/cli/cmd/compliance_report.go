@@ -11,7 +11,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,13 +26,16 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 func complianceReportCmd() *cobra.Command {
@@ -46,17 +51,19 @@ func complianceReportCmd() *cobra.Command {
 }
 
 type complianceReportBundleInput struct {
-	bundle      *compliancev1.ComplianceReportBundle
-	reader      compliancereport.BundleArtifactReader
-	trustPolicy *compliancev1.ComplianceReportTrustPolicy
-	close       func() error
+	bundle        *compliancev1.ComplianceReportBundle
+	reader        compliancereport.BundleArtifactReader
+	trustPolicy   *compliancev1.ComplianceReportTrustPolicy
+	evidenceTrust evidence.AssessedSignerSource
+	close         func() error
 }
 
-type complianceReportBundleInputLoader func(context.Context, string, string) (complianceReportBundleInput, error)
+type complianceReportBundleInputLoader func(context.Context, string, string, string) (complianceReportBundleInput, error)
 type complianceReportBundleVerifier func(context.Context, compliancereport.BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error)
 
 func complianceReportVerifyCmdWithConfig(loader complianceReportBundleInputLoader, verifier complianceReportBundleVerifier, nowFunc func() time.Time) *cobra.Command {
 	var trustPolicyPath string
+	var evidenceTrustPath string
 	cmd := &cobra.Command{
 		Use:   "verify <bundle>",
 		Short: "Independently verify a complete signed report bundle offline",
@@ -72,15 +79,16 @@ func complianceReportVerifyCmdWithConfig(loader complianceReportBundleInputLoade
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			input, err := loader(ctx, args[0], trustPolicyPath)
+			input, err := loader(ctx, args[0], trustPolicyPath, evidenceTrustPath)
 			if err != nil {
 				return err
 			}
 			report, verifyErr := verifier(ctx, compliancereport.BundleVerificationRequest{
-				Bundle:      input.bundle,
-				Reader:      input.reader,
-				TrustPolicy: input.trustPolicy,
-				VerifiedAt:  nowFunc().UTC(),
+				Bundle:        input.bundle,
+				Reader:        input.reader,
+				TrustPolicy:   input.trustPolicy,
+				EvidenceTrust: input.evidenceTrust,
+				VerifiedAt:    nowFunc().UTC(),
 			})
 			var closeErr error
 			if input.close != nil {
@@ -106,6 +114,7 @@ func complianceReportVerifyCmdWithConfig(loader complianceReportBundleInputLoade
 		},
 	}
 	cmd.Flags().StringVar(&trustPolicyPath, "trust-policy", "", "Path to externally assessed compliance report trust policy")
+	cmd.Flags().StringVar(&evidenceTrustPath, "evidence-trust", "", "Path to externally assessed source evidence signer trust policy")
 	return cmd
 }
 
@@ -209,7 +218,7 @@ func (r *complianceBundleRootReader) listFiles(ctx context.Context, directory st
 	return nil
 }
 
-func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolicyPath string) (complianceReportBundleInput, error) {
+func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolicyPath, evidenceTrustPath string) (complianceReportBundleInput, error) {
 	if err := ctx.Err(); err != nil {
 		return complianceReportBundleInput{}, err
 	}
@@ -233,6 +242,20 @@ func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolic
 	if pathWithinRoot(bundleRoot, resolvedTrustPath) {
 		return complianceReportBundleInput{}, fmt.Errorf("%w: trust policy must be external to the report bundle", constants.ErrEvidenceTrustNotAssessed)
 	}
+	resolvedEvidenceTrustPath := ""
+	if strings.TrimSpace(evidenceTrustPath) != "" {
+		resolvedEvidenceTrustPath, err = filepath.EvalSymlinks(evidenceTrustPath)
+		if err != nil {
+			return complianceReportBundleInput{}, fmt.Errorf("%w: resolve assessed evidence trust: %w", constants.ErrEvidenceTrustNotAssessed, err)
+		}
+		resolvedEvidenceTrustPath, err = filepath.Abs(resolvedEvidenceTrustPath)
+		if err != nil {
+			return complianceReportBundleInput{}, fmt.Errorf("%w: resolve assessed evidence trust: %w", constants.ErrEvidenceTrustNotAssessed, err)
+		}
+		if pathWithinRoot(bundleRoot, resolvedEvidenceTrustPath) || resolvedEvidenceTrustPath == resolvedTrustPath {
+			return complianceReportBundleInput{}, fmt.Errorf("%w: evidence trust must be external to the report bundle and distinct from report trust", constants.ErrEvidenceTrustNotAssessed)
+		}
+	}
 	bundleBody, err := readComplianceReportInputFile(resolvedBundlePath)
 	if err != nil {
 		return complianceReportBundleInput{}, err
@@ -240,6 +263,24 @@ func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolic
 	bundle := &compliancev1.ComplianceReportBundle{}
 	if err := compliancev1.UnmarshalCanonical(bundleBody, bundle); err != nil {
 		return complianceReportBundleInput{}, fmt.Errorf("%w: decode canonical bundle descriptor: %w", constants.ErrReportVerificationFailed, err)
+	}
+	if bundleRequiresEvidenceTrust(bundle) && resolvedEvidenceTrustPath == "" {
+		return complianceReportBundleInput{}, fmt.Errorf("%w: --evidence-trust is required for represented signed source evidence", constants.ErrEvidenceTrustNotAssessed)
+	}
+	var evidenceTrust evidence.AssessedSignerSource
+	if resolvedEvidenceTrustPath != "" {
+		evidenceTrustBody, err := readComplianceReportInputFile(resolvedEvidenceTrustPath)
+		if err != nil {
+			return complianceReportBundleInput{}, fmt.Errorf("%w: %w", constants.ErrEvidenceTrustNotAssessed, err)
+		}
+		policy := &compliancev1.ComplianceEvidenceTrustPolicy{}
+		if err := compliancev1.UnmarshalCanonical(evidenceTrustBody, policy); err != nil {
+			return complianceReportBundleInput{}, fmt.Errorf("%w: decode canonical evidence trust policy: %w", constants.ErrEvidenceTrustNotAssessed, err)
+		}
+		evidenceTrust, err = newAssessedEvidenceTrust(policy, bundle.GetManifest().GetScopeRef(), bundle.GetManifest().GetGeneratedAt())
+		if err != nil {
+			return complianceReportBundleInput{}, err
+		}
 	}
 	trustBody, err := readComplianceReportInputFile(resolvedTrustPath)
 	if err != nil {
@@ -254,11 +295,97 @@ func loadComplianceReportBundleInput(ctx context.Context, bundlePath, trustPolic
 		return complianceReportBundleInput{}, fmt.Errorf("%w: open bundle root: %w", constants.ErrReportVerificationFailed, err)
 	}
 	return complianceReportBundleInput{
-		bundle:      bundle,
-		reader:      &complianceBundleRootReader{root: root},
-		trustPolicy: trustPolicy,
-		close:       root.Close,
+		bundle:        bundle,
+		reader:        &complianceBundleRootReader{root: root},
+		trustPolicy:   trustPolicy,
+		evidenceTrust: evidenceTrust,
+		close:         root.Close,
 	}, nil
+}
+
+type assessedEvidenceTrust struct {
+	keys map[string]ed25519.PublicKey
+}
+
+func (t *assessedEvidenceTrust) GetTrustedSignerPublicKey(ctx context.Context, keyID string) (ed25519.PublicKey, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	key, exists := t.keys[keyID]
+	if !exists {
+		return nil, constants.ErrTrustedSignerKeyNotFound
+	}
+	return append(ed25519.PublicKey(nil), key...), nil
+}
+
+func bundleRequiresEvidenceTrust(bundle *compliancev1.ComplianceReportBundle) bool {
+	if bundle == nil || bundle.GetAnalysis() == nil {
+		return false
+	}
+	for _, resource := range bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil {
+			continue
+		}
+		switch evidence.ArtifactType(resource.GetArtifactType()) {
+		case evidence.ArtifactTypeCommitment, evidence.ArtifactTypeCustomerAttestation, evidence.ArtifactTypeAssessorAttestation:
+			return true
+		}
+	}
+	return false
+}
+
+func loadAssessedEvidenceTrust(inputPath, scopeID string, signedAt time.Time) (evidence.AssessedSignerSource, error) {
+	body, err := readComplianceReportInputFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: read assessed evidence trust: %w", constants.ErrEvidenceTrustNotAssessed, err)
+	}
+	policy := &compliancev1.ComplianceEvidenceTrustPolicy{}
+	if err := compliancev1.UnmarshalCanonical(body, policy); err != nil {
+		return nil, fmt.Errorf("%w: decode canonical evidence trust policy: %w", constants.ErrEvidenceTrustNotAssessed, err)
+	}
+	return newAssessedEvidenceTrust(policy, scopeID, timestamppb.New(signedAt))
+}
+
+func newAssessedEvidenceTrust(policy *compliancev1.ComplianceEvidenceTrustPolicy, scopeID string, signedAt *timestamppb.Timestamp) (evidence.AssessedSignerSource, error) {
+	if policy == nil || policy.GetPolicyId() == "" || policy.GetPolicyVersion() == "" || len(policy.GetTrustedKeys()) == 0 || len(policy.GetTrustedKeys()) > constants.ComplianceEvidenceTrustMaxKeys || scopeID == "" || signedAt == nil || signedAt.CheckValid() != nil {
+		return nil, fmt.Errorf("%w: evidence trust policy, scope, and signed time are incomplete", constants.ErrEvidenceTrustNotAssessed)
+	}
+	at := signedAt.AsTime()
+	keys := make(map[string]ed25519.PublicKey, len(policy.GetTrustedKeys()))
+	for _, trusted := range policy.GetTrustedKeys() {
+		if trusted == nil || trusted.GetKeyId() == "" || trusted.GetAssessmentId() == "" || trusted.GetAssessorIdentity() == "" || trusted.GetAssessedAt() == nil || trusted.GetValidFrom() == nil || trusted.GetValidUntil() == nil {
+			return nil, fmt.Errorf("%w: assessed evidence signer metadata is incomplete", constants.ErrEvidenceTrustNotAssessed)
+		}
+		if _, exists := keys[trusted.GetKeyId()]; exists {
+			return nil, fmt.Errorf("%w: duplicate assessed evidence signer %s", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId())
+		}
+		if trusted.GetAssessedAt().CheckValid() != nil || trusted.GetValidFrom().CheckValid() != nil || trusted.GetValidUntil().CheckValid() != nil || trusted.GetRevokedAt() != nil && trusted.GetRevokedAt().CheckValid() != nil {
+			return nil, fmt.Errorf("%w: assessed evidence signer %s has an invalid timestamp", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId())
+		}
+		if trusted.GetAssessedAt().AsTime().After(at) || at.Before(trusted.GetValidFrom().AsTime()) || at.After(trusted.GetValidUntil().AsTime()) || trusted.GetRevokedAt() != nil && !at.Before(trusted.GetRevokedAt().AsTime()) {
+			return nil, fmt.Errorf("%w: assessed evidence signer %s is ineligible at bundle signing time", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId())
+		}
+		allowed := false
+		for _, allowedScope := range trusted.GetAllowedScopeRefs() {
+			if allowedScope == scopeID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, fmt.Errorf("%w: assessed evidence signer %s is not eligible for scope %s", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId(), scopeID)
+		}
+		publicKey, err := hex.DecodeString(trusted.GetPublicKey())
+		if err != nil || len(publicKey) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("%w: assessed evidence signer %s has an invalid Ed25519 public key", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId())
+		}
+		digest := sha256.Sum256(publicKey)
+		if trusted.GetPublicKeySha256() != hex.EncodeToString(digest[:]) {
+			return nil, fmt.Errorf("%w: assessed evidence signer %s public key digest mismatch", constants.ErrEvidenceTrustNotAssessed, trusted.GetKeyId())
+		}
+		keys[trusted.GetKeyId()] = ed25519.PublicKey(publicKey)
+	}
+	return &assessedEvidenceTrust{keys: keys}, nil
 }
 
 func readComplianceReportInputFile(inputPath string) ([]byte, error) {
@@ -488,22 +615,272 @@ func validDemoSourceRelativePath(value string) bool {
 	return value != "" && value != "." && value != constants.PathParentDir && !path.IsAbs(value) && !strings.HasPrefix(value, constants.PathParentDir+"/") && path.Clean(value) == value
 }
 
+type explicitSourceReader struct {
+	bodies map[string][]byte
+}
+
+func (r *explicitSourceReader) ReadFile(ctx context.Context, sourcePath string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	body, exists := r.bodies[sourcePath]
+	if !exists {
+		return nil, constants.ErrNotFound
+	}
+	return append([]byte(nil), body...), nil
+}
+
+func (r *explicitSourceReader) ReadDir(ctx context.Context, _ string) ([]os.DirEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, constants.ErrUnexpectedEvidenceArtifact
+}
+
+type standaloneReportSourceInput struct {
+	scopeID              string
+	verifiedAt           time.Time
+	evidenceTrust        evidence.AssessedSignerSource
+	ksiRunID             string
+	ksiHistory           string
+	ksiResults           string
+	commitmentRunID      string
+	commitment           string
+	commitmentAttemptID  string
+	commitmentScenarioID string
+	attestationRunID     string
+	attestations         string
+	auditRunID           string
+	auditRecords         []string
+	auditAttemptID       string
+	auditScenarioID      string
+	ledgerRunID          string
+	ledgerCommits        string
+	ledgerState          string
+	ledgerAttemptID      string
+	ledgerScenarioID     string
+	buildRunID           string
+	buildConfig          string
+}
+
+func buildStandaloneReportSources(ctx context.Context, input standaloneReportSourceInput) ([]evidence.EvidenceImporter, []compliancereport.SourceArtifact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	importers := make([]evidence.EvidenceImporter, 0, 8)
+	artifacts := make([]compliancereport.SourceArtifact, 0, 10)
+	addArtifact := func(bundlePath string, body []byte) error {
+		for _, artifact := range artifacts {
+			if artifact.BundlePath == bundlePath {
+				return fmt.Errorf("%w: duplicate standalone source path %s", constants.ErrEvidenceDuplicateID, bundlePath)
+			}
+		}
+		artifacts = append(artifacts, compliancereport.SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+		return nil
+	}
+	ksiRequested := input.ksiRunID != "" || input.ksiHistory != "" || input.ksiResults != ""
+	if ksiRequested {
+		if !evidence.ValidPathElement(input.ksiRunID) || input.ksiHistory == "" || input.ksiResults == "" {
+			return nil, nil, fmt.Errorf("%w: --ksi-run-id, --ksi-history, and --ksi-results are required together", constants.ErrValidationFailed)
+		}
+		historyBody, err := readComplianceReportInputFile(input.ksiHistory)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read KSI history: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		resultsBody, err := readComplianceReportInputFile(input.ksiResults)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read current KSI results: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		resultSet, latestBody, err := inspectKSIHistorySource(historyBody)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: inspect KSI history: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		if !bytes.Equal(resultsBody, latestBody) || resultSet.Binding.ScopeID != input.scopeID || resultSet.Binding.RunID != input.ksiRunID {
+			return nil, nil, fmt.Errorf("%w: KSI source scope, run, or current result binding does not match", constants.ErrEvidenceScopeMismatch)
+		}
+		historyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.ksiRunID, constants.ComplianceBundleKSIHistoryFilename)
+		resultsPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.ksiRunID, constants.ComplianceBundleKSIResultsFilename)
+		reader := &explicitSourceReader{bodies: map[string][]byte{historyPath: historyBody}}
+		importers = append(importers, evidence.NewKSIHistoryImporter(reader, evidence.KSIHistoryImportBinding{Reference: evidence.ContentReferenceForBody(constants.KSIHistoryReferencePrefix, historyBody), Path: historyPath, ScopeID: input.scopeID, RunID: input.ksiRunID, Class: resultSet.Class, ProducerIdentity: constants.KSIEvaluatorID, AssertionAssessments: resultSet.Binding.AssertionAssessments}))
+		if err := addArtifact(historyPath, historyBody); err != nil {
+			return nil, nil, err
+		}
+		if err := addArtifact(resultsPath, resultsBody); err != nil {
+			return nil, nil, err
+		}
+	}
+	commitmentRequested := input.commitmentRunID != "" || input.commitment != ""
+	if commitmentRequested {
+		if !evidence.ValidPathElement(input.commitmentRunID) || input.commitment == "" || input.evidenceTrust == nil || input.verifiedAt.IsZero() {
+			return nil, nil, fmt.Errorf("%w: commitment source, run, verification time, and assessed evidence trust are required", constants.ErrValidationFailed)
+		}
+		body, err := readComplianceReportInputFile(input.commitment)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read commitment: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		attestation := &operatorv1.CommitmentAttestation{}
+		if err := compliancev1.UnmarshalCanonical(body, attestation); err != nil || attestation.GetTransactionId() == "" {
+			return nil, nil, fmt.Errorf("%w: decode commitment", constants.ErrEvidenceArtifactMalformed)
+		}
+		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.commitmentRunID, constants.ComplianceBundleCommitmentsFilename)
+		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
+		importers = append(importers, evidence.NewCommitmentImporter(reader, input.evidenceTrust, evidence.CommitmentImportBinding{Reference: evidence.ContentReferenceForBody(constants.CommitmentReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.commitmentRunID, AttemptID: input.commitmentAttemptID, ScenarioID: input.commitmentScenarioID, TransactionID: attestation.GetTransactionId()}, input.verifiedAt))
+		if err := addArtifact(bundlePath, body); err != nil {
+			return nil, nil, err
+		}
+	}
+	attestationRequested := input.attestationRunID != "" || input.attestations != ""
+	if attestationRequested {
+		if !evidence.ValidPathElement(input.attestationRunID) || input.attestations == "" || input.evidenceTrust == nil || input.verifiedAt.IsZero() {
+			return nil, nil, fmt.Errorf("%w: attestation source, run, verification time, and assessed evidence trust are required", constants.ErrValidationFailed)
+		}
+		body, err := readComplianceReportInputFile(input.attestations)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read attestations: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.attestationRunID, constants.ComplianceBundleAttestationsFilename)
+		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
+		importers = append(importers, evidence.NewAttestationImporter(reader, input.evidenceTrust, evidence.AttestationImportBinding{Reference: evidence.ContentReferenceForBody(constants.AttestationCollectionReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.attestationRunID}, input.verifiedAt))
+		if err := addArtifact(bundlePath, body); err != nil {
+			return nil, nil, err
+		}
+	}
+	auditRequested := input.auditRunID != "" || len(input.auditRecords) != 0
+	if auditRequested {
+		if !evidence.ValidPathElement(input.auditRunID) || len(input.auditRecords) == 0 {
+			return nil, nil, fmt.Errorf("%w: --audit-run-id and at least one --audit-record are required together", constants.ErrValidationFailed)
+		}
+		for _, sourcePath := range input.auditRecords {
+			body, err := readComplianceReportInputFile(sourcePath)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w: read audit record: %w", constants.ErrEvidenceImporterFailed, err)
+			}
+			event := &operatorv1.AuditEvent{}
+			if err := compliancev1.UnmarshalCanonical(body, event); err != nil || event.GetOperatorSessionId() == "" {
+				return nil, nil, fmt.Errorf("%w: decode audit record", constants.ErrEvidenceArtifactMalformed)
+			}
+			reference := evidence.ContentReferenceForBody(constants.AuditRecordReferencePrefix, body)
+			_, digest, _ := evidence.ParseExpectedContentReference(reference, constants.AuditRecordReferencePrefix)
+			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.auditRunID, constants.AuditRecordsDirname, digest+constants.FileExtJSON)
+			reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
+			importers = append(importers, evidence.NewAuditRecordImporter(reader, evidence.AuditRecordImportBinding{Reference: reference, Path: bundlePath, ScopeID: input.scopeID, RunID: input.auditRunID, AttemptID: input.auditAttemptID, ScenarioID: input.auditScenarioID, OperatorSessionID: event.GetOperatorSessionId()}))
+			if err := addArtifact(bundlePath, body); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	ledgerRequested := input.ledgerRunID != "" || input.ledgerCommits != "" || input.ledgerState != ""
+	if ledgerRequested {
+		if !evidence.ValidPathElement(input.ledgerRunID) || input.ledgerCommits == "" || input.ledgerState == "" {
+			return nil, nil, fmt.Errorf("%w: --ledger-run-id, --ledger-commits, and --ledger-state are required together", constants.ErrValidationFailed)
+		}
+		commitsBody, err := readComplianceReportInputFile(input.ledgerCommits)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read ledger commits: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		stateBody, err := readComplianceReportInputFile(input.ledgerState)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read ledger state: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		base := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.ledgerRunID, constants.LedgerEvidenceDirname)
+		commitsPath := path.Join(base, constants.LedgerCommitsFilename)
+		statePath := path.Join(base, constants.LedgerStateFilename)
+		reader := &explicitSourceReader{bodies: map[string][]byte{commitsPath: commitsBody, statePath: stateBody}}
+		importers = append(importers, evidence.NewLedgerImporter(reader, evidence.LedgerImportBinding{CommitsReference: evidence.ContentReferenceForBody(constants.LedgerCommitCollectionReferencePrefix, commitsBody), StateReference: evidence.ContentReferenceForBody(constants.LedgerStateReferencePrefix, stateBody), CommitsPath: commitsPath, StatePath: statePath, ScopeID: input.scopeID, RunID: input.ledgerRunID, AttemptID: input.ledgerAttemptID, ScenarioID: input.ledgerScenarioID}))
+		if err := addArtifact(commitsPath, commitsBody); err != nil {
+			return nil, nil, err
+		}
+		if err := addArtifact(statePath, stateBody); err != nil {
+			return nil, nil, err
+		}
+	}
+	buildRequested := input.buildRunID != "" || input.buildConfig != ""
+	if buildRequested {
+		if !evidence.ValidPathElement(input.buildRunID) || input.buildConfig == "" {
+			return nil, nil, fmt.Errorf("%w: --build-run-id and --build-config-attestations are required together", constants.ErrValidationFailed)
+		}
+		body, err := readComplianceReportInputFile(input.buildConfig)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: read build and configuration attestations: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		metadata, err := evidence.InspectBuildConfigSource(body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: inspect build and configuration attestations: %w", constants.ErrEvidenceImporterFailed, err)
+		}
+		bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, input.scopeID, input.buildRunID, constants.BuildConfigAttestationsFilename)
+		reader := &explicitSourceReader{bodies: map[string][]byte{bundlePath: body}}
+		importers = append(importers, evidence.NewBuildConfigImporter(reader, evidence.BuildConfigImportBinding{Reference: evidence.ContentReferenceForBody(constants.BuildAttestationReferencePrefix, body), Path: bundlePath, ScopeID: input.scopeID, RunID: input.buildRunID, BuildIdentity: metadata.BuildIdentity, SourceRevision: metadata.SourceRevision, ProducerIdentity: metadata.ProducerIdentity}))
+		if err := addArtifact(bundlePath, body); err != nil {
+			return nil, nil, err
+		}
+	}
+	return importers, artifacts, nil
+}
+
+func inspectKSIHistorySource(body []byte) (*compliance.KSIResultSet, []byte, error) {
+	var first *compliance.KSIResultSet
+	var latest []byte
+	for _, line := range bytes.Split(body, []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		if err := evidence.ValidateCanonicalJSON(line); err != nil {
+			return nil, nil, err
+		}
+		resultSet := &compliance.KSIResultSet{}
+		decoder := json.NewDecoder(bytes.NewReader(line))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(resultSet); err != nil {
+			return nil, nil, err
+		}
+		if first == nil {
+			first = resultSet
+		}
+		latest = append([]byte(nil), line...)
+	}
+	if first == nil {
+		return nil, nil, constants.ErrEvidenceArtifactMalformed
+	}
+	return first, latest, nil
+}
+
 func complianceReportGenerateCmdWithConfig(
 	fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error),
 	provenanceSourceFactory func(string) evidence.ProvenanceSource,
 	signingIdentityLoader complianceReportSigningIdentityLoader,
 ) *cobra.Command {
 	var (
-		projectRoot       string
-		scopeID           string
-		demoRuns          []string
-		evalRuns          []string
-		windowStartMilli  int64
-		windowEndMilli    int64
-		reportID          string
-		bundleProfile     string
-		signingMetadata   string
-		signingPrivateKey string
+		projectRoot          string
+		scopeID              string
+		demoRuns             []string
+		evalRuns             []string
+		windowStartMilli     int64
+		windowEndMilli       int64
+		reportID             string
+		bundleProfile        string
+		signingMetadata      string
+		signingPrivateKey    string
+		evidenceTrustPath    string
+		ksiRunID             string
+		ksiHistory           string
+		ksiResults           string
+		commitmentRunID      string
+		commitment           string
+		commitmentAttemptID  string
+		commitmentScenarioID string
+		attestationRunID     string
+		attestations         string
+		auditRunID           string
+		auditRecords         []string
+		auditAttemptID       string
+		auditScenarioID      string
+		ledgerRunID          string
+		ledgerCommits        string
+		ledgerState          string
+		ledgerAttemptID      string
+		ledgerScenarioID     string
+		buildRunID           string
+		buildConfig          string
 	)
 
 	cmd := &cobra.Command{
@@ -514,8 +891,8 @@ func complianceReportGenerateCmdWithConfig(
 			if scopeID == "" {
 				return fmt.Errorf("%w: --scope-id is required", constants.ErrValidationFailed)
 			}
-			if len(demoRuns) == 0 && len(evalRuns) == 0 {
-				return fmt.Errorf("%w: at least one --demo-run or --eval-run is required", constants.ErrValidationFailed)
+			if len(demoRuns) == 0 && len(evalRuns) == 0 && ksiRunID == "" && ksiHistory == "" && ksiResults == "" && commitmentRunID == "" && commitment == "" && attestationRunID == "" && attestations == "" && auditRunID == "" && len(auditRecords) == 0 && ledgerRunID == "" && ledgerCommits == "" && ledgerState == "" && buildRunID == "" && buildConfig == "" {
+				return fmt.Errorf("%w: at least one demo, eval, or standalone platform source is required", constants.ErrValidationFailed)
 			}
 			if windowStartMilli <= 0 || windowEndMilli <= 0 || windowEndMilli < windowStartMilli {
 				return fmt.Errorf("%w: a valid evidence window is required", constants.ErrValidationFailed)
@@ -539,17 +916,53 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return err
 			}
+			windowStart := time.UnixMilli(windowStartMilli).UTC()
+			windowEnd := time.UnixMilli(windowEndMilli).UTC()
+			var evidenceTrust evidence.AssessedSignerSource
+			if evidenceTrustPath != "" {
+				evidenceTrust, err = loadAssessedEvidenceTrust(evidenceTrustPath, scopeID, windowEnd)
+				if err != nil {
+					return err
+				}
+			}
 			source := provenanceSourceFactory(projectRoot)
 			importers, err := buildEvidenceGraphImporters(ctx, fileSvc, source, demoRuns, evalRuns)
 			if err != nil {
 				return err
 			}
+			standaloneImporters, standaloneSourceArtifacts, err := buildStandaloneReportSources(ctx, standaloneReportSourceInput{
+				scopeID:              scopeID,
+				verifiedAt:           windowEnd,
+				evidenceTrust:        evidenceTrust,
+				ksiRunID:             ksiRunID,
+				ksiHistory:           ksiHistory,
+				ksiResults:           ksiResults,
+				commitmentRunID:      commitmentRunID,
+				commitment:           commitment,
+				commitmentAttemptID:  commitmentAttemptID,
+				commitmentScenarioID: commitmentScenarioID,
+				attestationRunID:     attestationRunID,
+				attestations:         attestations,
+				auditRunID:           auditRunID,
+				auditRecords:         auditRecords,
+				auditAttemptID:       auditAttemptID,
+				auditScenarioID:      auditScenarioID,
+				ledgerRunID:          ledgerRunID,
+				ledgerCommits:        ledgerCommits,
+				ledgerState:          ledgerState,
+				ledgerAttemptID:      ledgerAttemptID,
+				ledgerScenarioID:     ledgerScenarioID,
+				buildRunID:           buildRunID,
+				buildConfig:          buildConfig,
+			})
+			if err != nil {
+				return err
+			}
+			importers = append(importers, standaloneImporters...)
 			assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
 			if err != nil {
 				return fmt.Errorf("compliance report: load canonical catalogs: %w", err)
 			}
-			windowStart := time.UnixMilli(windowStartMilli).UTC()
-			windowEnd := time.UnixMilli(windowEndMilli).UTC()
 			sourceArtifacts, err := buildDemoVerificationArtifacts(ctx, fileSvc, source, demoRuns, windowEnd)
 			if err != nil {
 				return err
@@ -559,6 +972,7 @@ func complianceReportGenerateCmdWithConfig(
 				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
 			}
 			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
+			sourceArtifacts = append(sourceArtifacts, standaloneSourceArtifacts...)
 			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
 			result, err := compliancereport.GenerateSignedComplianceBundle(ctx, compliancereport.SignedBundleGenerationRequest{
 				Generation: compliancereport.GenerationRequest{
@@ -599,6 +1013,27 @@ func complianceReportGenerateCmdWithConfig(
 	cmd.Flags().StringVar(&bundleProfile, "profile", string(compliancereport.ProfilePublic), "Bundle profile: public or restricted")
 	cmd.Flags().StringVar(&signingMetadata, "signing-metadata", "", "Path to canonical compliance report signing-key metadata")
 	cmd.Flags().StringVar(&signingPrivateKey, "signing-private-key", "", "Path to hex-encoded Ed25519 compliance report private key")
+	cmd.Flags().StringVar(&evidenceTrustPath, "evidence-trust", "", "Path to externally assessed source evidence signer trust policy")
+	cmd.Flags().StringVar(&ksiRunID, "ksi-run-id", "", "Run ID for protected KSI history evidence")
+	cmd.Flags().StringVar(&ksiHistory, "ksi-history", "", "Path to canonical KSI history JSONL")
+	cmd.Flags().StringVar(&ksiResults, "ksi-results", "", "Path to canonical current KSI result JSON")
+	cmd.Flags().StringVar(&commitmentRunID, "commitment-run-id", "", "Run ID for the protected commitment source")
+	cmd.Flags().StringVar(&commitment, "commitment", "", "Path to a canonical signed commitment attestation")
+	cmd.Flags().StringVar(&commitmentAttemptID, "commitment-attempt-id", "", "Optional attempt ID for commitment evidence")
+	cmd.Flags().StringVar(&commitmentScenarioID, "commitment-scenario-id", "", "Optional scenario ID for commitment evidence")
+	cmd.Flags().StringVar(&attestationRunID, "attestation-run-id", "", "Run ID for protected customer and assessor attestations")
+	cmd.Flags().StringVar(&attestations, "attestations", "", "Path to canonical customer and assessor attestation JSONL")
+	cmd.Flags().StringVar(&auditRunID, "audit-run-id", "", "Run ID for protected audit records")
+	cmd.Flags().StringSliceVar(&auditRecords, "audit-record", nil, "Path to a canonical audit record (repeatable)")
+	cmd.Flags().StringVar(&auditAttemptID, "audit-attempt-id", "", "Optional attempt ID for audit evidence")
+	cmd.Flags().StringVar(&auditScenarioID, "audit-scenario-id", "", "Optional scenario ID for audit evidence")
+	cmd.Flags().StringVar(&ledgerRunID, "ledger-run-id", "", "Run ID for the protected ledger source")
+	cmd.Flags().StringVar(&ledgerCommits, "ledger-commits", "", "Path to canonical ledger commit JSONL")
+	cmd.Flags().StringVar(&ledgerState, "ledger-state", "", "Path to canonical ledger state JSON")
+	cmd.Flags().StringVar(&ledgerAttemptID, "ledger-attempt-id", "", "Optional attempt ID for ledger evidence")
+	cmd.Flags().StringVar(&ledgerScenarioID, "ledger-scenario-id", "", "Optional scenario ID for ledger evidence")
+	cmd.Flags().StringVar(&buildRunID, "build-run-id", "", "Run ID for protected build and configuration evidence")
+	cmd.Flags().StringVar(&buildConfig, "build-config-attestations", "", "Path to canonical build and configuration attestation JSONL")
 	cmd.Flags().StringVar(&projectRoot, "project-root", "", "Project root directory (defaults to cwd)")
 	return cmd
 }
