@@ -12,491 +12,284 @@ Version: v2.1.7
 
 ## Overview
 
-This guide covers connecting the g8e platform to the gateway. The gateway serves as the central policy decision point, while the operator executes governed mutations through the five-layer verification pipeline.
+The g8e Operator is the host-side Policy Execution Point. It opens an outbound mTLS WebSocket connection to the Gateway, subscribes to its identity- and session-scoped command channel, verifies governed transactions, executes approved actions on its host, and publishes signed receipts and heartbeats. The Operator does not expose an inbound MCP, A2A, or command listener.
+
+Connecting a new Operator has four parts:
+
+1. Start the Gateway.
+2. Enroll the first Gateway owner if the Gateway is not already bootstrapped.
+3. Start the Operator with the Gateway endpoint. The Operator submits a platform enrollment request and waits.
+4. Approve the request from an enrolled owner CLI. The Operator installs its credentials and connects automatically.
+
+The reference Gateway and Operator are commands in the same `g8e` binary. See [Build Operator](build_operator.md) for build and execution internals and [Operator Architecture](../architecture/operator.md) for the service design.
 
 ---
 
-## Reference Operator Connection
+## Prerequisites
 
-### Local Deployment
+The Gateway host requires:
 
-For development or single-host deployments, start the gateway locally:
+- A running `g8e` Gateway.
+- TCP ports 8080 and 8443 reachable from the Operator host. Port 8080 serves discovery, trust-bundle, and platform-enrollment routes. Port 8443 serves the mTLS API and WebSocket pub/sub connection.
+- A certificate identity that matches the hostname used by the Operator. The default `full` certificate mode detects hostnames and IP addresses at Gateway startup; `--cert-mode localhost` is suitable only for same-host connections.
+- An enrolled owner CLI to approve the Operator request.
+
+The Operator host requires:
+
+- The `g8e` binary and a writable launch directory. The process creates its `.g8e/` runtime tree below that directory.
+- Outbound access to Gateway ports 8080 and 8443.
+- A working directory containing the files and resources that governed actions may access. Use `--working-dir` to select the command-execution directory; this option does not relocate the `.g8e/` runtime tree.
+
+No inbound port is required on the Operator host.
+
+### Endpoint Requirements
+
+Use a bare hostname with `g8e operator start --endpoint`, without an `http://` or `https://` scheme and without a port. The current worker uses Gateway port 8080 for discovery and enrollment and port 8443 for mTLS bootstrap, state queries, receipt publication, and pub/sub. Although the root command displays a global `--port` flag, `operator start` does not apply it to the worker configuration in this version; non-default Gateway ports are not supported by this command path.
+
+The hostname must resolve on the Operator host and must appear in the Gateway certificate. For a remote Gateway without DNS, map the Gateway address to the built-in `g8e.local` identity on the Operator host, then use `g8e.local` as the endpoint. For example, add this host mapping using the administration mechanism for the target operating system:
+
+```text
+192.0.2.10 g8e.local
+```
+
+Replace `192.0.2.10` with the Gateway address. Do not use `--cert-mode localhost` for this remote connection.
+
+---
+
+## Connect a New Operator
+
+### 1. Start the Gateway
+
+On the Gateway host, start the service:
 
 ```bash
 ./g8e gw start
 ```
 
-By default, the gateway starts in background mode with doctrine posture (L1 enforced, L2/L3 audited). Use `--follow` or `-f` to run in the foreground for debugging. Use `--interactive` or `-i` to launch the onboarding wizard before starting, which guides you through posture, consensus, passkey, CORS, and certificate settings. The gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs). Use `--cert-mode localhost` to restrict certificates to localhost only.
+The Gateway starts in the background by default. Use `--follow` to run it in the foreground or `./g8e gw logs -f` to follow a background process. The default posture is `doctrine`; `consensus`, `ratify`, and `notary` are also available through `--posture`.
 
-For first-time setup, run the interactive wizard separately:
+To preview settings with the interactive wizard, run:
 
 ```bash
 ./g8e gw setup
 ```
 
-This launches the onboarding wizard to configure gateway settings before the first start. Any flags provided on the command line are used as initial values in the wizard.
+The wizard resolves posture, consensus, passkey, CORS, downstream, public URL, and certificate settings and prints the result; `gw setup` does not persist or start that configuration. Use `gw start --interactive` to run the wizard and start the Gateway with the resolved values in the same invocation.
 
-Available posture modes via `--posture`:
-- **doctrine** (default): L1 enforced, L2/L3 audited
-- **consensus**: L1/L2 enforced, L3 audited
-- **ratify**: L1/L3 enforced, L2 audited
-- **notary**: L1/L2/L3 strictly enforced
-
-### Remote Deployment
-
-For distributed infrastructure, deploy the operator on remote hosts.
-
-#### 1. Copy/Paste Deploy Scripts (Gateway-Served)
-
-The gateway embeds deploy scripts and serves them over HTTP on port 8080. After starting the gateway on the host machine, run these commands on remote hosts to download and deploy the g8e binary. See [scripts.md](../architecture/scripts.md#remote-deploy-scripts-gateway-served) for full details on the deploy scripts.
-
-**Linux/macOS:**
-
-```bash
-curl -fsSL http://<gateway-ip>:8080/g8e-deploy.sh | bash
-```
-
-**Windows:**
-
-```powershell
-irm http://<gateway-ip>:8080/g8e-deploy.ps1 | iex
-```
-
-#### 2. Operator Remote Management CLI Commands
-
-The gateway provides CLI commands to deploy and manage operators on remote hosts via SSH:
-
-**Deploy operator binary to remote hosts:**
-
-```bash
-./g8e operator deploy --hosts <host1,host2> --background
-```
-
-This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts the gateway in the background on each remote host. Requires `./g8e auth enroll user` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
-
-**Stream operator binary to remote hosts:**
-
-```bash
-./g8e operator stream <host1> <host2> --endpoint <gateway-ip>
-```
-
-This command streams the operator binary to remote hosts over SSH and executes it directly on each host. When `--endpoint` is provided, the operator starts automatically on each remote host after the binary is injected. Without `--endpoint`, the binary is saved to a temporary file on the remote host with instructions for manual startup.
-
-Hosts are specified as positional arguments or via `--hosts <file>` (one host per line, or `-` for stdin). Additional flags:
-
-- `--arch`: target architecture (amd64, arm64, 386)
-- `--concurrency`: max parallel SSH sessions
-- `--timeout`: per-host dial and inject timeout in seconds
-- `--ssh-config`: path to SSH config file
-- `--known-hosts`: path to SSH known_hosts file
-- `--ssh-identity-file`: SSH identity file path
-- `--ssh-user`: SSH username
-- `--ssh-passphrase`: passphrase for encrypted SSH private keys
-- `--binary-dir`: directory containing architecture-specific operator builds
-- `--no-git`: disable ledger
-- `--preflight`: enable pre-flight SSH connectivity check before binary transfer
-
-**Copy operator binary locally:**
-
-```bash
-./g8e operator cp <target-path>
-```
-
-**Copy operator binary to remote host via SCP:**
-
-```bash
-./g8e operator scp <user@host:path>
-```
-
-This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `--preserve` to preserve file attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
-
-#### 3. CSR-Based Enrollment
-
-On the remote host, generate a CSR and enroll with the gateway:
-
-```bash
-./g8e auth enroll operator -e <gateway-ip>
-```
-
-The endpoint accepts a gateway hostname, IP address, host-and-port pair, or URL. A plain host or IP uses HTTP port 8080 by default; an explicit scheme or port is preserved. This command generates an operator CSR, submits it to the gateway, and saves the signed certificates to the PKI directory.
-
-#### 4. Start the Operator
-
-On the remote host, start the operator with the enrolled certificates:
-
-```bash
-./g8e operator start -e <gateway-ip>
-```
-
-When `--endpoint` is provided, the operator automatically performs CSR enrollment with the gateway, making step 3 optional. The operator will:
-- Load the mTLS certificates from the PKI directory (or auto-enroll via `--endpoint`)
-- Connect to the gateway control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
-- Start the local audit vault and execution services
-- Execute mutations through the L1-L5 verification pipeline
-
----
-
-## Operator Configuration
-
-### Gateway Endpoint
-
-The `-e` or `--endpoint` persistent flag specifies the remote gateway address for client-side commands including CSR enrollment (`g8e auth enroll operator`) and operator startup (`g8e operator start`). The gateway itself does not require an endpoint flag at startup, as it binds to the configured ports. Use `-p` or `--port` to override the default HTTPS port (8443) when connecting to a gateway on a non-standard port.
-
-### PKI Directory
-
-Specify the PKI directory via the `--pki-dir` flag when starting the gateway:
-
-```bash
-./g8e gw start --pki-dir /etc/g8e/pki
-```
-
-This defaults to `.g8e/pki` in the current working directory. The PKI directory contains the root CA, intermediate CA, operator service certificates, and trust bundles.
-
----
-
-## Health Checks
-
-Check status:
+Verify the Gateway process and HTTP health endpoint:
 
 ```bash
 ./g8e gw status
 ```
 
-This reports:
-- Gateway running state (RUNNING or STOPPED)
-- Gateway endpoint URLs (Operator Bootstrap, Public API, Console UI, MCP HTTP)
-- Process PID (when available)
+### 2. Enroll the Gateway Owner
 
-List all operators currently connected to the gateway:
+A new Gateway starts with no users and does not issue platform workload credentials until the first owner enrolls. On the Gateway host, or on an owner workstation configured to reach it, run:
 
 ```bash
-./g8e operator list
+./g8e auth enroll user --endpoint <gateway-host>
 ```
 
-This displays each operator's ID, type, and status.
+For a same-host Gateway, omit `--endpoint` or use `localhost`. Enrollment creates the first user and CLI session on an unbootstrapped Gateway, installs the Gateway root CA into the operating-system trust store by default, and runs the browser passkey ceremony. Use `--no-system-trust` only when an administrator has already installed the root CA. Use `--headless` for an mTLS-only CLI identity when another enrolled owner can approve the recovery request; a headless identity cannot authenticate to the Console SPA.
+
+The first enrolled user is the persistent owner authorized to approve platform workload enrollment requests.
+
+### 3. Start the Operator
+
+On the Operator host, start the foreground worker:
+
+```bash
+./g8e operator start --endpoint <gateway-host>
+```
+
+For a same-host deployment, use:
+
+```bash
+./g8e operator start --endpoint localhost
+```
+
+If Operator credentials are not installed, the process:
+
+1. Fetches the Gateway trust bundle from `http://<gateway-host>:8080/.well-known/g8e/pki/ca-bundle`.
+2. Generates Operator and CLI ECDSA P-256 keys and certificate signing requests.
+3. Submits an owner-approved platform enrollment request.
+4. Writes resumable pending state to `.g8e/pki/pending-enrollment/g8eo.json` with private-file permissions.
+5. Prints the request ID, CSR fingerprints, and approval command, then polls for a decision.
+
+Leave this process running while the owner approves the request. If the process stops, rerunning the same command from the same launch directory resumes the request with the same pending state and key material. A pending request expires if it is not approved within its server-provided enrollment window.
+
+`g8e auth enroll operator` is not a current CLI command. Operator enrollment is part of `g8e operator start --endpoint`.
+
+### 4. Inspect and Approve the Request
+
+From the enrolled owner CLI, list pending platform enrollment requests:
+
+```bash
+./g8e auth pending-platform-enrollments --endpoint <gateway-host>
+```
+
+Compare the displayed component, hostname, system fingerprint, and Operator and CLI key fingerprints with the requesting Operator's output. Approve the matching request:
+
+```bash
+./g8e auth approve-platform-enrollment <request-id> --endpoint <gateway-host>
+```
+
+The command displays the request details and asks for confirmation. For non-interactive operation after independently validating the request, add `--yes`. To reject a request, use `--deny`; `--reason` attaches an optional decision note.
+
+Only a valid, non-revoked CLI identity belonging to the first enrolled owner can approve or deny the request. The Gateway enforces this authorization.
+
+### 5. Wait for the Connection
+
+After approval, the Operator signs the completion transcript with both generated private keys, receives the issued certificates, validates the response, and writes:
+
+- `.g8e/pki/operator.crt`
+- `.g8e/pki/operator.key`
+- `.g8e/pki/cli.crt`
+- `.g8e/pki/cli.key`
+- `.g8e/pki/trust/g8eg-ca-bundle.pem`
+
+The process removes the pending state after those writes succeed. It then authenticates to the Gateway over mTLS, receives its Operator ID, Operator session ID, runtime limits, posture, and heartbeat configuration, initializes encrypted local storage and execution services, and subscribes to:
+
+```text
+cmd:<operator-id>:<operator-session-id>
+```
+
+A successful connection logs `Channel established - Ready to receive`. The Operator sends an immediate heartbeat and continues at the configured interval, which defaults to 30 seconds.
 
 ---
 
-## Using the Operator
+## Use Pre-Provisioned Credentials
 
-### MCP Tool Calls
-
-AI clients can connect to the gateway's MCP endpoint:
-
-**For mTLS-based MCP:**
+To start with an existing Operator identity, provide the certificate, matching private key, and Gateway trust bundle explicitly:
 
 ```bash
-curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
+./g8e operator start \
+  --endpoint <gateway-host> \
+  --cert /path/to/operator.crt \
+  --key /path/to/operator.key \
+  --trust-bundle /path/to/g8eg-ca-bundle.pem
 ```
 
-> Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
+Without explicit paths, the worker looks for `.g8e/pki/operator.crt`, `.g8e/pki/operator.key`, and `.g8e/pki/trust/g8eg-ca-bundle.pem` below its launch directory. Both the certificate and key must be present and form a valid pair. Partial credential state does not trigger automatic enrollment and startup fails closed.
 
-**For plain HTTP MCP (non-mTLS):**
-
-```bash
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
-```
-
-**List supported agents:**
-
-```bash
-./g8e mcp agent list
-```
-
-**View MCP client configuration matrix:**
-
-```bash
-./g8e mcp agent show <agent>
-```
-
-Replace `<agent>` with a supported agent (claude, codex, devin, gemini, goose). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
-
-**Launch an agent with g8e governance:**
-
-```bash
-./g8e mcp agent run claude
-```
-
-This starts the gateway (if not already running), performs CLI auth, and launches the agent with native tools disabled so all I/O goes through g8e MCP. Every action is audited through the L1-L5 pipeline. Extra arguments after `--` are forwarded to the agent:
-
-```bash
-./g8e mcp agent run claude -- -p "fix the failing tests"
-```
-
-To wrap an external MCP server with g8e governance:
-
-```bash
-./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem ~/projects
-```
-
-### L3 Transaction Approval
-
-When the gateway is running in ratify or notary posture, mutation transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
-
-```bash
-./g8e auth approve <transaction_hash>
-```
-
-This opens a browser for WebAuthn/passkey verification and waits for the approval to complete. CLI mTLS credentials are required.
-
-### Direct Envelope Submission
-
-For direct envelope submission to the gateway:
-
-```bash
-curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
-  -H "Content-Type: application/json" \
-  -d @envelope.json
-```
-
-The envelope must include `transaction_hash`, `nonce`, `expires_at`, and `state_merkle_root` fields. L4 Warden validates these before execution.
+The current worker runs in the foreground. Use the target operating system's service manager or container orchestrator to supervise it in production and preserve its launch directory across restarts.
 
 ---
 
-## Protocol Library for Client Development
+## Deploy the Binary to a Remote Host
 
-Operators and CLI clients connecting to the g8e Gateway can use the g8e Protocol Library for protobuf schema definitions, SPIFFE workload identity helpers, and JSON protocol constants. The library is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+`g8e operator cp <target>` copies the current binary to a local target. `g8e operator scp <user@host:path>` invokes the system `scp` client to copy it to a remote host. After copying, make the binary executable where required and start it on the target host with `g8e operator start --endpoint <gateway-host>`.
 
-### Go Module
-
-```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
-```
-
-The module provides protobuf types for governance envelopes, operator messages, and common protocol structures. It also includes SPIFFE workload identity helpers for generating operator, CLI, and gateway identities used in mTLS enrollment.
-
-See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
-
-### Python Package
-
-For operator-side tooling or Python-based services:
-
-```bash
-pip install g8e==2.1.7
-```
-
-Provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
+Do not use `operator deploy --background` as an Operator rollout path in this version: its current implementation starts `gw start` on each target rather than `operator start`. The current Cobra wrapper for `operator stream` also consumes its public flags before its native parser receives them, so `--endpoint`, `--hosts`, and related options do not provide a reliable automated rollout. Use `cp`, `scp`, or an external deployment system and start the worker explicitly.
 
 ---
 
-## Maintenance
+## Verify and Operate the Connection
 
-### Log Management
+### Verify Gateway Health
 
-View gateway logs:
+```bash
+./g8e gw status
+```
+
+This checks the Gateway HTTP health endpoint, falls back to the local process manager for host mode, and also reports the Docker Compose stack. It verifies the Gateway, not the remote Operator process.
+
+### Inspect Enrolled Operators
+
+From an enrolled CLI identity:
+
+```bash
+./g8e operator list --endpoint <gateway-host>
+```
+
+The command lists Operator records associated with the enrolled user, including Operator ID, type, cloud subtype, Operator session ID, and recorded status. Use the Operator process log and the `Channel established - Ready to receive` message as the direct confirmation that the current worker established its pub/sub channel.
+
+### View Gateway Logs
 
 ```bash
 ./g8e gw logs -f
 ```
 
-### View Settings
-
-Fetch and display the current gateway platform settings:
-
-```bash
-./g8e gw settings
-```
-
-### Restart
-
-Restart:
+### Restart or Stop the Gateway
 
 ```bash
 ./g8e gw restart
-```
-
-The current posture is preserved across restarts. If the posture file is missing, the gateway defaults to doctrine posture.
-
-### Stop
-
-Stop:
-
-```bash
 ./g8e gw stop
 ```
 
-### Certificate Renewal
+Gateway restart preserves the persisted posture. A running Operator detects a closed pub/sub stream and retries the connection with bounded backoff; supervise the worker so it restarts if its retry limit is exhausted.
 
-When the mTLS certificate expires, re-authenticate using:
+### Stop the Operator
 
-```bash
-./g8e auth enroll user
-```
-
-The enrollment coordinator checks the local credential state. If credentials are complete and valid, they are reused without rotation. If credentials are partial or corrupt, the coordinator initiates the one-time human-approved recovery flow. To force certificate rotation (e.g., before expiry), use:
-
-```bash
-./g8e auth enroll user --rotate-cli
-```
-
-Rotation is mTLS-protected: the caller's identity is derived from the existing CLI certificate. Only one replacement certificate is issued per run. For remote device enrollment, use CSR-based enrollment:
-
-```bash
-./g8e auth enroll operator -e <gateway-ip>
-```
-
-**Windows Enrollment:**
-
-On Windows, `./g8e auth enroll user` imports the signed CLI certificate into the Windows Certificate Store for Windows Hello native API access. CLI keys are file-backed ECDSA P-256 on all platforms.
-
----
-
-## Custom Operator Connection
-
-For custom g8e-compatible implementations, the gateway follows the same operational pattern:
-
-1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates via `./g8e auth enroll operator`.
-2. **Configure Runtime**: Set up the data directory, PKI directory, and secrets directory.
-3. **Start Gateway**: Launch the gateway with `./g8e gw start`.
-4. **Authenticate CLI**: Run `./g8e auth enroll user` to obtain client credentials.
-5. **Verify Connection**: Confirm the gateway is running via `./g8e gw status`.
-6. **Monitor Health**: Implement health checks for the gateway process and audit vault.
-
-### Configuration
-
-Custom operators should support configuration via:
-- CLI flags for runtime parameters (gateway URL, paths)
-- Configuration files for complex deployments
-- Environment variables for vault settings (G8E_VAULT_DIR, G8E_VAULT_KEY)
-
-### High Availability
-
-For production deployments, consider:
-- Multiple operator instances per host for redundancy
-- Automatic restart on failure
-- Health check integration with orchestration systems
-- Log aggregation and monitoring
+Send `SIGINT` or `SIGTERM` to the foreground Operator process. It cancels the service context, stops the heartbeat scheduler and pub/sub service, closes local services, and exits after graceful shutdown.
 
 ---
 
 ## Troubleshooting
 
-### Gateway Fails to Start
+### The Operator Waits Before Submitting an Enrollment Request
 
-Verify the gateway is not already running:
+The Gateway is running but has not been bootstrapped with its first owner. The Operator retries submission with bounded backoff. Run `g8e auth enroll user` against the Gateway, then leave or restart the Operator process so it can submit the platform request.
 
-```bash
-./g8e gw status
-```
+### The Operator Waits for Approval
 
-Check gateway logs for startup errors:
+List requests from the owner CLI:
 
 ```bash
-./g8e gw logs -f
+./g8e auth pending-platform-enrollments --endpoint <gateway-host>
 ```
 
-Verify PKI directory exists and contains valid certificates:
+Approve the matching request ID after comparing its fingerprints. Restarting the requesting Operator from the same launch directory resumes the persisted request; starting it from another directory creates or uses a different `.g8e/` runtime tree.
+
+### Trust-Bundle Fetch Fails
+
+Confirm that the Operator host can reach the Gateway discovery port and that the endpoint is a bare resolvable hostname:
 
 ```bash
-ls -la .g8e/pki/
+curl -fsS http://<gateway-host>:8080/.well-known/g8e/pki/ca-bundle
 ```
 
-If the database is corrupted, reset the gateway (preserves CA and certificates):
+If this request fails, check routing, firewall rules, Gateway health, and hostname resolution. If it succeeds but Operator startup rejects the bundle, inspect the Gateway and Operator logs for certificate parsing or trust errors rather than bypassing TLS validation.
 
-```bash
-./g8e gw reset --force
-```
+### mTLS Bootstrap or Pub/Sub Fails
 
-For a full wipe of all runtime state including PKI, use `gw clean`:
+Confirm all of the following:
 
-```bash
-./g8e gw clean --force
-```
+- The Operator uses the same launch directory that contains its enrolled `.g8e/pki/` state.
+- The endpoint has no URL scheme or port.
+- The endpoint hostname resolves on the Operator host.
+- The hostname appears in the Gateway certificate identity generated at startup.
+- TCP port 8443 is reachable.
+- The Operator certificate and key are a matching, non-expired pair.
+- The canonical trust bundle is `.g8e/pki/trust/g8eg-ca-bundle.pem`.
 
-After `gw clean`, re-enroll with `./g8e auth enroll user` to obtain new credentials.
+For an IP-only remote deployment, map the Gateway IP to `g8e.local` and use `--endpoint g8e.local`. Do not disable certificate verification.
 
-### Certificate Errors
+### Startup Reports Missing Operator Session ID
 
-Verify the PKI directory as described in [Gateway Fails to Start](#gateway-fails-to-start). Then verify the runtime directory contains client certificates:
+The mTLS reauthentication/bootstrap request must return the Operator ID and Operator session ID before local audit services start. Confirm that enrollment completed, the certificate identifies the enrolled Operator, and the Gateway still contains that Operator session. `auth enroll user` manages CLI credentials and does not repair an Operator identity.
 
-```bash
-ls -la .g8e/cli.crt .g8e/cli.key
-```
+### Execution Vault Initialization Fails
 
-Re-enroll if certificates are missing or expired:
-
-```bash
-./g8e auth enroll user
-```
-
-If the trust bundle is stale after gateway PKI regeneration:
-
-```bash
-./g8e auth logout && ./g8e auth enroll user
-```
-
-### Audit Vault Errors
-
-Verify audit vault directory exists:
-
-```bash
-ls -la .g8e/data/
-ls -la .g8e/data/ledger/
-```
-
-Check gateway logs for audit vault write errors:
-
-```bash
-./g8e gw logs -f
-```
-
-Verify write permissions on the data directory:
-
-```bash
-./g8e gw security validate --pki-dir .g8e/pki --secrets-dir .g8e/secrets
-```
-
-### Authentication Failures
-
-Verify the gateway is running:
-
-```bash
-./g8e gw status
-```
-
-Verify you have valid client credentials:
-
-```bash
-ls -la .g8e/cli.crt .g8e/cli.key
-```
-
-Re-authenticate if credentials are missing or invalid:
-
-```bash
-./g8e auth enroll user
-```
+The execution vault is enabled by default and is required for replay protection. Do not start the worker with `--execution-vault=false`. Ensure the launch directory is writable and that the existing `.g8e/vault/` key can unlock its encrypted state. See [Build Operator](build_operator.md#local-runtime-state) for the Operator runtime layout and vault administration commands.
 
 ---
 
-## Security Considerations
+## Security Properties
 
-### Outbound-Only Connectivity
-
-The gateway operates as a zero-trust boundary. Clients establish outbound-only mTLS connections to the gateway. No inbound ports are required on client hosts. This eliminates NAT traversal requirements and reduces the remote attack surface.
-
-### Local-First Audit
-
-All audit entries are written to the local audit vault before execution. Raw data, forensic context, and execution history never leave the host. Only sovereignty-scrubbed projections cross the wire via the gateway APIs.
-
-### Fail-Closed Execution
-
-The gateway executes mutations only through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator). Any failure in any layer results in a typed rejection and audit entry. No fallback paths or silent retries exist.
-
-### Certificate Revocation
-
-Certificate revocation is enforced on every mTLS handshake. The gateway maintains a CRL (Certificate Revocation List) and revocation bundle. Revoked certificates are immediately rejected, preventing unauthorized access.
+- **Owner-approved enrollment:** A new workload receives no platform certificate until the persistent Gateway owner approves its request over an authenticated mTLS CLI session.
+- **Proof of key possession:** The Operator signs the enrollment completion transcript with both generated private keys before credentials are issued.
+- **Outbound-only worker:** The Operator initiates its Gateway connections and exposes no inbound application listener.
+- **Scoped command channel:** The Operator subscribes to a channel bound to its Operator and session identities.
+- **Fail-closed execution:** The Operator verifies transaction structure, expiry, replay state, hash and state binding, doctrine, and posture-required L2 and L3 evidence before L5 execution.
+- **Local-first evidence:** The Operator persists signed execution evidence and encrypted local state before publishing result projections to the Gateway.
+- **mTLS and revocation:** Gateway authenticated routes validate the certificate identity and revocation state in addition to normal TLS chain and hostname checks.
 
 ---
 
 ## Next Steps
 
-- **[Build Apps](./build_apps.md)**: Build g8e-compatible applications using a gateway.
-- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference, constants, models, and usage examples.
+- [Build Operator](build_operator.md): Build the reference worker, understand runtime state, and review the current processing contract.
+- [Operator Architecture](../architecture/operator.md): Review the Operator service stack and execution boundary.
+- [Build Apps](build_apps.md): Connect MCP, A2A, and direct-envelope clients to the Gateway.
+- [Protocol Library](../architecture/protocol.md): Use the public protobuf schemas, constants, and workload identity helpers.

@@ -1,7 +1,7 @@
 # Sovereignty Gauntlet Evidence and Social Content Guide
 
-Last Updated: 2026-09-07
-Version: v2.1.6
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 This runbook gives a coding agent a repeatable process for generating, preserving, and explaining g8e proof artifacts for social posts, articles, demonstrations, and technical review. The campaign message is:
 
@@ -24,21 +24,24 @@ When asked to run this guide, the agent:
 
 ## What is runnable today
 
-The current repository supports three complementary evidence lanes. Demo evidence runs have their own read-only verifier; this is distinct from the future complete eval-bundle and proof-backed report-bundle verifiers:
+The current repository supports four complementary evidence lanes. Demo evidence verification, evidence-graph validation, signed compliance report-bundle verification, and eval receipt verification have different scopes and are not interchangeable:
 
 | Lane | Best use | What it produces | Headline status |
 | --- | --- | --- | --- |
-| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, integrity verification, and KSI JSON | Publish measured scenario outcomes and passing checks with the provider clearly identified |
-| FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, KSI evidence for FedRAMP, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
-| Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Immutable manifest, typed tasks, attempts, stages, metrics, encrypted restricted evidence, receipts, observations, and compatibility summaries | Do not use current smoke output for extraordinary headline statistics |
+| Unified-stack proof | Developer, AI, security, and product posts | Real or fake model-driven governed mutations, signed receipt export, CSV store exports, and integrity verification | Publish measured scenario outcomes and passing checks with the provider clearly identified |
+| FedRAMP and DHS demos | Compliance, public-sector, defense, and event demonstrations | Concise or verbose typed scenario results, persisted manifests, content-addressed receipts, persistence attestations and state observations, independent demo-run verification, bound KSI evidence when supplied with the required assessment context, and tactical TUI output | Publish as a labeled demonstration; state that target resources and data are synthetic |
+| Evidence-grade evals | Engineering diagnostics, model comparison, and future campaign input | Real-provider `ifeval_subset` reports and deterministic synthetic suites with immutable manifests, typed tasks, attempts, metrics, observations, receipts where applicable, and compatibility summaries | State whether the run used real providers or a synthetic local system; do not use either as the unimplemented flagship matrix |
+| Signed compliance report bundle | Point-in-time, scope-bound offline review | Canonical analysis, framework profiles, deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers, protected source inventories, a signed bundle, and a canonical offline verification report | Publish the exact verified bundle scope and external trust inputs; do not relabel point-in-time report integrity as certification, recurring effectiveness, or eval-native verification |
 
-The current eval CLI supports only `ifeval_subset`. Its `verify-receipts` command verifies canonical receipt signatures and final persistence attestations but does not verify the complete eval bundle, commitment ledger, trust root, all record references, or all input hashes. The planned 25-scenario utility/privacy/policy/protocol matrix, generated proof card, and complete one-command bundle verifier are not currently implemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
+The real-provider `g8e-evals run` command supports the curated `ifeval_subset` suite. The separate `g8e-evals bench-synthetic` command supports `privacy_token_lifecycle`, `governance_adversarial`, `privacy_boundary_leakage`, `policy_attack`, `benign_overblock`, `tool_sequence`, `factual_qa`, `citation_backed`, `partial_milestone`, `final_state`, `ledger_consistency`, `reliability`, and `economics_performance`; these runs exercise deterministic observers and graders against local production-shaped systems without a real LLM, g8ee, gateway, Operator, or authenticated governance path. `g8e-evals verify-receipts` verifies canonical receipt signatures and final persistence attestations but does not verify a complete eval bundle, commitment ledger, trust root, all record references, or all input hashes.
+
+The compliance CLI separately implements `g8e compliance evidence-graph verify`, signed `g8e compliance report generate`, and complete offline `g8e compliance report verify`. The report verifier independently replays the protected demo, eval, KSI, commitment, customer or assessor attestation, audit, ledger, and build or configuration sources represented in that signed report bundle, reproduces analysis and renderers, and requires external assessed trust. It is not an eval-native verifier and does not turn the available suites into the planned frozen utility/privacy/policy/protocol experiment. The preregistered minimum 25-scenario flagship matrix, generated proof card, eval-native canonical analysis and signed bundle, statistical release gate, and complete eval-native verifier remain unimplemented. Until those capabilities exist and all publication gates pass, describe this work as a **Sovereignty Gauntlet demonstration** or **rehearsal**, not the completed publication-grade flagship experiment.
 
 ## Validated rehearsal
 
 The `20260831T220953Z` rehearsal exercised this runbook against a clean source baseline and retained the failed setup attempts and corrected reruns. The unified lane completed both useful-work scenarios, verified 49 of 49 exported receipt signatures and persistence attestations against the two producing actuator public keys, and passed all six store-integrity checks with no failures or skips. The fixed FedRAMP and DHS environments each passed all four scenarios under consensus posture. The separate real-local `ollama/gemma4:12b` doctrine diagnostic passed all five supported `ifeval_subset` tasks with a measured 180-second idle threshold.
 
-These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run did not perform complete-bundle verification, and its KSI output describes measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
+These results remain bounded to that run. The FedRAMP resources, DHS targets, coalition link, and data were synthetic or simulated. The successful eval tasks were answer-only and contained zero bound receipts, so they support no eval receipt-verification claim. The run predates and did not perform v2.1.7 signed compliance report-bundle verification or any eval-native complete-bundle verification, and its KSI output describes measured evidence alignment rather than authorization. Use the process below for a new campaign; do not reuse these historical counts as evidence for a later run.
 
 ## 1. Create an immutable campaign workspace
 
@@ -52,27 +55,28 @@ CAMPAIGN_DIR="${REPO_ROOT}/.local.dev/marketing/sovereignty-gauntlet/${RUN_ID}"
 test ! -e "${CAMPAIGN_DIR}"
 mkdir -p "${CAMPAIGN_DIR}/metadata" "${CAMPAIGN_DIR}/logs" "${CAMPAIGN_DIR}/unified/reports" "${CAMPAIGN_DIR}/unified/compliance" "${CAMPAIGN_DIR}/fedramp/compliance" "${CAMPAIGN_DIR}/dhs" "${CAMPAIGN_DIR}/evals"
 printf '%s\n' "${RUN_ID}" > "${CAMPAIGN_DIR}/metadata/run-id.txt"
-git rev-parse HEAD > "${CAMPAIGN_DIR}/metadata/source-revision.txt"
-git status --short > "${CAMPAIGN_DIR}/metadata/source-tree-status.txt"
 ./g8e version | tee "${CAMPAIGN_DIR}/metadata/g8e-version.txt"
+sha256sum ./g8e | tee "${CAMPAIGN_DIR}/metadata/g8e-binary-sha256.txt"
+printf '%s\n' 'source-provenance=not-collected' > "${CAMPAIGN_DIR}/metadata/source-provenance-status.txt"
 docker version > "${CAMPAIGN_DIR}/metadata/docker-version.txt"
 docker compose version > "${CAMPAIGN_DIR}/metadata/docker-compose-version.txt"
 printf '%s\n' "${CAMPAIGN_DIR}"
 ```
 
-Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. A non-empty `source-tree-status.txt` means the run uses an uncommitted source tree. Preserve that fact in any publication notes. Never claim a reproducible source revision from the commit hash alone when the tree is dirty.
+Keep the same shell for the run so `CAMPAIGN_DIR`, identity values, provider settings, `pipefail`, and the evidence-key location remain available. The binary version and digest identify the executable used, not the source tree that produced it. The repository rules prohibit agents from invoking Git, so `source-provenance-status.txt` remains `not-collected` unless the user supplies an approved provenance artifact or directs the release-owner provenance workflow in [Release Process](../devs/release_process.md#stage-2-reproduction-and-provenance). Do not claim source reproducibility from the binary version or digest alone.
 
-Record the campaign mode before continuing:
+Record the current capability boundary before continuing:
 
 ```bash
-if ./g8e evals verify-bundle --help >/dev/null 2>&1; then
-  printf '%s\n' 'complete-bundle-verifier-detected' | tee "${CAMPAIGN_DIR}/metadata/campaign-mode.txt"
-else
-  printf '%s\n' 'current-demonstration-mode' | tee "${CAMPAIGN_DIR}/metadata/campaign-mode.txt"
-fi
+./g8e compliance report verify --help > "${CAMPAIGN_DIR}/metadata/report-bundle-verifier-help.txt"
+printf '%s\n' \
+  'campaign-mode=current-demonstration' \
+  'signed-compliance-report-bundle-verifier=available' \
+  'eval-native-complete-bundle-verifier=not-implemented' \
+  | tee "${CAMPAIGN_DIR}/metadata/campaign-mode.txt"
 ```
 
-Detection of a future command is not proof that its output is valid. When the complete verifier appears, inspect its current help, schema documentation, trust-root requirements, and tests before using it. Do not reuse a command syntax preserved in an old plan.
+The available complete verifier applies to a signed compliance report bundle and requires external assessed trust. It does not verify an eval-native release bundle or make the campaign publication-grade.
 
 ## 2. Choose retained state or a clean run
 
@@ -267,6 +271,8 @@ Apply the current proof gates:
 ```bash
 VERIFICATION="${CAMPAIGN_DIR}/unified/reports/verification_summary.csv"
 awk -F, '$1 == "commitment_chain" && $4 == "PASS" { print; found=1 } END { exit !found }' "${VERIFICATION}"
+awk -F, '$1 == "commitment_hash_recompute" && $4 == "PASS" { print; found=1 } END { exit !found }' "${VERIFICATION}"
+awk -F, '$1 == "commitment_signature" && $4 == "PASS" { print; found=1 } END { exit !found }' "${VERIFICATION}"
 awk -F, '$1 == "git_merkle_root" && $4 == "PASS" { print; found=1 } END { exit !found }' "${VERIFICATION}"
 awk -F, '$1 == "file_mutation_linkage" && $4 == "PASS" && $5 !~ /^0 mutations checked/ { print; found=1 } END { exit !found }' "${VERIFICATION}"
 awk -F, '$1 == "receipt_commitment_crosslink" && $4 == "PASS" { print; found=1 } END { exit !found }' "${VERIFICATION}"
@@ -275,18 +281,29 @@ test -z "$(awk -F, '$4 == "FAIL" { print }' "${VERIFICATION}")"
 
 For a public integrity claim, inspect every `SKIPPED` row. Do not advertise a skipped check as covered. The current CSV verification pass checks commitment-chain structure, canonical commitment hashes, Auditor signatures on commitments, the Git root, mutation linkage, and receipt/commitment cross-links. It does not validate the receipt signature or final persistence attestation; the separate protocol verification in step 3.4 does that. `report all` verifies live stores and is not a complete verifier for the copied eval or campaign bundle.
 
-### 3.6 Generate KSI evidence
+### 3.6 Generate bound KSI evidence
 
-Run compliance evaluation against the same populated operator state:
+The v2.1.7 KSI command fails closed unless the caller binds the evaluation to an assessment scope, run, assertion-assessment set, and evidence window. Run it against the same populated Operator state only when those identifiers come from the assessment being reported:
 
 ```bash
 docker exec g8e-operator /g8e compliance ksi \
   --class C \
   --catalog /docs/reference/ksi-catalog.json \
+  --scope-id '<assessment-scope-id>' \
+  --run-id '<assessment-run-id>' \
+  --assertion-assessment-id '<canonical-assertion-assessment-id>' \
+  --evidence-window-start-unix-ms '<inclusive-start-ms>' \
+  --evidence-window-end-unix-ms '<inclusive-end-ms>' \
   > "${CAMPAIGN_DIR}/unified/ksi-result.json"
 ```
 
-Report the measured satisfied/not-satisfied result. A KSI result is evidence alignment, not FedRAMP authorization. The superseded flat OSCAL export and proof-backed report bundle generator are not exposed by the CLI.
+Add repeatable `--assertion-assessment-id`, `--attempt-id`, `--scenario-id`, and `--action-id` flags as required by the assessment population. Do not invent binding identifiers merely to satisfy the CLI. Report the measured satisfied, not-satisfied, or unavailable result. A KSI result is evidence alignment, not FedRAMP authorization.
+
+### 3.7 Optionally generate and verify a signed compliance report bundle
+
+The compliance report pipeline is implemented in v2.1.7. `g8e compliance report generate` imports explicit scope-bound demo runs, eval runs, or standalone KSI, commitment, attestation, audit, ledger, and build or configuration sources; generates canonical analysis and deterministic JSON, OSCAL, Markdown, HTML, and CLI renderers; copies protected source bytes into the bundle; and signs the complete bundle. `g8e compliance report verify` reads only bundle-confined bytes, authenticates the report with an external assessed report trust policy, separately authenticates represented signed source evidence with external assessed evidence trust when required, independently replays every protected source, reproduces the analysis and renderers, and exits nonzero when the canonical verification report is invalid.
+
+Follow [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md#cli-commands) for the complete generation and trust setup. Generate one report per assessment scope; do not combine FedRAMP and DHS runs merely because they belong to one campaign. Retain the generated bundle, external trust-policy digests, exact verification command, verifier output, and exit status. A valid report bundle proves point-in-time integrity for its represented source set; it does not establish certification, recurring operating effectiveness, independent hardware or organizational control, or eval-native flagship results.
 
 ## 4. Run the audience-specific visual demos
 
@@ -318,12 +335,20 @@ Require a zero exit status and `"valid":true` before claiming that the persisted
 2. Unauthorized destruction of `/var/cloudsvc` is blocked at L1 before actuation.
 3. Governed configuration revert succeeds and records the prior state hash.
 4. Destruction of the gateway audit vault is blocked at L1.
-5. The automatically appended KSI evidence row reports whether snapshot emission and verification passed.
+5. The automatically appended KSI evidence row records the snapshot-export attempt; in v2.1.7 this row fails closed because the demo orchestration does not supply the assessment bindings now required by `compliance ksi`.
 
-Copy KSI output from the FedRAMP gateway after the scenarios:
+Treat the automatic KSI row as unavailable rather than a pass. When canonical assessment identifiers and an evidence window exist, collect a separately bound KSI result from the FedRAMP gateway:
 
 ```bash
-docker exec g8e-fedramp-gateway /g8e compliance ksi --class C --catalog /docs/reference/ksi-catalog.json > "${CAMPAIGN_DIR}/fedramp/ksi-result.json"
+docker exec g8e-fedramp-gateway /g8e compliance ksi \
+  --class C \
+  --catalog /docs/reference/ksi-catalog.json \
+  --scope-id '<assessment-scope-id>' \
+  --run-id '<assessment-run-id>' \
+  --assertion-assessment-id '<canonical-assertion-assessment-id>' \
+  --evidence-window-start-unix-ms '<inclusive-start-ms>' \
+  --evidence-window-end-unix-ms '<inclusive-end-ms>' \
+  > "${CAMPAIGN_DIR}/fedramp/ksi-result.json"
 ```
 
 Do not claim that a blocked wipe proves the audit vault is impossible to tamper with. The measured result is that the declared request was rejected at L1 and did not reach the synthetic actuator in this run. Scenarios 2 and 4 now include an independent post-rejection verification step that checks the target state (operations log or audit vault DB) is still present and non-empty, proving the prohibited operation did not occur.
@@ -349,7 +374,7 @@ Say “simulated coalition datalink” and “synthetic data.” Do not claim cl
 
 ## 5. Run evidence-grade evals as diagnostics
 
-Use this lane to generate typed evidence for the currently supported `ifeval_subset` benchmark. It does not implement the complete Sovereignty Gauntlet attack matrix.
+Use `g8e-evals run` to generate typed real-provider or fake-provider evidence for the curated `ifeval_subset` benchmark. Use `g8e-evals bench-synthetic` to exercise the 13 deterministic local suites listed in [What is runnable today](#what-is-runnable-today). Synthetic suites run without a real LLM, g8ee, gateway, Operator, authentication context, or production governance posture, so label their outputs as observer and grader pipeline diagnostics rather than model or real-stack results. Neither command implements the frozen, repeated, publication-grade Sovereignty Gauntlet matrix.
 
 Create an owner-only evidence key outside the campaign directory. The key never enters the published bundle:
 
@@ -401,6 +426,16 @@ uv run g8e-evals run \
 
 Provider, model, endpoint, API-key, judge, task-limit, headless, and timeout options are listed by `uv run g8e-evals run --help`. Record exact model-role mappings from `manifest.json`; never describe an omitted or fake role as a real frontier model.
 
+Run a synthetic suite separately, with its own output directory and classification:
+
+```bash
+uv run g8e-evals bench-synthetic \
+  --suite governance_adversarial \
+  --output-dir "${CAMPAIGN_DIR}/evals/synthetic"
+```
+
+Use `uv run g8e-evals bench-synthetic --help` for the complete suite list. Preserve the generated manifest, tasks, attempts, suite-specific typed observations, metrics, receipts where applicable, restricted-evidence index, and summary. Do not combine synthetic and real-provider denominators or describe a synthetic suite as proof that a live gateway rejected an attack.
+
 Locate the generated report and verify receipt signatures and final persistence attestations:
 
 ```bash
@@ -443,7 +478,7 @@ Use this order when choosing screenshots, excerpts, and post material:
 | 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `demo-run-verification.json` | Measured KSI counts plus the typed independent verification result for the persisted FedRAMP demo evidence | Compliance post or article |
 | 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` and `demo-run-verification.json` | Disconnected continuity, blocked wipe, governed purge, and the typed independent verification result | Defense/edge video |
 | 9 | `${EVAL_REPORT_DIR}/manifest.json`, `attempts.jsonl`, `stages.jsonl`, and `metrics.jsonl` | Exact configuration, denominators, grader outcomes, usage, latency, and evidence linkage | Technical appendix |
-| 10 | `${CAMPAIGN_DIR}/metadata/` | Source revision, dirty-tree status, binary/FIPS versions, Docker versions, provider classification, and campaign mode | Methodology footer |
+| 10 | `${CAMPAIGN_DIR}/metadata/` | Binary version and digest, source-provenance status or approved provenance artifact, FIPS and Docker versions, provider classification, and campaign capability boundary | Methodology footer |
 
 A polished terminal screenshot uses the concise scenario summary, followed by the matching transaction row and verification row. A technical article links the canonical machine-readable files rather than transcribing hashes manually.
 
@@ -453,7 +488,7 @@ A polished terminal screenshot uses the concise scenario summary, followed by th
 
 A current-run social claim is publishable only when all applicable checks pass:
 
-- The exact source revision and dirty-tree state are retained.
+- The executable version and SHA-256 digest are retained, and the source-provenance status is explicit. Any source-reproducibility claim cites an approved provenance artifact rather than inferring source identity from the binary.
 - Provider and model classification is explicit.
 - Every quoted scenario appears in the retained log with `ok` or `PASS`.
 - The matching action appears in the signed receipt export.
@@ -465,7 +500,8 @@ A current-run social claim is publishable only when all applicable checks pass:
 - Synthetic targets, canaries, and data are labeled.
 - KSI and compliance-evidence language says measured alignment or evidence, never authorization.
 - Any demo-evidence verification claim cites a retained canonical report with `"valid":true` and a zero verifier exit status.
-- The public artifact set excludes keys, secrets, raw restricted evidence, local credential paths, and personal data.
+- Any signed report-bundle claim cites the exact bundle, external report-trust policy digest, external evidence-trust policy digest when required, canonical `ComplianceVerificationReport` with `"valid":true`, and zero verifier exit status. It states that verification covers the point-in-time represented source set rather than an eval-native bundle or recurring effectiveness.
+- The public artifact set excludes private keys, secrets, raw restricted evidence, local credential paths, personal data, and trust material that is not explicitly approved for publication.
 
 ### Publication-grade flagship gate
 
@@ -476,11 +512,11 @@ Do not publish the planned flagship result card or aggregate Sovereignty Gauntle
 - Real-provider SDK-boundary canary observations and exact local rehydration observations.
 - Independent prohibited-side-effect and final-state observations.
 - Complete schema, hash, reference, denominator, stage-graph, receipt, persistence, commitment, state, privacy, encrypted-evidence, and trust-root verification.
-- A complete one-command verifier that exits non-zero for deliberate tampering in every advertised evidence class.
+- A complete eval-native verifier that checks the frozen experiment population, authoritative metrics, trust roots, references, stage graph, receipts, persistence, commitments, state, privacy evidence, and encrypted-evidence metadata and exits nonzero for deliberate tampering in every advertised eval evidence class. The available signed compliance report-bundle verifier does not satisfy this eval-native gate.
 - A generated proof card whose values derive only from authoritative typed metrics.
 - Zero silent exclusions and explicit reporting of missingness, infrastructure failures, retries, provider usage reconciliation, latency, tokens, and cost.
 
-Until then, do not claim complete-bundle verification, zero raw canaries at all model boundaries, exact local rehydration rates, protocol-attack rejection rates, prohibited-side-effect rates, or publication-grade utility comparisons unless a newer implemented suite directly measures and verifies them.
+Until then, do not claim complete eval-bundle verification, zero raw canaries at all model boundaries, exact local rehydration rates, protocol-attack rejection rates, prohibited-side-effect rates, or publication-grade utility comparisons unless a newer implemented suite directly measures and verifies them. A successfully verified signed compliance report bundle supports a narrower complete-report-bundle claim for the exact represented source set and trust policies.
 
 ## 8. Copy/paste-ready post templates
 
@@ -573,7 +609,8 @@ SOVEREIGNTY GAUNTLET RUN
 Run ID: <run-id>
 Campaign directory: <absolute path>
 Mode: <current demonstration | publication-grade verified>
-Source: <revision; clean/dirty>
+Executable: <version and SHA-256 digest>
+Source provenance: <approved artifact and digest | not collected>
 Provider: <provider/model; real/local/fake>
 
 Measured outcomes
@@ -583,7 +620,8 @@ Measured outcomes
 - Persistence/commitments: <result>
 - Store verification: <PASS/FAIL/SKIPPED summary>
 - KSI/demo evidence: <counts and verification-report status>
-- Complete-bundle verification: <PASS or NOT IMPLEMENTED/NOT RUN>
+- Signed compliance report-bundle verification: <PASS/FAIL/NOT RUN; exact scope and trust inputs>
+- Eval-native complete-bundle verification: <NOT IMPLEMENTED/NOT RUN>
 
 Best copy/paste data
 1. <absolute artifact path>: <specific lines/rows and why they matter>
@@ -606,7 +644,7 @@ Recommended post
 <one copy/paste-ready post populated only from measured artifacts>
 ```
 
-The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, fake-provider role, dirty source tree, synthetic target, or incomplete verification before presenting positive claims.
+The agent also calls out any `FAIL`, `SKIPPED`, empty report, missing observer, fake-provider role, missing source provenance, synthetic target, unavailable KSI binding, or incomplete verification before presenting positive claims.
 
 ## README evidence refresh
 

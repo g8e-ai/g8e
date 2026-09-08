@@ -3,21 +3,30 @@
 Last Updated: 2026-09-08
 Version: v2.1.7
 
-This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
+This guide covers building the shared Gateway/Operator image, running a gateway-only container, and managing the repository's Docker Compose deployments. For the complete four-service product workflow, see the [Unified Docker Stack Guide](./unified_stack.md).
 
-## Quick Start
+## Prerequisites
 
-### Build Image
+- Docker with BuildKit support
+- Docker Compose v2 (`docker compose`)
+- A checkout of this repository
+- The `./g8e` CLI when performing owner or platform enrollment from the host
 
-Build the g8e container image from the repository root:
+Run repository commands from the repository root unless a section explicitly changes directories.
+
+## Build the Image
+
+Build the shared Gateway/Operator image from the repository root:
 
 ```bash
 docker build -t g8e-gateway:latest .
 ```
 
-### Run Standalone Container
+The runtime image contains a linux/amd64 binary. Run it on linux/amd64 or through a container runtime configured to emulate that platform.
 
-Start the gateway in doctrine mode with default port mappings and volume persistence:
+## Run a Standalone Gateway
+
+Start only the Gateway Policy Decision Point with persistent runtime state:
 
 ```bash
 docker run -d \
@@ -26,51 +35,112 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start -f --posture doctrine
+  gw start -f --posture doctrine --cert-mode localhost
 ```
 
-The `-f` flag runs the gateway in the foreground instead of spawning a background subprocess. This is required for container usage so the process does not exit immediately. Standalone execution runs only the Gateway Policy Decision Point without the operator, dashboard, or ensemble services.
+`-f` keeps the gateway in the foreground as the container's main process. `--cert-mode localhost` makes this local-only example deterministic. Omit it to use the default `full` identity detection mode, and add the host identity mounts described in [Host identity and certificates](#host-identity-and-certificates) when the certificate must cover host names or addresses.
 
-## Docker Compose Deployment
+The standalone command does not start the operator, ensemble, or dashboard. Enroll the first owner from the host after the health endpoint responds:
 
-The repository includes a root `docker-compose.yml` that deploys the full platform stack: the Gateway, the Operator, the Ensemble, and the Dashboard on a shared `g8e-net` bridge network.
+```bash
+until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
+./g8e auth enroll user -e localhost
+```
 
-The compose stack uses a two-phase startup model. Only the gateway starts by default (unprofiled). The platform workloads (operator, ensemble, and dashboard) belong to the `bootstrapped` Compose profile (`profiles: [bootstrapped]`) and require an enrolled owner before they can start. The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending platform enrollment requests.
+The enrollment command writes the host CLI identity to the host runtime tree; that identity is separate from the gateway state in the `g8e-data` volume.
 
-### Core Services
+## Unified Docker Compose Stack
 
-- **`g8e-gateway`**: Policy Decision Point. Admits transactions, manages PKI, and enforces L1-L3 governance. Starts via `gw start -f` with CORS and passkey RP origins configured for the dashboard (`http://${G8E_HOSTNAME:-localhost}:${G8E_DASHBOARD_PORT:-3000}`). Starts with zero users and issues no platform certificates until the first owner enrolls.
-- **`g8e-operator`**: Policy Execution Point. Connects to the gateway via outbound mTLS to pull work from its pub/sub channel, re-verify proofs, and execute L4-L5 actions. Uses `operator start -e g8e.local`. The gateway registers `g8e.local` and `g8eg` as network aliases on `g8e-net`, so the operator resolves the gateway by the hostname matching its certificate SANs. Gated behind the `bootstrapped` profile. On first start with no credentials, the operator submits a platform enrollment request and waits for owner approval before becoming ready.
-- **`ensemble`**: First-party agentic ensemble (g8ee) Python FastAPI service built from `ensemble/Dockerfile`. Submits governed intents through MCP and publishes SSE events. Gated behind the `bootstrapped` profile. Submits a platform enrollment request at startup via the owner-approved platform enrollment protocol and waits for owner approval before its lifespan completes. Connects to the gateway document store, pub/sub, and blob APIs over mTLS using its enrolled credentials (`pki/issued/apps/g8ee.crt`). Mounts `g8e-operator-data:/operator-state:ro` read-only to access the operator's enrolled mTLS certificate for privileged governance envelope signing. See the [g8ee documentation](../ensemble/index.md) for the ensemble component architecture, agents, governance, and SSE pipeline.
-- **`dashboard`**: Operator dashboard (g8ed) Node.js Express service built from `dashboard/Dockerfile`. Provides the browser UI for chat, operator management, audit, and settings. Gated behind the `bootstrapped` profile. Runs as the non-root `g8e` user (UID 1001) with volume mounted at `g8e-dashboard-data:/data` and `G8E_RUNTIME_DIR=/data`. Submits a platform enrollment request at startup to obtain an mTLS app identity (`spiffe://g8e.local/app/g8ed`) for prepared server-to-server gateway clients; the current static host does not construct those clients. The browser SPA authenticates independently to the gateway via WebAuthn passkeys. See the [g8ed documentation](../dashboard/index.md) for the dashboard component architecture, auth, gateway integration, and operator surfaces.
+The root `docker-compose.yml` defines four services on the `g8e-net` bridge network:
 
-### Service Dependencies and Health Checks
+| Service | Role | Published ports | Persistent volume |
+| --- | --- | --- | --- |
+| `g8e-gateway` | Policy Decision Point, PKI authority, governance API, console, and transport services | 8080, 8443 | `g8e-gateway-data` |
+| `g8e-operator` | Outbound mTLS Policy Execution Point | None | `g8e-operator-data` |
+| `ensemble` | g8ee FastAPI agentic ensemble | 8000 | `g8e-ensemble-data` |
+| `dashboard` | g8ed Express static SPA host | 3000 | `g8e-dashboard-data` |
 
-The operator, ensemble, and dashboard services depend on the gateway health check passing (`depends_on` with `condition: service_healthy` for `g8e-gateway`). The ensemble service also depends on `g8e-operator: condition: service_started`.
+Only `g8e-gateway` is in the default Compose profile. The operator, ensemble, and dashboard use the `bootstrapped` profile. Those workload containers can start before owner enrollment, but their startup enrollment blocks readiness until the first owner approves their platform enrollment requests.
 
-Health checks defined in `docker-compose.yml` reflect truthful service readiness:
+The gateway and operator use the root `Dockerfile`. The ensemble uses `ensemble/Dockerfile`, and the dashboard uses `dashboard/Dockerfile`.
 
-- `g8e-gateway`: `wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health`
-- `g8e-operator`: `test -f /root/.g8e/pki/operator.crt`
-- `ensemble`: `python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"`
-- `dashboard`: `wget --no-verbose --tries=1 --spider http://localhost:3000/`
+### Start the gateway only
 
-Because platform enrollment requires owner approval, the operator, ensemble, and dashboard health checks remain not-ready while approval is pending. Once the owner approves their requests, each component completes enrollment and transitions to healthy.
+```bash
+docker compose up -d --build
+```
 
-### Environment Variables
+This starts the unprofiled gateway service. Verify its health before enrolling:
 
-The compose file supports the following environment variable overrides. A `.env.example` file at the repository root documents all six with defaults and descriptions:
+```bash
+curl -fsS http://localhost:8080/api/v1/health
+```
 
-- **`G8E_PREFIX`**: Prefix for container names (default: `g8e`). Containers are named `${G8E_PREFIX}-gateway`, `${G8E_PREFIX}-operator`, `${G8E_PREFIX}-ensemble`, and `${G8E_PREFIX}-dashboard`.
-- **`G8E_HTTP_PORT`**: Host port mapped to the gateway HTTP discovery surface, container port 8080 (default: `8080`). Used for health checks, CA bundle fetch, and platform enrollment submission.
-- **`G8E_HTTPS_PORT`**: Host port mapped to the gateway HTTPS/mTLS surface, container port 8443 (default: `8443`). Used for MCP, A2A, governance envelopes, document store, WebSocket pub/sub, and the console SPA.
-- **`G8E_ENSEMBLE_PORT`**: Host port mapped to the ensemble FastAPI API, container port 8000 (default: `8000`).
-- **`G8E_DASHBOARD_PORT`**: Host port mapped to the dashboard Express server, container port 3000 (default: `3000`).
-- **`G8E_HOSTNAME`**: Public hostname the gateway advertises in approval links, host-header validation, CORS, and passkey RP origins (default: `localhost`). Set to a real hostname (e.g. `dev.g8e.local`) when accessing the gateway from outside localhost.
+### Complete the manual bootstrap
 
-### Resource Limits
+```bash
+# Enroll the first owner and create the host CLI mTLS identity.
+./g8e auth enroll user -e localhost
 
-All four services define CPU and memory constraints in `docker-compose.yml`:
+# Start the platform workloads.
+docker compose --profile bootstrapped up -d
+
+# Discover the requests submitted by the workloads.
+./g8e auth pending-platform-enrollments
+
+# Approve each exact request ID. Approving the operator first makes its shared transport credentials available before the ensemble finishes startup.
+./g8e auth approve-platform-enrollment <operator-request-id> --yes
+./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
+./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+
+# Inspect readiness after enrollment completes.
+docker compose --profile bootstrapped ps
+```
+
+The approval commands use the enrolled host CLI identity over mTLS. They accept request IDs, not requester tokens, token hashes, CSRs, or certificates. The gateway console at `https://localhost:8443/console/` also lists and approves pending requests after browser passkey enrollment.
+
+### Use the CLI walkthrough
+
+The repository CLI wraps the root Compose stack:
+
+```bash
+./g8e docker start --full
+```
+
+This starts the `bootstrapped` profile, waits for `http://127.0.0.1:8080/api/v1/health`, enrolls or reuses the CLI owner identity, and checks once for each pending request in ensemble, dashboard, then operator order. Each prompt is optional. If a workload has not submitted its request when checked, the walkthrough skips it; use the pending and approval commands above to finish manually.
+
+The walkthrough currently assumes the default host gateway ports, 8080 and 8443. For remapped ports, use the manual workflow and pass the host endpoints to each authentication command:
+
+```bash
+./g8e auth enroll user -e localhost:18080 --port 18443
+./g8e auth pending-platform-enrollments -e localhost:18080 --port 18443
+./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
+```
+
+Use `./g8e docker start --full --skip-enroll` to start all four services without the walkthrough. The workload services remain pending until their requests are approved manually.
+
+## Compose Configuration
+
+Copy `.env.example` to `.env` or export overrides before invoking Compose:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `G8E_PREFIX` | `g8e` | Prefixes container names, such as `g8e-gateway`. It does not rename Compose services, networks, or volumes. |
+| `G8E_HTTP_PORT` | `8080` | Host port published to gateway container port 8080. |
+| `G8E_HTTPS_PORT` | `8443` | Host port published to gateway container port 8443. |
+| `G8E_ENSEMBLE_PORT` | `8000` | Host port published to ensemble container port 8000. |
+| `G8E_DASHBOARD_PORT` | `3000` | Host port published to dashboard container port 3000. |
+| `G8E_HOSTNAME` | `localhost` | Hostname used by the gateway public URL, passkey RP configuration, dashboard gateway URL, and dashboard CORS origin. |
+
+For example:
+
+```bash
+G8E_HTTP_PORT=18080 G8E_HTTPS_PORT=18443 G8E_DASHBOARD_PORT=13000 docker compose up -d --build
+```
+
+Host-port overrides do not change container listeners. The gateway still listens on 8080 and 8443 inside the Compose network.
+
+The root Compose file configures these resource constraints:
 
 | Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
 | --- | --- | --- | --- | --- |
@@ -79,169 +149,41 @@ All four services define CPU and memory constraints in `docker-compose.yml`:
 | `ensemble` | 2 | 2G | 0.5 | 512M |
 | `dashboard` | 1 | 512M | 0.25 | 128M |
 
-These limits document expected resource allocations for the development stack. Adjust them for production workloads or create a compose override file (`docker-compose.override.yml`).
+## Dependencies and Health Checks
 
-## CLI Management (`./g8e docker`)
+The operator, ensemble, and dashboard wait for the gateway's Compose health check. The ensemble also waits for the operator container to start, but not for the operator to become healthy.
 
-The `g8e` CLI provides dedicated management subcommands for the root Docker Compose stack:
+| Service | Compose health check | Readiness meaning |
+| --- | --- | --- |
+| `g8e-gateway` | `wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health` | The gateway health endpoint returns success. |
+| `g8e-operator` | `test -f /root/.g8e/pki/operator.crt` | The operator certificate has been written after enrollment. |
+| `ensemble` | HTTP request to `http://localhost:8000/health` | FastAPI startup, including app enrollment and client initialization, has completed. |
+| `dashboard` | `wget --no-verbose --tries=1 --spider http://localhost:3000/` | Startup enrollment completed and Express is listening. |
 
-| Command | Description |
-| --- | --- |
-| `./g8e docker start` | Start the gateway container (default profile). |
-| `./g8e docker start --full` | Start the full stack and run the interactive enrollment walkthrough. |
-| `./g8e docker start --full --skip-enroll` | Start the full stack without the interactive walkthrough. |
-| `./g8e docker stop` | Stop and remove stack containers while preserving volumes and networks. |
-| `./g8e docker status` | Display container and service status (`docker compose ps`). |
-| `./g8e docker build` | Build all Docker images defined in `docker-compose.yml` (`--no-cache` supported). |
-| `./g8e docker logs [service] [-f]` | Show and stream logs for the stack or a specific service. |
-| `./g8e docker reset [--full]` | Clean containers, volumes, and networks, then restart the stack. |
-| `./g8e docker rebuild [--full]` | Rebuild images and restart the stack (`--no-cache` supported). |
-| `./g8e docker clean` | Remove all containers, volumes, and networks across all profiles. |
+The Dockerfile intentionally has no image-level `HEALTHCHECK` because the same image runs the listening gateway and the outbound-only operator.
 
-## Owner-Approved Platform Bootstrap
+## Service Identity and Storage
 
-Deploying the full stack requires completing the owner-approved platform enrollment sequence:
+The workload services submit owner-approved platform enrollment requests when they do not have reusable credentials:
 
-```bash
-# 1. Start the gateway service.
-docker compose up -d --build
-# Or use the CLI wrapper:
-# ./g8e docker start
+- The operator stores `pki/operator.crt` and `pki/operator.key` in `g8e-operator-data`.
+- The ensemble stores its `spiffe://g8e.local/app/g8ee` identity under `pki/issued/apps/` in `g8e-ensemble-data`.
+- The dashboard stores its `spiffe://g8e.local/app/g8ed` identity under `/data/pki/issued/apps/` in `g8e-dashboard-data` and does not listen until enrollment succeeds.
 
-# 2. Wait for the gateway to become healthy.
-until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
+The ensemble mounts `g8e-operator-data` read-only at `/operator-state`. Its governance client uses the operator certificate and key from that mount for the privileged governance-envelope route; its other gateway clients use the ensemble app identity.
 
-# 3. Enroll the first owner to establish the root of trust and create the CLI mTLS identity.
-./g8e auth enroll user -e localhost
+The gateway runtime volume is mounted at `/root/.g8e` and includes:
 
-# 4. Start the platform workloads in the bootstrapped profile.
-docker compose --profile bootstrapped up -d
+- `data/` for the canonical SQLite database and ledger state
+- `pki/` for generated authorities, serving certificates, identities, and trust bundles
+- `secrets/` for platform secret material
+- `vault/` for encrypted vault state and the default vault key at `vault/key`
 
-# 5. List pending platform enrollment requests submitted by the workloads.
-./g8e auth pending-platform-enrollments
+Removing `g8e-gateway-data` destroys the gateway PKI, owner records, and audit state. The next startup creates a new authority and requires owner and workload enrollment again.
 
-# 6. Approve each request by exact request ID (recommended order: operator, dashboard, ensemble).
-./g8e auth approve-platform-enrollment <operator-request-id> --yes
-./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
-./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
+## Host Identity and Certificates
 
-# 7. Verify that all workloads have completed enrollment and are healthy.
-docker compose ps
-# Or:
-# ./g8e docker status
-```
-
-Alternatively, running `./g8e docker start --full` automates steps 1 through 6 via an interactive walkthrough that enrolls the owner and prompts for approval of each pending component. The gateway console at `https://localhost:8443/console/` also supports listing and approving pending platform enrollment requests in a browser.
-
-The approval commands operate on request IDs only. They never print or accept requester tokens, token hashes, CSR PEM, or certificates. Pending discovery and approval both go through authenticated HTTPS using the CLI mTLS identity created during owner enrollment.
-
-## Headless Gateway-Only Deployment
-
-To run only the gateway without starting the platform workloads, start the default compose profile and enroll the owner using the `--headless` flag:
-
-```bash
-docker compose up -d --build
-./g8e auth enroll user --headless -e localhost
-```
-
-Because `g8e-operator`, `ensemble`, and `dashboard` belong to the `bootstrapped` profile, running `docker compose up -d` without `--profile bootstrapped` starts only `g8e-gateway`. The `--headless` flag on `auth enroll user` completes user bootstrap while skipping the interactive browser-based passkey ceremony, making it suitable for CI, headless servers, and automation environments.
-
-## Demo Environments
-
-Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
-
-- **Healthcare**: FHIR R4 compliance and PHI protection (`demos/healthcare/`).
-- **Finance**: High-integrity ledger and audit requirements (`demos/finance/`).
-- **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture (`demos/dhs/`).
-- **FedRAMP**: Sovereign cloud governance with audit integrity, access control, cross-domain protection, and human-in-the-loop resource destruction approval (`demos/fedramp/`).
-
-To run a demo:
-
-```bash
-cd demos/healthcare
-docker compose up -d --build
-```
-
-Each demo uses its own `compose.yml` file with isolated networks (`net_untrusted`, `net_perimeter`, `net_internal`, `net_secure`, `net_mgmt`), volumes, and doctrine bind mounts. Demos build from the repo-root `Dockerfile` via `context: ../..` in each compose `build` stanza, compiling from source in-container without requiring a pre-built binary. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
-
-Demo stacks follow the same owner-approved platform enrollment bootstrap flow as the root compose file. After starting a demo stack, enroll the first owner against the demo gateway and approve the operator's pending request before dependent services become ready. The `g8e demos start` and `g8e demos run` commands print exact bootstrap instructions, including the demo gateway port and approval commands.
-
-### Consensus Bootstrap Files
-
-Demos that use consensus or notary posture (DHS, FedRAMP) require a bootstrap configuration file:
-
-- **`consensus-bootstrap.json`**: Defines the consensus policy, member app IDs, quorum threshold, and cryptographic seeds for member signing keys. The file supports two key modes:
-  - **`member_seeds`** (preferred): A map of member app IDs to individual hex-encoded Ed25519 seeds. Each member receives its own key pair, ensuring a single compromised key cannot satisfy a multi-member quorum.
-  - **`seed_hex`** (legacy fallback): A single hex-encoded Ed25519 seed shared across all members. When `member_seeds` is omitted but `seed_hex` is provided, the same key is registered for every member.
-
-When `member_seeds` is present, it takes precedence over `seed_hex`. If both are omitted, a fresh key pair is generated and shared across members.
-
-The gateway container mounts `consensus-bootstrap.json` to seed the ConsensusPolicy and trusted signer registry at startup:
-
-```yaml
-# gateway
-volumes:
-  - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
-```
-
-```yaml
-# agent
-volumes:
-  - ./config/consensus-bootstrap.json:/etc/g8e/consensus-bootstrap.json:ro
-```
-
-When `member_seeds` is used, each member signs votes with its own distinct key, and the gateway verifies each signature against the registered public key.
-
-### Gateway Posture in Demos
-
-The DHS and FedRAMP demos boot the gateway in `consensus` posture via the `G8E_GATEWAY_POSTURE` environment variable (default: `consensus`) and maintain it for the entire run. Scenarios execute under this posture without restarting or recreating the gateway mid-demo.
-
-## Configuration
-
-### Port Mapping
-
-The gateway exposes two primary ports:
-- **8080**: HTTP for bootstrap discovery, health checks, CA bundle download, and catch-all redirect to HTTPS.
-- **8443**: HTTPS for MCP, A2A, governance envelopes, document store, WebSocket pub/sub, and the console SPA.
-
-Custom ports are configured via CLI flags or environment variables:
-
-**CLI Example:**
-```bash
-docker run -d \
-  g8e-gateway:latest \
-  gw start -f --posture doctrine --http-port 3000 --https-port 3443
-```
-
-**Compose Example:**
-```yaml
-services:
-  g8e-gateway:
-    ports:
-      - "3000:8080"
-      - "3443:8443"
-    command: ["gw", "start", "-f", "--posture", "consensus"]
-```
-
-Container ports remain 8080 and 8443; only the host-side mapping changes.
-
-### Data Persistence
-
-The gateway maintains state in `/root/.g8e` within the container. This directory contains:
-- **`data/`**: SQLite database.
-- **`pki/`**: TLS certificates and trust bundles.
-- **`secrets/`**: Platform secret keys and vault key.
-- **`vault/`**: Encrypted storage for sensitive materials.
-
-Mount a persistent volume to preserve state across container lifecycles:
-
-```bash
-docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw start -f --posture doctrine
-```
-
-### Host Identity Bind Mounts
-
-So the gateway serving certificate covers the host's real IPs and hostname when the gateway runs in a container, the root `docker-compose.yml` and each demo's `compose.yml` bind-mount the host's `/etc/hosts` and `/etc/hostname` read-only into the container at `/etc/hosts.host` and `/etc/hostname.host`:
+The root Compose file and all four demo gateway services mount Linux host identity files read-only:
 
 ```yaml
 volumes:
@@ -249,89 +191,145 @@ volumes:
   - /etc/hostname:/etc/hostname.host:ro
 ```
 
-The network identity detector reads these host-mounted files before the container's own `/etc/hosts` and `/etc/hostname`, de-duplicating IPs and aliases across both sources. The serving certificate is regenerated on startup when SAN drift is detected (expected IPs or DNS names missing from the existing certificate). See [Network Architecture](../architecture/network.md#8-network-identity-detection) for the detection pipeline.
+In the default `full` certificate identity mode, the detector reads these mounted files before the container's own files and includes detected host IP addresses and DNS aliases. The gateway regenerates its internally managed serving certificate when required SANs are absent. These mounts are Linux-oriented; deployments on other Docker hosts need an equivalent identity and certificate strategy.
 
-### Governance Posture
+`--cert-mode localhost` restricts generated serving identities to the built-in local service names and loopback address. `--cert-mode full` also enables detected network identities. `--pki-dir` changes the gateway's PKI storage directory; it is not an interface for injecting an externally issued serving certificate.
 
-Specify the security posture at startup using the `--posture` flag:
+See [Network Architecture](../architecture/network.md#8-network-identity-detection) for the detector pipeline.
 
-- **`--posture doctrine`**: L1 enforced; L2/L3 audited.
-- **`--posture consensus`**: L1/L2 enforced; L3 audited.
-- **`--posture ratify`**: L1/L3 enforced; L2 audited.
-- **`--posture notary`**: L1/L2/L3 strictly enforced.
+## Ports
 
-## Architecture
+The gateway has two listeners:
 
-### Multi-Stage Build
+- **8080 HTTP**: health, bootstrap discovery, CA bundle download, platform enrollment submission, and redirects for other routes
+- **8443 HTTPS/mTLS**: authenticated APIs, MCP, A2A, governance envelopes, document and blob services, pub/sub, and the console
 
-The `Dockerfile` employs a multi-stage build process:
-
-1. **Build Stage**: Uses `golang:1.26.6` to compile platform binaries via `make build-all`.
-2. **Runtime Stage**: Uses pinned Debian Bookworm (`debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168`) for the execution environment.
-
-The image includes:
-- The `g8e` binary at `/g8e`.
-- All platform binaries at `/opt/g8e/bin/` for node deployment via `/.well-known/g8e/bin/`.
-- Protocol constants at `/protocol/constants`.
-- Reference data at `/docs/reference` (KSI catalog and COSAiS overlays for the compliance CLI).
-- Required utilities including `curl`, `wget`, and `ca-certificates`.
-
-The build links the Go Cryptographic Module v1.0.0 (CMVP Cert #5247) and enters FIPS 140-3 approved mode on startup for linux/amd64 targets. Runtime strict enforcement is configured via `GODEBUG=fips140=only`.
-
-Protocol constants are bundled from the `protocol/` directory. The Python protocol package (`g8e`) can be installed separately:
+Compose host-port mappings leave those container listeners unchanged. In a standalone container, listener flags and published ports must match. For example:
 
 ```bash
-pip install g8e==2.1.7
+docker run -d \
+  --name g8e-gateway-custom-ports \
+  -p 3000:3000 \
+  -p 3443:3443 \
+  -v g8e-custom-data:/root/.g8e \
+  g8e-gateway:latest \
+  gw start -f --posture doctrine --cert-mode localhost --http-port 3000 --https-port 3443
 ```
 
-Or configure `G8E_PROTOCOL_DIR=/protocol` to direct the Python package to bundled constants. See [Protocol Library](../architecture/protocol.md) for details.
+To retain the default container listeners while changing only host ports, publish `3000:8080` and `3443:8443` and omit the listener flags.
 
-### Health Monitoring
+## Governance Postures
 
-The `Dockerfile` does not define an image-level health check because the same image serves as both the gateway (listening on HTTP/HTTPS) and the operator (an outbound-only client). Health checks are declared per-service in `docker-compose.yml`, where each service expresses its own readiness signal.
+`gw start --posture` accepts:
 
-Inspect container health status with:
+- `doctrine`: L1 enforced; L2 and L3 audited
+- `consensus`: L1 and L2 enforced; L3 audited
+- `ratify`: L1 and L3 enforced; L2 audited
+- `notary`: L1, L2, and L3 strictly enforced
+
+The root Compose gateway does not pass `--posture`, so the CLI default is `doctrine`. Consensus and notary deployments also require their corresponding policy and proof configuration; selecting a posture alone does not create those inputs.
+
+## CLI Lifecycle Commands
+
+All `./g8e docker` commands require the repository-root `docker-compose.yml` in the current directory.
+
+| Command | Current behavior |
+| --- | --- |
+| `./g8e docker start` | Runs `docker compose up -d` for the default gateway-only profile. |
+| `./g8e docker start --full` | Starts the `bootstrapped` profile and runs the interactive enrollment walkthrough. |
+| `./g8e docker start --full --skip-enroll` | Starts the full profile without enrollment prompts. |
+| `./g8e docker stop` | Runs Compose `down` against the full profile. It removes containers and the Compose network but preserves named volumes. |
+| `./g8e docker status [--profile bootstrapped]` | Runs Compose `ps`. |
+| `./g8e docker build [--no-cache]` | Builds images with a source build ID; the command targets the full profile by default. |
+| `./g8e docker logs [service] [-f] [--profile bootstrapped]` | Prints or follows Compose logs, optionally for one Compose service name. |
+| `./g8e docker reset [--full] [--profile bootstrapped]` | Removes containers, volumes, and networks, then starts the selected scope. This destroys persisted state. |
+| `./g8e docker rebuild [--full] [--profile bootstrapped]` | Runs Compose down, build, and up. `--no-cache` defaults to true; use `--no-cache=false` to reuse the cache. |
+| `./g8e docker clean` | Removes containers, volumes, networks, and orphans across the full profile. Confirmation is skipped by default; use `--yes=false` to request a prompt. |
+
+`reset` and `clean` are destructive because they pass `down -v`. Back up any required runtime evidence before using them.
+
+## Headless Gateway-Only Enrollment
+
+For an mTLS-only CLI identity without browser passkey registration or OS trust installation:
+
+```bash
+docker compose up -d --build
+./g8e auth enroll user --headless -e localhost
+```
+
+On an unbootstrapped gateway, this creates the first CLI owner identity without a passkey. On a gateway that already has an owner, headless recovery requires approval from an already enrolled CLI. A headless identity cannot authenticate to the browser console, so retain at least one passkey-enabled owner identity when console access or L3 WebAuthn approval is required.
+
+## Demo Compose Environments
+
+The repository contains separate Healthcare, Finance, DHS, and FedRAMP deployments under `demos/`. These are isolated compliance demonstrations, not extensions of the root unified stack. Each uses five named network tiers and excludes the root stack's ensemble and dashboard services.
+
+Use the demos CLI for the documented lifecycle and bootstrap instructions:
+
+```bash
+./g8e demos start healthcare
+./g8e demos status healthcare
+./g8e demos scenarios list healthcare
+```
+
+Direct Compose usage runs from the selected demo directory:
+
+```bash
+cd demos/healthcare
+docker compose up -d --build
+```
+
+Each demo builds the shared Go image from the repository-root Dockerfile through `context: ../..`. See [Demos](../../demos/README.md) for service topologies, ports, enrollment commands, and scenarios.
+
+### Consensus demo bootstrap
+
+The DHS and FedRAMP gateway services default `G8E_GATEWAY_POSTURE` to `consensus` and mount `config/consensus-bootstrap.json` into the gateway and scenario agent containers. Their checked-in files use `member_seeds`, which derives a distinct Ed25519 key pair for each configured member. The gateway also supports a shared `seed_hex` fallback and generates a shared key when neither seed form is present; `member_seeds` takes precedence when supplied.
+
+These deterministic seeds are demo fixtures. Production consensus keys require deployment-specific secret management rather than checked-in bootstrap seeds.
+
+## Image Contents and FIPS Mode
+
+The multi-stage Dockerfile uses `golang:1.26.6` for the builder and a digest-pinned Debian 12 Bookworm runtime image. It installs the shared binary at `/g8e`, copies cross-platform deployment binaries to `/opt/g8e/bin/`, protocol constants to `/protocol/constants`, and compliance reference data to `/docs/reference`.
+
+Linux binaries are built with Go Cryptographic Module v1.0.0 support. The linux/amd64 image enters FIPS approved mode, but strict enforcement is off by default so non-approved primitives used by features such as Ed25519 consensus remain available. Set `GODEBUG=fips140=only` only for a deployment whose selected features use approved primitives, and verify the running image directly:
+
+```bash
+docker run --rm g8e-gateway:latest version --fips
+docker run --rm -e GODEBUG=fips140=only g8e-gateway:latest version --fips
+```
+
+The second command enables strict enforcement for that process. It can make features that require non-approved primitives fail closed.
+
+## Operations and Troubleshooting
+
+Inspect status and logs with Compose service names:
+
+```bash
+docker compose --profile bootstrapped ps
+docker compose --profile bootstrapped logs -f g8e-gateway
+./g8e docker logs g8e-operator -f --profile bootstrapped
+```
+
+Inspect container health with the configured container-name prefix:
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway
 docker inspect --format='{{.State.Health.Status}}' g8e-operator
-docker inspect --format='{{.State.Health.Status}}' g8e-ensemble
-docker inspect --format='{{.State.Health.Status}}' g8e-dashboard
 ```
 
-## Troubleshooting
-
-### Log Inspection
-
-```bash
-# Gateway logs
-docker logs g8e-gateway
-
-# Full compose logs
-docker compose logs -f
-
-# Follow logs via CLI
-./g8e docker logs -f
-```
-
-### Service Status
-
-Verify the internal state of the gateway:
+Query gateway process state inside the container:
 
 ```bash
 docker exec g8e-gateway /g8e gw status
 ```
 
-Or check container status with the CLI:
+If workload enrollment is pending, list requests and inspect the corresponding service logs. If volumes were removed, discard assumptions about prior trust: the gateway has a new authority, and the owner and workloads must enroll again.
 
-```bash
-./g8e docker status
-```
+## Production Deployment Notes
 
-## Production Considerations
+The root Compose file is a single-host reference deployment. A production deployment supplies deployment-specific orchestration, secret backup and recovery, resource sizing, monitoring, and ingress controls.
 
-- **Base Image**: The runtime image uses Debian Bookworm slim. Maintain regular updates to the base image for security patches.
-- **Resource Constraints**: The root `docker-compose.yml` defines per-service CPU and memory limits (see Resource Limits above). Adjust these for production workloads.
-- **Vault Management**: The vault auto-initializes on first run with a generated key. Use `G8E_VAULT_KEY` to override the default key file path, or `--vault-key` to specify it via CLI. The vault must be unlocked at startup; if the key cannot be read, the gateway fails to start.
-- **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
-- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through the Docker network alias on the shared bridge network. Ensure this hostname matches the gateway certificate SANs in production deployments. On first start with no installed credentials, the operator performs owner-approved platform enrollment against this endpoint and waits for approval before it becomes ready. See Owner-Approved Platform Bootstrap above.
+- Terminate public browser traffic with trusted HTTPS and configure the gateway public URL, CORS origins, passkey RP ID, and passkey origins to exactly match the browser-visible deployment. The root Compose defaults use plain HTTP for the dashboard and are intended for localhost development.
+- Persist and protect the complete gateway runtime volume. The vault key defaults to `/root/.g8e/vault/key`; `G8E_VAULT_KEY` or `--vault-key` changes that path, not the key value.
+- Treat the generated root authority and serving keys as production secrets. `--cert-mode full` controls SAN discovery but does not replace the internal PKI with a public certificate authority.
+- Keep `g8e.local` resolvable inside the service network because the operator and ensemble connect to that name. The Compose network alias provides resolution, and the gateway includes `g8e.local` in its serving certificate.
+- Verify FIPS mode and enforcement on the deployed process with `g8e version --fips`; do not infer enforcement from build configuration alone.

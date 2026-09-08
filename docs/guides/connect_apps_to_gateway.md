@@ -51,7 +51,7 @@ Starting the gateway creates the `.g8e` directory structure:
 - `.g8e/vault/` - Encryption vault for data at rest
 - `.g8e/logs/` - Component logs
 
-The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). The `--posture` flag controls which of the first three governance layers are enforced as fail-closed gates versus audited. Layers L4 (Warden, pre-dispatch verification) and L5 (Actuator, isolated tool dispatch with signed receipts) are always enforced regardless of posture. To run in different enforcement modes, use the `--posture` flag:
+The g8e Gateway defaults to the `doctrine` posture. The `--posture` flag selects which of the first three governance layers are fail-closed gates and which are audit-only. Layers L4 (Warden, pre-dispatch verification) and L5 (Actuator, isolated tool dispatch with signed receipts) always run regardless of posture. The reference Gateway supports four postures:
 
 #### Doctrine Mode (Default)
 
@@ -69,9 +69,17 @@ Enforces L1 and L2 (multi-signature Byzantine consensus). L3 notary signature is
 ./g8e gw start --posture consensus
 ```
 
+#### Ratify Mode
+
+Enforces L1 and L3 (human approval through WebAuthn or an authenticated CLI proof). L2 consensus is audited but not required.
+
+```bash
+./g8e gw start --posture ratify
+```
+
 #### Notary Mode
 
-Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure posture.
+Enforces L1, L2, and L3. Mutations require both L2 consensus and L3 approval.
 
 ```bash
 ./g8e gw start --posture notary
@@ -83,16 +91,16 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery endpoints, deploy scripts |
-| **HTTPS Surface** | 8443 (TLS) | Per-route: public, mTLS, web session, or dual | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
+| **HTTP Surface** | 8080 (HTTP) | Public or token-scoped | Health checks, bootstrap and platform enrollment discovery, CLI recovery request/status/complete, PKI discovery endpoints, deploy scripts |
+| **HTTPS Surface** | 8443 (TLS) | Per route: public, mTLS, web session, dual, or JWT for MCP/A2A when JWKS is configured | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, SSE, and the console SPA |
 
 ### Port Separation
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, CLI recovery request/status/complete (token-scoped), PKI discovery, and deploy scripts. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
-- **HTTPS Surface**: TLS-protected surface for all governance, MCP, A2A, document store, WebSocket, and console routes. Every route is classified into one of four auth modes: public (no auth), mTLS (client certificate required), web session (cookie-based browser auth), and dual (mTLS preferred, cookie fallback).
+- **HTTP Surface**: Plain HTTP for health checks, initial bootstrap, token-scoped CLI recovery and platform enrollment request/status/completion, PKI discovery, and deploy scripts. No MCP, A2A, governance, document-store, pub/sub, or other authenticated mutation endpoints are exposed on this surface.
+- **HTTPS Surface**: TLS-protected surface for governance, MCP, A2A, document store, WebSocket, SSE, and console routes. Every route is classified as public, mTLS-only, web-session-only, or dual (mTLS preferred with cookie fallback). When JWKS authentication is configured, the MCP and A2A handlers validate JWTs instead of relying on the main mTLS middleware.
 
-Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS. mTLS routes require a valid client certificate. Web session routes validate a session cookie. Dual routes try mTLS first and fall back to cookie auth.
+Public routes such as health, the console SPA, bootstrap, passkey console, and the approval redirect page bypass mTLS. mTLS routes require a valid client certificate and an accepted SPIFFE identity. Web-session routes validate the `g8e_web_session_cookie` cookie. Dual routes try mTLS first and fall back to that cookie.
 
 Port mixing is prohibited. The gateway fails startup if the HTTP and HTTPS surfaces are assigned to the same port, as this would conflate plain-HTTP bootstrap routes with TLS-protected API routes.
 
@@ -115,6 +123,17 @@ The Gateway provides a unified health endpoint across all services for consisten
 ---
 
 ## Connectivity Methods
+
+The command-line examples use an enrolled CLI identity. `./g8e auth enroll user` stores that identity under `.g8e/pki/` and normally installs the Gateway root CA in the operating-system trust store. On systems where the root is not installed, add `--cacert .g8e/pki/trust/g8eg-ca-bundle.pem` to each `curl` command. A deployed service instead uses its own app certificate and private key as described in [Application Enrollment](#application-enrollment).
+
+The credential determines authorization as well as transport authentication:
+
+| Credential | Primary surfaces | Important restrictions |
+|---|---|---|
+| CLI or Operator mTLS certificate | Direct governance envelopes, data APIs, audit, PKI management, MCP, and A2A | The certificate identity and active session must match request context. |
+| App mTLS certificate | MCP, A2A, WebSocket pub/sub, SSE producer APIs, and policy-authorized data APIs | App identities cannot submit directly to `/api/v1/governance/envelopes`; the Gateway constructs envelopes for MCP, A2A, and `cmd:` pub/sub intents. App policy controls limits and access. |
+| Web session cookie | Browser user, passkey, approval, and SSE consumer routes | Browser requests use `credentials: 'include'`; this credential is not accepted by mTLS-only routes. |
+| JWT | MCP and A2A only when Gateway JWKS authentication is configured | The configured issuer, audience, role, and token signature are validated. |
 
 ### 1. MCP (Model Context Protocol)
 
@@ -190,16 +209,16 @@ All native tools enforce fail-closed input validation.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/mcp` | POST/GET | Unified MCP JSON-RPC endpoint (POST for dispatch, GET for SSE heartbeat) |
+| `/mcp` | POST, GET | Streamable HTTP MCP endpoint: POST dispatches JSON-RPC requests and GET opens an SSE connection with keepalive events. |
 
 #### MCP Unified Endpoint Tool Invocation
 
-The `/mcp` endpoint is the sole MCP surface for AI IDEs. It implements the JSON-RPC 2.0 dispatch contract:
+The `/mcp` endpoint is the sole MCP surface. Standard clients begin with `initialize`, send `notifications/initialized`, discover tools with `tools/list`, and invoke a tool with `tools/call`. The Gateway currently negotiates MCP protocol version `2025-06-18` by default and echoes a client-supplied protocol version. The following direct request demonstrates tool invocation after client setup:
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -239,7 +258,7 @@ The Gateway provides a special `read_field` tool for governed field access with 
 
 ### 2. A2A (Agent-to-Agent)
 
-A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway applies the same governance verification to A2A skill calls as it does to MCP tool calls.
+A2A is a JSON-RPC 2.0 HTTP protocol for agent skill invocation. The Gateway applies the same governance pipeline to A2A skill calls as it does to MCP tool calls. The reference Gateway does not provide a built-in A2A skill catalog; start it with `--a2a-downstream-url <url>` before invoking skills supplied by a downstream A2A server.
 
 #### A2A Endpoints
 
@@ -251,16 +270,16 @@ A2A is an HTTP/JSON protocol for agent skill invocation. The Gateway applies the
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "method": "a2a/call",
     "params": {
-      "skill_name": "file.read",
+      "skill_name": "<downstream-skill-name>",
       "payload": {
-        "path": "/etc/hosts"
+        "input": "<skill-input>"
       }
     },
     "id": 1
@@ -271,42 +290,38 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
 
 ### 3. Direct Governance Envelope
 
-Applications can submit canonical JSON `GovernanceEnvelope` transactions directly. This is the only customer-facing mutation API on the Gateway.
+Authenticated CLI and Operator clients can submit canonical protojson `GovernanceEnvelope` transactions directly. This is the direct mutation API for clients that construct complete envelopes themselves. App certificates are intentionally blocked from this route; app workloads submit MCP calls, A2A calls, or `CommandIntent` messages on authorized `cmd:` channels so the Gateway constructs and verifies the envelope.
 
 #### Envelope Submission
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
 
-The envelope `id` must match the transaction hash computed from the envelope fields. The Gateway rejects envelopes with mismatched IDs.
+Both envelope `id` and `transaction_hash` must equal the canonical transaction hash computed from the hashed envelope fields. The Gateway rejects a missing or mismatched value. The wire body uses protobuf JSON field names and encodings; construct it with the protocol library rather than ad hoc JSON.
 
 ---
 
 ### 4. WebSocket Pub/Sub
 
-The Gateway provides real-time pub/sub via WebSocket for streaming events and command dispatch.
+The Gateway provides mTLS-authenticated real-time pub/sub at `wss://<gateway>:8443/api/v1/pubsub/stream`. The WebSocket wire format is binary protobuf, not JSON: clients encode and decode `g8e.pubsub.v1.PubSubMessage` frames from the protocol library.
 
-#### WebSocket Connection
+#### Pub/Sub Actions and Channels
 
-```bash
-wscat -c wss://localhost:8443/api/v1/pubsub/stream \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key
-```
+Clients send `subscribe`, `psubscribe`, `unsubscribe`, and `publish` actions. A successful exact or pattern subscription returns a protobuf acknowledgment before event delivery. Topic ACLs bind subscriptions and publications to the authenticated certificate identity; broad cross-operator patterns such as `heartbeat:*` are rejected.
 
-#### Pub/Sub Channels
+Canonical operator channels include:
 
-- **Mutation channels**: `cmd:*` (governed, require envelope submission)
-- **Non-mutation channels**: `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`
+- `cmd:<operator_id>:<operator_session_id>` for app-to-Operator command intents. An authorized app publishes canonical protojson `CommandIntent` data; the Gateway validates the target session and constructs the governed envelope.
+- `results:<operator_id>:<operator_session_id>` and `heartbeat:<operator_id>:<operator_session_id>` for Operator output and liveness.
+- `receipts:<operator_id>:<operator_session_id>` for signed Operator receipts. The Gateway verifies, persists, and relays valid receipts.
+- Session-scoped `sse:` and `ws_session:` channels used by the Gateway event bridges.
 
-#### Subscribe Protocol
-
-To subscribe, send a message with the `subscribe` action and the desired channel name. The broker confirms with a `subscribed` acknowledgment frame before delivering any messages.
+Use a protobuf-capable WebSocket client for application integration. A text-oriented client such as `wscat` can verify the TLS upgrade but cannot directly produce the required protobuf frames.
 
 ---
 
@@ -319,32 +334,32 @@ The Gateway provides a JSON document store with CRUD operations and query suppor
 ```bash
 # Get document
 curl https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key
 
 # Set document (allowed on infrastructure collections)
 curl -X PUT https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{"posture": "doctrine"}'
 
 # Update document (merge)
 curl -X PATCH https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{"posture": "consensus"}'
 
 # Delete document
 curl -X DELETE https://localhost:8443/api/v1/data/settings/platform_settings \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key
 
 # Query documents
 curl -X POST https://localhost:8443/api/v1/data/cases/_query \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "filters": [
@@ -413,7 +428,7 @@ Generate a client certificate for CLI operations:
 This:
 1. Generates a CSR (Certificate Signing Request)
 2. Receives a signed client certificate with SPIFFE URI SAN
-3. Stores the client certificate in `.g8e/cli.crt` and private key in `.g8e/cli.key`
+3. Stores the client certificate in `.g8e/pki/cli.crt` and private key in `.g8e/pki/cli.key`
 4. Opens a browser to register a WebAuthn/FIDO2 passkey for web session authentication
 
 CLI sessions use the mTLS certificate fingerprint as L3 proof. The passkey enables browser-based authentication for console and approval flows.
@@ -428,19 +443,19 @@ For web-based interactions:
 
 Web sessions use WebAuthn signatures as L3 proof.
 
-### CSR-Based Enrollment
+### CSR-Based mTLS Enrollment
 
-CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret, a client generates its own key pair and asks the Gateway to sign a certificate attesting the identity. The Gateway acts as a Certificate Authority (CA). Starting the Gateway is itself the Platform Owner's authorization; there are no invite codes, pre-shared keys, or manual approval steps. The client proves its identity on every subsequent call via mTLS. No shared secrets, no API keys to leak.
+CSR-based enrollment gives CLI, Operator, and app workloads cryptographic identities without transferring their private keys to the Gateway. The client generates a P-256 key and CSR, the Gateway authorizes the enrollment path, and the issued certificate carries one or more SPIFFE URI SANs. Browser sessions use WebAuthn rather than client certificates, and MCP/A2A clients may use JWT authentication when the Gateway has JWKS configured.
 
-All authentication to the Gateway uses CSR-based enrollment. The first human to authenticate via `./g8e auth enroll user` becomes the Platform Owner. All other entities (operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
+The first successful `./g8e auth enroll user` against an unbootstrapped Gateway creates the first user and CLI session; that user is the platform owner. Later CLI enrollment on an already bootstrapped Gateway uses the one-time human-approved recovery flow. External apps use delegated enrollment backed by an enrolled human CLI. Reserved first-party platform components use the separate owner-approved platform enrollment protocol.
 
-#### Enrollment Flow
+#### mTLS Enrollment Properties
 
-1. **Client generates key pair and CSR**: The entity (device, app, or user) creates a private key and a Certificate Signing Request (CSR) that states the desired identity (e.g., `spiffe://g8e.local/app/etl-service`)
-2. **Gateway validates and signs**: The Gateway (acting as CA) issues a signed mTLS certificate with a SPIFFE URI SAN
-3. **Client receives certificate**: The client gets its signed certificate (such as `.g8e/cli.crt` or `.g8e/pki/issued/apps/<name>.crt`) and uses it with its private key for all subsequent authentication
-4. **Short-lived by design**: Leaf certificates expire after 7 days, limiting the lifetime of a compromised key
-5. **Certificate renewal**: Clients must re-enroll before certificate expiry. The enrollment coordinator reuses valid credentials without rotation; use `--rotate-cli` to force rotation. Partial or corrupt credentials trigger the one-time human-approved recovery flow.
+1. **Private key ownership**: The client creates and retains its private key and submits only a signed CSR.
+2. **SPIFFE identity**: The Gateway issues a certificate with an identity appropriate to the enrollment path, such as `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` or `spiffe://g8e.local/app/<app_name>`.
+3. **Trust material**: The enrollment response or runtime tree supplies the certificate chain and Gateway trust bundle needed for server verification.
+4. **Short lifetimes**: Standard leaf certificates and CLI sessions have a seven-day lifetime. Delegated external-app certificates have a one-hour lifetime.
+5. **Renewal**: The CLI enrollment coordinator reuses complete valid credentials and rotates an expiring identity; `--rotate-cli` forces rotation. External apps request another delegated certificate before expiry. Reserved platform components resume their owner-approved enrollment workflow as needed.
 
 #### Device Enrollment
 
@@ -448,36 +463,86 @@ For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI se
 
 #### Application Enrollment
 
-Applications enroll via the owner-approved platform enrollment protocol to obtain an app identity (`spiffe://g8e.local/app/<appname>`). The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending enrollment requests. For delegated credential enrollment (where a human CLI session vouches for the app), use the `/api/v1/pki/apps/delegated` endpoint with mTLS authentication.
+External applications use delegated enrollment. An enrolled human CLI authenticates `POST /api/v1/pki/apps/delegated`, vouches for the application, and submits a P-256 CSR with `app_name`, `app_type`, and optional `organization_id`. The Gateway returns a one-hour certificate containing both the app identity and requesting-user identity, its chain, the trust bundle, the SPIFFE app ID, and the expiry time. It also creates the default `AppPolicy` required by app authentication. Delegated enrollment establishes identity only; it does not grant L2 consensus signing authority.
 
-Two in-tree components enroll via this protocol at startup using the same nine-step resumable sequence (load-or-validate installed identity, load persisted pending attempt, generate keys and submit request if no resumable attempt exists, print approval instructions, poll status with bounded backoff, sign the canonical completion transcript, validate the response, write credentials atomically, and start the main service only after the active identity loads):
+The following example creates an app key and CSR, builds the JSON request without flattening PEM newlines, and enrolls the app with the local CLI identity:
 
-- **Ensemble (g8ee)** — `ensemble/app/services/infra/app_enrollment_service.py` enrolls as app name `g8ee` to obtain `spiffe://g8e.local/app/g8ee`. Runs as Phase 0.25 of the FastAPI lifespan. Pending state persists to `pki/pending-enrollment/g8ee.json` with 0600 permissions; enrolled credentials persist in the `g8e-ensemble-data` volume. See [Ensemble (g8ee)](../architecture/ensemble.md) and the [g8ee documentation](../ensemble/index.md) for the component-level enrollment and runtime details.
-- **Dashboard (g8ed)** — `dashboard/services/infra/app-enrollment-service.js` enrolls as app name `g8ed` to obtain `spiffe://g8e.local/app/g8ed`. Runs as an async startup phase before `app.listen()`. Pending state persists to `pki/pending-enrollment/g8ed.json` with 0600 permissions; enrolled credentials persist in the `g8e-dashboard-data` volume. The dashboard's browser SPA still authenticates via WebAuthn passkeys; the container's mTLS identity is available to prepared server-to-server gateway clients, which the current static host does not construct. See [Dashboard (g8ed)](../architecture/dashboard.md), the [g8ed documentation](../dashboard/index.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) § In-Tree Dashboard Server-to-Server mTLS Enrollment.
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out etl-service.key
+openssl req -new -key etl-service.key -subj "/CN=etl-service" -out etl-service.csr
+python3 - <<'PY'
+import json
+from pathlib import Path
 
-Both consume the same owner-approved platform enrollment contract: submit a platform enrollment request (with a P-256 CSR and system fingerprint) to the gateway's plain-HTTP discovery surface, wait for the owner to approve the request by exact request ID via authenticated mTLS, sign the canonical completion transcript, validate the response, and write the returned app cert, cert chain, private key, and trust bundle to the app's own runtime tree under `pki/issued/apps/<name>.crt`, `<name>.key`, and `pki/trust/hub-bundle.pem`. See [auth.md](../architecture/auth.md) §1.5 for the full protocol.
+request = {
+    "csr_pem": Path("etl-service.csr").read_text(),
+    "app_name": "etl-service",
+    "app_type": "custom",
+}
+Path("etl-service-enrollment.json").write_text(json.dumps(request))
+PY
+curl -X POST https://localhost:8443/api/v1/pki/apps/delegated \
+  --cacert .g8e/pki/trust/g8eg-ca-bundle.pem \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
+  -H "Content-Type: application/json" \
+  -d @etl-service-enrollment.json \
+  -o etl-service-enrollment-response.json
+```
+
+The app retains `etl-service.key`; the Gateway never returns the private key. Persist `app_cert`, `cert_chain`, and `trust_bundle` from the response with private-file permissions. Present the leaf certificate followed by its chain when connecting:
+
+```bash
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+response = json.loads(Path("etl-service-enrollment-response.json").read_text())
+if not response.get("success"):
+    raise RuntimeError(response.get("error", "app enrollment failed"))
+Path("etl-service.crt").write_text(response["app_cert"])
+Path("etl-service-chain.pem").write_text(response["app_cert"] + response["cert_chain"])
+Path("g8eg-ca-bundle.pem").write_text(response["trust_bundle"])
+for path in ("etl-service.key", "etl-service.crt", "etl-service-chain.pem", "g8eg-ca-bundle.pem"):
+    os.chmod(path, 0o600)
+PY
+curl -X POST https://localhost:8443/mcp \
+  --cacert g8eg-ca-bundle.pem \
+  --cert etl-service-chain.pem \
+  --key etl-service.key \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+The reserved first-party names `g8ed`, `g8ee`, and `g8eo` cannot use delegated enrollment. Those components use the owner-approved platform enrollment endpoints under `/api/v1/auth/platform-enrollments/`: request, status, and completion are token-scoped discovery operations available over plain HTTP, while pending-list and decision operations require the active first owner through mTLS or a web session. The resumable client generates keys, submits its request, waits for an exact request-ID decision, signs the completion transcript, validates the issued identity, and writes credentials atomically.
+
+The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that reserved-component flow during startup. See [Authentication Architecture](../architecture/auth.md), [Ensemble Architecture](../architecture/ensemble.md), [Dashboard Architecture](../architecture/dashboard.md), and [Build a g8e-Compatible Frontend](./build_frontend.md) for their component-specific behavior.
 
 ---
 
 ## GUI Enrollment
 
-The `g8e auth enroll gui` command manages external frontend application enrollment (React, Lovable, custom apps) with the g8e Gateway. Enrollment persists the frontend's origin in a local enrollment file and verifies that the running gateway was started with the correct `--cors-origin` and `--passkey-rp-origin` flags for that origin. The gateway is not restarted during enrollment; it must be started with the right flags beforehand.
+The `g8e auth enroll gui` command tree manages local integration metadata for external browser frontends such as React or Lovable applications. It does not create a server-side app identity, change Gateway configuration, or restart the Gateway. The running Gateway must already have matching CORS and WebAuthn settings.
 
-After enrollment, the frontend can:
+The current `gui enroll` implementation sends its CORS preflight to the plain-HTTP health endpoint, while the plain-HTTP router does not apply the Gateway CORS middleware. Consequently, `gui enroll` fails its preflight before it persists `.g8e/gui_enrollments.json`, even when the HTTPS surface has the requested origin configured. The browser integration itself uses the HTTPS surface and can be configured with the Gateway flags below. `gui verify` only prints a manual checklist; it does not execute those checks. Treat the GUI enrollment commands as local tooling with this current limitation, not as a server-side authorization step.
+
+With the HTTPS CORS and WebAuthn settings configured, the frontend can:
 - Authenticate users via WebAuthn passkeys
 - Receive SSE (Server-Sent Events) live streams
 - Make authenticated API calls with session cookies
 
 ### Prerequisites
 
-- g8e Gateway running with CORS and passkey RP origin flags set for the frontend origin (e.g., `g8e gw start --cors-origin https://my-app.lovable.app --passkey-rp-origin https://my-app.lovable.app`)
-- Frontend application served on a known origin (e.g., `http://localhost:3003`, `https://my-app.lovable.app`)
+- Frontend application served on a known origin, such as `http://localhost:3003` or `https://my-app.lovable.app`.
+- Gateway running with that exact origin in both `--cors-origin` and `--passkey-rp-origin`.
+- For a non-localhost frontend, `--passkey-rp-id` set to the frontend hostname or a registrable parent-domain suffix. For example: `./g8e gw start --cors-origin https://my-app.lovable.app --passkey-rp-origin https://my-app.lovable.app --passkey-rp-id my-app.lovable.app`. The Gateway has one RP ID, so all configured browser origins must be valid for that RP ID.
 
 ### Commands
 
 #### `g8e auth enroll gui enroll`
 
-Enroll a frontend application origin with the gateway.
+Attempt to validate and persist a frontend origin in the local enrollment file. This command currently encounters the plain-HTTP CORS limitation described above.
 
 ```bash
 g8e auth enroll gui enroll --origin <url> [flags]
@@ -485,18 +550,18 @@ g8e auth enroll gui enroll --origin <url> [flags]
 
 Flags:
 - `--origin` (required): Frontend application origin URL (e.g., `https://my-app.lovable.app`)
-- `--passkey-rp-id`: Passkey RP ID (defaults to the origin's hostname)
-- `--passkey-rp-name`: Passkey RP display name (default: `g8e`)
-- `--public-base-url`: Public base URL for the gateway (e.g., `https://console.g8e.ai`)
+- `--passkey-rp-id`: RP ID printed in the generated frontend snippet. When omitted, the command uses the parsed origin host value; specify this flag explicitly for origins containing a port. This option does not reconfigure the running Gateway, whose `--passkey-rp-id` must match.
+- `--passkey-rp-name`: RP display name printed in the snippet (default: `g8e`).
+- `--public-base-url`: Gateway base URL printed in the snippet. The command checks reachability and emits a warning, rather than failing, if this URL cannot be reached.
 
 The command:
 1. Validates the origin URL
-2. Sends a CORS preflight request to the running gateway to verify the origin is in its allowed origins
-3. If `--public-base-url` is provided, verifies the gateway is reachable at that URL
-4. Persists the origin to `gui_enrollments.json` in the g8e runtime directory
-5. Outputs a TypeScript configuration snippet for the frontend developer
+2. Sends an `OPTIONS` preflight to the plain-HTTP health endpoint on the default localhost port and checks `Access-Control-Allow-Origin`.
+3. If `--public-base-url` is provided, checks its health endpoint and prints a warning if the check fails.
+4. Persists the origin to `.g8e/gui_enrollments.json`.
+5. Outputs a TypeScript configuration snippet for the frontend developer.
 
-If the gateway is not running or does not have the origin configured, the command fails with an error indicating which flags to use when starting the gateway.
+The enrollment and verification commands construct their local URLs with the default localhost ports 8080 and 8443; they do not discover custom `--http-port` or `--https-port` values. Persistence and snippet output happen only after the preflight succeeds. In the current Gateway, the plain-HTTP health response has no CORS headers, so that preflight does not succeed.
 
 #### `g8e auth enroll gui show`
 
@@ -539,12 +604,12 @@ Checks enrollment status and prints a verification checklist with gateway endpoi
 
 ### Frontend Integration Checklist
 
-After enrollment, the frontend developer must:
+The frontend integration uses these settings:
 
 - **CORS**: All `fetch` calls must include `credentials: 'include'`
-- **Passkey RP**: The RP ID must match the gateway's hostname (derived from the origin or set via `--passkey-rp-id`)
-- **SSE**: `EventSource` must use `withCredentials: true`
-- **Session cookie**: The gateway sets a session cookie with cross-origin attributes for enrolled origins
+- **Passkey RP**: The RP ID returned in WebAuthn options must equal the Gateway's configured RP ID and must be the frontend origin hostname or a registrable suffix of it. RP IDs never include a scheme or port.
+- **SSE**: Construct `EventSource` with `{ withCredentials: true }`. The Gateway derives the user and web-session route from the authenticated cookie; do not send `web_session_id` in the query string.
+- **Session cookie**: The Gateway sets the HttpOnly, Secure `g8e_web_session_cookie`. When any cross-origin origin is configured, the cookie uses `SameSite=None`; otherwise it uses `SameSite=Lax`.
 
 #### Key Endpoints
 
@@ -557,16 +622,18 @@ After enrollment, the frontend developer must:
 | `/api/v1/auth/passkeys/console/authenticate/challenge` | POST | Begin passkey authentication |
 | `/api/v1/auth/passkeys/console/authenticate/verify` | POST | Verify passkey authentication |
 | `/api/v1/users/me` | GET | Get current user (requires session) |
-| `/api/v1/sse/stream` | GET | SSE live events (requires session; web_session_id from cookie) |
+| `/api/v1/sse/stream` | GET | SSE live events; the authenticated cookie supplies the user and web-session route |
 | `/api/v1/approvals` | GET | List pending approvals (requires session) |
 
 ### Example: Lovable Integration
 
 ```bash
-# Enroll a Lovable app
-g8e auth enroll gui enroll --origin https://my-app.lovable.app
+./g8e gw start \
+  --cors-origin https://my-app.lovable.app \
+  --passkey-rp-origin https://my-app.lovable.app \
+  --passkey-rp-id my-app.lovable.app
 
-# The command outputs a TypeScript snippet:
+# Configure the frontend directly; gui enroll currently fails its HTTP preflight.
 # const API_BASE_URL = 'https://localhost:8443';
 # const PASSKEY_RP_ID = 'my-app.lovable.app';
 # const PASSKEY_RP_NAME = 'g8e';
@@ -577,10 +644,13 @@ Paste the configuration snippet into your Lovable project and follow the [Lovabl
 ### Example: Custom React App
 
 ```bash
-# Enroll a local React dev server
-g8e auth enroll gui enroll --origin http://localhost:3000
+./g8e gw start \
+  --cors-origin http://localhost:3000 \
+  --passkey-rp-origin http://localhost:3000 \
+  --passkey-rp-id localhost
 
-# Verify connectivity
+# Configure the frontend with API_BASE_URL=https://localhost:8443 and PASSKEY_RP_ID=localhost.
+# This prints the current manual checklist; it does not perform the checks.
 g8e auth enroll gui verify --origin http://localhost:3000
 ```
 
@@ -589,22 +659,24 @@ g8e auth enroll gui verify --origin http://localhost:3000
 #### CORS Errors
 
 If the browser blocks requests with CORS errors:
-- Verify the origin is enrolled: `g8e auth enroll gui show`
-- Verify the gateway was started with `--cors-origin` and `--passkey-rp-origin` flags for this origin
-- Check that `credentials: 'include'` is set on all fetch calls
+- Verify the Gateway was started with the frontend's exact origin in `--cors-origin`; the local `gui_enrollments.json` file does not affect server authorization.
+- Verify the same origin is present in `--passkey-rp-origin` for WebAuthn ceremonies.
+- Check that `credentials: 'include'` is set on all `fetch` calls.
 
 #### Passkey RP Mismatch
 
 If WebAuthn registration fails with "RP ID does not match":
-- The RP ID must be a registrable domain suffix of the origin's hostname
-- Use `--passkey-rp-id` to set a custom RP ID (e.g., `g8e auth enroll gui enroll --origin https://app.example.com --passkey-rp-id example.com`)
+- Verify the Gateway was started with an RP ID that is the frontend origin hostname or a registrable suffix; it must not include a scheme or port.
+- Keep the generated frontend configuration aligned with the same value, for example `g8e auth enroll gui enroll --origin https://app.example.com --passkey-rp-id example.com`.
+- Restart the Gateway with `--passkey-rp-id example.com --passkey-rp-origin https://app.example.com` if its active configuration differs.
 
 #### SSE Connection Refused
 
 If SSE connections fail:
-- Verify the session is authenticated (passkey authentication completed)
-- Check that `withCredentials: true` is set on the `EventSource`
-- The `web_session_id` parameter must match the session ID from authentication
+- Verify passkey authentication completed and the browser holds `g8e_web_session_cookie`.
+- Check that the `EventSource` uses `{ withCredentials: true }`.
+- Do not add `web_session_id`, `cli_session_id`, or `user_id` to the browser stream URL; the Gateway derives the route from authenticated request context.
+- If the frontend is cross-origin, verify the exact origin is allowed and the cookie was issued with `SameSite=None; Secure`.
 
 ---
 
@@ -616,8 +688,8 @@ Enroll a device using CSR-based enrollment with mTLS authentication. The user_id
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
@@ -633,17 +705,19 @@ curl -X POST https://localhost:8443/api/v1/pki/devices/enroll \
 
 ### CSR Signing (Low-level)
 
-Submit a CSR for low-level certificate issuance (for advanced use cases):
+`POST /api/v1/pki/csr/sign` is an authenticated low-level platform identity endpoint. Prefer the purpose-built CLI, device, delegated-app, or platform-component enrollment flows because they create the associated session and policy records. Callers of this endpoint must supply every identity component required by the selected leaf type.
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/pki/csr/sign \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -H "Content-Type: application/json" \
   -d '{
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...",
     "leaf_type": "operator",
-    "operator_id": "op-123"
+    "organization_id": "org-123",
+    "operator_id": "op-123",
+    "workload_session_id": "op-session-123"
   }'
 ```
 
@@ -651,7 +725,7 @@ curl -X POST https://localhost:8443/api/v1/pki/csr/sign \
 
 ## Out-of-Band (OOB) Approval Flow
 
-When a standard AI client requests a mutation without L3 proof, the Gateway suspends the transaction and returns an OOB approval URL.
+In `ratify` and `notary` posture, an MCP or A2A mutation without valid L3 proof is suspended for out-of-band passkey approval. In `doctrine` and `consensus` posture, L3 is audit-only and its absence does not suspend the transaction.
 
 ### Suspension Flow
 
@@ -669,24 +743,25 @@ List suspended transactions (requires web session cookie):
 
 ```bash
 curl https://localhost:8443/api/v1/approvals \
-  --cookie "web_session=..."
+  --cookie "g8e_web_session_cookie=..."
 ```
 
 Get WebAuthn challenge for a suspended transaction:
 
 ```bash
 curl https://localhost:8443/api/v1/approvals/{tx_hash}/challenge \
-  --cookie "web_session=..."
+  --cookie "g8e_web_session_cookie=..."
 ```
 
 Verify WebAuthn assertion and resume execution:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash}/verify \
-  --cookie "web_session=..." \
+  --cookie "g8e_web_session_cookie=..." \
   -H "Content-Type: application/json" \
   -d '{
     "id": "credential-id-base64url",
+    "rawId": "credential-id-base64url",
     "clientDataJSON": "...",
     "authenticatorData": "...",
     "signature": "..."
@@ -703,16 +778,16 @@ The Gateway attaches the L3 proof and resubmits the envelope through the verific
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts?operator_session_id=op-session-abc \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key
 ```
 
 ### Export Audit Receipts
 
 ```bash
 curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z&limit=100 \
-  --cert .g8e/cli.crt \
-  --key .g8e/cli.key \
+  --cert .g8e/pki/cli.crt \
+  --key .g8e/pki/cli.key \
   -o audit-export.json
 ```
 
@@ -720,7 +795,7 @@ curl https://localhost:8443/api/v1/audit/receipts/export?since=2026-01-01T00:00:
 
 `GET /api/v1/audit/receipts?tx_id=<transaction-id>` returns a bare canonical protojson `ActionReceipt`. Supplying `investigation_id` together with `action_type` performs a unique correlation lookup and also returns the bare receipt; multiple matches return HTTP 409. Requests without either unique selector and all `/receipts/export` requests return `AuditReceiptsResponse`, whose `receipts` array contains searchable columns and the complete canonical receipt under each record's `action_receipt` field.
 
-Consumers verify both signatures before trusting an exported receipt. The Python protocol package accepts the Gateway or Operator actuator public key as raw bytes, hexadecimal, or SPKI PEM:
+Consumers verify both signatures before trusting an exported receipt. Select the Gateway or Operator actuator public key whose derived key ID matches the receipt's `signer_key_id`; a deployment that produces receipts through multiple actuators requires every producer key. The Python protocol package accepts a selected key as raw bytes, hexadecimal, or SPKI PEM:
 
 ```python
 import json
@@ -734,7 +809,7 @@ from g8e.receipts import (
 
 record = json.loads(Path("audit-export.json").read_text())["receipts"][0]
 receipt = parse_action_receipt(record["action_receipt"])
-public_key = Path(".g8e/pki/warden_pub.pem").read_text()
+public_key = Path(".g8e/pki/Actuator_pub.pem").read_text()
 
 if not verify_action_receipt_signature(receipt, public_key):
     raise ValueError("invalid action receipt signature")
@@ -800,7 +875,7 @@ ls -la .g8e/pki/
 Verify client certificate and key exist:
 
 ```bash
-ls -la .g8e/cli.crt .g8e/cli.key
+ls -la .g8e/pki/cli.crt .g8e/pki/cli.key
 ```
 
 Re-run login if certificate is missing or expired:
@@ -811,10 +886,11 @@ Re-run login if certificate is missing or expired:
 
 ### Operator Connection Issues
 
-Check Gateway is listening on the HTTPS port:
+Check the public health endpoint without disabling TLS verification:
 
 ```bash
-curl -k https://localhost:8443/api/v1/health
+curl http://localhost:8080/api/v1/health
+curl --cacert .g8e/pki/trust/g8eg-ca-bundle.pem https://localhost:8443/api/v1/health
 ```
 
 ---
