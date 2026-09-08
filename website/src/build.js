@@ -115,7 +115,7 @@ async function build() {
   ]);
   const html = renderWebsite(readme, template);
   if (process.argv.includes('--check')) {
-    if (!html.includes('id="the-g8e-governance-suite"') || !html.includes('class="mermaid"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
+    if (!html.includes('id="proof-not-promises"') || !html.includes('id="four-components-one-governance-boundary"') || !html.includes('class="mermaid"') || html.includes('href="docs/')) throw new Error('generated website validation failed');
     return;
   }
   await rm(OUTPUT_DIRECTORY, { recursive: true, force: true });
@@ -126,7 +126,7 @@ async function build() {
     writeFile(resolve(OUTPUT_DIRECTORY, 'styles.css'), styles),
     writeFile(resolve(OUTPUT_DIRECTORY, 'site.js'), script),
     writeFile(resolve(OUTPUT_DIRECTORY, 'llms-full.txt'), readme),
-    writeFile(resolve(OUTPUT_DIRECTORY, 'llms.txt'), '# g8e Governance Suite\n\nThe canonical project overview is available at https://g8e.ai/llms-full.txt and the source repository is https://github.com/g8e-ai/g8e.\n')
+    writeFile(resolve(OUTPUT_DIRECTORY, 'llms.txt'), '# g8e AI Data and Execution Governance\n\nThe canonical project overview is available at https://g8e.ai/llms-full.txt and the source repository is https://github.com/g8e-ai/g8e.\n')
   ]);
   await Promise.all([...LOCAL_IMAGES].map(async ([source, destination]) => {
     if (!extname(source)) throw new Error(`invalid image path: ${source}`);

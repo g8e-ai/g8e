@@ -36,7 +36,7 @@ SOC 2 Trust Services Criteria, ISO/IEC 27001, HIPAA Security Rule, PCI DSS, GDPR
 The proof-backed reporting path separates collection, verification, grading, analysis, profiling, and rendering:
 
 1. Read-only importers decode persisted demo, eval, receipt, persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed attestation evidence.
-2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, action, transaction, and evidence-window binding.
+2. The evidence graph validates canonical digests, content addresses, references, prohibited cycles, assessed trust, encryption metadata, freshness, and scope, run, attempt, scenario, transaction, and evidence-window binding.
 3. `assertion_assessment@1.0.0` evaluates atomic assertions only from verified, scope-bound evidence.
 4. `framework_assessment@1.0.0` projects assertion assessments through the reviewed crosswalk without changing the underlying assertion outcomes.
 5. `BuildComplianceAnalysis` creates the canonical cross-framework analysis, including evidence-window completeness, gaps, evidence links, limitations, findings, remediation, evidence resources, and explicit responsibility and outcome sections.

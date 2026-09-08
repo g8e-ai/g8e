@@ -639,7 +639,7 @@ The frontend integration uses these settings:
 # const PASSKEY_RP_NAME = 'g8e';
 ```
 
-Paste the configuration snippet into your Lovable project and follow the [Lovable Frontend Integration](lovable.md) guide for the full component architecture.
+Add this configuration to the Lovable project and follow [Connect a Lovable App](lovable.md) for local browser and certificate setup.
 
 ### Example: Custom React App
 
@@ -900,7 +900,7 @@ curl --cacert .g8e/pki/trust/g8eg-ca-bundle.pem https://localhost:8443/api/v1/he
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
-- **[Lovable Frontend Integration](lovable.md)** - Full component architecture for Lovable apps
+- **[Connect a Lovable App](lovable.md)** - Connect a browser-hosted Lovable app to a local Gateway
 - **[MCP Protocol](../../protocol/docs/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../../protocol/docs/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

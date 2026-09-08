@@ -13,7 +13,7 @@ The guide separates evidence that the repository generates today from the public
 
 When asked to run this guide, the agent:
 
-1. Reads this guide, [Evals](../ensemble/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), and the relevant demo README before executing commands.
+1. Reads this guide, [Evals](../ensemble/evals.md), [Headless End-to-End UX Smoke Test](ux_smoke_test.md), [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md), and the relevant demo README before executing commands.
 2. Creates a new timestamped campaign directory. It never overwrites or deletes a prior run.
 3. Asks for explicit confirmation before `g8e docker clean`, `g8e demos clean`, Docker volume removal, or any other command that destroys retained state.
 4. Records whether every model is real, local, or deterministic fake; whether every target is real or synthetic; and which enforcement, storage, and verification paths are real.
@@ -444,7 +444,7 @@ uv run g8e-evals verify-receipts "${EVAL_REPORT_DIR}" --pki-dir "${G8E_GATEWAY_P
 printf '%s\n' "${EVAL_REPORT_DIR}"
 ```
 
-The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts before making any receipt-verification claim. A missing key, missing `receipts.jsonl`, or zero bound receipts is not a receipt-verification pass even when the command exits zero. The current `ifeval_subset` tasks can complete as answer-only turns with no ActionReceipt; that run remains a model and eval-system diagnostic, reports zero receipt coverage, and supports no signed-receipt claim. The command is not complete-bundle verification.
+The public key must come from the producing environment; copying it proves provenance but does not independently establish trust in it. Require the command to report a non-zero receipt total, zero failures, and equal total and verified counts before making any receipt-verification claim. A missing key, missing `receipts.jsonl`, or zero bound receipts is not a receipt-verification pass even when the command exits zero. The current `ifeval_subset` tasks can complete as answer-only turns with no ActionReceipt; that run remains a model and eval-system diagnostic, reports zero receipt coverage, and supports no signed-receipt claim. The command is receipt-only verification, not complete eval-bundle or signed compliance report-bundle verification.
 
 The useful eval files are:
 
@@ -478,7 +478,8 @@ Use this order when choosing screenshots, excerpts, and post material:
 | 7 | `${CAMPAIGN_DIR}/fedramp/ksi-result.json` and `demo-run-verification.json` | Measured KSI counts plus the typed independent verification result for the persisted FedRAMP demo evidence | Compliance post or article |
 | 8 | `${CAMPAIGN_DIR}/dhs/scenarios-verbose.txt` and `demo-run-verification.json` | Disconnected continuity, blocked wipe, governed purge, and the typed independent verification result | Defense/edge video |
 | 9 | `${EVAL_REPORT_DIR}/manifest.json`, `attempts.jsonl`, `stages.jsonl`, and `metrics.jsonl` | Exact configuration, denominators, grader outcomes, usage, latency, and evidence linkage | Technical appendix |
-| 10 | `${CAMPAIGN_DIR}/metadata/` | Binary version and digest, source-provenance status or approved provenance artifact, FIPS and Docker versions, provider classification, and campaign capability boundary | Methodology footer |
+| 10 | `<verified-report-bundle>` and its retained canonical `ComplianceVerificationReport` | Signed bundle scope, protected source inventory, reproduced analysis and renderers, external trust identities, verification time, and exact failures | Point-in-time compliance evidence appendix |
+| 11 | `${CAMPAIGN_DIR}/metadata/` | Binary version and digest, source-provenance status or approved provenance artifact, FIPS and Docker versions, provider classification, and campaign capability boundary | Methodology footer |
 
 A polished terminal screenshot uses the concise scenario summary, followed by the matching transaction row and verification row. A technical article links the canonical machine-readable files rather than transcribing hashes manually.
 
@@ -663,7 +664,7 @@ The release owner reviews the candidate before promotion. Do not write directly 
 
 Stage 2 for v2.1.6 uses this same stack setup for one fresh, separately invoked complete run. Before the run, the release owner binds the versioned profile to an explicit deterministic source inclusion manifest, component and image digests, and public operating system, architecture, hardware, Python, and container-runtime identities. Projection preserves the v2.1.5 run as Stage 1 and compares both complete populations without causal or statistical attribution. Promotion requires explicit release-owner approval of the exact canonical candidate tree digest; a mismatch leaves the current snapshot unchanged. See [Stage 2 Reproduction and Provenance](../devs/release_process.md#stage-2-reproduction-and-provenance) for the commands and approval boundary.
 
-Later evidence stages may publish governed-action receipts and state proof, complete bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
+Later README evidence stages may publish governed-action receipts and state proof, eval-native complete-bundle verification, statistical comparisons, and compliance analysis. Those stages do not retroactively strengthen or relabel a Stage 1 claim. Repository publication of actuator verification keys does not independently establish an external trust root.
 
 ### Publication ownership and approvals
 
@@ -676,10 +677,11 @@ The README evidence refresh is a reviewed publication operation with four distin
 
 ## Related documentation
 
-- [Evals](../ensemble/evals.md) — current evidence schema, supported benchmark, run command, and receipt-verifier scope.
+- [Evals](../ensemble/evals.md) — current evidence schema, real-provider benchmark, experiment arms, run command, and receipt-verifier scope.
 - [Headless End-to-End UX Smoke Test](ux_smoke_test.md) — authoritative unified-stack enrollment, scenario, report, and troubleshooting sequence.
 - [Unified Docker Stack](unified_stack.md) — component topology, identity, storage, and lifecycle.
 - [Demo Environments](../../demos/README.md) — per-demo architecture, commands, scenarios, and real-versus-display boundaries.
 - [FedRAMP Demo](../../demos/fedramp/README.md) — synthetic cloud campaign and KSI evidence.
 - [DHS Demo](../../demos/dhs/README.md) — disconnected-operations and governed-destruction campaign.
+- [Proof-Backed Compliance Evidence](../reference/compliance-evidence.md) — current evidence graph, signed report-bundle generation, external trust, complete offline verification, and remaining limits.
 - [Compliance Alignment](../reference/compliance-alignment.md) — KSI, protocol-owned compliance catalog, and persisted demo-evidence semantics and claim boundaries.

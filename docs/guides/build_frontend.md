@@ -16,7 +16,7 @@ This guide describes how to build a g8e-compatible web UI. It covers gateway con
 
 The `g8e auth enroll gui` command family records external frontend origins and generates integration configuration. The `enroll` command validates the origin, verifies the local gateway's CORS response, optionally checks that a public gateway URL is healthy, persists the origin to a local enrollment file, and outputs a TypeScript configuration snippet. It does not configure or restart the gateway, and it does not verify the gateway's passkey RP configuration.
 
-For Lovable-specific integration (AI agent prompt, Cloudflare Tunnel setup), see [Lovable Frontend Integration](./lovable.md).
+For the minimal local Lovable setup, see [Connect a Lovable App](./lovable.md).
 
 ### Architecture
 
@@ -500,7 +500,7 @@ Then run `g8e auth enroll gui enroll --origin https://your-app.example.com --pas
 
 ## See Also
 
-- [Lovable Frontend Integration](./lovable.md) - Lovable-specific integration guide with AI agent prompt
+- [Connect a Lovable App](./lovable.md) - Minimal local setup for a browser-hosted Lovable app
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) - WebAuthn passkey authentication architecture

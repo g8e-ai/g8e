@@ -387,7 +387,7 @@ Then make an allowed-origin request to the gateway's HTTPS URL and inspect the C
 ## See Also
 
 - [Build a g8e-Compatible Frontend](./build_frontend.md) - Full reference for building a frontend from scratch
-- [Lovable Frontend Integration](./lovable.md) - Lovable-specific integration guide with AI agent prompt
+- [Connect a Lovable App](./lovable.md) - Connect a browser-hosted Lovable app directly to a local Gateway
 - [Cloudflare Tunnel Integration](./cloudflare_tunnel.md) - Expose the gateway via a public tunnel
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) - General application connectivity patterns
 - [Authentication & Authorization](../architecture/auth.md) - WebAuthn passkey authentication architecture
