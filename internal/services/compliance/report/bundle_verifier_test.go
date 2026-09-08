@@ -10,7 +10,11 @@ package report
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"path"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +25,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -40,14 +46,138 @@ func (r *bundleArtifactReaderStub) ReadFile(_ context.Context, bundlePath string
 	return append([]byte(nil), body...), nil
 }
 
+func (r *bundleArtifactReaderStub) ListFiles(context.Context) ([]string, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	paths := make([]string, 0, len(r.bodies))
+	for bundlePath := range r.bodies {
+		paths = append(paths, bundlePath)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func demoReplaySourceFixture(t *testing.T, runID string, generatedAt time.Time) []SourceArtifact {
+	t.Helper()
+	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	scenarios, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
+	require.NoError(t, err)
+	definitions := make([]*compliancev1.DemoScenarioDefinition, 0)
+	definitionRefs := make([]*compliancev1.VersionedReference, 0)
+	frameworkRefs := make(map[string]*compliancev1.FrameworkControlReference)
+	for _, definition := range scenarios.GetDefinitions() {
+		if !strings.HasPrefix(definition.GetScenarioId(), constants.DemosOrgFedRAMP+"-") {
+			continue
+		}
+		definitions = append(definitions, definition)
+		definitionRefs = append(definitionRefs, &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()})
+		for _, reference := range definition.GetFrameworkControlRefs() {
+			key := reference.GetFrameworkRef().GetId() + ":" + reference.GetFrameworkRef().GetVersion() + ":" + reference.GetControlId()
+			frameworkRefs[key] = reference
+		}
+	}
+	require.NotEmpty(t, definitions)
+	sort.Slice(definitions, func(i, j int) bool { return definitions[i].GetScenarioId() < definitions[j].GetScenarioId() })
+	sort.Slice(definitionRefs, func(i, j int) bool { return definitionRefs[i].GetId() < definitionRefs[j].GetId() })
+	frameworkKeys := make([]string, 0, len(frameworkRefs))
+	for key := range frameworkRefs {
+		frameworkKeys = append(frameworkKeys, key)
+	}
+	sort.Strings(frameworkKeys)
+	manifestFrameworkRefs := make([]*compliancev1.FrameworkControlReference, 0, len(frameworkKeys))
+	for _, key := range frameworkKeys {
+		manifestFrameworkRefs = append(manifestFrameworkRefs, frameworkRefs[key])
+	}
+	provenanceBody := []byte("services: {}")
+	provenanceDigest := sha256.Sum256(provenanceBody)
+	manifest := &compliancev1.DemoManifest{
+		DemoId:                 constants.DemosOrgFedRAMP,
+		DemoVersion:            constants.DemoVersion,
+		RunId:                  runID,
+		ScopeId:                constants.DemoScopeFedRAMP,
+		GeneratedAt:            timestamppb.New(generatedAt),
+		ScenarioDefinitionRefs: definitionRefs,
+		ProvenanceHashes:       []*compliancev1.NamedDigest{{Name: constants.DemosComposeFile, Sha256: hex.EncodeToString(provenanceDigest[:])}},
+		RequiredEnvironment:    []string{"docker", "g8e-binary"},
+		FrameworkControlRefs:   manifestFrameworkRefs,
+		SupportedLanes:         []string{"automated", "manual-notary"},
+	}
+	definition := definitions[0]
+	result := &compliancev1.DemoScenarioResult{
+		ResultId:             runID + ":" + definition.GetScenarioId(),
+		ScenarioRef:          &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()},
+		DemoId:               constants.DemosOrgFedRAMP,
+		ScopeId:              constants.DemoScopeFedRAMP,
+		RunId:                runID,
+		StartedAt:            timestamppb.New(generatedAt.Add(time.Second)),
+		CompletedAt:          timestamppb.New(generatedAt.Add(2 * time.Second)),
+		Status:               "failed",
+		Failure:              "expected fixture failure",
+		VerificationStatus:   "unverifiable",
+		DisplayNumber:        definition.GetDisplayNumber(),
+		Title:                definition.GetTitle(),
+		AssertionRefs:        definition.GetAssertionRefs(),
+		FrameworkControlRefs: definition.GetFrameworkControlRefs(),
+		StepResults: []*compliancev1.DemoStepResult{{
+			StepId: "step-1", Operation: "fixture", StartedAt: timestamppb.New(generatedAt.Add(time.Second)), CompletedAt: timestamppb.New(generatedAt.Add(2 * time.Second)), Status: "failed", Failure: "expected fixture failure", Required: true,
+		}},
+	}
+	manifestBody, err := compliancev1.MarshalCanonical(manifest)
+	require.NoError(t, err)
+	resultBody, err := compliancev1.MarshalCanonical(result)
+	require.NoError(t, err)
+	definitionBodies := make([]string, 0, len(definitions))
+	for _, value := range definitions {
+		body, err := compliancev1.MarshalCanonical(value)
+		require.NoError(t, err)
+		definitionBodies = append(definitionBodies, string(body))
+	}
+	base := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID)
+	return []SourceArtifact{
+		{BundlePath: path.Join(base, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename), Body: manifestBody, MediaType: constants.MediaTypeJSON},
+		{BundlePath: path.Join(base, constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename), Body: resultBody, MediaType: constants.MediaTypeJSON},
+		{BundlePath: path.Join(base, constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile), Body: provenanceBody, MediaType: constants.MediaTypeText},
+		{BundlePath: path.Join(base, constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename), Body: []byte(strings.Join(definitionBodies, "\n")), MediaType: constants.MediaTypeJSON},
+	}
+}
+
 func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
 	t.Helper()
 	request, _ := bundleAssemblyFixture(t)
 	request.Analysis = rendererTestAnalysis()
+	request.Analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
+		ArtifactId:         string(evidence.ArtifactTypeDemoManifest) + ":sha256:" + strings.Repeat("a", 64),
+		ArtifactType:       string(evidence.ArtifactTypeDemoManifest),
+		Sha256:             strings.Repeat("a", 64),
+		MediaType:          constants.MediaTypeJSON,
+		SchemaRef:          "g8e.compliance.v1.DemoManifest",
+		ProducerIdentity:   "demo-run-1",
+		ProducedAt:         timestamppb.New(request.GeneratedAt),
+		ScopeId:            request.ScopeRef,
+		RunId:              "demo-run-1",
+		VerificationStatus: string(evidence.VerificationStatusVerified),
+		VerifierId:         constants.DemoRunVerifierID,
+		VerifierVersion:    constants.DemoRunVerifierVersion,
+		VerifiedAt:         timestamppb.New(request.GeneratedAt),
+		BundlePath:         path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.DemoRunManifestFilename),
+	}}
 	request.Profiles[0].AnalysisRef = request.Analysis.GetAnalysisId()
 	analysisBody, err := compliancev1.MarshalCanonical(request.Analysis)
 	require.NoError(t, err)
 	request.RenderedFormats[0].Body = analysisBody
+	sourceReportBody, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
+		ReportId:        "demo-run-1",
+		Valid:           true,
+		VerifiedAt:      timestamppb.New(request.GeneratedAt),
+		VerifierId:      constants.DemoRunVerifierID,
+		VerifierVersion: constants.DemoRunVerifierVersion,
+	})
+	require.NoError(t, err)
+	demoSourceBase := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1")
+	request.SourceArtifacts = append(request.SourceArtifacts, demoReplaySourceFixture(t, "demo-run-1", request.GeneratedAt)...)
+	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: path.Join(demoSourceBase, constants.ComplianceBundleSourceVerificationFilename), Body: sourceReportBody, MediaType: constants.MediaTypeJSON})
 	result, err := AssembleBundle(request)
 	require.NoError(t, err)
 	identity := bundleSigningIdentityFixture(t)
@@ -100,6 +230,34 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 		failureCode error
 	}{
 		{
+			name: "unsupported bundle schema",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Manifest.ReportSchemaVersion = "2.0.0"
+			},
+			failureCode: constants.ErrEvidenceSchemaMismatch,
+		},
+		{
+			name: "unsupported assembler identity",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Manifest.GeneratorIdentity = "unassessed-assembler"
+			},
+			failureCode: constants.ErrEvidenceProducerUnverified,
+		},
+		{
+			name: "analysis scope mismatch",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Analysis.ScopeRef = "other-scope"
+			},
+			failureCode: constants.ErrEvidenceScopeMismatch,
+		},
+		{
+			name: "framework profile analysis mismatch",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Profiles[0].AnalysisRef = "analysis:sha256:" + strings.Repeat("0", 64)
+			},
+			failureCode: constants.ErrUnresolvedReference,
+		},
+		{
 			name: "artifact body digest mismatch",
 			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				reader.bodies[constants.ComplianceBundleAnalysisPath] = []byte(`{"tampered":true}`)
@@ -121,6 +279,20 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			failureCode: constants.ErrChecksumMismatch,
 		},
 		{
+			name: "artifact length mutation",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Artifacts[0].ByteLength++
+			},
+			failureCode: constants.ErrChecksumMismatch,
+		},
+		{
+			name: "renderer media type mutation",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.RenderedFormats[0].MediaType = constants.MediaTypeText
+			},
+			failureCode: constants.ErrRendererMismatch,
+		},
+		{
 			name: "checksum root mutation",
 			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundle.ChecksumRoot = strings.Repeat("0", 64)
@@ -135,6 +307,20 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			failureCode: constants.ErrChecksumMismatch,
 		},
 		{
+			name: "malformed generation timestamp",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Manifest.GeneratedAt = &timestamppb.Timestamp{Seconds: 253402300800}
+			},
+			failureCode: constants.ErrReportSignatureFailed,
+		},
+		{
+			name: "manifest signature mutation",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Manifest.Signature.Signature = strings.Repeat("0", ed25519.SignatureSize*2)
+			},
+			failureCode: constants.ErrReportSignatureFailed,
+		},
+		{
 			name: "checksum signature mutation",
 			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundle.ChecksumRootSignature.Signature = strings.Repeat("0", ed25519.SignatureSize*2)
@@ -147,6 +333,62 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 				policy.TrustedKeys = nil
 			},
 			failureCode: constants.ErrEvidenceTrustNotAssessed,
+		},
+		{
+			name: "signer scope not assessed",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, policy *compliancev1.ComplianceReportTrustPolicy) {
+				policy.TrustedKeys[0].AllowedScopeRefs = []string{"other-scope"}
+			},
+			failureCode: constants.ErrEvidenceTrustNotAssessed,
+		},
+		{
+			name: "signer revoked before generation",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, policy *compliancev1.ComplianceReportTrustPolicy) {
+				policy.TrustedKeys[0].RevokedAt = timestamppb.New(bundle.Manifest.GeneratedAt.AsTime())
+			},
+			failureCode: constants.ErrEvidenceTrustNotAssessed,
+		},
+		{
+			name: "signer validity expired before generation",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, policy *compliancev1.ComplianceReportTrustPolicy) {
+				policy.TrustedKeys[0].Metadata.ExpiresAt = timestamppb.New(bundle.Manifest.GeneratedAt.AsTime().Add(-time.Second))
+			},
+			failureCode: constants.ErrEvidenceTrustNotAssessed,
+		},
+		{
+			name: "missing demo source verification",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
+				delete(reader.bodies, bundlePath)
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
+		},
+		{
+			name: "invalid demo source verification",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
+				report := &compliancev1.ComplianceVerificationReport{ReportId: "demo-run-1", VerifiedAt: timestamppb.Now(), VerifierId: constants.DemoRunVerifierID, VerifierVersion: constants.DemoRunVerifierVersion}
+				body, err := compliancev1.MarshalCanonical(report)
+				require.NoError(t, err)
+				reader.bodies[bundlePath] = body
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
+		},
+		{
+			name: "missing demo runtime manifest source",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunManifestFilename)
+				delete(reader.bodies, bundlePath)
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
+		},
+		{
+			name: "tampered demo runtime results source",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename)
+				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
 		},
 	}
 	for _, test := range tests {
@@ -168,6 +410,78 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			assert.Contains(t, failureCodes(report), test.failureCode.Error())
 		})
 	}
+}
+
+func TestBundleVerifier_SourceVerificationRejectsReportWithoutAnalysisEvidenceRun(t *testing.T) {
+	generatedAt := time.Unix(1_700_000_000, 0).UTC()
+	body, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
+		ReportId:        "undeclared-run",
+		Valid:           true,
+		VerifiedAt:      timestamppb.New(generatedAt),
+		VerifierId:      constants.DemoRunVerifierID,
+		VerifierVersion: constants.DemoRunVerifierVersion,
+	})
+	require.NoError(t, err)
+	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "undeclared-run", constants.ComplianceBundleSourceVerificationFilename)
+	verifier := bundleVerifier{
+		request: BundleVerificationRequest{Bundle: &compliancev1.ComplianceReportBundle{
+			Manifest: &compliancev1.ComplianceReportManifest{GeneratedAt: timestamppb.New(generatedAt)},
+			Analysis: &compliancev1.ComplianceAnalysis{},
+		}},
+		report: &compliancev1.ComplianceVerificationReport{},
+		bodies: map[string][]byte{bundlePath: body},
+	}
+
+	verifier.verifySourceVerificationReports(context.Background())
+
+	assert.Contains(t, failureCodes(verifier.report), constants.ErrUnresolvedReference.Error())
+}
+
+func TestVerifyComplianceReportBundle_RejectsUnexpectedDirectoryArtifacts(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	reader.bodies[constants.ComplianceBundleUnexpectedTestPath] = []byte("unexpected")
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{
+		Bundle:      bundle,
+		Reader:      reader,
+		TrustPolicy: policy,
+		VerifiedAt:  verifiedAt,
+	})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assert.Contains(t, failureCodes(report), constants.ErrUnexpectedEvidenceArtifact.Error())
+}
+
+func TestVerifyComplianceReportBundle_OrdersFailuresDeterministically(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	reader.bodies[constants.ComplianceBundleAnalysisPath] = []byte(`{"tampered":true}`)
+	bundle.ChecksumRoot = strings.Repeat("0", 64)
+
+	first, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	require.NoError(t, err)
+	second, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+	require.NoError(t, err)
+
+	assert.Equal(t, first.GetFailures(), second.GetFailures())
+	for index := 1; index < len(first.GetFailures()); index++ {
+		previous := first.GetFailures()[index-1]
+		current := first.GetFailures()[index]
+		assert.LessOrEqual(t, previous.GetSubjectRef()+previous.GetCode()+previous.GetReason(), current.GetSubjectRef()+current.GetCode()+current.GetReason())
+	}
+}
+
+func TestVerifyComplianceReportBundle_ReportsArtifactReaderFailures(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
+	readErr := errors.New("read failed")
+	reader.err = readErr
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assert.Contains(t, failureCodes(report), constants.ErrDirectoryRead.Error())
+	assert.Contains(t, failureCodes(report), constants.ErrBundleArtifactMissing.Error())
 }
 
 func TestVerifyComplianceReportBundle_RejectsInvalidVerifierConfiguration(t *testing.T) {

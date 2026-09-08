@@ -425,7 +425,10 @@ func ValidateReportManifestReferences(scopeRef string, frameworkRefs []*complian
 			return fmt.Errorf("%w: report bundle references: %v", constants.ErrInvalidEvidenceGraph, err)
 		}
 	}
-	for _, bundlePath := range append(append([]string{scopeRef, assertionCatalogRef, evidenceIndexRef}, crosswalkRefs...), assessmentRefs...) {
+	if scopeRef == "" || scopeRef != strings.TrimSpace(scopeRef) || scopeRef == "." || scopeRef == constants.PathParentDir || strings.ContainsAny(scopeRef, `/\\`) {
+		return fmt.Errorf("%w: unsafe report scope reference %q", constants.ErrInvalidEvidenceGraph, scopeRef)
+	}
+	for _, bundlePath := range append(append([]string{assertionCatalogRef, evidenceIndexRef}, crosswalkRefs...), assessmentRefs...) {
 		if err := validateBundlePath(bundlePath); err != nil {
 			return err
 		}
@@ -521,6 +524,12 @@ func ValidateComplianceReportBundle(bundle *compliancev1.ComplianceReportBundle,
 			return fmt.Errorf("%w: duplicate bundle artifact path %s", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
 		}
 		seenPaths[artifact.BundlePath] = struct{}{}
+	}
+	referencedPaths := append(append([]string{bundle.Manifest.GetAssertionCatalogRef(), bundle.Manifest.GetEvidenceIndexRef()}, bundle.Manifest.GetCrosswalkRefs()...), bundle.Manifest.GetAssessmentRefs()...)
+	for _, referencedPath := range referencedPaths {
+		if _, exists := seenPaths[referencedPath]; !exists {
+			return fmt.Errorf("%w: manifest reference %s has no matching artifact", constants.ErrUnresolvedReference, referencedPath)
+		}
 	}
 	if bundle.Analysis == nil {
 		return fmt.Errorf("%w: bundle analysis is missing", constants.ErrInvalidEvidenceGraph)

@@ -1219,6 +1219,7 @@ var (
 
 	// Compliance report bundle assembly errors
 	ErrBundleAssemblyFailed     = errors.New("compliance: report bundle assembly failed")
+	ErrBundlePersistenceFailed  = errors.New("compliance: report bundle persistence failed")
 	ErrBundleProfileUnsupported = errors.New("compliance: unsupported bundle profile")
 	ErrBundleArtifactMissing    = errors.New("compliance: bundle artifact content is missing")
 	ErrBundleChecksumRootFailed = errors.New("compliance: bundle checksum root computation failed")

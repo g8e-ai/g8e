@@ -172,7 +172,7 @@ The verifier independently checks:
 - Typed metric source, grader, and grade reproduction
 - Artifact directory integrity and root directory enforcement
 
-Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. Demo, eval, standalone receipt and persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed-attestation importers use shared evidence-graph and cryptographic verification primitives. The complete eval-bundle and report-bundle verifier remains outstanding.
+Missing, malformed, duplicated, unexpected, cross-scope, stale, unsigned, checksum-mismatched, or unresolvable evidence invalidates the report. Demo, eval, standalone receipt and persistence, audit, commitment, ledger, KSI-history, build/configuration, and signed-attestation importers use shared evidence-graph and cryptographic verification primitives. Signed report-bundle generation and protected-body offline verification are implemented. Complete raw source inventories, independent source-verifier replay from bundled bodies, and the complete eval-bundle verifier remain outstanding.
 
 ---
 
@@ -193,10 +193,10 @@ This demonstrates L3 evidence (real-stack scenario with verified receipts and in
 
 ## What is not yet available
 
-The canonical analysis and rendering path is available through `g8e compliance report generate`, but the following capabilities remain outstanding:
+Canonical analysis, signed report-bundle generation, and protected-body offline report-bundle verification are available, but the following capabilities remain outstanding:
 
-- **Complete signed report bundles** — Bundle assembly, dedicated report-signing trust, checksum and signature roots, public and restricted profiles, and `g8e compliance report verify <bundle>` are not implemented.
-- **Complete eval-bundle offline verification** — Eval import and evidence-graph validation are implemented, but complete bundle verification remains outstanding and shares future bundle primitives with report verification.
+- **Complete report-bundle source replay** — Protected demo-run verification reports are required for every demo manifest represented in canonical analysis, but the bundle does not yet carry the complete raw demo and eval source inventories needed to replay each source verifier independently from bundled bodies.
+- **Complete eval-bundle offline verification** — Eval import and evidence-graph validation are implemented, but complete bundle verification remains outstanding and reuses the report bundle's receipt, persistence, deterministic-stage, metric, state, checksum, trust, and signature primitives.
 - **Historical effectiveness evidence** — Recurring evidence collection, assertion and control history stores, release-gate profiles, failed-run denominator preservation, and version bridge assessments are not implemented. Canonical analysis calculates point-in-time evidence-window completeness but does not establish operating effectiveness over a recurring period.
 - **Additional framework crosswalks** — Only FedRAMP 20x and NIST SP 800-53 have canonical framework definitions and a reviewed crosswalk. SOC 2, ISO 27001, HIPAA, PCI DSS, GDPR, NIST SP 800-63B, and NSA ZIG do not receive generated framework-control assessments.
 - **Manual notary real-topology verification** — The `fedramp-escalate` and `dhs-release` passkey flows are implemented and unit-tested but have not been run against their real notary topologies.
@@ -205,9 +205,9 @@ The canonical analysis and rendering path is available through `g8e compliance r
 
 ## Roadmap
 
-Phases 0 through 3 are complete. Phase 4 implements assertion grading, framework grading, canonical analysis, content-addressed OSCAL evidence resources, deterministic OSCAL UUIDv5 identities, shared JSON/OSCAL/Markdown/HTML/CLI rendering, explicit responsibility and outcome sections, and deterministic framework profiles. Its remaining work is the canonical vector, golden renderer, renderer-equality, framework aggregation, OSCAL schema, and evidence-link resolution verification matrix.
+Phases 0 through 4 are complete for in-tree implementation and verification. Phase 4 includes assertion grading, framework grading, canonical analysis, content-addressed OSCAL evidence resources, deterministic OSCAL UUIDv5 identities, shared JSON/OSCAL/Markdown/HTML/CLI rendering, explicit responsibility and outcome sections, deterministic framework profiles, the repository-owned OSCAL validator, and its conformance and mutation matrices. Clean-environment offline validation with network access disabled remains an external acceptance lane.
 
-**Phase 5 — Signed and independently verified complete bundles.** This phase adds a dedicated compliance-report signing identity, checksums for every protected public and restricted artifact, signed manifest and checksum roots, explicit assessed trust metadata, and complete offline report verification.
+**Phase 5 — Signed and independently verified complete bundles.** The report-bundle path has a dedicated compliance-report signing identity, checksums for every protected public and restricted artifact, signed manifest and checksum roots, explicit externally assessed trust, protected source-verifier-result composition, immutable persistence, directory-integrity enforcement, and deterministic renderer reproduction. Complete raw source inventories, independent source-verifier replay from bundled bodies, the complete eval-bundle verifier, and the cross-domain mutation and clean-environment acceptance lanes remain outstanding.
 
 **Phase 6 — Recurring evidence, release gates, and historical effectiveness.** This phase adds scheduled evidence collection, assertion and control history, release-gate profiles, failed-run denominator preservation, and bridge assessments for version changes.
 
@@ -217,16 +217,15 @@ Phases 0 through 3 are complete. Phase 4 implements assertion grading, framework
 
 ## CLI commands
 
-The compliance CLI exposes read-only evaluation, evidence-graph verification, demo verification, and canonical analysis generation:
+The compliance CLI exposes evaluation, evidence-graph verification, demo verification, signed report-bundle generation, and offline report-bundle verification:
 
 - `g8e compliance ksi --class C --scope-id <scope> --run-id <run> --window-start-unix-ms <start> --window-end-unix-ms <end>` evaluates KSIs with an explicit assessment binding and prints the result set as JSON.
 - `g8e compliance ksi-history --ksi <id>` reads historical evaluation snapshots for a specific KSI.
 - `g8e compliance overlay --overlay-dir <dir>` inspects and validates AI control overlay catalogs.
 - `g8e compliance demo-run verify <run-id> [--project-root <dir>]` independently verifies one persisted demo run and emits a canonical `ComplianceVerificationReport`.
 - `g8e compliance evidence-graph verify --demo-run <run-id> --eval-run <run-id>` imports and validates persisted runs as one typed content-addressed graph.
-- `g8e compliance report generate --scope-id <scope> --demo-run <run-id> --eval-run <run-id> --window-start-unix-ms <start> --window-end-unix-ms <end> --format <json|oscal|markdown|html|cli>` grades verified evidence, constructs canonical analysis and framework profiles, and writes the selected analysis view to standard output.
-
-Complete bundle generation, signing, and `g8e compliance report verify <bundle>` are not implemented.
+- `g8e compliance report generate --scope-id <scope> --demo-run <run-id> --eval-run <run-id> --window-start-unix-ms <start> --window-end-unix-ms <end> --report-id <report-id> --profile <public|restricted> --signing-metadata <path> --signing-private-key <path>` grades verified evidence, constructs canonical analysis and framework profiles, renders every supported format, assembles and signs the complete bundle, persists it under the runtime report tree, and prints the canonical bundle descriptor path.
+- `g8e compliance report verify <bundle-manifest.json> --trust-policy <assessed-trust-policy.json>` independently verifies the persisted protected bodies, inventory, signed roots, assessed trust, protected source-verification results, and deterministic renderers offline and emits a canonical `ComplianceVerificationReport`; the trust policy must remain external to the bundle. Independent replay of source verifiers from bundled raw source bodies remains outstanding.
 
 ---
 
@@ -294,6 +293,7 @@ For compliance evidence questions, audit support, or independent verification as
 |---------|------|--------|---------|
 | 2.1.3 | 2026-09-02 | Lateralus Labs | Initial proof-backed compliance evidence document; documented the protocol-owned assertion, framework, crosswalk, and demo-scenario catalogs, 14 evidence-grade demo scenarios, independent demo-run verification, demonstrated evidence at the v2.1.3 release boundary, and the Phase 3-7 roadmap |
 | 2.1.6 | 2026-09-07 | Lateralus Labs | Reconciled completed evidence-graph, KSI, canonical analysis, OSCAL, shared renderer, control-section, and framework-profile capabilities; retained complete signed bundles, recurring effectiveness, and expanded frameworks as outstanding work |
+| 2.1.7 | 2026-09-07 | Lateralus Labs | Reconciled signed report-bundle generation, dedicated signing inputs, immutable persistence, external assessed trust, protected source-verifier-result composition, directory-integrity enforcement, deterministic renderer reproduction, and protected-body offline verification; retained independent bundled-source replay, complete eval-bundle verification, recurring effectiveness, and expanded frameworks as outstanding work |
 
 ---
 

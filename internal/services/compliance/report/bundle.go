@@ -9,10 +9,13 @@ package report
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sort"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -20,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
@@ -73,6 +77,7 @@ type BundleAssemblyRequest struct {
 	CrosswalkRefs       []string
 	AssessmentRefs      []string
 	EvidenceIndexRef    string
+	SourceArtifacts     []SourceArtifact
 	RestrictedArtifacts []RestrictedArtifact
 }
 
@@ -86,6 +91,12 @@ type RestrictedArtifact struct {
 	Body       []byte
 	MediaType  string
 	Encryption *compliancev1.EvidenceEncryptionMetadata
+}
+
+type SourceArtifact struct {
+	BundlePath string
+	Body       []byte
+	MediaType  string
 }
 
 type BundleArtifactBody struct {
@@ -136,6 +147,13 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 			return nil, err
 		}
 		artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: profilePath, Body: append([]byte(nil), profileBytes...)})
+	}
+
+	for _, source := range request.SourceArtifacts {
+		if err := addArtifact(&artifacts, &checksumEntries, source.BundlePath, source.Body, source.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
+			return nil, err
+		}
+		artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: source.BundlePath, Body: append([]byte(nil), source.Body...)})
 	}
 
 	renderedEntries := make([]*compliancev1.RenderedFormatEntry, 0, len(request.RenderedFormats))
@@ -216,6 +234,81 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 	}, nil
 }
 
+func PersistBundle(ctx context.Context, fileSvc fs.RuntimeFileService, result *BundleAssemblyResult) (string, error) {
+	if ctx == nil {
+		return "", fmt.Errorf("%w: context is required", constants.ErrBundlePersistenceFailed)
+	}
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrBundlePersistenceFailed, err)
+	}
+	if fileSvc == nil || result == nil || result.Bundle == nil {
+		return "", fmt.Errorf("%w: file service and assembled bundle are required", constants.ErrBundlePersistenceFailed)
+	}
+	bundle := result.Bundle
+	if err := catalog.ValidateComplianceReportBundle(bundle, &compliancev1.FrameworkCatalog{Frameworks: collectFrameworkDefinitions(bundle.GetManifest().GetFrameworkRefs())}); err != nil {
+		return "", fmt.Errorf("%w: validate assembled bundle: %w", constants.ErrBundlePersistenceFailed, err)
+	}
+	reportID := bundle.GetManifest().GetReportId()
+	if reportID != strings.TrimSpace(reportID) || strings.ContainsAny(reportID, `/\\:`) || path.Clean(reportID) != reportID || reportID == "." || reportID == constants.PathParentDir {
+		return "", fmt.Errorf("%w: unsafe report ID %q", constants.ErrBundlePersistenceFailed, reportID)
+	}
+	if len(result.ArtifactBodies) != len(bundle.GetArtifacts()) {
+		return "", fmt.Errorf("%w: protected body count does not match artifact inventory", constants.ErrBundlePersistenceFailed)
+	}
+	bodies := make(map[string][]byte, len(result.ArtifactBodies))
+	previousPath := ""
+	for _, artifactBody := range result.ArtifactBodies {
+		if artifactBody.BundlePath == constants.ComplianceBundleManifestPath || artifactBody.BundlePath <= previousPath {
+			return "", fmt.Errorf("%w: protected body paths are duplicated, reserved, or unsorted", constants.ErrBundlePersistenceFailed)
+		}
+		previousPath = artifactBody.BundlePath
+		bodies[artifactBody.BundlePath] = artifactBody.Body
+	}
+	for _, artifact := range bundle.GetArtifacts() {
+		body, exists := bodies[artifact.GetBundlePath()]
+		if !exists {
+			return "", fmt.Errorf("%w: protected body %s is missing", constants.ErrBundlePersistenceFailed, artifact.GetBundlePath())
+		}
+		digest := sha256.Sum256(body)
+		if hex.EncodeToString(digest[:]) != artifact.GetSha256() || int64(len(body)) != artifact.GetByteLength() {
+			return "", fmt.Errorf("%w: protected body %s does not match its descriptor", constants.ErrBundlePersistenceFailed, artifact.GetBundlePath())
+		}
+	}
+	descriptorBody, err := compliancev1.MarshalCanonical(bundle)
+	if err != nil {
+		return "", fmt.Errorf("%w: canonicalize bundle descriptor: %w", constants.ErrBundlePersistenceFailed, err)
+	}
+	bundleDir := path.Join(constants.ComplianceBundlesDirname, reportID)
+	exists, err := fileSvc.FileExists(ctx, bundleDir)
+	if err != nil {
+		return "", fmt.Errorf("%w: inspect bundle destination: %w", constants.ErrBundlePersistenceFailed, err)
+	}
+	if exists {
+		return "", fmt.Errorf("%w: bundle destination already exists", constants.ErrBundlePersistenceFailed)
+	}
+	if err := fileSvc.MkdirAll(ctx, bundleDir, constants.PermDirStandard); err != nil {
+		return "", fmt.Errorf("%w: create bundle directory: %w", constants.ErrBundlePersistenceFailed, err)
+	}
+	for _, artifactBody := range result.ArtifactBodies {
+		artifactPath := path.Join(bundleDir, artifactBody.BundlePath)
+		if err := fileSvc.WriteFile(ctx, artifactPath, artifactBody.Body, constants.PermFilePublic); err != nil {
+			return "", cleanupIncompleteBundle(ctx, fileSvc, bundleDir, fmt.Errorf("write protected body %s: %w", artifactBody.BundlePath, err))
+		}
+	}
+	descriptorPath := path.Join(bundleDir, constants.ComplianceBundleManifestPath)
+	if err := fileSvc.WriteFile(ctx, descriptorPath, descriptorBody, constants.PermFilePublic); err != nil {
+		return "", cleanupIncompleteBundle(ctx, fileSvc, bundleDir, fmt.Errorf("write canonical bundle descriptor: %w", err))
+	}
+	return descriptorPath, nil
+}
+
+func cleanupIncompleteBundle(ctx context.Context, fileSvc fs.RuntimeFileService, bundleDir string, persistErr error) error {
+	if err := fileSvc.RemoveAll(context.WithoutCancel(ctx), bundleDir); err != nil {
+		return fmt.Errorf("%w: %w; remove incomplete bundle: %w", constants.ErrBundlePersistenceFailed, persistErr, err)
+	}
+	return fmt.Errorf("%w: %w", constants.ErrBundlePersistenceFailed, persistErr)
+}
+
 // SignBundle signs the checksum root and manifest root with the dedicated
 // compliance-report signing identity. The checksum root signature is stored on
 // the bundle; the manifest signature is stored on the manifest. The manifest
@@ -284,6 +377,16 @@ func validateBundleAssemblyRequest(request BundleAssemblyRequest) error {
 		&compliancev1.FrameworkCatalog{Frameworks: collectFrameworkDefinitions(request.FrameworkRefs)},
 	); err != nil {
 		return fmt.Errorf("%w: manifest reference validation: %w", constants.ErrBundleAssemblyFailed, err)
+	}
+	requiredSourcePaths := append(append([]string{request.AssertionCatalogRef, request.EvidenceIndexRef}, request.CrosswalkRefs...), request.AssessmentRefs...)
+	sourcePaths := make(map[string]struct{}, len(request.SourceArtifacts))
+	for _, source := range request.SourceArtifacts {
+		sourcePaths[source.BundlePath] = struct{}{}
+	}
+	for _, requiredPath := range requiredSourcePaths {
+		if _, exists := sourcePaths[requiredPath]; !exists {
+			return fmt.Errorf("%w: manifest-referenced source artifact %s is missing", constants.ErrBundleArtifactMissing, requiredPath)
+		}
 	}
 	if len(request.RenderedFormats) == 0 {
 		return fmt.Errorf("%w: at least one rendered format is required", constants.ErrBundleAssemblyFailed)

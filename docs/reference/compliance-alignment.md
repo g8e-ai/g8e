@@ -69,7 +69,7 @@ g8e compliance evidence-graph verify \
   --eval-run <eval-run-id>
 ```
 
-Generate canonical analysis from an explicit scope and evidence window. Repeat `--demo-run` and `--eval-run` as needed, and select `json`, `oscal`, `markdown`, `html`, or `cli`:
+Generate and persist a signed report bundle from an explicit scope and evidence window. Repeat `--demo-run` and `--eval-run` as needed, select the `public` or `restricted` profile, and supply the dedicated compliance-report signing identity:
 
 ```bash
 g8e compliance report generate \
@@ -78,7 +78,17 @@ g8e compliance report generate \
   --eval-run <eval-run-id> \
   --window-start-unix-ms <inclusive-start> \
   --window-end-unix-ms <inclusive-end> \
-  --format json
+  --report-id <report-id> \
+  --profile public \
+  --signing-metadata <signing-metadata.json> \
+  --signing-private-key <signing-private-key.hex>
+```
+
+Verify the persisted bundle independently with an external assessed trust policy:
+
+```bash
+g8e compliance report verify <bundle-manifest.json> \
+  --trust-policy <assessed-trust-policy.json>
 ```
 
 Verify one persisted demo run independently:
@@ -87,7 +97,7 @@ Verify one persisted demo run independently:
 g8e compliance demo-run verify <run-id>
 ```
 
-`compliance report generate` and all verification commands are read-only. Report generation does not collect evidence or mutate assessed state. Complete signed bundle assembly and `compliance report verify` remain separate outstanding work; a rendered analysis is not a signed report bundle.
+`compliance report generate` reads persisted evidence without mutating assessed state, assembles every canonical analysis, framework profile, protected source-verification result, and rendered format into an immutable signed bundle, then persists the protected bodies before writing the canonical descriptor last. `compliance report verify` is read-only and offline: it requires assessed trust outside the bundle, verifies directory integrity, checks every protected body and checksum root, verifies both signatures, validates protected source-verification-result composition, and deterministically reproduces every renderer. Complete raw source inventories and independent replay of demo and eval source verification from bundled bodies remain outstanding.
 
 ## Generated artifacts
 
@@ -99,7 +109,7 @@ Assessment results belong in generated artifacts, not this document. The reposit
 - [v2.1.4 release evidence (CSV)](../release_notes/v2.1.x/v2.1.4-compliance-evidence.csv)
 - [Current public README evidence index](../evidence/readme/current/index.json)
 
-The release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the complete signed bundle and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. Each generated artifact carries its own release, generation time, scope-related inputs, and claim boundaries; later evidence does not rewrite an earlier result.
+The release-evidence files aggregate live KSI results, KSI history inventory, and independently verified demo runs. They predate the current signed report-bundle implementation and are not substitutes for canonical `ComplianceAnalysis`, deterministic framework profiles, or offline bundle verification. Each generated artifact carries its own release, generation time, scope-related inputs, and claim boundaries; later evidence does not rewrite an earlier result.
 
 ## Responsibility boundaries
 

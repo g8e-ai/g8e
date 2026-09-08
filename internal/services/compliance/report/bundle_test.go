@@ -8,10 +8,13 @@
 package report
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -62,6 +65,10 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 			FrameworkVersion: "CR26-2026-06-24",
 		}},
 	}
+	assertionCatalogRef := path.Join(constants.ComplianceBundleAssertionsDirname, constants.ComplianceBundleAssertionCatalogFilename)
+	crosswalkRef := path.Join(constants.ComplianceBundleCrosswalksDirname, constants.ComplianceBundleCrosswalkFilename)
+	assessmentRef := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename)
+	evidenceIndexRef := path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename)
 	request := BundleAssemblyRequest{
 		Profile:         ProfilePublic,
 		Analysis:        analysis,
@@ -73,10 +80,16 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 		FrameworkRefs: []*compliancev1.VersionedReference{
 			{Id: "fedramp-20x", Version: "CR26-2026-06-24"},
 		},
-		AssertionCatalogRef: path.Join(constants.ComplianceBundleAssertionsDirname, constants.ComplianceBundleAssertionCatalogFilename),
-		CrosswalkRefs:       []string{path.Join(constants.ComplianceBundleCrosswalksDirname, constants.ComplianceBundleCrosswalkFilename)},
-		AssessmentRefs:      []string{path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename)},
-		EvidenceIndexRef:    path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename),
+		AssertionCatalogRef: assertionCatalogRef,
+		CrosswalkRefs:       []string{crosswalkRef},
+		AssessmentRefs:      []string{assessmentRef},
+		EvidenceIndexRef:    evidenceIndexRef,
+		SourceArtifacts: []SourceArtifact{
+			{BundlePath: assertionCatalogRef, Body: []byte(`{"catalog_id":"assertions"}`), MediaType: constants.MediaTypeJSON},
+			{BundlePath: crosswalkRef, Body: []byte(`{"catalog_id":"crosswalks"}`), MediaType: constants.MediaTypeJSON},
+			{BundlePath: assessmentRef, Body: []byte(`{"assessment_id":"assessment-1"}`), MediaType: constants.MediaTypeJSON},
+			{BundlePath: evidenceIndexRef, Body: []byte(`{"artifact_id":"evidence-1"}`), MediaType: constants.MediaTypeJSON},
+		},
 	}
 	return request, frameworks
 }
@@ -98,6 +111,209 @@ func bundleSigningIdentityFixture(t *testing.T) *ComplianceReportSigningIdentity
 	identity, err := NewComplianceReportSigningIdentity(metadata, privateKey)
 	require.NoError(t, err)
 	return identity
+}
+
+type recordingBundleFileService struct {
+	files         map[string][]byte
+	writes        []string
+	writeErrPath  string
+	writeErr      error
+	removedPaths  []string
+	existingPaths map[string]bool
+}
+
+func newRecordingBundleFileService() *recordingBundleFileService {
+	return &recordingBundleFileService{
+		files:         make(map[string][]byte),
+		existingPaths: make(map[string]bool),
+	}
+}
+
+func (s *recordingBundleFileService) MkdirAll(context.Context, string, os.FileMode) error {
+	return nil
+}
+
+func (s *recordingBundleFileService) CreateRuntimeTree(context.Context) error {
+	panic("unexpected CreateRuntimeTree")
+}
+
+func (s *recordingBundleFileService) ReadFile(_ context.Context, relPath string) ([]byte, error) {
+	body, ok := s.files[relPath]
+	if !ok {
+		return nil, constants.ErrNotFound
+	}
+	return append([]byte(nil), body...), nil
+}
+
+func (s *recordingBundleFileService) FileExists(_ context.Context, relPath string) (bool, error) {
+	return s.existingPaths[relPath], nil
+}
+
+func (s *recordingBundleFileService) Stat(context.Context, string) (os.FileInfo, error) {
+	panic("unexpected Stat")
+}
+
+func (s *recordingBundleFileService) WriteFile(_ context.Context, relPath string, data []byte, _ os.FileMode) error {
+	s.writes = append(s.writes, relPath)
+	if relPath == s.writeErrPath {
+		return s.writeErr
+	}
+	s.files[relPath] = append([]byte(nil), data...)
+	return nil
+}
+
+func (s *recordingBundleFileService) OpenForAppend(context.Context, string, os.FileMode) (*os.File, error) {
+	panic("unexpected OpenForAppend")
+}
+
+func (s *recordingBundleFileService) OpenForRead(context.Context, string) (*os.File, error) {
+	panic("unexpected OpenForRead")
+}
+
+func (s *recordingBundleFileService) Remove(context.Context, string) error {
+	panic("unexpected Remove")
+}
+
+func (s *recordingBundleFileService) RemoveAll(_ context.Context, relPath string) error {
+	s.removedPaths = append(s.removedPaths, relPath)
+	for filePath := range s.files {
+		if filePath == relPath || strings.HasPrefix(filePath, relPath+"/") {
+			delete(s.files, filePath)
+		}
+	}
+	return nil
+}
+
+func (s *recordingBundleFileService) ReadDir(context.Context, string) ([]os.DirEntry, error) {
+	panic("unexpected ReadDir")
+}
+
+func (s *recordingBundleFileService) Rename(context.Context, string, string) error {
+	panic("unexpected Rename")
+}
+
+func (s *recordingBundleFileService) EnforceDirPermissions(context.Context, string, os.FileMode) error {
+	panic("unexpected EnforceDirPermissions")
+}
+
+func (s *recordingBundleFileService) EnforceFilePermissions(context.Context, string, os.FileMode) error {
+	panic("unexpected EnforceFilePermissions")
+}
+
+func (s *recordingBundleFileService) Resolve(relPath string) string {
+	return relPath
+}
+
+func (s *recordingBundleFileService) Rel(absPath string) (string, error) {
+	return absPath, nil
+}
+
+func (s *recordingBundleFileService) RelFromAbs(absPath string) (string, error) {
+	return absPath, nil
+}
+
+func TestPersistBundle_WritesExactProtectedBodiesBeforeCanonicalDescriptor(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	result, err := AssembleBundle(request)
+	require.NoError(t, err)
+	require.NoError(t, SignBundle(result, bundleSigningIdentityFixture(t)))
+	fileSvc := newRecordingBundleFileService()
+
+	descriptorPath, err := PersistBundle(context.Background(), fileSvc, result)
+	require.NoError(t, err)
+
+	bundleDir := path.Join(constants.ComplianceBundlesDirname, request.ReportID)
+	expectedDescriptorPath := path.Join(bundleDir, constants.ComplianceBundleManifestPath)
+	assert.Equal(t, expectedDescriptorPath, descriptorPath)
+	require.Len(t, fileSvc.writes, len(result.ArtifactBodies)+1)
+	assert.Equal(t, expectedDescriptorPath, fileSvc.writes[len(fileSvc.writes)-1])
+	for _, artifact := range result.ArtifactBodies {
+		assert.Equal(t, artifact.Body, fileSvc.files[path.Join(bundleDir, artifact.BundlePath)])
+	}
+	descriptorBytes, err := compliancev1.MarshalCanonical(result.Bundle)
+	require.NoError(t, err)
+	assert.Equal(t, descriptorBytes, fileSvc.files[expectedDescriptorPath])
+}
+
+func TestPersistBundle_RejectsInvalidAssemblyResultsBeforeWriting(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*BundleAssemblyResult)
+	}{
+		{
+			name: "missing protected body",
+			mutate: func(result *BundleAssemblyResult) {
+				result.ArtifactBodies = result.ArtifactBodies[:len(result.ArtifactBodies)-1]
+			},
+		},
+		{
+			name: "protected body differs from descriptor",
+			mutate: func(result *BundleAssemblyResult) {
+				result.ArtifactBodies[0].Body = []byte("mutated")
+			},
+		},
+		{
+			name: "unsafe report ID",
+			mutate: func(result *BundleAssemblyResult) {
+				result.Bundle.Manifest.ReportId = constants.PathParentDir
+			},
+		},
+		{
+			name: "unsigned bundle",
+			mutate: func(result *BundleAssemblyResult) {
+				result.Bundle.ChecksumRootSignature = nil
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, _ := bundleAssemblyFixture(t)
+			result, err := AssembleBundle(request)
+			require.NoError(t, err)
+			require.NoError(t, SignBundle(result, bundleSigningIdentityFixture(t)))
+			test.mutate(result)
+			fileSvc := newRecordingBundleFileService()
+
+			_, err = PersistBundle(context.Background(), fileSvc, result)
+
+			assert.ErrorIs(t, err, constants.ErrBundlePersistenceFailed)
+			assert.Empty(t, fileSvc.writes)
+		})
+	}
+}
+
+func TestPersistBundle_RejectsExistingBundleWithoutOverwriting(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	result, err := AssembleBundle(request)
+	require.NoError(t, err)
+	require.NoError(t, SignBundle(result, bundleSigningIdentityFixture(t)))
+	fileSvc := newRecordingBundleFileService()
+	bundleDir := path.Join(constants.ComplianceBundlesDirname, request.ReportID)
+	fileSvc.existingPaths[bundleDir] = true
+
+	_, err = PersistBundle(context.Background(), fileSvc, result)
+
+	assert.ErrorIs(t, err, constants.ErrBundlePersistenceFailed)
+	assert.Empty(t, fileSvc.writes)
+	assert.Empty(t, fileSvc.removedPaths)
+}
+
+func TestPersistBundle_RemovesIncompleteNewBundleAfterWriteFailure(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	result, err := AssembleBundle(request)
+	require.NoError(t, err)
+	require.NoError(t, SignBundle(result, bundleSigningIdentityFixture(t)))
+	fileSvc := newRecordingBundleFileService()
+	bundleDir := path.Join(constants.ComplianceBundlesDirname, request.ReportID)
+	fileSvc.writeErrPath = path.Join(bundleDir, result.ArtifactBodies[len(result.ArtifactBodies)-1].BundlePath)
+	fileSvc.writeErr = errors.New("injected write failure")
+
+	_, err = PersistBundle(context.Background(), fileSvc, result)
+
+	assert.ErrorIs(t, err, constants.ErrBundlePersistenceFailed)
+	assert.ErrorIs(t, err, fileSvc.writeErr)
+	assert.Equal(t, []string{bundleDir}, fileSvc.removedPaths)
+	assert.Empty(t, fileSvc.files)
 }
 
 func TestParseBundleProfile_AcceptsPublicAndRestricted(t *testing.T) {
@@ -310,6 +526,50 @@ func TestAssembleBundle_RejectsDuplicateBundlePaths(t *testing.T) {
 	})
 	_, err := AssembleBundle(request)
 	assert.ErrorIs(t, err, constants.ErrBundleChecksumRootFailed)
+}
+
+func TestAssembleBundle_IncludesManifestReferencedSourceArtifacts(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.SourceArtifacts = []SourceArtifact{
+		{BundlePath: request.AssertionCatalogRef, Body: []byte(`{"catalog_id":"assertions"}`), MediaType: constants.MediaTypeJSON},
+		{BundlePath: request.CrosswalkRefs[0], Body: []byte(`{"catalog_id":"crosswalks"}`), MediaType: constants.MediaTypeJSON},
+		{BundlePath: request.AssessmentRefs[0], Body: []byte(`{"assessment_id":"assessment-1"}`), MediaType: constants.MediaTypeJSON},
+		{BundlePath: request.EvidenceIndexRef, Body: []byte(`{"artifact_id":"evidence-1"}`), MediaType: constants.MediaTypeJSON},
+	}
+
+	result, err := AssembleBundle(request)
+
+	require.NoError(t, err)
+	for _, source := range request.SourceArtifacts {
+		assert.Contains(t, artifactBundlePaths(result.Bundle.GetArtifacts()), source.BundlePath)
+		assert.Equal(t, source.Body, artifactBodyAt(result.ArtifactBodies, source.BundlePath))
+	}
+}
+
+func TestAssembleBundle_RejectsMissingManifestReferencedSourceArtifacts(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.SourceArtifacts = nil
+
+	_, err := AssembleBundle(request)
+
+	assert.ErrorIs(t, err, constants.ErrBundleArtifactMissing)
+}
+
+func artifactBundlePaths(artifacts []*compliancev1.BundleArtifact) []string {
+	paths := make([]string, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		paths = append(paths, artifact.GetBundlePath())
+	}
+	return paths
+}
+
+func artifactBodyAt(bodies []BundleArtifactBody, bundlePath string) []byte {
+	for _, body := range bodies {
+		if body.BundlePath == bundlePath {
+			return body.Body
+		}
+	}
+	return nil
 }
 
 func TestSignBundle_SignsChecksumRootAndManifestRoot(t *testing.T) {
