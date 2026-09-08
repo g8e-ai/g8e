@@ -1218,9 +1218,9 @@ var (
 	ErrEvidenceVerifierUnverified   = errors.New("compliance: evidence verifier identity not verified")
 
 	// Compliance report bundle assembly errors
-	ErrBundleAssemblyFailed    = errors.New("compliance: report bundle assembly failed")
+	ErrBundleAssemblyFailed     = errors.New("compliance: report bundle assembly failed")
 	ErrBundleProfileUnsupported = errors.New("compliance: unsupported bundle profile")
-	ErrBundleArtifactMissing   = errors.New("compliance: bundle artifact content is missing")
+	ErrBundleArtifactMissing    = errors.New("compliance: bundle artifact content is missing")
 	ErrBundleChecksumRootFailed = errors.New("compliance: bundle checksum root computation failed")
 
 	// Compliance KSI history errors

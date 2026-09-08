@@ -396,7 +396,7 @@ func ValidateControlAssessment(assessment *compliancev1.FrameworkControlAssessme
 }
 
 func ValidateReportManifest(manifest *compliancev1.ComplianceReportManifest, frameworks *compliancev1.FrameworkCatalog) error {
-	if manifest == nil || manifest.ReportId == "" || manifest.ReportSchemaVersion == "" || manifest.GeneratedAt == nil || manifest.GeneratedAt.CheckValid() != nil || manifest.GeneratorIdentity == "" || manifest.GeneratorVersion == "" || manifest.ScopeRef == "" || len(manifest.FrameworkRefs) == 0 || manifest.AssertionCatalogRef == "" || len(manifest.CrosswalkRefs) == 0 || len(manifest.AssessmentRefs) == 0 || manifest.EvidenceIndexRef == "" || manifest.Signature == nil || manifest.ManifestSha256 == "" {
+	if manifest == nil || manifest.ReportId == "" || manifest.ReportSchemaVersion == "" || manifest.GeneratedAt == nil || manifest.GeneratedAt.CheckValid() != nil || manifest.GeneratorIdentity == "" || manifest.GeneratorVersion == "" || manifest.ScopeRef == "" || len(manifest.FrameworkRefs) == 0 || manifest.AssertionCatalogRef == "" || len(manifest.CrosswalkRefs) == 0 || len(manifest.AssessmentRefs) == 0 || manifest.EvidenceIndexRef == "" || manifest.ManifestSha256 == "" {
 		return fmt.Errorf("%w: report manifest is incomplete", constants.ErrInvalidEvidenceGraph)
 	}
 	if err := validateSHA256(manifest.ManifestSha256); err != nil {

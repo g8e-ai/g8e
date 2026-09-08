@@ -38,6 +38,8 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 		GeneratorVersion:      constants.AnalysisBuilderVersion,
 		EvidenceGraphValid:    true,
 	}
+	analysisBytes, err := compliancev1.MarshalCanonical(analysis)
+	require.NoError(t, err)
 	profile := &compliancev1.FrameworkProfile{
 		ProfileId:      "profile:sha256:" + strings.Repeat("b", 64),
 		FrameworkRef:   &compliancev1.VersionedReference{Id: "fedramp-20x", Version: "CR26-2026-06-24"},
@@ -49,7 +51,7 @@ func bundleAssemblyFixture(t *testing.T) (BundleAssemblyRequest, *compliancev1.F
 		Format:     FormatJSON,
 		MediaType:  constants.MediaTypeJSON,
 		BundlePath: constants.ComplianceBundleJSONPath,
-		Body:       []byte(`{"analysis_id":"test"}`),
+		Body:       analysisBytes,
 	}
 	frameworks := &compliancev1.FrameworkCatalog{
 		CatalogId:      "frameworks",
@@ -145,17 +147,8 @@ func TestAssembleBundle_PublicProfile_ProducesChecksummedArtifactsAndManifest(t 
 	assert.Len(t, result.Bundle.GetRenderedFormats(), 1)
 	assert.Equal(t, string(FormatJSON), result.Bundle.GetRenderedFormats()[0].GetFormat())
 
-	assert.NoError(t, catalog.ValidateComplianceReportBundle(
-		&compliancev1.ComplianceReportBundle{
-			Manifest:              manifest,
-			Artifacts:             result.Bundle.GetArtifacts(),
-			Analysis:              result.Bundle.GetAnalysis(),
-			RenderedFormats:       result.Bundle.GetRenderedFormats(),
-			ChecksumRoot:          result.Bundle.GetChecksumRoot(),
-			ChecksumRootSignature: &compliancev1.ReportSignature{KeyId: "key-1", Algorithm: constants.ComplianceReportSignatureAlgorithm, SignedSha256: result.Bundle.GetChecksumRoot(), Signature: strings.Repeat("0", 128)},
-		},
-		frameworks,
-	))
+	require.NoError(t, SignBundle(result, bundleSigningIdentityFixture(t)))
+	assert.NoError(t, catalog.ValidateComplianceReportBundle(result.Bundle, frameworks))
 }
 
 func TestAssembleBundle_RestrictedProfile_IncludesRestrictedArtifactsWithEncryption(t *testing.T) {
@@ -239,9 +232,11 @@ func TestAssembleBundle_ChecksumRootChangesOnArtifactMutation(t *testing.T) {
 	first, err := AssembleBundle(request)
 	require.NoError(t, err)
 	mutated := request
-	mutated.RenderedFormats = make([]RenderedFormat, len(request.RenderedFormats))
-	copy(mutated.RenderedFormats, request.RenderedFormats)
-	mutated.RenderedFormats[0].Body = []byte(`{"analysis_id":"mutated"}`)
+	mutated.Analysis = proto.Clone(request.Analysis).(*compliancev1.ComplianceAnalysis)
+	mutated.Analysis.GeneratorVersion = "mutated"
+	mutated.RenderedFormats = append([]RenderedFormat(nil), request.RenderedFormats...)
+	mutated.RenderedFormats[0].Body, err = compliancev1.MarshalCanonical(mutated.Analysis)
+	require.NoError(t, err)
 	second, err := AssembleBundle(mutated)
 	require.NoError(t, err)
 	assert.NotEqual(t, first.Bundle.GetChecksumRoot(), second.Bundle.GetChecksumRoot())
@@ -289,6 +284,13 @@ func TestAssembleBundle_RejectsEmptyArtifactBody(t *testing.T) {
 	request.RenderedFormats[0].Body = nil
 	_, err := AssembleBundle(request)
 	assert.ErrorIs(t, err, constants.ErrBundleArtifactMissing)
+}
+
+func TestAssembleBundle_RejectsRenderedJSONThatDiffersFromCanonicalAnalysis(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.RenderedFormats[0].Body = []byte(`{"analysis_id":"mutated"}`)
+	_, err := AssembleBundle(request)
+	assert.ErrorIs(t, err, constants.ErrBundleAssemblyFailed)
 }
 
 func TestAssembleBundle_RejectsEmptyBundlePath(t *testing.T) {
@@ -350,14 +352,9 @@ func TestSignBundle_ManifestSignatureBindsManifestContent(t *testing.T) {
 	identity := bundleSigningIdentityFixture(t)
 	require.NoError(t, SignBundle(result, identity))
 
-	manifestBytesWithSigCleared := func() []byte {
-		cloned := proto.Clone(result.Bundle.GetManifest()).(*compliancev1.ComplianceReportManifest)
-		cloned.Signature = nil
-		body, err := compliancev1.MarshalCanonical(cloned)
-		require.NoError(t, err)
-		return body
-	}
-	digest := sha256.Sum256(manifestBytesWithSigCleared())
+	manifestBytes, err := canonicalManifestBytes(result.Bundle.GetManifest())
+	require.NoError(t, err)
+	digest := sha256.Sum256(manifestBytes)
 	assert.Equal(t, hex.EncodeToString(digest[:]), result.Bundle.GetManifest().GetManifestSha256())
 	assert.Equal(t, hex.EncodeToString(digest[:]), result.Bundle.GetManifest().GetSignature().GetSignedSha256())
 }
@@ -394,9 +391,8 @@ func TestSignBundle_ManifestSignatureFailsOnContentMutation(t *testing.T) {
 	require.NoError(t, SignBundle(result, identity))
 
 	mutated := proto.Clone(result.Bundle.GetManifest()).(*compliancev1.ComplianceReportManifest)
-	mutated.Signature = nil
 	mutated.ReportId = "tampered-report-id"
-	mutatedBytes, err := compliancev1.MarshalCanonical(mutated)
+	mutatedBytes, err := canonicalManifestBytes(mutated)
 	require.NoError(t, err)
 	mutatedDigest := sha256.Sum256(mutatedBytes)
 	assert.NotEqual(t, hex.EncodeToString(mutatedDigest[:]), result.Bundle.GetManifest().GetManifestSha256(),

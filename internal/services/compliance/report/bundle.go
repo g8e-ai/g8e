@@ -8,6 +8,7 @@
 package report
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -130,7 +131,14 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 
 	renderedEntries := make([]*compliancev1.RenderedFormatEntry, 0, len(request.RenderedFormats))
 	for _, rendered := range request.RenderedFormats {
-		if err := addArtifact(&artifacts, &checksumEntries, rendered.BundlePath, rendered.Body, rendered.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
+		if rendered.BundlePath == constants.ComplianceBundleAnalysisPath && rendered.Format == FormatJSON && rendered.MediaType == constants.MediaTypeJSON {
+			if err := validateBundleArtifactInputs(rendered.BundlePath, rendered.Body, rendered.MediaType); err != nil {
+				return nil, err
+			}
+			if !bytes.Equal(rendered.Body, analysisBytes) {
+				return nil, fmt.Errorf("%w: rendered JSON does not match canonical analysis", constants.ErrBundleAssemblyFailed)
+			}
+		} else if err := addArtifact(&artifacts, &checksumEntries, rendered.BundlePath, rendered.Body, rendered.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
 			return nil, err
 		}
 		renderedEntries = append(renderedEntries, &compliancev1.RenderedFormatEntry{
@@ -196,9 +204,9 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 // SignBundle signs the checksum root and manifest root with the dedicated
 // compliance-report signing identity. The checksum root signature is stored on
 // the bundle; the manifest signature is stored on the manifest. The manifest
-// SHA-256 is recomputed from the canonical manifest bytes (with the signature
-// field cleared) so the signed digest binds the complete manifest content
-// excluding the signature itself.
+// SHA-256 is recomputed from canonical manifest bytes with the digest and
+// signature fields cleared so the signed digest binds the complete manifest
+// content without becoming self-referential.
 func SignBundle(result *BundleAssemblyResult, identity *ComplianceReportSigningIdentity) error {
 	if result == nil || result.Bundle == nil {
 		return fmt.Errorf("%w: bundle assembly result is missing", constants.ErrBundleAssemblyFailed)
@@ -371,7 +379,10 @@ func computeChecksumRoot(checksums []*compliancev1.ChecksumEntry) (string, error
 }
 
 func canonicalManifestBytes(manifest *compliancev1.ComplianceReportManifest) ([]byte, error) {
-	return compliancev1.MarshalCanonical(manifest)
+	canonical := proto.Clone(manifest).(*compliancev1.ComplianceReportManifest)
+	canonical.ManifestSha256 = ""
+	canonical.Signature = nil
+	return compliancev1.MarshalCanonical(canonical)
 }
 
 func cloneVersionedRefs(refs []*compliancev1.VersionedReference) []*compliancev1.VersionedReference {
