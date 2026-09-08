@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -34,11 +35,16 @@ type BundleArtifactReader interface {
 	ListFiles(context.Context) ([]string, error)
 }
 
+type AuthorizedPlaintextReader interface {
+	ReadPlaintext(context.Context, *compliancev1.BundleArtifact, []byte) ([]byte, error)
+}
+
 type BundleVerificationRequest struct {
-	Bundle      *compliancev1.ComplianceReportBundle
-	Reader      BundleArtifactReader
-	TrustPolicy *compliancev1.ComplianceReportTrustPolicy
-	VerifiedAt  time.Time
+	Bundle                    *compliancev1.ComplianceReportBundle
+	Reader                    BundleArtifactReader
+	TrustPolicy               *compliancev1.ComplianceReportTrustPolicy
+	AuthorizedPlaintextReader AuthorizedPlaintextReader
+	VerifiedAt                time.Time
 }
 
 func VerifyComplianceReportBundle(ctx context.Context, request BundleVerificationRequest) (*compliancev1.ComplianceVerificationReport, error) {
@@ -227,16 +233,30 @@ func (v *bundleVerifier) verifyArtifactBodies(ctx context.Context) {
 		if artifact.GetByteLength() != int64(len(body)) {
 			v.fail(constants.ErrChecksumMismatch, artifact.GetBundlePath(), "artifact byte length does not match protected bytes")
 		}
+		if artifact.GetProfile() == constants.ComplianceBundleProfileRestricted && v.request.AuthorizedPlaintextReader != nil {
+			plaintext, err := v.request.AuthorizedPlaintextReader.ReadPlaintext(ctx, artifact, append([]byte(nil), body...))
+			if err != nil {
+				v.fail(constants.ErrEvidenceEncryptionInvalid, artifact.GetBundlePath(), err.Error())
+				continue
+			}
+			if int64(len(plaintext)) > constants.ComplianceBundleMaxArtifactBytes {
+				v.fail(constants.ErrEvidenceArtifactTooLarge, artifact.GetBundlePath(), "authorized plaintext exceeds verification size limit")
+				continue
+			}
+			plaintextDigest := sha256.Sum256(plaintext)
+			if artifact.GetEncryption().GetPlaintextSha256() != hex.EncodeToString(plaintextDigest[:]) {
+				v.fail(constants.ErrEvidenceEncryptionInvalid, artifact.GetBundlePath(), "authorized plaintext SHA-256 does not match authenticated encryption metadata")
+			}
+		}
 	}
 }
 
 func (v *bundleVerifier) verifyChecksumRoot() {
-	entries := make([]*compliancev1.ChecksumEntry, 0, len(v.request.Bundle.GetArtifacts()))
-	for _, artifact := range v.request.Bundle.GetArtifacts() {
-		if artifact == nil {
-			continue
-		}
-		entries = append(entries, &compliancev1.ChecksumEntry{BundlePath: artifact.GetBundlePath(), Sha256: artifact.GetSha256()})
+	entries, err := artifactDescriptorChecksumEntries(v.request.Bundle.GetArtifacts())
+	if err != nil {
+		v.fail(constants.ErrBundleChecksumRootFailed, constants.ComplianceBundleChecksumsPath, err.Error())
+		v.report.ReproducedChecksumRoot = zeroSHA256()
+		return
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].GetBundlePath() < entries[j].GetBundlePath() })
 	root, err := computeChecksumRoot(entries)
@@ -270,7 +290,78 @@ func (v *bundleVerifier) verifySignatures() {
 	}
 }
 
+func (v *bundleVerifier) verifyCanonicalReportSources() {
+	manifest := v.request.Bundle.GetManifest()
+	assertionPath := manifest.GetAssertionCatalogRef()
+	assertions := &compliancev1.ControlAssertionCatalog{}
+	if !v.decodeCanonicalSource(assertionPath, assertions) {
+		return
+	}
+	if err := catalog.ValidateAssertionCatalog(assertions); err != nil {
+		v.fail(err, assertionPath, err.Error())
+		return
+	}
+	frameworkPath := path.Join(constants.ComplianceBundleFrameworkCatalogsDirname, constants.ComplianceBundleFrameworkCatalogFilename)
+	frameworks := &compliancev1.FrameworkCatalog{}
+	if !v.decodeCanonicalSource(frameworkPath, frameworks) {
+		return
+	}
+	if err := catalog.ValidateFrameworkCatalog(frameworks); err != nil {
+		v.fail(err, frameworkPath, err.Error())
+		return
+	}
+	for _, reference := range manifest.GetFrameworkRefs() {
+		if reference == nil || catalog.FindFramework(frameworks, reference.GetId(), reference.GetVersion()) == nil {
+			v.fail(constants.ErrUnsupportedFramework, frameworkPath, "manifest framework is absent from the protected framework catalog")
+		}
+	}
+	for _, crosswalkPath := range manifest.GetCrosswalkRefs() {
+		crosswalks := &compliancev1.ControlCrosswalkCatalog{}
+		if !v.decodeCanonicalSource(crosswalkPath, crosswalks) {
+			continue
+		}
+		if err := catalog.ValidateCatalogSet(assertions, frameworks, crosswalks); err != nil {
+			v.fail(err, crosswalkPath, err.Error())
+		}
+	}
+	assertionAssessments, err := marshalCanonicalMessages(v.request.Bundle.GetAnalysis().GetAssertionAssessments())
+	v.verifyCanonicalSourceProjection(path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename), assertionAssessments, err)
+	controlAssessments, err := marshalCanonicalMessages(v.request.Bundle.GetAnalysis().GetFrameworkAssessments())
+	v.verifyCanonicalSourceProjection(path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename), controlAssessments, err)
+	evidenceIndex, err := marshalCanonicalMessages(v.request.Bundle.GetAnalysis().GetEvidenceResources())
+	v.verifyCanonicalSourceProjection(manifest.GetEvidenceIndexRef(), evidenceIndex, err)
+}
+
+func (v *bundleVerifier) decodeCanonicalSource(bundlePath string, message proto.Message) bool {
+	body, exists := v.bodies[bundlePath]
+	if !exists {
+		v.fail(constants.ErrBundleArtifactMissing, bundlePath, "canonical report source is missing")
+		return false
+	}
+	if err := compliancev1.UnmarshalCanonical(body, message); err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+		return false
+	}
+	return true
+}
+
+func (v *bundleVerifier) verifyCanonicalSourceProjection(bundlePath string, expected []byte, err error) {
+	if err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, err.Error())
+		return
+	}
+	body, exists := v.bodies[bundlePath]
+	if !exists {
+		v.fail(constants.ErrBundleArtifactMissing, bundlePath, "canonical report source is missing")
+		return
+	}
+	if !bytes.Equal(body, expected) {
+		v.fail(constants.ErrRendererMismatch, bundlePath, "canonical report source does not reproduce from the typed analysis")
+	}
+}
+
 func (v *bundleVerifier) verifyTypedArtifacts() {
+	v.verifyCanonicalReportSources()
 	analysisBody, ok := v.bodies[constants.ComplianceBundleAnalysisPath]
 	if !ok {
 		v.fail(constants.ErrBundleArtifactMissing, constants.ComplianceBundleAnalysisPath, "canonical analysis artifact is missing")

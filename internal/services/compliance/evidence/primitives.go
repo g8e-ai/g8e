@@ -288,6 +288,22 @@ func ValidateVerificationReport(body []byte, reportID, verifierID, verifierVersi
 	if reportID == "" || verifierID == "" || verifierVersion == "" || notAfter.IsZero() || report.GetReportId() != reportID || report.GetVerifierId() != verifierID || report.GetVerifierVersion() != verifierVersion || !report.GetValid() || len(report.GetFailures()) != 0 || report.GetVerifiedAt() == nil || report.GetVerifiedAt().CheckValid() != nil || report.GetVerifiedAt().AsTime().After(notAfter) {
 		return nil, fmt.Errorf("%w: verification report is invalid or does not match its declared binding", constants.ErrReportVerificationFailed)
 	}
+	expectedCheckID := ""
+	switch {
+	case verifierID == constants.DemoRunVerifierID && verifierVersion == constants.DemoRunVerifierVersion:
+		expectedCheckID = constants.DemoRunVerificationCheck
+	case verifierID == constants.EvalRunVerifierID && verifierVersion == constants.EvalRunVerifierVersion:
+		expectedCheckID = constants.EvalRunVerificationCheck
+	default:
+		return nil, fmt.Errorf("%w: protected source verifier is unsupported", constants.ErrReportVerificationFailed)
+	}
+	if len(report.GetChecks()) != 1 {
+		return nil, fmt.Errorf("%w: protected source verification report requires exactly one check", constants.ErrReportVerificationFailed)
+	}
+	check := report.GetChecks()[0]
+	if check == nil || check.GetCheckId() != expectedCheckID || check.GetStatus() != compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED || check.GetVerifierId() != verifierID || check.GetVerifierVersion() != verifierVersion || len(check.GetEvidenceRefs()) != 1 || check.GetEvidenceRefs()[0] != reportID || len(check.GetFailures()) != 0 {
+		return nil, fmt.Errorf("%w: protected source verification check is invalid or does not match its declared binding", constants.ErrReportVerificationFailed)
+	}
 	return report, nil
 }
 

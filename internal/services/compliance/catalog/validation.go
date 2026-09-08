@@ -465,9 +465,16 @@ func ValidateBundleArtifact(artifact *compliancev1.BundleArtifact) error {
 	if artifact.ByteLength < 0 {
 		return fmt.Errorf("%w: bundle artifact %s has negative byte length", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
 	}
+	restrictedPath := bundlePathWithinDirectory(artifact.BundlePath, constants.ComplianceBundleRestrictedDirname)
 	if artifact.Profile == constants.ComplianceBundleProfileRestricted {
+		if !restrictedPath {
+			return fmt.Errorf("%w: restricted bundle artifact %s is outside the restricted namespace", constants.ErrBundleProfileUnsupported, artifact.BundlePath)
+		}
 		if artifact.Encryption == nil || artifact.Encryption.Algorithm == "" || artifact.Encryption.KeyId == "" || artifact.Encryption.AuthorizationScope == "" || artifact.Encryption.PlaintextSha256 == "" || artifact.Encryption.AuthenticatedMetadataSha256 == "" {
 			return fmt.Errorf("%w: restricted bundle artifact %s requires complete encryption metadata", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath)
+		}
+		if artifact.Encryption.Algorithm != constants.EvalEvidenceEncryptionAES256GCM {
+			return fmt.Errorf("%w: restricted bundle artifact %s uses unsupported encryption algorithm %q", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath, artifact.Encryption.Algorithm)
 		}
 		if err := validateSHA256(artifact.Encryption.PlaintextSha256); err != nil {
 			return fmt.Errorf("%w: restricted artifact %s plaintext digest: %v", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath, err)
@@ -477,8 +484,24 @@ func ValidateBundleArtifact(artifact *compliancev1.BundleArtifact) error {
 		}
 	} else if artifact.Encryption != nil {
 		return fmt.Errorf("%w: public bundle artifact %s must not carry encryption metadata", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath)
+	} else if restrictedPath {
+		return fmt.Errorf("%w: public bundle artifact %s occupies the restricted namespace", constants.ErrBundleProfileUnsupported, artifact.BundlePath)
 	}
 	return nil
+}
+
+func bundlePathWithinDirectory(bundlePath, directory string) bool {
+	current := path.Clean(bundlePath)
+	for {
+		parent := path.Dir(current)
+		if parent == constants.PathCurrentDir {
+			return current == directory
+		}
+		if parent == constants.PathRoot {
+			return false
+		}
+		current = parent
+	}
 }
 
 func ValidateComplianceReportBundle(bundle *compliancev1.ComplianceReportBundle, frameworks *compliancev1.FrameworkCatalog) error {
@@ -519,6 +542,9 @@ func ValidateComplianceReportBundle(bundle *compliancev1.ComplianceReportBundle,
 	for _, artifact := range bundle.Artifacts {
 		if err := ValidateBundleArtifact(artifact); err != nil {
 			return err
+		}
+		if bundle.Manifest.GetBundleProfile() == constants.ComplianceBundleProfilePublic && artifact.GetProfile() != constants.ComplianceBundleProfilePublic {
+			return fmt.Errorf("%w: public bundle contains restricted artifact %s", constants.ErrBundleProfileUnsupported, artifact.GetBundlePath())
 		}
 		if _, exists := seenPaths[artifact.BundlePath]; exists {
 			return fmt.Errorf("%w: duplicate bundle artifact path %s", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)

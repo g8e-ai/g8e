@@ -614,6 +614,12 @@ func TestVerifyEvalRun_AcceptsCompleteBundle(t *testing.T) {
 	assert.Equal(t, fix.runID, report.GetReportId())
 	assert.Equal(t, constants.EvalRunVerifierID, report.GetVerifierId())
 	assert.Equal(t, constants.EvalRunVerifierVersion, report.GetVerifierVersion())
+	require.Len(t, report.GetChecks(), 1)
+	assert.Equal(t, constants.EvalRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, report.GetChecks()[0].GetStatus())
+	assert.Contains(t, report.GetChecks()[0].GetEvidenceRefs(), fix.runID)
+	assert.Equal(t, report.GetVerifierId(), report.GetChecks()[0].GetVerifierId())
+	assert.Equal(t, report.GetVerifierVersion(), report.GetChecks()[0].GetVerifierVersion())
 	assert.Equal(t, verifiedAt, report.GetVerifiedAt().AsTime())
 }
 
@@ -646,6 +652,10 @@ func TestVerifyEvalRun_ReportsImporterFailures(t *testing.T) {
 			assert.False(t, report.GetValid())
 			require.NotEmpty(t, report.GetFailures())
 			assert.Equal(t, constants.ErrEvidenceImporterFailed.Error(), report.GetFailures()[0].GetCode())
+			require.Len(t, report.GetChecks(), 1)
+			assert.Equal(t, constants.EvalRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+			assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED, report.GetChecks()[0].GetStatus())
+			assert.Equal(t, report.GetFailures(), report.GetChecks()[0].GetFailures())
 		})
 	}
 }

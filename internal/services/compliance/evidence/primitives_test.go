@@ -307,6 +307,13 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 		VerifiedAt:      timestamppb.New(verifiedAt),
 		VerifierId:      constants.DemoRunVerifierID,
 		VerifierVersion: constants.DemoRunVerifierVersion,
+		Checks: []*compliancev1.VerificationCheckResult{NewVerificationCheckResult(
+			constants.DemoRunVerificationCheck,
+			constants.DemoRunVerifierID,
+			constants.DemoRunVerifierVersion,
+			[]string{"run-1"},
+			nil,
+		)},
 	}
 	tests := []struct {
 		name      string
@@ -323,6 +330,22 @@ func TestValidateVerificationReport_EnforcesCanonicalBoundSuccessfulReport(t *te
 		{name: "invalid report", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Valid = false }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "report contains failures", mutate: func(report *compliancev1.ComplianceVerificationReport) {
 			report.Failures = []*compliancev1.VerificationFailure{{Code: constants.ErrChecksumMismatch.Error()}}
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "missing verification check", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.Checks = nil }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "duplicate verification check", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks = append(report.Checks, proto.Clone(report.Checks[0]).(*compliancev1.VerificationCheckResult))
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "wrong verification check identity", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].CheckId = constants.EvalRunVerificationCheck
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "unspecified verification check status", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].Status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_UNSPECIFIED
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "verification check lacks run evidence", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].EvidenceRefs = []string{"other-run"}
+		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
+		{name: "verification check verifier mismatch", mutate: func(report *compliancev1.ComplianceVerificationReport) {
+			report.Checks[0].VerifierId = constants.EvalRunVerifierID
 		}, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "missing verification time", mutate: func(report *compliancev1.ComplianceVerificationReport) { report.VerifiedAt = nil }, notAfter: verifiedAt, targetErr: constants.ErrReportVerificationFailed},
 		{name: "verification after cutoff", notAfter: verifiedAt.Add(-time.Nanosecond), targetErr: constants.ErrReportVerificationFailed},

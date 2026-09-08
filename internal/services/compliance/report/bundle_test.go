@@ -378,7 +378,7 @@ func TestAssembleBundle_RestrictedProfile_IncludesRestrictedArtifactsWithEncrypt
 		AuthenticatedMetadataSha256: strings.Repeat("b", 64),
 	}
 	request.RestrictedArtifacts = []RestrictedArtifact{{
-		BundlePath: "restricted/evidence.json",
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 		Body:       []byte(`{"encrypted":"ciphertext"}`),
 		MediaType:  constants.MediaTypeJSON,
 		Encryption: encryption,
@@ -398,11 +398,56 @@ func TestAssembleBundle_RestrictedProfile_IncludesRestrictedArtifactsWithEncrypt
 	assert.True(t, restrictedFound, "restricted profile bundle must include restricted artifacts")
 }
 
+func TestAssembleBundle_RestrictedProfile_BindsEncryptionMetadataToChecksumRoot(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.Profile = ProfileRestricted
+	request.RestrictedArtifacts = []RestrictedArtifact{{
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
+		Body:       []byte(`{"encrypted":"ciphertext"}`),
+		MediaType:  constants.MediaTypeJSON,
+		Encryption: &compliancev1.EvidenceEncryptionMetadata{
+			Algorithm:                   constants.EvalEvidenceEncryptionAES256GCM,
+			KeyId:                       "key-1",
+			AuthorizationScope:          "restricted-evidence",
+			PlaintextSha256:             strings.Repeat("a", 64),
+			AuthenticatedMetadataSha256: strings.Repeat("b", 64),
+		},
+	}}
+	first, err := AssembleBundle(request)
+	require.NoError(t, err)
+	request.RestrictedArtifacts[0].Encryption.KeyId = "key-2"
+	second, err := AssembleBundle(request)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, first.Bundle.GetChecksumRoot(), second.Bundle.GetChecksumRoot())
+}
+
+func TestAssembleBundle_RestrictedProfile_RejectsUnsupportedEncryptionAlgorithm(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.Profile = ProfileRestricted
+	request.RestrictedArtifacts = []RestrictedArtifact{{
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
+		Body:       []byte(`{"encrypted":"ciphertext"}`),
+		MediaType:  constants.MediaTypeJSON,
+		Encryption: &compliancev1.EvidenceEncryptionMetadata{
+			Algorithm:                   "unsupported",
+			KeyId:                       "key-1",
+			AuthorizationScope:          "restricted-evidence",
+			PlaintextSha256:             strings.Repeat("a", 64),
+			AuthenticatedMetadataSha256: strings.Repeat("b", 64),
+		},
+	}}
+
+	_, err := AssembleBundle(request)
+
+	assert.ErrorIs(t, err, constants.ErrEvidenceEncryptionInvalid)
+}
+
 func TestAssembleBundle_RestrictedProfile_RejectsRestrictedArtifactWithoutEncryption(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
 	request.Profile = ProfileRestricted
 	request.RestrictedArtifacts = []RestrictedArtifact{{
-		BundlePath: "restricted/evidence.json",
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 		Body:       []byte(`{"data":"value"}`),
 		MediaType:  constants.MediaTypeJSON,
 	}}
@@ -410,11 +455,52 @@ func TestAssembleBundle_RestrictedProfile_RejectsRestrictedArtifactWithoutEncryp
 	assert.ErrorIs(t, err, constants.ErrBundleAssemblyFailed)
 }
 
+func TestAssembleBundle_RestrictedProfile_RejectsArtifactOutsideRestrictedNamespace(t *testing.T) {
+	tests := []struct {
+		name       string
+		bundlePath string
+	}{
+		{name: "top-level public path", bundlePath: constants.ComplianceBundleUnexpectedTestPath},
+		{name: "nested restricted directory outside reserved root", bundlePath: constants.ComplianceBundleMisnestedRestrictedTestPath},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, _ := bundleAssemblyFixture(t)
+			request.Profile = ProfileRestricted
+			request.RestrictedArtifacts = []RestrictedArtifact{{
+				BundlePath: test.bundlePath,
+				Body:       []byte(`{"encrypted":"ciphertext"}`),
+				MediaType:  constants.MediaTypeJSON,
+				Encryption: &compliancev1.EvidenceEncryptionMetadata{
+					Algorithm:                   constants.EvalEvidenceEncryptionAES256GCM,
+					KeyId:                       "key-1",
+					AuthorizationScope:          constants.EvalRestrictedEvidenceScope,
+					PlaintextSha256:             strings.Repeat("a", 64),
+					AuthenticatedMetadataSha256: strings.Repeat("b", 64),
+				},
+			}}
+
+			_, err := AssembleBundle(request)
+
+			assert.ErrorIs(t, err, constants.ErrBundleProfileUnsupported)
+		})
+	}
+}
+
+func TestAssembleBundle_PublicProfile_RejectsPublicArtifactInRestrictedNamespace(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath, Body: []byte(`{"plaintext":"restricted"}`), MediaType: constants.MediaTypeJSON})
+
+	_, err := AssembleBundle(request)
+
+	assert.ErrorIs(t, err, constants.ErrBundleProfileUnsupported)
+}
+
 func TestAssembleBundle_PublicProfile_OmitsRestrictedArtifacts(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
 	request.Profile = ProfilePublic
 	request.RestrictedArtifacts = []RestrictedArtifact{{
-		BundlePath: "restricted/evidence.json",
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 		Body:       []byte(`{"encrypted":"ciphertext"}`),
 		MediaType:  constants.MediaTypeJSON,
 		Encryption: &compliancev1.EvidenceEncryptionMetadata{
@@ -766,7 +852,7 @@ func TestValidateComplianceReportBundle_RejectsRenderedFormatWithoutArtifact(t *
 
 func TestValidateBundleArtifact_RejectsRestrictedWithoutEncryption(t *testing.T) {
 	artifact := &compliancev1.BundleArtifact{
-		BundlePath: "restricted/evidence.json",
+		BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
 		Sha256:     strings.Repeat("a", 64),
 		MediaType:  constants.MediaTypeJSON,
 		Profile:    constants.ComplianceBundleProfileRestricted,

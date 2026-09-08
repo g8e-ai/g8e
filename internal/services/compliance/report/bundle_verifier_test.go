@@ -37,6 +37,20 @@ type bundleArtifactReaderStub struct {
 	readErr error
 }
 
+type authorizedPlaintextReaderStub struct {
+	plaintext []byte
+	err       error
+	calls     int
+}
+
+func (r *authorizedPlaintextReaderStub) ReadPlaintext(_ context.Context, _ *compliancev1.BundleArtifact, _ []byte) ([]byte, error) {
+	r.calls++
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]byte(nil), r.plaintext...), nil
+}
+
 func (r *bundleArtifactReaderStub) ReadFile(_ context.Context, bundlePath string) ([]byte, error) {
 	if r.readErr != nil {
 		return nil, r.readErr
@@ -147,6 +161,11 @@ func demoReplaySourceFixture(t *testing.T, runID string, generatedAt time.Time) 
 
 func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
 	t.Helper()
+	return signedBundleVerificationFixtureWithRequest(t, nil)
+}
+
+func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*BundleAssemblyRequest)) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
+	t.Helper()
 	request, _ := bundleAssemblyFixture(t)
 	request.Analysis = rendererTestAnalysis()
 	request.Analysis.EvidenceResources = []*compliancev1.ComplianceEvidenceReference{{
@@ -171,21 +190,31 @@ func signedBundleVerificationFixture(t *testing.T) (*compliancev1.ComplianceRepo
 	request.RenderedFormats = renderedFormats
 	controlAssessmentRef := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename)
 	request.AssessmentRefs = append(request.AssessmentRefs, controlAssessmentRef)
-	request.SourceArtifacts = append(request.SourceArtifacts,
-		SourceArtifact{BundlePath: path.Join(constants.ComplianceBundleFrameworkCatalogsDirname, constants.ComplianceBundleFrameworkCatalogFilename), Body: []byte(`{"catalog_id":"frameworks"}`), MediaType: constants.MediaTypeJSON},
-		SourceArtifact{BundlePath: controlAssessmentRef, Body: []byte(`{"assessment_id":"control-assessment-1"}`), MediaType: constants.MediaTypeJSON},
-	)
+	assertions, frameworks, crosswalks, err := catalog.LoadCanonicalCatalogs()
+	require.NoError(t, err)
+	request.SourceArtifacts, err = canonicalReportSourceArtifacts(GenerationRequest{Assertions: assertions, Frameworks: frameworks, Crosswalks: crosswalks}, &GenerationResult{Analysis: request.Analysis})
+	require.NoError(t, err)
 	sourceReportBody, err := compliancev1.MarshalCanonical(&compliancev1.ComplianceVerificationReport{
 		ReportId:        "demo-run-1",
 		Valid:           true,
 		VerifiedAt:      timestamppb.New(request.GeneratedAt),
 		VerifierId:      constants.DemoRunVerifierID,
 		VerifierVersion: constants.DemoRunVerifierVersion,
+		Checks: []*compliancev1.VerificationCheckResult{evidence.NewVerificationCheckResult(
+			constants.DemoRunVerificationCheck,
+			constants.DemoRunVerifierID,
+			constants.DemoRunVerifierVersion,
+			[]string{"demo-run-1"},
+			nil,
+		)},
 	})
 	require.NoError(t, err)
 	demoSourceBase := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1")
 	request.SourceArtifacts = append(request.SourceArtifacts, demoReplaySourceFixture(t, "demo-run-1", request.GeneratedAt)...)
 	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: path.Join(demoSourceBase, constants.ComplianceBundleSourceVerificationFilename), Body: sourceReportBody, MediaType: constants.MediaTypeJSON})
+	if mutate != nil {
+		mutate(&request)
+	}
 	result, err := AssembleBundle(request)
 	require.NoError(t, err)
 	identity := bundleSigningIdentityFixture(t)
@@ -237,6 +266,207 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *test
 		assert.Equal(t, report.GetVerifierVersion(), check.GetVerifierVersion())
 		assert.Empty(t, check.GetFailures())
 	}
+}
+
+func signedRestrictedBundleVerificationFixture(t *testing.T, plaintext []byte) (*compliancev1.ComplianceReportBundle, *bundleArtifactReaderStub, *compliancev1.ComplianceReportTrustPolicy, time.Time) {
+	t.Helper()
+	plaintextDigest := sha256.Sum256(plaintext)
+	return signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		request.Profile = ProfileRestricted
+		request.RestrictedArtifacts = []RestrictedArtifact{{
+			BundlePath: constants.ComplianceBundleRestrictedEvidenceTestPath,
+			Body:       []byte(`{"ciphertext":"authenticated"}`),
+			MediaType:  constants.MediaTypeJSON,
+			Encryption: &compliancev1.EvidenceEncryptionMetadata{
+				Algorithm:                   constants.EvalEvidenceEncryptionAES256GCM,
+				KeyId:                       "key-1",
+				AuthorizationScope:          constants.EvalRestrictedEvidenceScope,
+				PlaintextSha256:             hex.EncodeToString(plaintextDigest[:]),
+				AuthenticatedMetadataSha256: strings.Repeat("b", 64),
+			},
+		}}
+	})
+}
+
+func TestVerifyComplianceReportBundle_RejectsSignedCanonicalReportSourceMutations(t *testing.T) {
+	assertionPath := path.Join(constants.ComplianceBundleAssertionsDirname, constants.ComplianceBundleAssertionCatalogFilename)
+	frameworkPath := path.Join(constants.ComplianceBundleFrameworkCatalogsDirname, constants.ComplianceBundleFrameworkCatalogFilename)
+	crosswalkPath := path.Join(constants.ComplianceBundleCrosswalksDirname, constants.ComplianceBundleCrosswalkFilename)
+	assertionAssessmentsPath := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleAssertionAssessmentsFilename)
+	controlAssessmentsPath := path.Join(constants.ComplianceBundleAssessmentsDirname, constants.ComplianceBundleControlAssessmentsFilename)
+	tests := []struct {
+		name        string
+		bundlePath  string
+		failureCode error
+		mutate      func(*BundleAssemblyRequest) []byte
+	}{
+		{name: "assertion catalog semantics", bundlePath: assertionPath, failureCode: constants.ErrInvalidEvidenceGraph, mutate: func(request *BundleAssemblyRequest) []byte {
+			catalogValue := &compliancev1.ControlAssertionCatalog{}
+			require.NoError(t, compliancev1.UnmarshalCanonical(sourceArtifactBody(t, request.SourceArtifacts, assertionPath), catalogValue))
+			catalogValue.Sha256 = "invalid"
+			body, err := compliancev1.MarshalCanonical(catalogValue)
+			require.NoError(t, err)
+			return body
+		}},
+		{name: "framework catalog semantics", bundlePath: frameworkPath, failureCode: constants.ErrInvalidEvidenceGraph, mutate: func(request *BundleAssemblyRequest) []byte {
+			catalogValue := &compliancev1.FrameworkCatalog{}
+			require.NoError(t, compliancev1.UnmarshalCanonical(sourceArtifactBody(t, request.SourceArtifacts, frameworkPath), catalogValue))
+			catalogValue.Sha256 = "invalid"
+			body, err := compliancev1.MarshalCanonical(catalogValue)
+			require.NoError(t, err)
+			return body
+		}},
+		{name: "crosswalk catalog semantics", bundlePath: crosswalkPath, failureCode: constants.ErrInvalidEvidenceGraph, mutate: func(request *BundleAssemblyRequest) []byte {
+			catalogValue := &compliancev1.ControlCrosswalkCatalog{}
+			require.NoError(t, compliancev1.UnmarshalCanonical(sourceArtifactBody(t, request.SourceArtifacts, crosswalkPath), catalogValue))
+			catalogValue.Sha256 = "invalid"
+			body, err := compliancev1.MarshalCanonical(catalogValue)
+			require.NoError(t, err)
+			return body
+		}},
+		{name: "assertion assessment projection", bundlePath: assertionAssessmentsPath, failureCode: constants.ErrRendererMismatch, mutate: func(request *BundleAssemblyRequest) []byte {
+			assessments := cloneAssertionAssessments(request.Analysis.GetAssertionAssessments())
+			assessments[0].AssessmentId = "mutated-assessment"
+			body, err := marshalCanonicalMessages(assessments)
+			require.NoError(t, err)
+			return body
+		}},
+		{name: "control assessment projection", bundlePath: controlAssessmentsPath, failureCode: constants.ErrRendererMismatch, mutate: func(request *BundleAssemblyRequest) []byte {
+			assessments := cloneControlAssessments(request.Analysis.GetFrameworkAssessments())
+			assessments[0].AssessmentId = "mutated-assessment"
+			body, err := marshalCanonicalMessages(assessments)
+			require.NoError(t, err)
+			return body
+		}},
+		{name: "evidence index projection", bundlePath: path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename), failureCode: constants.ErrRendererMismatch, mutate: func(request *BundleAssemblyRequest) []byte {
+			resources := cloneEvidenceReferences(request.Analysis.GetEvidenceResources())
+			resources[0].RunId = "mutated-run"
+			body, err := marshalCanonicalMessages(resources)
+			require.NoError(t, err)
+			return body
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+				replaceSourceArtifactBody(t, request.SourceArtifacts, test.bundlePath, test.mutate(request))
+			})
+
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
+			assertVerificationFailure(t, report, test.failureCode, test.bundlePath)
+		})
+	}
+}
+
+func sourceArtifactBody(t *testing.T, artifacts []SourceArtifact, bundlePath string) []byte {
+	t.Helper()
+	for _, artifact := range artifacts {
+		if artifact.BundlePath == bundlePath {
+			return artifact.Body
+		}
+	}
+	require.FailNow(t, "source artifact is missing", bundlePath)
+	return nil
+}
+
+func replaceSourceArtifactBody(t *testing.T, artifacts []SourceArtifact, bundlePath string, body []byte) {
+	t.Helper()
+	for index := range artifacts {
+		if artifacts[index].BundlePath == bundlePath {
+			artifacts[index].Body = body
+			return
+		}
+	}
+	require.FailNow(t, "source artifact is missing", bundlePath)
+}
+
+func cloneAssertionAssessments(values []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {
+	clones := make([]*compliancev1.ControlAssertionAssessment, len(values))
+	for index, value := range values {
+		clones[index] = proto.Clone(value).(*compliancev1.ControlAssertionAssessment)
+	}
+	return clones
+}
+
+func cloneControlAssessments(values []*compliancev1.FrameworkControlAssessment) []*compliancev1.FrameworkControlAssessment {
+	clones := make([]*compliancev1.FrameworkControlAssessment, len(values))
+	for index, value := range values {
+		clones[index] = proto.Clone(value).(*compliancev1.FrameworkControlAssessment)
+	}
+	return clones
+}
+
+func cloneEvidenceReferences(values []*compliancev1.ComplianceEvidenceReference) []*compliancev1.ComplianceEvidenceReference {
+	clones := make([]*compliancev1.ComplianceEvidenceReference, len(values))
+	for index, value := range values {
+		clones[index] = proto.Clone(value).(*compliancev1.ComplianceEvidenceReference)
+	}
+	return clones
+}
+
+func TestVerifyComplianceReportBundle_AcceptsRestrictedBundleWithoutPlaintextAccess(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+}
+
+func TestVerifyComplianceReportBundle_VerifiesRestrictedPlaintextDigestWhenAuthorizedReaderProvided(t *testing.T) {
+	plaintext := []byte(`{"secret":"value"}`)
+	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, plaintext)
+	plaintextReader := &authorizedPlaintextReaderStub{plaintext: plaintext}
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+	assert.Equal(t, 1, plaintextReader.calls)
+}
+
+func TestVerifyComplianceReportBundle_RejectsAuthorizedPlaintextDigestMismatch(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"expected"}`))
+	plaintextReader := &authorizedPlaintextReaderStub{plaintext: []byte(`{"secret":"mutated"}`)}
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assert.Contains(t, report.GetFailures(), &compliancev1.VerificationFailure{Code: constants.ErrEvidenceEncryptionInvalid.Error(), SubjectRef: constants.ComplianceBundleRestrictedEvidenceTestPath, Reason: "authorized plaintext SHA-256 does not match authenticated encryption metadata"})
+	assert.Equal(t, 1, plaintextReader.calls)
+}
+
+func TestVerifyComplianceReportBundle_RejectsRestrictedEncryptionMetadataMutation(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+	for _, artifact := range bundle.GetArtifacts() {
+		if artifact.GetBundlePath() == constants.ComplianceBundleRestrictedEvidenceTestPath {
+			artifact.Encryption.AuthenticatedMetadataSha256 = strings.Repeat("c", 64)
+		}
+	}
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assert.Contains(t, report.GetFailures(), &compliancev1.VerificationFailure{Code: constants.ErrChecksumMismatch.Error(), SubjectRef: constants.ComplianceBundleChecksumsPath, Reason: "reproduced checksum root does not match bundle checksum root"})
+}
+
+func TestVerifyComplianceReportBundle_RejectsAuthorizedPlaintextReaderFailure(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedRestrictedBundleVerificationFixture(t, []byte(`{"secret":"value"}`))
+	plaintextReader := &authorizedPlaintextReaderStub{err: constants.ErrEvidenceTrustNotAssessed}
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt, AuthorizedPlaintextReader: plaintextReader})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assert.Contains(t, report.GetFailures(), &compliancev1.VerificationFailure{Code: constants.ErrEvidenceEncryptionInvalid.Error(), SubjectRef: constants.ComplianceBundleRestrictedEvidenceTestPath, Reason: constants.ErrEvidenceTrustNotAssessed.Error()})
+	assert.Equal(t, 1, plaintextReader.calls)
 }
 
 func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *testing.T) {
@@ -507,6 +737,20 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
 				delete(reader.bodies, bundlePath)
+			},
+			failureCode:    constants.ErrDemoRunVerificationFailed,
+			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),
+		},
+		{
+			name: "demo source verification lacks typed check",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
+				report := &compliancev1.ComplianceVerificationReport{}
+				require.NoError(t, compliancev1.UnmarshalCanonical(reader.bodies[bundlePath], report))
+				report.Checks = nil
+				body, err := compliancev1.MarshalCanonical(report)
+				require.NoError(t, err)
+				reader.bodies[bundlePath] = body
 			},
 			failureCode:    constants.ErrDemoRunVerificationFailed,
 			failureSubject: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename),

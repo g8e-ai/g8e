@@ -189,6 +189,10 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 
 	sortArtifacts(artifacts, checksumEntries)
 	sort.Slice(artifactBodies, func(i, j int) bool { return artifactBodies[i].BundlePath < artifactBodies[j].BundlePath })
+	checksumEntries, err = artifactDescriptorChecksumEntries(artifacts)
+	if err != nil {
+		return nil, err
+	}
 
 	checksumRoot, err := computeChecksumRoot(checksumEntries)
 	if err != nil {
@@ -418,13 +422,17 @@ func addArtifactDescriptor(artifacts *[]*compliancev1.BundleArtifact, checksums 
 	}
 	digest := sha256.Sum256(body)
 	digestHex := hex.EncodeToString(digest[:])
-	*artifacts = append(*artifacts, &compliancev1.BundleArtifact{
+	artifact := &compliancev1.BundleArtifact{
 		BundlePath: bundlePath,
 		Sha256:     digestHex,
 		MediaType:  mediaType,
 		Profile:    profile,
 		ByteLength: int64(len(body)),
-	})
+	}
+	if err := catalog.ValidateBundleArtifact(artifact); err != nil {
+		return err
+	}
+	*artifacts = append(*artifacts, artifact)
 	*checksums = append(*checksums, &compliancev1.ChecksumEntry{
 		BundlePath: bundlePath,
 		Sha256:     digestHex,
@@ -436,16 +444,23 @@ func addRestrictedArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums 
 	if err := validateBundleArtifactInputs(restricted.BundlePath, restricted.Body, restricted.MediaType, false); err != nil {
 		return err
 	}
+	if restricted.Encryption.GetAlgorithm() != constants.EvalEvidenceEncryptionAES256GCM {
+		return fmt.Errorf("%w: restricted artifact %s uses unsupported encryption algorithm %q", constants.ErrEvidenceEncryptionInvalid, restricted.BundlePath, restricted.Encryption.GetAlgorithm())
+	}
 	digest := sha256.Sum256(restricted.Body)
 	digestHex := hex.EncodeToString(digest[:])
-	*artifacts = append(*artifacts, &compliancev1.BundleArtifact{
+	artifact := &compliancev1.BundleArtifact{
 		BundlePath: restricted.BundlePath,
 		Sha256:     digestHex,
 		MediaType:  restricted.MediaType,
 		Profile:    constants.ComplianceBundleProfileRestricted,
 		ByteLength: int64(len(restricted.Body)),
 		Encryption: proto.Clone(restricted.Encryption).(*compliancev1.EvidenceEncryptionMetadata),
-	})
+	}
+	if err := catalog.ValidateBundleArtifact(artifact); err != nil {
+		return err
+	}
+	*artifacts = append(*artifacts, artifact)
 	*checksums = append(*checksums, &compliancev1.ChecksumEntry{
 		BundlePath: restricted.BundlePath,
 		Sha256:     digestHex,
@@ -476,6 +491,22 @@ func sortArtifacts(artifacts []*compliancev1.BundleArtifact, checksums []*compli
 	sort.Slice(checksums, func(i, j int) bool {
 		return checksums[i].GetBundlePath() < checksums[j].GetBundlePath()
 	})
+}
+
+func artifactDescriptorChecksumEntries(artifacts []*compliancev1.BundleArtifact) ([]*compliancev1.ChecksumEntry, error) {
+	entries := make([]*compliancev1.ChecksumEntry, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if artifact == nil {
+			return nil, fmt.Errorf("%w: bundle artifact descriptor is missing", constants.ErrBundleChecksumRootFailed)
+		}
+		body, err := compliancev1.MarshalCanonical(artifact)
+		if err != nil {
+			return nil, fmt.Errorf("%w: canonicalize bundle artifact descriptor: %w", constants.ErrBundleChecksumRootFailed, err)
+		}
+		digest := sha256.Sum256(body)
+		entries = append(entries, &compliancev1.ChecksumEntry{BundlePath: artifact.GetBundlePath(), Sha256: hex.EncodeToString(digest[:])})
+	}
+	return entries, nil
 }
 
 func computeChecksumRoot(checksums []*compliancev1.ChecksumEntry) (string, error) {

@@ -98,6 +98,12 @@ func TestVerifyDemoRun_AcceptsCanonicalCorrelatedRun(t *testing.T) {
 	assert.True(t, report.GetValid(), report.GetFailures())
 	assert.Empty(t, report.GetFailures())
 	assert.Equal(t, runID, report.GetReportId())
+	require.Len(t, report.GetChecks(), 1)
+	assert.Equal(t, constants.DemoRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, report.GetChecks()[0].GetStatus())
+	assert.Contains(t, report.GetChecks()[0].GetEvidenceRefs(), runID)
+	assert.Equal(t, report.GetVerifierId(), report.GetChecks()[0].GetVerifierId())
+	assert.Equal(t, report.GetVerifierVersion(), report.GetChecks()[0].GetVerifierVersion())
 }
 
 func TestVerifyDemoMetricEvidence_AcceptsHealthcareThresholdBindings(t *testing.T) {
@@ -316,6 +322,10 @@ func TestVerifyDemoRun_ReportsIntegrityFailuresFailClosed(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
 			assertReportContainsFailure(t, report, tt.failureErr)
+			require.Len(t, report.GetChecks(), 1)
+			assert.Equal(t, constants.DemoRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+			assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED, report.GetChecks()[0].GetStatus())
+			assert.Equal(t, report.GetFailures(), report.GetChecks()[0].GetFailures())
 		})
 	}
 }

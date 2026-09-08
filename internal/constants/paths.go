@@ -751,6 +751,8 @@ const (
 	ComplianceBundleSourceArtifactsDirname        = "artifacts"
 	ComplianceBundleSourceVerificationFilename    = "verification.json"
 	ComplianceBundleFrameworkProfileTestPath      = "profiles/profile:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json"
+	ComplianceBundleRestrictedEvidenceTestPath    = "restricted/evidence.json"
+	ComplianceBundleMisnestedRestrictedTestPath   = "sources/restricted/evidence.json"
 	ComplianceBundleUnexpectedTestPath            = "unexpected.json"
 	ComplianceReportSigningMetadataTestFilename   = "signing-metadata.json"
 	ComplianceReportSigningPrivateKeyTestFilename = "signing-private-key.hex"
