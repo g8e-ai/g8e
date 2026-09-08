@@ -46,8 +46,11 @@
     - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
     - [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
+    - [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
+  
+    - [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -375,6 +378,7 @@
 | verifier_version | [string](#string) |  |  |
 | failures | [VerificationFailure](#g8e-compliance-v1-VerificationFailure) | repeated |  |
 | reproduced_checksum_root | [string](#string) |  |  |
+| checks | [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult) | repeated |  |
 
 
 
@@ -997,6 +1001,26 @@
 
 
 
+<a name="g8e-compliance-v1-VerificationCheckResult"></a>
+
+### VerificationCheckResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| check_id | [string](#string) |  |  |
+| status | [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus) |  |  |
+| evidence_refs | [string](#string) | repeated |  |
+| verifier_id | [string](#string) |  |  |
+| verifier_version | [string](#string) |  |  |
+| failures | [VerificationFailure](#g8e-compliance-v1-VerificationFailure) | repeated |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-VerificationFailure"></a>
 
 ### VerificationFailure
@@ -1030,6 +1054,19 @@
 
 
  
+
+
+<a name="g8e-compliance-v1-VerificationCheckStatus"></a>
+
+### VerificationCheckStatus
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| VERIFICATION_CHECK_STATUS_UNSPECIFIED | 0 |  |
+| VERIFICATION_CHECK_STATUS_PASSED | 1 |  |
+| VERIFICATION_CHECK_STATUS_FAILED | 2 |  |
+
 
  
 

@@ -144,9 +144,19 @@ func TestVerifyDemoMetricEvidence_AcceptsHealthcareThresholdBindings(t *testing.
 				GraderRef: &compliancev1.VersionedReference{Id: constants.DemoMetricGraderID, Version: constants.DemoMetricGraderVersion},
 			}
 
-			assert.NoError(t, verifyDemoMetricEvidence(result, metric, observationBody))
+			assert.NoError(t, ValidateDemoMetricEvidence(result, metric, observationBody))
 		})
 	}
+}
+
+func TestValidateDemoStateObservation_RequiresStepContentAndReferenceBinding(t *testing.T) {
+	body := []byte(`{"value":42}`)
+	ref := contentReference("state-observation", body)
+	result := &compliancev1.DemoScenarioResult{StateObservationRefs: []string{ref}, StepResults: []*compliancev1.DemoStepResult{{EvidenceRefs: []string{ref}, ProtocolResult: string(body)}}}
+
+	assert.NoError(t, ValidateDemoStateObservation(result, ref, body))
+	result.StepResults[0].ProtocolResult = `{"value":43}`
+	assert.ErrorIs(t, ValidateDemoStateObservation(result, ref, body), constants.ErrUnresolvedReference)
 }
 
 func TestVerifyDemoRun_AcceptsContentAddressedHealthcareMetricEvidence(t *testing.T) {

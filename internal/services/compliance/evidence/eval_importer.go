@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
@@ -187,8 +188,13 @@ func VerifyEvalRun(ctx context.Context, reader ArtifactReader, runID, runDir str
 		ReportId: runID, VerifiedAt: timestamppb.New(verifiedAt), VerifierId: constants.EvalRunVerifierID,
 		VerifierVersion: constants.EvalRunVerifierVersion,
 	}
+	finalize := func() {
+		report.Valid = len(report.GetFailures()) == 0
+		report.Checks = []*compliancev1.VerificationCheckResult{NewVerificationCheckResult(constants.EvalRunVerificationCheck, constants.EvalRunVerifierID, constants.EvalRunVerifierVersion, []string{runID}, report.GetFailures())}
+	}
 	if reader == nil || !ValidPathElement(runID) || !ValidRelativePath(runDir) || verifiedAt.IsZero() {
 		report.Failures = append(report.Failures, &compliancev1.VerificationFailure{Code: constants.ErrInvalidEvidenceGraph.Error(), SubjectRef: runID, Reason: "reader, canonical run ID, matching relative run directory, and verification time are required"})
+		finalize()
 		return report, nil
 	}
 	importer := NewEvalBundleImporter(reader, runID, runDir)
@@ -208,7 +214,7 @@ func VerifyEvalRun(ctx context.Context, reader ArtifactReader, runID, runDir str
 		right := report.Failures[j].GetSubjectRef() + report.Failures[j].GetCode() + report.Failures[j].GetReason()
 		return left < right
 	})
-	report.Valid = len(report.Failures) == 0
+	finalize()
 	return report, nil
 }
 
@@ -490,7 +496,8 @@ func (i *EvalBundleImporter) buildReceiptNodes(manifest evalRunManifest, scopeID
 		}
 		status := VerificationStatusFailed
 		publicKey, keyErr := SignerPublicKey(receipt.GetSignerKeyId())
-		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil {
+		_, chainErr := governance.ValidateDeterministicProtocolChain(receipt)
+		if keyErr == nil && VerifyReceiptSignature(receipt, publicKey) == nil && VerifyReceiptPersistence(receipt, publicKey) == nil && chainErr == nil {
 			status = VerificationStatusVerified
 		}
 		artifactID := ContentAddress(ArtifactTypeEvalReceipt, record.Bytes)

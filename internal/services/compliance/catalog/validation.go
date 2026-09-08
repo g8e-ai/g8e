@@ -587,7 +587,51 @@ func ValidateVerificationReport(report *compliancev1.ComplianceVerificationRepor
 			return fmt.Errorf("%w: verification failure is incomplete", constants.ErrReportVerificationFailed)
 		}
 	}
+	seenChecks := make(map[string]struct{}, len(report.GetChecks()))
+	failedCheck := false
+	for _, check := range report.GetChecks() {
+		if check == nil || check.GetCheckId() == "" || check.GetVerifierId() != report.GetVerifierId() || check.GetVerifierVersion() != report.GetVerifierVersion() || len(check.GetEvidenceRefs()) == 0 {
+			return fmt.Errorf("%w: verification check is incomplete or does not match the report verifier", constants.ErrReportVerificationFailed)
+		}
+		if _, exists := seenChecks[check.GetCheckId()]; exists {
+			return fmt.Errorf("%w: duplicate verification check %s", constants.ErrReportVerificationFailed, check.GetCheckId())
+		}
+		seenChecks[check.GetCheckId()] = struct{}{}
+		switch check.GetStatus() {
+		case compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED:
+			if len(check.GetFailures()) != 0 {
+				return fmt.Errorf("%w: passed verification check contains failures", constants.ErrReportVerificationFailed)
+			}
+		case compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED:
+			if len(check.GetFailures()) == 0 {
+				return fmt.Errorf("%w: failed verification check lacks failures", constants.ErrReportVerificationFailed)
+			}
+			failedCheck = true
+		default:
+			return fmt.Errorf("%w: verification check status is unspecified", constants.ErrReportVerificationFailed)
+		}
+		for _, failure := range check.GetFailures() {
+			if !verificationFailurePresent(report.GetFailures(), failure) {
+				return fmt.Errorf("%w: verification check failure is absent from the report", constants.ErrReportVerificationFailed)
+			}
+		}
+	}
+	if len(report.GetChecks()) > 0 && report.GetValid() == failedCheck {
+		return fmt.Errorf("%w: verification checks and report validity disagree", constants.ErrReportVerificationFailed)
+	}
 	return nil
+}
+
+func verificationFailurePresent(failures []*compliancev1.VerificationFailure, target *compliancev1.VerificationFailure) bool {
+	if target == nil {
+		return false
+	}
+	for _, failure := range failures {
+		if failure.GetCode() == target.GetCode() && failure.GetSubjectRef() == target.GetSubjectRef() && failure.GetReason() == target.GetReason() {
+			return true
+		}
+	}
+	return false
 }
 
 func FindAssertion(catalog *compliancev1.ControlAssertionCatalog, id, version string) *compliancev1.ControlAssertionDefinition {

@@ -2,12 +2,22 @@ import datetime
 
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+class VerificationCheckStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    VERIFICATION_CHECK_STATUS_UNSPECIFIED: _ClassVar[VerificationCheckStatus]
+    VERIFICATION_CHECK_STATUS_PASSED: _ClassVar[VerificationCheckStatus]
+    VERIFICATION_CHECK_STATUS_FAILED: _ClassVar[VerificationCheckStatus]
+VERIFICATION_CHECK_STATUS_UNSPECIFIED: VerificationCheckStatus
+VERIFICATION_CHECK_STATUS_PASSED: VerificationCheckStatus
+VERIFICATION_CHECK_STATUS_FAILED: VerificationCheckStatus
 
 class VersionedReference(_message.Message):
     __slots__ = ("id", "version")
@@ -483,8 +493,24 @@ class VerificationFailure(_message.Message):
     reason: str
     def __init__(self, code: _Optional[str] = ..., subject_ref: _Optional[str] = ..., reason: _Optional[str] = ...) -> None: ...
 
+class VerificationCheckResult(_message.Message):
+    __slots__ = ("check_id", "status", "evidence_refs", "verifier_id", "verifier_version", "failures")
+    CHECK_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_REFS_FIELD_NUMBER: _ClassVar[int]
+    VERIFIER_ID_FIELD_NUMBER: _ClassVar[int]
+    VERIFIER_VERSION_FIELD_NUMBER: _ClassVar[int]
+    FAILURES_FIELD_NUMBER: _ClassVar[int]
+    check_id: str
+    status: VerificationCheckStatus
+    evidence_refs: _containers.RepeatedScalarFieldContainer[str]
+    verifier_id: str
+    verifier_version: str
+    failures: _containers.RepeatedCompositeFieldContainer[VerificationFailure]
+    def __init__(self, check_id: _Optional[str] = ..., status: _Optional[_Union[VerificationCheckStatus, str]] = ..., evidence_refs: _Optional[_Iterable[str]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ...) -> None: ...
+
 class ComplianceVerificationReport(_message.Message):
-    __slots__ = ("report_id", "valid", "verified_at", "verifier_id", "verifier_version", "failures", "reproduced_checksum_root")
+    __slots__ = ("report_id", "valid", "verified_at", "verifier_id", "verifier_version", "failures", "reproduced_checksum_root", "checks")
     REPORT_ID_FIELD_NUMBER: _ClassVar[int]
     VALID_FIELD_NUMBER: _ClassVar[int]
     VERIFIED_AT_FIELD_NUMBER: _ClassVar[int]
@@ -492,6 +518,7 @@ class ComplianceVerificationReport(_message.Message):
     VERIFIER_VERSION_FIELD_NUMBER: _ClassVar[int]
     FAILURES_FIELD_NUMBER: _ClassVar[int]
     REPRODUCED_CHECKSUM_ROOT_FIELD_NUMBER: _ClassVar[int]
+    CHECKS_FIELD_NUMBER: _ClassVar[int]
     report_id: str
     valid: bool
     verified_at: _timestamp_pb2.Timestamp
@@ -499,7 +526,8 @@ class ComplianceVerificationReport(_message.Message):
     verifier_version: str
     failures: _containers.RepeatedCompositeFieldContainer[VerificationFailure]
     reproduced_checksum_root: str
-    def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ...) -> None: ...
+    checks: _containers.RepeatedCompositeFieldContainer[VerificationCheckResult]
+    def __init__(self, report_id: _Optional[str] = ..., valid: _Optional[bool] = ..., verified_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., verifier_id: _Optional[str] = ..., verifier_version: _Optional[str] = ..., failures: _Optional[_Iterable[_Union[VerificationFailure, _Mapping]]] = ..., reproduced_checksum_root: _Optional[str] = ..., checks: _Optional[_Iterable[_Union[VerificationCheckResult, _Mapping]]] = ...) -> None: ...
 
 class OSCALValidatorIdentity(_message.Message):
     __slots__ = ("validator_id", "validator_version", "schema_version", "schema_digest")

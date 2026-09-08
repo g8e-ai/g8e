@@ -275,6 +275,21 @@ message VerificationFailure {
   string reason = 3;
 }
 
+enum VerificationCheckStatus {
+  VERIFICATION_CHECK_STATUS_UNSPECIFIED = 0;
+  VERIFICATION_CHECK_STATUS_PASSED = 1;
+  VERIFICATION_CHECK_STATUS_FAILED = 2;
+}
+
+message VerificationCheckResult {
+  string check_id = 1;
+  VerificationCheckStatus status = 2;
+  repeated string evidence_refs = 3;
+  string verifier_id = 4;
+  string verifier_version = 5;
+  repeated VerificationFailure failures = 6;
+}
+
 message ComplianceVerificationReport {
   string report_id = 1;
   bool valid = 2;
@@ -283,6 +298,7 @@ message ComplianceVerificationReport {
   string verifier_version = 5;
   repeated VerificationFailure failures = 6;
   string reproduced_checksum_root = 7;
+  repeated VerificationCheckResult checks = 8;
 }
 
 message OSCALValidatorIdentity {

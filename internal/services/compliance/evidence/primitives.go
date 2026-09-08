@@ -70,6 +70,45 @@ func MarshalCanonicalProto(msg proto.Message) ([]byte, error) {
 	return compliancev1.MarshalCanonical(msg)
 }
 
+func CanonicalProtoBodyEqual(body []byte, expected proto.Message) (bool, error) {
+	canonical, err := compliancev1.MarshalCanonical(expected)
+	if err != nil {
+		return false, fmt.Errorf("canonicalize expected protocol message: %w", err)
+	}
+	return bytes.Equal(body, canonical), nil
+}
+
+func CanonicalProtosEqual(left, right proto.Message) (bool, error) {
+	leftBody, err := compliancev1.MarshalCanonical(left)
+	if err != nil {
+		return false, fmt.Errorf("canonicalize left protocol message: %w", err)
+	}
+	rightBody, err := compliancev1.MarshalCanonical(right)
+	if err != nil {
+		return false, fmt.Errorf("canonicalize right protocol message: %w", err)
+	}
+	return bytes.Equal(leftBody, rightBody), nil
+}
+
+func NewVerificationCheckResult(checkID, verifierID, verifierVersion string, evidenceRefs []string, failures []*compliancev1.VerificationFailure) *compliancev1.VerificationCheckResult {
+	refs := append([]string(nil), evidenceRefs...)
+	for _, failure := range failures {
+		refs = append(refs, failure.GetSubjectRef())
+	}
+	sort.Strings(refs)
+	uniqueRefs := refs[:0]
+	for _, reference := range refs {
+		if reference != "" && (len(uniqueRefs) == 0 || uniqueRefs[len(uniqueRefs)-1] != reference) {
+			uniqueRefs = append(uniqueRefs, reference)
+		}
+	}
+	status := compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED
+	if len(failures) > 0 {
+		status = compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED
+	}
+	return &compliancev1.VerificationCheckResult{CheckId: checkID, Status: status, EvidenceRefs: uniqueRefs, VerifierId: verifierID, VerifierVersion: verifierVersion, Failures: append([]*compliancev1.VerificationFailure(nil), failures...)}
+}
+
 // VerifyDigest compares the SHA-256 of the given bytes to the expected
 // hex-encoded digest.
 func VerifyDigest(body []byte, expected string) bool {
@@ -250,4 +289,103 @@ func ValidateVerificationReport(body []byte, reportID, verifierID, verifierVersi
 		return nil, fmt.Errorf("%w: verification report is invalid or does not match its declared binding", constants.ErrReportVerificationFailed)
 	}
 	return report, nil
+}
+
+type healthcareMetricObservation struct {
+	Action          string `json:"action"`
+	RequestID       string `json:"request_id"`
+	ResourceType    string `json:"resource_type"`
+	Subject         string `json:"subject"`
+	MeasuredValue   int64  `json:"measured_value"`
+	ThresholdValue  int64  `json:"threshold_value"`
+	RunID           string `json:"run_id"`
+	ScenarioID      string `json:"scenario_id"`
+	Status          string `json:"status"`
+	AutoApproved    bool   `json:"auto_approved"`
+	ReportableToOHA bool   `json:"reportable_to_oha"`
+	EvaluatedAt     string `json:"evaluated_at"`
+}
+
+type healthcareMetricCollection struct {
+	CollectorID             string                      `json:"collector_id"`
+	CollectorVersion        string                      `json:"collector_version"`
+	Boundary                string                      `json:"boundary"`
+	InitialStateFixtureRef  string                      `json:"initial_state_fixture_ref"`
+	TerminalStateAssertions []string                    `json:"terminal_state_assertions"`
+	CollectedAt             time.Time                   `json:"collected_at"`
+	Observation             healthcareMetricObservation `json:"observation"`
+}
+
+type healthcareMetricExpectation struct {
+	MetricID, SubjectRef, Unit, Action, Status string
+	AutoApproved, ReportableToOHA              bool
+}
+
+func ValidateDemoStateObservation(result *compliancev1.DemoScenarioResult, reference string, body []byte) error {
+	if result == nil || ContentReferenceForBody("state-observation", body) != reference || !Contains(result.GetStateObservationRefs(), reference) {
+		return fmt.Errorf("%w: state observation is not declared by the scenario result", constants.ErrUnresolvedReference)
+	}
+	for _, step := range result.GetStepResults() {
+		if Contains(step.GetEvidenceRefs(), reference) && step.GetProtocolResult() == string(body) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: state-observation body is not bound to a scenario step", constants.ErrUnresolvedReference)
+}
+
+func ValidateDemoMetricEvidence(result *compliancev1.DemoScenarioResult, metric *compliancev1.DemoMetricEvidence, observationBody []byte) error {
+	if result == nil || metric == nil || metric.GetScenarioRef() == nil || metric.GetGraderRef() == nil || metric.GetEvaluatedAt() == nil || metric.GetEvaluatedAt().CheckValid() != nil {
+		return fmt.Errorf("%w: metric evidence is incomplete", constants.ErrInvalidEvidenceGraph)
+	}
+	expectations := map[string]healthcareMetricExpectation{
+		"healthcare-gold-card": {
+			MetricID: "healthcare-provider-approval-rate", SubjectRef: "PA-2026-0043", Unit: "percent",
+			Action: "gold-card", Status: "AUTO_APPROVED", AutoApproved: true,
+		},
+		"healthcare-sla-breach": {
+			MetricID: "healthcare-sla-elapsed-days", SubjectRef: "PA-2026-0044", Unit: "days",
+			Action: "sla-check", Status: "SLA_BREACHED", ReportableToOHA: true,
+		},
+	}
+	expected, ok := expectations[result.GetScenarioRef().GetId()]
+	if !ok {
+		return fmt.Errorf("%w: metric evidence is unsupported for scenario %s", constants.ErrUnsupportedGrader, result.GetScenarioRef().GetId())
+	}
+	if metric.GetMetricId() != expected.MetricID || metric.GetMetricVersion() != constants.DemoMetricEvidenceVersion ||
+		metric.GetRunId() != result.GetRunId() || metric.GetScopeId() != result.GetScopeId() ||
+		metric.GetScenarioRef().GetId() != result.GetScenarioRef().GetId() || metric.GetScenarioRef().GetVersion() != result.GetScenarioRef().GetVersion() ||
+		metric.GetSubjectRef() != expected.SubjectRef || metric.GetUnit() != expected.Unit ||
+		metric.GetComparison() != constants.DemoMetricComparisonGreaterThanOrEqual ||
+		metric.GetGraderRef().GetId() != constants.DemoMetricGraderID || metric.GetGraderRef().GetVersion() != constants.DemoMetricGraderVersion {
+		return fmt.Errorf("%w: metric identity, scope, or grader binding is invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	if ContentReferenceForBody("state-observation", observationBody) != metric.GetSourceEvidenceRef() || !Contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+		return fmt.Errorf("%w: metric source observation binding is invalid", constants.ErrEvidenceScopeMismatch)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(observationBody))
+	decoder.DisallowUnknownFields()
+	collection := healthcareMetricCollection{}
+	if err := decoder.Decode(&collection); err != nil {
+		return fmt.Errorf("%w: decode metric source observation: %v", constants.ErrEvidenceArtifactMalformed, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("%w: metric source observation contains trailing JSON", constants.ErrEvidenceArtifactMalformed)
+	}
+	observation := collection.Observation
+	evaluatedAt, err := time.Parse(time.RFC3339Nano, observation.EvaluatedAt)
+	if err != nil || collection.CollectedAt.Before(evaluatedAt) {
+		return fmt.Errorf("%w: metric source timestamps are invalid", constants.ErrInvalidEvidenceGraph)
+	}
+	if collection.CollectorID != "healthcare-actuator-state" || collection.CollectorVersion != "1.0.0" || collection.Boundary != "healthcare-actuator" ||
+		collection.InitialStateFixtureRef == "" || len(collection.TerminalStateAssertions) == 0 || observation.RunID != result.GetRunId() ||
+		observation.ScenarioID != result.GetScenarioRef().GetId() || observation.RequestID != expected.SubjectRef || observation.Action != expected.Action ||
+		observation.ResourceType != "ClaimResponse" || observation.Status != expected.Status || observation.AutoApproved != expected.AutoApproved ||
+		observation.ReportableToOHA != expected.ReportableToOHA || metric.GetMeasuredValue() != observation.MeasuredValue ||
+		metric.GetThresholdValue() != observation.ThresholdValue || !metric.GetEvaluatedAt().AsTime().Equal(evaluatedAt) {
+		return fmt.Errorf("%w: metric does not reproduce its bound source observation", constants.ErrInvalidEvidenceGraph)
+	}
+	if metric.GetPassed() != (metric.GetMeasuredValue() >= metric.GetThresholdValue()) || !metric.GetPassed() {
+		return fmt.Errorf("%w: metric grade does not reproduce the registered comparison", constants.ErrInvalidEvidenceGraph)
+	}
+	return nil
 }

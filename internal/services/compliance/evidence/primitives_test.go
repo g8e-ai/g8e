@@ -26,6 +26,43 @@ import (
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
+func TestCanonicalProtoBodyEqual_ComparesAgainstCanonicalProtocolBytes(t *testing.T) {
+	message := &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Valid: true}
+	body, err := compliancev1.MarshalCanonical(message)
+	require.NoError(t, err)
+
+	equal, err := CanonicalProtoBodyEqual(body, message)
+	require.NoError(t, err)
+	assert.True(t, equal)
+	equal, err = CanonicalProtoBodyEqual(append(body, ' '), message)
+	require.NoError(t, err)
+	assert.False(t, equal)
+}
+
+func TestCanonicalProtosEqual_PreservesRepeatedFieldOrder(t *testing.T) {
+	left := &compliancev1.ComplianceVerificationReport{ReportId: "report-1", Failures: []*compliancev1.VerificationFailure{{Code: "a"}, {Code: "b"}}}
+	right := proto.Clone(left).(*compliancev1.ComplianceVerificationReport)
+
+	equal, err := CanonicalProtosEqual(left, right)
+	require.NoError(t, err)
+	assert.True(t, equal)
+	right.Failures[0], right.Failures[1] = right.Failures[1], right.Failures[0]
+	equal, err = CanonicalProtosEqual(left, right)
+	require.NoError(t, err)
+	assert.False(t, equal)
+}
+
+func TestNewVerificationCheckResult_EmitsTypedPassedAndFailedChecks(t *testing.T) {
+	passed := NewVerificationCheckResult("check-1", "verifier-1", "1.0.0", []string{"b", "a", "a"}, nil)
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, passed.GetStatus())
+	assert.Equal(t, []string{"a", "b"}, passed.GetEvidenceRefs())
+	failure := &compliancev1.VerificationFailure{Code: "code", SubjectRef: "subject", Reason: "reason"}
+	failed := NewVerificationCheckResult("check-1", "verifier-1", "1.0.0", []string{"evidence"}, []*compliancev1.VerificationFailure{failure})
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED, failed.GetStatus())
+	assert.Equal(t, []string{"evidence", "subject"}, failed.GetEvidenceRefs())
+	assert.Equal(t, []*compliancev1.VerificationFailure{failure}, failed.GetFailures())
+}
+
 func TestReadAndDigest_ReturnsBytesAndDigest(t *testing.T) {
 	body := []byte(`{"hello":"world"}`)
 	reader := &memoryArtifactReader{files: map[string][]byte{"path": body}}

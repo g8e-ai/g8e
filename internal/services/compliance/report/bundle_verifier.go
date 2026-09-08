@@ -86,19 +86,28 @@ type bundleVerifier struct {
 
 func (v *bundleVerifier) verify(ctx context.Context) {
 	bundle := v.request.Bundle
-	frameworks := frameworkCatalogForManifest(bundle.GetManifest())
-	if err := catalog.ValidateComplianceReportBundle(bundle, frameworks); err != nil {
-		v.fail(err, constants.ComplianceBundleManifestPath, err.Error())
-	}
-	v.verifyManifestDigest()
-	v.verifyBindings()
-	v.verifyDirectoryInventory(ctx)
-	v.verifyArtifactBodies(ctx)
-	v.verifyChecksumRoot()
-	v.verifySignatures()
-	v.verifyTypedArtifacts()
-	v.verifySourceVerificationReports(ctx)
-	v.verifyRenderedFormats()
+	v.check(constants.ComplianceBundleCheckCatalog, []string{constants.ComplianceBundleManifestPath}, func() {
+		frameworks := frameworkCatalogForManifest(bundle.GetManifest())
+		if err := catalog.ValidateComplianceReportBundle(bundle, frameworks); err != nil {
+			v.fail(err, constants.ComplianceBundleManifestPath, err.Error())
+		}
+	})
+	v.check(constants.ComplianceBundleCheckManifestDigest, []string{constants.ComplianceBundleManifestPath}, v.verifyManifestDigest)
+	v.check(constants.ComplianceBundleCheckBindings, []string{constants.ComplianceBundleManifestPath, constants.ComplianceBundleAnalysisPath}, v.verifyBindings)
+	v.check(constants.ComplianceBundleCheckDirectoryInventory, []string{constants.ComplianceBundleManifestPath}, func() { v.verifyDirectoryInventory(ctx) })
+	v.check(constants.ComplianceBundleCheckArtifactBodies, []string{constants.ComplianceBundleManifestPath}, func() { v.verifyArtifactBodies(ctx) })
+	v.check(constants.ComplianceBundleCheckChecksumRoot, []string{constants.ComplianceBundleChecksumsPath}, v.verifyChecksumRoot)
+	v.check(constants.ComplianceBundleCheckSignatures, []string{constants.ComplianceBundleManifestPath, constants.ComplianceBundleChecksumsPath}, v.verifySignatures)
+	v.check(constants.ComplianceBundleCheckTypedArtifacts, []string{constants.ComplianceBundleAnalysisPath}, v.verifyTypedArtifacts)
+	v.check(constants.ComplianceBundleCheckSourceVerification, []string{constants.ComplianceBundleSourcesDirname}, func() { v.verifySourceVerificationReports(ctx) })
+	v.check(constants.ComplianceBundleCheckRenderedFormats, []string{constants.ComplianceBundleAnalysisPath}, v.verifyRenderedFormats)
+}
+
+func (v *bundleVerifier) check(checkID string, evidenceRefs []string, verify func()) {
+	failureStart := len(v.report.GetFailures())
+	verify()
+	failures := v.report.GetFailures()[failureStart:]
+	v.report.Checks = append(v.report.Checks, evidence.NewVerificationCheckResult(checkID, constants.ComplianceBundleVerifierID, constants.ComplianceBundleVerifierVersion, evidenceRefs, failures))
 }
 
 func (v *bundleVerifier) verifyManifestDigest() {
@@ -266,8 +275,8 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 	if !ok {
 		v.fail(constants.ErrBundleArtifactMissing, constants.ComplianceBundleAnalysisPath, "canonical analysis artifact is missing")
 	} else {
-		expected, err := compliancev1.MarshalCanonical(v.request.Bundle.GetAnalysis())
-		if err != nil || !bytes.Equal(analysisBody, expected) {
+		matches, err := evidence.CanonicalProtoBodyEqual(analysisBody, v.request.Bundle.GetAnalysis())
+		if err != nil || !matches {
 			v.fail(constants.ErrRendererMismatch, constants.ComplianceBundleAnalysisPath, "analysis artifact does not match the typed canonical analysis")
 		}
 	}
@@ -281,8 +290,8 @@ func (v *bundleVerifier) verifyTypedArtifacts() {
 			v.fail(constants.ErrBundleArtifactMissing, bundlePath, "framework profile artifact is missing")
 			continue
 		}
-		expected, err := compliancev1.MarshalCanonical(profile)
-		if err != nil || !bytes.Equal(body, expected) {
+		matches, err := evidence.CanonicalProtoBodyEqual(body, profile)
+		if err != nil || !matches {
 			v.fail(constants.ErrRendererMismatch, bundlePath, "framework profile artifact does not match the typed canonical profile")
 		}
 	}
@@ -492,9 +501,8 @@ func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, err.Error())
 		return
 	}
-	expectedBody, expectedErr := compliancev1.MarshalCanonical(expected)
-	replayedBody, replayedErr := compliancev1.MarshalCanonical(replayed)
-	if expectedErr != nil || replayedErr != nil || !replayed.GetValid() || !bytes.Equal(expectedBody, replayedBody) {
+	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
+	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "replayed eval verification does not match the protected source verification report")
 	}
 }
@@ -508,9 +516,8 @@ func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, err.Error())
 		return
 	}
-	expectedBody, expectedErr := compliancev1.MarshalCanonical(expected)
-	replayedBody, replayedErr := compliancev1.MarshalCanonical(replayed)
-	if expectedErr != nil || replayedErr != nil || !replayed.GetValid() || !bytes.Equal(expectedBody, replayedBody) {
+	matches, matchErr := evidence.CanonicalProtosEqual(expected, replayed)
+	if matchErr != nil || !replayed.GetValid() || !matches {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, "replayed demo verification does not match the protected source verification report")
 	}
 }

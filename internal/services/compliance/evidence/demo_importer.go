@@ -413,6 +413,10 @@ func (i *DemoRunImporter) loadStateObservations(ctx context.Context, results []*
 			if err := ValidateCanonicalJSON(readResult.Bytes); err != nil {
 				return nil, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceArtifactMalformed, ref, err)
 			}
+			status := VerificationStatusFailed
+			if ValidateDemoStateObservation(result, ref, readResult.Bytes) == nil {
+				status = VerificationStatusVerified
+			}
 			nodes = append(nodes, EvidenceNode{
 				ArtifactID:         ref,
 				ArtifactType:       ArtifactTypeStateObservation,
@@ -424,7 +428,10 @@ func (i *DemoRunImporter) loadStateObservations(ctx context.Context, results []*
 				ScopeID:            scopeID,
 				RunID:              runID,
 				ScenarioID:         result.GetScenarioRef().GetId(),
-				VerificationStatus: VerificationStatusUnverified,
+				VerificationStatus: status,
+				VerifierID:         constants.DemoRunVerifierID,
+				VerifierVersion:    constants.DemoRunVerifierVersion,
+				VerifiedAt:         i.nowFunc(),
 				BundlePath:         filepath.Join(constants.DemoRunStateObservationsDirname, digest+constants.FileExtJSON),
 				CanonicalBytes:     readResult.Bytes,
 				References:         []string{},
@@ -455,8 +462,20 @@ func (i *DemoRunImporter) loadMetrics(ctx context.Context, results []*compliance
 				return nil, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceArtifactMalformed, ref, err)
 			}
 			refs := []string{}
+			status := VerificationStatusFailed
 			if metric.GetSourceEvidenceRef() != "" {
 				refs = append(refs, metric.GetSourceEvidenceRef())
+				_, observationDigest, validReference := ParseExpectedContentReference(metric.GetSourceEvidenceRef(), "state-observation")
+				if validReference && Contains(result.GetStateObservationRefs(), metric.GetSourceEvidenceRef()) {
+					observationPath := i.runPath(constants.DemoRunStateObservationsDirname, observationDigest+constants.FileExtJSON)
+					observation, readErr := ReadAndDigest(i.reader, ctx, observationPath, constants.DemoRunMaxArtifactBytes)
+					if readErr != nil {
+						return nil, fmt.Errorf("%w: %s: %v", constants.ErrEvidenceImporterFailed, metric.GetSourceEvidenceRef(), readErr)
+					}
+					if ValidateDemoStateObservation(result, metric.GetSourceEvidenceRef(), observation.Bytes) == nil && ValidateDemoMetricEvidence(result, metric, observation.Bytes) == nil {
+						status = VerificationStatusVerified
+					}
+				}
 			}
 			nodes = append(nodes, EvidenceNode{
 				ArtifactID:         ref,
@@ -469,7 +488,10 @@ func (i *DemoRunImporter) loadMetrics(ctx context.Context, results []*compliance
 				ScopeID:            scopeID,
 				RunID:              runID,
 				ScenarioID:         result.GetScenarioRef().GetId(),
-				VerificationStatus: VerificationStatusUnverified,
+				VerificationStatus: status,
+				VerifierID:         constants.DemoRunVerifierID,
+				VerifierVersion:    constants.DemoRunVerifierVersion,
+				VerifiedAt:         i.nowFunc(),
 				BundlePath:         filepath.Join(constants.DemoRunMetricsDirname, digest+constants.FileExtJSON),
 				CanonicalBytes:     readResult.Bytes,
 				References:         refs,

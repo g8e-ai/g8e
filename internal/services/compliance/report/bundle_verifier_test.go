@@ -229,6 +229,14 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *test
 	assert.Equal(t, constants.ComplianceBundleVerifierID, report.GetVerifierId())
 	assert.Equal(t, constants.ComplianceBundleVerifierVersion, report.GetVerifierVersion())
 	assert.Equal(t, bundle.GetChecksumRoot(), report.GetReproducedChecksumRoot())
+	require.Len(t, report.GetChecks(), 10)
+	for _, check := range report.GetChecks() {
+		assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, check.GetStatus())
+		assert.NotEmpty(t, check.GetEvidenceRefs())
+		assert.Equal(t, report.GetVerifierId(), check.GetVerifierId())
+		assert.Equal(t, report.GetVerifierVersion(), check.GetVerifierVersion())
+		assert.Empty(t, check.GetFailures())
+	}
 }
 
 func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *testing.T) {

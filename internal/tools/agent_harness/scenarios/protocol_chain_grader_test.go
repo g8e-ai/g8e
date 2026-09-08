@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
@@ -150,7 +151,7 @@ func buildRejectedChainReceipt() *operatorv1.ActionReceipt {
 func TestNormalizeDeterministicStages_ExtractsValidVerifiedChain(t *testing.T) {
 	receipt := buildVerifiedChainReceipt()
 
-	stages, err := NormalizeDeterministicStages(receipt)
+	stages, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.NoError(t, err)
 	require.Len(t, stages, 7)
@@ -169,7 +170,7 @@ func TestNormalizeDeterministicStages_ExtractsValidVerifiedChain(t *testing.T) {
 func TestNormalizeDeterministicStages_ExtractsValidRejectedChain(t *testing.T) {
 	receipt := buildRejectedChainReceipt()
 
-	stages, err := NormalizeDeterministicStages(receipt)
+	stages, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.NoError(t, err)
 	require.Len(t, stages, 2)
@@ -182,7 +183,7 @@ func TestNormalizeDeterministicStages_ExtractsValidRejectedChain(t *testing.T) {
 func TestNormalizeDeterministicStages_FailsClosedOnEmptyStages(t *testing.T) {
 	receipt := &operatorv1.ActionReceipt{TransactionId: "transaction-1"}
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -194,7 +195,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnDuplicateStageIDs(t *testing.
 	receipt := buildRejectedChainReceipt()
 	receipt.DeterministicStageEvidence[0].StageId = receipt.DeterministicStageEvidence[1].StageId
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -206,7 +207,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnTransactionMismatch(t *testin
 	receipt := buildVerifiedChainReceipt()
 	receipt.DeterministicStageEvidence[0].TransactionId = "wrong-transaction"
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -218,7 +219,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnEmptyStageID(t *testing.T) {
 	receipt := buildVerifiedChainReceipt()
 	receipt.DeterministicStageEvidence[0].StageId = ""
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -230,7 +231,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnDuplicateKinds(t *testing.T) 
 	receipt := buildVerifiedChainReceipt()
 	receipt.DeterministicStageEvidence[1].Kind = receipt.DeterministicStageEvidence[0].Kind
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -243,7 +244,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnInvalidKindOrder(t *testing.T
 	receipt.DeterministicStageEvidence[0], receipt.DeterministicStageEvidence[1] =
 		receipt.DeterministicStageEvidence[1], receipt.DeterministicStageEvidence[0]
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -253,7 +254,7 @@ func TestNormalizeDeterministicStages_FailsClosedOnConflictingActionTypes(t *tes
 	receipt := buildVerifiedChainReceipt()
 	receipt.DeterministicStageEvidence[1].ActionType = "FILE_READ"
 
-	_, err := NormalizeDeterministicStages(receipt)
+	_, err := governance.NormalizeDeterministicStages(receipt)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrInvalidEvidenceGraph)
@@ -275,6 +276,9 @@ func TestGradeProtocolChain_AcceptsVerifiedChain(t *testing.T) {
 	assert.InDelta(t, 1.0, grade.Value, 0.001)
 	assert.Empty(t, grade.Failure)
 	assert.Regexp(t, `^deterministic-stages:sha256:[0-9a-f]{64}$`, grade.StageEvidenceRef)
+	chain, chainErr := governance.ValidateDeterministicProtocolChain(receipt)
+	require.NoError(t, chainErr)
+	assert.Equal(t, chain.ContentReference, grade.StageEvidenceRef)
 }
 
 // TestGradeProtocolChain_AcceptsRejectedChain proves that the grader accepts a
