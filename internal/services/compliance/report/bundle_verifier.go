@@ -404,6 +404,7 @@ func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyEvalSourceVerificationReports(ctx)
 	v.verifyKSIHistorySources(ctx)
 	v.verifyCommitmentSources(ctx)
+	v.verifyAttestationSources(ctx)
 }
 
 func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context) {
@@ -672,6 +673,117 @@ func (v *bundleVerifier) replayCommitmentSource(ctx context.Context, inventory *
 	}
 	if !proto.Equal(resource, nodes[0].ToProto()) {
 		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed commitment does not match the protected analysis evidence")
+	}
+}
+
+type attestationSourceInventory struct {
+	path      string
+	body      []byte
+	scopeID   string
+	runID     string
+	resources map[string]*compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyAttestationSources(ctx context.Context) {
+	inventories := make(map[string]*attestationSourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || (resource.GetArtifactType() != string(evidence.ArtifactTypeCustomerAttestation) && resource.GetArtifactType() != string(evidence.ArtifactTypeAssessorAttestation)) {
+			continue
+		}
+		bundlePath := resource.GetBundlePath()
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "attestation evidence requires canonical scope and run identifiers")
+			continue
+		}
+		expectedPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.ComplianceBundleAttestationsFilename)
+		if bundlePath != expectedPath {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "attestation evidence does not reference its protected source inventory")
+			continue
+		}
+		key := resource.GetScopeId() + "\x00" + resource.GetRunId()
+		inventory := inventories[key]
+		if inventory == nil {
+			inventory = &attestationSourceInventory{path: bundlePath, scopeID: resource.GetScopeId(), runID: resource.GetRunId(), resources: make(map[string]*compliancev1.ComplianceEvidenceReference)}
+			inventories[key] = inventory
+		}
+		if _, exists := inventory.resources[resource.GetArtifactId()]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "attestation evidence resource is duplicated")
+			continue
+		}
+		inventory.resources[resource.GetArtifactId()] = resource
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 5 || parts[4] != constants.ComplianceBundleAttestationsFilename {
+			continue
+		}
+		key := parts[2] + "\x00" + parts[3]
+		inventory := inventories[key]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "attestation source does not bind analysis evidence")
+			continue
+		}
+		inventory.body = body
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.body) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "attestation source inventory is missing or empty")
+			continue
+		}
+		if v.request.EvidenceTrust == nil {
+			v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "attestation source requires explicit external assessed evidence trust")
+			continue
+		}
+		v.replayAttestationSource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayAttestationSource(ctx context.Context, inventory *attestationSourceInventory) {
+	generatedAt := v.request.Bundle.GetManifest().GetGeneratedAt()
+	if generatedAt == nil || generatedAt.CheckValid() != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "attestation replay requires a valid deterministic bundle generation time")
+		return
+	}
+	binding := evidence.AttestationImportBinding{
+		Reference: evidence.ContentReferenceForBody(constants.AttestationCollectionReferencePrefix, inventory.body),
+		Path:      inventory.path,
+		ScopeID:   inventory.scopeID,
+		RunID:     inventory.runID,
+	}
+	reader := &bundledSourceArtifactReader{bodies: v.bodies}
+	nodes, err := evidence.NewAttestationImporter(reader, v.request.EvidenceTrust, binding, generatedAt.AsTime()).Import(ctx)
+	if err != nil {
+		failure := constants.ErrInvalidEvidenceGraph
+		if errors.Is(err, constants.ErrEvidenceTrustNotAssessed) {
+			failure = constants.ErrEvidenceTrustNotAssessed
+		}
+		v.fail(failure, inventory.path, err.Error())
+		return
+	}
+	if len(nodes) != len(inventory.resources) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation inventory does not match the protected analysis evidence count")
+		return
+	}
+	for index := range nodes {
+		node := &nodes[index]
+		resource := inventory.resources[node.ArtifactID]
+		if resource == nil {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation is absent from the protected analysis evidence")
+			continue
+		}
+		if node.VerificationStatus == evidence.VerificationStatusUnverified {
+			v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "attestation signer is not present in external assessed evidence trust")
+			continue
+		}
+		if !proto.Equal(resource, node.ToProto()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed attestation does not match the protected analysis evidence")
+		}
 	}
 }
 
