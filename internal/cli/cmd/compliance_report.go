@@ -320,7 +320,7 @@ func buildDemoVerificationArtifacts(ctx context.Context, reader evidence.Artifac
 func buildDemoRawSourceArtifacts(ctx context.Context, reader evidence.ArtifactReader, source evidence.ProvenanceSource, runID string) ([]compliancereport.SourceArtifact, error) {
 	runtimeRoot := path.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
 	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID)
-	artifacts, err := collectDemoRuntimeArtifacts(ctx, reader, runtimeRoot, runtimeRoot, bundleRoot)
+	artifacts, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, runtimeRoot, bundleRoot, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w: collect demo runtime %s: %w", constants.ErrDemoRunVerificationFailed, runID, err)
 	}
@@ -369,7 +369,38 @@ func buildDemoRawSourceArtifacts(ctx context.Context, reader evidence.ArtifactRe
 	return artifacts, nil
 }
 
-func collectDemoRuntimeArtifacts(ctx context.Context, reader evidence.ArtifactReader, runtimeRoot, currentPath, bundleRoot string) ([]compliancereport.SourceArtifact, error) {
+func buildEvalVerificationArtifacts(ctx context.Context, reader evidence.ArtifactReader, runIDs []string, verifiedAt time.Time) ([]compliancereport.SourceArtifact, error) {
+	artifacts := make([]compliancereport.SourceArtifact, 0, len(runIDs))
+	for _, runID := range runIDs {
+		runtimeRoot := path.Join(constants.DataDirname, constants.ComplianceDirname, constants.EvalRunsDirname, runID)
+		bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
+		report, err := evidence.VerifyEvalRun(ctx, reader, runID, runtimeRoot, verifiedAt)
+		if err != nil {
+			return nil, fmt.Errorf("%w: verify eval run %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+		}
+		if !report.GetValid() {
+			return nil, fmt.Errorf("%w: eval run %s has %d verification failures", constants.ErrEvalRunVerificationFailed, runID, len(report.GetFailures()))
+		}
+		rawArtifacts, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, runtimeRoot, bundleRoot, true)
+		if err != nil {
+			return nil, fmt.Errorf("%w: collect eval runtime %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+		}
+		artifacts = append(artifacts, rawArtifacts...)
+		body, err := compliancev1.MarshalCanonical(report)
+		if err != nil {
+			return nil, fmt.Errorf("%w: canonicalize eval verification report %s: %w", constants.ErrEvalRunVerificationFailed, runID, err)
+		}
+		artifacts = append(artifacts, compliancereport.SourceArtifact{
+			BundlePath: path.Join(bundleRoot, constants.ComplianceBundleSourceVerificationFilename),
+			Body:       body,
+			MediaType:  constants.MediaTypeJSON,
+		})
+	}
+	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].BundlePath < artifacts[j].BundlePath })
+	return artifacts, nil
+}
+
+func collectRuntimeSourceArtifacts(ctx context.Context, reader evidence.ArtifactReader, runtimeRoot, currentPath, bundleRoot string, allowEmpty bool) ([]compliancereport.SourceArtifact, error) {
 	entries, err := reader.ReadDir(ctx, currentPath)
 	if err != nil {
 		return nil, err
@@ -387,7 +418,7 @@ func collectDemoRuntimeArtifacts(ctx context.Context, reader evidence.ArtifactRe
 		}
 		sourcePath := path.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			nested, err := collectDemoRuntimeArtifacts(ctx, reader, runtimeRoot, sourcePath, bundleRoot)
+			nested, err := collectRuntimeSourceArtifacts(ctx, reader, runtimeRoot, sourcePath, bundleRoot, allowEmpty)
 			if err != nil {
 				return nil, err
 			}
@@ -405,7 +436,7 @@ func collectDemoRuntimeArtifacts(ctx context.Context, reader evidence.ArtifactRe
 		if err != nil {
 			return nil, err
 		}
-		if len(body) == 0 || int64(len(body)) > constants.ComplianceBundleMaxArtifactBytes {
+		if !allowEmpty && len(body) == 0 || int64(len(body)) > constants.ComplianceBundleMaxArtifactBytes {
 			return nil, constants.ErrEvidenceArtifactTooLarge
 		}
 		artifacts = append(artifacts, compliancereport.SourceArtifact{
@@ -487,6 +518,12 @@ func complianceReportGenerateCmdWithConfig(
 			if err != nil {
 				return err
 			}
+			evalSourceArtifacts, err := buildEvalVerificationArtifacts(ctx, fileSvc, evalRuns, windowEnd)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrReportVerificationFailed, err)
+			}
+			sourceArtifacts = append(sourceArtifacts, evalSourceArtifacts...)
+			sort.Slice(sourceArtifacts, func(i, j int) bool { return sourceArtifacts[i].BundlePath < sourceArtifacts[j].BundlePath })
 			result, err := compliancereport.GenerateSignedComplianceBundle(ctx, compliancereport.SignedBundleGenerationRequest{
 				Generation: compliancereport.GenerationRequest{
 					ScopeID:     scopeID,

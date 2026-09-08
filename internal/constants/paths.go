@@ -731,6 +731,7 @@ const (
 	ComplianceBundleManifestPath                  = "manifest.json"
 	ComplianceBundleSourcesDirname                = "sources"
 	ComplianceBundleSourceDemosDirname            = "demos"
+	ComplianceBundleSourceEvalsDirname            = "evals"
 	ComplianceBundleSourceRuntimeDirname          = "runtime"
 	ComplianceBundleSourceProvenanceDirname       = "provenance"
 	ComplianceBundleSourceArtifactsDirname        = "artifacts"

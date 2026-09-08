@@ -123,15 +123,16 @@ func (v *demoRunVerifier) verifyManifest(manifest *compliancev1.DemoManifest) {
 		v.fail(constants.ErrInvalidEvidenceGraph, v.runID, err.Error())
 		return
 	}
-	v.definitions = make(map[string]*compliancev1.DemoScenarioDefinition)
+	canonicalDefinitions := make(map[string]*compliancev1.DemoScenarioDefinition)
 	expectedRefs := make([]string, 0)
 	for _, definition := range scenarioCatalog.GetDefinitions() {
 		if strings.HasPrefix(definition.GetScenarioId(), manifest.GetDemoId()+"-") {
 			key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
-			v.definitions[key] = definition
+			canonicalDefinitions[key] = definition
 			expectedRefs = append(expectedRefs, key)
 		}
 	}
+	v.definitions = v.loadDefinitions(manifest, canonicalDefinitions, expectedRefs)
 	definitions := make([]*compliancev1.DemoScenarioDefinition, 0, len(v.definitions))
 	for _, definition := range v.definitions {
 		definitions = append(definitions, definition)
@@ -153,6 +154,40 @@ func (v *demoRunVerifier) verifyManifest(manifest *compliancev1.DemoManifest) {
 		v.fail(constants.ErrUnresolvedReference, constants.DemoRunManifestFilename, "manifest scenario definitions do not match the canonical demo catalog")
 	}
 	v.verifyProvenance(manifest)
+}
+
+func (v *demoRunVerifier) loadDefinitions(manifest *compliancev1.DemoManifest, canonical map[string]*compliancev1.DemoScenarioDefinition, expectedRefs []string) map[string]*compliancev1.DemoScenarioDefinition {
+	artifacts, err := v.source.Definitions(v.ctx, manifest.GetDemoId())
+	if err != nil {
+		v.fail(constants.ErrUnresolvedReference, constants.DemoRunManifestFilename, fmt.Sprintf("load scenario definitions: %v", err))
+		return nil
+	}
+	definitions := make(map[string]*compliancev1.DemoScenarioDefinition, len(artifacts))
+	actualRefs := make([]string, 0, len(artifacts))
+	for index, artifact := range artifacts {
+		subject := fmt.Sprintf("%s#%d", constants.DemoRunDefinitionsFilename, index+1)
+		definition := &compliancev1.DemoScenarioDefinition{}
+		if err := compliancev1.UnmarshalCanonical(artifact.Body, definition); err != nil {
+			v.fail(constants.ErrEvidenceArtifactMalformed, subject, err.Error())
+			continue
+		}
+		key := versionedKey(definition.GetScenarioId(), definition.GetScenarioVersion())
+		canonicalDefinition, exists := canonical[key]
+		if !exists || !proto.Equal(definition, canonicalDefinition) {
+			v.fail(constants.ErrChecksumMismatch, subject, "scenario definition does not match the canonical demo catalog")
+			continue
+		}
+		if _, duplicate := definitions[key]; duplicate {
+			v.fail(constants.ErrInvalidEvidenceGraph, subject, "duplicate scenario definition")
+			continue
+		}
+		definitions[key] = definition
+		actualRefs = append(actualRefs, key)
+	}
+	if !equalStringSets(actualRefs, expectedRefs) {
+		v.fail(constants.ErrUnresolvedReference, constants.DemoRunDefinitionsFilename, "scenario definition source is incomplete or contains unexpected entries")
+	}
+	return definitions
 }
 
 func (v *demoRunVerifier) verifyProvenance(manifest *compliancev1.DemoManifest) {

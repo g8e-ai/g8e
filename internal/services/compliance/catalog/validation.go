@@ -462,8 +462,8 @@ func ValidateBundleArtifact(artifact *compliancev1.BundleArtifact) error {
 	if artifact.Profile != constants.ComplianceBundleProfilePublic && artifact.Profile != constants.ComplianceBundleProfileRestricted {
 		return fmt.Errorf("%w: bundle artifact %s has unsupported profile %q", constants.ErrBundleProfileUnsupported, artifact.BundlePath, artifact.Profile)
 	}
-	if artifact.ByteLength <= 0 {
-		return fmt.Errorf("%w: bundle artifact %s has non-positive byte length", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
+	if artifact.ByteLength < 0 {
+		return fmt.Errorf("%w: bundle artifact %s has negative byte length", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
 	}
 	if artifact.Profile == constants.ComplianceBundleProfileRestricted {
 		if artifact.Encryption == nil || artifact.Encryption.Algorithm == "" || artifact.Encryption.KeyId == "" || artifact.Encryption.AuthorizationScope == "" || artifact.Encryption.PlaintextSha256 == "" || artifact.Encryption.AuthenticatedMetadataSha256 == "" {

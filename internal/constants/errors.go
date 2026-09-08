@@ -1203,6 +1203,7 @@ var (
 	ErrUnexpectedEvidenceArtifact = errors.New("compliance: unexpected evidence artifact")
 	ErrEvidenceArtifactTooLarge   = errors.New("compliance: evidence artifact exceeds size limit")
 	ErrDemoRunVerificationFailed  = errors.New("compliance: demo run verification failed")
+	ErrEvalRunVerificationFailed  = errors.New("compliance: eval run verification failed")
 	ErrComplianceReleaseEvidence  = errors.New("compliance: release evidence generation failed")
 
 	// Compliance evidence graph errors

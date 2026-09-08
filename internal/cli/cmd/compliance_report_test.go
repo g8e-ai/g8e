@@ -146,9 +146,33 @@ func TestComplianceReportGenerateCmdWithConfig_PersistsSignedBundleWithEveryProt
 	assert.Equal(t, evidence.EvalScopeID("evidence-graph-suite"), bundle.GetAnalysis().GetScopeRef())
 	assert.NotNil(t, bundle.GetManifest().GetSignature())
 	assert.NotNil(t, bundle.GetChecksumRootSignature())
+	artifactPaths := make(map[string]struct{}, len(bundle.GetArtifacts()))
+	for _, artifact := range bundle.GetArtifacts() {
+		artifactPaths[artifact.GetBundlePath()] = struct{}{}
+	}
+	evalSourceBase := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
+	for _, filename := range []string{
+		constants.EvalRunManifestFilename,
+		constants.EvalRunTasksFilename,
+		constants.EvalRunAttemptsFilename,
+		constants.EvalRunReceiptsFilename,
+		constants.EvalRunStagesFilename,
+		constants.EvalRunMetricsFilename,
+		constants.EvalRunEvidenceIndexFilename,
+	} {
+		assert.Contains(t, artifactPaths, path.Join(evalSourceBase, constants.ComplianceBundleSourceRuntimeDirname, filename))
+	}
+	evalVerificationPath := path.Join(evalSourceBase, constants.ComplianceBundleSourceVerificationFilename)
+	require.Contains(t, artifactPaths, evalVerificationPath)
+	evalVerificationBody, err := fileSvc.ReadFile(context.Background(), path.Join(constants.ComplianceBundlesDirname, bundle.GetManifest().GetReportId(), evalVerificationPath))
+	require.NoError(t, err)
+	evalVerificationReport := &compliancev1.ComplianceVerificationReport{}
+	require.NoError(t, compliancev1.UnmarshalCanonical(evalVerificationBody, evalVerificationReport))
+	assert.True(t, evalVerificationReport.GetValid())
+	assert.Equal(t, constants.EvalRunVerifierID, evalVerificationReport.GetVerifierId())
 	require.Len(t, bundle.GetRenderedFormats(), len(compliancereport.SupportedFormats()))
 	for _, rendered := range bundle.GetRenderedFormats() {
-		artifactPath := path.Join(constants.ComplianceBundlesDirname, "report-1", rendered.GetBundlePath())
+		artifactPath := path.Join(constants.ComplianceBundlesDirname, bundle.GetManifest().GetReportId(), rendered.GetBundlePath())
 		body, err := fileSvc.ReadFile(context.Background(), artifactPath)
 		require.NoError(t, err)
 		assert.NotEmpty(t, body)

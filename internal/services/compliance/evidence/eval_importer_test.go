@@ -525,3 +525,51 @@ func nodesByType(nodes []EvidenceNode, artifactType ArtifactType) []EvidenceNode
 	}
 	return matched
 }
+
+func TestVerifyEvalRun_AcceptsCompleteBundle(t *testing.T) {
+	fix := newEvalImporterFixture(t)
+	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
+
+	report, err := VerifyEvalRun(context.Background(), fix.reader, fix.runID, fix.runDir, verifiedAt)
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+	assert.Equal(t, fix.runID, report.GetReportId())
+	assert.Equal(t, constants.EvalRunVerifierID, report.GetVerifierId())
+	assert.Equal(t, constants.EvalRunVerifierVersion, report.GetVerifierVersion())
+	assert.Equal(t, verifiedAt, report.GetVerifiedAt().AsTime())
+}
+
+func TestVerifyEvalRun_ReportsImporterFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*evalImporterFixture)
+	}{
+		{
+			name: "missing manifest",
+			mutate: func(fix *evalImporterFixture) {
+				delete(fix.reader.files, fix.path(constants.EvalRunManifestFilename))
+			},
+		},
+		{
+			name: "malformed metric",
+			mutate: func(fix *evalImporterFixture) {
+				fix.reader.files[fix.path(constants.EvalRunMetricsFilename)] = []byte(`{"schema_version":`)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fix := newEvalImporterFixture(t)
+			test.mutate(fix)
+
+			report, err := VerifyEvalRun(context.Background(), fix.reader, fix.runID, fix.runDir, time.Unix(1_700_000_100, 0).UTC())
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			require.NotEmpty(t, report.GetFailures())
+			assert.Equal(t, constants.ErrEvidenceImporterFailed.Error(), report.GetFailures()[0].GetCode())
+		})
+	}
+}

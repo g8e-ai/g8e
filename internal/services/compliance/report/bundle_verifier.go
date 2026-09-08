@@ -278,6 +278,11 @@ type demoSourceInventory struct {
 }
 
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
+	v.verifyDemoSourceVerificationReports(ctx)
+	v.verifyEvalSourceVerificationReports(ctx)
+}
+
+func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context) {
 	expectedRuns := make(map[string]struct{})
 	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
 		if resource != nil && resource.GetArtifactType() == string(evidence.ArtifactTypeDemoManifest) && resource.GetRunId() != "" {
@@ -352,6 +357,129 @@ func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	}
 }
 
+type evalSourceInventory struct {
+	verificationReport *compliancev1.ComplianceVerificationReport
+	manifest           bool
+	tasks              bool
+	attempts           bool
+	receipts           bool
+	stages             bool
+	metrics            bool
+	evidenceIndex      bool
+}
+
+func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context) {
+	expectedRuns := make(map[string]struct{})
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource != nil && resource.GetArtifactType() == string(evidence.ArtifactTypeEvalManifest) && resource.GetRunId() != "" {
+			expectedRuns[resource.GetRunId()] = struct{}{}
+		}
+	}
+	inventories := make(map[string]*evalSourceInventory, len(expectedRuns))
+	for runID := range expectedRuns {
+		inventories[runID] = &evalSourceInventory{}
+	}
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) < 4 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceBundleSourceEvalsDirname || parts[2] == "" {
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
+			continue
+		}
+		runID := parts[2]
+		inventory, expected := inventories[runID]
+		if !expected {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "eval source artifact does not bind an analysis evidence run")
+			continue
+		}
+		switch parts[3] {
+		case constants.ComplianceBundleSourceVerificationFilename:
+			if len(parts) != 4 {
+				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source verification path is unsupported")
+				continue
+			}
+			inventory.verificationReport = v.verifyEvalSourceVerificationReport(bundlePath, body, runID)
+		case constants.ComplianceBundleSourceRuntimeDirname:
+			if len(parts) < 5 {
+				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime source path is incomplete")
+				continue
+			}
+			if len(parts) > 5 {
+				if parts[4] != constants.EvalRunEvidenceDirname {
+					v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime nested source path is unsupported")
+				}
+				continue
+			}
+			switch parts[4] {
+			case constants.EvalRunManifestFilename:
+				inventory.manifest = true
+			case constants.EvalRunTasksFilename:
+				inventory.tasks = true
+			case constants.EvalRunAttemptsFilename:
+				inventory.attempts = true
+			case constants.EvalRunReceiptsFilename:
+				inventory.receipts = true
+			case constants.EvalRunStagesFilename:
+				inventory.stages = true
+			case constants.EvalRunMetricsFilename:
+				inventory.metrics = true
+			case constants.EvalRunEvidenceIndexFilename:
+				inventory.evidenceIndex = true
+			default:
+				v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval runtime root source path is unsupported")
+			}
+		default:
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "eval source path is unsupported")
+		}
+	}
+	for runID, inventory := range inventories {
+		if inventory.verificationReport == nil {
+			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a valid independent source verification report")
+		}
+		complete := inventory.manifest && inventory.tasks && inventory.attempts && inventory.receipts && inventory.stages && inventory.metrics && inventory.evidenceIndex
+		if !complete {
+			bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID)
+			v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval evidence run lacks a complete protected runtime source inventory")
+		}
+		if complete && inventory.verificationReport != nil {
+			v.replayEvalSourceVerification(ctx, runID, inventory.verificationReport)
+		}
+	}
+}
+
+func (v *bundleVerifier) verifyEvalSourceVerificationReport(bundlePath string, body []byte, runID string) *compliancev1.ComplianceVerificationReport {
+	report := &compliancev1.ComplianceVerificationReport{}
+	if err := compliancev1.UnmarshalCanonical(body, report); err != nil {
+		v.fail(constants.ErrEvidenceArtifactMalformed, bundlePath, "eval source verification report is not canonical")
+		return nil
+	}
+	if report.GetReportId() != runID || report.GetVerifierId() != constants.EvalRunVerifierID || report.GetVerifierVersion() != constants.EvalRunVerifierVersion || !report.GetValid() || len(report.GetFailures()) != 0 || report.GetVerifiedAt() == nil || report.GetVerifiedAt().CheckValid() != nil || report.GetVerifiedAt().AsTime().After(v.request.Bundle.GetManifest().GetGeneratedAt().AsTime()) {
+		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "eval source verification report is invalid or does not bind the declared run")
+		return nil
+	}
+	return report
+}
+
+func (v *bundleVerifier) replayEvalSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
+	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.EvalRunsDirname, runID)
+	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceEvalsDirname, runtimeRoot: runtimeRoot}
+	replayed, err := evidence.VerifyEvalRun(ctx, reader, runID, runtimeRoot, expected.GetVerifiedAt().AsTime())
+	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
+	if err != nil {
+		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, err.Error())
+		return
+	}
+	expectedBody, expectedErr := compliancev1.MarshalCanonical(expected)
+	replayedBody, replayedErr := compliancev1.MarshalCanonical(replayed)
+	if expectedErr != nil || replayedErr != nil || !replayed.GetValid() || !bytes.Equal(expectedBody, replayedBody) {
+		v.fail(constants.ErrEvalRunVerificationFailed, bundlePath, "replayed eval verification does not match the protected source verification report")
+	}
+}
+
 func (v *bundleVerifier) verifyDemoSourceVerificationReport(bundlePath string, body []byte, runID string) *compliancev1.ComplianceVerificationReport {
 	report := &compliancev1.ComplianceVerificationReport{}
 	if err := compliancev1.UnmarshalCanonical(body, report); err != nil {
@@ -366,7 +494,9 @@ func (v *bundleVerifier) verifyDemoSourceVerificationReport(bundlePath string, b
 }
 
 func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID string, expected *compliancev1.ComplianceVerificationReport) {
-	replayed, err := evidence.VerifyDemoRun(ctx, &bundledDemoArtifactReader{bodies: v.bodies, runID: runID}, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, expected.GetVerifiedAt().AsTime())
+	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, runID)
+	reader := &bundledRuntimeArtifactReader{bodies: v.bodies, runID: runID, sourceDir: constants.ComplianceBundleSourceDemosDirname, runtimeRoot: runtimeRoot}
+	replayed, err := evidence.VerifyDemoRun(ctx, reader, runID, &bundledDemoProvenanceSource{bodies: v.bodies, runID: runID}, expected.GetVerifiedAt().AsTime())
 	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, runID, constants.ComplianceBundleSourceVerificationFilename)
 	if err != nil {
 		v.fail(constants.ErrDemoRunVerificationFailed, bundlePath, err.Error())
@@ -379,12 +509,14 @@ func (v *bundleVerifier) replayDemoSourceVerification(ctx context.Context, runID
 	}
 }
 
-type bundledDemoArtifactReader struct {
-	bodies map[string][]byte
-	runID  string
+type bundledRuntimeArtifactReader struct {
+	bodies      map[string][]byte
+	runID       string
+	sourceDir   string
+	runtimeRoot string
 }
 
-func (r *bundledDemoArtifactReader) ReadFile(ctx context.Context, sourcePath string) ([]byte, error) {
+func (r *bundledRuntimeArtifactReader) ReadFile(ctx context.Context, sourcePath string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -399,7 +531,7 @@ func (r *bundledDemoArtifactReader) ReadFile(ctx context.Context, sourcePath str
 	return append([]byte(nil), body...), nil
 }
 
-func (r *bundledDemoArtifactReader) ReadDir(ctx context.Context, sourcePath string) ([]os.DirEntry, error) {
+func (r *bundledRuntimeArtifactReader) ReadDir(ctx context.Context, sourcePath string) ([]os.DirEntry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -427,38 +559,37 @@ func (r *bundledDemoArtifactReader) ReadDir(ctx context.Context, sourcePath stri
 	sort.Strings(names)
 	result := make([]os.DirEntry, 0, len(names))
 	for _, name := range names {
-		result = append(result, bundledDemoDirEntry{name: name, directory: entries[name]})
+		result = append(result, bundledRuntimeDirEntry{name: name, directory: entries[name]})
 	}
 	return result, nil
 }
 
-func (r *bundledDemoArtifactReader) bundlePath(sourcePath string) (string, bool) {
-	runtimeRoot := filepath.Join(constants.DataDirname, constants.ComplianceDirname, constants.DemoEvidenceDirname, r.runID)
-	relative, err := filepath.Rel(runtimeRoot, sourcePath)
+func (r *bundledRuntimeArtifactReader) bundlePath(sourcePath string) (string, bool) {
+	relative, err := filepath.Rel(r.runtimeRoot, sourcePath)
 	if err != nil || relative == constants.PathParentDir || strings.HasPrefix(relative, constants.PathParentDir+string(filepath.Separator)) {
 		return "", false
 	}
-	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, r.runID, constants.ComplianceBundleSourceRuntimeDirname)
+	bundleRoot := path.Join(constants.ComplianceBundleSourcesDirname, r.sourceDir, r.runID, constants.ComplianceBundleSourceRuntimeDirname)
 	if relative == "." {
 		return bundleRoot, true
 	}
 	return path.Join(bundleRoot, filepath.ToSlash(relative)), true
 }
 
-type bundledDemoDirEntry struct {
+type bundledRuntimeDirEntry struct {
 	name      string
 	directory bool
 }
 
-func (e bundledDemoDirEntry) Name() string { return e.name }
-func (e bundledDemoDirEntry) IsDir() bool  { return e.directory }
-func (e bundledDemoDirEntry) Type() os.FileMode {
+func (e bundledRuntimeDirEntry) Name() string { return e.name }
+func (e bundledRuntimeDirEntry) IsDir() bool  { return e.directory }
+func (e bundledRuntimeDirEntry) Type() os.FileMode {
 	if e.directory {
 		return os.ModeDir
 	}
 	return 0
 }
-func (e bundledDemoDirEntry) Info() (os.FileInfo, error) { return nil, nil }
+func (e bundledRuntimeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 type bundledDemoProvenanceSource struct {
 	bodies map[string][]byte

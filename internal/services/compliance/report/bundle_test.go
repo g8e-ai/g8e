@@ -546,6 +546,23 @@ func TestAssembleBundle_IncludesManifestReferencedSourceArtifacts(t *testing.T) 
 	}
 }
 
+func TestAssembleBundle_PreservesEmptyEvalSourceArtifacts(t *testing.T) {
+	request, _ := bundleAssemblyFixture(t)
+	emptyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceEvalsDirname, "eval-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.EvalRunReceiptsFilename)
+	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: emptyPath, Body: []byte{}, MediaType: constants.MediaTypeJSON})
+
+	result, err := AssembleBundle(request)
+
+	require.NoError(t, err)
+	assert.Empty(t, artifactBodyAt(result.ArtifactBodies, emptyPath))
+	for _, artifact := range result.Bundle.GetArtifacts() {
+		if artifact.GetBundlePath() == emptyPath {
+			assert.Zero(t, artifact.GetByteLength())
+			assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", artifact.GetSha256())
+		}
+	}
+}
+
 func TestAssembleBundle_RejectsMissingManifestReferencedSourceArtifacts(t *testing.T) {
 	request, _ := bundleAssemblyFixture(t)
 	request.SourceArtifacts = nil

@@ -150,7 +150,7 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 	}
 
 	for _, source := range request.SourceArtifacts {
-		if err := addArtifact(&artifacts, &checksumEntries, source.BundlePath, source.Body, source.MediaType, constants.ComplianceBundleProfilePublic); err != nil {
+		if err := addSourceArtifact(&artifacts, &checksumEntries, source.BundlePath, source.Body, source.MediaType); err != nil {
 			return nil, err
 		}
 		artifactBodies = append(artifactBodies, BundleArtifactBody{BundlePath: source.BundlePath, Body: append([]byte(nil), source.Body...)})
@@ -159,7 +159,7 @@ func AssembleBundle(request BundleAssemblyRequest) (*BundleAssemblyResult, error
 	renderedEntries := make([]*compliancev1.RenderedFormatEntry, 0, len(request.RenderedFormats))
 	for _, rendered := range request.RenderedFormats {
 		if rendered.BundlePath == constants.ComplianceBundleAnalysisPath && rendered.Format == FormatJSON && rendered.MediaType == constants.MediaTypeJSON {
-			if err := validateBundleArtifactInputs(rendered.BundlePath, rendered.Body, rendered.MediaType); err != nil {
+			if err := validateBundleArtifactInputs(rendered.BundlePath, rendered.Body, rendered.MediaType, false); err != nil {
 				return nil, err
 			}
 			if !bytes.Equal(rendered.Body, analysisBytes) {
@@ -405,7 +405,15 @@ func validateBundleAssemblyRequest(request BundleAssemblyRequest) error {
 }
 
 func addArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums *[]*compliancev1.ChecksumEntry, bundlePath string, body []byte, mediaType, profile string) error {
-	if err := validateBundleArtifactInputs(bundlePath, body, mediaType); err != nil {
+	return addArtifactDescriptor(artifacts, checksums, bundlePath, body, mediaType, profile, false)
+}
+
+func addSourceArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums *[]*compliancev1.ChecksumEntry, bundlePath string, body []byte, mediaType string) error {
+	return addArtifactDescriptor(artifacts, checksums, bundlePath, body, mediaType, constants.ComplianceBundleProfilePublic, true)
+}
+
+func addArtifactDescriptor(artifacts *[]*compliancev1.BundleArtifact, checksums *[]*compliancev1.ChecksumEntry, bundlePath string, body []byte, mediaType, profile string, allowEmpty bool) error {
+	if err := validateBundleArtifactInputs(bundlePath, body, mediaType, allowEmpty); err != nil {
 		return err
 	}
 	digest := sha256.Sum256(body)
@@ -425,7 +433,7 @@ func addArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums *[]*compli
 }
 
 func addRestrictedArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums *[]*compliancev1.ChecksumEntry, restricted RestrictedArtifact) error {
-	if err := validateBundleArtifactInputs(restricted.BundlePath, restricted.Body, restricted.MediaType); err != nil {
+	if err := validateBundleArtifactInputs(restricted.BundlePath, restricted.Body, restricted.MediaType, false); err != nil {
 		return err
 	}
 	digest := sha256.Sum256(restricted.Body)
@@ -445,11 +453,11 @@ func addRestrictedArtifact(artifacts *[]*compliancev1.BundleArtifact, checksums 
 	return nil
 }
 
-func validateBundleArtifactInputs(bundlePath string, body []byte, mediaType string) error {
+func validateBundleArtifactInputs(bundlePath string, body []byte, mediaType string, allowEmpty bool) error {
 	if bundlePath == "" {
 		return fmt.Errorf("%w: artifact bundle path is empty", constants.ErrBundleAssemblyFailed)
 	}
-	if len(body) == 0 {
+	if !allowEmpty && len(body) == 0 {
 		return fmt.Errorf("%w: artifact %s has empty content", constants.ErrBundleArtifactMissing, bundlePath)
 	}
 	if int64(len(body)) > constants.ComplianceBundleMaxArtifactBytes {

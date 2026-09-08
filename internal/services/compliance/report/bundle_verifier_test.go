@@ -356,6 +356,13 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			failureCode: constants.ErrEvidenceTrustNotAssessed,
 		},
 		{
+			name: "missing eval source inventory",
+			mutate: func(bundle *compliancev1.ComplianceReportBundle, _ *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundle.Analysis.EvidenceResources = append(bundle.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{ArtifactType: string(evidence.ArtifactTypeEvalManifest), RunId: "eval-run-1"})
+			},
+			failureCode: constants.ErrEvalRunVerificationFailed,
+		},
+		{
 			name: "missing demo source verification",
 			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceVerificationFilename)
@@ -386,6 +393,22 @@ func TestVerifyComplianceReportBundle_ReportsArtifactAndSignatureMutations(t *te
 			name: "tampered demo runtime results source",
 			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
 				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceRuntimeDirname, constants.DemoRunResultsFilename)
+				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
+		},
+		{
+			name: "tampered demo provenance source",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceProvenanceDirname, constants.ComplianceBundleSourceArtifactsDirname, constants.DemosComposeFile)
+				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
+			},
+			failureCode: constants.ErrDemoRunVerificationFailed,
+		},
+		{
+			name: "tampered demo scenario definitions source",
+			mutate: func(_ *compliancev1.ComplianceReportBundle, reader *bundleArtifactReaderStub, _ *compliancev1.ComplianceReportTrustPolicy) {
+				bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundleSourceDemosDirname, "demo-run-1", constants.ComplianceBundleSourceProvenanceDirname, constants.DemoRunDefinitionsFilename)
 				reader.bodies[bundlePath] = append(reader.bodies[bundlePath], '\n')
 			},
 			failureCode: constants.ErrDemoRunVerificationFailed,

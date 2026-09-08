@@ -351,6 +351,7 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 	scenarios, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
 	require.NoError(t, err)
 	refs := make([]*compliancev1.VersionedReference, 0)
+	sourceDefinitions := make([]DemoDefinitionArtifact, 0)
 	frameworkRefs := make(map[string]*compliancev1.FrameworkControlReference)
 	var selectedDefinition *compliancev1.DemoScenarioDefinition
 	for _, definition := range scenarios.GetDefinitions() {
@@ -358,6 +359,9 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 			continue
 		}
 		refs = append(refs, &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()})
+		body, marshalErr := compliancev1.MarshalCanonical(definition)
+		require.NoError(t, marshalErr)
+		sourceDefinitions = append(sourceDefinitions, DemoDefinitionArtifact{Body: body})
 		if selectedDefinition == nil || definition.GetScenarioId() == scenarioID {
 			selectedDefinition = definition
 		}
@@ -412,7 +416,7 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 		runArtifactPath(runID, constants.DemoRunManifestFilename): manifestBody,
 		runArtifactPath(runID, constants.DemoRunResultsFilename):  resultBody,
 	}}
-	return reader, memoryProvenanceSource{artifacts: provenance}, runID
+	return reader, memoryProvenanceSource{artifacts: provenance, definitions: sourceDefinitions}, runID
 }
 
 func validHealthcareMetricRunFixture(t *testing.T) (*memoryArtifactReader, memoryProvenanceSource, string) {
