@@ -83,5 +83,4 @@ The interaction between agents follows strict architectural invariants:
 - [Prompts](prompts.md) — System prompt assembly and persona templating
 - [Thinking](thinking.md) — Provider reasoning tokens and cryptographic thought signatures
 - [Evals](evals.md) — Benchmark evaluation suite and Judge scoring rubrics
-- [Constants](constants.md) — Application constants and agent identifiers
 

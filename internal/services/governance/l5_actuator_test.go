@@ -697,3 +697,31 @@ func TestSignatureDigest_ProtocolVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestDeterministicStageActionType_RequiresOneConsistentActionType(t *testing.T) {
+	tests := []struct {
+		name       string
+		receipt    *operatorv1.ActionReceipt
+		expected   string
+		expectsErr bool
+	}{
+		{name: "consistent action type", receipt: &operatorv1.ActionReceipt{DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{ActionType: "FILE_EDIT"}, {}, {ActionType: "FILE_EDIT"}}}, expected: "FILE_EDIT"},
+		{name: "nil receipt", expectsErr: true},
+		{name: "missing stages", receipt: &operatorv1.ActionReceipt{}, expectsErr: true},
+		{name: "empty action types", receipt: &operatorv1.ActionReceipt{DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{}, {}}}, expectsErr: true},
+		{name: "conflicting action types", receipt: &operatorv1.ActionReceipt{DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{ActionType: "FILE_EDIT"}, {ActionType: "FILE_READ"}}}, expectsErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actionType, err := DeterministicStageActionType(test.receipt)
+			if test.expectsErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, constants.ErrEvidenceArtifactMalformed)
+				assert.Empty(t, actionType)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, actionType)
+		})
+	}
+}

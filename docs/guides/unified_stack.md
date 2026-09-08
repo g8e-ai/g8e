@@ -1,129 +1,202 @@
 # Unified Docker Stack Guide
 
-Last Updated: 2026-09-05
-Version: v2.1.4
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-This guide describes how to bring up the complete g8e platform — gateway, operator, ensemble (g8ee), and dashboard (g8ed) — as a single Docker Compose stack from the repository root, using either Docker Compose directly or the first-class `./g8e docker` CLI management commands.
+This guide explains how to run the gateway, operator, ensemble (g8ee), and dashboard (g8ed) from the repository root as one Docker Compose stack. You can manage the stack with Docker Compose directly or with the `./g8e docker` commands.
 
-## What Ships in the Unified Stack
+## Prerequisites
 
-The repository root `docker-compose.yml` defines four services on a single `g8e-net` bridge network:
+The unified stack requires:
 
-| Service | Image | Port | Role |
+- Docker Engine with the Docker Compose v2 plugin.
+- The g8e repository and `./g8e` binary on the host.
+- Ports 8080, 8443, 8000, and 3000 available when using the defaults.
+- A browser with WebAuthn support for interactive owner enrollment. Headless enrollment is available when no browser is present.
+
+Run all commands in this guide from the repository root. The `./g8e docker` commands require `docker-compose.yml` in the current directory.
+
+The start and reset commands run `docker compose up -d` without `--build`. Build the images after source changes or when you want to guarantee a fresh local image:
+
+```bash
+./g8e docker build
+```
+
+You can also use `docker compose up -d --build` in the manual workflow.
+
+## Stack Services
+
+The root `docker-compose.yml` defines four services on the `g8e-net` bridge network:
+
+| Service | Build | Published ports | Role |
 | --- | --- | --- | --- |
-| `g8e-gateway` | repo-root `Dockerfile` (Go, FIPS) | 8080 (HTTP), 8443 (HTTPS) | Policy Decision Point: admits transactions, manages PKI, enforces L1-L3 governance, brokers pub/sub, serves the console SPA and MCP/A2A endpoints. |
-| `g8e-operator` | repo-root `Dockerfile` (Go, FIPS) | — | Policy Execution Point: outbound-only mTLS to the gateway, pulls work from its pub/sub channel, re-verifies proofs, and executes L4-L5 actions. |
-| `ensemble` | `ensemble/Dockerfile` (Python/FastAPI) | 8000 | First-party agentic ensemble (g8ee): submits `GovernanceEnvelope` transactions directly to the privileged governance endpoint with the operator transport identity, publishes SSE events, and drives the AI reasoning loop. See the [g8ee documentation](../ensemble/index.md). |
-| `dashboard` | `dashboard/Dockerfile` (Node.js/Express) | 3000 | Operator dashboard (g8ed): browser UI for chat, operator management, audit, and settings. See the [g8ed documentation](../dashboard/index.md). |
+| `g8e-gateway` | Root `Dockerfile` | 8080 HTTP, 8443 HTTPS | Policy Decision Point. It admits transactions, manages PKI, enforces gateway governance, brokers pub/sub, and serves the console, MCP, and A2A surfaces. |
+| `g8e-operator` | Root `Dockerfile` | None | Policy Execution Point. It connects outbound to the gateway over mTLS, receives work, re-verifies proofs, and performs L4 and L5 execution. |
+| `ensemble` | `ensemble/Dockerfile` with the repository root as its build context | 8000 | First-party agentic ensemble. It runs the AI reasoning flow, submits governed transactions, and publishes events. See the [g8ee documentation](../ensemble/index.md). |
+| `dashboard` | `dashboard/Dockerfile` with the repository root as its build context | 3000 | First-party browser interface for chat, operator management, audit, and settings. See the [g8ed documentation](../dashboard/index.md). |
 
-The gateway and operator share the same Go binary (the repo-root `Dockerfile`), built with FIPS 140-3 approved mode enabled. The ensemble and dashboard each have their own Dockerfile rooted at the repository root so they can copy their source and the in-tree `protocol/python/` package.
+The gateway and operator use the same Go image and binary. The Linux AMD64 binary includes the Go FIPS 140-3 cryptographic module. Strict runtime enforcement is off by default because the platform uses cryptographic primitives that strict mode rejects. See the [Docker Gateway Guide](./docker_gateway.md) for the supported operating environment and verification details.
 
-## Quick Start
+## Startup Model
 
-The unified stack uses a two-phase startup model. Only the gateway starts by default (unprofiled); the operator, dashboard, and ensemble belong to the `bootstrapped` Compose profile (`profiles: [bootstrapped]`) and require a human owner to enroll before they can start. The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending platform enrollment requests.
+Only `g8e-gateway` belongs to the default Compose profile. The operator, ensemble, and dashboard belong to the `bootstrapped` profile. A fresh gateway initializes its PKI immediately, but it starts with no users and does not issue workload credentials until the first owner enrolls and approves each platform enrollment request.
 
-### Automated Workflow (`./g8e docker start --full`)
+The profile controls which containers Compose starts; it does not bypass enrollment. The three workload containers remain not ready while they wait for owner approval.
 
-The easiest way to start the complete stack is through the interactive CLI command from the repository root:
+## Automated Workflow
+
+The interactive helper starts all four services and walks through enrollment using the default host ports:
 
 ```bash
 ./g8e docker start --full
 ```
 
-This single command starts the stack containers, waits for the gateway health check to pass, enrolls the CLI user (creating the first owner and CLI mTLS identity), and interactively prompts to approve each platform workload enrollment request in sequence (ensemble, dashboard, and operator).
+On a fresh deployment, the command:
 
-### Manual Workflow (Docker Compose)
+1. Starts the `bootstrapped` Compose profile in the background.
+2. Polls `http://127.0.0.1:8080/api/v1/health` until the gateway responds.
+3. Enrolls the local CLI identity. The first enrollment creates the owner and registers a WebAuthn passkey; an existing valid identity is reused.
+4. Checks for pending enrollment requests in ensemble, dashboard, then operator order and prompts before approving each request.
 
-You can also orchestrate the lifecycle manually in three distinct phases:
+Each approval prompt accepts `y` or `yes`; any other response skips that component. The walkthrough checks each component only once. If a container has not submitted its request by the time it is checked, the command reports that no request was found and continues. Use the manual approval commands below for any request that appears later.
 
-#### Phase 1: Start the gateway
+The helper assumes the default gateway host ports, 8080 and 8443. Use the manual workflow when the gateway is published on different ports.
 
-From the repository root:
+To start all workload containers without running owner enrollment or approval prompts:
+
+```bash
+./g8e docker start --full --skip-enroll
+```
+
+The workloads remain pending until an enrolled owner approves them.
+
+## Manual Workflow
+
+### 1. Start the gateway
 
 ```bash
 docker compose up -d --build
+until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
 ```
 
-This builds the images and starts only the gateway service. The gateway becomes healthy immediately. No other containers start because the operator, dashboard, and ensemble are gated behind the `bootstrapped` profile.
+This starts only `g8e-gateway` because the other services are in the `bootstrapped` profile.
 
-#### Phase 2: Enroll the first owner
-
-After the gateway is healthy, enroll the first owner to establish the root of trust and create the CLI mTLS identity:
+### 2. Enroll the first owner
 
 ```bash
-# 1. Wait for the gateway to be healthy.
-until curl -fsS http://localhost:8080/api/v1/health >/dev/null 2>&1; do sleep 2; done
-
-# 2. Enroll the first owner.
-#    -e specifies the gateway HTTP discovery endpoint (host or host:port).
-#    mTLS port defaults to 8443 and does not need to be set explicitly.
 ./g8e auth enroll user -e localhost
 ```
 
-If the local CLI has a stale trust bundle from a previous gateway instance (for example, after `docker compose down -v`), the coordinator detects that the gateway is not yet bootstrapped and initializes cleanly instead of failing on stale trust anchors.
+The discovery endpoint uses HTTP port 8080 and the authenticated API uses HTTPS port 8443 by default. Interactive enrollment installs the gateway root CA into system trust before opening the browser for passkey registration. The command prompts before operations that require user action.
 
-#### Phase 3: Start and approve platform workloads
+If local credentials remain from a gateway whose volumes were removed, the enrollment coordinator checks the new gateway state and performs initial bootstrap when no owner exists.
 
-Once the first owner is enrolled, start the operator, dashboard, and ensemble:
+### 3. Start the workload containers
 
 ```bash
-# 3. Start the bootstrapped-profile workloads.
 docker compose --profile bootstrapped up -d
+```
 
-# 4. List pending platform enrollment requests submitted by the workloads.
+Each workload submits its own enrollment request and waits for a decision. Requests can appear at different times.
+
+### 4. Approve the workload requests
+
+```bash
 ./g8e auth pending-platform-enrollments
+```
 
-# 5. Approve each request by exact request ID (recommended order: operator, dashboard, ensemble).
+Approve each exact request ID. Approving the operator first makes its transport identity available before the ensemble begins governed submissions:
+
+```bash
 ./g8e auth approve-platform-enrollment <operator-request-id> --yes
 ./g8e auth approve-platform-enrollment <dashboard-request-id> --yes
 ./g8e auth approve-platform-enrollment <ensemble-request-id> --yes
-
-# 6. Verify that all workloads have completed enrollment and are healthy.
-docker compose ps
 ```
 
-Alternatively, use the gateway console at `https://localhost:8443/console/` to list pending requests and approve them in a browser. The console signs in via the same first-owner WebAuthn passkey created during owner enrollment.
+Without `--yes`, each command displays request metadata and asks for confirmation. Re-run `pending-platform-enrollments` if a component has not submitted its request yet. You can deny a request with `--deny` and optionally include `--reason`.
 
-Once the stack is healthy, the following endpoints are available:
+You can also approve pending requests in the gateway console at `https://localhost:8443/console/`. Console authentication uses the owner's WebAuthn passkey.
 
-- Gateway HTTP Discovery & CA Bundle: `http://localhost:8080`
-- Gateway HTTPS & Console SPA: `https://localhost:8443` (Console: `https://localhost:8443/console/`)
+### 5. Verify readiness
+
+```bash
+docker compose --profile bootstrapped ps
+```
+
+When all enrollment flows complete, the following surfaces are available:
+
+- Gateway discovery and CA bundle: `http://localhost:8080`
+- Gateway HTTPS API: `https://localhost:8443`
+- Gateway console: `https://localhost:8443/console/`
 - Ensemble API: `http://localhost:8000`
-- Dashboard UI: `http://localhost:3000`
+- Dashboard: `http://localhost:3000`
 
-The gateway runs in `doctrine` posture by default with CORS and passkey RP origins pre-configured for the dashboard origin (`http://localhost:3000`). This allows the dashboard to register WebAuthn passkeys and make authenticated cross-origin requests to the gateway from the browser.
+The gateway starts in `doctrine` posture. Compose configures the dashboard origin for CORS and WebAuthn, so the browser SPA can establish a passkey-backed gateway session and call the gateway directly.
 
-## CLI Management (`./g8e docker`)
+## Non-Default Ports and Hostnames
 
-The `g8e` binary provides dedicated CLI subcommands for managing the root Docker Compose stack:
+The compose file reads six optional environment variables. The repository root `.env.example` contains the same defaults.
 
-| Command | Description |
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `G8E_PREFIX` | `g8e` | Prefixes container names such as `${G8E_PREFIX}-gateway`. It does not rename the Compose network or named volumes. |
+| `G8E_HTTP_PORT` | `8080` | Host port for gateway discovery, health, CA bundle retrieval, and enrollment submission. |
+| `G8E_HTTPS_PORT` | `8443` | Host port for the gateway HTTPS and mTLS API. |
+| `G8E_ENSEMBLE_PORT` | `8000` | Host port for the ensemble API. |
+| `G8E_DASHBOARD_PORT` | `3000` | Host port for the dashboard. |
+| `G8E_HOSTNAME` | `localhost` | Browser-visible gateway hostname used in the public URL, CORS origin, and WebAuthn relying-party configuration. |
+
+Export overrides so they apply to every Compose command in the workflow:
+
+```bash
+export G8E_HTTP_PORT=18080
+export G8E_HTTPS_PORT=18443
+export G8E_ENSEMBLE_PORT=18000
+export G8E_DASHBOARD_PORT=13000
+docker compose up -d --build
+```
+
+Pass both gateway ports to host-side authentication commands:
+
+```bash
+./g8e auth enroll user -e localhost:18080 --port 18443
+docker compose --profile bootstrapped up -d
+./g8e auth pending-platform-enrollments -e localhost:18080 --port 18443
+./g8e auth approve-platform-enrollment <request-id> --yes -e localhost:18080 --port 18443
+```
+
+Set `G8E_HOSTNAME` to the hostname used by the browser when accessing the gateway from another machine. The hostname must resolve to the Docker host, and the published ports must be reachable. WebAuthn relying-party IDs are hostnames, not URLs or host-and-port strings.
+
+## CLI Management
+
+| Command | Behavior |
 | --- | --- |
-| `./g8e docker start` | Start the gateway container (default profile). |
-| `./g8e docker start --full` | Start the full stack and run the interactive owner enrollment and workload approval walkthrough. |
-| `./g8e docker start --full --skip-enroll` | Start the full stack in the background without the interactive walkthrough (workloads remain pending approval). |
-| `./g8e docker stop` | Stop and remove stack containers while preserving volumes and networks. |
-| `./g8e docker status` | Display container and service status (`docker compose ps`). |
-| `./g8e docker build` | Build all Docker images defined in `docker-compose.yml` (`--no-cache` supported). |
-| `./g8e docker logs [service] [-f]` | Show and stream logs for the stack or a specific service container. |
-| `./g8e docker reset [--full]` | Clean containers, volumes, and networks, then restart the stack. |
-| `./g8e docker rebuild [--full]` | Rebuild images from scratch and restart the stack (`--no-cache` supported). |
-| `./g8e docker clean` | Remove all containers, volumes, and networks across all profiles (`--yes` supported). |
+| `./g8e docker start` | Starts the default profile, which contains only the gateway. |
+| `./g8e docker start --full` | Starts the `bootstrapped` profile and runs the interactive enrollment walkthrough. |
+| `./g8e docker start --full --skip-enroll` | Starts all services without the enrollment walkthrough. |
+| `./g8e docker start --profile <name>` | Starts an explicit Compose profile. A non-empty profile also runs the walkthrough unless `--skip-enroll` is set. |
+| `./g8e docker stop` | Runs `docker compose down` for all unified-stack services. It removes containers and the Compose network but preserves named volumes. |
+| `./g8e docker status` | Runs `docker compose ps`. |
+| `./g8e docker build` | Builds the images used by all four services. `--no-cache` disables the build cache. |
+| `./g8e docker logs [service] [-f]` | Prints logs for the stack or one Compose service and optionally follows them. |
+| `./g8e docker rebuild [--full]` | Stops and rebuilds the explicit `--profile`, or the default profile when none is given, then restarts the profile selected by `--profile` or `--full`. It preserves volumes and does not run enrollment. The build bypasses the cache by default; pass `--no-cache=false` to reuse it. |
+| `./g8e docker reset [--full]` | Runs destructive cleanup and restarts the selected scope without rebuilding images or running enrollment. It does not ask for confirmation. `--full` selects the restart profile but does not select that profile for the cleanup step. |
+| `./g8e docker clean` | Removes containers, volumes, networks, and orphans across the unified stack. It skips confirmation by default; pass `--yes=false` to require a prompt. |
 
-## Service Dependencies, Health Checks, and Resource Limits
+Use `--profile bootstrapped` with `rebuild` or `reset` when the operation must target the full profile during both shutdown and restart. A successful reset destroys state in the volumes it removes. `clean` always targets the full profile and destroys the gateway PKI, owner records, audit data, operator identity, and app identities. Use these destructive commands only when a fresh trust domain is intended.
 
-The operator, ensemble, and dashboard services declare dependencies on the gateway being healthy (`depends_on` with `condition: service_healthy` for `g8e-gateway`). The ensemble service also depends on `g8e-operator: condition: service_started`.
+## Dependencies, Health Checks, and Resources
 
-Health checks defined in `docker-compose.yml` reflect truthful service readiness:
+The operator, ensemble, and dashboard wait for the gateway container to become healthy. The ensemble also waits for the operator container to start, but not for operator enrollment to complete.
 
-- `g8e-gateway`: `wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health`
-- `g8e-operator`: `test -f /root/.g8e/pki/operator.crt`
-- `ensemble`: `python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"`
-- `dashboard`: `wget --no-verbose --tries=1 --spider http://localhost:3000/`
+Compose uses these health checks:
 
-Because platform enrollment requires owner approval, the operator, ensemble, and dashboard health checks remain not-ready while approval is pending. Once the owner approves their requests, each component completes enrollment and transitions to healthy.
+- `g8e-gateway`: HTTP `GET /api/v1/health` on port 8080.
+- `g8e-operator`: presence of the enrolled operator certificate.
+- `ensemble`: HTTP `GET /health` on port 8000. FastAPI does not accept this request until startup enrollment and service initialization complete.
+- `dashboard`: HTTP `GET /` on port 3000. Express starts listening only after dashboard app enrollment completes.
 
-All four services define CPU and memory resource constraints in `docker-compose.yml`:
+The workload health checks therefore remain unhealthy or in their startup period while enrollment is pending.
 
 | Service | CPU limit | Memory limit | CPU reservation | Memory reservation |
 | --- | --- | --- | --- | --- |
@@ -132,85 +205,86 @@ All four services define CPU and memory resource constraints in `docker-compose.
 | `ensemble` | 2 | 2G | 0.5 | 512M |
 | `dashboard` | 1 | 512M | 0.25 | 128M |
 
-## Environment Variables
+## PKI and Workload Identity
 
-The compose file supports the following environment variable overrides. A `.env.example` file at the repository root documents all six variables with defaults and descriptions:
+The gateway creates its CA hierarchy, serving certificate, and canonical trust bundle in the `g8e-gateway-data` volume. It serves the CA bundle from `http://<gateway>:8080/.well-known/g8e/pki/ca-bundle`. Read-only host identity mounts allow the gateway to include detected host addresses and names in its serving certificate and regenerate that certificate when its SAN set changes.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `G8E_PREFIX` | `g8e` | Prefix for container names (`${G8E_PREFIX}-gateway`, `${G8E_PREFIX}-operator`, etc.). |
-| `G8E_HTTP_PORT` | `8080` | Host port mapped to the gateway HTTP discovery surface. |
-| `G8E_HTTPS_PORT` | `8443` | Host port mapped to the gateway HTTPS/mTLS surface. |
-| `G8E_ENSEMBLE_PORT` | `8000` | Host port mapped to the ensemble API. |
-| `G8E_DASHBOARD_PORT` | `3000` | Host port mapped to the dashboard Express server. |
-| `G8E_HOSTNAME` | `localhost` | Public hostname the gateway advertises in approval links, CORS, and passkey RP origins. Set to a real hostname when accessing the gateway from outside localhost. |
+The operator, ensemble, and dashboard each complete the owner-approved platform enrollment protocol and persist their credentials in separate named volumes. Pending enrollment state also persists, so a restarted workload resumes its existing request instead of generating a new key and request.
 
-Example: run the stack on alternate ports:
+The dashboard has two separate identities. Its container enrolls an app mTLS identity before Express starts, while the browser authenticates directly to the gateway with the owner's WebAuthn passkey.
 
-```bash
-G8E_HTTP_PORT=18080 G8E_HTTPS_PORT=18443 G8E_DASHBOARD_PORT=13000 docker compose up -d --build
-```
+The governance envelope endpoint rejects app certificates. The unified compose therefore mounts the operator data volume read-only into the ensemble and supplies the operator certificate and key paths through `G8E_GOVERNANCE_OPERATOR_CERT` and `G8E_GOVERNANCE_OPERATOR_KEY`. The ensemble uses that identity only for governed envelope transport; its other gateway traffic uses its own app identity. Approving the operator first ensures these credentials exist before governed requests begin.
 
-## mTLS, PKI, and Workload Identity
-
-The gateway generates its own root CA on startup and initializes its PKI under the `g8e-gateway-data` named volume at `/root/.g8e`. The canonical gateway trust bundle is maintained at `.g8e/pki/trust/g8eg-ca-bundle.pem` and served over plain HTTP at `http://<gateway>:8080/.well-known/g8e/pki/ca-bundle`. The compose file bind-mounts the host's `/etc/hosts` and `/etc/hostname` read-only into the gateway container at `/etc/hosts.host` and `/etc/hostname.host` so the network identity detector covers the host's real IPs and hostname in the serving certificate SANs; the certificate is regenerated on startup when SAN drift is detected. See [Docker Gateway Guide](./docker_gateway.md#host-identity-bind-mounts) for details.
-
-The gateway starts with zero users and issues no platform certificates until the first owner enrolls and approves pending enrollment requests. The operator, ensemble, and dashboard each enroll via the owner-approved platform enrollment protocol: they submit a platform enrollment request (containing a CSR and system fingerprint) to the gateway's plain-HTTP discovery surface, the owner approves the request by exact request ID via authenticated mTLS, and the component signs a canonical completion transcript and receives its enrolled credentials. See [auth.md](../architecture/auth.md) §1.5 for the full protocol specification.
-
-### Component Identity and Storage
-
-- **`g8e-operator`**: Stores its enrolled identity certificate and private key in the `g8e-operator-data` named volume at `/root/.g8e/pki/operator.crt` and `/root/.g8e/pki/operator.key`. It connects outbound to the gateway over mTLS (`operator start -e g8e.local`) using `spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>`.
-- **`ensemble`**: Has its own `g8e-ensemble-data` named volume mounted at `/root/.g8e` (read-write) and writes its enrolled cert, key, and trust bundle to its own runtime tree (`pki/issued/apps/g8ee.crt`, `g8ee.key`, `pki/trust/hub-bundle.pem`) after owner approval. The `AppEnrollmentService` (`ensemble/app/services/infra/app_enrollment_service.py`) manages the nine-step resumable enrollment sequence. Pending state (private key, requester token, request ID, CSR fingerprint, expiry) is persisted to `pki/pending-enrollment/g8ee.json` with 0600 permissions so the ensemble resumes the same request and key material across container restarts. Its app identity SPIFFE URI is `spiffe://g8e.local/app/g8ee`.
-- **`dashboard`**: Has its own `g8e-dashboard-data` named volume mounted at `/data` (the dashboard container runs as the non-root `g8e` user with UID 1001, so `/data` is owned by `g8e:g8e` rather than `/root/.g8e`) with `G8E_RUNTIME_DIR=/data`. It enrolls via `dashboard/services/infra/app-enrollment-service.js`, obtaining `spiffe://g8e.local/app/g8ed` and writing credentials to `pki/issued/apps/g8ed.crt`, `g8ed.key`, `pki/trust/hub-bundle.pem`. The dashboard's **container** holds an mTLS app identity for prepared server-to-server gateway clients, which the current static host does not construct, while the dashboard's **browser SPA** authenticates independently via WebAuthn passkeys. See [Dashboard (g8ed)](../architecture/dashboard.md) for the dashboard architecture.
-
-### Operator Cert Sharing for Governance Envelopes
-
-The gateway Privileged Route Registry restricts `POST /api/v1/governance/envelopes` to authorized operator sessions and rejects submissions authenticated with app certificates with `ErrPrivilegedEndpointAccess`. To submit governed envelopes while preserving this security boundary, the compose file mounts the operator's data volume read-only into the ensemble container:
-
-- Volume mount: `g8e-operator-data:/operator-state:ro`
-- Environment variables: `G8E_GOVERNANCE_OPERATOR_CERT=/operator-state/pki/operator.crt` and `G8E_GOVERNANCE_OPERATOR_KEY=/operator-state/pki/operator.key`
-
-The ensemble `GovernanceClient` (`ensemble/app/clients/governance_client.py`) builds a dedicated TLS configuration from the operator cert/key specifically for governance transport. It lazily parses the operator SPIFFE URI (`spiffe://g8e.local/operator/<org_id>/<operator_id>/<operator_session_id>`) from the certificate to bind the envelope's `operator_id` and `operator_session_id`, satisfying the gateway `verifyEnvelopeIdentityBinding` check. All other ensemble gateway traffic (settings, SSE push, health) continues to use the ensemble's own app certificate (`spiffe://g8e.local/app/g8ee`).
+See [Authentication and Identity](../architecture/auth.md) for the enrollment protocol and trust model.
 
 ## Headless Gateway-Only Deployment
 
-To run only the gateway without starting the platform workloads, start the default compose profile and enroll the owner using the `--headless` flag:
+Start only the default profile and enroll a CLI-only owner identity without opening a browser:
 
 ```bash
 docker compose up -d --build
 ./g8e auth enroll user --headless -e localhost
 ```
 
-Because `g8e-operator`, `ensemble`, and `dashboard` belong to the `bootstrapped` profile, running `docker compose up -d` without `--profile bootstrapped` starts only `g8e-gateway`. The `--headless` flag on `auth enroll user` completes user bootstrap while skipping the interactive browser-based passkey ceremony, making it suitable for CI, headless servers, and automation environments.
+Headless enrollment skips passkey registration and OS trust installation. The resulting mTLS identity can approve workload enrollment requests from the CLI but cannot sign in to the gateway console. On an already bootstrapped gateway, headless recovery requires approval from another enrolled CLI identity.
 
-## Relationship to Per-Demo Composes
+## Troubleshooting
 
-The unified platform compose is distinct from the per-demo composes in `demos/<org>/compose.yml` (Healthcare, Finance, DHS, FedRAMP, Frontend). The per-demo composes are org-specific, hermetically sealed deployments on five isolated networks (`net_untrusted`, `net_perimeter`, `net_internal`, `net_secure`, `net_mgmt`) that exercise specialized compliance and doctrine scenarios. They build the gateway and operator images from the repo-root `Dockerfile` via `context: ../..` and are driven by the `g8e demos` CLI. The per-demo composes do not include the ensemble or dashboard services. See the [Demos README](../../demos/README.md) for the full comparison.
+### A workload remains unhealthy
 
-## Stopping and Cleaning Up
+List pending requests and inspect the affected service logs:
 
 ```bash
-# Stop the stack (keep volumes, preserving PKI state and audit ledger):
-docker compose down
-# Or:
-# ./g8e docker stop
-
-# Stop the stack and remove volumes (PKI state and audit ledger):
-docker compose down -v
-# Or:
-# ./g8e docker clean
+./g8e auth pending-platform-enrollments
+./g8e docker logs <service>
 ```
 
-Removing volumes destroys the gateway's PKI and audit state. The next startup re-bootstraps the CA and requires the owner to re-enroll and re-approve the platform workloads.
+Approve the request, then run `./g8e docker status`. Use Compose service names such as `g8e-operator`, `ensemble`, or `dashboard` with the logs command.
+
+### The automated walkthrough reports no pending request
+
+The walkthrough does not wait for each workload request. List pending requests again after the container has had time to submit, then approve the exact request ID manually.
+
+### Browser authentication or TLS fails
+
+Confirm that the browser uses the same hostname configured by `G8E_HOSTNAME`, that the gateway root CA is trusted by the host, and that the HTTPS port is reachable. Re-run interactive owner enrollment if passkey registration did not complete.
+
+### A fresh gateway conflicts with old local credentials
+
+If the Docker volumes were removed but host-side CLI credentials remain, run `./g8e auth enroll user` against the fresh gateway. The coordinator detects that the gateway has no owner and performs initial bootstrap.
+
+## Relationship to Demo Stacks
+
+The unified stack is separate from the Healthcare, Finance, DHS, and FedRAMP compose projects under `demos/`. Those deployments use organization-specific network segmentation and scenarios and are managed through `./g8e demos`. They do not include the ensemble or dashboard. See the [Demos README](../../demos/README.md).
+
+## Stopping and Removing the Stack
+
+Stop containers while keeping named-volume state:
+
+```bash
+docker compose --profile bootstrapped down
+# or
+./g8e docker stop
+```
+
+Remove containers and named volumes only when you intend to destroy the trust domain and all persisted platform state:
+
+```bash
+docker compose --profile bootstrapped down -v
+# or, without a confirmation prompt by default
+./g8e docker clean
+```
+
+After volume removal, the next gateway startup creates a new PKI. Enroll the first owner again and approve new workload requests.
 
 ## Related Documentation
 
-- [Platform Architecture Overview](../architecture/overview.md): The five-layer governance pipeline and component roles.
-- [Ensemble (g8ee)](../architecture/ensemble.md): The agentic ensemble architecture, agent models, and event streams.
-- [Dashboard (g8ed)](../architecture/dashboard.md): The operator dashboard architecture and UI surfaces.
-- [g8ee Documentation](../ensemble/index.md): Detailed g8ee component documentation — agents, governance, prompts, SSE, storage, and evals.
-- [g8ed Documentation](../dashboard/index.md): Detailed g8ed component documentation — architecture, auth, gateway integration, SSE, and operator surfaces.
-- [Gateway Architecture](../architecture/gateway.md): The gateway service stack, endpoints, and policy enforcement.
-- [Operator Architecture](../architecture/operator.md): The operator execution boundary and L4-L5 lifecycle.
-- [Docker Gateway Guide](./docker_gateway.md): Building and running the gateway image standalone and in demo environments.
-- [Authentication and Identity](../architecture/auth.md): The full authentication, passkey ceremony, and platform enrollment protocol specifications.
+- [Platform Architecture Overview](../architecture/overview.md): Component roles and the five-layer governance pipeline.
+- [Gateway Architecture](../architecture/gateway.md): Gateway services, protocol surfaces, and policy enforcement.
+- [Operator Architecture](../architecture/operator.md): Operator execution boundary and L4-L5 lifecycle.
+- [Ensemble Architecture](../architecture/ensemble.md): Ensemble role, agent models, and event flow.
+- [Dashboard Architecture](../architecture/dashboard.md): Browser and container boundaries.
+- [g8ee Documentation](../ensemble/index.md): Ensemble configuration, agents, providers, storage, and testing.
+- [g8ed Documentation](../dashboard/index.md): Dashboard authentication, gateway integration, and development.
+- [Docker Gateway Guide](./docker_gateway.md): Standalone gateway image operation.
+- [Authentication and Identity](../architecture/auth.md): mTLS, WebAuthn, PKI, and platform enrollment.

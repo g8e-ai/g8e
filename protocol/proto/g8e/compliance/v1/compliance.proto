@@ -201,6 +201,50 @@ message ReportSignature {
   string signature = 4;
 }
 
+message ComplianceReportSigningKeyMetadata {
+  string key_id = 1;
+  string algorithm = 2;
+  string purpose = 3;
+  string public_key_sha256 = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message ComplianceReportTrustedKey {
+  ComplianceReportSigningKeyMetadata metadata = 1;
+  string public_key = 2;
+  string assessment_id = 3;
+  string assessor_identity = 4;
+  google.protobuf.Timestamp assessed_at = 5;
+  repeated string allowed_scope_refs = 6;
+  google.protobuf.Timestamp revoked_at = 7;
+}
+
+message ComplianceReportTrustPolicy {
+  string policy_id = 1;
+  string policy_version = 2;
+  repeated ComplianceReportTrustedKey trusted_keys = 3;
+}
+
+message ComplianceEvidenceTrustedKey {
+  string key_id = 1;
+  string public_key = 2;
+  string public_key_sha256 = 3;
+  string assessment_id = 4;
+  string assessor_identity = 5;
+  google.protobuf.Timestamp assessed_at = 6;
+  google.protobuf.Timestamp valid_from = 7;
+  google.protobuf.Timestamp valid_until = 8;
+  repeated string allowed_scope_refs = 9;
+  google.protobuf.Timestamp revoked_at = 10;
+}
+
+message ComplianceEvidenceTrustPolicy {
+  string policy_id = 1;
+  string policy_version = 2;
+  repeated ComplianceEvidenceTrustedKey trusted_keys = 3;
+}
+
 message ComplianceReportManifest {
   string report_id = 1;
   string report_schema_version = 2;
@@ -215,12 +259,54 @@ message ComplianceReportManifest {
   string evidence_index_ref = 11;
   string checksum_root = 12;
   ReportSignature signature = 13;
+  string bundle_profile = 14;
+  string manifest_sha256 = 15;
+}
+
+message BundleArtifact {
+  string bundle_path = 1;
+  string sha256 = 2;
+  string media_type = 3;
+  string profile = 4;
+  int64 byte_length = 5;
+  EvidenceEncryptionMetadata encryption = 6;
+}
+
+message RenderedFormatEntry {
+  string format = 1;
+  string media_type = 2;
+  string bundle_path = 3;
+}
+
+message ComplianceReportBundle {
+  ComplianceReportManifest manifest = 1;
+  repeated BundleArtifact artifacts = 2;
+  ComplianceAnalysis analysis = 3;
+  repeated FrameworkProfile profiles = 4;
+  repeated RenderedFormatEntry rendered_formats = 5;
+  string checksum_root = 6;
+  ReportSignature checksum_root_signature = 7;
 }
 
 message VerificationFailure {
   string code = 1;
   string subject_ref = 2;
   string reason = 3;
+}
+
+enum VerificationCheckStatus {
+  VERIFICATION_CHECK_STATUS_UNSPECIFIED = 0;
+  VERIFICATION_CHECK_STATUS_PASSED = 1;
+  VERIFICATION_CHECK_STATUS_FAILED = 2;
+}
+
+message VerificationCheckResult {
+  string check_id = 1;
+  VerificationCheckStatus status = 2;
+  repeated string evidence_refs = 3;
+  string verifier_id = 4;
+  string verifier_version = 5;
+  repeated VerificationFailure failures = 6;
 }
 
 message ComplianceVerificationReport {
@@ -231,6 +317,29 @@ message ComplianceVerificationReport {
   string verifier_version = 5;
   repeated VerificationFailure failures = 6;
   string reproduced_checksum_root = 7;
+  repeated VerificationCheckResult checks = 8;
+}
+
+message OSCALValidatorIdentity {
+  string validator_id = 1;
+  string validator_version = 2;
+  string schema_version = 3;
+  string schema_digest = 4;
+}
+
+message OSCALValidationFailure {
+  string code = 1;
+  string message = 2;
+  string instance_ptr = 3;
+  string schema_ptr = 4;
+  string keyword = 5;
+}
+
+message OSCALValidationResult {
+  OSCALValidatorIdentity validator = 1;
+  bool valid = 2;
+  repeated OSCALValidationFailure structural_failures = 3;
+  repeated OSCALValidationFailure semantic_failures = 4;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +397,7 @@ message ControlSection {
   string status_filter = 4;
   repeated string control_assessment_refs = 5;
   string description = 6;
+  repeated FrameworkControlReference control_refs = 7;
 }
 
 message ComplianceAnalysis {

@@ -81,6 +81,11 @@ func TestGenerateComplianceAnalysis_OrchestratesVerifiedEvidenceThroughCanonical
 	assert.Len(t, result.Analysis.GetAssertionAssessments(), len(assertions.GetAssertions()))
 	assert.NotEmpty(t, result.Analysis.GetFrameworkAssessments())
 	assert.True(t, result.Analysis.GetEvidenceGraphValid())
+	require.Len(t, result.Profiles, len(frameworks.GetFrameworks()))
+	for _, profile := range result.Profiles {
+		assert.Equal(t, result.Analysis.GetAnalysisId(), profile.GetAnalysisRef())
+		assert.Equal(t, constants.FrameworkProfileVersion, profile.GetProfileVersion())
+	}
 }
 
 func TestGenerateComplianceAnalysis_RejectsMissingImporters(t *testing.T) {

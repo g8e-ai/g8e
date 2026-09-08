@@ -1,290 +1,200 @@
 # Developer Guidelines
 
-AI agents updating documentation must follow **[docs.md](docs.md)** for stylistic rules, terminology, and source-of-truth hierarchy.
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-## Platform Overview
+This guide defines the coding and maintenance rules for the g8e repository. The current working tree is the source of truth for current behavior. Use the [Code Map](codemap.md) for package and runtime ownership, the [Testing Guide](tests.md) for test infrastructure and commands, and the [Documentation Guide](docs.md) for documentation ownership, style, metadata, generation, and validation.
 
-g8e is a zero-trust execution platform for agentic infrastructure. Mutations are typed, signed, state-bound, and verified through a 5-layer gauntlet before any host state changes.
+## Platform Boundaries
 
-- **GovernanceEnvelope**: Canonical wire format for all mutations (protojson)
-- **5-layer verification**: L1 (Doctrine) → L2 (Consensus) → L3 (Notary) → L4 (Warden) → L5 (Actuator)
-- **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
-- **BYO clients**: The CLI (`./g8e`) is the default interface; MCP stdio for AI IDE integration; Console SPA and TUI for governance management
+g8e contains a Governance Gateway, an in-process Operator substrate, and an outbound Governed Operator. Governed operations enter the execution boundary as typed intent or a canonical protobuf `GovernanceEnvelope`; the active posture determines whether L2 consensus and L3 notary evidence gate execution. L1 doctrine, L4 verification, and L5 actuation remain part of every governed execution path.
 
-See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md), [Codemap](codemap.md).
+The governance guarantee applies only to operations that traverse a g8e ingress. An external MCP wrapper performs inline L1 screening but does not add an envelope, L2 through L5 execution, a signed receipt, or Gateway audit. Client-native tools and other side channels remain outside the governance boundary. Read [Governance](../architecture/governance.md) for the canonical five-layer and posture model and [AI Agents and the g8e Governance Boundary](../architecture/agents.md) for integration-path limits.
 
-## Getting Started
+## Development Environment
 
-Requires `make` and Go 1.26+ installed. If you don't have them, run the setup script for your platform to install them automatically (see [scripts.md](../architecture/scripts.md) for details):
+The Go module declares Go 1.26.6, and the platform setup scripts accept Go 1.26 or newer. The scripts install missing development prerequisites interactively, run the repository build, and add the repository binary to the user path. See [Scripts](../architecture/scripts.md) for platform-specific behavior.
 
-- **Linux:** `bash scripts/linux-setup.sh`
-- **macOS:** `bash scripts/macos-setup.sh`
-- **Windows:** `pwsh scripts/windows-setup.ps1`
+Run commands from the repository root unless the owning component guide says otherwise:
 
 ```bash
-make build          # Build the g8e Operator binary
-./g8e --help        # Complete command reference
+make build
+./g8e --help
+./g8e test unit
+./g8e test integration
+make lint
 ```
 
-| Command | Purpose |
-|---|---|
-| `./g8e gw start` | Start the Gateway (`--doctrine-dir` loads JSON doctrine files for L1 threat detection) |
-| `./g8e gw status` | Gateway health and status |
-| `./g8e auth enroll user` | Enroll the first owner / local CLI session with the running Gateway and register a passkey |
-| `./g8e auth enroll gui` | Enroll an external frontend application origin with the Gateway |
-| `./g8e auth pending-platform-enrollments` | List pending platform workload enrollment requests (operator, dashboard, ensemble) via authenticated mTLS |
-| `./g8e auth approve-platform-enrollment <request-id>` | Approve or deny (`--deny`) a pending platform workload enrollment request by exact request ID via authenticated mTLS |
-| `./g8e compliance` | FedRAMP 20x KSI evaluation and history, COSAiS overlay inspection, and read-only verification of persisted demo evidence runs |
-| `./g8e test` | Run test suites |
+`make build` compiles the complete `g8e` platform CLI from `cmd/g8e`, writes a platform binary under `bin/`, copies the runnable binary to the repository root, and refreshes `demos/bin/g8e`. Use `./g8e <command> --help` as the live source for command names, arguments, flags, defaults, and destructive effects. Use the [Getting Started Guide](../guides/getting_started.md) for deployment and enrollment rather than treating this coding guide as an operations procedure.
 
-Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks. Platform workloads (operator, dashboard, ensemble) start not-ready and require owner-approved platform enrollment: the gateway starts with zero users, the first owner enrolls via `auth enroll user`, each workload submits a platform enrollment request at startup, and the owner approves each request by exact request ID via `auth approve-platform-enrollment` before the workload becomes ready. See [auth.md](../architecture/auth.md) and the [Docker Gateway Guide](../guides/docker_gateway.md) for the full bootstrap flow.
+This guide owns repository-wide invariants and Go platform conventions. Component-specific workflows live in the [Protocol README](../../protocol/README.md), [Dashboard Development](../dashboard/development.md), [Dashboard Testing](../dashboard/tests.md), [Ensemble Development](../ensemble/devs.md), and [Ensemble Testing](../ensemble/tests.md).
 
-## Paths & State
+## Engineering Rules
 
-**Source paths** (git root):
-- `protocol/` - Protobuf schemas, JSON protocol constants, model definitions, Python SDK, and conformance tests
-- `cmd/g8e/` - Binary entrypoint
-- `internal/cli/cmd/` - Cobra command tree
-- `internal/cli/serve/` - Gateway and operator boot sequences
-- `internal/cli/sse/` - Reusable SSE client (frame parsing, reconnection, mTLS headers)
-- `internal/cli/tui/` - Tactical Governance Console (Bubble Tea TUI)
-- `internal/` - Internal Go packages
-- `internal/pkg/` - Shared internal packages (e.g., SSH utilities, certificate helpers)
-- `dashboard/` - Governance Dashboard web application and server
-- `ensemble/` - Multi-agent orchestration ensemble (Python)
-- `demos/` - Deterministic scenario demonstrations
-- `scripts/` - Setup and smoke test scripts
-- `test/` - E2E and integration tests (gateway, MCP, consensus, native tool registry)
-- `docs/` - Documentation
+### Always
 
-**Runtime paths** (`.g8e/`):
-- `.g8e/pki/` - CA hierarchy and trust bundles
-- `.g8e/secrets/` - Bootstrap secrets
-- `.g8e/vault/` - Encryption vault (private)
-- `.g8e/data/` - SQLite databases and blobs
-- `.g8e/logs/` - Component logs
-- `.g8e/pids/` - Process IDs
+- Replace broken paths instead of preserving compatibility shims for technical debt.
+- Fix root causes. Do not add defensive guards at callers to conceal invalid construction or state.
+- Keep functions focused: reads read, writes write, validation validates, and orchestration composes explicit dependencies.
+- Make security checks fail closed and propagate their errors.
+- Prefer explicit dependencies and state transitions over package globals, lazy adapters, reflection, or hidden side effects.
+- Return errors from production paths. Do not panic for recoverable production failures.
+- Wrap errors with operation context and preserve the cause with `%w`, for example `fmt.Errorf("gateway: load doctrine: %w", err)`.
+- Use `context.Context` for cancellation and give every goroutine clear ownership, cancellation, and completion coordination through channels or `sync.WaitGroup`.
+- Use typed models for known shapes. Do not replace protobuf or domain models with untyped maps or ad hoc JSON objects.
+- Format Go with `gofmt` and group imports as standard library, external dependencies, and internal repository packages.
+- Pass pointers for mutable or large structs and values for small read-only structs.
+- Confirm a dependency is already available before importing it; add new dependencies through the owning package manager rather than editing lock or manifest entries by hand.
+- Keep changes focused and leave the affected code cleaner than it was.
+- Reproduce bugs with a failing regression test before changing production code, then verify the test passes with the fix.
+- Update documentation and generated artifacts in the same change as the behavior they describe.
 
-**Cleanup:** `./g8e gw reset` (delete DB + secrets, preserve CA) · `./g8e gw clean` (destructive removal of all runtime state)
+### Never
 
-## Always
+- Do not add `ensure*` or `getOrCreate*` helpers that combine reads and writes or hide creation as a lookup side effect.
+- Do not use protobuf `Any`, `map[string]interface{}`, or equivalent untyped containers for a known contract.
+- Do not declare package-level sentinel errors outside `internal/constants/errors.go`.
+- Do not use `errors.New` for a distinct production failure mode outside `internal/constants/errors.go`.
+- Do not hardcode `.g8e/` runtime paths or bypass `RuntimeFileService` with direct `os` file operations outside the file-service implementation.
+- Do not invoke `go test` directly for platform suites; use `./g8e test ...` or the owning Makefile target.
+- Do not use `t.Parallel()` in integration or E2E tests.
+- Do not hand-edit generated README, protobuf reference, or OpenAPI output.
+- Do not leave current-state documentation stale or broaden a security or evidence claim beyond the path and artifacts that support it.
 
-- Rip and replace broken code; no compatibility shims
-- Functions do one thing: reads read, writes write
-- Fix root causes; no defensive guards at call sites
-- Fail-closed on security checks
-- Explicit over implicit; no magic or hidden side effects
-- Leave codebase cleaner than you found it
-- Check all errors; wrap with context: `fmt.Errorf("component: action: %w", err)`
-- Define typed error constants in `internal/constants/errors.go` for any error that is checked, compared, wrapped with `errors.Is()`/`errors.As()`, or represents a distinct failure mode
-- Use `fmt.Errorf()` for wrapping with context, dynamic messages with runtime values, and one-off test errors
-- Search for hand-rolled strings when adding new error constants and replace them
-- Return errors from production paths; no panics
-- Use `context.Context` for cancellation; manage goroutines with `sync.WaitGroup` or channels
-- Write table-driven tests with `testify/assert`
-- Use three import blocks: standard library, external, internal
-- Pass pointers for mutable/large structs; values for small/read-only structs
-- Use typed model instances; no raw dicts, untyped maps, or ad-hoc JSON
-- Use canonical JSON (protojson) for all client-facing surfaces
-- Route all mutations through `GovernanceEnvelope` and the 5-layer verification gauntlet
-- Define ALL filepath strings as constants in `internal/constants/paths.go`
-- Use `RuntimeFileService` (`internal/services/fs`) as the canonical abstraction for all `.g8e/` file I/O. Call `CreateRuntimeTree` at startup, then use `fileSvc.ReadFile`/`fileSvc.WriteFile`/`fileSvc.Stat`/`fileSvc.Remove` with relative paths constructed from `constants.*` constants
-- Pass `fileSvc` as an explicit parameter to services and functions that perform `.g8e/` file I/O. Do not use `os.ReadFile`/`os.WriteFile` for `.g8e/` paths
-- Use `fileSvc.Resolve(constants.*)` to obtain absolute paths when needed (e.g., for `filepath.Join` in non-fileSvc APIs). Use `fileSvc.Rel()` to convert absolute `.g8e/` paths back to relative paths for `fileSvc` calls
-- Use `constants.Perm*` constants for file and directory permissions. Use `constants.Err*` constants for error checking (e.g., `errors.Is(err, constants.ErrNotFound)` replaces `os.IsNotExist`)
-- Wrap `fileSvcFactory()` errors with `constants.ErrFileServiceInit` in all `*WithConfig` command functions. Do not use `constants.ErrInternal`, `constants.ErrPathValidation`, or ad-hoc string wrapping for file service initialization errors
-- Inject `fileSvcFactory func(string, *slog.Logger) (fs.RuntimeFileService, error)` as a parameter in `*WithConfig` command functions. Production constructors pass `newFileSvc`; tests pass `fileSvcFactoryFor(fileSvc)` with a temp-rooted `fileSvc`. Every injection point must have a factory-error test asserting `ErrFileServiceInit` wrapping
-- Do not add `DataDir`/`CredentialsDir`/`PKIDir` fields to config structs. Use `fileSvc.Resolve(constants.*)` instead. `paths.Infra` is config-only (path registration), not for file I/O
-- Use `TestPaths` for isolated test environments (base directory from a constant, all sub-paths from constants)
-- Reproduce bugs with failing tests before fixing
-- Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
-- Tier 2 (Integration) tests: real database, pub/sub, and local PKI. Tier 3 (E2E) tests: real Docker containers. Tier 4 (External) tests: real LLM providers and third-party APIs
-- Keep test infrastructure separated from production code
-- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, chaos, summary)
-- Document what the system does, not what it should do
-- Cross-link rather than repeat
-- Present tense, active voice, direct and specific
-- Keep PRs focused (one change per PR)
-- Add tests for bug fixes and features
+## Errors
 
-## Never
+`internal/constants/errors.go` owns sentinel errors that callers compare, wrap, or inspect with `errors.Is` or `errors.As`, as well as distinct reusable platform failure modes. Before adding an error, search that file and existing callers for an equivalent constant. Add a centralized constant only when no suitable owner exists, then replace duplicate hand-written forms in the affected scope.
 
-- No `ensure*()`, `getOrCreate*()`, `Any` types, or `map[string]interface{}` for known shapes
-- No hand-rolled error strings (`errors.New("...")`) when a centralized constant exists or should exist
-- No package-level error variables outside `internal/constants/errors.go`
-- No panics in production paths
-- No hardcoded or dynamically constructed filepath strings (including `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`)
-- No `filepath.Join()` with string literals (except within `TestPaths` using constants)
-- No `go test` directly for platform tests; use `./g8e test`
-- No emojis in documentation
-- No stale docs; docs are code
+Use:
 
-## Patterns
+- A centralized `constants.Err*` value for a known failure mode.
+- `fmt.Errorf("component: action: %w", err)` to add context while preserving a cause.
+- `fmt.Errorf` with runtime values for dynamic errors.
+- A one-off `fmt.Errorf` value in tests when the test needs an injected cause that has no production meaning.
 
-### Error Handling
+Do not compare rendered error strings when `errors.Is`, `errors.As`, or a typed status is available.
 
-Return centralized error constants from `internal/constants/errors.go` for known failure modes. Wrap errors with context using `fmt.Errorf` and the `%w` verb for dynamic messages or chaining. Never hand-roll error strings with `errors.New` when a centralized constant exists or should exist. Never declare package-level error variables outside `internal/constants/errors.go`.
+## Typed Contracts and Serialization
 
-### Adding Error Constants
+Protobuf schemas under `protocol/proto/g8e/` own governance envelopes, proofs, Operator messages, pub/sub messages, receipts, and compliance messages. Preserve typed protobuf payloads through governance and transport code. Internal envelope payloads use protobuf binary encoding where the execution path expects it; protobuf-owned JSON boundaries use `protojson` so field names, enums, and canonical message semantics remain consistent. Non-protobuf HTTP surfaces use named typed request and response structs rather than raw dictionaries.
 
-1. Check `internal/constants/errors.go` for existing matches
-2. Add a new constant if none exists
-3. Use it consistently across the codebase
-4. Search for hand-rolled strings to replace
+A mutation added to a governed ingress must be classified with the canonical action and event registries, represented by a typed payload, wrapped in a `GovernanceEnvelope`, verified by L4, and dispatched by L5. Do not call mutation handlers directly to bypass envelope construction or the verification gauntlet. The [Protocol Specification](../../protocol/docs/spec.md) owns wire requirements, while [Governance](../architecture/governance.md) owns posture and execution behavior.
 
-### Adding Path Constants
+Registry ownership is surface-specific. Runtime Go constants live under `internal/constants/`; external registries and schemas live under `protocol/constants/`, `protocol/models/`, and `protocol/schemas/`. Check the owning registry and its contract tests before changing either side. When a public registry has both Go and JSON representations, update both through the established owner and run the relevant contract or conformance tests.
 
-1. Add to `internal/constants/paths.go`
-2. Update `protocol/constants/` JSON if part of the public protocol
-3. Run tests to verify integration
-4. Commit both Go source and JSON reference files
+## Runtime Paths and File I/O
 
-### Generated README
+`RuntimeFileService` in `internal/services/fs/file_service.go` is the canonical boundary for `.g8e/` state. Startup constructs the service and calls `CreateRuntimeTree`. Consumers pass relative paths assembled from constants in `internal/constants/paths.go` to methods such as `ReadFile`, `WriteFile`, `Stat`, `FileExists`, `ReadDir`, `Rename`, `Remove`, and `RemoveAll`.
 
-The root `README.md` is generated by `scripts/generate_readme.py` from `docs/templates/README.md.tmpl` and the public proof snapshot in `docs/evidence/readme/current/`. Do not edit `README.md` directly. Stable narrative edits belong in the template; evidence updates belong in a reviewed public snapshot. Run `make readme` to regenerate and `make readme-check` to detect drift. The generator is offline, deterministic, and credential-free; it validates checksums, rejects unsupported schema versions, and refuses to render missing, ineligible, or contradictory evidence as passing.
+Follow these rules for runtime I/O:
 
-- mTLS by default; test runner handles certificate injection
-- Contract tests enforce alignment between components and `protocol/`
-- Coverage threshold: 75%
-- See [Testing Guide](tests.md) for detailed test patterns and infrastructure
+- Define reusable system, repository, and runtime path strings in `internal/constants/paths.go`. Do not introduce inline `.g8e/` fragments or `filepath.Join` calls with path literals in consumers.
+- Pass `fs.RuntimeFileService` explicitly to services and functions that own runtime I/O.
+- Use `fileSvc.Resolve` only when an API requires an absolute path.
+- Use `fileSvc.Rel` to convert an absolute path inside the runtime root back to a relative service path.
+- Use `fileSvc.FileExists` for existence checks and compare missing-file errors with `errors.Is(err, constants.ErrNotFound)`.
+- Use `constants.Perm*` values for runtime file and directory permissions.
+- Keep direct `os` operations that implement this boundary inside `internal/services/fs`; callers use the service.
 
-**Test infrastructure separation:**
-- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`) and `TestTokenStore` (in-memory `TokenStore` with TTL). `TestSQLAuditStore` satisfies `compliance.AuditEvidenceReader` via `ListEvents` and `ListFileMutations` methods.
-- `internal/services/pubsub/pubsubtest/` - Test-only `PubSubClient` mock (`MockOperatorPubSubClient`)
-- `internal/services/governance/governancetest/` - Test-only governance store fixtures (`SimpleConsensusStore`, `SimpleAppPolicyStore`, `SimpleStateRootProvider`)
-- `internal/services/keystore/keystoretest/` - Test-only keyring and test filesystem fixtures (`TestKeyring`)
-- `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
-- `internal/tools/agent_harness/` - Agent test harness with scenario runner (`client/`, `config/`, `scenarios/`) for MCP/A2A gateway integration tests
-- `test/` - Root-level E2E and integration tests (gateway, MCP, consensus, native tool registry, A2A)
-- Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
-- Production outbound mode wires `storage.SQLAuditStore` directly as `TransactionAuditStore` via its native `DocSet` method (no adapter)
+Public CLI and startup configuration currently contain directory fields such as Gateway `DataDir`, `PKIDir`, `SecretsDir`, and `VaultDir`. Do not spread those absolute paths through service code or add duplicate directory fields merely to route runtime I/O. Resolve runtime locations at the boundary and pass the file service to the owner.
 
-## Dependency Construction Model
+Command constructors under `internal/cli/cmd/` that access runtime state accept a file-service factory so tests can inject an isolated service. A factory initialization failure wraps `constants.ErrFileServiceInit` and preserves the underlying error. Every new factory injection point requires a matching case in `internal/cli/cmd/factory_error_test.go` that proves downstream dependencies are not called.
 
-The platform has two modes (gateway, outbound) and multiple postures (doctrine, consensus, ratify, notary). Mode determines which dependencies exist; posture determines which optional governance features are wired within gateway mode. The construction model makes mode a compile-time concern and posture a construction-time concern, so the compiler proves which dependencies exist for which mode and no nil reaches a call site for a mode-bifurcated dependency.
+Tests use `testutil.TempDir` and `testutil.TestPaths` for isolated roots. `testutil.TempDir` returns an absolute base directory; pass it directly to `fs.NewRuntimeFileService` and path initialization rather than appending `.g8e` yourself. The [Testing Guide](tests.md#runtime-files-and-test-paths) owns the complete fixture and path rules.
 
-### ModeDeps shape
+## Dependency Construction
 
-Two first-class struct types, one per mode, each fully populated for its mode. A shared `GovernanceCoreDeps` base is embedded by both so the shared fields are declared once. The types live in `internal/services/pubsub/mode_deps.go` (the `pubsub` package already imports `consensus`, `config`, and `mcp` transitively, and `GatewayModeDeps.PlatformEnrollmentDeps` is same-package; placing the types in `internal/services/gateway` would create an import cycle because `gateway` imports `pubsub`).
+The Gateway and outbound Operator have different dependency sets. `pubsub.GovernanceCoreDeps` contains the governance dependencies shared by both modes. `pubsub.GatewayModeDeps` adds gateway-only document, consensus, field-read, platform-enrollment, and posture dependencies; `pubsub.OutboundModeDeps` exposes only the shared fields.
 
-```go
-// GovernanceCoreDeps holds the governance dependencies required by both
-// outbound and gateway modes. Embedded by GatewayModeDeps and OutboundModeDeps
-// so the shared fields are declared once.
-type GovernanceCoreDeps struct {
-    ReplayStore       governance.ReplayStore
-    StateRootProvider governance.StateRootProvider
-    TransactionAudit  governance.TransactionAuditStore
-    L3Notary          governance.L3Notary
-    SignerStore       governance.SignerStore
-    Doctrine          *governance.L1Doctrine
-}
+`NewOutboundModeDeps` validates the outbound core before `G8eoService` constructs `OperatorPubSubService`. `NewGatewayModeDeps` provides validation for a gateway bundle when called, but the current production Gateway builder constructs `GatewayModeDeps` directly and passes it to `NewGatewayOperatorPubSubService`. Code in that path must not assume the validating constructor ran; preserve the builder's explicit non-nil wiring and the command-service constructor's checks.
 
-// GatewayModeDeps embeds GovernanceCoreDeps and adds gateway-only fields.
-// All fields are non-nil at construction (except Consensus, nil when the
-// posture does not require L2); the constructor rejects nils with typed errors. There
-// is no SetConsensusService, no EnvProcAdapter, no SessionValidatorAdapter —
-// consensus and the envelope processor are wired at construction.
-// PlatformEnrollmentDeps and GovernedDocStore are gateway-only; the compiler
-// proves they do not exist in outbound mode.
-type GatewayModeDeps struct {
-    GovernanceCoreDeps
-    GovernedDocStore       governance.GovernedDocumentStore
-    ConsensusPolicyStore   governance.L2ConsensusPolicyStore
-    FieldReader            mcp.FieldReader
-    Consensus              *consensus.ConsensusService // nil when posture does not require L2
-    PlatformEnrollmentDeps *pubsub.PlatformEnrollmentDeps
-    Posture                config.GatewayPosture
-}
+The Gateway builder constructs the current runtime in this order:
 
-// OutboundModeDeps embeds GovernanceCoreDeps only. There is no
-// GovernedDocStore, no ConsensusPolicyStore, no FieldReader, no Consensus, no
-// MCPGateway, no PlatformEnrollmentDeps — the type statically proves they do not
-// exist in outbound mode.
-type OutboundModeDeps struct {
-    GovernanceCoreDeps
-}
-```
+1. Open the canonical database and obtain typed stores.
+2. Load L1 doctrine and bootstrap posture-required L2 consensus when configured.
+3. Construct the gateway-mode `OperatorPubSubService` with governance and platform-enrollment dependencies.
+4. Construct `PlatformEnrollmentService` with the command service as its envelope processor.
+5. Construct `mcp.GatewayService` with the command service as envelope processor and session validator and with audit and L2 dependencies supplied at construction.
+6. Call `OperatorPubSubService.BindMCPGateway` once before either service starts to complete the genuine egress cycle.
+7. Build the HTTP handler and servers after all controller dependencies exist.
 
-Two constructor functions, `NewGatewayModeDeps(...) (*GatewayModeDeps, error)` and `NewOutboundModeDeps(...) (*OutboundModeDeps, error)`, reject nil required dependencies with typed errors from `internal/constants/errors.go`. The previous shared `pubsub.GovernanceDeps` struct is removed; `GovernanceCoreDeps` replaces it as the embedded base. The distinct `OutboundModeDeps` and `GatewayModeDeps` types enforce the mode boundary at the compiler level — `OutboundModeDeps` has no `GovernedDocStore`, `ConsensusPolicyStore`, `FieldReader`, `Consensus`, `PlatformEnrollmentDeps`, or `Posture` fields, so no reflection or AST test is needed.
+`BindMCPGateway` rejects nil, duplicate, and post-start binding with centralized typed errors. Do not reintroduce construction-time setters for audit, consensus, or session validation. Posture-dependent L2 remains optional only where the posture does not require it; required posture dependencies fail closed.
 
-### Posture sub-typing (B1)
+See the [Code Map](codemap.md#runtime-modes) for the broader Gateway and outbound Operator ownership model.
 
-Within gateway mode, posture (doctrine / consensus / ratify / notary) determines whether `Consensus` is present. `GatewayModeDeps` carries a `Posture` enum field and `Consensus` as a typed optional (`*consensus.ConsensusService`, nil when the posture does not require L2). The `GovernanceController`'s consensus route is registered only in consensus and notary postures; doctrine and ratify gateways have no consensus endpoint registered, so those postures return 404 (route unregistered) rather than 503. There is no 503-on-nil guard — `handleConsensusDeliberate` calls `c.consensus.HandleDeliberate` directly because the route is only registered when consensus is non-nil. The posture-conditional wiring is documented in the `NewGatewayModeDeps` constructor docstring. A single optional field does not justify doubling the gateway-mode type count.
+## Testing
 
-### C2 inverted construction order
+The repository uses four tiers:
 
-The `mcp.GatewayService` ↔ `OperatorPubSubService` cycle that previously required lazy adapters is broken by inverting the construction order. `OperatorPubSubService` does not need `mcpGateway` for its own construction; `mcpGateway` was only used to wire mcpGateway's own dependencies back into it (`SetAuditLogger`, `SetL2ConsensusDeliberator`) and to set adapter targets. Moving those wirings to `mcp.GatewayService`'s construction and eliminating the adapters makes `mcpGateway` a post-construction egress dependency.
+| Tier | Purpose | Runtime dependencies |
+| --- | --- | --- |
+| Tier 1: Unit | Untagged package and component tests | No running platform or third-party service |
+| Tier 2: In-process integration | Integration-tagged Go tests and component integration suites | Local files, processes, SQLite, PKI, pub/sub, and in-process services |
+| Tier 3: Live platform E2E | Public-interface tests against deployed components | Running Gateway, Operator, Ensemble, and Dashboard with enrolled local credentials |
+| Tier 4: External | Ensemble and eval tests that call provider APIs | Explicit third-party credentials and endpoints |
 
-The gateway-mode boot path (`RunGateway`) constructs dependencies in this order:
+Core test rules:
 
-1. Open DB, construct typed stores (`gateway.OpenCanonicalDBService`).
-2. Run `ConsensusBootstrap` (moved here from after `NewGatewayModeService`; it reads from the DB the constructor opens, and the DB is now open). Produces the `*consensus.ConsensusService` (or nil when the posture does not require L2).
-3. Build `OperatorPubSubService` via `NewGatewayOperatorPubSubService` using `GatewayModeDeps` (no `mcpGateway` yet — egress is nil at construction). The `PlatformEnrollmentHandler` is wired here from `GatewayModeDeps.PlatformEnrollmentDeps` (gateway-mode only), and `GovernedDocStore` is wired directly from `GatewayModeDeps`.
-4. Build `PlatformEnrollmentService` with `envProc: pubsubSvc` (concrete injection, no adapter). This moves out of `gatewayServiceBuilder.build()` because the adapter is eliminated and the concrete pubsub service must exist first.
-5. Build `mcp.GatewayService` via `mcp.NewGatewayService` with `EnvProc: pubsubSvc` and `SessionValidator: pubsubSvc` (concrete injection, no adapter). `AuditLogger` (from `stores.AuditStore`, available at step 1) and `L2ConsensusDeliberator` (the bootstrapped consensus service, available after step 2; nil when the posture does not require L2) are also wired here at construction.
-6. Wire egress: `pubsubSvc.BindMCPGateway(mcpGateway)` — the one-time, non-nil, pre-start egress binding. The bound pointer is immutable thereafter and safe for concurrent egress dispatch.
-7. Build `GatewayModeService` with `GovernanceController` wired with the already-constructed consensus (no `SetConsensusService`) and `PlatformEnrollmentControllerDeps.EnrollSvc` set to the `PlatformEnrollmentService` from step 4. `initHTTPHandler` runs here at the end of the wiring phase (after the passkey orchestrator and passkey handler, which also depend on `mcpGateway`), populating the `handler`, `server`, and `publicServer` fields that `Start()` reads.
+- Use table-driven Go tests with `testify/assert` and `testify/require` where appropriate.
+- Name test functions, subtests, and files for the behavior they verify. Do not use generic `coverage`, `gap`, `edge`, `misc`, `success`, or `error` names as the scope.
+- Keep Tier 1 independent of a running platform. Tier 2 and Tier 3 exercise real local boundaries rather than mocking internal services, database clients, or cross-component communication.
+- Let `NewGatewayFixture` register teardown. Do not stop its Gateway, close its databases, or close its downstream server a second time.
+- Register temporary credential and long-lived fixture cleanup with `t.Cleanup`, not a helper-local `defer` that runs before the test body.
+- Use explicit cancellation contexts and join goroutines before the test returns.
+- Use typed constants for statuses, reasons, paths, and permissions instead of duplicating their values in assertions.
+- Keep the canonical trust bundle at `.g8e/pki/trust/g8eg-ca-bundle.pem`; tests do not repair failures by mutating developer PKI state.
+- Do not use `os.Chdir` to align runtime state. Working-directory changes are limited to behavior that intentionally discovers source-tree or configuration files and require a file-level explanation and cleanup.
 
-`SetAuditLogger` and `SetL2ConsensusDeliberator` are eliminated from `mcp.GatewayService` because C2 moves `ConsensusBootstrap` into the construction flow, making both construction-phase. `SetConsensusService` is eliminated from `GatewayModeService` because consensus is wired at construction via `GatewayModeDeps`. `GatewayEnvProcAdapter` and `GatewaySessionValidatorAdapter` are eliminated because the concrete `OperatorPubSubService` is injected directly as `EnvProc` and `SessionValidator`.
+Use these primary entry points:
 
-### Egress binding
+- `./g8e test unit`
+- `./g8e test integration`
+- `./g8e test e2e`
+- `./g8e test e2e-full`
+- `./g8e test coverage`
+- `./g8e test lint`
+- `./g8e test chaos`
+- `./g8e test summary`
+- `make test`, `make test-unit`, `make test-integration`, `make test-docker`, and `make test-coverage`
+- `make ensemble-test`, `make evals-test`, `make test-external`, and `make dashboard-test`
 
-The only construction-phase bind in the gateway boot path is `OperatorPubSubService.BindMCPGateway`, the egress binding. Egress is a genuine two-phase dependency: `OperatorPubSubService` must exist before `mcpGateway` (which injects it as `EnvProc`/`SessionValidator`), but `OperatorPubSubService` needs `mcpGateway` for egress dispatch. `BindMCPGateway` rejects nil (`constants.ErrPubSubMCPGatewayNil`), duplicate binding (`constants.ErrPubSubMCPGatewayAlreadyBound`), and post-start binding (`constants.ErrPubSubMCPGatewayBindAfterStart`) with centralized typed errors. The bound pointer is immutable after binding and safe for concurrent egress dispatch — `GetMCPGateway` returns the immutable binding (or nil if binding has not completed). This is the minimum honest surface for the one genuine two-phase dependency; one checked bind is preferable to a sum type whose "wrong mode" accessors would reintroduce runtime guards for what should be compile-time proofs.
+The CLI and Makefile do not select identical package sets and timeout flags for every suite. Reproduce a CI failure through the same owning entry point. Read the [Testing Guide](tests.md) for exact selection, lifecycle, state, race, coverage, and component-specific behavior.
 
-### Platform enrollment handler typing
+## Generated Artifacts
 
-`PlatformEnrollmentHandler` is a required field in the gateway-mode `OperatorPubSubService` constructor (sourced from `GatewayModeDeps.PlatformEnrollmentDeps`); it is absent in outbound mode (the field does not exist on `OutboundModeDeps`). The five platform enrollment event types (`EventPlatformEnrollment*Requested`) are gateway-initiated governance actions dispatched only via `ExecuteVerifiedTransaction` after envelope verification; outbound mode never produces platform enrollment envelopes, so the dispatch paths are unreachable there. The five `if rs.platformEnrollment == nil { break }` guards in `ExecuteVerifiedTransaction` are eliminated by making the handler construction mode-specific, not by guarding at the call site.
+Generated output is changed through its owner:
 
-### Posture-conditional fail-closed guards (retained)
+| Output | Source | Update and validation |
+| --- | --- | --- |
+| Root `README.md` | `docs/templates/README.md.tmpl` and the promoted snapshot under `docs/evidence/readme/current/` | `make readme`, `make readme-test`, and `make readme-check` |
+| Go, Python, TypeScript, and Markdown protobuf output | Schemas and comments under `protocol/proto/g8e/` | `make proto` (`make generate` is an alias) plus affected conformance tests |
+| Gateway OpenAPI | Swagger annotations in the Go owners | `make swagger-generate` plus route and contract tests |
+| Website | Generated root `README.md` | `make website-test` and `make website-build` when rendering is affected |
+| Doctrine references | JSON under `protocol/constants/doctrine/` and demo doctrine inputs | `make validate-doctrines` |
+| COSAiS overlays | Canonical overlay and doctrine references | `make validate-cosais` |
 
-The `L4Warden` posture-conditional guards for `doctrine == nil` (`ErrTxDoctrineMissing`) and `l3Notary == nil` (`ErrTxL3NotaryNotConfigured`) are retained. These enforce posture rules (a posture that requires L1/L3 must have the dependency wired), not mode-bifurcation smells. The `consensusPolicyStore == nil` guard in `verifyL2Consensus` is also retained as the posture-conditional fail-closed path: in gateway mode the store is always wired; in outbound mode the posture never requires L2.
+Do not edit the generated root README, protobuf API reference, or OpenAPI files as the source change. The [Documentation Guide](docs.md#generated-and-machine-readable-documentation) defines complete ownership and validation, and the [Release Process](release_process.md) defines attended evidence promotion.
 
-## Constants & Doctrines
+## Doctrine Changes
 
-Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
+`governance.NewL1DoctrineFromDir` starts with the built-in MITRE-oriented detectors and loads additional `*.json` files from the configured Gateway doctrine directory. `./g8e gw start --doctrine-dir <path>` sets that directory, and `G8E_DOCTRINE_DIR` supplies it when the flag is absent. The Gateway loads doctrine during construction, so restart the Gateway after changing runtime doctrine files.
 
-**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, validated by `make validate-doctrines`. L1Doctrine uses protobuf field options and hardcoded threat detectors at runtime; the JSON files are reference schemas. At gateway startup, `--doctrine-dir` (env: `G8E_DOCTRINE_DIR`) loads additional `*.json` doctrine files via `NewL1DoctrineFromDir()`, appending file-loaded detectors after hardcoded MITRE patterns. The loaded doctrine instance is shared between the MCP Gateway ThreatScanner and L4Warden.
+Reference doctrine JSON under `protocol/constants/doctrine/` is validated by `make validate-doctrines`; the validator also checks compliance references. Update the owning JSON and affected Go or protocol contracts together when a doctrine identifier or public shape changes.
 
-Adding doctrines: update JSON → `make validate-doctrines` → restart Operator. For runtime doctrine loading, place JSON files in the doctrine directory and pass `--doctrine-dir`.
+## Native MCP Tools
 
-See [Constants Reference](../../protocol/docs/constants.md) and [Protocol Spec](../../protocol/docs/spec.md).
+Native MCP tools implement `mcp.NativeTool` and execute through the Gateway's in-process Operator boundary after governed dispatch. The outbound `G8eoService` does not construct `mcp.GatewayService`, so the native MCP registry is not an independent outbound Operator tool server. `internal/services/mcp/native_tool_registry.go` is the current inventory and registration owner; do not duplicate its tool list in documentation.
 
-**Code generation:** `make proto` (protobuf from `.proto` files) · `make generate` (alias)
+To add a native tool:
 
-## Native Tools
+1. Use `protocol/docs/mcp_tool_template.go` as the implementation template.
+2. Implement `Name`, `Description`, `InputSchema`, and `Execute` with typed inputs and contextual errors.
+3. Register the tool explicitly in `RegisterNativeTools` in `internal/services/mcp/native_tool_registry.go`.
+4. Add focused unit tests and any governed integration coverage required by the execution path.
+5. Do not use `init`; registration is explicit and registry construction returns errors.
 
-MCP tools compiled into the g8e binary that execute within the Operator's execution boundary locally.
+## Documentation and Contribution Workflow
 
-**Adding a new native tool:**
-1. Copy `protocol/docs/mcp_tool_template.go` to `internal/services/mcp/your_tool_name.go`
-2. Implement `NativeTool` interface: `Name()`, `Description()`, `InputSchema()`, `Execute()`
-3. Register in `RegisterNativeTools()` at `internal/services/mcp/native_tool_registry.go`
-4. Add unit tests in `internal/services/mcp/your_tool_name_test.go`
-5. No `init()` function; registration is explicit
+Treat documentation as code. Audit every changed document end to end, trace claims to current owners, update related current-state summaries, regenerate source-owned output, review relative links, and update `Last Updated` and `Version` only after the audit. Use the exact value in `VERSION` for maintained `Version:` headers. Follow [Documentation Guidelines](docs.md) for the complete process.
 
-**Existing tools:** Database (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy, audit receipts (list, get).
-
-## Quick Reference
-
-| Concern | Location |
-|---|---|
-| Protobuf schemas | `protocol/proto/` |
-| Constants (JSON reference) | `protocol/constants/` |
-| JSON model definitions | `protocol/models/` |
-| Go registry files | `internal/constants/` |
-| Governance layers | `internal/services/governance/` |
-| Gateway service | `internal/services/gateway/` |
-| MCP gateway & native tools | `internal/services/mcp/` |
-| Compliance (KSI, catalogs, demo evidence, OSCAL renderer) | `internal/services/compliance/` |
-| CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |
-| Architecture docs | `docs/architecture/` |
-
-## Contributing
-
-- One change per PR
-- Add tests for bug fixes and features
-- Commit prefixes: `g8e: fix the thing`
-
-**Contact:** danny@g8e.ai · **License:** BSL 1.1 (converts to Apache 2.0 on 2030-08-18)
-
+Keep a contribution focused on one coherent change and include tests for fixes and features. The [Contributing Guide](../../.github/CONTRIBUTING.md) owns issue, security-reporting, and contribution entry points. The repository is distributed under the [Business Source License 1.1](../../LICENSE), with the Change Date and Change License defined in that file.

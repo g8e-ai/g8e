@@ -98,6 +98,12 @@ func TestVerifyDemoRun_AcceptsCanonicalCorrelatedRun(t *testing.T) {
 	assert.True(t, report.GetValid(), report.GetFailures())
 	assert.Empty(t, report.GetFailures())
 	assert.Equal(t, runID, report.GetReportId())
+	require.Len(t, report.GetChecks(), 1)
+	assert.Equal(t, constants.DemoRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, report.GetChecks()[0].GetStatus())
+	assert.Contains(t, report.GetChecks()[0].GetEvidenceRefs(), runID)
+	assert.Equal(t, report.GetVerifierId(), report.GetChecks()[0].GetVerifierId())
+	assert.Equal(t, report.GetVerifierVersion(), report.GetChecks()[0].GetVerifierVersion())
 }
 
 func TestVerifyDemoMetricEvidence_AcceptsHealthcareThresholdBindings(t *testing.T) {
@@ -144,9 +150,19 @@ func TestVerifyDemoMetricEvidence_AcceptsHealthcareThresholdBindings(t *testing.
 				GraderRef: &compliancev1.VersionedReference{Id: constants.DemoMetricGraderID, Version: constants.DemoMetricGraderVersion},
 			}
 
-			assert.NoError(t, verifyDemoMetricEvidence(result, metric, observationBody))
+			assert.NoError(t, ValidateDemoMetricEvidence(result, metric, observationBody))
 		})
 	}
+}
+
+func TestValidateDemoStateObservation_RequiresStepContentAndReferenceBinding(t *testing.T) {
+	body := []byte(`{"value":42}`)
+	ref := contentReference("state-observation", body)
+	result := &compliancev1.DemoScenarioResult{StateObservationRefs: []string{ref}, StepResults: []*compliancev1.DemoStepResult{{EvidenceRefs: []string{ref}, ProtocolResult: string(body)}}}
+
+	assert.NoError(t, ValidateDemoStateObservation(result, ref, body))
+	result.StepResults[0].ProtocolResult = `{"value":43}`
+	assert.ErrorIs(t, ValidateDemoStateObservation(result, ref, body), constants.ErrUnresolvedReference)
 }
 
 func TestVerifyDemoRun_AcceptsContentAddressedHealthcareMetricEvidence(t *testing.T) {
@@ -306,6 +322,10 @@ func TestVerifyDemoRun_ReportsIntegrityFailuresFailClosed(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, report.GetValid())
 			assertReportContainsFailure(t, report, tt.failureErr)
+			require.Len(t, report.GetChecks(), 1)
+			assert.Equal(t, constants.DemoRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+			assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED, report.GetChecks()[0].GetStatus())
+			assert.Equal(t, report.GetFailures(), report.GetChecks()[0].GetFailures())
 		})
 	}
 }
@@ -351,6 +371,7 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 	scenarios, err := catalog.LoadDemoScenarioCatalog(assertions, frameworks)
 	require.NoError(t, err)
 	refs := make([]*compliancev1.VersionedReference, 0)
+	sourceDefinitions := make([]DemoDefinitionArtifact, 0)
 	frameworkRefs := make(map[string]*compliancev1.FrameworkControlReference)
 	var selectedDefinition *compliancev1.DemoScenarioDefinition
 	for _, definition := range scenarios.GetDefinitions() {
@@ -358,6 +379,9 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 			continue
 		}
 		refs = append(refs, &compliancev1.VersionedReference{Id: definition.GetScenarioId(), Version: definition.GetScenarioVersion()})
+		body, marshalErr := compliancev1.MarshalCanonical(definition)
+		require.NoError(t, marshalErr)
+		sourceDefinitions = append(sourceDefinitions, DemoDefinitionArtifact{Body: body})
 		if selectedDefinition == nil || definition.GetScenarioId() == scenarioID {
 			selectedDefinition = definition
 		}
@@ -412,7 +436,7 @@ func validDemoRunFixtureForScenario(t *testing.T, demoID, scopeID, scenarioID st
 		runArtifactPath(runID, constants.DemoRunManifestFilename): manifestBody,
 		runArtifactPath(runID, constants.DemoRunResultsFilename):  resultBody,
 	}}
-	return reader, memoryProvenanceSource{artifacts: provenance}, runID
+	return reader, memoryProvenanceSource{artifacts: provenance, definitions: sourceDefinitions}, runID
 }
 
 func validHealthcareMetricRunFixture(t *testing.T) (*memoryArtifactReader, memoryProvenanceSource, string) {

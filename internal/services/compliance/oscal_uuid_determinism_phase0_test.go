@@ -13,22 +13,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
 )
 
-// TestPhase0OSCAL_RandomUUIDsPreventByteIdenticalOutput documents that the
-// current OSCAL export uses random RFC 4122 UUID v4 for every document, result,
-// observation, finding, subject, component, control-implementation, and
-// back-matter resource identifier. Regenerating an assessment from identical
-// inputs (the same canonical analysis and generated-at timestamp) produces
-// different UUIDs and therefore different byte output on every run.
-//
-// This non-determinism prevents reproducible verification: an independent
-// environment cannot confirm that two bundles from the same inputs are
-// byte-identical. Phase 4 replaces random UUIDs with deterministic
-// namespace-derived identifiers bound to report, control, assertion, and
-// evidence identities. When the fix lands, this test is flipped to assert
-// byte-identical output.
-func TestPhase0OSCAL_RandomUUIDsPreventByteIdenticalOutput(t *testing.T) {
+// TestPhase0OSCAL_IdenticalInputsProduceByteIdenticalOutput verifies that identical canonical analysis produces reproducible unsigned OSCAL output.
+func TestPhase0OSCAL_IdenticalInputsProduceByteIdenticalOutput(t *testing.T) {
 	analysis := oscalTestAnalysis()
 	exporter := NewOSCALExporter(oscalTestCatalog())
 
@@ -37,26 +27,16 @@ func TestPhase0OSCAL_RandomUUIDsPreventByteIdenticalOutput(t *testing.T) {
 	doc2, err := exporter.GenerateAssessmentResults(analysis)
 	require.NoError(t, err)
 
-	// Marshal both to canonical JSON (field order is stable from struct order).
 	raw1, err := json.Marshal(doc1)
 	require.NoError(t, err)
 	raw2, err := json.Marshal(doc2)
 	require.NoError(t, err)
 
-	// The two outputs differ because UUIDs are random. After Phase 4, identical
-	// inputs plus a frozen generator version produce byte-identical unsigned
-	// output, and this assertion flips to assert.Equal.
-	assert.NotEqual(t, string(raw1), string(raw2),
-		phase0RegressionBeforeFix+
-			": identical inputs produce different OSCAL output because UUIDs are random v4; "+
-			"deterministic regeneration is impossible today. After Phase 4 this flips to Equal.")
+	assert.Equal(t, string(raw1), string(raw2), phase0RegressionAfterFix+": identical inputs produce byte-identical OSCAL output")
 }
 
-// TestPhase0OSCAL_RandomUUIDsDifferAcrossDocuments documents that every call to
-// generateUUID produces a unique value, so even within a single document
-// generation pass, no two UUID-bearing records share a deterministic
-// relationship. This is the root cause of non-reproducible bundles.
-func TestPhase0OSCAL_RandomUUIDsDifferAcrossDocuments(t *testing.T) {
+// TestPhase0OSCAL_ComponentIdentifiersAreStable verifies that catalog-bound component identifiers remain stable across generation calls.
+func TestPhase0OSCAL_ComponentIdentifiersAreStable(t *testing.T) {
 	exporter := NewOSCALExporter(oscalTestCatalog())
 
 	compDef1, err := exporter.GenerateComponentDefinition()
@@ -64,27 +44,73 @@ func TestPhase0OSCAL_RandomUUIDsDifferAcrossDocuments(t *testing.T) {
 	compDef2, err := exporter.GenerateComponentDefinition()
 	require.NoError(t, err)
 
-	// The top-level component-definition UUID differs on every call.
-	assert.NotEqual(t, compDef1.UUID, compDef2.UUID,
-		phase0RegressionBeforeFix+
-			": component-definition UUID is random and differs across identical-input calls")
-
-	// Component UUIDs also differ.
+	assert.Equal(t, compDef1.UUID, compDef2.UUID, phase0RegressionAfterFix+": component-definition UUID is catalog-bound")
 	require.NotEmpty(t, compDef1.Components)
 	require.NotEmpty(t, compDef2.Components)
-	assert.NotEqual(t, compDef1.Components[0].UUID, compDef2.Components[0].UUID,
-		phase0RegressionBeforeFix+
-			": component UUID is random and differs across identical-input calls")
+	assert.Equal(t, compDef1.Components[0].UUID, compDef2.Components[0].UUID, phase0RegressionAfterFix+": component UUID is catalog-bound")
 }
 
-// TestPhase0OSCAL_GenerateUUIDIsRandomV4 directly exercises the generateUUID
-// helper to lock the current behavior: two calls return different values.
-func TestPhase0OSCAL_GenerateUUIDIsRandomV4(t *testing.T) {
-	u1 := generateUUID()
-	u2 := generateUUID()
+// TestPhase0OSCAL_GenerateUUIDIsIdentityBound verifies deterministic namespace derivation and identity separation.
+func TestPhase0OSCAL_GenerateUUIDIsIdentityBound(t *testing.T) {
+	u1 := generateUUID("observation", "analysis-1", "assertion-1")
+	u2 := generateUUID("observation", "analysis-1", "assertion-1")
+	u3 := generateUUID("observation", "analysis-1", "assertion-2")
 
-	assert.NotEqual(t, u1, u2,
-		phase0RegressionBeforeFix+
-			": generateUUID returns a random value on every call; "+
-			"Phase 4 replaces this with deterministic namespace-derived identifiers")
+	assert.Equal(t, u1, u2, phase0RegressionAfterFix+": equal identities derive equal UUIDs")
+	assert.NotEqual(t, u1, u3, phase0RegressionAfterFix+": distinct assertion identities derive distinct UUIDs")
+}
+
+func TestPhase0OSCAL_IdentifiersBindCanonicalRecordIdentities(t *testing.T) {
+	newAnalysis := func() *compliancev1.ComplianceAnalysis {
+		analysis := oscalTestAnalysis()
+		analysis.AssertionAssessments = analysis.AssertionAssessments[:1]
+		analysis.FrameworkAssessments = analysis.FrameworkAssessments[:1]
+		analysis.EvidenceResources = analysis.EvidenceResources[:1]
+		return analysis
+	}
+	tests := []struct {
+		name     string
+		mutate   func(*compliancev1.ComplianceAnalysis)
+		selectID func(*OSCALAssessmentResults) string
+	}{
+		{name: "report identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) { analysis.AnalysisId += "-changed" }, selectID: func(document *OSCALAssessmentResults) string { return document.AssessmentResults.UUID }},
+		{name: "assertion assessment observation identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.AssertionAssessments[0].AssessmentId += "-changed"
+			analysis.FrameworkAssessments[0].AssertionAssessmentRefs[0] = analysis.AssertionAssessments[0].AssessmentId
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.Results[0].Observations[0].UUID
+		}},
+		{name: "assertion assessment subject identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.AssertionAssessments[0].AssessmentId += "-changed"
+			analysis.FrameworkAssessments[0].AssertionAssessmentRefs[0] = analysis.AssertionAssessments[0].AssessmentId
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.Results[0].Observations[0].Subjects[0].SubjectUUID
+		}},
+		{name: "evidence identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			const changedDigest = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+			changedArtifactID := "action-receipt:sha256:" + changedDigest
+			analysis.EvidenceResources[0].ArtifactId = changedArtifactID
+			analysis.EvidenceResources[0].Sha256 = changedDigest
+			analysis.AssertionAssessments[0].EvidenceRefs[0] = changedArtifactID
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.BackMatter.Resources[0].UUID
+		}},
+		{name: "control identity", mutate: func(analysis *compliancev1.ComplianceAnalysis) {
+			analysis.FrameworkAssessments[0].ControlId = "KSI-CMT-02"
+		}, selectID: func(document *OSCALAssessmentResults) string {
+			return document.AssessmentResults.Results[0].Findings[0].UUID
+		}},
+	}
+	exporter := NewOSCALExporter(oscalTestCatalog())
+	base, err := exporter.GenerateAssessmentResults(newAnalysis())
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			changedAnalysis := newAnalysis()
+			tt.mutate(changedAnalysis)
+			changed, err := exporter.GenerateAssessmentResults(changedAnalysis)
+			require.NoError(t, err)
+			assert.NotEqual(t, tt.selectID(base), tt.selectID(changed), phase0RegressionAfterFix+": UUID binds the canonical record identity")
+		})
+	}
 }

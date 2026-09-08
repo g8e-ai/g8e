@@ -22,7 +22,7 @@ import (
 )
 
 var responsibilities = []string{"platform", "customer", "shared", "inherited", "assessor"}
-var supportStatuses = []string{"mapped", "unsupported"}
+var supportStatuses = []string{"mapped", "planned", "unsupported"}
 var mappingTypes = []string{"full", "partial", "supporting", "not_applicable"}
 var assessmentStatuses = []string{"satisfied", "not_satisfied", "not_applicable", "unverifiable", "customer_attestation_required"}
 var evidenceLevels = []string{"L0", "L1", "L2", "L3", "L4", "L5"}
@@ -32,7 +32,7 @@ var verificationStatuses = []string{"verified", "invalid", "unverifiable", "unsu
 var freshnessStatuses = []string{"fresh", "stale", "incomplete", "not_applicable"}
 var signatureAlgorithms = []string{"ed25519"}
 var supportedGraders = []string{"protocol_chain@1.0.0", "policy_outcome@1.0.0", "receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "commitment_chain@1.0.0", "independent_state@1.0.0", "secret_detection_precision_recall@1.0.0", "model_boundary_raw_secret_rate@1.0.0", "exact_local_rehydration@1.0.0", "authenticated_operation@1.0.0", "fips_mode@1.0.0"}
-var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", "compliance_bundle@1.0.0", constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
+var supportedVerifiers = []string{"receipt_integrity@1.0.0", "receipt_persistence@1.0.0", "deterministic_stage_chain@1.0.0", "commitment_chain@1.0.0", "state_observation@1.0.0", "eval_metric@1.0.0", "identity_attestation@1.0.0", "notary_proof@1.0.0", "build_provenance@1.0.0", "runtime_fips@1.0.0", constants.ComplianceBundleVerifierID + "@" + constants.ComplianceBundleVerifierVersion, constants.AssertionGraderID + "@" + constants.AssertionGraderVersion, constants.FrameworkGraderID + "@" + constants.FrameworkGraderVersion}
 
 func ValidateAssertionCatalog(catalog *compliancev1.ControlAssertionCatalog) error {
 	if catalog == nil || catalog.CatalogId == "" || catalog.CatalogVersion == "" || len(catalog.Assertions) == 0 {
@@ -396,31 +396,44 @@ func ValidateControlAssessment(assessment *compliancev1.FrameworkControlAssessme
 }
 
 func ValidateReportManifest(manifest *compliancev1.ComplianceReportManifest, frameworks *compliancev1.FrameworkCatalog) error {
-	if manifest == nil || manifest.ReportId == "" || manifest.ReportSchemaVersion == "" || manifest.GeneratedAt == nil || manifest.GeneratedAt.CheckValid() != nil || manifest.GeneratorIdentity == "" || manifest.GeneratorVersion == "" || manifest.ScopeRef == "" || len(manifest.FrameworkRefs) == 0 || manifest.AssertionCatalogRef == "" || len(manifest.CrosswalkRefs) == 0 || len(manifest.AssessmentRefs) == 0 || manifest.EvidenceIndexRef == "" || manifest.Signature == nil {
+	if manifest == nil || manifest.ReportId == "" || manifest.ReportSchemaVersion == "" || manifest.GeneratedAt == nil || manifest.GeneratedAt.CheckValid() != nil || manifest.GeneratorIdentity == "" || manifest.GeneratorVersion == "" || manifest.ScopeRef == "" || len(manifest.FrameworkRefs) == 0 || manifest.AssertionCatalogRef == "" || len(manifest.CrosswalkRefs) == 0 || len(manifest.AssessmentRefs) == 0 || manifest.EvidenceIndexRef == "" || manifest.ManifestSha256 == "" {
 		return fmt.Errorf("%w: report manifest is incomplete", constants.ErrInvalidEvidenceGraph)
 	}
-	if err := validateVersionedReferences(manifest.FrameworkRefs); err != nil {
-		return fmt.Errorf("%w: report framework references: %v", constants.ErrInvalidEvidenceGraph, err)
+	if err := validateSHA256(manifest.ManifestSha256); err != nil {
+		return fmt.Errorf("%w: manifest sha256: %v", constants.ErrInvalidEvidenceGraph, err)
 	}
-	for _, reference := range manifest.FrameworkRefs {
-		if FindFramework(frameworks, reference.Id, reference.Version) == nil {
-			return fmt.Errorf("%w: %s", constants.ErrUnsupportedFramework, referenceKey(reference))
-		}
-	}
-	for _, references := range [][]string{manifest.CrosswalkRefs, manifest.AssessmentRefs} {
-		if err := validateUniqueStrings(references); err != nil {
-			return fmt.Errorf("%w: report bundle references: %v", constants.ErrInvalidEvidenceGraph, err)
-		}
-	}
-	for _, bundlePath := range append(append([]string{manifest.ScopeRef, manifest.AssertionCatalogRef, manifest.EvidenceIndexRef}, manifest.CrosswalkRefs...), manifest.AssessmentRefs...) {
-		if err := validateBundlePath(bundlePath); err != nil {
-			return err
-		}
+	if err := ValidateReportManifestReferences(manifest.ScopeRef, manifest.FrameworkRefs, manifest.AssertionCatalogRef, manifest.CrosswalkRefs, manifest.AssessmentRefs, manifest.EvidenceIndexRef, frameworks); err != nil {
+		return err
 	}
 	if err := validateSHA256(manifest.ChecksumRoot); err != nil {
 		return err
 	}
 	return ValidateReportSignature(manifest.Signature)
+}
+
+func ValidateReportManifestReferences(scopeRef string, frameworkRefs []*compliancev1.VersionedReference, assertionCatalogRef string, crosswalkRefs, assessmentRefs []string, evidenceIndexRef string, frameworks *compliancev1.FrameworkCatalog) error {
+	if err := validateVersionedReferences(frameworkRefs); err != nil {
+		return fmt.Errorf("%w: report framework references: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	for _, reference := range frameworkRefs {
+		if FindFramework(frameworks, reference.Id, reference.Version) == nil {
+			return fmt.Errorf("%w: %s", constants.ErrUnsupportedFramework, referenceKey(reference))
+		}
+	}
+	for _, references := range [][]string{crosswalkRefs, assessmentRefs} {
+		if err := validateUniqueStrings(references); err != nil {
+			return fmt.Errorf("%w: report bundle references: %v", constants.ErrInvalidEvidenceGraph, err)
+		}
+	}
+	if scopeRef == "" || scopeRef != strings.TrimSpace(scopeRef) || scopeRef == "." || scopeRef == constants.PathParentDir || strings.ContainsAny(scopeRef, `/\\`) {
+		return fmt.Errorf("%w: unsafe report scope reference %q", constants.ErrInvalidEvidenceGraph, scopeRef)
+	}
+	for _, bundlePath := range append(append([]string{assertionCatalogRef, evidenceIndexRef}, crosswalkRefs...), assessmentRefs...) {
+		if err := validateBundlePath(bundlePath); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ValidateChecksumEntry(checksum *compliancev1.ChecksumEntry) error {
@@ -431,6 +444,142 @@ func ValidateChecksumEntry(checksum *compliancev1.ChecksumEntry) error {
 		return err
 	}
 	return validateSHA256(checksum.Sha256)
+}
+
+func ValidateBundleArtifact(artifact *compliancev1.BundleArtifact) error {
+	if artifact == nil {
+		return fmt.Errorf("%w: bundle artifact is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if err := validateBundlePath(artifact.BundlePath); err != nil {
+		return err
+	}
+	if err := validateSHA256(artifact.Sha256); err != nil {
+		return err
+	}
+	if artifact.MediaType == "" {
+		return fmt.Errorf("%w: bundle artifact %s has empty media type", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
+	}
+	if artifact.Profile != constants.ComplianceBundleProfilePublic && artifact.Profile != constants.ComplianceBundleProfileRestricted {
+		return fmt.Errorf("%w: bundle artifact %s has unsupported profile %q", constants.ErrBundleProfileUnsupported, artifact.BundlePath, artifact.Profile)
+	}
+	if artifact.ByteLength < 0 {
+		return fmt.Errorf("%w: bundle artifact %s has negative byte length", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
+	}
+	restrictedPath := bundlePathWithinDirectory(artifact.BundlePath, constants.ComplianceBundleRestrictedDirname)
+	if artifact.Profile == constants.ComplianceBundleProfileRestricted {
+		if !restrictedPath {
+			return fmt.Errorf("%w: restricted bundle artifact %s is outside the restricted namespace", constants.ErrBundleProfileUnsupported, artifact.BundlePath)
+		}
+		if artifact.Encryption == nil || artifact.Encryption.Algorithm == "" || artifact.Encryption.KeyId == "" || artifact.Encryption.AuthorizationScope == "" || artifact.Encryption.PlaintextSha256 == "" || artifact.Encryption.AuthenticatedMetadataSha256 == "" {
+			return fmt.Errorf("%w: restricted bundle artifact %s requires complete encryption metadata", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath)
+		}
+		if artifact.Encryption.Algorithm != constants.EvalEvidenceEncryptionAES256GCM {
+			return fmt.Errorf("%w: restricted bundle artifact %s uses unsupported encryption algorithm %q", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath, artifact.Encryption.Algorithm)
+		}
+		if err := validateSHA256(artifact.Encryption.PlaintextSha256); err != nil {
+			return fmt.Errorf("%w: restricted artifact %s plaintext digest: %v", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath, err)
+		}
+		if err := validateSHA256(artifact.Encryption.AuthenticatedMetadataSha256); err != nil {
+			return fmt.Errorf("%w: restricted artifact %s authenticated metadata digest: %v", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath, err)
+		}
+	} else if artifact.Encryption != nil {
+		return fmt.Errorf("%w: public bundle artifact %s must not carry encryption metadata", constants.ErrEvidenceEncryptionInvalid, artifact.BundlePath)
+	} else if restrictedPath {
+		return fmt.Errorf("%w: public bundle artifact %s occupies the restricted namespace", constants.ErrBundleProfileUnsupported, artifact.BundlePath)
+	}
+	return nil
+}
+
+func bundlePathWithinDirectory(bundlePath, directory string) bool {
+	current := path.Clean(bundlePath)
+	for {
+		parent := path.Dir(current)
+		if parent == constants.PathCurrentDir {
+			return current == directory
+		}
+		if parent == constants.PathRoot {
+			return false
+		}
+		current = parent
+	}
+}
+
+func ValidateComplianceReportBundle(bundle *compliancev1.ComplianceReportBundle, frameworks *compliancev1.FrameworkCatalog) error {
+	if bundle == nil {
+		return fmt.Errorf("%w: compliance report bundle is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if err := ValidateReportManifest(bundle.Manifest, frameworks); err != nil {
+		return err
+	}
+	if bundle.Manifest.GetBundleProfile() != constants.ComplianceBundleProfilePublic && bundle.Manifest.GetBundleProfile() != constants.ComplianceBundleProfileRestricted {
+		return fmt.Errorf("%w: manifest bundle profile %q", constants.ErrBundleProfileUnsupported, bundle.Manifest.GetBundleProfile())
+	}
+	if bundle.ChecksumRoot == "" {
+		return fmt.Errorf("%w: bundle checksum root is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if err := validateSHA256(bundle.ChecksumRoot); err != nil {
+		return fmt.Errorf("%w: bundle checksum root: %v", constants.ErrInvalidEvidenceGraph, err)
+	}
+	if bundle.ChecksumRootSignature == nil {
+		return fmt.Errorf("%w: bundle checksum root signature is missing", constants.ErrReportSignatureFailed)
+	}
+	if err := ValidateReportSignature(bundle.ChecksumRootSignature); err != nil {
+		return err
+	}
+	if bundle.ChecksumRootSignature.SignedSha256 != bundle.ChecksumRoot {
+		return fmt.Errorf("%w: checksum root signature does not bind the checksum root", constants.ErrReportSignatureFailed)
+	}
+	if bundle.Manifest.GetSignature().GetSignedSha256() != bundle.Manifest.GetManifestSha256() {
+		return fmt.Errorf("%w: manifest signature does not bind the manifest SHA-256", constants.ErrReportSignatureFailed)
+	}
+	if len(bundle.Artifacts) == 0 {
+		return fmt.Errorf("%w: bundle has no artifacts", constants.ErrInvalidEvidenceGraph)
+	}
+	if len(bundle.Artifacts) > constants.ComplianceBundleMaxArtifacts {
+		return fmt.Errorf("%w: bundle exceeds artifact limit", constants.ErrInvalidEvidenceGraph)
+	}
+	seenPaths := make(map[string]struct{}, len(bundle.Artifacts))
+	for _, artifact := range bundle.Artifacts {
+		if err := ValidateBundleArtifact(artifact); err != nil {
+			return err
+		}
+		if bundle.Manifest.GetBundleProfile() == constants.ComplianceBundleProfilePublic && artifact.GetProfile() != constants.ComplianceBundleProfilePublic {
+			return fmt.Errorf("%w: public bundle contains restricted artifact %s", constants.ErrBundleProfileUnsupported, artifact.GetBundlePath())
+		}
+		if _, exists := seenPaths[artifact.BundlePath]; exists {
+			return fmt.Errorf("%w: duplicate bundle artifact path %s", constants.ErrInvalidEvidenceGraph, artifact.BundlePath)
+		}
+		seenPaths[artifact.BundlePath] = struct{}{}
+	}
+	referencedPaths := append(append([]string{bundle.Manifest.GetAssertionCatalogRef(), bundle.Manifest.GetEvidenceIndexRef()}, bundle.Manifest.GetCrosswalkRefs()...), bundle.Manifest.GetAssessmentRefs()...)
+	for _, referencedPath := range referencedPaths {
+		if _, exists := seenPaths[referencedPath]; !exists {
+			return fmt.Errorf("%w: manifest reference %s has no matching artifact", constants.ErrUnresolvedReference, referencedPath)
+		}
+	}
+	if bundle.Analysis == nil {
+		return fmt.Errorf("%w: bundle analysis is missing", constants.ErrInvalidEvidenceGraph)
+	}
+	if len(bundle.RenderedFormats) == 0 {
+		return fmt.Errorf("%w: bundle has no rendered formats", constants.ErrInvalidEvidenceGraph)
+	}
+	seenFormats := make(map[string]struct{}, len(bundle.RenderedFormats))
+	for _, rendered := range bundle.RenderedFormats {
+		if rendered == nil || rendered.Format == "" || rendered.MediaType == "" || rendered.BundlePath == "" {
+			return fmt.Errorf("%w: rendered format entry is incomplete", constants.ErrInvalidEvidenceGraph)
+		}
+		if err := validateBundlePath(rendered.BundlePath); err != nil {
+			return err
+		}
+		if _, exists := seenPaths[rendered.BundlePath]; !exists {
+			return fmt.Errorf("%w: rendered format %s has no matching artifact", constants.ErrUnresolvedReference, rendered.BundlePath)
+		}
+		if _, exists := seenFormats[rendered.Format]; exists {
+			return fmt.Errorf("%w: duplicate rendered format %s", constants.ErrInvalidEvidenceGraph, rendered.Format)
+		}
+		seenFormats[rendered.Format] = struct{}{}
+	}
+	return nil
 }
 
 func ValidateReportSignature(signature *compliancev1.ReportSignature) error {
@@ -464,7 +613,51 @@ func ValidateVerificationReport(report *compliancev1.ComplianceVerificationRepor
 			return fmt.Errorf("%w: verification failure is incomplete", constants.ErrReportVerificationFailed)
 		}
 	}
+	seenChecks := make(map[string]struct{}, len(report.GetChecks()))
+	failedCheck := false
+	for _, check := range report.GetChecks() {
+		if check == nil || check.GetCheckId() == "" || check.GetVerifierId() != report.GetVerifierId() || check.GetVerifierVersion() != report.GetVerifierVersion() || len(check.GetEvidenceRefs()) == 0 {
+			return fmt.Errorf("%w: verification check is incomplete or does not match the report verifier", constants.ErrReportVerificationFailed)
+		}
+		if _, exists := seenChecks[check.GetCheckId()]; exists {
+			return fmt.Errorf("%w: duplicate verification check %s", constants.ErrReportVerificationFailed, check.GetCheckId())
+		}
+		seenChecks[check.GetCheckId()] = struct{}{}
+		switch check.GetStatus() {
+		case compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED:
+			if len(check.GetFailures()) != 0 {
+				return fmt.Errorf("%w: passed verification check contains failures", constants.ErrReportVerificationFailed)
+			}
+		case compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED:
+			if len(check.GetFailures()) == 0 {
+				return fmt.Errorf("%w: failed verification check lacks failures", constants.ErrReportVerificationFailed)
+			}
+			failedCheck = true
+		default:
+			return fmt.Errorf("%w: verification check status is unspecified", constants.ErrReportVerificationFailed)
+		}
+		for _, failure := range check.GetFailures() {
+			if !verificationFailurePresent(report.GetFailures(), failure) {
+				return fmt.Errorf("%w: verification check failure is absent from the report", constants.ErrReportVerificationFailed)
+			}
+		}
+	}
+	if len(report.GetChecks()) > 0 && report.GetValid() == failedCheck {
+		return fmt.Errorf("%w: verification checks and report validity disagree", constants.ErrReportVerificationFailed)
+	}
 	return nil
+}
+
+func verificationFailurePresent(failures []*compliancev1.VerificationFailure, target *compliancev1.VerificationFailure) bool {
+	if target == nil {
+		return false
+	}
+	for _, failure := range failures {
+		if failure.GetCode() == target.GetCode() && failure.GetSubjectRef() == target.GetSubjectRef() && failure.GetReason() == target.GetReason() {
+			return true
+		}
+	}
+	return false
 }
 
 func FindAssertion(catalog *compliancev1.ControlAssertionCatalog, id, version string) *compliancev1.ControlAssertionDefinition {

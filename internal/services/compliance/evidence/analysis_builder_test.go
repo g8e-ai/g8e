@@ -440,7 +440,6 @@ func TestBuildComplianceAnalysis_GroupsSectionsByResponsibility(t *testing.T) {
 	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
 	require.NoError(t, err)
 	sections := analysis.GetSections()
-	require.Len(t, sections, 2)
 	responsibilities := make(map[string]*compliancev1.ControlSection)
 	for _, section := range sections {
 		responsibilities[section.GetResponsibility()] = section
@@ -451,6 +450,62 @@ func TestBuildComplianceAnalysis_GroupsSectionsByResponsibility(t *testing.T) {
 	assert.Equal(t, "Customer Controls", responsibilities["customer"].GetTitle())
 	assert.Len(t, responsibilities["platform"].GetControlAssessmentRefs(), 1)
 	assert.Len(t, responsibilities["customer"].GetControlAssessmentRefs(), 1)
+}
+
+func TestBuildComplianceAnalysis_EmitsExplicitResponsibilityAndStatusSections(t *testing.T) {
+	request := analysisBaseRequest(t)
+	framework := request.Frameworks.GetFrameworks()[0]
+	framework.Controls = append(framework.Controls,
+		analysisTestControl("PLATFORM-01", "platform"),
+		analysisTestControl("CUSTOMER-01", "customer"),
+		analysisTestControl("INHERITED-01", "inherited"),
+		analysisTestControl("ASSESSOR-01", "assessor"),
+		analysisTestControl("PLANNED-01", "platform"),
+		analysisTestControl("UNSUPPORTED-01", "shared"),
+	)
+	framework.Controls[len(framework.Controls)-2].SupportStatus = "planned"
+	framework.Controls[len(framework.Controls)-2].SupportRationale = "A future catalog version maps this control."
+	framework.Controls[len(framework.Controls)-1].SupportStatus = "unsupported"
+	framework.Controls[len(framework.Controls)-1].SupportRationale = "No reviewed mapping exists."
+
+	shared := request.FrameworkAssessments[0]
+	platform := analysisTestFrameworkAssessment("fedramp-20x", "CR26-2026-06-24", "PLATFORM-01", "not_satisfied", "platform")
+	customer := analysisTestFrameworkAssessment("fedramp-20x", "CR26-2026-06-24", "CUSTOMER-01", "unverifiable", "customer")
+	inherited := analysisTestFrameworkAssessment("fedramp-20x", "CR26-2026-06-24", "INHERITED-01", "satisfied", "inherited")
+	inherited.AssertionAssessmentRefs = []string{request.AssertionAssessments[0].GetAssessmentId()}
+	request.AssertionAssessments[0].FreshnessStatus = "stale"
+	assessor := analysisTestFrameworkAssessment("fedramp-20x", "CR26-2026-06-24", "ASSESSOR-01", "customer_attestation_required", "assessor")
+	request.FrameworkAssessments = []*compliancev1.FrameworkControlAssessment{shared, platform, customer, inherited, assessor}
+
+	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), request)
+	require.NoError(t, err)
+	sections := make(map[string]*compliancev1.ControlSection)
+	for _, section := range analysis.GetSections() {
+		key := section.GetStatusFilter()
+		if key == "" {
+			key = section.GetResponsibility()
+		}
+		sections[key] = section
+	}
+
+	require.Len(t, sections, 10)
+	for _, key := range []string{"platform", "customer", "shared", "inherited", "assessor_required", "planned", "unsupported", "failed", "stale", "unverifiable"} {
+		assert.Contains(t, sections, key)
+	}
+	assert.Equal(t, []string{platform.GetAssessmentId()}, sections["platform"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{customer.GetAssessmentId()}, sections["customer"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{shared.GetAssessmentId()}, sections["shared"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{inherited.GetAssessmentId()}, sections["inherited"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{assessor.GetAssessmentId()}, sections["assessor_required"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{platform.GetAssessmentId()}, sections["failed"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{inherited.GetAssessmentId()}, sections["stale"].GetControlAssessmentRefs())
+	assert.Equal(t, []string{customer.GetAssessmentId()}, sections["unverifiable"].GetControlAssessmentRefs())
+	assert.Empty(t, sections["planned"].GetControlAssessmentRefs())
+	assert.Empty(t, sections["unsupported"].GetControlAssessmentRefs())
+	require.Len(t, sections["planned"].GetControlRefs(), 1)
+	assert.Equal(t, "PLANNED-01", sections["planned"].GetControlRefs()[0].GetControlId())
+	require.Len(t, sections["unsupported"].GetControlRefs(), 1)
+	assert.Equal(t, "UNSUPPORTED-01", sections["unsupported"].GetControlRefs()[0].GetControlId())
 }
 
 func TestBuildComplianceAnalysis_SortsSectionsBySectionID(t *testing.T) {
@@ -515,6 +570,45 @@ func TestBuildComplianceAnalysis_DifferentInputsProduceDifferentIDs(t *testing.T
 	analysis2, err := evidence.BuildComplianceAnalysis(context.Background(), request)
 	require.NoError(t, err)
 	assert.NotEqual(t, analysis1.GetAnalysisId(), analysis2.GetAnalysisId())
+}
+
+func TestBuildComplianceAnalysis_AnalysisIDBindsCompleteAssessmentContent(t *testing.T) {
+	request := analysisBaseRequest(t)
+	analysis1, err := evidence.BuildComplianceAnalysis(context.Background(), request)
+	require.NoError(t, err)
+	request.AssertionAssessments[0].Status = "not_satisfied"
+	request.AssertionAssessments[0].FailureReason = "deterministic grader failed"
+	analysis2, err := evidence.BuildComplianceAnalysis(context.Background(), request)
+	require.NoError(t, err)
+	assert.NotEqual(t, analysis1.GetAnalysisId(), analysis2.GetAnalysisId())
+}
+
+func TestBuildComplianceAnalysis_CanonicalVectorIsPinned(t *testing.T) {
+	analysis, err := evidence.BuildComplianceAnalysis(context.Background(), analysisBaseRequest(t))
+	require.NoError(t, err)
+	canonical, err := compliancev1.MarshalCanonical(analysis)
+	require.NoError(t, err)
+	digest := sha256.Sum256(canonical)
+	assert.Equal(t, "compliance-analysis:sha256:e7bf3f5704d223f6895146dba1261055c75f5a126d099bc0aeaa95854989ebf0", analysis.GetAnalysisId())
+	assert.Equal(t, "d19e6bba9bc8415f5ce959e69b595c01101c1e2fda46cc8b3918bdca02be6c92", hex.EncodeToString(digest[:]))
+}
+
+func TestBuildComplianceAnalysis_CanonicalBytesIgnoreInputOrdering(t *testing.T) {
+	request1 := analysisBaseRequest(t)
+	analysis1, err := evidence.BuildComplianceAnalysis(context.Background(), request1)
+	require.NoError(t, err)
+	bytes1, err := compliancev1.MarshalCanonical(analysis1)
+	require.NoError(t, err)
+
+	request2 := analysisBaseRequest(t)
+	request2.AssertionAssessments[0], request2.AssertionAssessments[1] = request2.AssertionAssessments[1], request2.AssertionAssessments[0]
+	request2.FrameworkAssessments[0], request2.FrameworkAssessments[1] = request2.FrameworkAssessments[1], request2.FrameworkAssessments[0]
+	analysis2, err := evidence.BuildComplianceAnalysis(context.Background(), request2)
+	require.NoError(t, err)
+	bytes2, err := compliancev1.MarshalCanonical(analysis2)
+	require.NoError(t, err)
+
+	assert.Equal(t, bytes1, bytes2)
 }
 
 func TestBuildComplianceAnalysis_SortsAssertionAndFrameworkAssessments(t *testing.T) {
@@ -847,7 +941,7 @@ func TestBuildComplianceAnalysis_EvidenceLinksOnlyForScopeNodes(t *testing.T) {
 	}
 }
 
-func TestBuildComplianceAnalysis_EmptyAssessmentsProduceEmptyAnalysis(t *testing.T) {
+func TestBuildComplianceAnalysis_EmptyAssessmentsPreserveExplicitCatalogSections(t *testing.T) {
 	assertions, frameworks, crosswalks := analysisTestCatalogs(t)
 	request := evidence.AnalysisRequest{
 		ScopeID:              "scope-1",
@@ -867,7 +961,10 @@ func TestBuildComplianceAnalysis_EmptyAssessmentsProduceEmptyAnalysis(t *testing
 	assert.Equal(t, "empty", analysis.GetEvidenceWindowCompleteness().GetCompletenessStatus())
 	assert.Empty(t, analysis.GetGaps())
 	assert.Empty(t, analysis.GetFindings())
-	assert.Empty(t, analysis.GetSections())
+	require.Len(t, analysis.GetSections(), 10)
+	for _, section := range analysis.GetSections() {
+		assert.Empty(t, section.GetControlAssessmentRefs())
+	}
 }
 
 func findAnalysisGapByAssertion(t *testing.T, gaps []*compliancev1.ComplianceGap, assertionRef string) *compliancev1.ComplianceGap {

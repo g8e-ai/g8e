@@ -5,69 +5,97 @@ parent: Core
 
 # About g8e
 
-g8e is a zero-trust execution platform for agentic infrastructure. It sits between the human, AI, and real-world devices, enforcing a fail-closed verification pipeline before any state change occurs. The platform reduces cloud providers to stateless reasoning co-processors: the model reasons over tokenized projections and cryptographic commitments, while state, keys, and raw data remain on the host that owns them. The reference Operator and Governance Gateway are implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies.
+Last Updated: 2026-09-08
+Version: v2.1.7
 
-The core invariant is narrow: every mutation is a typed, signed, state-bound `GovernanceEnvelope` serialized as canonical JSON. Every envelope must clear a fail-closed five-layer verification pipeline before execution. The operator re-derives every proof from scratch against its own local state before any mutation occurs.
+## Why g8e Exists
 
-g8e functions as a secure perimeter for tool-calling standards. It treats MCP and A2A tool calls as unverified payloads and wraps them in a strict, canonical `GovernanceEnvelope`. The gateway provides a unified MCP endpoint with JWT authentication, just-in-time user provisioning, SSE streaming, and Document, KV, and Blob stores with MCP and A2A protocol translation. The operator compiles 32 native tools for database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata lookup, Git operations, Kubernetes inspection, shell execution, remote operator deployment, and governed audit receipt queries. See the [Position Paper](./position_paper.md) for the full argument on why this separation of reasoning and state resolves the forced choice between frontier reasoning and data sovereignty.
+I have spent thirty years managing and protecting data across remote systems: structured data, unstructured data, and blobs; NFS, SMB, HTTPS, S3, and SSH; Linux, Unix, and Windows; WANs, LANs, applications, networks, and storage. The technical work was only part of the job. The rest included security reviews, audits, sales cycles, customer visits, root-cause analyses, mission-critical service design, and painful production conversations.
 
-## Architectural Differentiators
+The part I value most is taking that burden away from people so they can get on with their other work and their lives.
 
-- **Cloud as Stateless Co-Processor:** The cloud reasoning layer receives tokenized projections and cryptographic commitments, never raw data. Rehydration to real values happens only at the L5 Actuator, at the instant of execution, on the host where the data already lives. See [Encryption](../architecture/encryption.md).
-- **State Remains Local:** Canonical state resides within the [Local-First Audit Architecture (LFAA)](../architecture/storage.md) on the host. The cloud provider sees transaction hashes, state roots, and tokenized projections. The hash-chained ledger serves as state history and is maintained on the host.
-- **Keys Owned by Data Owners:** Vault keys are generated, imported, and controlled by the data owner. All sensitive data at rest is encrypted with AES-256-GCM using keys that never leave the host in plaintext. A compromised cloud or gateway cannot decrypt host data because the keys were never shared. See [Encryption](../architecture/encryption.md).
-- **Outbound-Only Operator:** The host-resident Governed Operator connects via an outbound-only mTLS tunnel to the Governance Gateway. It listens on no ports, accepts no inbound connections, and bypasses NAT and firewalls. The gateway cannot reach into the operator; the operator pulls work when it chooses. See [Network Architecture](../architecture/network.md).
-- **Zero Standing Privileges:** The operator holds no permanent administrative credentials. Permissions are minted just-in-time from the verified intent inside the governance envelope, scoped to a single action, and dissolved on completion. A compromise of any layer cannot exfiltrate persistent credentials because none exist. See [Governance](../architecture/governance.md).
-- **Unified Context and Control Plane:** Every admitted action writes its complete signed receipt to the host-local SQLite audit store before execution, appends a signed attestation to the SQLite commitment chain, and records governed file snapshots in the git-backed ledger. Agents derive context from these linked stores and verify it against live host state through governed tools. See [Storage Architecture](../architecture/storage.md).
-- **Proof of Human Presence:** High-risk mutations require a WebAuthn/FIDO2 passkey assertion computed over the transaction hash. The approval is bound to one action, one moment, and one host: it cannot be transplanted, replayed, or harvested. See [Authentication](../architecture/auth.md).
-- **5-Layer Verification Sequence:** Mutations sequentially traverse Doctrine (L1), Consensus (L2), Notary (L3), and Warden (L4) at the Operator boundary before reaching the Actuator (L5) execution boundary. The gateway delegates required L2 deliberation to an enrolled Consensus service that produces signed Ed25519 votes over the transaction hash. Universal checks and every proof required by the active posture fail closed; optional L2 and L3 results are audited without gating execution. See [Governance](../architecture/governance.md) and [Consensus](../architecture/consensus.md).
-- **Zero Standing Dependencies:** The reference Governed Operator is a single, statically compiled binary, making the platform air-gap capable for deployment in isolated infrastructure perimeters.
-- **Console SPA & Dashboard:** The g8e Console provides a browser-based interface for passkey enrollment, interactive L3 transaction approval, and real-time SSE audit streaming, alongside the operator dashboard for fleet and session management. See [Dashboard Architecture](../architecture/dashboard.md) and [Authentication](../architecture/auth.md).
+During production incidents, the people on the call were often handling several other deadlines at once. That was reasonable. They had an expert working the problem, and they had other responsibilities competing for their attention. I learned to ask a simple question my mother taught me: how would I want to be treated in this situation?
 
-## Core Architecture
+If a production storage array were down hours before a major company event, with managers escalating and a deadline closing in, I would want someone trustworthy to take control, fix the problem, prove that it was fixed, and give me a clear record I could forward to management after the call. That is how I worked. I gathered as much context as I could directly from the affected systems, asked high-signal questions, kept meticulous notes, explained the next action, and showed my work. When customers allowed me to drive under their supervision and credentials, they could focus on everything else demanding their attention.
 
-1. **g8e Protocol** - The domain-agnostic wire contract, schemas, transaction hash, state binding, receipt model, and L1-L5 governance verification rules. See [Protocol Specification](../../protocol/docs/spec.md).
-2. **Governance Gateway** - The reference Policy Decision Point (PDP). It admits signed envelopes, manages PKI, enforces freshness and replay defense, and relays to operators. It provides a unified MCP endpoint with JWT authentication, just-in-time user provisioning, SSE streaming, and Document, KV, and Blob stores with MCP and A2A protocol translation. It does not initiate connections to operators. The gateway can run in the cloud or on-premises. See [Gateway Architecture](../architecture/gateway.md).
-3. **Governed Operator** - The host-resident Policy Execution Point (PEP). It initiates outbound-only mTLS connections to the gateway, re-verifies all proofs locally against its own state, and is the only component authorized to mutate the host. The operator compiles 32 native tools for database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata lookup, Git operations, Kubernetes inspection, shell execution, remote operator deployment, and governed audit receipt queries. The operator runs at the site of the data owner. See [Operator Architecture](../architecture/operator.md).
-4. **Consensus** - An enrolled service that evaluates envelopes and produces signed Ed25519 votes over the canonical SHA-256 transaction hash for L2 consensus. The gateway delegates L2 deliberation to the Consensus and never self-signs. See [Consensus Architecture](../architecture/consensus.md) and [Governance](../architecture/governance.md).
-5. **Application Layer** - Optional producers and consumers, including g8e-compatible agentic ensembles (such as Ensemble `g8ee`), operator dashboards (`g8ed`), BYO frontends, BYO agents, MCP clients, A2A clients, and native g8e applications. g8e is actor-agnostic and governs actions rather than actors. See [Connecting Applications](../guides/connect_apps_to_gateway.md), [Ensemble Architecture](../architecture/ensemble.md), [AI Agents Boundary](../architecture/agents.md), the [g8ee documentation](../ensemble/index.md), and the [g8ed documentation](../dashboard/index.md) for the first-party component details.
+That trust did not come from personality or blind faith. I was the person their escalation policy required them to call, I worked inside their controls, and our incentives were aligned around the same outcome.
 
-## Posture Configurations
+I wanted people to have that kind of help in their pocket: a capable expert powered by safe and reliable AI, available without depending on an escalation chain. That is why I built g8e.
 
-The gateway supports four posture configurations that control which verification layers are enforced versus audited:
+## Danny as Code
 
-| Posture | L1 Doctrine | L2 Consensus | L3 Notary | Typical Use |
-| --- | --- | --- | --- | --- |
-| `doctrine` (default) | Enforced | Audited | Audited | Local development and CI |
-| `consensus` | Enforced | Enforced | Audited | Automated workflows with multi-agent review |
-| `ratify` | Enforced | Audited | Enforced (mutations only) | Human-authorized workflows without multi-agent review |
-| `notary` | Enforced | Enforced | Enforced (mutations only) | Production with multi-agent review and human authorization |
+g8e encodes the operating method I developed across those thirty years:
 
-L4 Warden and L5 Actuator are always active in all configurations. The following checks are enforced as fail-closed gates in every posture: L1 Doctrine validation, transaction hash integrity, nonce replay protection, expiry enforcement, state Merkle root validation, action type validation, and payload decoding. See [Governance](../architecture/governance.md) for posture configuration.
+1. Gather broad context from the user and the systems involved.
+2. Ask focused questions that reduce uncertainty.
+3. Converge on the best next step rather than acting on the first plausible answer.
+4. Present the proposed action and its justification to the person with the most at stake.
+5. Bind approval to the exact action when the active policy requires human authorization.
+6. Execute through a constrained boundary at the system that owns the data.
+7. Verify the outcome, preserve signed evidence, and follow the work through to completion.
 
-## Operational Philosophy
+The optional first-party [g8ee agentic ensemble](../architecture/ensemble.md) implements one reasoning and ReAct workflow around that method. The core g8e platform does not trust a model, an ensemble, or a human interface with execution authority merely because it proposed an action. It supplies the identity, policy, verification, execution, and receipt boundary between a request and a real-world side effect.
 
-g8e is built for operators who manage remote systems under real-world pressure: production fires, looming deadlines, and multi-tasking stakeholders. The platform mirrors the workflow of a trusted expert who gathers maximum context directly on the target systems, asks high-signal questions, converges on the ideal next step, and proposes action with justification before the person with the most at stake approves. Once approved, the operator executes cleanly, proves the result, and follows up end-to-end.
+## What g8e Is
 
-The same binary, protocol, and verification pipeline governs actions across domains. What changes between domains is the doctrine configuration, the target data, and the governance posture. The data owner configures these to match their regulatory and operational requirements. The platform does not need domain-specific code. It needs domain-specific doctrine, which is data, not code.
+g8e is a zero-trust execution platform between humans, AI systems, applications, and the devices they affect. It governs actions rather than actors. A user or AI can propose work, but a mutation that traverses the governed platform is represented as a typed, state-bound `GovernanceEnvelope` and reaches execution only after the checks required by the active governance posture succeed.
+
+The platform separates policy decisions from execution authority:
+
+| Component | Role |
+| --- | --- |
+| **g8e Protocol** | Defines the canonical envelope, identity and state binding, replay controls, transaction hash, governance proofs, and signed receipt model. |
+| **g8eg Governance Gateway** | Acts as the Policy Decision Point for authentication, PKI, envelope construction, L1 Doctrine, required L2 Consensus coordination, L3 Notary workflows, routing, and platform APIs. It also contains an in-process Operator substrate for work executed on the Gateway host. |
+| **g8eo Governed Operator** | Acts as the Policy Execution Point on a managed host. It pulls work over outbound mTLS, verifies each envelope at its local L4 Warden, executes accepted work through L5, and retains authoritative local receipts. |
+| **Consensus service** | Evaluates transactions and emits Ed25519 votes over the transaction hash. Votes have protocol authority only when they come from enrolled members and satisfy the configured policy and quorum. |
+| **People, applications, and interfaces** | Humans, AI clients, g8ee, g8ed, MCP clients, A2A clients, and native applications propose actions and consume results without joining the trusted execution boundary. |
+
+The reference Gateway and Operator are two modes of the same statically linked Go binary. The repository also includes the optional Python g8ee ensemble and JavaScript g8ed dashboard. These are reference implementations of separable protocol roles, not requirements for building a compatible client, Gateway, Operator, consensus service, or interface.
+
+## The Verification Boundary
+
+Every governed operation reaches the L4 Warden and L5 Actuator boundary. The active [governance posture](../architecture/governance.md) determines whether L2 and L3 are enforced gates or recorded, non-gating evidence:
+
+1. **L1 Doctrine** decodes typed payloads and applies field constraints, forbidden-pattern rules, and MITRE ATT&CK-oriented threat detection. L1 is enforced in every posture.
+2. **L2 Consensus** verifies Ed25519 votes from enrolled consensus members against a configured policy and quorum when the posture requires multi-agent authorization.
+3. **L3 Notary** verifies transaction-bound human authorization for mutations when the posture requires it. Gateway workflows use WebAuthn; outbound Operator workflows use signed approval proofs.
+4. **L4 Warden** reserves the nonce, checks expiry and replay state, recomputes the transaction hash, validates the state root and payload, reruns Doctrine, and verifies posture-required L2 and L3 evidence before dispatch.
+5. **L5 Actuator** persists signed pre-execution evidence, appends a commitment when the SQL commitment ledger is available, rehydrates explicitly registered protected values at the execution site, mints a transaction-bound capability, dispatches the handler, dissolves the capability, and persists the signed final outcome.
+
+A remote Operator performs L4 and L5 on the managed host. Gateway MCP and A2A calls use the Gateway's in-process Operator substrate unless routed to a configured downstream service. The exact guarantees differ for direct envelopes, Operator command relay, Gateway MCP and A2A ingress, and the external MCP wrapper; [AI Agents and the g8e Governance Boundary](../architecture/agents.md) defines those limits.
+
+## Sovereignty and Accountability
+
+The design keeps execution authority and authoritative evidence at the data owner's boundary:
+
+- The remote Operator initiates its connection to the Gateway over mTLS and exposes no inbound management port.
+- The Operator independently verifies an envelope before changing its host; Gateway admission alone cannot force execution.
+- Governed read and tool outputs pass through bounded scrubbing paths before they are returned. Explicit reversible placeholders can keep registered sensitive values out of earlier reasoning and transport stages and rehydrate them at L5. Scrubbing minimizes disclosure but does not claim that every application prompt or every value is automatically tokenized.
+- Vault and keystore services protect selected persisted content and platform keys. The [Encryption Architecture](../architecture/encryption.md) defines exactly which data is encrypted and where key custody remains deployment-dependent.
+- L5 persists a signed `EXECUTING` receipt before dispatch and a signed final receipt after execution. Governed file mutations also record file evidence when the file ledger is enabled.
+- L5's transaction capability gates internal dispatch, but the operating-system account and external credentials available to an Operator remain explicit deployment responsibilities.
+
+Receipts prove what crossed the governed path. g8e does not sandbox an AI process or attest to actions taken through client-native tools, other MCP servers, direct shell or filesystem access, or any side channel outside that path.
+
+## Current Reference Implementation
+
+The current Go implementation provides a unified MCP endpoint, a separate A2A call route, mTLS authentication, optional JWT authentication with just-in-time user provisioning when JWKS is configured, WebAuthn and CLI approval workflows, platform event streaming over SSE, an MCP streaming transport, pub/sub, PKI, and Document, KV, and Blob stores.
+
+The native registry contains 32 governed tools for database inspection, log filtering, process and host telemetry, network and TLS diagnostics, configuration and filesystem inspection, containers and Kubernetes, cloud metadata, shell execution, remote Operator deployment, and audit receipt queries. The tools are compiled into the Go binary, but operations that invoke host facilities such as a shell, `git`, `kubectl`, service managers, or time-synchronization utilities require those facilities to exist on the target system.
+
+See the [Platform Overview](../architecture/overview.md) for the component and data flow, [Governance](../architecture/governance.md) for exact posture semantics, [Operator Architecture](../architecture/operator.md) for execution behavior and the tool catalog, and the [Protocol Specification](../../protocol/docs/spec.md) for the wire contract.
 
 ## Related Documentation
 
-- [Position Paper](./position_paper.md): The full argument for the sovereignty inversion.
-- [Platform Overview](../architecture/overview.md): High-level system architecture, components, and verification pipeline.
-- [Gateway Architecture](../architecture/gateway.md): Gateway role, capabilities, and port topology.
-- [Operator Architecture](../architecture/operator.md): Operator role, native tools, and local audit.
-- [AI Agents and Governance Boundary](../architecture/agents.md): Untrusted AI client interaction, native tools, and execution flow.
-- [Consensus Architecture](../architecture/consensus.md): L2 multi-signature consensus, enrollment, and deliberation flow.
-- [Authentication](../architecture/auth.md): mTLS, SPIFFE, PKI, WebAuthn, and the five-layer verification sequence.
-- [Encryption](../architecture/encryption.md): Vault architecture, key hierarchy, and cryptographic primitives.
-- [Storage Architecture](../architecture/storage.md): Audit store, ledger, execution vault, and data flow.
-- [Network Architecture](../architecture/network.md): PKI, mTLS, enrollment, and outbound-only connectivity.
-- [Governance](../architecture/governance.md): Five-layer pipeline, posture configurations, and transaction flow.
-- [SSE Streaming](../architecture/sse.md): SSE event stream, real-time approvals, and audit telemetry.
-- [Dashboard Architecture](../architecture/dashboard.md): Operator dashboard, passkey enrollment, and management interface.
-- [Ensemble Architecture](../architecture/ensemble.md): First-party agentic ensemble service and execution workflow.
-- [g8ee Documentation](../ensemble/index.md): Detailed g8ee component documentation — agents, governance, prompts, SSE, storage, and evals.
-- [g8ed Documentation](../dashboard/index.md): Detailed g8ed component documentation — architecture, auth, gateway integration, SSE, and operator surfaces.
-- [Protocol Specification](../../protocol/docs/spec.md): Wire contract, schemas, and verification rules.
-
+- [Position Paper](./position_paper.md): The sovereignty argument and system model behind g8e.
+- [Platform Overview](../architecture/overview.md): Components, trust boundaries, and end-to-end transaction flow.
+- [Governance](../architecture/governance.md): Five-layer verification, posture behavior, and receipt flow.
+- [AI Agents and the g8e Governance Boundary](../architecture/agents.md): Integration paths, governed scope, and bypass limits.
+- [Gateway Architecture](../architecture/gateway.md): Gateway services, authentication surfaces, routing, and local execution.
+- [Operator Architecture](../architecture/operator.md): Outbound execution, local verification, native tools, and audit evidence.
+- [Consensus Architecture](../architecture/consensus.md): Enrollment, deliberation, signatures, and quorum.
+- [Authentication and Authorization](../architecture/auth.md): mTLS, SPIFFE identity, sessions, WebAuthn, and CLI proofs.
+- [Encryption Architecture](../architecture/encryption.md): Vault, keystore, scrubbing, rehydration, and key-custody boundaries.
+- [Storage Architecture](../architecture/storage.md): Audit, commitment, execution-vault, file-ledger, and application storage ownership.
+- [Network Architecture](../architecture/network.md): PKI, mTLS, enrollment, ports, and outbound Operator connectivity.
+- [Protocol Specification](../../protocol/docs/spec.md): Canonical messages, hashes, proofs, and wire rules.

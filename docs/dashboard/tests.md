@@ -65,7 +65,7 @@ HTTP-facing component tests inject or replace `window.serviceClient`. They verif
 
 ## SSE Tests
 
-The SSE manager suite provides a fake `EventSource` and controlled timers. It verifies credentialed construction, session switching, event envelope validation, infrastructure event handling, keepalive expiry, reconnect jitter and limits, browser visibility, failure signals, and cleanup. Chat handler tests separately verify the UI interpretation of typed event payloads.
+The SSE manager suite provides a fake `EventSource` and controlled timers. It verifies credentialed construction, session switching, event envelope dispatch, infrastructure event handling, open and basic error state, active-state reporting, keepalive expiry, and disconnect counter cleanup. It does not verify reconnect timing, jitter, attempt exhaustion, visibility handling, invalid JSON in the message callback, or end-to-end Gateway compatibility. Chat handler tests separately verify the UI interpretation of typed event payloads.
 
 ## Enrollment and mTLS Tests
 

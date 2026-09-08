@@ -1,0 +1,15 @@
+{
+  "fixture_type": "oscal-assessment-results",
+  "schema_version": "1.1.2",
+  "source_url": "https://raw.githubusercontent.com/usnistgov/oscal-content/78650f02ad9321bb7b817846f8fbd4f2bcd620de/examples/ar/json/ifa_assessment-results-example-min.json",
+  "source_repository": "https://github.com/usnistgov/oscal-content",
+  "source_revision": "78650f02ad9321bb7b817846f8fbd4f2bcd620de",
+  "source_blob": "ce59aa13fb410c797e3fc737b1a0e587afe37fda",
+  "source_path": "examples/ar/json/ifa_assessment-results-example-min.json",
+  "license": "NIST License (https://www.nist.gov/open/license)",
+  "byte_length": 9193,
+  "sha256": "8a86008c9fcd697705df99d90ed007ba5fe7f2271314345ab33227a049727d77",
+  "retrieved_at": "2026-09-07",
+  "retrieval_method": "direct download from the official NIST OSCAL content repository at the pinned revision",
+  "integrity_note": "The fixture bytes are checked in unmodified and authenticated by the Tier 1 validator test before structural and semantic validation."
+}

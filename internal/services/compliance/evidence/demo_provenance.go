@@ -35,7 +35,7 @@ func (s *DemoDirectoryProvenanceSource) Artifacts(ctx context.Context, demoID st
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if s == nil || s.projectRoot == "" || !validPathElement(demoID) || demoScope(demoID) == "" {
+	if s == nil || s.projectRoot == "" || !ValidPathElement(demoID) || DemoScope(demoID) == "" {
 		return nil, fmt.Errorf("%w: invalid demo provenance root or demo ID", constants.ErrInvalidEvidenceGraph)
 	}
 	demoDir := filepath.Join(s.projectRoot, constants.DemosDirname, demoID)
@@ -78,7 +78,7 @@ func (s *DemoDirectoryProvenanceSource) Definitions(ctx context.Context, demoID 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if s == nil || s.projectRoot == "" || !validPathElement(demoID) || demoScope(demoID) == "" {
+	if s == nil || s.projectRoot == "" || !ValidPathElement(demoID) || DemoScope(demoID) == "" {
 		return nil, fmt.Errorf("%w: invalid demo provenance root or demo ID", constants.ErrInvalidEvidenceGraph)
 	}
 	assertions, frameworks, _, err := catalog.LoadCanonicalCatalogs()

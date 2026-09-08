@@ -1388,11 +1388,6 @@
         "_python_const": "GEMINI_3_1_PRO",
         "value": "gemini-3.1-pro-preview"
       },
-      "gemma4:26b": {
-        "_go_const": "LLMsOllamaGemma426b",
-        "_python_const": "OLLAMA_GEMMA4_26B",
-        "value": "gemma4:26b"
-      },
       "gemma4:e2b": {
         "_go_const": "LLMsOllamaGemma4E2b",
         "_python_const": "OLLAMA_GEMMA4_E2B",
@@ -1402,11 +1397,6 @@
         "_go_const": "LLMsOllamaGemma4E4b",
         "_python_const": "OLLAMA_GEMMA4_E4B",
         "value": "gemma4:e4b"
-      },
-      "glm-5.1:cloud": {
-        "_go_const": "LLMsOllamaGlm51",
-        "_python_const": "OLLAMA_GLM_5_1",
-        "value": "glm-5.1:cloud"
       },
       "google_gemma-4-E2B-it-Q4_K_M.gguf": {
         "_go_const": "LLMsLlamacppGemma4E2b",
@@ -1437,16 +1427,6 @@
         "_go_const": "LLMsOllamaLlama323b",
         "_python_const": "OLLAMA_LLAMA_3_2_3B",
         "value": "llama3.2:3b"
-      },
-      "nemotron-3-nano:30b": {
-        "_go_const": "LLMsOllamaNemotron330b",
-        "_python_const": "OLLAMA_NEMOTRON_3_30B",
-        "value": "nemotron-3-nano:30b"
-      },
-      "qwen3.5:122b": {
-        "_go_const": "LLMsOllamaQwen35122b",
-        "_python_const": "OLLAMA_QWEN3_5_122B",
-        "value": "qwen3.5:122b"
       },
       "qwen3.5:2b": {
         "_go_const": "LLMsOllamaQwen352b",

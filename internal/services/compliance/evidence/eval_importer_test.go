@@ -237,11 +237,18 @@ func (f *evalImporterFixture) addEncryptedEvidence(t *testing.T, artifactID stri
 }
 
 func (f *evalImporterFixture) addSignedReceipt(t *testing.T) string {
+	return f.addSignedReceiptWithMutation(t, nil)
+}
+
+func (f *evalImporterFixture) addSignedReceiptWithMutation(t *testing.T, mutate func(*operatorv1.ActionReceipt)) string {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signerKeyID := hex.EncodeToString(pub)
-	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-1", TransactionHash: "tx-hash", SignerKeyId: signerKeyID, ExecutedAtUnixMs: 1_700_000_001_000, DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{ActionType: "GOVERNANCE_ACTION"}}}
+	receipt := newEvalVerifiedChainReceipt(signerKeyID)
+	if mutate != nil {
+		mutate(receipt)
+	}
 	payload, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
 	receipt.Signature = hex.EncodeToString(ed25519.Sign(priv, payload))
@@ -258,6 +265,37 @@ func (f *evalImporterFixture) addSignedReceipt(t *testing.T) string {
 	attempt := evalFixtureAttempt{SchemaVersion: "1.40.0", AttemptID: f.attemptID, RunID: f.runID, TaskID: f.taskID, ArmID: "direct", StartedAt: time.Unix(1_700_000_001, 0).UTC(), EndedAt: time.Unix(1_700_000_002, 0).UTC(), ReceiptRefs: []string{receiptID}, GradeRefs: []string{"metric-pass"}}
 	f.writeJSONL(t, constants.EvalRunAttemptsFilename, attempt)
 	return receiptID
+}
+
+func newEvalVerifiedChainReceipt(signerKeyID string) *operatorv1.ActionReceipt {
+	receipt := &operatorv1.ActionReceipt{
+		TransactionId:    "tx-1",
+		TransactionHash:  "tx-hash",
+		Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		StateRootBefore:  "root-before",
+		StateRootAfter:   "root-after",
+		SignerKeyId:      signerKeyID,
+		ExecutedAtUnixMs: 1_700_000_001_000,
+		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
+		L3Status:         operatorv1.L3Status_L3_STATUS_NOT_REQUIRED,
+	}
+	l4ID := receipt.TransactionId + ":L4"
+	l5ID := receipt.TransactionId + ":L5"
+	receipt.DeterministicStageEvidence = []*operatorv1.DeterministicStageEvidence{
+		{StageId: receipt.TransactionId + ":L1", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L1_DOCTRINE, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED, ParentStageId: l4ID},
+		{StageId: receipt.TransactionId + ":L2", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_PROTOCOL_L2, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED, ParentStageId: l4ID},
+		{StageId: receipt.TransactionId + ":L3", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L3_NOTARY, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_NOT_REQUIRED, ParentStageId: l4ID},
+		{StageId: l4ID, Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L4_VERIFICATION, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_VERIFIED, ParentStageId: l5ID},
+		{StageId: receipt.TransactionId + ":PERSIST", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED, ParentStageId: l5ID},
+		{StageId: receipt.TransactionId + ":COMMIT", Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_COMMITMENT_APPEND, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED, ParentStageId: l5ID},
+		{StageId: l5ID, Kind: operatorv1.DeterministicStageKind_DETERMINISTIC_STAGE_KIND_L5_EXECUTION, Outcome: operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_COMPLETED, StateRootBefore: receipt.StateRootBefore, StateRootAfter: receipt.StateRootAfter},
+	}
+	for _, stage := range receipt.DeterministicStageEvidence {
+		stage.TransactionId = receipt.TransactionId
+		stage.TransactionHash = receipt.TransactionHash
+		stage.ActionType = "GOVERNANCE_ACTION"
+	}
+	return receipt
 }
 
 func TestEvalBundleImporter_SourceID(t *testing.T) {
@@ -408,6 +446,44 @@ func TestEvalBundleImporter_Import_LoadsSignedReceipt(t *testing.T) {
 	assert.Contains(t, attempts[0].References, receipts[0].ArtifactID)
 }
 
+func TestEvalBundleImporter_Import_MarksProtocolChainMutationsFailed(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*operatorv1.ActionReceipt)
+	}{
+		{name: "stage ordering", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.DeterministicStageEvidence[0], receipt.DeterministicStageEvidence[1] = receipt.DeterministicStageEvidence[1], receipt.DeterministicStageEvidence[0]
+		}},
+		{name: "transaction binding", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.DeterministicStageEvidence[0].TransactionHash = "other-hash"
+		}},
+		{name: "action binding", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.DeterministicStageEvidence[0].ActionType = "OTHER_ACTION"
+		}},
+		{name: "parent topology", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.DeterministicStageEvidence[0].ParentStageId = receipt.DeterministicStageEvidence[6].StageId
+		}},
+		{name: "stage outcome", mutate: func(receipt *operatorv1.ActionReceipt) {
+			receipt.DeterministicStageEvidence[1].Outcome = operatorv1.DeterministicStageOutcome_DETERMINISTIC_STAGE_OUTCOME_FAILED
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fix := newEvalImporterFixture(t)
+			fix.addSignedReceiptWithMutation(t, tt.mutate)
+			nodes, err := fix.importer().Import(context.Background())
+			if tt.name == "action binding" {
+				assert.ErrorIs(t, err, constants.ErrEvidenceScopeMismatch)
+				return
+			}
+			require.NoError(t, err)
+			receipts := nodesByType(nodes, ArtifactTypeEvalReceipt)
+			require.Len(t, receipts, 1)
+			assert.Equal(t, VerificationStatusFailed, receipts[0].VerificationStatus)
+		})
+	}
+}
+
 func TestEvalBundleImporter_Import_MarksUnsignedReceiptFailed(t *testing.T) {
 	fix := newEvalImporterFixture(t)
 	receipt := &operatorv1.ActionReceipt{TransactionId: "tx-1", SignerKeyId: "invalid", DeterministicStageEvidence: []*operatorv1.DeterministicStageEvidence{{ActionType: "GOVERNANCE_ACTION"}}}
@@ -524,4 +600,62 @@ func nodesByType(nodes []EvidenceNode, artifactType ArtifactType) []EvidenceNode
 		}
 	}
 	return matched
+}
+
+func TestVerifyEvalRun_AcceptsCompleteBundle(t *testing.T) {
+	fix := newEvalImporterFixture(t)
+	verifiedAt := time.Unix(1_700_000_100, 0).UTC()
+
+	report, err := VerifyEvalRun(context.Background(), fix.reader, fix.runID, fix.runDir, verifiedAt)
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+	assert.Equal(t, fix.runID, report.GetReportId())
+	assert.Equal(t, constants.EvalRunVerifierID, report.GetVerifierId())
+	assert.Equal(t, constants.EvalRunVerifierVersion, report.GetVerifierVersion())
+	require.Len(t, report.GetChecks(), 1)
+	assert.Equal(t, constants.EvalRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+	assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_PASSED, report.GetChecks()[0].GetStatus())
+	assert.Contains(t, report.GetChecks()[0].GetEvidenceRefs(), fix.runID)
+	assert.Equal(t, report.GetVerifierId(), report.GetChecks()[0].GetVerifierId())
+	assert.Equal(t, report.GetVerifierVersion(), report.GetChecks()[0].GetVerifierVersion())
+	assert.Equal(t, verifiedAt, report.GetVerifiedAt().AsTime())
+}
+
+func TestVerifyEvalRun_ReportsImporterFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*evalImporterFixture)
+	}{
+		{
+			name: "missing manifest",
+			mutate: func(fix *evalImporterFixture) {
+				delete(fix.reader.files, fix.path(constants.EvalRunManifestFilename))
+			},
+		},
+		{
+			name: "malformed metric",
+			mutate: func(fix *evalImporterFixture) {
+				fix.reader.files[fix.path(constants.EvalRunMetricsFilename)] = []byte(`{"schema_version":`)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fix := newEvalImporterFixture(t)
+			test.mutate(fix)
+
+			report, err := VerifyEvalRun(context.Background(), fix.reader, fix.runID, fix.runDir, time.Unix(1_700_000_100, 0).UTC())
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			require.NotEmpty(t, report.GetFailures())
+			assert.Equal(t, constants.ErrEvidenceImporterFailed.Error(), report.GetFailures()[0].GetCode())
+			require.Len(t, report.GetChecks(), 1)
+			assert.Equal(t, constants.EvalRunVerificationCheck, report.GetChecks()[0].GetCheckId())
+			assert.Equal(t, compliancev1.VerificationCheckStatus_VERIFICATION_CHECK_STATUS_FAILED, report.GetChecks()[0].GetStatus())
+			assert.Equal(t, report.GetFailures(), report.GetChecks()[0].GetFailures())
+		})
+	}
 }

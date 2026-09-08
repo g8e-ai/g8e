@@ -115,7 +115,7 @@ class TestSettingsService:
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
                 primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:27b",
+                primary_model="gemma3:12b",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
@@ -139,7 +139,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:27b", llm_max_tokens=2048
+                primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:12b", llm_max_tokens=2048
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
@@ -167,7 +167,7 @@ class TestSettingsService:
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
                 primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:27b",
+                primary_model="gemma3:12b",
             )
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
@@ -194,7 +194,7 @@ class TestSettingsService:
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
                 primary_provider=LLMProvider.OLLAMA,
-                primary_model="gemma3:27b",
+                primary_model="gemma3:12b",
                 llm_command_gen_passes=5,
                 llm_command_gen_enabled=False,
                 llm_command_gen_auditor=False,
@@ -249,7 +249,7 @@ class TestSettingsService:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         user_settings = G8eeUserSettings(
-            llm=LLMSettings(primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:27b")
+            llm=LLMSettings(primary_provider=LLMProvider.OLLAMA, primary_model="gemma3:12b")
         )
         user_doc = UserSettingsDocument(user_id=user_id, settings=user_settings)
 

@@ -1,279 +1,147 @@
 # Encryption Architecture
 
-Last Updated: 2026-08-30
-Version: v2.1.0
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 ## Overview
 
-g8e enforces mandatory encryption for all sensitive data at rest and mutual TLS (mTLS) for all network communication. The encryption system consists of a per-host vault that provides AES-256-GCM primitives, a three-tier key hierarchy, a platform keystore backed by OS keyrings for secret storage, and a Public Key Infrastructure (PKI) hierarchy for certificate-based mTLS authentication.
+g8e uses two independent encryption systems for data at rest. The vault encrypts sensitive audit, execution, ledger, and token content. The platform keystore encrypts long-lived security material such as signing keys, certificate authority keys, service certificate keys, session secrets, and integration credentials.
 
-All platform mutations are protected by the five-layer governance interlock described in [Governance](./governance.md) and [Authentication & Authorization](./auth.md). See [Authentication & Authorization](./auth.md) for identity enrollment and session management, and [Storage Architecture](./storage.md) for service-specific storage behavior.
+Network encryption is a separate control. The Gateway serves a plain HTTP discovery and bootstrap surface and a TLS 1.3 HTTPS surface. HTTPS routes apply public, browser-session, mTLS, dual-auth, or JWT authentication according to the route; protected workload routes require a verified client certificate and workload identity. See [Network Architecture](./network.md) for PKI, trust bundles, certificate lifetimes, revocation, and port topology.
 
-## Design Principles
+All governed operations pass through the five-layer interlock after transport authentication:
 
-- **Fail-closed**: Encryption is mandatory. The gateway fails to start unless the vault is initialized and unlocked.
-- **Zero-knowledge**: The Data Encryption Key (DEK) is never persisted to disk in plaintext; only its wrapped form is stored.
-- **Key rotation**: Re-keying rotates the DEK wrapper without re-encrypting data.
-- **Mutual authentication**: All network connections require client certificates verified against the platform CA chain.
+1. **L1 Doctrine** applies hard gates, forbidden-pattern matching, and MITRE threat detection.
+2. **L2 Consensus** verifies Ed25519 consensus signatures when the active posture requires them.
+3. **L3 Notary** verifies WebAuthn or signed CLI authorization for mutations when the active posture requires it.
+4. **L4 Warden** verifies signatures, replay protection, expiry, nonces, the transaction hash, and the state Merkle root before dispatch.
+5. **L5 Actuator** rehydrates available protected values at the execution boundary, mints a transaction-scoped capability, dispatches the action, and produces signed receipts.
 
-## Key Hierarchy
+See [Governance](./governance.md) for posture-specific enforcement and [Authentication & Authorization](./auth.md) for principal and session validation.
 
-The vault uses a three-tier key hierarchy:
+## Vault Encryption
 
-1. **Private Key**: A 32-byte hex-encoded value, user-provided or auto-generated, used to unlock the vault.
-2. **Key Encryption Key (KEK)**: Derived from the private key using HKDF-SHA256. It wraps and unwraps the DEK.
-3. **Data Encryption Key (DEK)**: A per-vault random key, wrapped by the KEK before storage. The DEK is used for per-record AES-256-GCM encryption with unique nonces.
+### Key Hierarchy
 
-## Encrypted Data at Rest
+Each runtime tree has one vault. A 32-byte vault private key derives a Key Encryption Key (KEK) through HKDF-SHA256. The KEK wraps a randomly generated 32-byte Data Encryption Key (DEK) with AES Key Wrap. The vault header stores the wrapped DEK and a derived key fingerprint, while the unwrapped DEK remains in process memory only while the vault is open.
 
-The audit store, execution vault, ledger, and encrypted key-value adapter all encrypt content using the vault when it is unlocked. The following data is encrypted at rest:
+The DEK encrypts each protected value with AES-256-GCM and a fresh random nonce. Authentication failures, malformed ciphertext, a locked vault, a missing header, and an incorrect private key return errors rather than producing plaintext or accepting unauthenticated data. Closing the vault clears the in-memory DEK.
 
-- **Audit store**: Event content, command stdout, and command stderr.
-- **Execution vault**: Compressed stdout, compressed stderr, and compressed file diffs.
-- **Ledger**: File content stored in the git-backed ledger with the `.enc` suffix.
-- **Encrypted key-value store**: Sentinel token values.
+The vault private key is a separate file. Possession of the private key and vault header is sufficient to recover the DEK, so operators must back up and protect both. The key file relies on restrictive filesystem permissions and is not stored in the platform keystore.
 
-The gateway refuses to start if the vault cannot be unlocked. Other components that use the vault fail closed when it is locked rather than falling back to plaintext.
+### Protected Content
 
-Platform signing keys, certificate keys, and session secrets are encrypted separately through the [Platform Keystore](#platform-keystore).
+The vault encrypts these content fields before persistence:
 
-## Vault Lifecycle
+- **Audit store:** Event content, command standard output, and command standard error. Searchable metadata such as event type, timestamps, command text, exit status, identifiers, and receipt fields remains structured in the database.
+- **Execution vault:** Command standard output, command standard error, and file-diff content. Encryption occurs before compression. Execution metadata, file paths, hashes, sizes, and workflow identifiers remain structured.
+- **File ledger:** Copies of governed file content are encrypted and stored with an `.enc` suffix when the ledger is enabled. Repository metadata and file-history metadata are not encrypted by the vault.
+- **Scrubbing token store:** Reversible UEI token values are encrypted before entering the canonical key-value store. Token keys and expiry metadata remain visible.
 
-### Initialization
+These controls encrypt selected sensitive fields, not every byte in every database or runtime file. Replay nonces, suspended envelopes, state documents, SSE events, commitment records, and other structured governance data use their service-specific storage protections. See [Storage Architecture](./storage.md) for the complete persistence boundary.
 
-The `g8e vault` commands manage the lifecycle of the per-host vault:
+### Startup and Failure Behavior
 
-- `g8e vault init` generates a new vault with a random key and writes it to the default key path.
-- `g8e vault init --vault-dir <path>` uses a custom vault directory.
-- `g8e vault init --key-path <path>` uses a custom key path.
-- `g8e vault import --key-hex <hex-string>` imports an existing key; `g8e vault import` reads it from stdin.
+Gateway startup creates the vault header and a random private key when no header exists, then opens the vault before initializing services that require encrypted storage. The default vault directory and key path are `.g8e/vault` and `.g8e/vault/key`. `--vault-dir` and `--vault-key` override these paths; `G8E_VAULT_DIR` and `G8E_VAULT_KEY` provide environment overrides when the corresponding flags are unset.
 
-The gateway also auto-initializes a vault on first start if no vault header exists, generating a random key and saving it to the default key path. This enables zero-config startup for development and testing.
+Startup fails if an existing vault key cannot be read, decoded, or matched to the header. The audit store, execution vault, ledger, and encrypted token adapter also reject protected reads or writes while the vault is locked. Execution-vault persistence of command output and file diffs is best-effort after execution, so a persistence failure is logged but does not change the already completed action result.
 
-### Unlocking
+Automatic initialization is convenient for a new runtime tree but is not recovery. If a vault header is missing while ciphertext from an earlier vault remains, startup creates a new key hierarchy that cannot decrypt the old content.
 
-- `g8e vault unlock --key-path <path/to/vault/key>` unlocks an existing vault.
-- `g8e vault unlock --vault-dir <path>` unlocks a vault in a custom directory.
-- `g8e gw start` uses `--vault-key <path>` or the `G8E_VAULT_KEY` environment variable to locate the key, or defaults to the key file in the vault directory.
+## Operating the Vault
 
-### Re-keying
+### Initialize and Back Up
 
-- `g8e vault rekey --key-path <path/to/vault/key> --new-key-path <path/to/new.key>` re-wraps the DEK with a new private key.
-- Update the gateway `--vault-key` flag or `G8E_VAULT_KEY` environment variable to point to the new key and restart the gateway.
+Run `g8e vault init` to create a header and key before the first Gateway start when explicit key custody is required. Use `--vault-dir` and `--key-path` to select paths within the active runtime tree. The command refuses to replace an existing header.
 
-### Status and Reset
+Back up the key with an approved secret-management process. `g8e vault export --key-path <path>` prints the key in hexadecimal form, so its output must be treated as secret material. `g8e vault import --key-path <path>` writes a supplied hexadecimal key but does not create or modify a vault header; the imported key must match the existing header.
 
-- `g8e vault status` shows whether the vault is initialized and unlocked.
-- `g8e vault reset` destroys the vault and all encrypted data. Use `--confirm` to skip the interactive prompt.
+### Validate Access
 
-### Export and Import
+`g8e vault unlock --key-path <path>` opens the vault only for that command invocation and confirms that the key can unwrap the DEK. It does not unlock an already running Gateway or persist an unlocked state. The Gateway opens its own vault during startup, so change its key configuration and restart it when the key path changes.
 
-- `g8e vault export --key-path <path/to/vault/key>` writes the private key in hex to stdout.
-- `g8e vault import` stores a key provided on stdin or via `--key-hex`.
+`g8e vault status` reports whether a header exists and the lock state of the command's new process-local vault instance. It does not inspect the running Gateway, so it normally reports a configured vault as locked.
 
-## Configuration
+### Rotate the Private Key
 
-### Vault Command Flags
+Run `g8e vault rekey --key-path <current-key> --new-key-path <new-key>` while the Gateway is stopped. The command generates a new private key and re-wraps the existing DEK; it does not re-encrypt stored records. After the command succeeds, configure `--vault-key` or `G8E_VAULT_KEY` with the new path, start the Gateway, and verify encrypted reads before removing the old key backup.
 
-- `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
-- `--key-path`: Path to the vault key (default: `.g8e/vault/key`).
-- `--new-key-path`: Path to save the new vault key during rekey (default: `<vault-dir>/key.new`).
-- `--confirm`: Skip interactive confirmation for vault reset.
-- `--key-hex`: Vault key as a hex string for the import command.
+Re-keying invalidates the old private key as soon as the updated header is saved. Keep the operation isolated from concurrent startup and protect the new key output because loss of the new key makes existing vault content unrecoverable.
 
-### Gateway Flags
+### Reset
 
-- `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
-- `--vault-key`: Path to the vault private key (default: `.g8e/vault/key`).
+`g8e vault reset` requires typing `destroy`; `--confirm` skips that prompt. Reset removes the vault header and any database files located directly in the vault directory, which makes content encrypted under that header's DEK unrecoverable. It does not securely erase every ciphertext-bearing database, ledger repository, backup, or exported key, and it does not remove the configured key file.
 
-### Environment Variables
-
-- `G8E_VAULT_DIR`: Override the vault directory.
-- `G8E_VAULT_KEY`: Override the vault key path.
-
-## Security Guarantees
-
-### Data at Rest
-
-- All sensitive data is encrypted with AES-256-GCM.
-- Each record uses a unique nonce to prevent key reuse.
-- The DEK is never written to disk in plaintext; only its wrapped form persists.
-- Private key and KEK material are zeroed from memory when the vault is locked.
-
-### Key Management
-
-- Private keys are 32-byte hex-encoded values.
-- Key fingerprints are derived identifiers with domain separation; they are not secrets.
-- Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
-- Re-keying rotates the DEK wrapper without data loss.
-- Vault reset destroys all data irrecoverably.
-
-### Fail-Closed Behavior
-
-- The gateway fails to start without an unlocked vault.
-- Encryption operations fail if the vault is locked.
-- No component silently falls back to plaintext storage.
-- Errors are logged and propagated to callers.
+Use reset only when abandoning the encrypted data set. Starting the Gateway afterward creates a new vault hierarchy.
 
 ## Platform Keystore
 
-The keystore manages platform secrets using a master encryption key stored in the OS-native credential store. Secrets are encrypted with AES-256-GCM and stored as JSON structures with embedded nonces. It also provides in-memory encryption and decryption for runtime values stored in the database.
+The platform keystore has its own random 32-byte AES-256-GCM master key and does not use the vault DEK. It stores each encrypted secret as an authenticated ciphertext with its nonce and format version. Gateway startup retrieves or creates the master key, enforces private permissions on the secrets directory, and validates the required bootstrap secrets before continuing.
 
-### OS Keyring Support
+The keystore protects:
 
-The keystore uses the OS-native credential store when available, with a file-based fallback:
+- Actuator, Auditor, Notary, Operator, and CLI signing material managed by the Gateway.
+- Root, Hub, Operator, and Gateway Peer CA private keys.
+- Gateway service-certificate private keys and other managed service keys.
+- Session encryption material and stored session tokens.
+- Auditor authentication material.
+- API keys stored for external integrations.
 
-- **Linux**: libsecret/GNOME Keyring, with a file-based fallback.
-- **macOS**: Keychain.
-- **Windows**: File-based storage.
+Public key identifiers and public certificates are not secrets. Client and workload enrollment keys generated outside the Gateway remain under the custody of the component that generated them.
 
-The file-based fallback stores the master key as a base64-encoded file with restrictive permissions and uses atomic file writes.
+### Master-Key Storage
 
-### Encrypted Secrets
+- **Linux:** The keystore uses libsecret when available and falls back to a file in the runtime secrets directory when libsecret is unavailable.
+- **macOS:** The keystore uses Keychain and fails startup if Keychain initialization fails.
+- **Windows:** The keystore uses a file in the runtime secrets directory.
 
-The keystore encrypts the following platform secrets at rest:
+The file keyring stores the base64-encoded master key with private permissions and replaces it atomically. Because the file master key and encrypted secret files occupy the same runtime tree, this fallback protects against casual disclosure and partial-file exposure but does not provide cryptographic separation from an attacker who can read the complete secrets directory. Deployments that require OS-backed non-file key custody use libsecret on Linux or Keychain on macOS and protect runtime backups accordingly.
 
-- Session encryption keys and session tokens.
-- Ed25519 signing keys (actuator, notary, operator, CLI).
-- CA private keys (root, hub, operator, gateway peer).
-- Service certificate private keys.
-- API keys for external service integrations.
-- Auditor HMAC keys.
+Deleting or losing the keystore master key makes keystore-encrypted platform secrets unavailable. On later startup, an absent key may cause a new master key to be generated, but that new key cannot decrypt ciphertext produced with the previous key.
 
-## TLS and mTLS
+## Scrubbing and Execution-Site Rehydration
 
-### PKI Hierarchy
+Scrubbing reduces sensitive content returned from governed reads and downstream tool calls. The active scrubber replaces recognized credentials, private keys, tokens, personal data, network identifiers, and sensitive key-value fields with non-secret labels. Strict mode is enabled by default, output is bounded, and disabling scrubbing suppresses output rather than returning raw content.
 
-The gateway operates a full PKI hierarchy using ECDSA P-256 certificates:
+Reversible UEI placeholders are a separate facility. When a caller explicitly registers a value, the scrubbing service assigns a `{{UEI_N}}` placeholder and persists the encrypted mapping for 24 hours. L5 recursively replaces mapped placeholders in text or JSON payload strings immediately before dispatch, keeping the original value out of earlier reasoning and transport stages.
 
-1. **Root CA**: Self-signed, 10-year validity. Signs all intermediate CAs.
-2. **Hub Intermediate CA**: Signed by Root, 10-year validity. Signs the gateway serving certificate.
-3. **Operator Intermediate CA**: Signed by Root, 10-year validity. Signs operator, CLI, and app leaf certificates.
-4. **Gateway Peer Intermediate CA**: Signed by Root, 10-year validity. Signs gateway peer certificates for multi-host deployments.
+The current automatic output-scrubbing paths use irreversible labels; they do not automatically convert every detected secret into a UEI placeholder. If a payload contains a placeholder whose mapping is absent or expired, rehydration leaves that placeholder unchanged and dispatch can continue. Operators must therefore treat UEI rehydration as an explicit caller-managed workflow, not as a general guarantee that every redacted value is restored.
 
-CA private keys are stored encrypted in the keystore. CA certificates are written to the PKI directory with public read permissions.
+Scrubbed observed-state evidence and encrypted raw execution content serve different purposes. Scrubbing limits disclosure across component boundaries, while vault encryption protects selected persisted content. Neither control replaces route authentication, governance authorization, or host access controls.
 
-### Certificate Types and Validity
+## TLS and Certificate Protection
 
-| Certificate Type | Signing CA | Validity |
-|---|---|---|
-| Gateway serving cert | Hub Intermediate CA | 90 days |
-| Operator leaf cert | Operator Intermediate CA | 7 days |
-| CLI leaf cert | Operator Intermediate CA | 7 days |
-| App enrollment cert | Operator Intermediate CA | 7 days |
-| Gateway peer cert | Gateway Peer Intermediate CA | 90 days |
-| Delegated app credential | Operator Intermediate CA | 1 hour |
+The Gateway creates or loads an ECDSA P-256 Root CA, separate Hub, Operator, and Gateway Peer intermediate CAs, and a 90-day serving certificate. CA and serving private keys are encrypted through the platform keystore; public certificates and trust bundles are written to the PKI tree.
 
-All PKI-issued certificates use ECDSA P-256 keys. Certificate Signing Requests (CSRs) with non-P-256 keys are rejected.
+The HTTPS listener requires TLS 1.3 and verifies a client certificate when one is presented. Route middleware then enforces the route's authentication mode. Public bootstrap and browser routes can complete TLS without a client certificate, browser routes can use a secure web session, protected workload routes require mTLS, and configured MCP or A2A ingress can use JWT authentication. The plain HTTP listener exposes only its restricted discovery, bootstrap, and distribution router.
 
-### mTLS Enforcement
+The Gateway checks certificate revocation and SPIFFE identity and session binding on authenticated requests. It renews a missing or near-expiry serving certificate and regenerates it when newly detected DNS names or IP addresses are absent from its SANs. See [Network Architecture](./network.md) for the current certificate hierarchy and transport behavior, and [Authentication & Authorization](./auth.md) for enrollment, rotation, and session checks.
 
-The gateway exposes two ports:
+## Cryptographic Compliance
 
-- **HTTP port**: Plain HTTP for bootstrap and MCP discovery flows.
-- **HTTPS port**: mTLS for API, enrollment, and public surfaces. It uses TLS 1.3 as the minimum version and requires and verifies a client certificate against a CA pool containing the Root CA and Operator Intermediate CA.
-
-Route-level mTLS enforcement is handled by authentication middleware, which classifies routes by auth mode. See [Authentication & Authorization](./auth.md) for details.
-
-### SPIFFE Workload Identity
-
-All certificates carry SPIFFE URI SANs under the `g8e.local` trust domain. The following identity formats are used:
-
-- **Operator**: `spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`
-- **CLI**: `spiffe://g8e.local/cli/<user_id>/<session_id>`
-- **App**: `spiffe://g8e.local/app/<operator_id>`
-- **Gateway peer**: `spiffe://g8e.local/gateway/<gateway_id>`
-- **Hub**: `spiffe://g8e.local/hub/operator-listen`
-- **User (delegated)**: `spiffe://g8e.local/user/<user_id>`
-
-The SPIFFE URI SAN binds the certificate to a specific workload identity and session.
-
-### Trust Bundles
-
-The gateway generates and maintains the following trust bundles in the PKI directory:
-
-- **Gateway bundle**: Root CA + Hub Intermediate CA + Operator Intermediate CA + Gateway Peer Intermediate CA. Used by clients connecting to the gateway.
-- **Operator bundle**: Root CA + Operator Intermediate CA. Used by operator instances.
-- **Root CA mirror**: Root CA only, for operator clients.
-
-## Certificate Management
-
-### CSR Signing
-
-The gateway signs Certificate Signing Requests (CSRs) for operator, CLI, app, and gateway peer enrollment. CSRs must use ECDSA P-256 keys. The signing process embeds SPIFFE URI SANs based on the enrollment type and session context.
-
-### App Enrollment
-
-External apps can enroll via the PKI API to receive mTLS identity certificates. Enrollment is identity-only by default, giving apps certificates without consensus power. L2 signer capability requires explicit admin registration.
-
-Delegated credentials are short-lived certificates valid for 1 hour that bind both an app identity and a requesting user identity via dual SPIFFE URI SANs. These enable user-scoped app operations without sharing long-term credentials.
-
-### Certificate Revocation
-
-The gateway maintains a revocation list in the canonical database. Revoked certificate serials are checked during mTLS authentication. The gateway generates standard X.509 Certificate Revocation Lists (CRLs) signed by the Operator Intermediate CA.
-
-### Auto-Renewal
-
-The gateway automatically regenerates its serving certificate if it is missing, within 30 days of expiry, or if SAN drift is detected at startup. SAN drift is additive: if the network identity detector discovers IPs or DNS names that are not present in the existing certificate's SAN list, the certificate is regenerated so the new IPs and hostnames are covered. Removal of a name from the host does not trigger regeneration. CA private keys missing from the keystore trigger CA regeneration.
-
-## Migration Path
-
-### From Unencrypted to Encrypted
-
-For existing deployments with unencrypted data:
-
-1. Run `g8e vault init` to create a vault, or let the gateway auto-initialize it on first start.
-2. Unlock the vault with `g8e vault unlock --key-path .g8e/vault/key`.
-3. Restart the gateway with `g8e gw restart`.
-4. New data is encrypted automatically. Existing unencrypted data remains unchanged and is not retroactively re-encrypted.
-
-### Key Rotation
-
-To rotate vault keys, follow the [Re-keying](#re-keying) steps, then update the gateway to reference the new key path and restart.
-
-## Compliance
-
-### FIPS 140-3
-
-g8e links against the Go Cryptographic Module v1.0.0 (CMVP Cert #5247, CAVP A6650) when built with `GOFIPS140=v1.0.0`. FIPS mode is activated at build time; no runtime environment variable is required. The binary runs integrity self-checks and known-answer tests automatically.
-
-The validated algorithms used by g8e include EdDSA (Ed25519) for consensus signatures and receipts, ECDSA P-256 for PKI certificate signatures, AES-256-GCM for vault and keystore encryption, HKDF-SHA256 for key derivation, HMAC-SHA256 for auditor authentication, SHA-256 for transaction hashing, and the X25519MLKEM768 hybrid for FIPS 203 post-quantum TLS key agreement.
-
-X25519 is removed from all TLS configurations because it is not SP 800-56A rev3 compliant. Ed25519 is excluded from TLS certificate signatures; g8e enforces ECDSA P-256 for all PKI-issued certificates and rejects Ed25519-signed certificates at load time.
-
-The `g8e version --fips` command reports FIPS approved mode, enforcement state, and validated module version. It exits non-zero only if approved mode is not active.
-
-See [FIPS 140-3 Compliance](../reference/fips140-3.md) for the complete validated boundary, operating environment matrix, and build and runtime activation details.
+Build-time module selection, runtime approved-mode reporting, strict enforcement, validated algorithms, excluded algorithms, and operating-environment limits are maintained in [FIPS 140-3 Compliance](../reference/fips140-3.md). Run `g8e version --fips` against the deployed binary to inspect its actual approved-mode and enforcement state. Do not infer strict enforcement from the presence of the linked module alone.
 
 ## Troubleshooting
 
-### Vault Locked
+### Gateway Cannot Open the Vault
 
-If services fail with a locked vault error, run `g8e vault status`, unlock with `g8e vault unlock --key-path <path/to/vault/key>`, and restart the gateway with `g8e gw restart`.
+1. Confirm that the configured vault directory contains the expected header.
+2. Confirm that `--vault-key` or `G8E_VAULT_KEY` points to the matching 64-character hexadecimal key file.
+3. Run `g8e vault unlock --vault-dir <dir> --key-path <path>` to validate the pair outside the Gateway process.
+4. Restore the matching header and key from backup if either was replaced. A newly generated key cannot recover old ciphertext.
 
-### Invalid Key
+### Keystore Secrets Cannot Be Decrypted
 
-If vault unlock fails with an invalid key error:
+Confirm that the operating-system credential store is available under the same account that initialized the Gateway. On Linux or Windows file-keyring deployments, restore the matching master-key file and encrypted secret files together. Recreating only the master key does not recover existing secrets.
 
-- Verify the key path is correct.
-- Ensure the key file exists and is readable.
-- Confirm the key is a 32-byte hex-encoded value.
-- If the key is lost, data is unrecoverable.
+### TLS Authentication Fails
 
-### Vault Not Initialized
+Check the server and client certificate validity, the current Gateway trust bundle, certificate revocation state, and the SPIFFE identity's session or application policy. Public HTTPS reachability does not prove that an mTLS-protected route accepts the presented workload identity. See [Authentication & Authorization](./auth.md) for recovery and rotation workflows.
 
-If services fail with an uninitialized vault error, run `g8e vault init`, unlock with `g8e vault unlock --key-path .g8e/vault/key`, and restart the gateway with `g8e gw restart`.
+## Related Documentation
 
-### Certificate Expired
-
-If mTLS connections fail with certificate errors:
-
-- Gateway serving certificates auto-renew within 30 days of expiry.
-- Operator and CLI leaf certificates expire after 7 days and require re-enrollment via `g8e auth enroll user`.
-- Check certificate validity using standard certificate tools.
-
-## Receipt Signature Verification
-
-The gateway signs action receipts with its Actuator Ed25519 private key. The actuator public key is exported to the PKI directory during gateway boot in both PEM and JSON formats with its key ID, enabling offline verification by external harnesses.
-
-Consumers that need to cryptographically verify receipt authenticity must obtain the public key out-of-band by reading the exported files from the gateway PKI directory. The Python protocol package provides `parse_action_receipt`, `canonicalize_action_receipt`, `verify_action_receipt_signature`, and `verify_receipt_persistence_attestation` in `g8e.receipts`; these helpers verify canonical receipt signatures and the final durable-persistence attestation against the caller-supplied trusted Ed25519 public key. Standard cryptographic libraries can implement the same protocol in other languages.
+- [Storage Architecture](./storage.md): Persistence services, encrypted fields, retention, and audit flows.
+- [Network Architecture](./network.md): PKI hierarchy, TLS surfaces, trust bundles, SPIFFE identities, and revocation.
+- [Authentication & Authorization](./auth.md): Enrollment, sessions, route authentication, and identity binding.
+- [Governance](./governance.md): Five-layer verification and posture behavior.
+- [FIPS 140-3 Compliance](../reference/fips140-3.md): Validated boundary, operating environment, and runtime verification.

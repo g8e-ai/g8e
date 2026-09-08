@@ -5,13 +5,20 @@
 
 - [g8e/compliance/v1/compliance.proto](#g8e_compliance_v1_compliance-proto)
     - [AssessmentScope](#g8e-compliance-v1-AssessmentScope)
+    - [BundleArtifact](#g8e-compliance-v1-BundleArtifact)
     - [ChecksumEntry](#g8e-compliance-v1-ChecksumEntry)
     - [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis)
     - [ComplianceEvidenceReference](#g8e-compliance-v1-ComplianceEvidenceReference)
+    - [ComplianceEvidenceTrustPolicy](#g8e-compliance-v1-ComplianceEvidenceTrustPolicy)
+    - [ComplianceEvidenceTrustedKey](#g8e-compliance-v1-ComplianceEvidenceTrustedKey)
     - [ComplianceFinding](#g8e-compliance-v1-ComplianceFinding)
     - [ComplianceGap](#g8e-compliance-v1-ComplianceGap)
     - [ComplianceRemediation](#g8e-compliance-v1-ComplianceRemediation)
+    - [ComplianceReportBundle](#g8e-compliance-v1-ComplianceReportBundle)
     - [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest)
+    - [ComplianceReportSigningKeyMetadata](#g8e-compliance-v1-ComplianceReportSigningKeyMetadata)
+    - [ComplianceReportTrustPolicy](#g8e-compliance-v1-ComplianceReportTrustPolicy)
+    - [ComplianceReportTrustedKey](#g8e-compliance-v1-ComplianceReportTrustedKey)
     - [ComplianceVerificationReport](#g8e-compliance-v1-ComplianceVerificationReport)
     - [ComponentInventoryEntry](#g8e-compliance-v1-ComponentInventoryEntry)
     - [ControlAssertionAssessment](#g8e-compliance-v1-ControlAssertionAssessment)
@@ -36,9 +43,16 @@
     - [FrameworkDefinition](#g8e-compliance-v1-FrameworkDefinition)
     - [FrameworkProfile](#g8e-compliance-v1-FrameworkProfile)
     - [NamedDigest](#g8e-compliance-v1-NamedDigest)
+    - [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure)
+    - [OSCALValidationResult](#g8e-compliance-v1-OSCALValidationResult)
+    - [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity)
+    - [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry)
     - [ReportSignature](#g8e-compliance-v1-ReportSignature)
+    - [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult)
     - [VerificationFailure](#g8e-compliance-v1-VerificationFailure)
     - [VersionedReference](#g8e-compliance-v1-VersionedReference)
+  
+    - [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -77,6 +91,26 @@
 | assessment_window_end | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 | excluded_components | [string](#string) | repeated |  |
 | customer_responsibilities | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-BundleArtifact"></a>
+
+### BundleArtifact
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| bundle_path | [string](#string) |  |  |
+| sha256 | [string](#string) |  |  |
+| media_type | [string](#string) |  |  |
+| profile | [string](#string) |  |  |
+| byte_length | [int64](#int64) |  |  |
+| encryption | [EvidenceEncryptionMetadata](#g8e-compliance-v1-EvidenceEncryptionMetadata) |  |  |
 
 
 
@@ -163,6 +197,47 @@
 
 
 
+<a name="g8e-compliance-v1-ComplianceEvidenceTrustPolicy"></a>
+
+### ComplianceEvidenceTrustPolicy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| policy_id | [string](#string) |  |  |
+| policy_version | [string](#string) |  |  |
+| trusted_keys | [ComplianceEvidenceTrustedKey](#g8e-compliance-v1-ComplianceEvidenceTrustedKey) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceEvidenceTrustedKey"></a>
+
+### ComplianceEvidenceTrustedKey
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key_id | [string](#string) |  |  |
+| public_key | [string](#string) |  |  |
+| public_key_sha256 | [string](#string) |  |  |
+| assessment_id | [string](#string) |  |  |
+| assessor_identity | [string](#string) |  |  |
+| assessed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| valid_from | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| valid_until | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| allowed_scope_refs | [string](#string) | repeated |  |
+| revoked_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-ComplianceFinding"></a>
 
 ### ComplianceFinding
@@ -223,6 +298,27 @@
 
 
 
+<a name="g8e-compliance-v1-ComplianceReportBundle"></a>
+
+### ComplianceReportBundle
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| manifest | [ComplianceReportManifest](#g8e-compliance-v1-ComplianceReportManifest) |  |  |
+| artifacts | [BundleArtifact](#g8e-compliance-v1-BundleArtifact) | repeated |  |
+| analysis | [ComplianceAnalysis](#g8e-compliance-v1-ComplianceAnalysis) |  |  |
+| profiles | [FrameworkProfile](#g8e-compliance-v1-FrameworkProfile) | repeated |  |
+| rendered_formats | [RenderedFormatEntry](#g8e-compliance-v1-RenderedFormatEntry) | repeated |  |
+| checksum_root | [string](#string) |  |  |
+| checksum_root_signature | [ReportSignature](#g8e-compliance-v1-ReportSignature) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-ComplianceReportManifest"></a>
 
 ### ComplianceReportManifest
@@ -244,6 +340,66 @@
 | evidence_index_ref | [string](#string) |  |  |
 | checksum_root | [string](#string) |  |  |
 | signature | [ReportSignature](#g8e-compliance-v1-ReportSignature) |  |  |
+| bundle_profile | [string](#string) |  |  |
+| manifest_sha256 | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportSigningKeyMetadata"></a>
+
+### ComplianceReportSigningKeyMetadata
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key_id | [string](#string) |  |  |
+| algorithm | [string](#string) |  |  |
+| purpose | [string](#string) |  |  |
+| public_key_sha256 | [string](#string) |  |  |
+| created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| expires_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportTrustPolicy"></a>
+
+### ComplianceReportTrustPolicy
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| policy_id | [string](#string) |  |  |
+| policy_version | [string](#string) |  |  |
+| trusted_keys | [ComplianceReportTrustedKey](#g8e-compliance-v1-ComplianceReportTrustedKey) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-ComplianceReportTrustedKey"></a>
+
+### ComplianceReportTrustedKey
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| metadata | [ComplianceReportSigningKeyMetadata](#g8e-compliance-v1-ComplianceReportSigningKeyMetadata) |  |  |
+| public_key | [string](#string) |  |  |
+| assessment_id | [string](#string) |  |  |
+| assessor_identity | [string](#string) |  |  |
+| assessed_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| allowed_scope_refs | [string](#string) | repeated |  |
+| revoked_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
 
 
 
@@ -265,6 +421,7 @@
 | verifier_version | [string](#string) |  |  |
 | failures | [VerificationFailure](#g8e-compliance-v1-VerificationFailure) | repeated |  |
 | reproduced_checksum_root | [string](#string) |  |  |
+| checks | [VerificationCheckResult](#g8e-compliance-v1-VerificationCheckResult) | repeated |  |
 
 
 
@@ -422,6 +579,7 @@
 | status_filter | [string](#string) |  |  |
 | control_assessment_refs | [string](#string) | repeated |  |
 | description | [string](#string) |  |  |
+| control_refs | [FrameworkControlReference](#g8e-compliance-v1-FrameworkControlReference) | repeated |  |
 
 
 
@@ -796,6 +954,78 @@
 
 
 
+<a name="g8e-compliance-v1-OSCALValidationFailure"></a>
+
+### OSCALValidationFailure
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| code | [string](#string) |  |  |
+| message | [string](#string) |  |  |
+| instance_ptr | [string](#string) |  |  |
+| schema_ptr | [string](#string) |  |  |
+| keyword | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-OSCALValidationResult"></a>
+
+### OSCALValidationResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator | [OSCALValidatorIdentity](#g8e-compliance-v1-OSCALValidatorIdentity) |  |  |
+| valid | [bool](#bool) |  |  |
+| structural_failures | [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure) | repeated |  |
+| semantic_failures | [OSCALValidationFailure](#g8e-compliance-v1-OSCALValidationFailure) | repeated |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-OSCALValidatorIdentity"></a>
+
+### OSCALValidatorIdentity
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| validator_id | [string](#string) |  |  |
+| validator_version | [string](#string) |  |  |
+| schema_version | [string](#string) |  |  |
+| schema_digest | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-RenderedFormatEntry"></a>
+
+### RenderedFormatEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| format | [string](#string) |  |  |
+| media_type | [string](#string) |  |  |
+| bundle_path | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="g8e-compliance-v1-ReportSignature"></a>
 
 ### ReportSignature
@@ -808,6 +1038,26 @@
 | algorithm | [string](#string) |  |  |
 | signed_sha256 | [string](#string) |  |  |
 | signature | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="g8e-compliance-v1-VerificationCheckResult"></a>
+
+### VerificationCheckResult
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| check_id | [string](#string) |  |  |
+| status | [VerificationCheckStatus](#g8e-compliance-v1-VerificationCheckStatus) |  |  |
+| evidence_refs | [string](#string) | repeated |  |
+| verifier_id | [string](#string) |  |  |
+| verifier_version | [string](#string) |  |  |
+| failures | [VerificationFailure](#g8e-compliance-v1-VerificationFailure) | repeated |  |
 
 
 
@@ -847,6 +1097,19 @@
 
 
  
+
+
+<a name="g8e-compliance-v1-VerificationCheckStatus"></a>
+
+### VerificationCheckStatus
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| VERIFICATION_CHECK_STATUS_UNSPECIFIED | 0 |  |
+| VERIFICATION_CHECK_STATUS_PASSED | 1 |  |
+| VERIFICATION_CHECK_STATUS_FAILED | 2 |  |
+
 
  
 
