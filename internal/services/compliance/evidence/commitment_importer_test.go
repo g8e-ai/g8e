@@ -26,6 +26,7 @@ type commitmentFixture struct {
 	attestation *operatorv1.CommitmentAttestation
 	body        []byte
 	binding     CommitmentImportBinding
+	verifiedAt  time.Time
 }
 
 func newCommitmentFixture(t *testing.T) *commitmentFixture {
@@ -69,6 +70,7 @@ func newCommitmentFixture(t *testing.T) *commitmentFixture {
 			ScenarioID:    "scenario-1",
 			TransactionID: attestation.TransactionId,
 		},
+		verifiedAt: time.Unix(1_700_000_100, 0).UTC(),
 	}
 }
 
@@ -83,13 +85,12 @@ func (f *commitmentFixture) replaceAttestation(t *testing.T) {
 
 func TestCommitmentImporter_SourceID(t *testing.T) {
 	fixture := newCommitmentFixture(t)
-	assert.Equal(t, "commitment", NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).SourceID())
+	assert.Equal(t, "commitment", NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).SourceID())
 }
 
 func TestCommitmentImporter_Import_VerifiesCanonicalAttestation(t *testing.T) {
 	fixture := newCommitmentFixture(t)
-	importer := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding)
-	importer.nowFunc = func() time.Time { return time.Unix(1_700_000_100, 0).UTC() }
+	importer := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt)
 	nodes, err := importer.Import(context.Background())
 	require.NoError(t, err)
 	require.Len(t, nodes, 1)
@@ -106,7 +107,7 @@ func TestCommitmentImporter_Import_VerifiesCanonicalAttestation(t *testing.T) {
 	assert.Equal(t, constants.CommitmentEvidenceVerifierID, node.VerifierID)
 	assert.Equal(t, constants.CommitmentEvidenceVerifierVersion, node.VerifierVersion)
 	assert.Equal(t, time.UnixMilli(fixture.attestation.CommittedAtUnixMs), node.ProducedAt)
-	assert.Equal(t, time.Unix(1_700_000_100, 0).UTC(), node.VerifiedAt)
+	assert.Equal(t, fixture.verifiedAt, node.VerifiedAt)
 	assert.Equal(t, fixture.body, node.CanonicalBytes)
 	assert.Empty(t, node.References)
 }
@@ -114,7 +115,7 @@ func TestCommitmentImporter_Import_VerifiesCanonicalAttestation(t *testing.T) {
 func TestCommitmentImporter_Import_PreservesUnverifiedStatusWithoutAssessedKey(t *testing.T) {
 	fixture := newCommitmentFixture(t)
 	fixture.trust.keys = map[string]ed25519.PublicKey{}
-	nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(context.Background())
+	nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 	require.NoError(t, err)
 	require.Len(t, nodes, 1)
 	assert.Equal(t, VerificationStatusUnverified, nodes[0].VerificationStatus)
@@ -134,7 +135,7 @@ func TestCommitmentImporter_Import_MarksCryptographicMutationsFailed(t *testing.
 			fixture := newCommitmentFixture(t)
 			test.mutate(fixture)
 			fixture.replaceAttestation(t)
-			nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(context.Background())
+			nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 			require.NoError(t, err)
 			require.Len(t, nodes, 1)
 			assert.Equal(t, VerificationStatusFailed, nodes[0].VerificationStatus)
@@ -150,13 +151,14 @@ func TestCommitmentImporter_Import_RejectsInvalidConfiguration(t *testing.T) {
 		importer *CommitmentImporter
 	}{
 		{name: "nil importer", importer: nil},
-		{name: "nil reader", importer: NewCommitmentImporter(nil, fixture.trust, fixture.binding)},
-		{name: "nil trust", importer: NewCommitmentImporter(fixture.reader, nil, fixture.binding)},
-		{name: "invalid reference", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: "invalid", Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID})},
-		{name: "unsafe path", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: filepath.Join(constants.PathParentDir, constants.CommitmentsDirname), ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID})},
-		{name: "empty scope", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID})},
-		{name: "empty run", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, TransactionID: fixture.binding.TransactionID})},
-		{name: "empty transaction", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID})},
+		{name: "nil reader", importer: NewCommitmentImporter(nil, fixture.trust, fixture.binding, fixture.verifiedAt)},
+		{name: "nil trust", importer: NewCommitmentImporter(fixture.reader, nil, fixture.binding, fixture.verifiedAt)},
+		{name: "missing verification time", importer: NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, time.Time{})},
+		{name: "invalid reference", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: "invalid", Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID}, fixture.verifiedAt)},
+		{name: "unsafe path", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: filepath.Join(constants.PathParentDir, constants.CommitmentsDirname), ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID}, fixture.verifiedAt)},
+		{name: "empty scope", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, RunID: fixture.binding.RunID, TransactionID: fixture.binding.TransactionID}, fixture.verifiedAt)},
+		{name: "empty run", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, TransactionID: fixture.binding.TransactionID}, fixture.verifiedAt)},
+		{name: "empty transaction", importer: NewCommitmentImporter(fixture.reader, fixture.trust, CommitmentImportBinding{Reference: fixture.binding.Reference, Path: fixture.binding.Path, ScopeID: fixture.binding.ScopeID, RunID: fixture.binding.RunID}, fixture.verifiedAt)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -191,7 +193,7 @@ func TestCommitmentImporter_Import_RejectsContentAndBindingMutations(t *testing.
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newCommitmentFixture(t)
 			test.mutate(t, fixture)
-			_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(context.Background())
+			_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 			require.Error(t, err)
 			assert.ErrorIs(t, err, test.targetErr)
 		})
@@ -202,7 +204,7 @@ func TestCommitmentImporter_Import_PropagatesTrustAssessmentFailure(t *testing.T
 	fixture := newCommitmentFixture(t)
 	trustErr := fmt.Errorf("commitment trust unavailable")
 	fixture.trust.err = trustErr
-	_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(context.Background())
+	_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceTrustNotAssessed)
 	assert.ErrorIs(t, err, trustErr)
@@ -211,7 +213,7 @@ func TestCommitmentImporter_Import_PropagatesTrustAssessmentFailure(t *testing.T
 func TestCommitmentImporter_Import_WrapsReadFailure(t *testing.T) {
 	fixture := newCommitmentFixture(t)
 	readErr := fmt.Errorf("commitment source unavailable")
-	_, err := NewCommitmentImporter(&failingArtifactReader{err: readErr}, fixture.trust, fixture.binding).Import(context.Background())
+	_, err := NewCommitmentImporter(&failingArtifactReader{err: readErr}, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrEvidenceImporterFailed)
 	assert.ErrorIs(t, err, readErr)
@@ -221,13 +223,13 @@ func TestCommitmentImporter_Import_RespectsCancellation(t *testing.T) {
 	fixture := newCommitmentFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(ctx)
+	_, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(ctx)
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestCommitmentImporter_Import_ProducesValidGraph(t *testing.T) {
 	fixture := newCommitmentFixture(t)
-	nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding).Import(context.Background())
+	nodes, err := NewCommitmentImporter(fixture.reader, fixture.trust, fixture.binding, fixture.verifiedAt).Import(context.Background())
 	require.NoError(t, err)
 	graph := NewEvidenceGraph(constants.DemoRunMaxArtifactBytes, []string{constants.MediaTypeJSON})
 	for _, node := range nodes {

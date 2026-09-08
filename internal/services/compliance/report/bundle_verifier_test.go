@@ -13,6 +13,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path"
 	"sort"
@@ -26,15 +27,30 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
+	"github.com/g8e-ai/g8e/v2/internal/services/governance"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
+	operatorv1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/operator/v1"
 )
 
 type bundleArtifactReaderStub struct {
 	bodies  map[string][]byte
 	listErr error
 	readErr error
+}
+
+type assessedEvidenceSignerStub struct {
+	keys map[string]ed25519.PublicKey
+}
+
+func (s *assessedEvidenceSignerStub) GetTrustedSignerPublicKey(_ context.Context, keyID string) (ed25519.PublicKey, error) {
+	key, exists := s.keys[keyID]
+	if !exists {
+		return nil, constants.ErrTrustedSignerKeyNotFound
+	}
+	return key, nil
 }
 
 type authorizedPlaintextReaderStub struct {
@@ -240,6 +256,147 @@ func signedBundleVerificationFixtureWithRequest(t *testing.T, mutate func(*Bundl
 	return result.Bundle, reader, policy, request.GeneratedAt.Add(time.Hour)
 }
 
+type ksiSourcePaths struct {
+	history string
+	results string
+}
+
+func addKSIHistorySourceFixture(t *testing.T, request *BundleAssemblyRequest) ksiSourcePaths {
+	t.Helper()
+	runID := "ksi-run-1"
+	binding := compliance.EvaluationBinding{
+		ScopeID:            request.ScopeRef,
+		RunID:              runID,
+		WindowStartUnixMs:  request.GeneratedAt.Add(-time.Hour).UnixMilli(),
+		WindowEndUnixMs:    request.GeneratedAt.UnixMilli(),
+		EvaluatorID:        constants.KSIEvaluatorID,
+		EvaluatorVersion:   constants.KSIEvaluatorVersion,
+		MethodDefinitionID: constants.KSIMethodDefinitionVersion,
+		AssertionAssessments: compliance.AssertionAssessmentScope{
+			AssessmentIDs: []string{"assessment-1"},
+		},
+	}
+	resultSet := compliance.KSIResultSet{
+		Class:         compliance.ClassC,
+		EvaluatedAtMs: request.GeneratedAt.UnixMilli(),
+		Binding:       binding,
+		Results: []compliance.KSIResult{{
+			ID:                  "KSI-CMT-01",
+			Status:              compliance.KSIStatusSatisfied,
+			Outcome:             compliance.KSIOutcomeSatisfied,
+			LastValidatedUnixMs: request.GeneratedAt.Add(-time.Second).UnixMilli(),
+			MethodCount:         2,
+			Binding:             binding,
+		}},
+	}
+	body, err := json.Marshal(resultSet)
+	require.NoError(t, err)
+	digest := sha256.Sum256(body)
+	digestHex := hex.EncodeToString(digest[:])
+	paths := ksiSourcePaths{
+		history: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, request.ScopeRef, runID, constants.ComplianceBundleKSIHistoryFilename),
+		results: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, request.ScopeRef, runID, constants.ComplianceBundleKSIResultsFilename),
+	}
+	request.Analysis.EvidenceResources = append(request.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{
+		ArtifactId:         constants.KSIResultReferencePrefix + ":sha256:" + digestHex,
+		ArtifactType:       string(evidence.ArtifactTypeKSIResult),
+		Sha256:             digestHex,
+		MediaType:          constants.MediaTypeJSON,
+		SchemaRef:          "g8e.compliance.KSIResultSet@" + constants.KSIHistorySchemaVersion,
+		ProducerIdentity:   constants.KSIEvaluatorID,
+		ProducedAt:         timestamppb.New(request.GeneratedAt),
+		ScopeId:            request.ScopeRef,
+		RunId:              runID,
+		VerificationStatus: string(evidence.VerificationStatusUnverified),
+		BundlePath:         paths.history,
+	})
+	request.SourceArtifacts = append(request.SourceArtifacts,
+		SourceArtifact{BundlePath: paths.history, Body: body, MediaType: constants.MediaTypeJSON},
+		SourceArtifact{BundlePath: paths.results, Body: body, MediaType: constants.MediaTypeJSON},
+	)
+	evidenceIndexPath := path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename)
+	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
+	require.NoError(t, err)
+	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	require.NoError(t, err)
+	return paths
+}
+
+type commitmentSourceFixture struct {
+	bundlePath  string
+	privateKey  ed25519.PrivateKey
+	attestation *operatorv1.CommitmentAttestation
+	trust       *assessedEvidenceSignerStub
+}
+
+func addCommitmentSourceFixture(t *testing.T, request *BundleAssemblyRequest) commitmentSourceFixture {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	keyID := hex.EncodeToString(publicKey)
+	attestation := &operatorv1.CommitmentAttestation{
+		TransactionId:               "transaction-1",
+		TransactionHash:             strings.Repeat("1", 64),
+		PriorCommitmentHash:         strings.Repeat("2", 64),
+		StateRootAtCommit:           strings.Repeat("3", 64),
+		L2SignatureDigest:           strings.Repeat("4", 64),
+		WardenIntentSignatureDigest: strings.Repeat("5", 64),
+		HumanSignatureDigest:        strings.Repeat("6", 64),
+		ActionType:                  "FILE_EDIT",
+		TargetResource:              constants.DemosTargetDataDir,
+		CommittedAtUnixMs:           request.GeneratedAt.Add(-time.Second).UnixMilli(),
+		AuditorKeyId:                keyID,
+	}
+	signCommitmentFixture(t, attestation, privateKey)
+	body, err := compliancev1.MarshalCanonical(attestation)
+	require.NoError(t, err)
+	digest := sha256.Sum256(body)
+	digestHex := hex.EncodeToString(digest[:])
+	bundlePath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, request.ScopeRef, "commitment-run-1", constants.ComplianceBundleCommitmentsFilename)
+	request.Analysis.EvidenceResources = append(request.Analysis.EvidenceResources, &compliancev1.ComplianceEvidenceReference{
+		ArtifactId:         constants.CommitmentReferencePrefix + ":sha256:" + digestHex,
+		ArtifactType:       string(evidence.ArtifactTypeCommitment),
+		Sha256:             digestHex,
+		MediaType:          constants.MediaTypeJSON,
+		SchemaRef:          "g8e.operator.v1.CommitmentAttestation",
+		ProducerIdentity:   keyID,
+		ProducedAt:         timestamppb.New(time.UnixMilli(attestation.GetCommittedAtUnixMs())),
+		ScopeId:            request.ScopeRef,
+		RunId:              "commitment-run-1",
+		AttemptId:          "attempt-1",
+		ScenarioId:         "scenario-1",
+		TransactionId:      attestation.GetTransactionId(),
+		VerificationStatus: string(evidence.VerificationStatusVerified),
+		VerifierId:         constants.CommitmentEvidenceVerifierID,
+		VerifierVersion:    constants.CommitmentEvidenceVerifierVersion,
+		VerifiedAt:         timestamppb.New(request.GeneratedAt),
+		BundlePath:         bundlePath,
+	})
+	sort.Slice(request.Analysis.EvidenceResources, func(i, j int) bool {
+		return request.Analysis.EvidenceResources[i].GetArtifactId() < request.Analysis.EvidenceResources[j].GetArtifactId()
+	})
+	request.SourceArtifacts = append(request.SourceArtifacts, SourceArtifact{BundlePath: bundlePath, Body: body, MediaType: constants.MediaTypeJSON})
+	evidenceIndexPath := path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename)
+	evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
+	require.NoError(t, err)
+	replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
+	request.RenderedFormats, err = renderAllFormats(request.Analysis)
+	require.NoError(t, err)
+	return commitmentSourceFixture{bundlePath: bundlePath, privateKey: privateKey, attestation: attestation, trust: &assessedEvidenceSignerStub{keys: map[string]ed25519.PublicKey{keyID: publicKey}}}
+}
+
+func signCommitmentFixture(t *testing.T, attestation *operatorv1.CommitmentAttestation, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	attestation.Hash = ""
+	attestation.Signature = ""
+	payload, err := governance.CanonicalizeCommitmentAttestation(attestation)
+	require.NoError(t, err)
+	digest := sha256.Sum256(payload)
+	attestation.Hash = hex.EncodeToString(digest[:])
+	attestation.Signature = hex.EncodeToString(ed25519.Sign(privateKey, payload))
+}
+
 func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *testing.T) {
 	bundle, reader, policy, verifiedAt := signedBundleVerificationFixture(t)
 
@@ -265,6 +422,192 @@ func TestVerifyComplianceReportBundle_AcceptsCompleteSignedBundleOffline(t *test
 		assert.Equal(t, report.GetVerifierId(), check.GetVerifierId())
 		assert.Equal(t, report.GetVerifierVersion(), check.GetVerifierVersion())
 		assert.Empty(t, check.GetFailures())
+	}
+}
+
+func TestVerifyComplianceReportBundle_RejectsSignedCommitmentThatDiffersFromAnalysis(t *testing.T) {
+	var fixture commitmentSourceFixture
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		fixture = addCommitmentSourceFixture(t, request)
+		fixture.attestation.TargetResource += "-substituted"
+		signCommitmentFixture(t, fixture.attestation, fixture.privateKey)
+		body, err := compliancev1.MarshalCanonical(fixture.attestation)
+		require.NoError(t, err)
+		replaceSourceArtifactBody(t, request.SourceArtifacts, fixture.bundlePath, body)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
+	assertVerificationFailure(t, report, constants.ErrInvalidEvidenceGraph, fixture.bundlePath)
+}
+
+func TestVerifyComplianceReportBundle_AcceptsCompleteCommitmentSource(t *testing.T) {
+	var fixture commitmentSourceFixture
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		fixture = addCommitmentSourceFixture(t, request)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+}
+
+func TestVerifyComplianceReportBundle_RejectsMissingCommitmentSource(t *testing.T) {
+	var fixture commitmentSourceFixture
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		fixture = addCommitmentSourceFixture(t, request)
+		request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, fixture.bundlePath)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assertVerificationFailure(t, report, constants.ErrInvalidEvidenceGraph, fixture.bundlePath)
+}
+
+func TestVerifyComplianceReportBundle_RejectsCommitmentWithoutAssessedEvidenceTrust(t *testing.T) {
+	var fixture commitmentSourceFixture
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		fixture = addCommitmentSourceFixture(t, request)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assertVerificationFailure(t, report, constants.ErrEvidenceTrustNotAssessed, fixture.bundlePath)
+}
+
+func TestVerifyComplianceReportBundle_RejectsCommitmentWithUnassessedSigner(t *testing.T) {
+	var fixture commitmentSourceFixture
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		fixture = addCommitmentSourceFixture(t, request)
+		fixture.trust.keys = map[string]ed25519.PublicKey{}
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.False(t, report.GetValid())
+	assertVerificationFailure(t, report, constants.ErrEvidenceTrustNotAssessed, fixture.bundlePath)
+}
+
+func TestVerifyComplianceReportBundle_RejectsCommitmentAnalysisBindingMutations(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*compliancev1.ComplianceEvidenceReference)
+	}{
+		{name: "run differs from source inventory", mutate: func(resource *compliancev1.ComplianceEvidenceReference) { resource.RunId = "other-run" }},
+		{name: "transaction differs from attestation", mutate: func(resource *compliancev1.ComplianceEvidenceReference) { resource.TransactionId = "other-transaction" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var fixture commitmentSourceFixture
+			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+				fixture = addCommitmentSourceFixture(t, request)
+				for _, resource := range request.Analysis.GetEvidenceResources() {
+					if resource.GetArtifactType() == string(evidence.ArtifactTypeCommitment) {
+						test.mutate(resource)
+						break
+					}
+				}
+				evidenceIndexPath := path.Join(constants.ComplianceBundleEvidenceDirname, constants.ComplianceBundleEvidenceIndexFilename)
+				evidenceIndex, err := marshalCanonicalMessages(request.Analysis.GetEvidenceResources())
+				require.NoError(t, err)
+				replaceSourceArtifactBody(t, request.SourceArtifacts, evidenceIndexPath, evidenceIndex)
+				request.RenderedFormats, err = renderAllFormats(request.Analysis)
+				require.NoError(t, err)
+			})
+
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, EvidenceTrust: fixture.trust, VerifiedAt: verifiedAt})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			assertVerificationFailure(t, report, constants.ErrInvalidEvidenceGraph, fixture.bundlePath)
+		})
+	}
+}
+
+func TestVerifyComplianceReportBundle_AcceptsCompleteKSIResultAndHistorySources(t *testing.T) {
+	bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+		addKSIHistorySourceFixture(t, request)
+	})
+
+	report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+	require.NoError(t, err)
+	assert.True(t, report.GetValid())
+	assert.Empty(t, report.GetFailures())
+}
+
+func TestVerifyComplianceReportBundle_RejectsSignedKSISourceMutations(t *testing.T) {
+	tests := []struct {
+		name          string
+		resultsSource bool
+	}{
+		{name: "history snapshot differs from analysis"},
+		{name: "current results differ from latest history", resultsSource: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var targetPath string
+			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+				paths := addKSIHistorySourceFixture(t, request)
+				targetPath = paths.history
+				if test.resultsSource {
+					targetPath = paths.results
+				}
+				resultSet := compliance.KSIResultSet{}
+				require.NoError(t, json.Unmarshal(sourceArtifactBody(t, request.SourceArtifacts, targetPath), &resultSet))
+				resultSet.Results[0].LastValidatedUnixMs--
+				body, err := json.Marshal(resultSet)
+				require.NoError(t, err)
+				replaceSourceArtifactBody(t, request.SourceArtifacts, targetPath, body)
+				if !test.resultsSource {
+					replaceSourceArtifactBody(t, request.SourceArtifacts, paths.results, body)
+				}
+			})
+
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid(), "REGRESSION: AFTER FIX")
+			assertVerificationFailure(t, report, constants.ErrInvalidEvidenceGraph, targetPath)
+		})
+	}
+}
+
+func TestVerifyComplianceReportBundle_RejectsIncompleteKSISourceInventories(t *testing.T) {
+	tests := []struct {
+		name          string
+		removeResults bool
+	}{
+		{name: "missing history"},
+		{name: "missing current results", removeResults: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var missingPath string
+			bundle, reader, policy, verifiedAt := signedBundleVerificationFixtureWithRequest(t, func(request *BundleAssemblyRequest) {
+				paths := addKSIHistorySourceFixture(t, request)
+				missingPath = paths.history
+				if test.removeResults {
+					missingPath = paths.results
+				}
+				request.SourceArtifacts = removeSourceArtifact(request.SourceArtifacts, missingPath)
+			})
+
+			report, err := VerifyComplianceReportBundle(context.Background(), BundleVerificationRequest{Bundle: bundle, Reader: reader, TrustPolicy: policy, VerifiedAt: verifiedAt})
+
+			require.NoError(t, err)
+			assert.False(t, report.GetValid())
+			assertVerificationFailure(t, report, constants.ErrInvalidEvidenceGraph, missingPath)
+		})
 	}
 }
 
@@ -381,6 +724,16 @@ func replaceSourceArtifactBody(t *testing.T, artifacts []SourceArtifact, bundleP
 		}
 	}
 	require.FailNow(t, "source artifact is missing", bundlePath)
+}
+
+func removeSourceArtifact(artifacts []SourceArtifact, bundlePath string) []SourceArtifact {
+	result := make([]SourceArtifact, 0, len(artifacts)-1)
+	for _, artifact := range artifacts {
+		if artifact.BundlePath != bundlePath {
+			result = append(result, artifact)
+		}
+	}
+	return result
 }
 
 func cloneAssertionAssessments(values []*compliancev1.ControlAssertionAssessment) []*compliancev1.ControlAssertionAssessment {

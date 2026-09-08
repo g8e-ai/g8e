@@ -26,14 +26,14 @@ type CommitmentImportBinding struct {
 }
 
 type CommitmentImporter struct {
-	reader  ArtifactReader
-	trust   AssessedSignerSource
-	binding CommitmentImportBinding
-	nowFunc func() time.Time
+	reader     ArtifactReader
+	trust      AssessedSignerSource
+	binding    CommitmentImportBinding
+	verifiedAt time.Time
 }
 
-func NewCommitmentImporter(reader ArtifactReader, trust AssessedSignerSource, binding CommitmentImportBinding) *CommitmentImporter {
-	return &CommitmentImporter{reader: reader, trust: trust, binding: binding, nowFunc: time.Now}
+func NewCommitmentImporter(reader ArtifactReader, trust AssessedSignerSource, binding CommitmentImportBinding, verifiedAt time.Time) *CommitmentImporter {
+	return &CommitmentImporter{reader: reader, trust: trust, binding: binding, verifiedAt: verifiedAt}
 }
 
 func (i *CommitmentImporter) SourceID() string {
@@ -41,8 +41,8 @@ func (i *CommitmentImporter) SourceID() string {
 }
 
 func (i *CommitmentImporter) Import(ctx context.Context) ([]EvidenceNode, error) {
-	if i == nil || i.reader == nil || i.trust == nil || !validCommitmentBinding(i.binding) {
-		return nil, fmt.Errorf("%w: reader, assessed trust, content reference, path, scope, run, and transaction are required", constants.ErrInvalidEvidenceGraph)
+	if i == nil || i.reader == nil || i.trust == nil || !validCommitmentBinding(i.binding) || i.verifiedAt.IsZero() {
+		return nil, fmt.Errorf("%w: reader, assessed trust, content reference, path, scope, run, transaction, and verification time are required", constants.ErrInvalidEvidenceGraph)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (i *CommitmentImporter) Import(ctx context.Context) ([]EvidenceNode, error)
 	if attestation.GetTransactionId() != i.binding.TransactionID {
 		return nil, fmt.Errorf("%w: commitment transaction does not match import binding", constants.ErrEvidenceScopeMismatch)
 	}
-	status, verifierID, verifierVersion, verifiedAt, err := verifyAssessedCommitment(ctx, i.trust, attestation, i.nowFunc)
+	status, verifierID, verifierVersion, verifiedAt, err := verifyAssessedCommitment(ctx, i.trust, attestation, i.verifiedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func validCommitmentAttestation(attestation *operatorv1.CommitmentAttestation) b
 	return attestation.GetTransactionId() != "" && attestation.GetTransactionHash() != "" && attestation.GetStateRootAtCommit() != "" && attestation.GetWardenIntentSignatureDigest() != "" && attestation.GetActionType() != "" && attestation.GetTargetResource() != "" && attestation.GetCommittedAtUnixMs() > 0 && attestation.GetAuditorKeyId() != "" && attestation.GetSignature() != "" && attestation.GetHash() != ""
 }
 
-func verifyAssessedCommitment(ctx context.Context, trust AssessedSignerSource, attestation *operatorv1.CommitmentAttestation, nowFunc func() time.Time) (VerificationStatus, string, string, time.Time, error) {
+func verifyAssessedCommitment(ctx context.Context, trust AssessedSignerSource, attestation *operatorv1.CommitmentAttestation, verifiedAt time.Time) (VerificationStatus, string, string, time.Time, error) {
 	payload, err := governance.CanonicalizeCommitmentAttestation(attestation)
 	if err != nil {
 		return "", "", "", time.Time{}, fmt.Errorf("%w: canonicalize commitment: %w", constants.ErrEvidenceArtifactMalformed, err)
@@ -93,7 +93,7 @@ func verifyAssessedCommitment(ctx context.Context, trust AssessedSignerSource, a
 		if cryptographicallyValid {
 			return VerificationStatusUnverified, "", "", time.Time{}, nil
 		}
-		return VerificationStatusFailed, constants.CommitmentEvidenceVerifierID, constants.CommitmentEvidenceVerifierVersion, nowFunc(), nil
+		return VerificationStatusFailed, constants.CommitmentEvidenceVerifierID, constants.CommitmentEvidenceVerifierVersion, verifiedAt, nil
 	}
 	if err != nil {
 		return "", "", "", time.Time{}, fmt.Errorf("%w: resolve auditor %s: %w", constants.ErrEvidenceTrustNotAssessed, attestation.GetAuditorKeyId(), err)
@@ -106,5 +106,5 @@ func verifyAssessedCommitment(ctx context.Context, trust AssessedSignerSource, a
 	if !cryptographicallyValid {
 		status = VerificationStatusFailed
 	}
-	return status, constants.CommitmentEvidenceVerifierID, constants.CommitmentEvidenceVerifierVersion, nowFunc(), nil
+	return status, constants.CommitmentEvidenceVerifierID, constants.CommitmentEvidenceVerifierVersion, verifiedAt, nil
 }

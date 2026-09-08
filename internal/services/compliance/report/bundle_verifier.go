@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/compliance"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/catalog"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancev1 "github.com/g8e-ai/g8e/v2/protocol/proto/g8e/compliance/v1"
@@ -43,6 +45,7 @@ type BundleVerificationRequest struct {
 	Bundle                    *compliancev1.ComplianceReportBundle
 	Reader                    BundleArtifactReader
 	TrustPolicy               *compliancev1.ComplianceReportTrustPolicy
+	EvidenceTrust             evidence.AssessedSignerSource
 	AuthorizedPlaintextReader AuthorizedPlaintextReader
 	VerifiedAt                time.Time
 }
@@ -399,6 +402,8 @@ type demoSourceInventory struct {
 func (v *bundleVerifier) verifySourceVerificationReports(ctx context.Context) {
 	v.verifyDemoSourceVerificationReports(ctx)
 	v.verifyEvalSourceVerificationReports(ctx)
+	v.verifyKSIHistorySources(ctx)
+	v.verifyCommitmentSources(ctx)
 }
 
 func (v *bundleVerifier) verifyDemoSourceVerificationReports(ctx context.Context) {
@@ -568,6 +573,284 @@ func (v *bundleVerifier) verifyEvalSourceVerificationReports(ctx context.Context
 			v.replayEvalSourceVerification(ctx, runID, inventory.verificationReport)
 		}
 	}
+}
+
+type commitmentSourceInventory struct {
+	path     string
+	body     []byte
+	resource *compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyCommitmentSources(ctx context.Context) {
+	inventories := make(map[string]*commitmentSourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || resource.GetArtifactType() != string(evidence.ArtifactTypeCommitment) {
+			continue
+		}
+		bundlePath := resource.GetBundlePath()
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "commitment evidence requires canonical scope and run identifiers")
+			continue
+		}
+		expectedPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.ComplianceBundleCommitmentsFilename)
+		if bundlePath != expectedPath {
+			v.fail(constants.ErrInvalidEvidenceGraph, bundlePath, "commitment evidence does not reference its protected source inventory")
+			continue
+		}
+		key := resource.GetScopeId() + "\x00" + resource.GetRunId()
+		if _, exists := inventories[key]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, bundlePath, "commitment source inventory binds multiple analysis resources")
+			continue
+		}
+		inventories[key] = &commitmentSourceInventory{path: bundlePath, resource: resource}
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 5 || parts[4] != constants.ComplianceBundleCommitmentsFilename {
+			continue
+		}
+		key := parts[2] + "\x00" + parts[3]
+		inventory := inventories[key]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "commitment source does not bind analysis evidence")
+			continue
+		}
+		inventory.body = body
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.body) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "commitment source inventory is missing or empty")
+			continue
+		}
+		if v.request.EvidenceTrust == nil {
+			v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "commitment source requires explicit external assessed evidence trust")
+			continue
+		}
+		v.replayCommitmentSource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayCommitmentSource(ctx context.Context, inventory *commitmentSourceInventory) {
+	resource := inventory.resource
+	binding := evidence.CommitmentImportBinding{
+		Reference:     resource.GetArtifactId(),
+		Path:          inventory.path,
+		ScopeID:       resource.GetScopeId(),
+		RunID:         resource.GetRunId(),
+		AttemptID:     resource.GetAttemptId(),
+		ScenarioID:    resource.GetScenarioId(),
+		TransactionID: resource.GetTransactionId(),
+	}
+	generatedAt := v.request.Bundle.GetManifest().GetGeneratedAt()
+	if generatedAt == nil || generatedAt.CheckValid() != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "commitment replay requires a valid deterministic bundle generation time")
+		return
+	}
+	reader := &bundledSourceArtifactReader{bodies: v.bodies}
+	nodes, err := evidence.NewCommitmentImporter(reader, v.request.EvidenceTrust, binding, generatedAt.AsTime()).Import(ctx)
+	if err != nil {
+		failure := constants.ErrInvalidEvidenceGraph
+		if errors.Is(err, constants.ErrEvidenceTrustNotAssessed) {
+			failure = constants.ErrEvidenceTrustNotAssessed
+		}
+		v.fail(failure, inventory.path, err.Error())
+		return
+	}
+	if len(nodes) != 1 {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed commitment does not produce exactly one evidence resource")
+		return
+	}
+	if nodes[0].VerificationStatus == evidence.VerificationStatusUnverified {
+		v.fail(constants.ErrEvidenceTrustNotAssessed, inventory.path, "commitment signer is not present in external assessed evidence trust")
+		return
+	}
+	if !proto.Equal(resource, nodes[0].ToProto()) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.path, "replayed commitment does not match the protected analysis evidence")
+	}
+}
+
+type ksiHistorySourceInventory struct {
+	historyPath string
+	historyBody []byte
+	resultsPath string
+	resultsBody []byte
+	resources   map[string]*compliancev1.ComplianceEvidenceReference
+}
+
+func (v *bundleVerifier) verifyKSIHistorySources(ctx context.Context) {
+	inventories := make(map[string]*ksiHistorySourceInventory)
+	for _, resource := range v.request.Bundle.GetAnalysis().GetEvidenceResources() {
+		if resource == nil || resource.GetArtifactType() != string(evidence.ArtifactTypeKSIResult) {
+			continue
+		}
+		if !evidence.ValidPathElement(resource.GetScopeId()) || !evidence.ValidPathElement(resource.GetRunId()) {
+			v.fail(constants.ErrEvidenceScopeMismatch, resource.GetArtifactId(), "KSI history evidence requires canonical scope and run identifiers")
+			continue
+		}
+		historyPath := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.ComplianceBundleKSIHistoryFilename)
+		if resource.GetBundlePath() != historyPath {
+			v.fail(constants.ErrUnresolvedReference, resource.GetArtifactId(), "KSI history evidence does not reference its protected source inventory")
+			continue
+		}
+		key := resource.GetScopeId() + "\x00" + resource.GetRunId()
+		inventory := inventories[key]
+		if inventory == nil {
+			inventory = &ksiHistorySourceInventory{
+				historyPath: historyPath,
+				resultsPath: path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname, resource.GetScopeId(), resource.GetRunId(), constants.ComplianceBundleKSIResultsFilename),
+				resources:   make(map[string]*compliancev1.ComplianceEvidenceReference),
+			}
+			inventories[key] = inventory
+		}
+		if _, exists := inventory.resources[resource.GetArtifactId()]; exists {
+			v.fail(constants.ErrEvidenceDuplicateID, resource.GetArtifactId(), "KSI history evidence resource is duplicated")
+			continue
+		}
+		inventory.resources[resource.GetArtifactId()] = resource
+	}
+
+	prefix := path.Join(constants.ComplianceBundleSourcesDirname, constants.ComplianceBundlePlatformEvidenceDirname) + "/"
+	for bundlePath, body := range v.bodies {
+		if !strings.HasPrefix(bundlePath, prefix) {
+			continue
+		}
+		parts := strings.Split(bundlePath, "/")
+		if len(parts) != 5 || parts[0] != constants.ComplianceBundleSourcesDirname || parts[1] != constants.ComplianceBundlePlatformEvidenceDirname || parts[2] == "" || parts[3] == "" {
+			continue
+		}
+		if parts[4] != constants.ComplianceBundleKSIHistoryFilename && parts[4] != constants.ComplianceBundleKSIResultsFilename {
+			continue
+		}
+		key := parts[2] + "\x00" + parts[3]
+		inventory := inventories[key]
+		if inventory == nil {
+			v.fail(constants.ErrUnresolvedReference, bundlePath, "platform source does not bind analysis evidence")
+			continue
+		}
+		switch bundlePath {
+		case inventory.historyPath:
+			inventory.historyBody = body
+		case inventory.resultsPath:
+			inventory.resultsBody = body
+		default:
+			v.fail(constants.ErrUnexpectedEvidenceArtifact, bundlePath, "platform source path is unsupported")
+		}
+	}
+
+	for _, inventory := range inventories {
+		if len(inventory.historyBody) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "KSI history source inventory is missing or empty")
+			continue
+		}
+		if len(inventory.resultsBody) == 0 {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.resultsPath, "KSI result source inventory is missing or empty")
+			continue
+		}
+		v.replayKSIHistorySource(ctx, inventory)
+	}
+}
+
+func (v *bundleVerifier) replayKSIHistorySource(ctx context.Context, inventory *ksiHistorySourceInventory) {
+	resultSet, err := firstKSIHistoryResultSet(inventory.historyBody)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, err.Error())
+		return
+	}
+	latestBody, err := lastKSIHistoryResultBody(inventory.historyBody)
+	if err != nil || !bytes.Equal(latestBody, inventory.resultsBody) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.resultsPath, "current KSI results do not match the latest protected history snapshot")
+		return
+	}
+	producerIdentity := constants.KSIEvaluatorID
+	for _, resource := range inventory.resources {
+		if resource.GetProducerIdentity() != producerIdentity {
+			v.fail(constants.ErrEvidenceProducerUnverified, inventory.historyPath, "KSI history resource producer identity is unsupported")
+			return
+		}
+	}
+	binding := evidence.KSIHistoryImportBinding{
+		Reference:            evidence.ContentReferenceForBody(constants.KSIHistoryReferencePrefix, inventory.historyBody),
+		Path:                 inventory.historyPath,
+		ScopeID:              resultSet.Binding.ScopeID,
+		RunID:                resultSet.Binding.RunID,
+		Class:                resultSet.Class,
+		ProducerIdentity:     producerIdentity,
+		AssertionAssessments: resultSet.Binding.AssertionAssessments,
+	}
+	reader := &bundledSourceArtifactReader{bodies: v.bodies}
+	nodes, err := evidence.NewKSIHistoryImporter(reader, binding).Import(ctx)
+	if err != nil {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, err.Error())
+		return
+	}
+	if len(nodes) != len(inventory.resources) {
+		v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the analysis evidence inventory")
+		return
+	}
+	for index := range nodes {
+		resource := inventory.resources[nodes[index].ArtifactID]
+		if resource == nil || !proto.Equal(resource, nodes[index].ToProto()) {
+			v.fail(constants.ErrInvalidEvidenceGraph, inventory.historyPath, "replayed KSI history does not match the protected analysis evidence")
+			return
+		}
+	}
+}
+
+func lastKSIHistoryResultBody(body []byte) ([]byte, error) {
+	var latest []byte
+	for _, line := range bytes.Split(body, []byte{'\n'}) {
+		if len(line) != 0 {
+			latest = line
+		}
+	}
+	if len(latest) == 0 {
+		return nil, constants.ErrEvidenceArtifactMalformed
+	}
+	return latest, nil
+}
+
+func firstKSIHistoryResultSet(body []byte) (*compliance.KSIResultSet, error) {
+	for _, line := range bytes.Split(body, []byte{'\n'}) {
+		if len(line) == 0 {
+			continue
+		}
+		resultSet := &compliance.KSIResultSet{}
+		decoder := json.NewDecoder(bytes.NewReader(line))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(resultSet); err != nil {
+			return nil, fmt.Errorf("decode KSI history binding: %w", err)
+		}
+		return resultSet, nil
+	}
+	return nil, constants.ErrEvidenceArtifactMalformed
+}
+
+type bundledSourceArtifactReader struct {
+	bodies map[string][]byte
+}
+
+func (r *bundledSourceArtifactReader) ReadFile(ctx context.Context, sourcePath string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	body, exists := r.bodies[sourcePath]
+	if !exists {
+		return nil, constants.ErrNotFound
+	}
+	return append([]byte(nil), body...), nil
+}
+
+func (r *bundledSourceArtifactReader) ReadDir(ctx context.Context, _ string) ([]os.DirEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, constants.ErrUnexpectedEvidenceArtifact
 }
 
 func (v *bundleVerifier) verifySourceVerificationReport(bundlePath string, body []byte, runID, verifierID, verifierVersion string, verificationErr error, source string) *compliancev1.ComplianceVerificationReport {
