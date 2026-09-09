@@ -22,7 +22,10 @@ from pydantic import ValidationError
 from g8e_evals.arms import Arm
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
+    DenominatorKind,
     DuplicateMetricError,
+    EligibilityKind,
+    MetricApplicabilityContract,
     MetricDefinition,
     MetricDirection,
     MetricGraderClassMismatchError,
@@ -150,6 +153,10 @@ def _minimal_definition(**overrides) -> MetricDefinition:
         "aggregation": "boolean_fraction",
         "uncertainty_method": "Bootstrap interval.",
         "evidence_requirements": ["test_evidence"],
+        "applicability": MetricApplicabilityContract(
+            eligibility=EligibilityKind.DERIVED,
+            denominator=DenominatorKind.DERIVED,
+        ),
     }
     defaults.update(overrides)
     return MetricDefinition(**defaults)  # type: ignore[arg-type]

@@ -183,14 +183,12 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
                 f"metric {definition.metric_id}@{definition.metric_version} "
                 f"is registered but has no release domain mapping"
             )
-        threshold = definition.release_threshold
-        has_threshold = threshold is not None and not threshold.startswith("To be")
         entries.append(ReleaseMetricEntry(
             metric_id=definition.metric_id,
             metric_version=definition.metric_version,
             domain=domain,
-            has_practical_threshold=has_threshold,
-            threshold_description=threshold or "No practical threshold defined; calibration pending.",
+            has_practical_threshold=definition.practical_threshold is not None,
+            threshold_description=definition.release_threshold or "No practical threshold defined; calibration pending.",
         ))
     return entries
 

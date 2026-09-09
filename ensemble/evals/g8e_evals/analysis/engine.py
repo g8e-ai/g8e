@@ -48,8 +48,11 @@ from g8e_evals.arms import ARM_DEFINITIONS
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
     AggregationMethod,
+    DenominatorKind,
+    EligibilityKind,
     MetricDefinition,
     MetricDirection,
+    ThresholdOperator,
 )
 from g8e_evals.release_metric_set import (
     RELEASE_METRIC_SET,
@@ -256,7 +259,7 @@ def _build_release_metric_lookup() -> dict[tuple[str, str], ReleaseMetricEntry]:
     return {(m.metric_id, m.metric_version): m for m in RELEASE_METRIC_SET.metrics}
 
 
-def _task_declares_metric(task: TaskDefinition, definition: MetricDefinition) -> bool:
+def _task_declares_grader(task: TaskDefinition, definition: MetricDefinition) -> bool:
     grader_ref = definition.grader_ref
     if grader_ref is None:
         return False
@@ -266,6 +269,51 @@ def _task_declares_metric(task: TaskDefinition, definition: MetricDefinition) ->
         and grader.grader_class == grader_ref.grader_class
         for grader in task.graders
     )
+
+
+def _task_assertion_count(task: TaskDefinition, task_field: str | None) -> int:
+    if task_field is None:
+        return 0
+    assertions = getattr(task, task_field)
+    if isinstance(assertions, list):
+        return len(assertions)
+    if task_field == "state_fixture" and task.state_fixture is not None:
+        return len(task.state_fixture.assertions)
+    return 0
+
+
+def _metric_is_eligible(
+    task: TaskDefinition,
+    attempt: AttemptRecord,
+    definition: MetricDefinition,
+) -> bool:
+    contract = definition.applicability
+    if contract.eligibility == EligibilityKind.TASK_SUITE:
+        return task.suite_id == contract.suite_id
+    if contract.eligibility == EligibilityKind.COMPLETED_ANSWER:
+        return attempt.terminal_status == TerminalStatus.COMPLETED and attempt.answer_ref is not None
+    if contract.eligibility == EligibilityKind.EXPECTED_ACTION_CLASS:
+        return bool(task.expected_action_class) and _task_declares_grader(task, definition)
+    if contract.eligibility == EligibilityKind.EXPECTED_POLICY_OUTCOME:
+        return task.expected_allow_block_outcome is not None and _task_declares_grader(task, definition)
+    if contract.eligibility in (EligibilityKind.TASK_ASSERTIONS, EligibilityKind.TASK_STATE_ASSERTIONS):
+        return _task_assertion_count(task, contract.task_field) > 0 and _task_declares_grader(task, definition)
+    if contract.eligibility == EligibilityKind.USAGE_RECONCILIATION:
+        return attempt.usage_reconciliation is not None
+    return False
+
+
+def _missing_denominator_contribution(task: TaskDefinition, definition: MetricDefinition) -> int:
+    contract = definition.applicability
+    if contract.denominator == DenominatorKind.ATTEMPT:
+        return 1
+    if contract.denominator in (DenominatorKind.TASK_ASSERTION_COUNT, DenominatorKind.TASK_STATE_ASSERTION_COUNT):
+        return _task_assertion_count(task, contract.task_field)
+    if contract.denominator == DenominatorKind.EXPECTED_CANARY_OCCURRENCES:
+        return sum(assertion.expected_occurrences for assertion in task.sensitive_canary_annotations)
+    if contract.denominator == DenominatorKind.EXPECTED_SENSITIVE_OCCURRENCES:
+        return sum(assertion.expected_sensitive_occurrences for assertion in task.secret_detection_assertions)
+    return 0
 
 
 def _compute_metric_results(
@@ -307,7 +355,7 @@ def _compute_metric_results(
                 attempt
                 for attempt in attempts_by_arm[arm_id]
                 if attempt.attempt_id in observed_attempt_ids
-                or _task_declares_metric(task_by_id[attempt.task_id], definition)
+                or _metric_is_eligible(task_by_id[attempt.task_id], attempt, definition)
             ]
             if not arm_attempts:
                 continue
@@ -349,7 +397,9 @@ def _compute_metric_results(
                     # Count as eligible but missing (denominator preservation)
                     eligible_count += 1
                     missing_count += 1
-                    denominator += 1
+                    denominator += _missing_denominator_contribution(
+                        task_by_id[attempt.task_id], definition,
+                    )
 
             # Compute aggregate value
             # When all eligible observations are missing, the value is None
@@ -558,7 +608,8 @@ def _compute_gate_decisions(
 
         threshold_desc = release_entry.threshold_description
         definition = DEFAULT_METRIC_REGISTRY.get(mr.metric_id, mr.metric_version)
-        threshold_value: float | None = None
+        threshold = definition.practical_threshold
+        threshold_value = threshold.value if threshold is not None else None
         ni_margin_entry = get_non_inferiority_margin(mr.metric_id, mr.metric_version)
         ni_margin = ni_margin_entry.margin if ni_margin_entry is not None else None
 
@@ -568,22 +619,17 @@ def _compute_gate_decisions(
         elif mr.missing_count > 0:
             status = GateDecisionStatus.INSUFFICIENT_DATA
             reason = f"{mr.missing_count} of {mr.eligible_count} eligible attempts are missing observations."
-        elif not release_entry.has_practical_threshold:
+        elif threshold is None:
             status = GateDecisionStatus.UNSUPPORTED
             reason = "No practical threshold defined; calibration pending."
+        elif mr.value is None:
+            status = GateDecisionStatus.INSUFFICIENT_DATA
+            reason = "No measured value is available for the practical threshold."
         else:
-            parsed_threshold, is_blocker = _parse_threshold(definition, mr.direction)
-            threshold_value = parsed_threshold
-            if threshold_value is not None and mr.value is not None:
-                passed = _check_threshold(mr.value, threshold_value, mr.direction)
-                status = GateDecisionStatus.PASS if passed else GateDecisionStatus.FAIL
-                if is_blocker:
-                    reason = f"Release-blocker threshold {threshold_value} {'met' if passed else 'not met'}: measured {mr.value}."
-                else:
-                    reason = f"Practical threshold {threshold_value} {'met' if passed else 'not met'}: measured {mr.value}."
-            else:
-                status = GateDecisionStatus.UNSUPPORTED
-                reason = "Threshold could not be parsed from definition."
+            passed = _check_threshold(mr.value, threshold.value, threshold.operator)
+            status = GateDecisionStatus.PASS if passed else GateDecisionStatus.FAIL
+            threshold_kind = "Release-blocker" if threshold.release_blocker else "Practical"
+            reason = f"{threshold_kind} threshold {threshold.value} {'met' if passed else 'not met'}: measured {mr.value}."
 
         decisions.append(GateDecision(
             metric_id=mr.metric_id,
@@ -601,39 +647,8 @@ def _compute_gate_decisions(
     return decisions
 
 
-def _parse_threshold(definition: MetricDefinition, direction: MetricDirection) -> tuple[float | None, bool]:
-    """Parse a practical threshold value from the definition's release_threshold.
-
-    Returns (threshold_value, is_release_blocker). Release-blocker
-    thresholds are exact requirements (e.g., 1.0 for proportions). Non-
-    inferiority margins are parsed from "non-inferiority margin of X"
-    patterns.
-    """
-    import re
-
-    threshold_str = definition.release_threshold
-    if threshold_str is None:
-        return None, False
-
-    # Release-blocker: "Practical threshold: 1.0 for governed arms; ..."
-    # Extract the first floating-point number after "Practical threshold:"
-    if threshold_str.startswith("Practical threshold:"):
-        match = re.search(r"Practical threshold:\s+(\d+\.?\d*)", threshold_str)
-        if match:
-            try:
-                return float(match.group(1)), True
-            except ValueError:
-                pass
-    # Non-inferiority margin
-    if "non-inferiority margin" in threshold_str.lower():
-        return None, False
-
-    return None, False
-
-
-def _check_threshold(value: float, threshold: float, direction: MetricDirection) -> bool:
-    """Check whether a measured value meets the practical threshold."""
-    if direction == MetricDirection.LOWER_IS_BETTER:
+def _check_threshold(value: float, threshold: float, operator: ThresholdOperator) -> bool:
+    if operator == ThresholdOperator.LESS_THAN_OR_EQUAL:
         return value <= threshold
     return value >= threshold
 
