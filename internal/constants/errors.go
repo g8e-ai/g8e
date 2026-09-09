@@ -1274,4 +1274,11 @@ var (
 	ErrJSONSchemaCompileFailed       = errors.New("jsonschema: schema compilation failed")
 	ErrJSONSchemaValidationFailed    = errors.New("jsonschema: instance validation failed")
 	ErrJSONSchemaResourceLimit       = errors.New("jsonschema: resource limit exceeded")
+
+	// Observe read API errors
+	ErrObserveCursorInvalid    = errors.New("observe: invalid cursor")
+	ErrObserveLimitOutOfBounds = errors.New("observe: limit out of bounds")
+	ErrObserveRunNotFound      = errors.New("observe: run not found")
+	ErrObserveEvalNotFound     = errors.New("observe: eval not found")
+	ErrObserveDownloadNotFound = errors.New("observe: download not found")
 )

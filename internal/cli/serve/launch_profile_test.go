@@ -284,3 +284,30 @@ func TestValidateLaunchProfile_AcceptsZeroPorts(t *testing.T) {
 	_, err := ReadLaunchProfile(fileSvc)
 	require.NoError(t, err, "zero ports and rate limits are valid (meaning 'use defaults')")
 }
+
+// TestReadLaunchProfile_TrailingJSONReturnsErrLaunchProfileCorrupted
+// verifies that ReadLaunchProfile rejects a file containing multiple JSON
+// values (trailing JSON after the first object). The decoder's second
+// decoder.Decode call detects the extra value and returns
+// ErrLaunchProfileCorrupted instead of silently accepting the first object.
+func TestReadLaunchProfile_TrailingJSONReturnsErrLaunchProfileCorrupted(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+
+	// Write two concatenated profile objects. The first is a valid
+	// version-1 profile; the second is extra trailing data that must be
+	// rejected.
+	cfg := validTestGatewayConfig()
+	cfg.NetworkIdentityFile = ""
+	first, err := json.Marshal(GatewayLaunchProfile{Version: LaunchProfileVersion, Config: cfg})
+	require.NoError(t, err)
+	second, err := json.Marshal(GatewayLaunchProfile{Version: LaunchProfileVersion, Config: cfg})
+	require.NoError(t, err)
+	trailing := append(first, second...)
+
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorLaunchProfileFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, trailing, constants.PermFilePrivate))
+
+	_, err = ReadLaunchProfile(fileSvc)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrLaunchProfileCorrupted)
+}

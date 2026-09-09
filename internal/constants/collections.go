@@ -41,4 +41,12 @@ const (
 	CollectionEnrollmentTokens      CollectionName = "enrollment_tokens"
 	CollectionCLIRecoveryRequests   CollectionName = "cli_recovery_requests"
 	CollectionPlatformEnrollments   CollectionName = "platform_enrollments"
+	// Observe projection collections. Phase 3 producers write agent and run
+	// state projections; Phase 4 writes eval projections and download
+	// artifacts. The observe read services query these collections with
+	// user_id ownership scoping.
+	CollectionObserveAgentStates CollectionName = "observe_agent_states"
+	CollectionObserveRuns        CollectionName = "observe_runs"
+	CollectionObserveEvals       CollectionName = "observe_evals"
+	CollectionObserveDownloads   CollectionName = "observe_downloads"
 )

@@ -53,6 +53,7 @@ type HTTPHandlerDependencies struct {
 	PubSubControllerDeps             PubSubControllerDeps
 	PasskeyControllerDeps            PasskeyControllerDeps
 	PlatformEnrollmentControllerDeps PlatformEnrollmentControllerDeps
+	ObserveControllerDeps            ObserveControllerDeps
 }
 
 // HTTPHandler manages the web API for the gateway service.
@@ -83,6 +84,7 @@ type HTTPHandler struct {
 	sseController             *SSEController
 	healthController          *HealthController
 	governanceController      *GovernanceController
+	observeController        *ObserveController
 
 	// router is the main HTTP router, built once at construction by
 	// buildPublicRouter and cached for the lifetime of the handler. It is
@@ -211,6 +213,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		sseController:                newSSEController(deps.SSEControllerDeps),
 		healthController:             newHealthController(deps.HealthControllerDeps),
 		governanceController:         newGovernanceController(deps.GovernanceControllerDeps),
+		observeController:           newObserveController(deps.ObserveControllerDeps),
 		mcpController:                newMCPController(deps.MCPControllerDeps),
 		pubsubController:             newPubSubController(deps.PubSubControllerDeps),
 		passkeyController:            newPasskeyController(deps.PasskeyControllerDeps),

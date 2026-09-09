@@ -266,7 +266,7 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [developer guide](docs/devs/
 
 ## Pilots and partnerships
 
-Lateralus Labs works with teams evaluating governed AI execution, sovereign data workflows, and proof-backed compliance reporting. Contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com).
+Lateralus Labs works with teams evaluating governed AI execution, sovereign data workflows, and proof-backed compliance reporting. Contact [danny@lateraluslabs.com](mailto:danny@lateraluslabs.com), [schedule a call](https://calendly.com/danny-lateraluslabs/quick_discovery), or connect on [LinkedIn](https://www.linkedin.com/in/dannybarbour/).
 
 ---
 

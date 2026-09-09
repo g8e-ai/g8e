@@ -8,13 +8,30 @@
 package serve
 
 import (
+	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
+	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
+
+// panicOnWriteFileSvc is a stub RuntimeFileService that panics if WriteFile is
+// called. It embeds a nil fs.RuntimeFileService so all other interface methods
+// panic with a nil-dereference if invoked. WriteLaunchProfile calls
+// ValidateLaunchProfile before any file I/O, so an invalid config never
+// reaches WriteFile. This stub proves the write boundary is never crossed.
+type panicOnWriteFileSvc struct {
+	fs.RuntimeFileService // nil; panics on any promoted method call
+}
+
+func (panicOnWriteFileSvc) WriteFile(context.Context, string, []byte, os.FileMode) error {
+	panic("WriteFile must not be called when ValidateLaunchProfile rejects the config")
+}
 
 // validProfile returns a GatewayLaunchProfile with every field valid for
 // ValidateLaunchProfile. NetworkIdentityFile is empty (as WriteLaunchProfile
@@ -177,4 +194,50 @@ func TestValidateLaunchProfile_AcceptsHTTPMCPDownstreamURL(t *testing.T) {
 	p := validProfile()
 	p.Config.MCPDownstreamURL = "http://downstream:3000/mcp"
 	assert.NoError(t, ValidateLaunchProfile(p))
+}
+
+// TestWriteLaunchProfile_RejectsInvalidConfigWithoutWriting proves that
+// WriteLaunchProfile calls ValidateLaunchProfile before any file I/O. An
+// invalid config must return ErrLaunchProfileInvalid and must never call
+// WriteFile on the file service. The panicOnWriteFileSvc stub fails the test
+// with a clear panic if WriteFile is reached.
+func TestWriteLaunchProfile_RejectsInvalidConfigWithoutWriting(t *testing.T) {
+	tests := []struct {
+		name  string
+		mutate func(cfg *GatewayConfig)
+	}{
+		{
+			name: "invalid posture",
+			mutate: func(cfg *GatewayConfig) {
+				cfg.Posture = "bogus"
+			},
+		},
+		{
+			name: "invalid allowed origin",
+			mutate: func(cfg *GatewayConfig) {
+				cfg.AllowedOrigins = []string{"not-a-url"}
+			},
+		},
+		{
+			name: "port collision",
+			mutate: func(cfg *GatewayConfig) {
+				cfg.HTTPPort = 9000
+				cfg.HTTPSPort = 9000
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validTestGatewayConfig()
+			cfg.NetworkIdentityFile = ""
+			tt.mutate(&cfg)
+
+			// The stub panics if WriteFile is called, proving no file is
+			// written when validation rejects the config.
+			var stubFs fs.RuntimeFileService = panicOnWriteFileSvc{}
+			err := WriteLaunchProfile(stubFs, cfg)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, constants.ErrLaunchProfileInvalid)
+		})
+	}
 }

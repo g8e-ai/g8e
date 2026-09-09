@@ -134,6 +134,11 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addPrefix(constants.APIPaths.Approvals, RouteAuthWebSession)
 	r.addPrefix(constants.APIPaths.AuthPasskeys, RouteAuthWebSession)
 
+	// Observe API — passkey-scoped, read-only observability surface. Every
+	// observe route requires a validated web session cookie. The middleware
+	// stamps user_id into context; controllers apply ownership scoping.
+	r.addPrefix(constants.APIPaths.ObservePrefix, RouteAuthWebSession)
+
 	// CLI recovery approval — browser console, authenticated existing user.
 	r.addExact(constants.APIPaths.AuthCLIRecoveryApprove, RouteAuthWebSession)
 

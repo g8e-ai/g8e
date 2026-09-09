@@ -213,6 +213,19 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkeyController.listCredentials)
 	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkeyController.revokeCredential))
 
+	// Observe API routes (RouteAuthWebSession — passkey-scoped, read-only
+	// observability surface). The unified auth middleware validates the web
+	// session cookie and stamps context with user_id before these handlers
+	// run. Controllers derive user_id from context and apply ownership
+	// scoping through the ObserveService.
+	mux.HandleFunc(constants.APIPaths.ObserveBootstrap, h.observeController.handleBootstrap)
+	mux.HandleFunc(constants.APIPaths.ObserveRuns, h.observeController.handleListRuns)
+	mux.Handle(constants.APIPaths.ObserveRunsByID, http.HandlerFunc(h.observeController.handleGetRun))
+	mux.HandleFunc(constants.APIPaths.ObserveEvals, h.observeController.handleListEvals)
+	mux.Handle(constants.APIPaths.ObserveEvalsByID, http.HandlerFunc(h.observeController.handleGetEval))
+	mux.HandleFunc(constants.APIPaths.ObserveDownloads, h.observeController.handleListDownloads)
+	mux.Handle(constants.APIPaths.ObserveDownloadsByID, http.HandlerFunc(h.observeController.handleGetDownload))
+
 	var handler http.Handler = mux
 	if h.authMiddleware != nil {
 		handler = h.authMiddleware.Middleware(mux)
