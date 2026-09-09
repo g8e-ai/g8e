@@ -40,10 +40,12 @@ func TestEnrollUserCmd(t *testing.T) {
 
 // TestEnrollCmd_Parent verifies the enroll parent command has no RunE
 // (cobra prints help and exits non-zero when invoked without a subcommand)
-// and registers the user and gui subcommands. The operator subcommand was
-// removed when the unauthenticated operator enrollment bypass was closed
-// (Phase 4); operators now enroll through the owner-approved platform
-// enrollment protocol.
+// and registers the user subcommand. The operator subcommand was removed
+// when the unauthenticated operator enrollment bypass was closed (Phase 4);
+// operators now enroll through the owner-approved platform enrollment
+// protocol. The gui subcommand was removed in Phase 5 of the v2.1.8
+// browser frontend connection UX rollout — `gw connect` is the sole local
+// browser connection workflow.
 func TestEnrollCmd_Parent(t *testing.T) {
 	cmd := enrollCmd()
 	assert.Equal(t, "enroll", cmd.Use)
@@ -54,8 +56,8 @@ func TestEnrollCmd_Parent(t *testing.T) {
 		names[sub.Name()] = true
 	}
 	assert.True(t, names["user"], "enroll parent must register the user subcommand")
-	assert.True(t, names["gui"], "enroll parent must register the gui subcommand")
 	assert.False(t, names["operator"], "enroll parent must NOT register the removed operator subcommand")
+	assert.False(t, names["gui"], "enroll parent must NOT register the removed gui subcommand")
 }
 
 func TestLogoutCmd(t *testing.T) {

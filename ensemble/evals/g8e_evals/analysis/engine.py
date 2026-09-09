@@ -22,18 +22,22 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 
+from g8e_evals.analysis import statistics
 from g8e_evals.analysis.canonical import (
     ANALYSIS_COMPUTATION_VERSION,
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
     CanonicalEvalAnalysis,
+    ComparisonDirection,
     ConfusionMatrix,
     DomainStratifiedResult,
     GateDecision,
     GateDecisionStatus,
     MetricAnalysisResult,
     MissingnessBreakdown,
+    PairedComparison,
     ReceiptCoverageAnalysis,
 )
 from g8e_evals.arms import ARM_DEFINITIONS
@@ -59,6 +63,28 @@ from g8e_evals.schema import (
 
 
 _FLOAT_PRECISION = 10
+
+
+@dataclass(frozen=True)
+class _RawComparison:
+    """Intermediate comparison record before Holm correction."""
+
+    metric_id: str
+    metric_version: str
+    baseline_arm_id: str
+    comparison_arm_id: str
+    paired_count: int
+    baseline_value: float
+    comparison_value: float
+    absolute_delta: float
+    relative_delta: float | None
+    standardized_effect_size: float | None
+    direction: ComparisonDirection
+    mcnemar_statistic: float | None
+    mcnemar_p_value: float | None
+    bootstrap_ci_lower: float | None
+    bootstrap_ci_upper: float | None
+    p_value: float | None
 
 
 def _round(value: float) -> float:
@@ -469,6 +495,217 @@ def _check_threshold(value: float, threshold: float, direction: MetricDirection,
     return value >= threshold
 
 
+def _compute_paired_comparisons(
+    tasks: Sequence[TaskDefinition],
+    attempts: Sequence[AttemptRecord],
+    metric_observations: Sequence[MetricObservation],
+) -> list[PairedComparison]:
+    """Compute paired comparisons between arms over identical task instances.
+
+    Pairs observations by ``(task_id, state_snapshot_hash)`` so that only
+    attempts on the same task instance and initial-state snapshot are
+    compared. For each metric and each ordered pair of arms (baseline,
+    comparison) where both arms have observations on the same task
+    instances, computes:
+
+    - Absolute and relative deltas.
+    - Cohen's d standardized effect size.
+    - McNemar test for binary outcomes (value >= 0.5 treated as pass).
+    - Paired t-test for continuous outcomes.
+    - Task-cluster bootstrap 95% confidence interval (seeded).
+    - Holm-Bonferroni correction across the family of comparisons for
+      each metric.
+
+    Returns comparisons sorted by ``(metric_id, metric_version,
+    baseline_arm_id, comparison_arm_id)``.
+    """
+    release_lookup = _build_release_metric_lookup()
+
+    # Build attempt lookup by attempt_id
+    attempt_by_id: dict[str, AttemptRecord] = {a.attempt_id: a for a in attempts}
+
+    # Group metric observations by (metric_id, metric_version, arm_id, task_id, state_snapshot_hash)
+    # to find paired task instances across arms
+    obs_by_metric: dict[tuple[str, str], list[MetricObservation]] = defaultdict(list)
+    for obs in metric_observations:
+        release_entry = release_lookup.get((obs.metric_id, obs.metric_version))
+        if release_entry is None:
+            continue
+        obs_by_metric[(obs.metric_id, obs.metric_version)].append(obs)
+
+    comparisons: list[PairedComparison] = []
+
+    for (metric_id, metric_version), metric_obs_list in sorted(obs_by_metric.items()):
+        definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
+        release_entry = release_lookup[(metric_id, metric_version)]
+
+        # Group observations by (arm_id, pairing_key) where pairing_key = (task_id, state_snapshot_hash)
+        obs_by_arm_pair: dict[tuple[str, tuple[str, str]], list[MetricObservation]] = defaultdict(list)
+        for obs in metric_obs_list:
+            attempt = attempt_by_id.get(obs.attempt_id)
+            if attempt is None:
+                continue
+            if obs.value is None:
+                continue
+            pairing_key = (obs.task_id, attempt.state_snapshot_hash)
+            arm_str = obs.arm_id.value
+            obs_by_arm_pair[(arm_str, pairing_key)].append(obs)
+
+        # Find all arm IDs that have observations for this metric
+        arm_ids_with_obs = sorted({arm for (arm, _) in obs_by_arm_pair.keys()})
+        if len(arm_ids_with_obs) < 2:
+            continue
+
+        # For each ordered pair of arms, find common pairing keys
+        raw_comparisons: list[_RawComparison] = []
+        for baseline_arm in arm_ids_with_obs:
+            for comparison_arm in arm_ids_with_obs:
+                if baseline_arm >= comparison_arm:
+                    continue
+
+                baseline_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == baseline_arm}
+                comparison_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == comparison_arm}
+                common_keys = sorted(baseline_keys & comparison_keys)
+                if len(common_keys) < 2:
+                    continue
+
+                baseline_vals: list[float] = []
+                comparison_vals: list[float] = []
+                for pk in common_keys:
+                    b_obs = obs_by_arm_pair[(baseline_arm, pk)]
+                    c_obs = obs_by_arm_pair[(comparison_arm, pk)]
+                    # Average multiple observations per pairing key (replicates)
+                    b_vals = [o.value for o in b_obs if o.value is not None]
+                    c_vals = [o.value for o in c_obs if o.value is not None]
+                    if not b_vals or not c_vals:
+                        continue
+                    baseline_vals.append(sum(b_vals) / len(b_vals))
+                    comparison_vals.append(sum(c_vals) / len(c_vals))
+
+                if len(baseline_vals) < 2:
+                    continue
+
+                baseline_value = sum(baseline_vals) / len(baseline_vals)
+                comparison_value = sum(comparison_vals) / len(comparison_vals)
+                abs_d = statistics.absolute_delta(baseline_value, comparison_value)
+                rel_d = statistics.relative_delta(baseline_value, comparison_value)
+                effect_size = statistics.cohens_d_paired(baseline_vals, comparison_vals)
+
+                # McNemar for binary outcomes
+                baseline_binary = [v >= 0.5 for v in baseline_vals]
+                comparison_binary = [v >= 0.5 for v in comparison_vals]
+                mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
+
+                # Paired t-test for continuous outcomes
+                _t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
+
+                # Bootstrap CI
+                ci_lower, ci_upper = statistics.bootstrap_ci(
+                    baseline_vals, comparison_vals, seed=0,
+                )
+
+                # Direction
+                if definition.direction == MetricDirection.LOWER_IS_BETTER:
+                    if abs_d < 0:
+                        direction = ComparisonDirection.IMPROVEMENT
+                    elif abs_d > 0:
+                        direction = ComparisonDirection.REGRESSION
+                    else:
+                        direction = ComparisonDirection.NEUTRAL
+                elif definition.direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
+                    if abs_d > 0:
+                        direction = ComparisonDirection.IMPROVEMENT
+                    elif abs_d < 0:
+                        direction = ComparisonDirection.REGRESSION
+                    else:
+                        direction = ComparisonDirection.NEUTRAL
+                else:
+                    direction = ComparisonDirection.NEUTRAL
+
+                # Use the p-value from the more appropriate test
+                # For binary pass/fail metrics, use McNemar; for continuous, use t-test
+                if definition.direction == MetricDirection.BINARY_PASS_FAIL:
+                    p_value = mcnemar_p
+                else:
+                    p_value = t_p
+
+                raw_comparisons.append(_RawComparison(
+                    metric_id=metric_id,
+                    metric_version=metric_version,
+                    baseline_arm_id=baseline_arm,
+                    comparison_arm_id=comparison_arm,
+                    paired_count=len(baseline_vals),
+                    baseline_value=_round(baseline_value),
+                    comparison_value=_round(comparison_value),
+                    absolute_delta=abs_d,
+                    relative_delta=rel_d,
+                    standardized_effect_size=effect_size,
+                    direction=direction,
+                    mcnemar_statistic=mcnemar_stat,
+                    mcnemar_p_value=mcnemar_p,
+                    bootstrap_ci_lower=ci_lower,
+                    bootstrap_ci_upper=ci_upper,
+                    p_value=p_value,
+                ))
+
+        if not raw_comparisons:
+            continue
+
+        # Apply Holm correction across the family of comparisons for this metric
+        p_values = [rc.p_value for rc in raw_comparisons]
+        # Replace None p-values with 1.0 for correction (no evidence of difference)
+        p_values_for_correction: list[float] = [p if p is not None else 1.0 for p in p_values]
+        holm_results = statistics.holm_correction(p_values_for_correction)
+
+        for rc, (rank, corrected_p) in zip(raw_comparisons, holm_results, strict=True):
+            comparisons.append(PairedComparison(
+                metric_id=rc.metric_id,
+                metric_version=rc.metric_version,
+                baseline_arm_id=rc.baseline_arm_id,
+                comparison_arm_id=rc.comparison_arm_id,
+                paired_count=rc.paired_count,
+                baseline_value=rc.baseline_value,
+                comparison_value=rc.comparison_value,
+                absolute_delta=rc.absolute_delta,
+                relative_delta=rc.relative_delta,
+                standardized_effect_size=rc.standardized_effect_size,
+                direction=rc.direction,
+                mcnemar_statistic=rc.mcnemar_statistic,
+                mcnemar_p_value=rc.mcnemar_p_value,
+                bootstrap_ci_lower=rc.bootstrap_ci_lower,
+                bootstrap_ci_upper=rc.bootstrap_ci_upper,
+                holm_corrected_p_value=corrected_p,
+                holm_rank=rank,
+                gate_decision=_paired_gate_decision(
+                    rc.p_value, corrected_p, rc.absolute_delta, definition.direction,
+                ),
+            ))
+
+    comparisons.sort(key=lambda c: (c.metric_id, c.metric_version, c.baseline_arm_id, c.comparison_arm_id))
+    return comparisons
+
+
+def _paired_gate_decision(
+    raw_p_value: float | None,
+    corrected_p_value: float,
+    abs_delta: float,
+    direction: MetricDirection,
+) -> GateDecisionStatus:
+    """Determine the gate decision for a paired comparison.
+
+    A comparison passes only when the Holm-corrected p-value is below
+    0.05 AND the absolute delta is practically meaningful (non-zero).
+    Statistical significance alone cannot pass a release.
+    """
+    if raw_p_value is None:
+        return GateDecisionStatus.INSUFFICIENT_DATA
+    if corrected_p_value > 0.05:
+        return GateDecisionStatus.INSUFFICIENT_DATA
+    if abs_delta == 0.0:
+        return GateDecisionStatus.INSUFFICIENT_DATA
+    return GateDecisionStatus.PASS
+
+
 def compute_canonical_analysis(
     tasks: Sequence[TaskDefinition],
     attempts: Sequence[AttemptRecord],
@@ -506,6 +743,7 @@ def compute_canonical_analysis(
     gate_decisions = _compute_gate_decisions(metric_results)
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
     confusion_matrices = _compute_confusion_matrices(attempts, metric_observations, tasks)
+    comparisons = _compute_paired_comparisons(tasks, attempts, metric_observations)
 
     unsupported_claim_names = sorted(RELEASE_METRIC_SET.unsupported_claim_names)
 
@@ -521,7 +759,7 @@ def compute_canonical_analysis(
         metric_results=metric_results,
         domain_stratified_results=domain_stratified,
         confusion_matrices=confusion_matrices,
-        comparisons=[],
+        comparisons=comparisons,
         gate_decisions=gate_decisions,
         bridge_runs=[],
         unsupported_claim_names=unsupported_claim_names,

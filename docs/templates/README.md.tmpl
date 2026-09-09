@@ -9,7 +9,7 @@ g8e is an AI data and execution governance suite. It places a fail-closed contro
 
 Every governed mutation is a typed, signed, state-bound `GovernanceEnvelope`. The Gateway admits it, the Operator independently verifies it, the Actuator executes it at the data owner’s boundary, and the platform records signed evidence of the result.
 
-[Get started](docs/guides/getting_started.md) · [Run the full suite](docs/guides/unified_stack.md) · [Architecture](docs/architecture/overview.md) · [Proof-backed compliance](docs/reference/compliance-evidence.md) · [Protocol](protocol/docs/spec.md)
+[Get started](docs/guides/getting_started.md) · [Run the full suite](docs/guides/unified_stack.md) · [Architecture](docs/architecture/overview.md) · [Proof-backed compliance](docs/reference/compliance-evidence.md) · [Protocol](protocol/docs/spec.md) · [Position paper](docs/core/position_paper.md)
 
 ## Proof, not promises
 

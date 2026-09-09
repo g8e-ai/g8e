@@ -117,7 +117,6 @@ Bare ` + "`auth enroll`" + ` (no subcommand) prints this help and exits non-zero
 	}
 	cmd.AddCommand(
 		enrollUserCmd(),
-		guiCmd(),
 	)
 	return cmd
 }

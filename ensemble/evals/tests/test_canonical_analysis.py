@@ -99,7 +99,7 @@ def _make_metric_obs(
     attempt_id: str = _ATTEMPT_ID,
     task_id: str = _TASK_ID,
     arm_id: Arm = Arm.DOCTRINE,
-    value: float = 1.0,
+    value: float | None = 1.0,
     eligible: bool = True,
     verification_status: VerificationStatus = VerificationStatus.VERIFIED,
 ) -> MetricObservation:
@@ -1024,3 +1024,754 @@ class TestReceiptCoverage:
         assert analysis.receipt_coverage.eligible_attempt_count == 2
         assert analysis.receipt_coverage.receipt_bound_count == 1
         assert analysis.receipt_coverage.coverage_pct == 50.0
+
+
+def _make_multi_arm_scenario(
+    arm_values: dict[Arm, list[float]],
+    task_ids: list[str],
+    metric_id: str = "receipt_integrity",
+    state_snapshot_hash: str = "",
+) -> tuple[list[TaskDefinition], list[AttemptRecord], list[MetricObservation]]:
+    """Build a multi-arm scenario with paired task instances.
+
+    Creates one task per task_id, one attempt per (arm, task_id), and one
+    metric observation per attempt. All attempts share the same
+    state_snapshot_hash so they pair on (task_id, state_snapshot_hash).
+    """
+    tasks = [_make_task(task_id=tid) for tid in task_ids]
+    attempts: list[AttemptRecord] = []
+    observations: list[MetricObservation] = []
+    for arm, values in arm_values.items():
+        for tid, val in zip(task_ids, values, strict=True):
+            att_id = f"att-{arm.value}-{tid}"
+            attempt = _make_attempt(
+                attempt_id=att_id,
+                task_id=tid,
+                arm_id=arm,
+            )
+            attempt = attempt.model_copy(update={"state_snapshot_hash": state_snapshot_hash})
+            attempts.append(attempt)
+            observations.append(_make_metric_obs(
+                metric_id=metric_id,
+                attempt_id=att_id,
+                task_id=tid,
+                arm_id=arm,
+                value=val,
+            ))
+    return tasks, attempts, observations
+
+
+class TestPairedComparisons:
+    """Tests for _compute_paired_comparisons in the canonical analysis engine."""
+
+    def test_paired_comparisons_empty_when_single_arm(self) -> None:
+        """Only one arm produces no comparisons (need at least 2 arms)."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.comparisons == []
+
+    def test_paired_comparisons_empty_when_no_common_tasks(self) -> None:
+        """Two arms with disjoint task sets produce no comparisons."""
+        task_d1 = _make_task(task_id="task-d1")
+        task_d2 = _make_task(task_id="task-d2")
+        task_r1 = _make_task(task_id="task-r1")
+        task_r2 = _make_task(task_id="task-r2")
+        att_d1 = _make_attempt(attempt_id="att-d1", task_id="task-d1", arm_id=Arm.DIRECT)
+        att_d2 = _make_attempt(attempt_id="att-d2", task_id="task-d2", arm_id=Arm.DIRECT)
+        att_r1 = _make_attempt(attempt_id="att-r1", task_id="task-r1", arm_id=Arm.DOCTRINE)
+        att_r2 = _make_attempt(attempt_id="att-r2", task_id="task-r2", arm_id=Arm.DOCTRINE)
+        obs_d1 = _make_metric_obs(attempt_id="att-d1", task_id="task-d1", arm_id=Arm.DIRECT, value=1.0)
+        obs_d2 = _make_metric_obs(attempt_id="att-d2", task_id="task-d2", arm_id=Arm.DIRECT, value=1.0)
+        obs_r1 = _make_metric_obs(attempt_id="att-r1", task_id="task-r1", arm_id=Arm.DOCTRINE, value=0.0)
+        obs_r2 = _make_metric_obs(attempt_id="att-r2", task_id="task-r2", arm_id=Arm.DOCTRINE, value=0.0)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task_d1, task_d2, task_r1, task_r2],
+            attempts=[att_d1, att_d2, att_r1, att_r2],
+            metric_observations=[obs_d1, obs_d2, obs_r1, obs_r2],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.comparisons == []
+
+    def test_paired_comparisons_empty_when_insufficient_pairs(self) -> None:
+        """Only 1 common task instance produces no comparisons (need >= 2)."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+            task_ids=["task-1"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.comparisons == []
+
+    def test_paired_comparisons_produce_deltas_for_two_arms(self) -> None:
+        """Two arms with 3 common tasks produce a comparison with correct deltas."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(ri_comparisons) == 1
+        cmp = ri_comparisons[0]
+        # baseline is alphabetically first: "direct" < "doctrine"
+        assert cmp.baseline_arm_id == "direct"
+        assert cmp.comparison_arm_id == "doctrine"
+        assert cmp.paired_count == 3
+        assert cmp.baseline_value == 1.0
+        assert cmp.comparison_value == 0.0
+        assert cmp.absolute_delta == -1.0
+        assert cmp.relative_delta == -1.0
+
+    def test_paired_comparisons_direction_regression_for_binary_pass_fail(self) -> None:
+        """BINARY_PASS_FAIL with negative delta produces REGRESSION."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.direction == ComparisonDirection.REGRESSION
+
+    def test_paired_comparisons_direction_improvement_for_higher_is_better(self) -> None:
+        """HIGHER_IS_BETTER with positive delta produces IMPROVEMENT."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="canary_scrubbing",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
+        assert cmp.direction == ComparisonDirection.IMPROVEMENT
+        assert cmp.absolute_delta == 0.5
+
+    def test_paired_comparisons_direction_regression_for_higher_is_better(self) -> None:
+        """HIGHER_IS_BETTER with negative delta produces REGRESSION."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="canary_scrubbing",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
+        assert cmp.direction == ComparisonDirection.REGRESSION
+        assert cmp.absolute_delta == -0.5
+
+    def test_paired_comparisons_direction_improvement_for_lower_is_better(self) -> None:
+        """LOWER_IS_BETTER with negative delta produces IMPROVEMENT."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="model_boundary_raw_secret_rate",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "model_boundary_raw_secret_rate")
+        assert cmp.direction == ComparisonDirection.IMPROVEMENT
+        assert cmp.absolute_delta == -0.5
+
+    def test_paired_comparisons_direction_regression_for_lower_is_better(self) -> None:
+        """LOWER_IS_BETTER with positive delta produces REGRESSION."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="model_boundary_raw_secret_rate",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "model_boundary_raw_secret_rate")
+        assert cmp.direction == ComparisonDirection.REGRESSION
+        assert cmp.absolute_delta == 0.5
+
+    def test_paired_comparisons_direction_neutral_for_zero_delta(self) -> None:
+        """Zero absolute delta produces NEUTRAL direction."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.direction == ComparisonDirection.NEUTRAL
+        assert cmp.absolute_delta == 0.0
+
+    def test_paired_comparisons_direction_neutral_for_neutral_metric(self) -> None:
+        """NEUTRAL direction metric always produces NEUTRAL comparison direction."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 2.0, 3.0], Arm.DOCTRINE: [3.0, 2.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="stage_latency_seconds",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "stage_latency_seconds")
+        assert cmp.direction == ComparisonDirection.NEUTRAL
+
+    def test_paired_comparisons_mcnemar_for_binary_pass_fail(self) -> None:
+        """BINARY_PASS_FAIL metrics use the McNemar p-value as the comparison p-value."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        # All 3 pairs are discordant in the same direction (baseline pass, comparison fail)
+        assert cmp.mcnemar_statistic is not None
+        assert cmp.mcnemar_p_value is not None
+        assert 0.0 <= cmp.mcnemar_p_value <= 1.0
+
+    def test_paired_comparisons_t_test_for_continuous_metric(self) -> None:
+        """Non-binary metrics use the paired t-test p-value as the comparison p-value."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7], Arm.DOCTRINE: [0.8, 0.9, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="canary_scrubbing",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
+        # Continuous metric uses t-test, McNemar may still be computed but p-value comes from t-test
+        # The diffs are [0.3, 0.3, 0.3] which has zero variance, so t-test returns (None, None)
+        # When t-test returns None, the p_value is None, and the gate decision is INSUFFICIENT_DATA
+        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+
+    def test_paired_comparisons_bootstrap_ci_deterministic(self) -> None:
+        """Bootstrap CI is deterministic for identical inputs."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            task_ids=["task-1", "task-2", "task-3", "task-4"],
+            metric_id="canary_scrubbing",
+        )
+        analysis1 = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        analysis2 = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp1 = next(c for c in analysis1.comparisons if c.metric_id == "canary_scrubbing")
+        cmp2 = next(c for c in analysis2.comparisons if c.metric_id == "canary_scrubbing")
+        assert cmp1.bootstrap_ci_lower == cmp2.bootstrap_ci_lower
+        assert cmp1.bootstrap_ci_upper == cmp2.bootstrap_ci_upper
+        assert cmp1.bootstrap_ci_lower is not None
+        assert cmp1.bootstrap_ci_upper is not None
+
+    def test_paired_comparisons_holm_correction_single_comparison(self) -> None:
+        """Holm correction with a single comparison preserves the p-value and assigns rank 1."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.holm_rank == 1
+        # Single comparison: Holm correction preserves the original p-value
+        if cmp.mcnemar_p_value is not None:
+            assert cmp.holm_corrected_p_value == cmp.mcnemar_p_value
+
+    def test_paired_comparisons_holm_correction_multiple_comparisons(self) -> None:
+        """Three arms produce 3 comparisons per metric with Holm correction applied."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        # C(3,2) = 3 pairs: (consensus, direct), (consensus, doctrine), (direct, doctrine)
+        assert len(ri_comparisons) == 3
+        # Holm ranks should be 1, 2, 3 (each comparison gets a unique rank)
+        ranks = sorted(c.holm_rank for c in ri_comparisons if c.holm_rank is not None)
+        assert ranks == [1, 2, 3]
+        # Corrected p-values should be monotonically non-decreasing by rank
+        by_rank = sorted(ri_comparisons, key=lambda c: c.holm_rank or 0)
+        corrected_ps = [c.holm_corrected_p_value for c in by_rank if c.holm_corrected_p_value is not None]
+        if len(corrected_ps) > 1:
+            for i in range(1, len(corrected_ps)):
+                assert corrected_ps[i] >= corrected_ps[i - 1]
+
+    def test_paired_comparisons_gate_decision_pass_when_significant(self) -> None:
+        """Gate decision is PASS when corrected p < 0.05 and delta is non-zero."""
+        # 7 tasks with all discordant pairs: baseline all pass, comparison all fail
+        # McNemar p-value for b=7, c=0, n=7: 2 * (0.5)^7 = 0.015625 < 0.05
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0] * 7, Arm.DOCTRINE: [0.0] * 7},
+            task_ids=[f"task-{i}" for i in range(1, 8)],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.gate_decision == GateDecisionStatus.PASS
+        assert cmp.holm_corrected_p_value is not None
+        assert cmp.holm_corrected_p_value < 0.05
+        assert cmp.absolute_delta != 0.0
+
+    def test_paired_comparisons_gate_decision_insufficient_data_when_p_value_none(self) -> None:
+        """Gate decision is INSUFFICIENT_DATA when the p-value is None (no discordant pairs)."""
+        # All same values: no discordant pairs, McNemar returns (None, None)
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.mcnemar_p_value is None
+        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+
+    def test_paired_comparisons_gate_decision_insufficient_data_when_not_significant(self) -> None:
+        """Gate decision is INSUFFICIENT_DATA when corrected p > 0.05."""
+        # 3 tasks with mixed discordant: b=2, c=1, p-value ≈ 1.0 (not significant)
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 0.0], Arm.DOCTRINE: [0.0, 0.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.mcnemar_p_value is not None
+        assert cmp.holm_corrected_p_value is not None
+        assert cmp.holm_corrected_p_value > 0.05
+        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+
+    def test_paired_comparisons_sorted_by_metric_and_arms(self) -> None:
+        """Comparisons are sorted by (metric_id, baseline_arm_id, comparison_arm_id)."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(
+                    metric_id="receipt_integrity",
+                    attempt_id=att_id,
+                    task_id=tid,
+                    arm_id=arm,
+                    value=val,
+                ))
+                observations.append(_make_metric_obs(
+                    metric_id="canary_scrubbing",
+                    attempt_id=att_id,
+                    task_id=tid,
+                    arm_id=arm,
+                    value=val,
+                ))
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        keys = [(c.metric_id, c.baseline_arm_id, c.comparison_arm_id) for c in analysis.comparisons]
+        assert keys == sorted(keys)
+
+    def test_paired_comparisons_excludes_none_value_observations(self) -> None:
+        """Observations with None values are excluded from pairing."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        attempts = [
+            _make_attempt(attempt_id="att-d1", task_id="task-1", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-d3", task_id="task-3", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE),
+            _make_attempt(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE),
+            _make_attempt(attempt_id="att-r3", task_id="task-3", arm_id=Arm.DOCTRINE),
+        ]
+        observations = [
+            _make_metric_obs(attempt_id="att-d1", task_id="task-1", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-d3", task_id="task-3", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE, value=0.0),
+            # task-2 doctrine observation has None value (excluded)
+            _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=None),
+            _make_metric_obs(attempt_id="att-r3", task_id="task-3", arm_id=Arm.DOCTRINE, value=0.0),
+        ]
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(cmp) == 1
+        # Only 2 common pairs (task-1 and task-3; task-2 excluded due to None value)
+        assert cmp[0].paired_count == 2
+
+    def test_paired_comparisons_pairs_by_state_snapshot_hash(self) -> None:
+        """Attempts with different state_snapshot_hash on the same task are not paired."""
+        task_ids = ["task-1", "task-2"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        # Direct arm: state_snapshot_hash="snap-a"
+        att_d1 = _make_attempt(attempt_id="att-d1", task_id="task-1", arm_id=Arm.DIRECT).model_copy(
+            update={"state_snapshot_hash": "snap-a"}
+        )
+        att_d2 = _make_attempt(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT).model_copy(
+            update={"state_snapshot_hash": "snap-a"}
+        )
+        # Doctrine arm: state_snapshot_hash="snap-b" (different from direct)
+        att_r1 = _make_attempt(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE).model_copy(
+            update={"state_snapshot_hash": "snap-b"}
+        )
+        att_r2 = _make_attempt(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE).model_copy(
+            update={"state_snapshot_hash": "snap-b"}
+        )
+        observations = [
+            _make_metric_obs(attempt_id="att-d1", task_id="task-1", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE, value=0.0),
+            _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=0.0),
+        ]
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=[att_d1, att_d2, att_r1, att_r2],
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        # No common pairing keys because state_snapshot_hash differs
+        assert analysis.comparisons == []
+
+    def test_paired_comparisons_pairs_with_matching_state_snapshot_hash(self) -> None:
+        """Attempts with the same state_snapshot_hash on the same task are paired."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        snap = "shared-snap"
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in [(Arm.DIRECT, [1.0, 1.0, 1.0]), (Arm.DOCTRINE, [0.0, 0.0, 0.0])]:
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(
+                    _make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm).model_copy(
+                        update={"state_snapshot_hash": snap}
+                    )
+                )
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(cmp) == 1
+        assert cmp[0].paired_count == 3
+
+    def test_paired_comparisons_three_arms_produce_three_pairs(self) -> None:
+        """Three arms produce C(3,2) = 3 ordered pairs per metric."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={
+                Arm.CONSENSUS: [1.0, 1.0, 1.0],
+                Arm.DIRECT: [0.0, 0.0, 0.0],
+                Arm.DOCTRINE: [1.0, 0.0, 1.0],
+            },
+            task_ids=task_ids,
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(ri_comparisons) == 3
+        pairs = {(c.baseline_arm_id, c.comparison_arm_id) for c in ri_comparisons}
+        assert pairs == {("consensus", "direct"), ("consensus", "doctrine"), ("direct", "doctrine")}
+
+    def test_paired_comparisons_deterministic_output(self) -> None:
+        """Identical inputs produce identical comparison records."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            task_ids=["task-1", "task-2", "task-3", "task-4"],
+            metric_id="canary_scrubbing",
+        )
+        analysis1 = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        analysis2 = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis1.canonical_json() == analysis2.canonical_json()
+
+    def test_paired_comparisons_replicates_averaged(self) -> None:
+        """Multiple observations per pairing key are averaged before comparison."""
+        task_ids = ["task-1", "task-2"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        # Direct: 2 observations on task-1 (0.5, 1.0 -> avg 0.75), 1 on task-2 (1.0)
+        # Doctrine: 1 observation on task-1 (0.0), 1 on task-2 (0.0)
+        attempts = [
+            _make_attempt(attempt_id="att-d1a", task_id="task-1", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-d1b", task_id="task-1", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT),
+            _make_attempt(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE),
+            _make_attempt(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE),
+        ]
+        observations = [
+            _make_metric_obs(attempt_id="att-d1a", task_id="task-1", arm_id=Arm.DIRECT, value=0.5),
+            _make_metric_obs(attempt_id="att-d1b", task_id="task-1", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-d2", task_id="task-2", arm_id=Arm.DIRECT, value=1.0),
+            _make_metric_obs(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE, value=0.0),
+            _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=0.0),
+        ]
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(cmp) == 1
+        # baseline (direct) values: [avg(0.5, 1.0), 1.0] = [0.75, 1.0] -> mean 0.875
+        assert cmp[0].baseline_value == round((0.75 + 1.0) / 2, 10)
+        assert cmp[0].paired_count == 2
+
+    def test_paired_comparisons_excludes_non_release_metrics(self) -> None:
+        """Metrics not in the release set are excluded from comparisons."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in [(Arm.DIRECT, [1.0, 1.0, 1.0]), (Arm.DOCTRINE, [0.0, 0.0, 0.0])]:
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(
+                    metric_id="nonexistent_metric",
+                    attempt_id=att_id,
+                    task_id=tid,
+                    arm_id=arm,
+                    value=val,
+                ))
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.comparisons == []
+
+    def test_paired_comparisons_relative_delta_none_for_zero_baseline(self) -> None:
+        """Relative delta is None when the baseline value is zero."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="canary_scrubbing",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
+        assert cmp.relative_delta is None
+        assert cmp.absolute_delta == 1.0
+
+    def test_paired_comparisons_effect_size_computed(self) -> None:
+        """Cohen's d standardized effect size is computed for non-constant diffs."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            task_ids=["task-1", "task-2", "task-3", "task-4"],
+            metric_id="canary_scrubbing",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
+        # Diffs are [0.3, 0.3, 0.3, 0.15] which has non-zero variance, so Cohen's d is computed
+        assert cmp.standardized_effect_size is not None
+
+    def test_paired_comparisons_effect_size_none_for_constant_diffs(self) -> None:
+        """Cohen's d is None when all diffs are identical (zero variance)."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        # All diffs are -1.0 (constant), so variance is 0 and Cohen's d is None
+        assert cmp.standardized_effect_size is None

@@ -19,6 +19,7 @@ dependencies = [
     "protobuf==7.36.0",
     "httpx-sse>=0.4.0",
     "cryptography==50.0.1",
+    "numpy>=2.2.0",
 ]
 
 [project.scripts]

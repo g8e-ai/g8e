@@ -16,6 +16,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -45,17 +47,30 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigYesFlagAttemptsResta
 
 	// Spawn a dummy subprocess whose PID will be written to the PID file.
 	// StopOperator will kill this process, not the test process.
-	dummyCmd := exec.Command("sleep", "300")
-	require.NoError(t, dummyCmd.Start())
+	//
+	// The dummy is started via "sh -c 'sleep 300 & echo $!'" so the shell
+	// exits immediately and sleep is reparented to init (PID 1). This avoids
+	// a zombie: when StopOperator sends SIGTERM/SIGKILL, init reaps the dead
+	// sleep automatically. If the test process were the parent, the killed
+	// sleep would remain a zombie until Wait() is called, and
+	// isProcessRunningWithFinder (which uses Signal(0)) would keep reporting
+	// it alive, causing StopOperator to fail with ErrProcessSigKillTimeout
+	// before StartOperator is reached.
+	dummyCmd := exec.Command("sh", "-c", "sleep 300 >/dev/null 2>&1 & echo $!")
+	output, err := dummyCmd.Output()
+	require.NoError(t, err)
+	dummyPID, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	require.NoError(t, err)
 	t.Cleanup(func() {
-		_ = dummyCmd.Process.Kill()
-		_, _ = dummyCmd.Process.Wait()
+		// Best-effort kill in case the test fails before StopOperator runs.
+		// The process is reparented to init, so no Wait() is needed here.
+		_ = syscall.Kill(dummyPID, syscall.SIGKILL)
 	})
 
 	// Write the dummy subprocess's PID to the PID file.
 	pidRelPath := filepath.Join(constants.PidDirname, constants.OperatorPIDFilename)
 	require.NoError(t, fileSvc.WriteFile(context.Background(), pidRelPath,
-		[]byte(strconv.Itoa(dummyCmd.Process.Pid)), constants.PermFilePrivate))
+		[]byte(strconv.Itoa(dummyPID)), constants.PermFilePrivate))
 
 	// Write a non-matching launch profile (different CORS origin).
 	profileCfg := serve.GatewayConfig{
@@ -90,7 +105,7 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigYesFlagAttemptsResta
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
-	err := cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
+	err = cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 	assert.Contains(t, buf.String(), "Stopping g8e Gateway")
