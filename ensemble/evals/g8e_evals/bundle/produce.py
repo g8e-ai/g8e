@@ -35,9 +35,8 @@ from g8e_evals.bundle.manifest import (
     ChecksumRoot,
     PrivacyClass,
 )
-from g8e_evals.bundle.signing import BundleSignature, EvalSigningKey, sign_bundle
-from g8e_evals.bundle.validation import validate_bundle_path
-from g8e_evals.schema import EvidenceEncryption, EvidenceEncryptionAlgorithm
+from g8e_evals.bundle.signing import EvalSigningKey, sign_bundle
+from g8e_evals.schema import EvidenceEncryption
 
 
 # Mapping from report-directory filenames to (ArtifactType, PrivacyClass).
@@ -179,7 +178,7 @@ def produce_bundle(
         entry = _build_artifact_entry(filename, content, encryption)
         entries.append(entry)
 
-    # Build manifest with empty self-hash, compute hash, then set it.
+    # Build manifest with empty self-hash fields.
     manifest = BundleManifest(
         schema_version=BUNDLE_MANIFEST_SCHEMA_VERSION,
         bundle_id=bundle_id,
@@ -191,8 +190,6 @@ def produce_bundle(
         manifest_content_sha256="",
         checksum_root_sha256="",
     )
-    manifest_hash = compute_manifest_hash(manifest)
-    manifest = manifest.model_copy(update={"manifest_content_sha256": manifest_hash})
 
     # Build checksum root with empty self-hash, compute hash, then set it.
     checksum_entries = [
@@ -206,8 +203,12 @@ def produce_bundle(
     checksum_hash = compute_checksum_root_hash(checksum_root)
     checksum_root = checksum_root.model_copy(update={"checksum_root_sha256": checksum_hash})
 
-    # Update manifest with checksum root hash.
+    # Set checksum root hash on manifest BEFORE computing manifest hash,
+    # because canonical_manifest_bytes only excludes manifest_content_sha256,
+    # not checksum_root_sha256. The manifest hash must cover the checksum root hash.
     manifest = manifest.model_copy(update={"checksum_root_sha256": checksum_hash})
+    manifest_hash = compute_manifest_hash(manifest)
+    manifest = manifest.model_copy(update={"manifest_content_sha256": manifest_hash})
 
     # Write all files to the bundle directory.
     for file_path in files:

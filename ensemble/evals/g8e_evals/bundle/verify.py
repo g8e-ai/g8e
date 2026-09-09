@@ -35,14 +35,10 @@ from g8e_evals.analysis import canonical_model_json, render_cli, render_html, re
 from g8e_evals.analysis.engine import compute_canonical_analysis_from_record
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.bundle.canonical import (
-    canonical_checksum_root_bytes,
-    canonical_manifest_bytes,
     compute_checksum_root_hash,
     compute_manifest_hash,
 )
 from g8e_evals.bundle.manifest import (
-    BUNDLE_MANIFEST_SCHEMA_VERSION,
-    ArtifactType,
     BundleManifest,
     ChecksumRoot,
     PrivacyClass,
@@ -603,12 +599,12 @@ def _verify_signatures_trust(
 # ---------------------------------------------------------------------------
 
 
-def _read_jsonl(bundle_root: Path, filename: str, model_cls: type[BaseModel]) -> list[BaseModel]:
+def _read_jsonl[T: BaseModel](bundle_root: Path, filename: str, model_cls: type[T]) -> list[T]:
     """Read a JSONL file and deserialize each line as a typed model."""
     path = bundle_root / filename
     if not path.exists():
         return []
-    records: list[BaseModel] = []
+    records: list[T] = []
     for line in path.read_text().splitlines():
         line = line.strip()
         if not line:
@@ -656,7 +652,7 @@ def _verify_record_bindings(
     tasks = _read_jsonl(bundle_root, evals_constants.TASKS_JSONL, TaskDefinition)
     attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
 
-    task_ids = [t.task_id for t in tasks]  # type: ignore[attr-defined]
+    task_ids = [t.task_id for t in tasks]
     if len(task_ids) != len(set(task_ids)):
         failures.append(VerificationFailure(
             layer=VerificationLayer.RECORD_BINDINGS,
@@ -664,9 +660,9 @@ def _verify_record_bindings(
             record_id="tasks",
             message="duplicate task ID",
         ))
-    task_by_id = {t.task_id: t for t in tasks}  # type: ignore[attr-defined]
+    task_by_id = {t.task_id: t for t in tasks}
 
-    attempt_ids = [a.attempt_id for a in attempts]  # type: ignore[attr-defined]
+    attempt_ids = [a.attempt_id for a in attempts]
     if len(attempt_ids) != len(set(attempt_ids)):
         failures.append(VerificationFailure(
             layer=VerificationLayer.RECORD_BINDINGS,
@@ -674,9 +670,9 @@ def _verify_record_bindings(
             record_id="attempts",
             message="duplicate attempt ID",
         ))
-    attempt_by_id = {a.attempt_id: a for a in attempts}  # type: ignore[attr-defined]
+    attempt_by_id = {a.attempt_id: a for a in attempts}
 
-    for attempt in attempts:  # type: ignore[attr-defined]
+    for attempt in attempts:
         if attempt.run_id != run_id:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.RECORD_BINDINGS,
@@ -695,7 +691,7 @@ def _verify_record_bindings(
     # Verify receipts reference valid attempts.
     from g8e_evals.schema import ReceiptObservation
     receipts = _read_jsonl(bundle_root, evals_constants.RECEIPTS_JSONL, ReceiptObservation)
-    for receipt in receipts:  # type: ignore[attr-defined]
+    for receipt in receipts:
         if receipt.attempt_id not in attempt_by_id:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.RECORD_BINDINGS,
@@ -734,9 +730,9 @@ def _verify_envelope_receipt(
     # Read attempts for correlation.
     from g8e_evals.schema import AttemptRecord
     attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
-    attempt_by_id = {a.attempt_id: a for a in attempts}  # type: ignore[attr-defined]
+    attempt_by_id = {a.attempt_id: a for a in attempts}
 
-    for receipt in receipts:  # type: ignore[attr-defined]
+    for receipt in receipts:
         if receipt.attempt_id not in attempt_by_id:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.ENVELOPE_RECEIPT,
@@ -772,11 +768,11 @@ def _verify_chain_links(
 
     from g8e_evals.schema import AttemptRecord, StageObservation
     attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
-    attempt_by_id = {a.attempt_id: a for a in attempts}  # type: ignore[attr-defined]
+    attempt_by_id = {a.attempt_id: a for a in attempts}
     stages = _read_jsonl(bundle_root, evals_constants.STAGES_JSONL, StageObservation)
 
     stage_ids: set[str] = set()
-    for stage in stages:  # type: ignore[attr-defined]
+    for stage in stages:
         if stage.stage_id in stage_ids:
             failures.append(VerificationFailure(
                 layer=VerificationLayer.CHAIN_LINKS,
@@ -832,7 +828,7 @@ def _verify_metric_producers(
     from g8e_evals.schema import MetricObservation
     metrics = _read_jsonl(bundle_root, evals_constants.METRICS_JSONL, MetricObservation)
 
-    for metric in metrics:  # type: ignore[attr-defined]
+    for metric in metrics:
         try:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         except Exception as exc:

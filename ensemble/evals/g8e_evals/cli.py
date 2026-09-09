@@ -175,6 +175,12 @@ from g8e_evals.analysis import (
     render_html,
     render_markdown,
 )
+from g8e_evals.bundle import (
+    EvalSigningKey,
+    EvalTrustStore,
+    produce_bundle,
+    verify_bundle,
+)
 from g8e_evals.models import ScoreDetails, TaskMetadata
 
 console = Console()
@@ -4820,6 +4826,125 @@ async def _run_synthetic_suite(
     _scan_report_for_canary_leaks(report_dir, canary_values, per_run_key)
 
     console.print(f"\n[bold green]Synthetic report saved to {report_dir}[/bold green]")
+
+
+@main.command(name="bundle")
+@click.argument("report_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument("bundle_dir", type=click.Path(path_type=Path))
+@click.option("--bundle-id", required=True, help="Unique bundle identity")
+@click.option("--run-id", required=True, help="Run identity from the run manifest")
+@click.option("--release-version", required=True, help="Release version")
+@click.option("--signing-key-seed", type=click.Path(exists=True, path_type=Path),
+              help="Path to a 32-byte Ed25519 seed file for deterministic signing")
+@click.option("--trust-store", type=click.Path(exists=True, path_type=Path),
+              help="Path to a JSON EvalTrustStore file (for reference, not stored in bundle)")
+@click.option("--json", "json_output", is_flag=True, help="Emit machine-readable manifest JSON")
+def bundle_cmd(
+    report_dir: Path,
+    bundle_dir: Path,
+    bundle_id: str,
+    run_id: str,
+    release_version: str,
+    signing_key_seed: Path | None,
+    trust_store: Path | None,
+    json_output: bool,
+):
+    """Create an immutable eval bundle from a report directory.
+
+    Reads every artifact in the report directory, builds a typed versioned
+    bundle manifest and checksum root, optionally signs them with a
+    dedicated Ed25519 eval-run signing identity, and writes the bundle to
+    the bundle directory. The bundle is the immutable contract that
+    offline verification checks against.
+    """
+    signing_key: EvalSigningKey | None = None
+    if signing_key_seed is not None:
+        seed = signing_key_seed.read_bytes()
+        try:
+            signing_key = EvalSigningKey.from_seed(seed)
+        except ValueError as exc:
+            raise click.ClickException(f"invalid signing key seed: {exc}") from exc
+
+    manifest = produce_bundle(
+        report_dir=report_dir,
+        bundle_dir=bundle_dir,
+        bundle_id=bundle_id,
+        run_id=run_id,
+        release_version=release_version,
+        signing_key=signing_key,
+    )
+
+    if json_output:
+        click.echo(canonical_model_json(manifest))
+    else:
+        console.print(f"[bold green]Bundle created at {bundle_dir}[/bold green]")
+        console.print(f"  Bundle ID: {manifest.bundle_id}")
+        console.print(f"  Run ID: {manifest.run_id}")
+        console.print(f"  Release: {manifest.release_version}")
+        console.print(f"  Artifacts: {len(manifest.artifacts)}")
+        if signing_key is not None:
+            console.print(f"  Signed with key: {signing_key.key_id[:16]}...")
+        else:
+            console.print("  [yellow]Unsigned (no signing key provided)[/yellow]")
+
+
+@main.command(name="verify")
+@click.argument("bundle_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--trust-store", type=click.Path(exists=True, path_type=Path),
+              help="Path to a JSON EvalTrustStore file (required for signature verification)")
+@click.option("--json", "json_output", is_flag=True, help="Emit machine-readable verification report")
+def verify_cmd(
+    bundle_dir: Path,
+    trust_store: Path | None,
+    json_output: bool,
+):
+    """Verify an eval bundle offline with complete fail-closed verification.
+
+    Runs eleven ordered verification layers: rooted inventory and limits;
+    schemas and canonical bytes; file hashes and references; manifest and
+    checksum signatures and assessed trust; run/task/attempt bindings;
+    envelope/receipt correlation; persistence, state, posture, stage chain,
+    commitment, and audit links; metric evidence and producers; canonical
+    analysis reproduction; renderer byte equality; and public/restricted
+    separation.
+
+    Requires no originating service, runtime directory, network access, or
+    in-bundle trust policy. The trust store is supplied externally; the
+    verifier never trusts a key merely because the bundle contains it.
+    """
+    trust_store_obj: EvalTrustStore | None = None
+    if trust_store is not None:
+        try:
+            trust_store_obj = EvalTrustStore.model_validate_json(trust_store.read_text())
+        except ValueError as exc:
+            raise click.ClickException(f"invalid trust store: {exc}") from exc
+
+    report = verify_bundle(bundle_dir, trust_store=trust_store_obj)
+
+    if json_output:
+        click.echo(canonical_model_json(report))
+    else:
+        status = "green" if report.ok else "red"
+        console.print(f"\n[{status}]Verification {'passed' if report.ok else 'failed'}[/{status}]")
+        console.print(f"  Bundle ID: {report.bundle_id}")
+        console.print(f"  Run ID: {report.run_id}")
+        console.print(f"  Release: {report.release_version}")
+        for layer_result in report.layers:
+            layer_status = "green" if layer_result.passed else "red"
+            console.print(
+                f"  [{layer_status}]Layer {int(layer_result.layer):02d} "
+                f"{layer_result.layer.name}: {layer_result.failure_count} failures[/{layer_status}]"
+            )
+        if report.failures:
+            console.print(f"\n  [red]Failures ({len(report.failures)}):[/red]")
+            for failure in report.failures:
+                console.print(
+                    f"    [red]L{int(failure.layer):02d} {failure.code.value} "
+                    f"({failure.record_id or '-'})[/red]: {failure.message}"
+                )
+
+    if not report.ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
