@@ -1,8 +1,8 @@
 # Eval Analysis — v2.1.8
 
 - Run ID: `run-golden-1`
-- Analysis schema version: `1.1.0`
-- Analysis computation version: `1.2.0`
+- Analysis schema version: `1.2.0`
+- Analysis computation version: `1.3.0`
 
 ## Input Summary
 
@@ -12,7 +12,7 @@
 - Receipts: 0
 - Stages: 0
 - Metric observations: 1
-- Input content hash: `abf5771405f8a5cbedaccb08e96a0782bd0129a8a454d5582d2afb046a91f601`
+- Input content hash: `fb1afb283c9059064efb3840a20a3909f1d42e918bf0b1bc54802b63c66cbf13`
 
 ## Missingness Breakdown
 
@@ -43,19 +43,33 @@
 
 | Metric | Version | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| human_wait_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| local_resource_cpu_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| local_resource_peak_memory_bytes | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| provider_cost_usd | 1.0.0 | doctrine | economics | neutral | N/A | 0 | 0 | 1 | 1 |
+| provider_usage_tokens | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
 | receipt_integrity | 1.0.0 | doctrine | governance | binary_pass_fail | 1 | 1 | 1 | 1 | 0 |
+| stage_latency_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
 
 ## Domain-Stratified Results
 
 | Arm | Domain | Metrics | Passing | Failing | Not Applicable |
 | --- | --- | --- | --- | --- | --- |
+| doctrine | economics | 1 | 0 | 0 | 0 |
 | doctrine | governance | 1 | 1 | 0 | 0 |
+| doctrine | telemetry | 5 | 0 | 0 | 0 |
 
 ## Gate Decisions
 
 | Metric | Version | Arm | Status | Measured | Threshold | NI Margin | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| human_wait_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| local_resource_cpu_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| local_resource_peak_memory_bytes | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| provider_cost_usd | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| provider_usage_tokens | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
 | receipt_integrity | 1.0.0 | doctrine | pass | 1 | 1 | 0 | Release-blocker threshold 1.0 met: measured 1.0. |
+| stage_latency_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
 
 ## Unsupported Claims
 

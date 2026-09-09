@@ -48,8 +48,8 @@ from g8e_evals.metrics import MetricDirection
 from g8e_evals.release_metric_set import MetricDomain
 
 
-ANALYSIS_SCHEMA_VERSION = "1.1.0"
-ANALYSIS_COMPUTATION_VERSION = "1.2.0"
+ANALYSIS_SCHEMA_VERSION = "1.2.0"
+ANALYSIS_COMPUTATION_VERSION = "1.3.0"
 
 _FLOAT_PRECISION = 10
 

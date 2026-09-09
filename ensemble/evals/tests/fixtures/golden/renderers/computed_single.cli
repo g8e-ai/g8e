@@ -1,7 +1,7 @@
 === Eval Analysis — v2.1.8 ===
 Run ID: run-golden-1
-Analysis schema: 1.1.0
-Analysis computation: 1.2.0
+Analysis schema: 1.2.0
+Analysis computation: 1.3.0
 
 --- Input Summary ---
   Tasks: 1
@@ -10,7 +10,7 @@ Analysis computation: 1.2.0
   Receipts: 0
   Stages: 0
   Metric observations: 1
-  Input content hash: abf5771405f8a5cbedaccb08e96a0782bd0129a8a454d5582d2afb046a91f601
+  Input content hash: fb1afb283c9059064efb3840a20a3909f1d42e918bf0b1bc54802b63c66cbf13
 
 --- Missingness Breakdown ---
   Completed: 1
@@ -33,13 +33,27 @@ Analysis computation: 1.2.0
   doctrine
 
 --- Metric Results ---
+  human_wait_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
+  local_resource_cpu_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
+  local_resource_peak_memory_bytes@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
+  provider_cost_usd@1.0.0 [doctrine] domain=economics dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
+  provider_usage_tokens@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
   receipt_integrity@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=1 num=1 den=1 eligible=1 missing=0
+  stage_latency_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=0 eligible=1 missing=1
 
 --- Domain-Stratified Results ---
+  doctrine / economics: metrics=1 pass=0 fail=0 na=0
   doctrine / governance: metrics=1 pass=1 fail=0 na=0
+  doctrine / telemetry: metrics=5 pass=0 fail=0 na=0
 
 --- Gate Decisions ---
+  human_wait_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
+  local_resource_cpu_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
+  local_resource_peak_memory_bytes@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
+  provider_cost_usd@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
+  provider_usage_tokens@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
   receipt_integrity@1.0.0 [doctrine] status=pass measured=1 threshold=1 ni_margin=0 reason=Release-blocker threshold 1.0 met: measured 1.0.
+  stage_latency_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=1 of 1 eligible attempts are missing observations.
 
 --- Unsupported Claims ---
   certification

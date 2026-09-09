@@ -328,8 +328,8 @@ class TestCanonicalAnalysisModel:
         assert ComparisonDirection.NEUTRAL.value == "neutral"
 
     def test_analysis_versions_are_pinned(self) -> None:
-        assert ANALYSIS_SCHEMA_VERSION == "1.1.0"
-        assert ANALYSIS_COMPUTATION_VERSION == "1.2.0"
+        assert ANALYSIS_SCHEMA_VERSION == "1.2.0"
+        assert ANALYSIS_COMPUTATION_VERSION == "1.3.0"
 
     def test_canonical_json_is_deterministic(self) -> None:
         """Two identical analyses produce byte-identical canonical JSON."""
