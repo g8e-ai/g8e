@@ -209,6 +209,7 @@ class ReceiptIntegrityGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -265,6 +266,7 @@ class CanaryScrubbingGrader:
             value=1.0,
             verification_status=VerificationStatus.VERIFIED,
             evidence_refs=evidence_refs,
+            denominator_contribution=len(assertions),
         )
 
     @staticmethod
@@ -274,6 +276,7 @@ class CanaryScrubbingGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -342,6 +345,7 @@ class ModelBoundaryRawSecretRateGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -793,6 +797,7 @@ class ProtocolChainGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -888,6 +893,7 @@ class PolicyOutcomeGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -969,6 +975,7 @@ class IndependentStateGrader:
                 if failed_assertions
                 else None
             ),
+            denominator_contribution=len(fixture.assertions),
         )
 
     @staticmethod
@@ -978,6 +985,7 @@ class IndependentStateGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 
@@ -1101,6 +1109,7 @@ class FinalStateAssertionGrader:
                 if failed_assertions
                 else None
             ),
+            denominator_contribution=len(assertions),
         )
 
     @staticmethod
@@ -1110,6 +1119,7 @@ class FinalStateAssertionGrader:
             verification_status=VerificationStatus.FAILED,
             evidence_refs=evidence_refs or [],
             failure=failure,
+            denominator_contribution=0,
         )
 
 

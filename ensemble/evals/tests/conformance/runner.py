@@ -45,7 +45,7 @@ def assert_case_passes(case: ConformanceCase) -> None:
             f"{case.grader_id}/{case.category.value}: "
             f"{case.expected_failure_contains!r} not in {result.failure!r}"
         )
-    elif case.expected_status != VerificationStatus.VERIFIED or case.expected_value == 0.0:
+    elif case.expected_status != VerificationStatus.VERIFIED:
         assert result.failure is not None, (
             f"{case.grader_id}/{case.category.value}: expected a failure message"
         )

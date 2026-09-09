@@ -1281,4 +1281,8 @@ var (
 	ErrObserveRunNotFound      = errors.New("observe: run not found")
 	ErrObserveEvalNotFound     = errors.New("observe: eval not found")
 	ErrObserveDownloadNotFound = errors.New("observe: download not found")
+
+	// Observe producer errors (Phase 3: state projection persistence and SSE emission)
+	ErrObserveInvalidTransition = errors.New("observe: invalid state transition")
+	ErrObserveStaleUpdate       = errors.New("observe: stale update rejected")
 )

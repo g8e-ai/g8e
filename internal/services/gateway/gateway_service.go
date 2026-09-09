@@ -83,6 +83,7 @@ type GatewayModeService struct {
 	platformEnrollmentSvc *PlatformEnrollmentService
 	consensusSvc          *consensus.ConsensusService
 	dispatchSvc           *DispatchService
+	observeProducer       *ObserveProducerService
 	responder             *response.Writer
 	server                *http.Server
 	publicServer          *http.Server
@@ -447,6 +448,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		platformEnrollmentSvc: platformEnrollmentSvc,
 		consensusSvc:          consensusSvc,
 		dispatchSvc:           NewDispatchService(logger, wsHandler, stateRootSvc, auth, string(cfg.Gateway.Posture)),
+		observeProducer:       NewObserveProducerService(docStore, sseStore, wsHandler, logger),
 		responder:             res,
 	}
 
@@ -901,6 +903,14 @@ func (ls *GatewayModeService) GetGatewayWebSocketHandler() *GatewayWebSocketHand
 // commands to operators over the WS pub/sub cmd channel.
 func (ls *GatewayModeService) GetDispatchService() *DispatchService {
 	return ls.dispatchSvc
+}
+
+// GetObserveProducerService returns the observe producer service that
+// persists agent and run state projections and emits typed SSE events after
+// successful persistence. Activity handlers call this to report state changes
+// through the persist-before-publish ordering.
+func (ls *GatewayModeService) GetObserveProducerService() *ObserveProducerService {
+	return ls.observeProducer
 }
 
 // GetHTTPPort returns the actual HTTP port the server is listening on.

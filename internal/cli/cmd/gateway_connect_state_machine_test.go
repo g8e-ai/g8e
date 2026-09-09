@@ -718,3 +718,109 @@ func TestGatewayConnectCmd_VerificationFailureReturnsErrCORSPreflightRejected(t 
 	)
 	assert.NotContains(t, buf.String(), "Paste this into your frontend builder")
 }
+
+// TestGatewayConnectCmd_StoppedGatewayNoSystemTrustProceedsToManualTrust
+// verifies that --no-system-trust on a stopped Gateway (no running profile)
+// starts the Gateway fresh, persists the launch profile, skips OS trust
+// installation, prints manual trust instructions, opens the browser, and
+// proceeds to verification. With stub deps returning success, the command
+// prints the frontend prompt. This exercises the full stopped-gateway flow
+// with a real StartOperator, unlike the existing
+// TestGatewayConnectCmd_NoSystemTrustSkipsInstallAndProceedsToManualTrust
+// which uses a running gateway with a pre-written matching profile.
+func TestGatewayConnectCmd_StoppedGatewayNoSystemTrustProceedsToManualTrust(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	withServeReExec(t, fileSvc)
+	startZombieReaper(t)
+
+	srv := newConnectTestServer(t)
+	discovery := stubDiscoveryResult(t)
+	browserOpened := false
+
+	deps := connectDeps{
+		trustInstaller: &stubTrustInstaller{trusted: false},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			return discovery, nil
+		},
+		verifier:      frontendverify.NewVerifier(stubVerifierDeps(t, srv)),
+		browserOpener: func(string) error { browserOpened = true; return nil },
+		confirm:       func(string) bool { return false },
+		continueFn:    func(string) bool { return true },
+		now:           time.Now,
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	require.NoError(t, cmd.Flags().Set("no-system-trust", "true"))
+	cmd.SetContext(t.Context())
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Starting g8e Gateway service")
+	assert.Contains(t, output, "System trust installation skipped (--no-system-trust)")
+	assert.Contains(t, output, "Manual browser trust is required")
+	assert.Contains(t, output, "Paste this into your frontend builder")
+	assert.True(t, browserOpened, "browser should be opened in manual trust mode")
+
+	// The launch profile should be persisted with the derived browser config.
+	profile, readErr := serve.ReadLaunchProfile(fileSvc)
+	require.NoError(t, readErr)
+	assert.Contains(t, profile.Config.AllowedOrigins, "https://your-app.lovable.app")
+	assert.Equal(t, "your-app.lovable.app", profile.Config.PasskeyRpID)
+}
+
+// TestGatewayConnectCmd_IDNARPOverrideCanonicalizedInProfile verifies that a
+// Unicode/mixed-case --passkey-rp-id override is canonicalized to its IDNA
+// ASCII form and persisted in the launch profile. The test uses a Unicode
+// hostname origin (café.lovable.app) with a mixed-case RP ID override
+// (Café.Lovable.App). browserorigin.ValidateRPID canonicalizes the override
+// via idna.Lookup.ToASCII + ToLower, producing xn--caf-dma.lovable.app. The
+// persisted profile must contain the canonical form, not the original
+// mixed-case/Unicode input.
+func TestGatewayConnectCmd_IDNARPOverrideCanonicalizedInProfile(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	withServeReExec(t, fileSvc)
+	startZombieReaper(t)
+
+	srv := newConnectTestServer(t)
+	discovery := stubDiscoveryResult(t)
+
+	deps := connectDeps{
+		trustInstaller: &stubTrustInstaller{trusted: true},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			return discovery, nil
+		},
+		verifier:      frontendverify.NewVerifier(stubVerifierDeps(t, srv)),
+		browserOpener: func(string) error { return nil },
+		confirm:       func(string) bool { return false },
+		continueFn:    func(string) bool { return true },
+		now:           time.Now,
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	require.NoError(t, cmd.Flags().Set("passkey-rp-id", "Café.Lovable.App"))
+	cmd.SetContext(t.Context())
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"https://café.lovable.app"})
+	require.NoError(t, err)
+
+	// Read the persisted launch profile and verify the RP ID is canonicalized.
+	profile, readErr := serve.ReadLaunchProfile(fileSvc)
+	require.NoError(t, readErr)
+
+	// The canonical IDNA ASCII form of café.lovable.app is xn--caf-dma.lovable.app.
+	assert.Equal(t, "xn--caf-dma.lovable.app", profile.Config.PasskeyRpID,
+		"RP ID should be canonicalized to IDNA ASCII form")
+	assert.NotEqual(t, "Café.Lovable.App", profile.Config.PasskeyRpID,
+		"RP ID should not be the original mixed-case/Unicode input")
+
+	// The allowed origin should also be the canonicalized URL.
+	assert.Contains(t, profile.Config.AllowedOrigins, "https://xn--caf-dma.lovable.app")
+}

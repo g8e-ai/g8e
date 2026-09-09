@@ -332,3 +332,53 @@ func TestRouteAuthRegistry_ObservePrefixFailClosedForUnknownSubPaths(t *testing.
 	// must not match the observe prefix and must fail closed to mTLS.
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/observer-lookalike"))
 }
+
+func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	// Generic data, audit, blob, KV, pubsub, SSE push, governance, and PKI
+	// management routes must remain RouteAuthMTLS (fail-closed default).
+	// The observe prefix must not widen auth for any of these surfaces.
+	mtlsPaths := []string{
+		// Data routes
+		constants.APIPaths.DataSettings,
+		constants.APIPaths.DataDB + "some-collection",
+		constants.APIPaths.DataItems,
+		constants.APIPaths.DataBlobs + "some-blob",
+		// Audit routes
+		constants.APIPaths.AuditReceipts,
+		constants.APIPaths.AuditReceiptsExport,
+		constants.APIPaths.AuditEvents,
+		constants.APIPaths.AuditSummary,
+		constants.APIPaths.AuditReport,
+		constants.APIPaths.AuditStream,
+		// KV routes
+		constants.APIPaths.KV + "some-key",
+		// PubSub routes
+		constants.APIPaths.PubSubPublish,
+		// SSE push (producer-only, never browser-accessible)
+		constants.APIPaths.SSEPush,
+		// Governance routes
+		constants.APIPaths.GovernanceEnvelopes,
+		constants.APIPaths.GovernanceSigners,
+		constants.APIPaths.GovernanceSignersByID + "some-signer",
+		// PKI management routes
+		constants.APIPaths.PKICSRSign,
+		constants.APIPaths.PKIAppsDelegated,
+		constants.APIPaths.PKICertificatesRevoke,
+		constants.APIPaths.PKIRevocationBundle,
+		// Operator routes
+		constants.APIPaths.Operators,
+		constants.APIPaths.OperatorsByID + "some-operator",
+		constants.APIPaths.OperatorsValidate,
+		constants.APIPaths.OperatorsBind,
+		// Admin routes
+		constants.APIPaths.AdminConsensus,
+		constants.APIPaths.AdminAppsRevoke,
+		constants.APIPaths.AdminAppPoliciesBySigner + "some-signer",
+	}
+	for _, path := range mtlsPaths {
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path),
+			"generic route %s must remain RouteAuthMTLS (fail-closed)", path)
+	}
+}

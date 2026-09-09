@@ -65,8 +65,8 @@ type CheckResult struct {
 
 // Report is the ordered result of a verification run. Checks are appended
 // in deterministic order: HTTPS health, certificate chain, CORS origin,
-// CORS credentials, CORS methods, CORS headers. AllFailures is non-empty
-// when any check failed; the first failure is the root-cause layer.
+// CORS credentials, CORS methods, CORS headers, CORS Vary. AllPassed is
+// false when any check failed; the first failure is the root-cause layer.
 type Report struct {
 	Checks       []CheckResult
 	AllPassed    bool
@@ -179,7 +179,7 @@ func (v *Verifier) Verify(ctx context.Context, opts VerifyOptions) (Report, erro
 	}
 	report.Checks = append(report.Checks, chainResult)
 
-	// 3-6. CORS preflight checks.
+	// 3-7. CORS preflight checks.
 	corsResults := v.checkCORS(ctx, client, opts.APIURL, opts.FrontendOrigin)
 	for _, r := range corsResults {
 		report.Checks = append(report.Checks, r)
@@ -250,7 +250,7 @@ func (v *Verifier) checkHTTPSHealth(ctx context.Context, client *http.Client, he
 // checkCORS sends an HTTPS OPTIONS preflight with the exact frontend
 // Origin, requested method, and requested headers, then checks each CORS
 // response header independently. Returns results in deterministic order:
-// origin, credentials, methods, headers.
+// origin, credentials, methods, headers, vary.
 func (v *Verifier) checkCORS(ctx context.Context, client *http.Client, healthURL string, origin browserorigin.Origin) []CheckResult {
 	originStr := origin.URL
 

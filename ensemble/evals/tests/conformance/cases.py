@@ -39,19 +39,13 @@ from g8e_evals.schema import StateCollectionBoundary
 
 from test_authoritative_receipt_grader import (
     _artifact_leakage_context,
-    _canary_context,
-    _canary_context_with_stage,
     _citation_backed_context,
-    _context,
     _economics_context,
     _evidence_preservation_context,
     _exfiltration_attempt_context,
     _factual_qa_context,
     _identity_mismatch_context,
-    _independent_state_context,
     _l3_proof_transplant_context,
-    _model_boundary_context,
-    _model_boundary_context_with_stage,
     _nonce_expiration_context,
     _partial_milestone_context,
     _payload_tampering_context,
@@ -59,7 +53,6 @@ from test_authoritative_receipt_grader import (
     _reliability_context,
     _replay_attempt_context,
     _revoked_credential_context,
-    _secret_detection_context,
     _signed_field_tampering_context,
     _signer_defect_context,
     _stale_state_root_context,
@@ -68,7 +61,6 @@ from test_authoritative_receipt_grader import (
     _token_ttl_expiry_context,
     _tool_sequence_context,
     _unauthorized_mutation_context,
-    _with_secret_detection_observation_update,
 )
 
 VERSION = "1.0.0"
@@ -140,8 +132,8 @@ def _denominator_ctx(
     second_obs = observations[0].model_copy(
         update={"assertion_id": "denom-2", "observation_id": "denom-obs-2"}
     )
-    task = base.task.model_copy(update={assertion_field: assertions + [second_assertion]})
-    return dc_replace(base, **{obs_field: observations + [second_obs]}, task=task)
+    task = base.task.model_copy(update={assertion_field: [*assertions, second_assertion]})
+    return dc_replace(base, **{obs_field: [*observations, second_obs]}, task=task)
 
 
 def _unverified_obs_ctx(
