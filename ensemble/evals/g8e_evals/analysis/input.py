@@ -20,6 +20,7 @@ class.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from g8e_evals.analysis.canonical import PreregistrationConfig
 from g8e_evals.schema import (
     AttemptRecord,
     ArtifactLeakageObservation,
@@ -123,6 +124,7 @@ class AnalysisInputRecord(BaseModel):
     audit_links: list[AuditLinkRecord] = Field(default_factory=list)
 
     price_table: TypedPriceTable | None = None
+    preregistration: PreregistrationConfig | None = None
 
 
 __all__ = [

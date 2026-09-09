@@ -9,7 +9,9 @@
 
 Covers persona resolution, agent-state request building, investigation
 run-state request building, status mapping, targetless skip, and the
-task lifecycle unsupported invariant (task counts are truthful zeros).
+task lifecycle unsupported invariant (task counts are truthful zeros
+because no task document creation or lifecycle path is implemented in
+the current ensemble).
 """
 
 from __future__ import annotations
@@ -120,8 +122,22 @@ class TestBuildInvestigationRunStateRequest:
         )
         assert req is None
 
-    def test_task_counts_are_truthful_zeros(self):
-        """Task lifecycle is unsupported: task counts are always zero."""
+    def test_task_counts_are_truthful_zeros_when_no_task_owner_implemented(self):
+        """Task counts are truthful zeros because no task lifecycle owner is implemented.
+
+        The protocol (``protocol/models/task.json``) designates the
+        ensemble as the authority for task documents, but no ensemble
+        code creates task documents, emits ``APP_TASK_*`` events, or
+        defines a task model or service. The ``tasks`` collection is
+        read by ``CaseDataService.get_case_tasks`` but nothing writes to
+        it. Until a task lifecycle implementation lands, the producer
+        payload carries truthful zero task counts. The Gateway computes
+        ``tasks_in_queue`` from these projection fields
+        (``total_tasks - completed_tasks``), not from SSE event
+        subtraction; that behavior is covered by the Go gateway
+        integration test
+        ``TestObserveService_GetBootstrapSnapshot_PopulatedStateReturnsObservedFreshness``.
+        """
         req = build_investigation_run_state_request(
             run_id="inv-1",
             display_name="My Case",
@@ -133,29 +149,6 @@ class TestBuildInvestigationRunStateRequest:
         assert req.completed_tasks == 0
         assert req.total_tasks == 0
         assert req.active_task_id is None
-
-    def test_dashboard_does_not_derive_queue_depth_from_sse_events(self):
-        """The run-state request never carries SSE-derived task counts.
-
-        This test proves the dashboard cannot derive queue depth from
-        SSE event subtraction because the producer payload always
-        contains truthful zero task counts when no authoritative task
-        owner exists.
-        """
-        req = build_investigation_run_state_request(
-            run_id="inv-1",
-            display_name="My Case",
-            status="running",
-            user_id="user-1",
-            web_session_id="web-1",
-        )
-        assert req is not None
-        assert req.total_tasks == 0
-        assert req.completed_tasks == 0
-        # No SSE event count or subtraction artifact in the payload.
-        dumped = req.model_dump(mode="json")
-        assert "event_count" not in dumped
-        assert "sse_count" not in dumped
 
 
 class TestMapInvestigationStatusToRunLifecycle:

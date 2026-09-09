@@ -36,6 +36,7 @@ from g8e_evals.analysis.canonical import (
     CanonicalEvalAnalysis,
     ComparisonDirection,
     ConfusionMatrix,
+    ContinuousTestPolicy,
     DomainStratifiedResult,
     GateDecision,
     GateDecisionStatus,
@@ -43,6 +44,7 @@ from g8e_evals.analysis.canonical import (
     MissingnessBreakdown,
     PairedComparison,
     PooledConfusionMatrix,
+    PreregistrationConfig,
     ReceiptCoverageAnalysis,
     canonical_model_json,
 )
@@ -163,6 +165,17 @@ class _RawComparison:
     bootstrap_ci_lower: float | None
     bootstrap_ci_upper: float | None
     p_value: float | None
+
+
+@dataclass(frozen=True)
+class _TaggedComparison:
+    """Raw comparison paired with its family and metric metadata for Holm correction."""
+
+    raw: _RawComparison
+    definition: MetricDefinition
+    family_name: str | None
+    is_primary: bool
+    non_inferiority_margin: float | None
 
 
 def _round(value: float) -> float:
@@ -313,6 +326,9 @@ def _compute_input_content_hash_from_record(record: AnalysisInputRecord) -> str:
 
     if record.price_table is not None:
         parts.append(f"price_table:{canonical_model_json(record.price_table)}")
+
+    if record.preregistration is not None:
+        parts.append(f"preregistration:{canonical_model_json(record.preregistration)}")
 
     joined = "\n".join(parts)
     return hashlib.sha256(joined.encode()).hexdigest()
@@ -834,16 +850,100 @@ def _check_threshold(value: float, threshold: float, operator: ThresholdOperator
     return value >= threshold
 
 
+def _validate_preregistration(
+    preregistration: PreregistrationConfig,
+    attempts: Sequence[AttemptRecord],
+    tasks: Sequence[TaskDefinition],
+) -> None:
+    """Validate that all attempts conform to the preregistration configuration.
+
+    Checks that every attempt's ``model_cohort_id`` is in the declared
+    cohort set, that the baseline and comparison arms are present in the
+    attempt set, that every attempt's ``replicate_id`` is in the declared
+    replicate set, that no duplicate (task, arm, snapshot, replicate)
+    combinations exist, and that every attempt references a task in the
+    declared task set. Rejects mixed model cohorts, undeclared arms,
+    missing declared arms, undeclared replicates, duplicate replicates,
+    and orphan attempts referencing unknown tasks.
+    """
+    declared_cohorts = set(preregistration.model_cohort_ids)
+    declared_arms = {preregistration.baseline_arm_id, *preregistration.comparison_arm_ids}
+    for attempt in attempts:
+        if attempt.model_cohort_id and attempt.model_cohort_id not in declared_cohorts:
+            raise ValueError(
+                f"attempt {attempt.attempt_id} model cohort {attempt.model_cohort_id!r} not declared in preregistration"
+            )
+        if attempt.arm_id.value not in declared_arms:
+            raise ValueError(
+                f"attempt {attempt.attempt_id} arm {attempt.arm_id.value!r} not declared in preregistration"
+            )
+
+    arm_ids_in_attempts = {a.arm_id.value for a in attempts}
+    for arm_id in declared_arms:
+        if arm_id not in arm_ids_in_attempts:
+            raise ValueError(
+                f"declared arm {arm_id!r} has no attempts in the analysis"
+            )
+
+    # Reject undeclared replicate IDs
+    if preregistration.required_replicate_ids:
+        declared_replicate_ids = set(preregistration.required_replicate_ids)
+        for attempt in attempts:
+            if attempt.replicate_id not in declared_replicate_ids:
+                raise ValueError(
+                    f"attempt {attempt.attempt_id} replicate_id {attempt.replicate_id!r} not declared in preregistration"
+                )
+
+    # Reject attempts referencing tasks not in the declared task set
+    task_ids = {t.task_id for t in tasks}
+    for attempt in attempts:
+        if attempt.task_id not in task_ids:
+            raise ValueError(
+                f"attempt {attempt.attempt_id} references task {attempt.task_id!r} not in the declared task set"
+            )
+
+    # Reject duplicate metric membership across secondary families
+    seen_metrics: set[str] = set()
+    for family in preregistration.secondary_families:
+        for metric_id in family.metric_ids:
+            if metric_id in seen_metrics:
+                raise ValueError(
+                    f"metric {metric_id!r} belongs to multiple secondary families"
+                )
+            seen_metrics.add(metric_id)
+
+    # Reject undeclared family membership: primary metrics cannot be in a family
+    primary_set = set(preregistration.primary_metric_ids)
+    for family in preregistration.secondary_families:
+        for metric_id in family.metric_ids:
+            if metric_id in primary_set:
+                raise ValueError(
+                    f"metric {metric_id!r} is both primary and in secondary family {family.family_name!r}"
+                )
+
+
 def _compute_paired_comparisons(
     tasks: Sequence[TaskDefinition],
     attempts: Sequence[AttemptRecord],
     metric_observations: Sequence[MetricObservation],
+    preregistration: PreregistrationConfig | None = None,
 ) -> list[PairedComparison]:
-    """Compute paired comparisons between arms over identical task instances.
+    """Compute preregistration-driven paired comparisons between arms.
+
+    When a preregistration configuration is supplied, only the baseline
+    and comparison arms explicitly declared in the configuration are
+    paired. Lexicographic baseline inference is removed: the declared
+    baseline arm is always the baseline, and each declared comparison
+    arm is paired against it. An analysis that requests a comparison
+    not declared by the configuration is rejected.
+
+    When no preregistration configuration is supplied, the function
+    returns an empty list. Comparisons without preregistration are not
+    authorized.
 
     Pairs observations by ``(task_id, state_snapshot_hash)`` so that only
     attempts on the same task instance and initial-state snapshot are
-    compared. For each metric and each ordered pair of arms (baseline,
+    compared. For each metric and each declared pair of arms (baseline,
     comparison) where both arms have observations on the same task
     instances, computes:
 
@@ -851,20 +951,45 @@ def _compute_paired_comparisons(
     - Cohen's d standardized effect size.
     - McNemar test for binary outcomes (value >= 0.5 treated as pass).
     - Paired t-test for continuous outcomes.
-    - Task-cluster bootstrap 95% confidence interval (seeded).
-    - Holm-Bonferroni correction across the family of comparisons for
-      each metric.
+    - Wilcoxon signed-rank test for continuous outcomes.
+    - Task-cluster bootstrap confidence interval (seeded from preregistration).
+    - Holm-Bonferroni correction across each named preregistered secondary
+      family. Primary metrics and metrics not in any family do not
+      undergo secondary-family correction.
+
+    The preregistered continuous-test policy selects which p-value
+    drives the gate decision. Both test outputs are preserved in the
+    result; the selection is declared before analysis and cannot be
+    changed after observing results.
 
     Returns comparisons sorted by ``(metric_id, metric_version,
     baseline_arm_id, comparison_arm_id)``.
     """
+    if preregistration is None:
+        return []
+
+    _validate_preregistration(preregistration, attempts, tasks)
+
     release_lookup = _build_release_metric_lookup()
 
     # Build attempt lookup by attempt_id
     attempt_by_id: dict[str, AttemptRecord] = {a.attempt_id: a for a in attempts}
 
+    # Build the declared arm pairs: (baseline, comparison) for each declared comparison arm
+    declared_pairs: list[tuple[str, str]] = [
+        (preregistration.baseline_arm_id, comp_arm)
+        for comp_arm in sorted(preregistration.comparison_arm_ids)
+    ]
+
+    # Build secondary family lookup: metric_id -> family_name
+    family_by_metric: dict[str, str] = {}
+    for family in preregistration.secondary_families:
+        for metric_id in family.metric_ids:
+            family_by_metric[metric_id] = family.family_name
+
+    primary_set = set(preregistration.primary_metric_ids)
+
     # Group metric observations by (metric_id, metric_version, arm_id, task_id, state_snapshot_hash)
-    # to find paired task instances across arms
     obs_by_metric: dict[tuple[str, str], list[MetricObservation]] = defaultdict(list)
     for obs in metric_observations:
         release_entry = release_lookup.get((obs.metric_id, obs.metric_version))
@@ -872,11 +997,14 @@ def _compute_paired_comparisons(
             continue
         obs_by_metric[(obs.metric_id, obs.metric_version)].append(obs)
 
-    comparisons: list[PairedComparison] = []
+    # Phase 1: Collect all raw comparisons across all metrics with family metadata.
+    all_tagged: list[_TaggedComparison] = []
 
     for (metric_id, metric_version), metric_obs_list in sorted(obs_by_metric.items()):
         definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
-        release_entry = release_lookup[(metric_id, metric_version)]
+        ni_margin = definition.non_inferiority_margin
+        family_name = family_by_metric.get(metric_id)
+        is_primary = metric_id in primary_set
 
         # Group observations by (arm_id, pairing_key) where pairing_key = (task_id, state_snapshot_hash)
         obs_by_arm_pair: dict[tuple[str, tuple[str, str]], list[MetricObservation]] = defaultdict(list)
@@ -890,152 +1018,176 @@ def _compute_paired_comparisons(
             arm_str = obs.arm_id.value
             obs_by_arm_pair[(arm_str, pairing_key)].append(obs)
 
-        # Find all arm IDs that have observations for this metric
-        arm_ids_with_obs = sorted({arm for (arm, _) in obs_by_arm_pair.keys()})
-        if len(arm_ids_with_obs) < 2:
-            continue
+        # For each declared pair of arms, find common pairing keys
+        for baseline_arm, comparison_arm in declared_pairs:
+            baseline_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == baseline_arm}
+            comparison_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == comparison_arm}
+            common_keys = sorted(baseline_keys & comparison_keys)
+            if len(common_keys) < 2:
+                continue
 
-        # For each ordered pair of arms, find common pairing keys
-        raw_comparisons: list[_RawComparison] = []
-        for baseline_arm in arm_ids_with_obs:
-            for comparison_arm in arm_ids_with_obs:
-                if baseline_arm >= comparison_arm:
+            baseline_vals: list[float] = []
+            comparison_vals: list[float] = []
+            for pk in common_keys:
+                b_obs = obs_by_arm_pair[(baseline_arm, pk)]
+                c_obs = obs_by_arm_pair[(comparison_arm, pk)]
+                # Aggregate replicates per pairing key using the preregistered policy
+                b_vals = [o.value for o in b_obs if o.value is not None]
+                c_vals = [o.value for o in c_obs if o.value is not None]
+                if not b_vals or not c_vals:
                     continue
-
-                baseline_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == baseline_arm}
-                comparison_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == comparison_arm}
-                common_keys = sorted(baseline_keys & comparison_keys)
-                if len(common_keys) < 2:
-                    continue
-
-                baseline_vals: list[float] = []
-                comparison_vals: list[float] = []
-                for pk in common_keys:
-                    b_obs = obs_by_arm_pair[(baseline_arm, pk)]
-                    c_obs = obs_by_arm_pair[(comparison_arm, pk)]
-                    # Average multiple observations per pairing key (replicates)
-                    b_vals = [o.value for o in b_obs if o.value is not None]
-                    c_vals = [o.value for o in c_obs if o.value is not None]
-                    if not b_vals or not c_vals:
-                        continue
+                if preregistration.replicate_aggregation_policy.value == "mean":
                     baseline_vals.append(sum(b_vals) / len(b_vals))
                     comparison_vals.append(sum(c_vals) / len(c_vals))
+                else:
+                    raise ValueError(
+                        f"unsupported replicate aggregation policy: {preregistration.replicate_aggregation_policy}"
+                    )
 
-                if len(baseline_vals) < 2:
-                    continue
+            if len(baseline_vals) < 2:
+                continue
 
-                baseline_value = sum(baseline_vals) / len(baseline_vals)
-                comparison_value = sum(comparison_vals) / len(comparison_vals)
-                abs_d = statistics.absolute_delta(baseline_value, comparison_value)
-                rel_d = statistics.relative_delta(baseline_value, comparison_value)
-                effect_size = statistics.cohens_d_paired(baseline_vals, comparison_vals)
+            baseline_value = sum(baseline_vals) / len(baseline_vals)
+            comparison_value = sum(comparison_vals) / len(comparison_vals)
+            abs_d = statistics.absolute_delta(baseline_value, comparison_value)
+            rel_d = statistics.relative_delta(baseline_value, comparison_value)
+            effect_size = statistics.cohens_d_paired(baseline_vals, comparison_vals)
 
-                # McNemar for binary outcomes
-                baseline_binary = [v >= 0.5 for v in baseline_vals]
-                comparison_binary = [v >= 0.5 for v in comparison_vals]
-                mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
+            # McNemar for binary outcomes
+            baseline_binary = [v >= 0.5 for v in baseline_vals]
+            comparison_binary = [v >= 0.5 for v in comparison_vals]
+            mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
 
-                # Paired t-test for continuous outcomes
-                t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
-                wilcoxon_stat, wilcoxon_p = statistics.wilcoxon_signed_rank_test(
-                    baseline_vals, comparison_vals,
-                )
+            # Paired t-test for continuous outcomes
+            t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
+            wilcoxon_stat, wilcoxon_p = statistics.wilcoxon_signed_rank_test(
+                baseline_vals, comparison_vals,
+            )
 
-                # Bootstrap CI
-                ci_lower, ci_upper = statistics.bootstrap_ci(
-                    baseline_vals, comparison_vals, seed=0,
-                )
+            # Bootstrap CI using preregistered parameters
+            ci_lower, ci_upper = statistics.bootstrap_ci(
+                baseline_vals,
+                comparison_vals,
+                n_bootstrap=preregistration.bootstrap_count,
+                confidence=preregistration.bootstrap_confidence,
+                seed=preregistration.bootstrap_seed,
+            )
 
-                # Direction
-                if definition.direction == MetricDirection.LOWER_IS_BETTER:
-                    if abs_d < 0:
-                        direction = ComparisonDirection.IMPROVEMENT
-                    elif abs_d > 0:
-                        direction = ComparisonDirection.REGRESSION
-                    else:
-                        direction = ComparisonDirection.NEUTRAL
-                elif definition.direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
-                    if abs_d > 0:
-                        direction = ComparisonDirection.IMPROVEMENT
-                    elif abs_d < 0:
-                        direction = ComparisonDirection.REGRESSION
-                    else:
-                        direction = ComparisonDirection.NEUTRAL
+            # Direction
+            if definition.direction == MetricDirection.LOWER_IS_BETTER:
+                if abs_d < 0:
+                    direction = ComparisonDirection.IMPROVEMENT
+                elif abs_d > 0:
+                    direction = ComparisonDirection.REGRESSION
                 else:
                     direction = ComparisonDirection.NEUTRAL
-
-                # Use the p-value from the more appropriate test
-                # For binary pass/fail metrics, use McNemar; for continuous, use t-test
-                if definition.direction == MetricDirection.BINARY_PASS_FAIL:
-                    p_value = mcnemar_p
+            elif definition.direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
+                if abs_d > 0:
+                    direction = ComparisonDirection.IMPROVEMENT
+                elif abs_d < 0:
+                    direction = ComparisonDirection.REGRESSION
                 else:
-                    p_value = t_p
+                    direction = ComparisonDirection.NEUTRAL
+            else:
+                direction = ComparisonDirection.NEUTRAL
 
-                raw_comparisons.append(_RawComparison(
-                    metric_id=metric_id,
-                    metric_version=metric_version,
-                    baseline_arm_id=baseline_arm,
-                    comparison_arm_id=comparison_arm,
-                    paired_count=len(baseline_vals),
-                    baseline_value=_round(baseline_value),
-                    comparison_value=_round(comparison_value),
-                    absolute_delta=abs_d,
-                    relative_delta=rel_d,
-                    standardized_effect_size=effect_size,
-                    direction=direction,
-                    mcnemar_statistic=mcnemar_stat,
-                    mcnemar_p_value=mcnemar_p,
-                    paired_t_statistic=t_stat,
-                    paired_t_p_value=t_p,
-                    wilcoxon_statistic=wilcoxon_stat,
-                    wilcoxon_p_value=wilcoxon_p,
-                    bootstrap_ci_lower=ci_lower,
-                    bootstrap_ci_upper=ci_upper,
-                    p_value=p_value,
-                ))
+            # Select the decision p-value using the preregistered policy
+            if preregistration.continuous_test_policy == ContinuousTestPolicy.MCNEMAR:
+                p_value = mcnemar_p
+            elif preregistration.continuous_test_policy == ContinuousTestPolicy.WILCOXON:
+                p_value = wilcoxon_p
+            else:
+                p_value = t_p
 
-        if not raw_comparisons:
-            continue
-
-        # Apply Holm correction across the family of comparisons for this metric
-        p_values = [rc.p_value for rc in raw_comparisons]
-        # Replace None p-values with 1.0 for correction (no evidence of difference)
-        p_values_for_correction: list[float] = [p if p is not None else 1.0 for p in p_values]
-        holm_results = statistics.holm_correction(p_values_for_correction)
-
-        # Look up non-inferiority margin from the metric definition
-        ni_definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
-        ni_margin = ni_definition.non_inferiority_margin
-
-        for rc, (rank, corrected_p) in zip(raw_comparisons, holm_results, strict=True):
-            comparisons.append(PairedComparison(
-                metric_id=rc.metric_id,
-                metric_version=rc.metric_version,
-                baseline_arm_id=rc.baseline_arm_id,
-                comparison_arm_id=rc.comparison_arm_id,
-                paired_count=rc.paired_count,
-                baseline_value=rc.baseline_value,
-                comparison_value=rc.comparison_value,
-                absolute_delta=rc.absolute_delta,
-                relative_delta=rc.relative_delta,
-                standardized_effect_size=rc.standardized_effect_size,
-                direction=rc.direction,
-                mcnemar_statistic=rc.mcnemar_statistic,
-                mcnemar_p_value=rc.mcnemar_p_value,
-                paired_t_statistic=rc.paired_t_statistic,
-                paired_t_p_value=rc.paired_t_p_value,
-                wilcoxon_statistic=rc.wilcoxon_statistic,
-                wilcoxon_p_value=rc.wilcoxon_p_value,
-                bootstrap_ci_lower=rc.bootstrap_ci_lower,
-                bootstrap_ci_upper=rc.bootstrap_ci_upper,
-                holm_corrected_p_value=corrected_p,
-                holm_rank=rank,
+            raw = _RawComparison(
+                metric_id=metric_id,
+                metric_version=metric_version,
+                baseline_arm_id=baseline_arm,
+                comparison_arm_id=comparison_arm,
+                paired_count=len(baseline_vals),
+                baseline_value=_round(baseline_value),
+                comparison_value=_round(comparison_value),
+                absolute_delta=abs_d,
+                relative_delta=rel_d,
+                standardized_effect_size=effect_size,
+                direction=direction,
+                mcnemar_statistic=mcnemar_stat,
+                mcnemar_p_value=mcnemar_p,
+                paired_t_statistic=t_stat,
+                paired_t_p_value=t_p,
+                wilcoxon_statistic=wilcoxon_stat,
+                wilcoxon_p_value=wilcoxon_p,
+                bootstrap_ci_lower=ci_lower,
+                bootstrap_ci_upper=ci_upper,
+                p_value=p_value,
+            )
+            all_tagged.append(_TaggedComparison(
+                raw=raw,
+                definition=definition,
+                family_name=family_name,
+                is_primary=is_primary,
                 non_inferiority_margin=ni_margin,
-                gate_decision=_paired_gate_decision(
-                    rc.p_value, corrected_p, rc.absolute_delta, definition.direction,
-                    ni_margin, rc.bootstrap_ci_lower, rc.bootstrap_ci_upper,
-                ),
             ))
+
+    # Phase 2: Apply Holm correction family-wide.
+    # For each named secondary family, collect all raw p-values across all
+    # metrics in that family and apply Holm across the combined set. Primary
+    # metrics and metrics not in any family do not undergo secondary-family
+    # correction: each comparison gets rank 1 and the raw p-value.
+    corrections: dict[int, tuple[int, float]] = {}
+    family_groups: dict[str | None, list[int]] = defaultdict(list)
+    for i, tc in enumerate(all_tagged):
+        family_groups[tc.family_name].append(i)
+
+    for family_name, indices in family_groups.items():
+        if family_name is not None:
+            p_values = [all_tagged[i].raw.p_value for i in indices]
+            p_values_for_correction: list[float] = [p if p is not None else 1.0 for p in p_values]
+            holm_results = statistics.holm_correction(p_values_for_correction)
+            for idx, (rank, corrected_p) in zip(indices, holm_results, strict=True):
+                corrections[idx] = (rank, corrected_p)
+        else:
+            for i in indices:
+                p = all_tagged[i].raw.p_value
+                corrections[i] = (1, p if p is not None else 1.0)
+
+    # Phase 3: Assemble PairedComparison records.
+    comparisons: list[PairedComparison] = []
+    for i, tc in enumerate(all_tagged):
+        rc = tc.raw
+        rank, corrected_p = corrections[i]
+        comparisons.append(PairedComparison(
+            metric_id=rc.metric_id,
+            metric_version=rc.metric_version,
+            baseline_arm_id=rc.baseline_arm_id,
+            comparison_arm_id=rc.comparison_arm_id,
+            paired_count=rc.paired_count,
+            baseline_value=rc.baseline_value,
+            comparison_value=rc.comparison_value,
+            absolute_delta=rc.absolute_delta,
+            relative_delta=rc.relative_delta,
+            standardized_effect_size=rc.standardized_effect_size,
+            direction=rc.direction,
+            mcnemar_statistic=rc.mcnemar_statistic,
+            mcnemar_p_value=rc.mcnemar_p_value,
+            paired_t_statistic=rc.paired_t_statistic,
+            paired_t_p_value=rc.paired_t_p_value,
+            wilcoxon_statistic=rc.wilcoxon_statistic,
+            wilcoxon_p_value=rc.wilcoxon_p_value,
+            bootstrap_ci_lower=rc.bootstrap_ci_lower,
+            bootstrap_ci_upper=rc.bootstrap_ci_upper,
+            holm_corrected_p_value=corrected_p,
+            holm_rank=rank,
+            non_inferiority_margin=tc.non_inferiority_margin,
+            gate_decision=_paired_gate_decision(
+                rc.p_value, corrected_p, rc.absolute_delta, tc.definition.direction,
+                tc.non_inferiority_margin, rc.bootstrap_ci_lower, rc.bootstrap_ci_upper,
+                preregistration.significance_level,
+            ),
+            selected_test=preregistration.continuous_test_policy.value,
+            family_name=tc.family_name,
+            replicate_aggregation_policy=preregistration.replicate_aggregation_policy.value,
+        ))
 
     comparisons.sort(key=lambda c: (c.metric_id, c.metric_version, c.baseline_arm_id, c.comparison_arm_id))
     return comparisons
@@ -1049,6 +1201,7 @@ def _paired_gate_decision(
     non_inferiority_margin: float | None,
     bootstrap_ci_lower: float | None,
     bootstrap_ci_upper: float | None,
+    significance_level: float = 0.05,
 ) -> GateDecisionStatus:
     """Determine the gate decision for a paired comparison.
 
@@ -1060,9 +1213,9 @@ def _paired_gate_decision(
     the upper CI bound must be <= margin.
 
     When no non-inferiority margin is defined, the gate uses the
-    default superiority test: Holm-corrected p-value < 0.05 AND a
-    practically meaningful (non-zero) absolute delta. Statistical
-    significance alone cannot pass a release.
+    default superiority test: Holm-corrected p-value < significance
+    level AND a practically meaningful (non-zero) absolute delta.
+    Statistical significance alone cannot pass a release.
     """
     if non_inferiority_margin is not None:
         # Non-inferiority testing via bootstrap CI
@@ -1084,7 +1237,7 @@ def _paired_gate_decision(
     # Default superiority gate: significance + practical significance
     if raw_p_value is None:
         return GateDecisionStatus.INSUFFICIENT_DATA
-    if corrected_p_value > 0.05:
+    if corrected_p_value > significance_level:
         return GateDecisionStatus.INSUFFICIENT_DATA
     if abs_delta == 0.0:
         return GateDecisionStatus.INSUFFICIENT_DATA
@@ -1232,7 +1385,9 @@ def compute_canonical_analysis_from_record(
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
     confusion_matrices = _compute_confusion_matrices(record.attempts, all_metric_observations, record.tasks)
     pooled_confusion_matrices = _compute_pooled_confusion_matrices(confusion_matrices)
-    comparisons = _compute_paired_comparisons(record.tasks, record.attempts, all_metric_observations)
+    comparisons = _compute_paired_comparisons(
+        record.tasks, record.attempts, all_metric_observations, record.preregistration,
+    )
 
     unsupported_claim_names = sorted(RELEASE_METRIC_SET.unsupported_claim_names)
 
@@ -1254,6 +1409,7 @@ def compute_canonical_analysis_from_record(
         bridge_runs=[],
         bridge_run_comparisons=[],
         unsupported_claim_names=unsupported_claim_names,
+        preregistration=record.preregistration,
     )
 
 
@@ -1265,6 +1421,7 @@ def compute_canonical_analysis(
     stages: Sequence[StageObservation],
     run_id: str,
     release_version: str = "v2.1.8",
+    preregistration: PreregistrationConfig | None = None,
 ) -> CanonicalEvalAnalysis:
     """Compute the canonical eval analysis from immutable records.
 
@@ -1284,6 +1441,7 @@ def compute_canonical_analysis(
         metric_observations=list(metric_observations),
         receipts=list(receipts),
         stages=list(stages),
+        preregistration=preregistration,
     )
     return compute_canonical_analysis_from_record(record)
 

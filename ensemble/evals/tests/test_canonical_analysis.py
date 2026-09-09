@@ -25,13 +25,17 @@ from g8e_evals.analysis.canonical import (
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
     CanonicalEvalAnalysis,
+    ComparisonDirection,
     ConfusionMatrix,
+    ContinuousTestPolicy,
     GateDecisionStatus,
     MetricAnalysisResult,
     MissingnessBreakdown,
     MissingnessReason,
-    ComparisonDirection,
+    PreregistrationConfig,
     ReceiptCoverageAnalysis,
+    SecondaryFamily,
+    canonical_model_json,
 )
 from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
 from g8e_evals.arms import Arm
@@ -1261,6 +1265,40 @@ def _make_multi_arm_scenario(
     return tasks, attempts, observations
 
 
+def _make_preregistration(
+    arm_values: dict[Arm, list[float]],
+    metric_id: str = "receipt_integrity",
+    primary_metric_ids: list[str] | None = None,
+    secondary_families: list | None = None,
+    continuous_test_policy: ContinuousTestPolicy = ContinuousTestPolicy.PAIRED_T,
+) -> PreregistrationConfig:
+    """Build a preregistration config for the arms in a multi-arm scenario.
+
+    The baseline arm is the lexicographically first arm, and all other
+    arms are comparison arms. Model cohort IDs default to empty strings
+    (matching the default on ``AttemptRecord``).
+    """
+    arm_ids = sorted(arm.value for arm in arm_values)
+    return PreregistrationConfig(
+        config_id="test-config-1",
+        config_version="1.0.0",
+        baseline_arm_id=arm_ids[0],
+        comparison_arm_ids=arm_ids[1:],
+        model_cohort_ids=[""],
+        task_assignment_id="test-assignment-1",
+        initial_state_assignment_id="test-snapshot-1",
+        required_replicate_ids=["1"],
+        required_replicate_count=1,
+        primary_metric_ids=primary_metric_ids or [],
+        secondary_families=secondary_families or [],
+        continuous_test_policy=continuous_test_policy,
+        bootstrap_count=10000,
+        bootstrap_confidence=0.95,
+        bootstrap_seed=0,
+        significance_level=0.05,
+    )
+
+
 class TestPairedComparisons:
     """Tests for _compute_paired_comparisons in the canonical analysis engine."""
 
@@ -1294,6 +1332,7 @@ class TestPairedComparisons:
         obs_d2 = _make_metric_obs(attempt_id="att-d2", task_id="task-d2", arm_id=Arm.DIRECT, value=1.0)
         obs_r1 = _make_metric_obs(attempt_id="att-r1", task_id="task-r1", arm_id=Arm.DOCTRINE, value=0.0)
         obs_r2 = _make_metric_obs(attempt_id="att-r2", task_id="task-r2", arm_id=Arm.DOCTRINE, value=0.0)
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
 
         analysis = compute_canonical_analysis(
             tasks=[task_d1, task_d2, task_r1, task_r2],
@@ -1302,15 +1341,18 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         assert analysis.comparisons == []
 
     def test_paired_comparisons_empty_when_insufficient_pairs(self) -> None:
         """Only 1 common task instance produces no comparisons (need >= 2)."""
+        arm_values = {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+            arm_values=arm_values,
             task_ids=["task-1"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1318,15 +1360,18 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         assert analysis.comparisons == []
 
     def test_paired_comparisons_produce_deltas_for_two_arms(self) -> None:
         """Two arms with 3 common tasks produce a comparison with correct deltas."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1334,11 +1379,12 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
         assert len(ri_comparisons) == 1
         cmp = ri_comparisons[0]
-        # baseline is alphabetically first: "direct" < "doctrine"
+        # baseline is the declared baseline arm: "direct"
         assert cmp.baseline_arm_id == "direct"
         assert cmp.comparison_arm_id == "doctrine"
         assert cmp.paired_count == 3
@@ -1349,10 +1395,12 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_regression_for_binary_pass_fail(self) -> None:
         """BINARY_PASS_FAIL with negative delta produces REGRESSION."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1360,17 +1408,20 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.direction == ComparisonDirection.REGRESSION
 
     def test_paired_comparisons_direction_improvement_for_higher_is_better(self) -> None:
         """HIGHER_IS_BETTER with positive delta produces IMPROVEMENT."""
+        arm_values = {Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [1.0, 1.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1378,6 +1429,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         assert cmp.direction == ComparisonDirection.IMPROVEMENT
@@ -1385,11 +1437,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_regression_for_higher_is_better(self) -> None:
         """HIGHER_IS_BETTER with negative delta produces REGRESSION."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1397,6 +1451,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         assert cmp.direction == ComparisonDirection.REGRESSION
@@ -1404,11 +1459,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_improvement_for_lower_is_better(self) -> None:
         """LOWER_IS_BETTER with negative delta produces IMPROVEMENT."""
+        arm_values = {Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.5, 0.5], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="model_boundary_raw_secret_rate",
         )
+        prereg = _make_preregistration(arm_values, metric_id="model_boundary_raw_secret_rate")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1416,6 +1473,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "model_boundary_raw_secret_rate")
         assert cmp.direction == ComparisonDirection.IMPROVEMENT
@@ -1423,11 +1481,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_regression_for_lower_is_better(self) -> None:
         """LOWER_IS_BETTER with positive delta produces REGRESSION."""
+        arm_values = {Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [0.5, 0.5, 0.5]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="model_boundary_raw_secret_rate",
         )
+        prereg = _make_preregistration(arm_values, metric_id="model_boundary_raw_secret_rate")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1435,6 +1495,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "model_boundary_raw_secret_rate")
         assert cmp.direction == ComparisonDirection.REGRESSION
@@ -1442,10 +1503,12 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_neutral_for_zero_delta(self) -> None:
         """Zero absolute delta produces NEUTRAL direction."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1453,6 +1516,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.direction == ComparisonDirection.NEUTRAL
@@ -1460,11 +1524,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_direction_neutral_for_neutral_metric(self) -> None:
         """NEUTRAL direction metric always produces NEUTRAL comparison direction."""
+        arm_values = {Arm.DIRECT: [1.0, 2.0, 3.0], Arm.DOCTRINE: [3.0, 2.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 2.0, 3.0], Arm.DOCTRINE: [3.0, 2.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="stage_latency_seconds",
         )
+        prereg = _make_preregistration(arm_values, metric_id="stage_latency_seconds")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1472,16 +1538,19 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "stage_latency_seconds")
         assert cmp.direction == ComparisonDirection.NEUTRAL
 
     def test_paired_comparisons_mcnemar_for_binary_pass_fail(self) -> None:
         """BINARY_PASS_FAIL metrics use the McNemar p-value as the comparison p-value."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1489,6 +1558,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         # All 3 pairs are discordant in the same direction (baseline pass, comparison fail)
@@ -1498,11 +1568,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_t_test_for_continuous_metric(self) -> None:
         """Non-binary metrics use the paired t-test p-value as the comparison p-value."""
+        arm_values = {Arm.DIRECT: [0.5, 0.6, 0.7], Arm.DOCTRINE: [0.8, 0.8, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7], Arm.DOCTRINE: [0.8, 0.8, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1510,6 +1582,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         # Continuous metrics publish both paired t-test and Wilcoxon signed-rank results.
@@ -1524,11 +1597,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_bootstrap_ci_deterministic(self) -> None:
         """Bootstrap CI is deterministic for identical inputs."""
+        arm_values = {Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3", "task-4"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis1 = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1536,6 +1611,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         analysis2 = compute_canonical_analysis(
             tasks=tasks,
@@ -1544,6 +1620,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp1 = next(c for c in analysis1.comparisons if c.metric_id == "canary_scrubbing")
         cmp2 = next(c for c in analysis2.comparisons if c.metric_id == "canary_scrubbing")
@@ -1553,10 +1630,20 @@ class TestPairedComparisons:
         assert cmp1.bootstrap_ci_upper is not None
 
     def test_paired_comparisons_holm_correction_single_comparison(self) -> None:
-        """Holm correction with a single comparison preserves the p-value and assigns rank 1."""
+        """Holm correction with a single comparison preserves the p-value and assigns rank 1.
+
+        Uses McNemar as the preregistered continuous-test policy because the
+        data is binary. A metric not in any secondary family receives no
+        secondary-family correction: rank 1 and the raw selected p-value.
+        """
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
+        )
+        prereg = _make_preregistration(
+            arm_values,
+            continuous_test_policy=ContinuousTestPolicy.MCNEMAR,
         )
         analysis = compute_canonical_analysis(
             tasks=tasks,
@@ -1565,15 +1652,23 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.holm_rank == 1
-        # Single comparison: Holm correction preserves the original p-value
+        assert cmp.family_name is None
+        # Single comparison with no family: Holm correction preserves the original p-value
         if cmp.mcnemar_p_value is not None:
             assert cmp.holm_corrected_p_value == cmp.mcnemar_p_value
 
     def test_paired_comparisons_holm_correction_multiple_comparisons(self) -> None:
-        """Three arms produce 3 comparisons per metric with Holm correction applied."""
+        """Three arms produce 2 comparisons per metric with family-wide Holm correction applied.
+
+        With preregistration, the baseline is the lexicographically first arm
+        and each comparison arm is paired against it. When the metric is in a
+        named secondary family, Holm correction is applied across all
+        comparisons in that family. Two comparisons receive ranks 1 and 2.
+        """
         task_ids = ["task-1", "task-2", "task-3"]
         tasks = [_make_task(task_id=tid) for tid in task_ids]
         arms_data = {
@@ -1589,6 +1684,13 @@ class TestPairedComparisons:
                 attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
                 observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
 
+        prereg = _make_preregistration(
+            arms_data,
+            secondary_families=[
+                SecondaryFamily(family_name="integrity", metric_ids=["receipt_integrity"]),
+            ],
+            continuous_test_policy=ContinuousTestPolicy.MCNEMAR,
+        )
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1596,13 +1698,17 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
-        # C(3,2) = 3 pairs: (consensus, direct), (consensus, doctrine), (direct, doctrine)
-        assert len(ri_comparisons) == 3
-        # Holm ranks should be 1, 2, 3 (each comparison gets a unique rank)
+        # With preregistration, baseline is consensus and comparison arms are direct and doctrine.
+        # That produces 2 pairs: (consensus, direct), (consensus, doctrine).
+        assert len(ri_comparisons) == 2
+        # All comparisons are in the same family
+        assert all(c.family_name == "integrity" for c in ri_comparisons)
+        # Holm ranks should be 1, 2 (each comparison gets a unique rank within the family)
         ranks = sorted(c.holm_rank for c in ri_comparisons if c.holm_rank is not None)
-        assert ranks == [1, 2, 3]
+        assert ranks == [1, 2]
         # Corrected p-values should be monotonically non-decreasing by rank
         by_rank = sorted(ri_comparisons, key=lambda c: c.holm_rank or 0)
         corrected_ps = [c.holm_corrected_p_value for c in by_rank if c.holm_corrected_p_value is not None]
@@ -1621,10 +1727,12 @@ class TestPairedComparisons:
         # 7 tasks with all discordant pairs: baseline all pass, comparison all fail
         # Diffs = [-1.0]*7, bootstrap CI = [-1.0, -1.0]
         # CI lower bound (-1.0) < -margin (0.0) → FAIL
+        arm_values = {Arm.DIRECT: [1.0] * 7, Arm.DOCTRINE: [0.0] * 7}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0] * 7, Arm.DOCTRINE: [0.0] * 7},
+            arm_values=arm_values,
             task_ids=[f"task-{i}" for i in range(1, 8)],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1632,6 +1740,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.non_inferiority_margin == 0.0
@@ -1647,10 +1756,12 @@ class TestPairedComparisons:
         # 7 tasks: comparison all pass, baseline all fail
         # Diffs = [1.0]*7, bootstrap CI = [1.0, 1.0]
         # CI lower bound (1.0) >= -margin (0.0) → PASS
+        arm_values = {Arm.DIRECT: [0.0] * 7, Arm.DOCTRINE: [1.0] * 7}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.0] * 7, Arm.DOCTRINE: [1.0] * 7},
+            arm_values=arm_values,
             task_ids=[f"task-{i}" for i in range(1, 8)],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1658,6 +1769,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.non_inferiority_margin == 0.0
@@ -1672,10 +1784,12 @@ class TestPairedComparisons:
         gate uses the CI, not the p-value.
         """
         # All same values: no discordant pairs, McNemar returns (None, None)
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1683,6 +1797,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.mcnemar_p_value is None
@@ -1699,10 +1814,12 @@ class TestPairedComparisons:
         # 3 tasks with mixed: DIRECT=[1.0, 1.0, 0.0], DOCTRINE=[0.0, 0.0, 1.0]
         # Diffs = [-1.0, -1.0, 1.0], mean = -0.333
         # Bootstrap CI lower bound will be negative, crossing the 0.0 margin
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 0.0], Arm.DOCTRINE: [0.0, 0.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 0.0], Arm.DOCTRINE: [0.0, 0.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1710,6 +1827,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.mcnemar_p_value is not None
@@ -1747,6 +1865,7 @@ class TestPairedComparisons:
                     value=val,
                 ))
 
+        prereg = _make_preregistration(arms_data)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1754,6 +1873,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         keys = [(c.metric_id, c.baseline_arm_id, c.comparison_arm_id) for c in analysis.comparisons]
         assert keys == sorted(keys)
@@ -1779,6 +1899,7 @@ class TestPairedComparisons:
             _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=None),
             _make_metric_obs(attempt_id="att-r3", task_id="task-3", arm_id=Arm.DOCTRINE, value=0.0),
         ]
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
 
         analysis = compute_canonical_analysis(
             tasks=tasks,
@@ -1787,6 +1908,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
         assert len(cmp) == 1
@@ -1817,6 +1939,7 @@ class TestPairedComparisons:
             _make_metric_obs(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE, value=0.0),
             _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=0.0),
         ]
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
 
         analysis = compute_canonical_analysis(
             tasks=tasks,
@@ -1825,6 +1948,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         # No common pairing keys because state_snapshot_hash differs
         assert analysis.comparisons == []
@@ -1846,6 +1970,7 @@ class TestPairedComparisons:
                 )
                 observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
 
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1853,22 +1978,24 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
         assert len(cmp) == 1
         assert cmp[0].paired_count == 3
 
-    def test_paired_comparisons_three_arms_produce_three_pairs(self) -> None:
-        """Three arms produce C(3,2) = 3 ordered pairs per metric."""
-        task_ids = ["task-1", "task-2", "task-3"]
+    def test_paired_comparisons_three_arms_produce_two_pairs(self) -> None:
+        """Three arms with preregistration produce 2 pairs (baseline vs each comparison arm)."""
+        arm_values = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0],
+        }
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={
-                Arm.CONSENSUS: [1.0, 1.0, 1.0],
-                Arm.DIRECT: [0.0, 0.0, 0.0],
-                Arm.DOCTRINE: [1.0, 0.0, 1.0],
-            },
-            task_ids=task_ids,
+            arm_values=arm_values,
+            task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1876,19 +2003,23 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
-        assert len(ri_comparisons) == 3
+        # With preregistration, baseline is consensus and comparison arms are direct and doctrine.
+        assert len(ri_comparisons) == 2
         pairs = {(c.baseline_arm_id, c.comparison_arm_id) for c in ri_comparisons}
-        assert pairs == {("consensus", "direct"), ("consensus", "doctrine"), ("direct", "doctrine")}
+        assert pairs == {("consensus", "direct"), ("consensus", "doctrine")}
 
     def test_paired_comparisons_deterministic_output(self) -> None:
         """Identical inputs produce identical comparison records."""
+        arm_values = {Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3", "task-4"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis1 = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1896,6 +2027,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         analysis2 = compute_canonical_analysis(
             tasks=tasks,
@@ -1904,6 +2036,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         assert analysis1.canonical_json() == analysis2.canonical_json()
 
@@ -1927,6 +2060,7 @@ class TestPairedComparisons:
             _make_metric_obs(attempt_id="att-r1", task_id="task-1", arm_id=Arm.DOCTRINE, value=0.0),
             _make_metric_obs(attempt_id="att-r2", task_id="task-2", arm_id=Arm.DOCTRINE, value=0.0),
         ]
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
 
         analysis = compute_canonical_analysis(
             tasks=tasks,
@@ -1935,6 +2069,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
         assert len(cmp) == 1
@@ -1970,11 +2105,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_relative_delta_none_for_zero_baseline(self) -> None:
         """Relative delta is None when the baseline value is zero."""
+        arm_values = {Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.0, 0.0, 0.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -1982,6 +2119,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         assert cmp.relative_delta is None
@@ -1989,11 +2127,13 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_effect_size_computed(self) -> None:
         """Cohen's d standardized effect size is computed for non-constant diffs."""
+        arm_values = {Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7, 0.8], Arm.DOCTRINE: [0.8, 0.9, 1.0, 0.95]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3", "task-4"],
             metric_id="canary_scrubbing",
         )
+        prereg = _make_preregistration(arm_values, metric_id="canary_scrubbing")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -2001,6 +2141,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         # Diffs are [0.3, 0.3, 0.3, 0.15] which has non-zero variance, so Cohen's d is computed
@@ -2008,10 +2149,12 @@ class TestPairedComparisons:
 
     def test_paired_comparisons_effect_size_none_for_constant_diffs(self) -> None:
         """Cohen's d is None when all diffs are identical (zero variance)."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
         )
+        prereg = _make_preregistration(arm_values)
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -2019,6 +2162,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         # All diffs are -1.0 (constant), so variance is 0 and Cohen's d is None
@@ -2034,11 +2178,13 @@ class TestPairedComparisons:
         # Baseline (DIRECT) scores 0.90, comparison (DOCTRINE) scores 0.87
         # Diffs = [-0.03]*7, bootstrap CI = [-0.03, -0.03]
         # CI lower bound (-0.03) >= -margin (-0.05) → PASS
+        arm_values = {Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.87] * 7}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.87] * 7},
+            arm_values=arm_values,
             task_ids=[f"task-{i}" for i in range(1, 8)],
             metric_id="factual_qa",
         )
+        prereg = _make_preregistration(arm_values, metric_id="factual_qa")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -2046,6 +2192,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "factual_qa")
         assert cmp.non_inferiority_margin == 0.05
@@ -2061,11 +2208,13 @@ class TestPairedComparisons:
         # Baseline (DIRECT) scores 0.90, comparison (DOCTRINE) scores 0.80
         # Diffs = [-0.10]*7, bootstrap CI = [-0.10, -0.10]
         # CI lower bound (-0.10) < -margin (-0.05) → FAIL
+        arm_values = {Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.80] * 7}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.80] * 7},
+            arm_values=arm_values,
             task_ids=[f"task-{i}" for i in range(1, 8)],
             metric_id="factual_qa",
         )
+        prereg = _make_preregistration(arm_values, metric_id="factual_qa")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -2073,6 +2222,7 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "factual_qa")
         assert cmp.non_inferiority_margin == 0.05
@@ -2081,11 +2231,13 @@ class TestPairedComparisons:
     def test_non_inferiority_gate_none_for_metrics_without_margin(self) -> None:
         """Metrics without a non-inferiority margin use the default superiority gate."""
         # eval_judge has no non-inferiority margin
+        arm_values = {Arm.DIRECT: [3.0, 3.0, 3.0], Arm.DOCTRINE: [4.0, 4.0, 4.0]}
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [3.0, 3.0, 3.0], Arm.DOCTRINE: [4.0, 4.0, 4.0]},
+            arm_values=arm_values,
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="eval_judge",
         )
+        prereg = _make_preregistration(arm_values, metric_id="eval_judge")
         analysis = compute_canonical_analysis(
             tasks=tasks,
             attempts=attempts,
@@ -2093,9 +2245,451 @@ class TestPairedComparisons:
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
+            preregistration=prereg,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "eval_judge")
         assert cmp.non_inferiority_margin is None
+
+    def test_preregistration_is_frozen_and_forbids_extra(self) -> None:
+        """PreregistrationConfig is frozen and rejects extra fields."""
+        from pydantic import ValidationError
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        # Frozen models reject direct attribute mutation
+        with pytest.raises((AttributeError, TypeError)):
+            prereg.baseline_arm_id = "doctrine"  # type: ignore[misc]
+        # Extra fields are rejected at construction
+        with pytest.raises(ValidationError):
+            PreregistrationConfig.model_validate({
+                "config_id": "test",
+                "config_version": "1.0.0",
+                "baseline_arm_id": "direct",
+                "comparison_arm_ids": ["doctrine"],
+                "model_cohort_ids": [""],
+                "task_assignment_id": "ta",
+                "initial_state_assignment_id": "isa",
+                "required_replicate_count": 1,
+                "bootstrap_count": 100,
+                "bootstrap_confidence": 0.95,
+                "bootstrap_seed": 0,
+                "significance_level": 0.05,
+                "extra_field": "rejected",
+            })
+
+    def test_preregistration_deterministic_serialization_and_hash(self) -> None:
+        """Identical preregistration configs produce identical canonical JSON."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]}
+        prereg1 = _make_preregistration(arm_values)
+        prereg2 = _make_preregistration(arm_values)
+        assert canonical_model_json(prereg1) == canonical_model_json(prereg2)
+
+    def test_changed_preregistration_changes_hash(self) -> None:
+        """Changing the preregistration config changes the input content hash."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        prereg1 = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        prereg2 = PreregistrationConfig(
+            config_id="test-config-2",
+            config_version="1.0.0",
+            baseline_arm_id="direct",
+            comparison_arm_ids=["doctrine"],
+            model_cohort_ids=[""],
+            task_assignment_id="test-assignment-2",
+            initial_state_assignment_id="test-snapshot-1",
+            required_replicate_ids=["1"],
+            required_replicate_count=1,
+            bootstrap_count=10000,
+            bootstrap_confidence=0.95,
+            bootstrap_seed=0,
+            significance_level=0.05,
+        )
+        analysis1 = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg1,
+        )
+        analysis2 = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg2,
+        )
+        assert analysis1.input_summary.input_content_hash != analysis2.input_summary.input_content_hash
+
+    def test_undeclared_comparison_arm_rejected(self) -> None:
+        """An attempt with an arm not declared in preregistration fails closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0], Arm.CONSENSUS: [1.0, 1.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        with pytest.raises(ValueError, match="not declared in preregistration"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
+
+    def test_no_lexicographic_baseline_inference(self) -> None:
+        """The declared baseline arm is used, not the lexicographically first arm."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.DIRECT: [1.0, 1.0, 1.0],
+            Arm.DOCTRINE: [0.0, 0.0, 0.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+        # Declare doctrine as baseline (not lexicographically first)
+        prereg = PreregistrationConfig(
+            config_id="test-config-1",
+            config_version="1.0.0",
+            baseline_arm_id="doctrine",
+            comparison_arm_ids=["direct"],
+            model_cohort_ids=[""],
+            task_assignment_id="test-assignment-1",
+            initial_state_assignment_id="test-snapshot-1",
+            required_replicate_ids=["1"],
+            required_replicate_count=1,
+            bootstrap_count=10000,
+            bootstrap_confidence=0.95,
+            bootstrap_seed=0,
+            significance_level=0.05,
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        ri = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        assert len(ri) == 1
+        assert ri[0].baseline_arm_id == "doctrine"
+        assert ri[0].comparison_arm_id == "direct"
+
+    def test_mixed_model_cohort_rejected(self) -> None:
+        """Attempts with a model cohort not declared in preregistration fail closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        # Add a model cohort to one attempt
+        attempts[0] = attempts[0].model_copy(update={"model_cohort_id": "undeclared-cohort"})
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        with pytest.raises(ValueError, match="model cohort"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
+
+    def test_undeclared_replicate_id_rejected(self) -> None:
+        """An attempt with a replicate_id not declared in preregistration fails closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        # Change one attempt's replicate_id to an undeclared value
+        attempts[0] = attempts[0].model_copy(update={"replicate_id": "undeclared-replicate"})
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        with pytest.raises(ValueError, match="replicate_id"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
+
+    def test_attempt_referencing_unknown_task_rejected(self) -> None:
+        """An attempt referencing a task not in the declared task set fails closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        # Change one attempt's task_id to a task not in the set
+        attempts[0] = attempts[0].model_copy(update={"task_id": "unknown-task"})
+        prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
+        with pytest.raises(ValueError, match="unknown task"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
+
+    def test_selected_continuous_test_policy_determines_decision_p_value(self) -> None:
+        """The preregistered continuous-test policy selects which p-value drives the gate."""
+        arm_values = {Arm.DIRECT: [1.0, 1.0, 1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0, 0.0, 0.0]}
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values=arm_values,
+            task_ids=["task-1", "task-2", "task-3", "task-4"],
+        )
+        # With WILCOXON policy, the selected test should be wilcoxon
+        prereg_w = _make_preregistration(
+            arm_values,
+            continuous_test_policy=ContinuousTestPolicy.WILCOXON,
+        )
+        analysis_w = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg_w,
+        )
+        cmp_w = next(c for c in analysis_w.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp_w.selected_test == "wilcoxon"
+        if cmp_w.wilcoxon_p_value is not None:
+            # With no family, corrected p = raw selected p
+            assert cmp_w.holm_corrected_p_value == cmp_w.wilcoxon_p_value
+
+        # With PAIRED_T policy, the selected test should be paired_t
+        prereg_t = _make_preregistration(
+            arm_values,
+            continuous_test_policy=ContinuousTestPolicy.PAIRED_T,
+        )
+        analysis_t = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg_t,
+        )
+        cmp_t = next(c for c in analysis_t.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp_t.selected_test == "paired_t"
+
+    def test_named_secondary_family_holm_correction_across_metrics(self) -> None:
+        """Holm correction is applied across all comparisons for all metrics in a named family."""
+        task_ids = ["task-1", "task-2", "task-3", "task-4"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0, 0.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        # Put two metrics in the same family
+        prereg = _make_preregistration(
+            arms_data,
+            secondary_families=[
+                SecondaryFamily(
+                    family_name="integrity",
+                    metric_ids=["receipt_integrity", "canary_scrubbing"],
+                ),
+            ],
+            continuous_test_policy=ContinuousTestPolicy.MCNEMAR,
+        )
+        # Add canary_scrubbing observations
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                observations.append(_make_metric_obs(
+                    metric_id="canary_scrubbing",
+                    attempt_id=att_id, task_id=tid, arm_id=arm, value=val,
+                ))
+
+        analysis = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        family_comparisons = [c for c in analysis.comparisons if c.family_name == "integrity"]
+        # 2 metrics x 2 comparison arms = 4 comparisons in the family
+        assert len(family_comparisons) == 4
+        # Ranks should be 1, 2, 3, 4 (Holm across all 4 comparisons in the family)
+        ranks = sorted(c.holm_rank for c in family_comparisons if c.holm_rank is not None)
+        assert ranks == [1, 2, 3, 4]
+
+    def test_primary_metric_not_in_family_correction(self) -> None:
+        """Primary metrics do not undergo secondary-family correction."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        prereg = _make_preregistration(
+            arms_data,
+            primary_metric_ids=["receipt_integrity"],
+            continuous_test_policy=ContinuousTestPolicy.MCNEMAR,
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        ri_comparisons = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        # Primary metric: no family correction, rank 1, raw p-value preserved
+        for cmp in ri_comparisons:
+            assert cmp.holm_rank == 1
+            assert cmp.family_name is None
+
+    def test_deterministic_output_regardless_of_input_list_order(self) -> None:
+        """Permuting input observation order produces identical comparison records."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.DIRECT: [1.0, 0.0, 1.0],
+            Arm.DOCTRINE: [0.0, 1.0, 0.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        prereg = _make_preregistration(arms_data, continuous_test_policy=ContinuousTestPolicy.MCNEMAR)
+
+        analysis1 = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        # Reverse observation order
+        reversed_obs = list(reversed(observations))
+        analysis2 = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=reversed_obs,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        assert analysis1.canonical_json() == analysis2.canonical_json()
+
+    def test_invalid_preregistration_values_fail_closed(self) -> None:
+        """Invalid preregistration values (bad significance level, bad bootstrap) fail closed."""
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            PreregistrationConfig(
+                config_id="test",
+                config_version="1.0.0",
+                baseline_arm_id="direct",
+                comparison_arm_ids=["doctrine"],
+                model_cohort_ids=[""],
+                task_assignment_id="ta",
+                initial_state_assignment_id="isa",
+                required_replicate_count=1,
+                bootstrap_count=0,  # invalid: must be >= 1
+                bootstrap_confidence=0.95,
+                bootstrap_seed=0,
+                significance_level=0.05,
+            )
+        with pytest.raises(ValidationError):
+            PreregistrationConfig(
+                config_id="test",
+                config_version="1.0.0",
+                baseline_arm_id="direct",
+                comparison_arm_ids=["doctrine"],
+                model_cohort_ids=[""],
+                task_assignment_id="ta",
+                initial_state_assignment_id="isa",
+                required_replicate_count=1,
+                bootstrap_count=100,
+                bootstrap_confidence=1.5,  # invalid: must be < 1.0
+                bootstrap_seed=0,
+                significance_level=0.05,
+            )
+        with pytest.raises(ValidationError):
+            PreregistrationConfig(
+                config_id="test",
+                config_version="1.0.0",
+                baseline_arm_id="direct",
+                comparison_arm_ids=["doctrine"],
+                model_cohort_ids=[""],
+                task_assignment_id="ta",
+                initial_state_assignment_id="isa",
+                required_replicate_count=1,
+                bootstrap_count=100,
+                bootstrap_confidence=0.95,
+                bootstrap_seed=0,
+                significance_level=0.0,  # invalid: must be > 0.0
+            )
+
+    def test_multiple_declared_comparison_arms(self) -> None:
+        """Multiple declared comparison arms produce one comparison per arm pair."""
+        task_ids = ["task-1", "task-2", "task-3"]
+        tasks = [_make_task(task_id=tid) for tid in task_ids]
+        arms_data = {
+            Arm.CONSENSUS: [1.0, 1.0, 1.0],
+            Arm.DIRECT: [0.0, 0.0, 0.0],
+            Arm.DOCTRINE: [1.0, 0.0, 1.0],
+        }
+        attempts: list[AttemptRecord] = []
+        observations: list[MetricObservation] = []
+        for arm, values in arms_data.items():
+            for tid, val in zip(task_ids, values, strict=True):
+                att_id = f"att-{arm.value}-{tid}"
+                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
+                observations.append(_make_metric_obs(attempt_id=att_id, task_id=tid, arm_id=arm, value=val))
+
+        prereg = _make_preregistration(arms_data, continuous_test_policy=ContinuousTestPolicy.MCNEMAR)
+        analysis = compute_canonical_analysis(
+            tasks=tasks, attempts=attempts, metric_observations=observations,
+            receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        )
+        ri = [c for c in analysis.comparisons if c.metric_id == "receipt_integrity"]
+        # 2 comparison arms (direct, doctrine) paired against baseline (consensus)
+        assert len(ri) == 2
+        pairs = {(c.baseline_arm_id, c.comparison_arm_id) for c in ri}
+        assert pairs == {("consensus", "direct"), ("consensus", "doctrine")}
+
+    def test_unauthorized_arm_not_in_preregistration_produces_no_comparison(self) -> None:
+        """A preregistration with no comparison arms fails closed at construction."""
+        from pydantic import ValidationError
+        # Preregistration only declares direct as baseline with no comparison arms
+        with pytest.raises(ValidationError):
+            PreregistrationConfig(
+                config_id="test",
+                config_version="1.0.0",
+                baseline_arm_id="direct",
+                comparison_arm_ids=[],  # invalid: min_length=1
+                model_cohort_ids=[""],
+                task_assignment_id="ta",
+                initial_state_assignment_id="isa",
+                required_replicate_count=1,
+                bootstrap_count=100,
+                bootstrap_confidence=0.95,
+                bootstrap_seed=0,
+                significance_level=0.05,
+            )
+
+    def test_duplicate_metric_in_secondary_families_rejected(self) -> None:
+        """A metric in two secondary families fails closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        prereg = _make_preregistration(
+            {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+            secondary_families=[
+                SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
+                SecondaryFamily(family_name="fam2", metric_ids=["receipt_integrity"]),
+            ],
+        )
+        with pytest.raises(ValueError, match="belongs to multiple secondary families"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
+
+    def test_primary_metric_in_secondary_family_rejected(self) -> None:
+        """A metric that is both primary and in a secondary family fails closed."""
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
+            task_ids=["task-1", "task-2"],
+        )
+        prereg = _make_preregistration(
+            {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+            primary_metric_ids=["receipt_integrity"],
+            secondary_families=[
+                SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
+            ],
+        )
+        with pytest.raises(ValueError, match="both primary and in secondary family"):
+            compute_canonical_analysis(
+                tasks=tasks, attempts=attempts, metric_observations=observations,
+                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+            )
 
 
 class TestBridgeRunComparisons:

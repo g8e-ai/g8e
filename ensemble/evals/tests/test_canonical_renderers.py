@@ -259,6 +259,9 @@ def _make_synthetic_analysis() -> CanonicalEvalAnalysis:
                 holm_rank=1,
                 non_inferiority_margin=0.0,
                 gate_decision=GateDecisionStatus.PASS,
+                selected_test="paired_t",
+                family_name=None,
+                replicate_aggregation_policy="mean",
             ),
         ],
         gate_decisions=[

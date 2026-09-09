@@ -126,7 +126,16 @@ def build_investigation_run_state_request(
 
     Returns ``None`` when both routing targets are ``None`` (targetless
     skip). Task counts are left at truthful zero defaults because no
-    authoritative task lifecycle owner exists in the current ensemble.
+    task document creation or lifecycle path is implemented in the
+    current ensemble. The protocol (``protocol/models/task.json``)
+    designates the ensemble as the authority for task documents submitted
+    via GovernanceEnvelope, but no ensemble code creates task documents,
+    emits ``APP_TASK_*`` events, or defines a task model or service. The
+    ``tasks`` collection is read by ``CaseDataService.get_case_tasks`` but
+    nothing writes to it. Wiring task projections requires a separate
+    task lifecycle implementation and is recorded as unsupported here.
+    The Gateway computes ``tasks_in_queue`` from these projection fields
+    (``total_tasks - completed_tasks``), not from SSE event subtraction.
     """
     if not web_session_id and not cli_session_id:
         return None

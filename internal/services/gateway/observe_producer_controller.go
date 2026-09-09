@@ -80,8 +80,9 @@ func (c *ObserveProducerController) requireAppUserID(w http.ResponseWriter, r *h
 
 // buildProducerRoute constructs an SSERoute from the derived user_id and
 // the request body's session routing fields. Exactly one of web_session_id
-// or cli_session_id must be set. The route is validated by the producer
-// service; this function only assembles it.
+// or cli_session_id must be set; the caller rejects dual routing before
+// calling this assembler. The route is validated by the producer service;
+// this function only assembles it.
 func buildProducerRoute(userID, webSessionID, cliSessionID string) SSERoute {
 	route := SSERoute{UserID: userID}
 	webSessionID = strings.TrimSpace(webSessionID)
@@ -92,6 +93,30 @@ func buildProducerRoute(userID, webSessionID, cliSessionID string) SSERoute {
 		route.CLISessionID = cliSessionID
 	}
 	return route
+}
+
+// validateProducerRouting rejects a producer request that provides both
+// routing targets or neither. Exactly one of web_session_id or
+// cli_session_id is required at the Gateway boundary so the gateway never
+// silently picks one when both are supplied.
+func validateProducerRouting(webSessionID, cliSessionID string) error {
+	webSessionID = strings.TrimSpace(webSessionID)
+	cliSessionID = strings.TrimSpace(cliSessionID)
+	n := 0
+	if webSessionID != "" {
+		n++
+	}
+	if cliSessionID != "" {
+		n++
+	}
+	switch n {
+	case 0:
+		return constants.ErrGatewaySSERouteSessionRequired
+	case 1:
+		return nil
+	default:
+		return constants.ErrGatewaySSERouteSessionMutuallyExclusive
+	}
 }
 
 // handleAgentState accepts a typed agent state update from the ensemble,
@@ -131,6 +156,10 @@ func (c *ObserveProducerController) handleAgentState(w http.ResponseWriter, r *h
 		return
 	}
 	if err := validateAgentProducerRequest(req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateProducerRouting(req.WebSessionID, req.CLISessionID); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -190,6 +219,10 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 		return
 	}
 	if err := validateRunProducerRequest(req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateProducerRouting(req.WebSessionID, req.CLISessionID); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}

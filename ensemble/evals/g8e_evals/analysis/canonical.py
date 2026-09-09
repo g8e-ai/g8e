@@ -96,6 +96,31 @@ class MissingnessReason(StrEnum):
     NOT_APPLICABLE = "not_applicable"
 
 
+class ContinuousTestPolicy(StrEnum):
+    """Preregistered policy selecting which continuous test p-value drives the gate.
+
+    The policy is declared before analysis and applied uniformly. It
+    cannot be changed after observing results. ``PAIRED_T`` selects the
+    paired t-test, ``WILCOXON`` selects the Wilcoxon signed-rank test, and
+    ``MCNEMAR`` selects the McNemar test for binary outcomes.
+    """
+
+    PAIRED_T = "paired_t"
+    WILCOXON = "wilcoxon"
+    MCNEMAR = "mcnemar"
+
+
+class ReplicateAggregationPolicy(StrEnum):
+    """Preregistered policy for aggregating multiple replicates within a pairing key.
+
+    ``MEAN`` averages replicate values before pairing. The policy is
+    declared before analysis and applied uniformly across all pairing
+    keys.
+    """
+
+    MEAN = "mean"
+
+
 class AnalysisInputSummary(BaseModel):
     """Summary of the immutable records that fed this analysis.
 
@@ -368,12 +393,95 @@ class NonInferiorityMargin(BaseModel):
     description: str = Field(min_length=1)
 
 
+class SecondaryFamily(BaseModel):
+    """Named family of metrics for Holm-Bonferroni multiplicity correction.
+
+    All comparisons for metrics in this family are corrected together.
+    A metric can belong to at most one secondary family. Family names
+    are unique within a preregistration configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    family_name: str = Field(min_length=1)
+    metric_ids: list[str] = Field(
+        min_length=1,
+        description="Metric IDs in this family. Each metric can belong to at most one family.",
+    )
+
+
+class PreregistrationConfig(BaseModel):
+    """Frozen typed preregistration configuration for paired analysis.
+
+    Every comparison is authorized by this immutable configuration. The
+    configuration declares the baseline arm, allowed comparison arms,
+    model cohort identities, task and initial-state assignment
+    identities, required replicates, replicate aggregation policy,
+    primary metrics, named secondary families, selected continuous-test
+    policy, bootstrap parameters, and significance level. The
+    configuration is hashed as part of the analysis input so that any
+    change to the declared comparisons or policies changes the input
+    content hash.
+
+    Lexicographic baseline inference is removed: only the baseline and
+    comparison arms explicitly declared here are paired. An analysis
+    that requests a comparison not declared by this configuration is
+    rejected.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    config_id: str = Field(min_length=1)
+    config_version: str = Field(min_length=1)
+
+    baseline_arm_id: str = Field(min_length=1)
+    comparison_arm_ids: list[str] = Field(
+        min_length=1,
+        description="Allowed comparison arms. Each is paired against the baseline arm.",
+    )
+
+    model_cohort_ids: list[str] = Field(
+        min_length=1,
+        description="Model cohort identities. Each attempt's model_cohort_id must be in this set.",
+    )
+    task_assignment_id: str = Field(min_length=1, description="Identity of the declared task assignment.")
+    initial_state_assignment_id: str = Field(min_length=1, description="Identity of the declared initial-state assignment.")
+
+    required_replicate_ids: list[str] = Field(
+        default_factory=list,
+        description="Required replicate IDs. Each pairing key must have exactly one attempt per replicate ID per arm.",
+    )
+    required_replicate_count: int = Field(ge=1, description="Number of replicates required per pairing key per arm.")
+
+    replicate_aggregation_policy: ReplicateAggregationPolicy = ReplicateAggregationPolicy.MEAN
+
+    primary_metric_ids: list[str] = Field(
+        default_factory=list,
+        description="Primary metrics. These do not undergo secondary-family correction.",
+    )
+    secondary_families: list[SecondaryFamily] = Field(
+        default_factory=list,
+        description="Named secondary families for Holm-Bonferroni correction.",
+    )
+
+    continuous_test_policy: ContinuousTestPolicy = ContinuousTestPolicy.PAIRED_T
+
+    bootstrap_count: int = Field(ge=1, description="Number of bootstrap resamples for confidence intervals.")
+    bootstrap_confidence: float = Field(gt=0.0, lt=1.0, description="Confidence level for bootstrap intervals.")
+    bootstrap_seed: int = Field(ge=0, description="Seed for the deterministic bootstrap generator.")
+
+    significance_level: float = Field(gt=0.0, lt=1.0, description="Significance level for gate decisions.")
+
+
 class PairedComparison(BaseModel):
     """Paired comparison between two arms over identical task instances.
 
     Includes absolute and relative deltas, effect size, and a typed
     gate decision. Built only from paired ``MetricObservation`` rows
-    on identical task instances and initial-state snapshots.
+    on identical task instances and initial-state snapshots. Every
+    comparison traces to a declared preregistration configuration
+    entry and exposes the selected decision test, secondary family,
+    and corrected probability.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -414,6 +522,19 @@ class PairedComparison(BaseModel):
     )
 
     gate_decision: GateDecisionStatus = GateDecisionStatus.INSUFFICIENT_DATA
+
+    selected_test: str = Field(
+        min_length=1,
+        description="Preregistered test policy that drives the gate decision (e.g. paired_t, wilcoxon, mcnemar).",
+    )
+    family_name: str | None = Field(
+        default=None,
+        description="Secondary family this comparison belongs to. None for primary metrics not in any family.",
+    )
+    replicate_aggregation_policy: str = Field(
+        min_length=1,
+        description="Preregistered policy used to aggregate replicates within each pairing key (e.g. mean).",
+    )
 
 
 class GateDecision(BaseModel):
@@ -561,6 +682,11 @@ class CanonicalEvalAnalysis(BaseModel):
         description="Sorted names of unsupported claims carried from the release metric set.",
     )
 
+    preregistration: PreregistrationConfig | None = Field(
+        default=None,
+        description="Preregistration configuration that authorized the paired comparisons. None when no comparisons were declared.",
+    )
+
     def canonical_json(self) -> str:
         """Return canonical JSON with sorted keys and no extra whitespace.
 
@@ -579,6 +705,7 @@ __all__ = [
     "CanonicalEvalAnalysis",
     "ComparisonDirection",
     "ConfusionMatrix",
+    "ContinuousTestPolicy",
     "DomainStratifiedResult",
     "GateDecision",
     "GateDecisionStatus",
@@ -588,6 +715,9 @@ __all__ = [
     "NonInferiorityMargin",
     "PairedComparison",
     "PooledConfusionMatrix",
+    "PreregistrationConfig",
     "ReceiptCoverageAnalysis",
+    "ReplicateAggregationPolicy",
+    "SecondaryFamily",
     "canonical_model_json",
 ]
