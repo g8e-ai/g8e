@@ -1,0 +1,305 @@
+{
+  "description": "Supported dashboard event payloads carried inside SSE envelopes. The adapter normalizes the outer push envelope, parses nested string events, validates recognized type/data pairs, and prevents routing IDs from becoming trusted payload.",
+  "event_types": {
+    "ai.eval.metric.recorded": {
+      "family": "g8e.v1.ai.eval",
+      "payload_model": "eval_metric_recorded_payload"
+    },
+    "ai.eval.run.completed": {
+      "family": "g8e.v1.ai.eval",
+      "payload_model": "eval_run_completed_payload"
+    },
+    "app.agent.status.updated": {
+      "family": "g8e.v1.app.agent",
+      "payload_model": "agent_status_updated_payload"
+    },
+    "app.run.status.updated": {
+      "family": "g8e.v1.app.run",
+      "payload_model": "run_status_updated_payload"
+    }
+  },
+  "families": {
+    "g8e.v1.ai.eval": {
+      "classification": "unsupported",
+      "dashboard_safe": false,
+      "description": "ai.eval.run.completed and ai.eval.metric.recorded are registered with protocol-owned payloads but have no real producer until Phase 3 wires the eval publication path. Classified unsupported until producers land."
+    },
+    "g8e.v1.app.agent": {
+      "classification": "mixed",
+      "dashboard_safe": true,
+      "description": "app.agent.activity.recorded is a governed document update for AgentActivityMetadata (governed_record_only). app.agent.status.updated is a dashboard_safe event with a protocol-owned payload, produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/agent-state and verified by real HTTP integration tests."
+    },
+    "g8e.v1.app.run": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "app.run.status.updated is produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/run-state with a protocol-owned payload, verified by real HTTP integration tests."
+    }
+  },
+  "payloads": {
+    "agent_status_updated_payload": {
+      "_description": "Payload for app.agent.status.updated events. Reports the current lifecycle state of a single agent persona. Distinct from app.agent.activity.recorded, which is a governed document update for AgentActivityMetadata.",
+      "agent_id": {
+        "description": "Stable agent identifier",
+        "required": true,
+        "type": "string"
+      },
+      "display_name": {
+        "description": "Human-readable agent name",
+        "required": true,
+        "type": "string"
+      },
+      "model": {
+        "description": "Model identifier when the agent is configured with a model",
+        "required": false,
+        "type": "string"
+      },
+      "observed_at": {
+        "description": "UTC timestamp of the observation",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "role": {
+        "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)",
+        "required": true,
+        "type": "string"
+      },
+      "run_id": {
+        "description": "Owning run identifier when the agent is bound to a run",
+        "required": false,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Payload schema version identifier",
+        "required": true,
+        "type": "string"
+      },
+      "status": {
+        "description": "Agent lifecycle state",
+        "enum": [
+          "idle",
+          "queued",
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "offline"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "task_id": {
+        "description": "Active task identifier when the agent is executing a task",
+        "required": false,
+        "type": "string"
+      }
+    },
+    "eval_metric_recorded_payload": {
+      "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its population, denominator, and verification status.",
+      "denominator": {
+        "description": "Denominator for the metric population",
+        "required": true,
+        "type": "integer"
+      },
+      "eligible": {
+        "description": "Number of eligible items in the measured population",
+        "required": true,
+        "type": "integer"
+      },
+      "metric_id": {
+        "description": "Registered metric identifier",
+        "required": true,
+        "type": "string"
+      },
+      "metric_version": {
+        "description": "Metric schema version",
+        "required": true,
+        "type": "string"
+      },
+      "recorded_at": {
+        "description": "UTC timestamp when the metric was recorded",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "run_id": {
+        "description": "Stable eval run identifier",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Payload schema version identifier",
+        "required": true,
+        "type": "string"
+      },
+      "unit": {
+        "description": "Metric unit",
+        "required": true,
+        "type": "string"
+      },
+      "value": {
+        "description": "Metric value when available",
+        "required": false,
+        "type": "number"
+      },
+      "verification_status": {
+        "description": "Honest verification boundary label. Never 'verified' until the complete verifier exists.",
+        "enum": [
+          "projection_validated",
+          "receipt_verification_not_applicable",
+          "verified"
+        ],
+        "required": true,
+        "type": "string"
+      }
+    },
+    "eval_run_completed_payload": {
+      "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports terminal aggregate counts and the verification boundary of a completed eval run.",
+      "arm_id": {
+        "description": "Eval arm identifier",
+        "required": true,
+        "type": "string"
+      },
+      "assigned_tasks": {
+        "description": "Number of tasks assigned to the run",
+        "required": true,
+        "type": "integer"
+      },
+      "completed_at": {
+        "description": "UTC timestamp when the eval run completed",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "published_projection_sha256": {
+        "description": "SHA-256 hash of the persisted disclosure-safe projection",
+        "required": true,
+        "type": "string"
+      },
+      "receipt_count": {
+        "description": "Number of receipts in the report",
+        "required": true,
+        "type": "integer"
+      },
+      "run_id": {
+        "description": "Stable eval run identifier",
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Payload schema version identifier",
+        "required": true,
+        "type": "string"
+      },
+      "suite_id": {
+        "description": "Eval suite identifier",
+        "required": true,
+        "type": "string"
+      },
+      "suite_version": {
+        "description": "Eval suite version",
+        "required": true,
+        "type": "string"
+      },
+      "terminal_attempts": {
+        "description": "Number of attempts that reached a terminal state",
+        "required": true,
+        "type": "integer"
+      },
+      "verification_status": {
+        "description": "Honest verification boundary label. Never 'verified' until the complete verifier exists.",
+        "enum": [
+          "projection_validated",
+          "receipt_verification_not_applicable",
+          "verified"
+        ],
+        "required": true,
+        "type": "string"
+      }
+    },
+    "run_status_updated_payload": {
+      "_description": "Payload for app.run.status.updated events. Reports the current lifecycle state of a run across investigations, evals, demos, and workflows.",
+      "active_task_id": {
+        "description": "Currently active task identifier",
+        "required": false,
+        "type": "string"
+      },
+      "completed_tasks": {
+        "description": "Number of completed tasks",
+        "required": true,
+        "type": "integer"
+      },
+      "display_name": {
+        "description": "Human-readable run name",
+        "required": true,
+        "type": "string"
+      },
+      "ended_at": {
+        "description": "UTC timestamp when the run reached a terminal state",
+        "format": "iso8601",
+        "required": false,
+        "type": "string"
+      },
+      "observed_at": {
+        "description": "UTC timestamp of the observation",
+        "format": "iso8601",
+        "required": true,
+        "type": "string"
+      },
+      "run_id": {
+        "description": "Stable run identifier",
+        "required": true,
+        "type": "string"
+      },
+      "run_kind": {
+        "description": "Run category",
+        "enum": [
+          "investigation",
+          "eval",
+          "demo",
+          "workflow"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "schema_version": {
+        "description": "Payload schema version identifier",
+        "required": true,
+        "type": "string"
+      },
+      "started_at": {
+        "description": "UTC timestamp when the run started",
+        "format": "iso8601",
+        "required": false,
+        "type": "string"
+      },
+      "status": {
+        "description": "Run lifecycle state",
+        "enum": [
+          "queued",
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "required": true,
+        "type": "string"
+      },
+      "total_tasks": {
+        "description": "Total number of tasks in the run",
+        "required": true,
+        "type": "integer"
+      }
+    }
+  },
+  "schema_version": "1.0.0",
+  "sentinel_event_types": {
+    "error": {
+      "description": "Replay failure marker. Carries a reason string. Triggers snapshot reconciliation."
+    },
+    "truncated": {
+      "description": "Replay gap marker. Carries since_id and limit. Triggers snapshot reconciliation."
+    }
+  }
+}

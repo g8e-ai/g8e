@@ -186,37 +186,37 @@ def test_matthews_correlation_coefficient_is_higher_is_better():
 def test_l2_through_l5_proof_properties_have_release_blocker_thresholds():
     for metric_id in ("l2_proof_property", "l3_proof_property", "l4_proof_property", "l5_proof_property"):
         definition = DEFAULT_METRIC_REGISTRY.get(metric_id, "1.0.0")
-        assert definition.release_threshold is not None
-        assert "1.0" in definition.release_threshold
+        assert definition.threshold_rendering is not None
+        assert "1.0" in definition.threshold_rendering
 
 
 @pytest.mark.unit
 def test_linkage_metrics_have_release_blocker_thresholds():
     for metric_id in ("receipt_linkage", "envelope_linkage", "state_linkage", "persistence_linkage", "commitment_linkage", "audit_linkage"):
         definition = DEFAULT_METRIC_REGISTRY.get(metric_id, "1.0.0")
-        assert definition.release_threshold is not None
-        assert "1.0" in definition.release_threshold
+        assert definition.threshold_rendering is not None
+        assert "1.0" in definition.threshold_rendering
 
 
 @pytest.mark.unit
 def test_evidence_validity_has_release_blocker_threshold():
     definition = DEFAULT_METRIC_REGISTRY.get("evidence_validity", "1.0.0")
-    assert definition.release_threshold is not None
-    assert "1.0" in definition.release_threshold
+    assert definition.threshold_rendering is not None
+    assert "1.0" in definition.threshold_rendering
 
 
 @pytest.mark.unit
 def test_attack_success_rate_has_zero_threshold():
     definition = DEFAULT_METRIC_REGISTRY.get("attack_success_rate", "1.0.0")
-    assert definition.release_threshold is not None
-    assert "0.0" in definition.release_threshold
+    assert definition.threshold_rendering is not None
+    assert "0.0" in definition.threshold_rendering
 
 
 @pytest.mark.unit
 def test_expected_layer_detection_has_release_blocker_threshold():
     definition = DEFAULT_METRIC_REGISTRY.get("expected_layer_detection", "1.0.0")
-    assert definition.release_threshold is not None
-    assert "1.0" in definition.release_threshold
+    assert definition.threshold_rendering is not None
+    assert "1.0" in definition.threshold_rendering
 
 
 # --- Tests for new primary telemetry metrics ---
@@ -298,8 +298,8 @@ def test_telemetry_metrics_are_telemetry_domain():
 def test_telemetry_metrics_have_no_threshold():
     for metric_id in _NEW_TELEMETRY_METRIC_IDS:
         definition = DEFAULT_METRIC_REGISTRY.get(metric_id, "1.0.0")
-        assert definition.release_threshold is None, (
-            f"telemetry metric {metric_id} has a release_threshold, expected None"
+        assert definition.threshold_rendering is None, (
+            f"telemetry metric {metric_id} has a threshold_rendering, expected None"
         )
 
 

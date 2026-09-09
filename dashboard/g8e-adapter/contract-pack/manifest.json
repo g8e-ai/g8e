@@ -1,0 +1,75 @@
+{
+  "files": [
+    {
+      "path": "builder-prompt.md",
+      "sha256": "9c3467f9034090d56746fec8015088a3e245b9d2f32401a82f18a79ea8494305"
+    },
+    {
+      "path": "event-schemas.json",
+      "sha256": "1ff2ac00da4ed7f27c5b67bb3e24bfea5711f1eac93541e2e481729fe430371c"
+    },
+    {
+      "path": "fixtures/bootstrap.json",
+      "sha256": "fe0b59f4b9cc95229505af27c26b79a544a291d5a46f5d4d0318822db9b10f8b"
+    },
+    {
+      "path": "fixtures/download-availability.json",
+      "sha256": "7b14de0f2c4e8091d688a609a84b15b410b500a22e4905104aa33e17e11381a5"
+    },
+    {
+      "path": "fixtures/empty-evals.json",
+      "sha256": "0d0d74fea2345afe25601e2d9b0c9c4712dcdef05e07e2f2300e5b06ed07bb62"
+    },
+    {
+      "path": "fixtures/live-stream.json",
+      "sha256": "5dc471c43e5f348d8fc559caff8c266ba5478403cb7c0c09d9f3d56c8ce8775a"
+    },
+    {
+      "path": "fixtures/partial-verification.json",
+      "sha256": "f843db5ce8a1bed2046e2707acbca34673c3592be26a184e9b0f6ffc36a14be1"
+    },
+    {
+      "path": "fixtures/reconnect.json",
+      "sha256": "377f021d25156a4f12b13d33519cab1d2236984a09a9033e24eadbb4e4e4219f"
+    },
+    {
+      "path": "fixtures/replay-gap.json",
+      "sha256": "c66653e90201397979c177fb16e0f3f24030ba75ba49eb1f16a75c03a51c8766"
+    },
+    {
+      "path": "fixtures/stale-telemetry.json",
+      "sha256": "37ec587ae4b6d2073fd89b614d22fc145f7e25f0ec28618b2b9722a76d88e67f"
+    },
+    {
+      "path": "fixtures/unauthenticated.json",
+      "sha256": "24329be9031f0fb5183ff3cbf45a02ca9f359156f2c92212a1abeffaa04354e4"
+    },
+    {
+      "path": "fixtures/unavailable-metrics.json",
+      "sha256": "02fbcf982dfdf90821d93ff53082227aeb7b588dda35abd73a888b0315d4dcc8"
+    },
+    {
+      "path": "fixtures/wrong-user-rejection.json",
+      "sha256": "b4f6bc7358cfc3e12c62ed341bd268b371471484e9bf9e0823527acd9866d186"
+    },
+    {
+      "path": "models.ts",
+      "sha256": "522ce317ac52354792796064d8b5b3ad354d712ee9b655c5a9c527269f838118"
+    },
+    {
+      "path": "observe.openapi.json",
+      "sha256": "5a2ab5a7aa01ec1f30249a330038260c65f27adc3cd89d81f15b2e0b488d764e"
+    },
+    {
+      "path": "README.md",
+      "sha256": "f137d51a6be24341be1b9b87b1a1adcfa99802b98cef523d2a1be7a1d03e5243"
+    },
+    {
+      "path": "runtime-config.schema.json",
+      "sha256": "3b0073517f53987cddc945de9ff6ce6b075d70aa27ba2016ead89d1e366aca8d"
+    }
+  ],
+  "generated_at": "deterministic",
+  "generator": "dashboard/g8e-adapter/generator/gen-contract-pack.mjs",
+  "schema_version": "1.0.0"
+}

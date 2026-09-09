@@ -17,11 +17,15 @@
     "build": "tsc --build",
     "build:host": "vite build --config host/vite.config.ts",
     "dev:host": "vite --config host/vite.config.ts",
+    "build:ref-ui": "vite build --config reference-ui/vite.config.ts",
+    "dev:ref-ui": "vite --config reference-ui/vite.config.ts",
+    "gen:contract-pack": "npm run build && node generator/gen-contract-pack.mjs",
+    "gen:contract-pack:check": "node generator/gen-contract-pack.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit && tsc --noEmit -p host/tsconfig.json",
-    "clean": "rm -rf dist coverage host/dist"
+    "lint": "tsc --noEmit && tsc --noEmit -p host/tsconfig.json && tsc --noEmit -p cp-check.tsconfig.json && tsc --noEmit -p reference-ui/tsconfig.json",
+    "clean": "rm -rf dist coverage host/dist reference-ui/dist"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

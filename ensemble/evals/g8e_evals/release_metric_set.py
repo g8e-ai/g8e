@@ -188,7 +188,7 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
             metric_version=definition.metric_version,
             domain=domain,
             has_practical_threshold=definition.practical_threshold is not None,
-            threshold_description=definition.release_threshold or "No practical threshold defined; calibration pending.",
+            threshold_description=definition.threshold_rendering or "No practical threshold defined; calibration pending.",
         ))
     return entries
 

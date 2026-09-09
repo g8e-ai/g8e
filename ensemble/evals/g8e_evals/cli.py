@@ -167,8 +167,6 @@ from g8e_evals.benchmarks.economics.observers import EconomicsPerformanceObserve
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.analysis import (
-    ANALYSIS_COMPUTATION_VERSION,
-    ANALYSIS_SCHEMA_VERSION,
     AnalysisInputRecord,
     CanonicalEvalAnalysis,
     canonical_model_json,
@@ -2631,7 +2629,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 @click.option("--pki-dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--json", "json_output", is_flag=True, help="Emit a machine-readable verification result")
 def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
-    """Re-verify all receipts in a report directory offline.
+    """Re-verify receipt signatures in a report directory offline.
+
+    This is a diagnostic primitive, not complete eval verification. It
+    verifies only receipt signatures and final-persistence attestations.
 
     Loads every ``*Actuator_pub.pem`` file in the PKI directory, derives the
     key_id from each PEM, and matches each receipt to its ``signer_key_id``.

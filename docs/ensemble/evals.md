@@ -95,17 +95,25 @@ Both live and synthetic reports contain:
 - `evidence-index.jsonl`: Content hashes, lengths, classifications, storage locations, and access metadata for indexed artifacts.
 - Assertion-specific `*-observations.jsonl` files: Typed observations for the boundaries supported by that command. Supported but unused observation files are present and empty.
 
-Live reports additionally contain encrypted evidence envelopes, `results.jsonl`, and `summary.json`. The latter two are compatibility views derived from typed records and are not independent evidence sources. Synthetic reports instead contain content-addressed files under `evidence/` and any local simulator state needed by the selected suite; they do not write `results.jsonl` or `summary.json`.
+Both live and synthetic reports additionally contain the canonical analysis artifacts, which are the authoritative release-facing output derived from the complete immutable input record:
+
+- `analysis-input.json`: The complete validated `AnalysisInputRecord` containing every immutable input that can influence analysis, with a content hash over the canonical bytes.
+- `analysis.json`: Canonical analysis JSON produced by `compute_canonical_analysis_from_record`, including metric results, confusion matrices, paired comparisons, and preregistration metadata.
+- `analysis.md`: Markdown rendering of the canonical analysis.
+- `analysis.html`: HTML rendering of the canonical analysis.
+- `analysis.txt`: Plain-text CLI rendering of the canonical analysis.
+
+Live reports additionally contain encrypted evidence envelopes and `diagnostic-results.jsonl`, a non-authoritative per-attempt diagnostic derived from typed records. It is not an independent evidence source and must not be presented as release evidence. Synthetic reports instead contain content-addressed files under `evidence/` and any local simulator state needed by the selected suite.
 
 The external live evidence key is never embedded in the report. Retaining it allows named key holders to decrypt restricted evidence out of band; deleting it makes those encrypted artifacts unrecoverable.
 
 ## Verify receipts
 
-Reverify receipts with `uv run --locked g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>`. The PKI directory must contain each producing signer's `*Actuator_pub.pem` file. Add `--json` for a machine-readable result bound to the run ID in a valid manifest.
+`verify-receipts` is a diagnostic primitive, not complete eval verification. Reverify receipt signatures with `uv run --locked g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>`. The PKI directory must contain each producing signer's `*Actuator_pub.pem` file. Add `--json` for a machine-readable result bound to the run ID in a valid manifest.
 
 The verifier derives each key ID, matches it to `signer_key_id`, and verifies the canonical receipt signature and final persistence attestation. A receipt-verification claim requires a nonzero receipt count, no missing keys, no failures, and verified counts equal to the total. A zero-receipt report is not evidence that receipt verification passed.
 
-This command does not validate the complete report graph, dataset hashes, encrypted evidence, commitment ledger, or trustworthiness of supplied public keys. It is a receipt verifier, not a complete offline bundle verifier.
+This command does not validate the complete report graph, dataset hashes, encrypted evidence, commitment ledger, or trustworthiness of supplied public keys. It is a receipt-signature diagnostic primitive, not a complete offline bundle verifier. Complete eval verification requires the immutable bundle contract, signing identity, and assessed-trust policy defined in later phases.
 
 ## Published README evidence
 
@@ -123,6 +131,48 @@ From the repository root, run:
 - `make evals-lint`: Ruff and Pyright checks for the standalone package.
 
 Live stack and provider evaluations are Tier 3 and are not part of the offline test targets.
+
+## Browser Publication and Observe Projections
+
+The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path that produces these projections from a verified eval bundle is not yet implemented. The complete `g8e-evals verify <bundle>` prerequisite does not exist in the current working tree; the existing `verify-receipts` command verifies only receipt signatures and final-persistence attestations and must not be presented as complete eval verification.
+
+### Current status: blocked
+
+Eval publication (Phase 4 of the observability frontend plan) remains blocked until the eval compliance plan provides a versioned canonical analysis and a complete fail-closed `g8e-evals verify <bundle>` result. The observability implementation does not solve the broader eval plan inside a frontend change. No provisional `verify` command is added that overstates coverage.
+
+### Required prerequisite
+
+The eval owner must expose a typed verified-bundle result containing run identity, suite and arm identity, assigned and terminal counts, registered metric rows, receipt count, source schema/version, canonical analysis hash, verification report, and public/restricted artifact classification. Verification statuses map to `projection_validated`, `receipt_verification_not_applicable`, and `verified`. The `verified` status requires the complete eval-native verifier; receipt-only verification cannot produce it.
+
+The governed ingress used by `g8e-evals publish` uses an enrolled workload identity or existing governed CLI ingress, never a browser session and never an unauthenticated route.
+
+### Publication boundary (when the prerequisite lands)
+
+When the prerequisite is available, eval publication will:
+
+1. Define a typed publication request and result with source run ID, source schema/version, canonical analysis hash, publication timestamp, verification status, and exact projection SHA-256.
+2. Read and verify the completed bundle first. Build the browser projection only from verified typed records; never parse `summary.json` as authoritative.
+3. Apply a typed disclosure policy that excludes prompts, outputs, chain-of-thought, raw trails, user email, session IDs, host paths, credentials, evidence keys, encrypted-evidence key-discovery metadata, and private host data.
+4. Canonically serialize the projection, compute its SHA-256, and persist it through the governed mutation path (five-layer verification gauntlet).
+5. Emit one `ai.eval.metric.recorded` event per eligible published metric and one `ai.eval.run.completed` event only after successful projection persistence. If persistence fails, emit neither.
+6. Update or create the corresponding run projection with `run_kind="eval"` using the eval run ID. Do not collapse it into an investigation ID.
+7. Build the download catalog only from deterministic public-safe artifacts with media type, byte size, SHA-256, privacy classification, source run ID, generation time, and authenticated URL.
+8. Implement authenticated download streaming with ownership checks, fixed content type, fixed content length, digest verification, safe disposition, and rooted path handling.
+9. Reject path traversal, symlinks escaping the publication root, duplicate IDs, hash mismatch, size mismatch, oversized files, unknown media types, restricted artifacts, and post-catalog file substitution.
+
+### Verification labels
+
+The observe frontend displays verification labels honestly:
+
+- `verified` — requires the complete eval-native verifier (not yet implemented).
+- `projection_validated` — the projection was validated against the verified bundle.
+- `receipt_verification_not_applicable` — receipt verification is not applicable to this run.
+
+The frontend never displays `verified` until the complete verifier exists. Partial verification is shown as `projection_validated`, never as `verified`.
+
+### Event classification
+
+The `g8e.v1.ai.eval` event family remains classified as `unsupported` in `protocol/constants/event_dashboard_classification.json` until the eval publication path lands and real post-persistence producers pass integration tests. The two eval events (`ai.eval.run.completed`, `ai.eval.metric.recorded`) are registered with protocol-owned payloads but have no real producer.
 
 ## Related
 

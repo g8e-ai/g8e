@@ -44,6 +44,17 @@ Then open the app in a new browser tab, not inside the Lovable editor preview. T
 
 If the browser asks for permission to access devices on your local network, select **Allow**.
 
+## Observe Frontend (Generator-Neutral Contract Pack)
+
+For a read-only observe dashboard (agent and run lifecycle projections, eval summaries, downloads, live SSE narrative), use the deterministic contract pack instead of the generic prompt above. The contract pack lives at `dashboard/g8e-adapter/contract-pack/` and contains a `builder-prompt.md` that encodes every hard constraint a generated observe SPA must satisfy.
+
+1. From `dashboard/g8e-adapter/`, run `npm run gen:contract-pack` to regenerate the pack (or `npm run gen:contract-pack:check` to verify committed outputs are current).
+2. Give Lovable the contents of `contract-pack/builder-prompt.md` plus the `contract-pack/models.ts`, `contract-pack/observe.openapi.json`, `contract-pack/event-schemas.json`, and `contract-pack/fixtures/` files.
+3. The generated SPA imports the audited `g8e-adapter` package for transport, auth, SSE, and state. It does not rewrite adapter code.
+4. Deploy the generated SPA at a top-level origin and connect it with `./g8e gw connect <origin>`.
+
+See [Generator-Neutral Builder Guide](./build_observe_frontend.md) for the runtime capability requirements and [Build a g8e-Compatible Frontend](./build_frontend.md#generator-neutral-observe-frontend) for the full observe frontend reference.
+
 ## Browser Limitations
 
 The CLI verifies Gateway HTTPS and CORS, but two browser-controlled restrictions are outside its control:

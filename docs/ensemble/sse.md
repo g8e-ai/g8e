@@ -82,6 +82,28 @@ The `EventService` class (`app/services/infra/event_service.py`) implements `Eve
 - **`publish_command_event(event_type, data, g8e_context, *, task_id)`** — Packages command execution telemetry and status updates into a `BackgroundEvent` bound to the context's user and investigation.
 - **`publish_investigation_event(investigation_id, event_type, payload, web_session_id, case_id, user_id, *, cli_session_id)`** — Constructs a `RequestContext` and publishes a targeted `SessionEvent` containing investigation and case correlation metadata.
 
+### Observe State Producers
+
+The `EventService` also exposes two best-effort observe state producer methods that push typed agent and run state projections to the Gateway's mTLS producer endpoints. These methods are the sole call-site boundary for lifecycle projection updates; lifecycle code never accesses `_internal_http_client` directly.
+
+- **`publish_agent_state(request)`** — Calls `InternalHttpClient.push_agent_state` with a typed `ObserveProducerAgentStateRequest`. Skips targetless requests (no `web_session_id` and no `cli_session_id`). Catches all exceptions except `asyncio.CancelledError` (which propagates), logs one warning with safe identifiers (`agent_id`, `status`), and returns without raising. Projection failures cannot abort primary workload behavior.
+- **`publish_run_state(request)`** — Calls `InternalHttpClient.push_run_state` with a typed `ObserveProducerRunStateRequest`. Same best-effort semantics: skips targetless requests, catches exceptions except `CancelledError`, logs a warning, and returns without raising.
+
+The producer request types are protocol-owned (`ObserveProducerAgentStateRequest`, `ObserveProducerRunStateRequest` from `g8e.models.observe_api`) with typed `Literal` enums for lifecycle status and run kind and `extra="forbid"` for unknown-field rejection. The ensemble imports these types via aliases in `app.models.internal_api` rather than redefining them.
+
+### Identity and Payload Helpers
+
+Pure helpers in `app/services/observe/` construct deterministic producer payloads from typed domain objects:
+
+- **`resolve_persona(persona_id)`** — Validates against `PERSONA_REGISTRY`, raises `UnknownPersonaError` for unknown personas.
+- **`build_agent_id(user_id, persona_id)`** — Constructs `f"{user_id}:{persona_id}"`. No email, session, or host data is embedded in agent IDs.
+- **`persona_display_name(persona_id)` / `persona_role(persona_id)`** — Registry-owned values. Never accept caller-supplied display metadata when the registry owns it.
+- **`routing_target(g8e_context)`** — Returns the `(web_session_id, cli_session_id)` pair from the request context. Exactly one target reaches the Gateway; if neither is present, projection push is skipped.
+- **`build_agent_state_request(...)`** — Builds a typed `ObserveProducerAgentStateRequest` from registry-owned metadata. Returns `None` for unknown persona or targetless routing.
+- **`build_investigation_run_state_request(...)`** — Builds a typed `ObserveProducerRunStateRequest` with truthful zero task counts (no task document creation path is implemented in the ensemble). Returns `None` for targetless routing.
+- **`map_investigation_status_to_run_lifecycle(status)`** — Maps `InvestigationStatus` to `RunLifecycleStatus`.
+- **`resolve_chat_persona_id(active_agent)`** — Maps `ReasoningAgent` to registered persona id, returns `None` for unknown/None.
+
 ### InternalHttpClient Transport and Resiliency
 
 The `InternalHttpClient` class (`app/services/infra/internal_http_client.py`) executes the HTTP transport over mTLS:
@@ -183,7 +205,63 @@ The `TribunalEmitter` classifies events into terminal and progress categories:
 6. AI_CONSENSUS_SESSION_COMPLETED        (Final approved command ready for execution)
 ```
 
-## Human-in-the-Loop Approvals
+## Observe Lifecycle Producers
+
+The ensemble wires authoritative lifecycle transitions through the `EventService` observe producer methods. These projections are best-effort: a projection failure logs a warning and returns without raising, so primary chat, tool, consensus, investigation, and operator work continues. The low-level HTTP client continues to raise typed network failures so direct callers can detect rejection.
+
+### Chat and Tool Lifecycle
+
+`deliver_via_sse` in `app/services/ai/agent_sse.py` pushes agent and run state projections adjacent to the authoritative state change. The projection call does not replace the existing SSE narrative event.
+
+Agent state transitions:
+
+- `running` at iteration start.
+- `waiting` when a universal tool call starts.
+- `running` when the tool result returns.
+- `failed` on a terminal model error (ERROR chunk) or unexpected exception.
+- `idle` on cancellation.
+- `completed` when the persona's turn work finishes.
+
+Investigation run state:
+
+- `running` at iteration start and completion (kept non-terminal during ordinary chat).
+- `waiting` during universal tool execution.
+
+A multi-turn investigation never attempts terminal-to-running after an ordinary completed chat turn. The run is kept `running` on completion, not `completed`. Only an authoritative investigation closure establishes `completed`.
+
+Persona resolution uses `resolve_chat_persona_id(inputs.active_agent)` which maps `ReasoningAgent.SAGE` to `"sage"` and `ReasoningAgent.DASH` to `"dash"`. When `active_agent` is `None`, agent projections are skipped. Display name and role come from the persona registry via `build_agent_state_request`. Run display name comes from `inputs.investigation.case_title`.
+
+### Consensus Lifecycle
+
+The Tribunal emitter boundary pushes agent state projections for the `"tribunal"` persona:
+
+- `running` at consensus start.
+- `running` on first-round no-consensus (not terminal).
+- `completed` on final success.
+- `failed` on terminal consensus failure.
+- `offline` when Tribunal is disabled.
+- `failed` on model-not-configured and provider-unavailable errors.
+
+A first-round no-consensus followed by round two is not a terminal run failure. The run is preserved as waiting/running until the final outcome. The payload contains no candidate command, raw request, vote reasoning, or dissent text. Only lifecycle identifiers and the allowed model field enter the observe payload.
+
+### Investigation Lifecycle
+
+`InvestigationService` in `app/services/investigation/investigation_service.py` injects `EventServiceProtocol | None` and pushes run projections after authoritative status mutations:
+
+- After successful governed creation persistence, pushes a `queued` run projection. If creation fails, no projection is pushed.
+- After an authoritative status update persists, maps `InvestigationStatus.OPEN`/`ESCALATED` to `running`, `CLOSED`/`RESOLVED` to `completed`. Only pushes when status actually changed.
+
+Display name is derived from `investigation.case_title` (disclosure-safe). No case description, prompt, user email, host path, or evidence references are included. Started and ended timestamps are preserved from authoritative persisted fields when they exist; if the domain model does not own one, it is left absent rather than synthesizing historical values.
+
+### Task Lifecycle
+
+The protocol designates the ensemble as the authority for task documents, but no ensemble code creates task documents, emits `APP_TASK_*` events, or defines a `TaskModel`/`TaskService`. The `tasks` collection is read by `get_case_tasks` but nothing writes to it. Task fields are left at truthful zero defaults and task lifecycle is documented as unsupported. The Go gateway computes `tasks_in_queue = total_tasks - completed_tasks` from projection fields, not SSE event subtraction.
+
+### Operator Dispatch
+
+Operator dispatch does not have an authoritative persona projection. `DispatchRequest` carries operator identity, not an agent persona. There is no "operator dispatch" persona in `PERSONA_REGISTRY`. The dispatch path routes governance envelopes to operators; it does not produce agent lifecycle transitions. Operator agent status is recorded as unsupported and no synthetic projection is fabricated.
+
+
 
 State-changing operations requiring human authorization trigger interactive approval events managed by `OperatorApprovalService` (`app/services/operator/approval_service.py`).
 

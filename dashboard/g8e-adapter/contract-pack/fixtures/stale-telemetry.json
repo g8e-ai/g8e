@@ -1,0 +1,23 @@
+{
+  "description": "Overview counters marked stale. The SPA shows a stale label, not a fabricated fresh value.",
+  "scenario": "stale-telemetry",
+  "snapshot": {
+    "agents": [],
+    "downloads": [],
+    "generated_at": "2026-09-09T12:00:00Z",
+    "latest_evals": [],
+    "measurements": {
+      "schema_version": "1.0.0"
+    },
+    "overview": {
+      "agents_running": 1,
+      "agents_running_freshness": "stale",
+      "generated_at": "2026-09-09T12:00:00Z",
+      "schema_version": "1.0.0",
+      "tasks_in_queue": 0,
+      "tasks_in_queue_freshness": "stale"
+    },
+    "recent_runs": [],
+    "schema_version": "1.0.0"
+  }
+}
