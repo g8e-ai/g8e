@@ -38,6 +38,12 @@ def _round(value: float) -> float:
     return round(float(value), _FLOAT_PRECISION)
 
 
+def _paired_sample_size(baseline_values: Sequence[object], comparison_values: Sequence[object]) -> int:
+    if len(baseline_values) != len(comparison_values):
+        raise ValueError("paired samples must have equal lengths")
+    return len(baseline_values)
+
+
 # ---------------------------------------------------------------------------
 # Delta computations
 # ---------------------------------------------------------------------------
@@ -66,7 +72,7 @@ def cohens_d_paired(baseline_values: Sequence[float], comparison_values: Sequenc
     ``d = mean(diff) / stddev(diff)`` where ``diff = comparison - baseline``.
     Returns ``None`` when fewer than 2 paired values or zero variance.
     """
-    n = min(len(baseline_values), len(comparison_values))
+    n = _paired_sample_size(baseline_values, comparison_values)
     if n < 2:
         return None
     diffs = np.array(
@@ -97,7 +103,7 @@ def mcnemar_test(
 
     Returns ``(None, None)`` when there are no discordant pairs.
     """
-    n = min(len(baseline_binary), len(comparison_binary))
+    n = _paired_sample_size(baseline_binary, comparison_binary)
     if n == 0:
         return None, None
 
@@ -218,7 +224,7 @@ def paired_t_test(
     Returns ``(t_statistic, p_value)``. Returns ``(None, None)`` when
     fewer than 2 paired values or zero variance.
     """
-    n = min(len(baseline_values), len(comparison_values))
+    n = _paired_sample_size(baseline_values, comparison_values)
     if n < 2:
         return None, None
 
@@ -245,8 +251,8 @@ def _t_distribution_two_sided(t: float, df: int) -> float:
     if df <= 0:
         return 1.0
     x = df / (df + t * t)
-    p_one_sided = _regularized_incomplete_beta(x, df / 2.0, 0.5)
-    return min(1.0, max(0.0, 2.0 * p_one_sided))
+    p_two_sided = _regularized_incomplete_beta(x, df / 2.0, 0.5)
+    return min(1.0, max(0.0, p_two_sided))
 
 
 def _regularized_incomplete_beta(x: float, a: float, b: float) -> float:
@@ -324,7 +330,7 @@ def wilcoxon_signed_rank_test(
     Returns ``(None, None)`` when fewer than 2 paired values or all
     differences are zero.
     """
-    n = min(len(baseline_values), len(comparison_values))
+    n = _paired_sample_size(baseline_values, comparison_values)
     if n < 2:
         return None, None
 
@@ -357,7 +363,7 @@ def wilcoxon_signed_rank_test(
     w_stat = min(w_plus, w_minus)
 
     if n_nz <= 20:
-        p_value = _wilcoxon_exact_p_value(w_stat, n_nz)
+        p_value = _wilcoxon_exact_p_value(w_stat, ranks)
     else:
         mean_w = n_nz * (n_nz + 1) / 4.0
         tie_counts: dict[float, int] = {}
@@ -379,19 +385,25 @@ def wilcoxon_signed_rank_test(
     return _round(w_stat), _round(min(max(p_value, 0.0), 1.0))
 
 
-def _wilcoxon_exact_p_value(w_stat: float, n: int) -> float:
+def _wilcoxon_exact_p_value(w_stat: float, ranks: np.ndarray) -> float:
     """Exact two-sided p-value for the Wilcoxon signed-rank test via DP."""
-    total = n * (n + 1) // 2
-    dp = np.zeros(total + 1, dtype=np.int64)
-    dp[0] = 1
-    for rank in range(1, n + 1):
-        for s in range(total, rank - 1, -1):
-            dp[s] += dp[s - rank]
+    scaled_ranks = [round(float(rank) * 2) for rank in ranks]
+    total = sum(scaled_ranks)
+    counts = np.zeros(total + 1, dtype=np.int64)
+    counts[0] = 1
+    reachable = 0
+    for rank in scaled_ranks:
+        for score in range(reachable, -1, -1):
+            counts[score + rank] += counts[score]
+        reachable += rank
 
-    w_int = round(w_stat)
-    count = int(np.sum(dp[: w_int + 1]) + np.sum(dp[total - w_int:]))
-    total_subsets = 2 ** n
-    return count / total_subsets
+    observed = round(w_stat * 2)
+    extreme_count = sum(
+        int(count)
+        for score, count in enumerate(counts)
+        if score <= observed or score >= total - observed
+    )
+    return min(extreme_count / (2 ** len(scaled_ranks)), 1.0)
 
 
 def _normal_sf(z: float) -> float:
@@ -420,7 +432,11 @@ def bootstrap_ci(
     The bootstrap is deterministic: identical inputs and seed produce
     identical intervals.
     """
-    n = min(len(baseline_values), len(comparison_values))
+    n = _paired_sample_size(baseline_values, comparison_values)
+    if n_bootstrap <= 0:
+        raise ValueError("bootstrap sample count must be positive")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("bootstrap confidence must be between zero and one")
     if n < 2:
         return None, None
 
@@ -457,6 +473,8 @@ def holm_correction(p_values: Sequence[float]) -> list[tuple[int, float]]:
     n = len(p_values)
     if n == 0:
         return []
+    if any(not math.isfinite(p_value) or not 0.0 <= p_value <= 1.0 for p_value in p_values):
+        raise ValueError("Holm correction requires finite probabilities between zero and one")
 
     p_arr = np.array(p_values, dtype=np.float64)
     sorted_indices = np.argsort(p_arr, kind="stable")

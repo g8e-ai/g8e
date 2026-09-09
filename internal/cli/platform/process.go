@@ -309,7 +309,20 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	return args, nil
 }
 
-func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
+func stopFailedStart(cmd *exec.Cmd) error {
+	killErr := cmd.Process.Kill()
+	_, waitErr := cmd.Process.Wait()
+	if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+		return fmt.Errorf("kill process: %w", killErr)
+	}
+	var exitErr *exec.ExitError
+	if waitErr != nil && !errors.As(waitErr, &exitErr) {
+		return fmt.Errorf("wait for process: %w", waitErr)
+	}
+	return nil
+}
+
+func (pm *ProcessManager) StartOperator(opts *OperatorStartOptions) error {
 	if err := pm.CreateDirectories(); err != nil {
 		return err
 	}
@@ -357,7 +370,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	// Find the first available port starting from httpPort
 	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP")
 	if err != nil {
-		return fmt.Errorf("%w: HTTP port: %v", constants.ErrPortUnavailable, err)
+		return fmt.Errorf("%w: HTTP port: %w", constants.ErrPortUnavailable, err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
@@ -366,7 +379,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	// Verify the calculated HTTPS port is available
 	if err := pm.checkPortAvailable(availableHTTPSPort, "Operator HTTPS"); err != nil {
-		return fmt.Errorf("%w: HTTPS port %d: %v", constants.ErrPortUnavailable, availableHTTPSPort, err)
+		return fmt.Errorf("%w: HTTPS port %d: %w", constants.ErrPortUnavailable, availableHTTPSPort, err)
 	}
 
 	binPath, err := pm.copyBinaryToBinDir()
@@ -376,7 +389,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	logHandle, err := pm.logSvc.OpenLogForAppend(context.Background())
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
+		return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 	}
 	logPath := pm.logSvc.LogFilePath()
 
@@ -393,10 +406,10 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	opts.RateLimitBurst = effectiveRateLimitBurst
 	opts.LogLevel = effectiveLogLevel
 
-	args, err := pm.BuildReExecArgs(opts)
+	args, err := pm.BuildReExecArgs(*opts)
 	if err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPathValidation, err, closeErr)
+			return fmt.Errorf("%w: build arguments: %w; close log: %w", constants.ErrPathValidation, err, closeErr)
 		}
 		return err
 	}
@@ -408,28 +421,41 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	if err := cmd.Start(); err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrProcessStartFailed, err, closeErr)
+			return fmt.Errorf("%w: start: %w; close log: %w", constants.ErrProcessStartFailed, err, closeErr)
 		}
-		return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	if err := pm.writePID(constants.OperatorPIDFilename, cmd.Process.Pid); err != nil {
-		_ = cmd.Process.Kill()
+		stopErr := stopFailedStart(cmd)
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPIDWriteFailed, err, closeErr)
+			if stopErr != nil {
+				return fmt.Errorf("%w: %w; stop failed start: %w; close log: %w", constants.ErrPIDWriteFailed, err, stopErr, closeErr)
+			}
+			return fmt.Errorf("%w: %w; close log: %w", constants.ErrPIDWriteFailed, err, closeErr)
 		}
-		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
+		if stopErr != nil {
+			return fmt.Errorf("%w: %w; stop failed start: %w", constants.ErrPIDWriteFailed, err, stopErr)
+		}
+		return fmt.Errorf("%w: %w", constants.ErrPIDWriteFailed, err)
 	}
 
 	if err := logHandle.Close(); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
+		cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+		if cleanupErr != nil {
+			return fmt.Errorf("%w: close log: %w; cleanup: %w", constants.ErrPathValidation, err, cleanupErr)
+		}
+		return fmt.Errorf("%w: close log: %w", constants.ErrPathValidation, err)
 	}
 
 	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
 	client := &http.Client{Timeout: HealthCheckInterval}
 	for i := 0; i < MaxHealthChecks; i++ {
 		if !pm.isProcessRunning(cmd.Process.Pid) {
-			_ = pm.deletePID(constants.OperatorPIDFilename)
+			cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+			if cleanupErr != nil {
+				return fmt.Errorf("%w: check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+			}
 			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logPath)
 		}
 		resp, err := client.Get(healthURL)
@@ -442,7 +468,10 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		time.Sleep(HealthCheckInterval)
 	}
 
-	_ = pm.deletePID(constants.OperatorPIDFilename)
+	cleanupErr := errors.Join(stopFailedStart(cmd), pm.deletePID(constants.OperatorPIDFilename))
+	if cleanupErr != nil {
+		return fmt.Errorf("%w: gateway did not become healthy, check %s: cleanup: %w", constants.ErrProcessStartFailed, logPath, cleanupErr)
+	}
 	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, logPath)
 }
 

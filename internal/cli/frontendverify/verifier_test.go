@@ -42,6 +42,7 @@ type testGatewayServer struct {
 	server   *httptest.Server
 	allowed  string
 	healthOK bool
+	emitVary bool
 }
 
 func newTestGatewayServer(t *testing.T, allowedOrigin string, healthOK bool) *testGatewayServer {
@@ -62,6 +63,7 @@ func newTestGatewayServer(t *testing.T, allowedOrigin string, healthOK bool) *te
 		rootCert: caCert,
 		allowed:  allowedOrigin,
 		healthOK: healthOK,
+		emitVary: true,
 	}
 
 	mux := http.NewServeMux()
@@ -107,7 +109,9 @@ func (g *testGatewayServer) handleHealth(w http.ResponseWriter, r *http.Request)
 }
 
 func (g *testGatewayServer) applyCORS(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add(constants.HeaderVary, "Origin")
+	if g.emitVary {
+		w.Header().Add(constants.HeaderVary, "Origin")
+	}
 	origin := r.Header.Get(constants.HeaderOrigin)
 	if origin == "" || !strings.EqualFold(strings.TrimRight(origin, "/"), strings.TrimRight(g.allowed, "/")) {
 		if r.Method == http.MethodOptions {
@@ -174,13 +178,14 @@ func TestVerifier_AllChecksPassWithCorrectConfig(t *testing.T) {
 	assert.True(t, report.AllPassed)
 	assert.Nil(t, report.FirstFailure)
 
-	require.Len(t, report.Checks, 6)
+	require.Len(t, report.Checks, 7)
 	assert.Equal(t, CheckHTTPSHealth, report.Checks[0].Name)
 	assert.Equal(t, CheckCertificateChain, report.Checks[1].Name)
 	assert.Equal(t, CheckCORSOrigin, report.Checks[2].Name)
 	assert.Equal(t, CheckCORSCredentials, report.Checks[3].Name)
 	assert.Equal(t, CheckCORSMethods, report.Checks[4].Name)
 	assert.Equal(t, CheckCORSHeaders, report.Checks[5].Name)
+	assert.Equal(t, CheckCORSVary, report.Checks[6].Name)
 
 	for _, c := range report.Checks {
 		assert.Equal(t, CheckPass, c.Status, "check %s should pass", c.Name)
@@ -331,6 +336,25 @@ func TestVerifier_CORSHeadersIncludeRequestedHeaders(t *testing.T) {
 	assert.Equal(t, CheckPass, headersCheck.Status)
 }
 
+func TestVerifier_CORSMissingVaryOriginFails(t *testing.T) {
+	origin := mustParseOrigin(t, "https://your-app.lovable.app")
+	gw := newTestGatewayServer(t, origin.URL, true)
+	gw.emitVary = false
+	defer gw.close()
+
+	verifier := NewVerifier(VerifierDeps{})
+	report, err := verifier.Verify(t.Context(), VerifyOptions{
+		FrontendOrigin: origin,
+		APIURL:         gw.healthURL(),
+		RootPool:       gw.rootPool(),
+		Timeout:        5 * time.Second,
+	})
+	require.NoError(t, err)
+	assert.False(t, report.AllPassed)
+	require.NotNil(t, report.FirstFailure)
+	assert.Equal(t, CheckCORSVary, report.FirstFailure.Name)
+}
+
 func TestVerifier_ReportDeterministicOrder(t *testing.T) {
 	origin := mustParseOrigin(t, "https://your-app.lovable.app")
 	gw := newTestGatewayServer(t, origin.URL, true)
@@ -352,6 +376,7 @@ func TestVerifier_ReportDeterministicOrder(t *testing.T) {
 		CheckCORSCredentials,
 		CheckCORSMethods,
 		CheckCORSHeaders,
+		CheckCORSVary,
 	}
 	require.Len(t, report.Checks, len(expectedOrder))
 	for i, expected := range expectedOrder {

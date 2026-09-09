@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Tier 1 conformance coverage analysis for all authoritative graders.
+"""Tier 2 conformance coverage analysis for all authoritative graders.
 
 Parses the existing conformance test file and maps test function names
 to the required conformance-case categories from the grader inventory.
@@ -28,7 +28,7 @@ from g8e_evals.grader_inventory import (
     ProducerPath,
 )
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 _TEST_FILE = Path(__file__).parent / "test_authoritative_receipt_grader.py"
 

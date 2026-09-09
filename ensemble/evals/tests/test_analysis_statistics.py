@@ -174,6 +174,13 @@ class TestPairedTTest:
         assert t1 == t2
         assert p1 == p2
 
+    def test_two_sided_probability_matches_reference_value(self) -> None:
+        baseline = [1.0, 2.0, 3.0, 4.0, 5.0]
+        comparison = [2.0, 2.0, 4.0, 4.0, 6.0]
+        statistic, p_value = statistics.paired_t_test(baseline, comparison)
+        assert statistic == 2.4494897428
+        assert p_value == 0.0704839969
+
 
 class TestWilcoxonSignedRankTest:
     def test_all_positive_diffs(self) -> None:
@@ -324,3 +331,42 @@ class TestHolmCorrection:
         assert corrected[0] == 0.03
         assert corrected[1] == 0.08
         assert corrected[2] == 0.08  # enforced to 0.08, not 0.05
+
+
+@pytest.mark.parametrize(
+    ("estimator", "baseline", "comparison"),
+    [
+        (statistics.cohens_d_paired, [1.0, 2.0], [1.0]),
+        (statistics.mcnemar_test, [True, False], [True]),
+        (statistics.paired_t_test, [1.0, 2.0], [1.0]),
+        (statistics.wilcoxon_signed_rank_test, [1.0, 2.0], [1.0]),
+        (statistics.bootstrap_ci, [1.0, 2.0], [1.0]),
+    ],
+)
+def test_paired_estimators_reject_unequal_sample_lengths(estimator, baseline, comparison) -> None:
+    with pytest.raises(ValueError, match="equal lengths"):
+        estimator(baseline, comparison)
+
+
+@pytest.mark.parametrize("p_values", [[-0.1], [1.1], [float("nan")]])
+def test_holm_correction_rejects_invalid_probabilities(p_values: list[float]) -> None:
+    with pytest.raises(ValueError, match="finite probabilities"):
+        statistics.holm_correction(p_values)
+
+
+@pytest.mark.parametrize(
+    ("n_bootstrap", "confidence"),
+    [
+        (0, 0.95),
+        (100, 0.0),
+        (100, 1.0),
+    ],
+)
+def test_bootstrap_ci_rejects_invalid_configuration(n_bootstrap: int, confidence: float) -> None:
+    with pytest.raises(ValueError, match=r"bootstrap (sample count|confidence)"):
+        statistics.bootstrap_ci(
+            [1.0, 2.0],
+            [2.0, 3.0],
+            n_bootstrap=n_bootstrap,
+            confidence=confidence,
+        )

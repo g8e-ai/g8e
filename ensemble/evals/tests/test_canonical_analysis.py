@@ -35,7 +35,7 @@ from g8e_evals.analysis.canonical import (
 )
 from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
 from g8e_evals.arms import Arm
-from g8e_evals.metrics import MetricDirection
+from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY, MetricDirection, UnregisteredMetricError
 from g8e_evals.release_metric_set import MetricDomain, RELEASE_METRIC_SET
 from g8e.operator.v1.operator_pb2 import (
     ActionReceipt,
@@ -44,12 +44,13 @@ from g8e.operator.v1.operator_pb2 import (
 )
 from g8e_evals.schema import (
     AttemptRecord,
-    GraderClass,
     GraderReference,
     MetricObservation,
     PolicyOutcome,
     ReceiptObservation,
     RejectionLayer,
+    StageKind,
+    StageObservation,
     TaskDefinition,
     TerminalStatus,
     VerificationStatus,
@@ -103,6 +104,7 @@ def _make_metric_obs(
     eligible: bool = True,
     verification_status: VerificationStatus = VerificationStatus.VERIFIED,
 ) -> MetricObservation:
+    definition = DEFAULT_METRIC_REGISTRY.get(metric_id, "1.0.0")
     return MetricObservation(
         metric_id=metric_id,
         metric_version="1.0.0",
@@ -111,10 +113,10 @@ def _make_metric_obs(
         arm_id=arm_id,
         task_id=task_id,
         value=value,
-        unit="boolean",
+        unit=definition.unit,
         eligible=eligible,
         verification_status=verification_status,
-        grader_class=GraderClass.DETERMINISTIC,
+        grader_class=definition.grader_class,
     )
 
 
@@ -272,8 +274,8 @@ class TestCanonicalAnalysisModel:
         assert ComparisonDirection.NEUTRAL.value == "neutral"
 
     def test_analysis_versions_are_pinned(self) -> None:
-        assert ANALYSIS_SCHEMA_VERSION == "1.0.0"
-        assert ANALYSIS_COMPUTATION_VERSION == "1.0.0"
+        assert ANALYSIS_SCHEMA_VERSION == "1.1.0"
+        assert ANALYSIS_COMPUTATION_VERSION == "1.1.0"
 
     def test_canonical_json_is_deterministic(self) -> None:
         """Two identical analyses produce byte-identical canonical JSON."""
@@ -310,6 +312,8 @@ class TestCanonicalAnalysisModel:
         json1 = analysis.canonical_json()
         json2 = analysis.canonical_json()
         assert json1 == json2
+        assert "\n" not in json1
+        assert json1.startswith('{"analysis_computation_version"')
 
 
 class TestCanonicalAnalysisComputation:
@@ -366,6 +370,38 @@ class TestCanonicalAnalysisComputation:
         assert ri.eligible_count == 1
         assert ri.missing_count == 0
         assert ri.verification_status_counts.get("verified") == 1
+
+    def test_partial_missingness_cannot_pass_release_gate(self) -> None:
+        task = _make_task()
+        first_attempt = _make_attempt(attempt_id="attempt-1")
+        second_attempt = _make_attempt(attempt_id="attempt-2")
+        observation = _make_metric_obs(attempt_id=first_attempt.attempt_id)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task],
+            attempts=[first_attempt, second_attempt],
+            metric_observations=[observation],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+
+        result = next(result for result in analysis.metric_results if result.metric_id == "receipt_integrity")
+        decision = next(decision for decision in analysis.gate_decisions if decision.metric_id == "receipt_integrity")
+        assert result.denominator == 2
+        assert result.missing_count == 1
+        assert decision.status == GateDecisionStatus.INSUFFICIENT_DATA
+
+    def test_unrelated_release_metrics_are_not_added_to_task_denominators(self) -> None:
+        analysis = compute_canonical_analysis(
+            tasks=[_make_task()],
+            attempts=[_make_attempt()],
+            metric_observations=[],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert {result.metric_id for result in analysis.metric_results} == {"receipt_integrity"}
 
     def test_denominator_preservation_model_failed(self) -> None:
         """A model-failed attempt is retained in the denominator."""
@@ -1397,7 +1433,7 @@ class TestPairedComparisons:
     def test_paired_comparisons_t_test_for_continuous_metric(self) -> None:
         """Non-binary metrics use the paired t-test p-value as the comparison p-value."""
         tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7], Arm.DOCTRINE: [0.8, 0.9, 1.0]},
+            arm_values={Arm.DIRECT: [0.5, 0.6, 0.7], Arm.DOCTRINE: [0.8, 0.8, 1.0]},
             task_ids=["task-1", "task-2", "task-3"],
             metric_id="canary_scrubbing",
         )
@@ -1410,10 +1446,13 @@ class TestPairedComparisons:
             run_id=_RUN_ID,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
-        # Continuous metric uses t-test, McNemar may still be computed but p-value comes from t-test
-        # The diffs are [0.3, 0.3, 0.3] which has zero variance, so t-test returns (None, None)
-        # canary_scrubbing has a non-inferiority margin of 0.0 (zero leakage tolerance)
-        # The bootstrap CI is [0.3, 0.3] and the lower bound (0.3) >= -margin (0.0), so PASS
+        # Continuous metrics publish both paired t-test and Wilcoxon signed-rank results.
+        # canary_scrubbing has a non-inferiority margin of 0.0 (zero leakage tolerance).
+        # The positive bootstrap CI remains within that strict margin, so the comparison passes.
+        assert cmp.paired_t_statistic is not None
+        assert cmp.paired_t_p_value is not None
+        assert cmp.wilcoxon_statistic is not None
+        assert cmp.wilcoxon_p_value is not None
         assert cmp.non_inferiority_margin == 0.0
         assert cmp.gate_decision == GateDecisionStatus.PASS
 
@@ -1837,33 +1876,31 @@ class TestPairedComparisons:
         assert cmp[0].baseline_value == round((0.75 + 1.0) / 2, 10)
         assert cmp[0].paired_count == 2
 
-    def test_paired_comparisons_excludes_non_release_metrics(self) -> None:
-        """Metrics not in the release set are excluded from comparisons."""
-        task_ids = ["task-1", "task-2", "task-3"]
-        tasks = [_make_task(task_id=tid) for tid in task_ids]
-        attempts: list[AttemptRecord] = []
-        observations: list[MetricObservation] = []
-        for arm, values in [(Arm.DIRECT, [1.0, 1.0, 1.0]), (Arm.DOCTRINE, [0.0, 0.0, 0.0])]:
-            for tid, val in zip(task_ids, values, strict=True):
-                att_id = f"att-{arm.value}-{tid}"
-                attempts.append(_make_attempt(attempt_id=att_id, task_id=tid, arm_id=arm))
-                observations.append(_make_metric_obs(
-                    metric_id="nonexistent_metric",
-                    attempt_id=att_id,
-                    task_id=tid,
-                    arm_id=arm,
-                    value=val,
-                ))
-
-        analysis = compute_canonical_analysis(
-            tasks=tasks,
-            attempts=attempts,
-            metric_observations=observations,
-            receipts=[],
-            stages=[],
-            run_id=_RUN_ID,
+    def test_paired_comparisons_reject_unregistered_metrics(self) -> None:
+        """Unregistered metric observations fail closed before comparison."""
+        task = _make_task()
+        attempt = _make_attempt()
+        observation = MetricObservation(
+            metric_id="nonexistent_metric",
+            metric_version="1.0.0",
+            attempt_id=attempt.attempt_id,
+            run_id=attempt.run_id,
+            arm_id=attempt.arm_id,
+            task_id=attempt.task_id,
+            value=1.0,
+            unit="boolean",
+            verification_status=VerificationStatus.VERIFIED,
         )
-        assert analysis.comparisons == []
+
+        with pytest.raises(UnregisteredMetricError, match="unregistered metric"):
+            compute_canonical_analysis(
+                tasks=[task],
+                attempts=[attempt],
+                metric_observations=[observation],
+                receipts=[],
+                stages=[],
+                run_id=_RUN_ID,
+            )
 
     def test_paired_comparisons_relative_delta_none_for_zero_baseline(self) -> None:
         """Relative delta is None when the baseline value is zero."""
@@ -2007,13 +2044,16 @@ class TestBridgeRunComparisons:
     ) -> CanonicalEvalAnalysis:
         """Build a minimal canonical analysis with one metric result."""
         task = _make_task()
-        attempt = _make_attempt(attempt_id=f"attempt-{run_id}", arm_id=arm_id)
+        attempt = _make_attempt(
+            attempt_id=f"attempt-{run_id}",
+            arm_id=arm_id,
+        ).model_copy(update={"run_id": run_id})
         obs = _make_metric_obs(
             metric_id=metric_id,
             attempt_id=f"attempt-{run_id}",
             arm_id=arm_id,
             value=value,
-        )
+        ).model_copy(update={"run_id": run_id})
         return compute_canonical_analysis(
             tasks=[task],
             attempts=[attempt],
@@ -2114,3 +2154,108 @@ class TestBridgeRunComparisons:
         )
         assert analysis.bridge_run_comparisons == []
         assert analysis.bridge_runs == []
+
+
+class TestCanonicalAnalysisInputValidation:
+    @staticmethod
+    def _compute(
+        *,
+        tasks: list[TaskDefinition] | None = None,
+        attempts: list[AttemptRecord] | None = None,
+        observations: list[MetricObservation] | None = None,
+        receipts: list[ReceiptObservation] | None = None,
+        stages: list[StageObservation] | None = None,
+    ) -> CanonicalEvalAnalysis:
+        return compute_canonical_analysis(
+            tasks=tasks if tasks is not None else [_make_task()],
+            attempts=attempts if attempts is not None else [_make_attempt()],
+            metric_observations=observations if observations is not None else [],
+            receipts=receipts if receipts is not None else [],
+            stages=stages if stages is not None else [],
+            run_id=_RUN_ID,
+        )
+
+    @pytest.mark.parametrize(
+        ("attempts", "error"),
+        [
+            ([_make_attempt(), _make_attempt()], "duplicate attempt ID"),
+            ([_make_attempt().model_copy(update={"run_id": "other-run"})], "attempt run does not match"),
+            ([_make_attempt(task_id="other-task")], "attempt references unknown task"),
+        ],
+    )
+    def test_rejects_invalid_attempt_bindings(
+        self,
+        attempts: list[AttemptRecord],
+        error: str,
+    ) -> None:
+        with pytest.raises(ValueError, match=error):
+            self._compute(attempts=attempts)
+
+    @pytest.mark.parametrize(
+        ("updates", "error"),
+        [
+            ({"run_id": "other-run"}, "metric observation run does not match"),
+            ({"task_id": "other-task"}, "metric observation task does not match"),
+            ({"arm_id": Arm.DIRECT}, "metric observation arm does not match"),
+            ({"attempt_id": "other-attempt"}, "metric observation references unknown attempt"),
+            ({"unit": "wrong-unit"}, "unit mismatch"),
+        ],
+    )
+    def test_rejects_invalid_metric_observation_bindings(
+        self,
+        updates: dict[str, object],
+        error: str,
+    ) -> None:
+        observation = _make_metric_obs().model_copy(update=updates)
+        with pytest.raises(ValueError, match=error):
+            self._compute(observations=[observation])
+
+    def test_rejects_duplicate_metric_observations(self) -> None:
+        observation = _make_metric_obs()
+        with pytest.raises(ValueError, match="duplicate metric observation"):
+            self._compute(observations=[observation, observation])
+
+    @pytest.mark.parametrize(
+        ("receipt", "error"),
+        [
+            (_make_receipt_observation().model_copy(update={"run_id": "other-run"}), "receipt run does not match"),
+            (_make_receipt_observation(attempt_id="other-attempt"), "receipt references unknown attempt"),
+        ],
+    )
+    def test_rejects_invalid_receipt_bindings(
+        self,
+        receipt: ReceiptObservation,
+        error: str,
+    ) -> None:
+        with pytest.raises(ValueError, match=error):
+            self._compute(receipts=[receipt])
+
+    @pytest.mark.parametrize(
+        ("updates", "error"),
+        [
+            ({"run_id": "other-run"}, "stage run does not match"),
+            ({"attempt_id": "other-attempt"}, "stage references unknown attempt"),
+            ({"task_id": "other-task"}, "stage task does not match"),
+        ],
+    )
+    def test_rejects_invalid_stage_bindings(
+        self,
+        updates: dict[str, object],
+        error: str,
+    ) -> None:
+        stage = StageObservation(
+            stage_id="stage-1",
+            attempt_id=_ATTEMPT_ID,
+            run_id=_RUN_ID,
+            task_id=_TASK_ID,
+            kind=StageKind.GRADING,
+        ).model_copy(update=updates)
+        with pytest.raises(ValueError, match=error):
+            self._compute(stages=[stage])
+
+    def test_input_hash_is_independent_of_mapping_insertion_order(self) -> None:
+        first_task = _make_task().model_copy(update={"metadata": {"z": 1, "a": 2}})
+        second_task = _make_task().model_copy(update={"metadata": {"a": 2, "z": 1}})
+        first = self._compute(tasks=[first_task])
+        second = self._compute(tasks=[second_task])
+        assert first.input_summary.input_content_hash == second.input_summary.input_content_hash

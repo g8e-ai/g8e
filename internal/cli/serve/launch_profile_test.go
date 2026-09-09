@@ -53,6 +53,17 @@ func validTestGatewayConfig() GatewayConfig {
 	}
 }
 
+func writeTestLaunchProfile(t *testing.T, fileSvc interface {
+	WriteFile(context.Context, string, []byte, os.FileMode) error
+}, cfg GatewayConfig) {
+	t.Helper()
+	cfg.NetworkIdentityFile = ""
+	data, err := json.Marshal(GatewayLaunchProfile{Version: LaunchProfileVersion, Config: cfg})
+	require.NoError(t, err)
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorLaunchProfileFilename)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFilePrivate))
+}
+
 func TestWriteLaunchProfile_RoundTripPreservesAllFields(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 	cfg := validTestGatewayConfig()
@@ -128,6 +139,18 @@ func TestReadLaunchProfile_CorruptedJSONReturnsErrLaunchProfileCorrupted(t *test
 	assert.ErrorIs(t, err, constants.ErrLaunchProfileCorrupted)
 }
 
+func TestReadLaunchProfile_UnknownFieldReturnsErrLaunchProfileCorrupted(t *testing.T) {
+	fileSvc := newTestFileSvc(t)
+
+	relPath := filepath.Join(constants.PidDirname, constants.OperatorLaunchProfileFilename)
+	data := []byte(`{"version":1,"config":{"Posture":"doctrine"},"unexpected":true}`)
+	require.NoError(t, fileSvc.WriteFile(context.Background(), relPath, data, constants.PermFilePrivate))
+
+	_, err := ReadLaunchProfile(fileSvc)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrLaunchProfileCorrupted)
+}
+
 func TestReadLaunchProfile_UnknownVersionReturnsErrLaunchProfileVersionUnsupported(t *testing.T) {
 	fileSvc := newTestFileSvc(t)
 
@@ -151,7 +174,7 @@ func TestReadLaunchProfile_InvalidPostureReturnsErrLaunchProfileInvalid(t *testi
 
 	cfg := validTestGatewayConfig()
 	cfg.Posture = g8econfig.GatewayPosture("bogus")
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)
@@ -163,7 +186,7 @@ func TestReadLaunchProfile_EmptyPostureReturnsErrLaunchProfileInvalid(t *testing
 
 	cfg := validTestGatewayConfig()
 	cfg.Posture = ""
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)
@@ -175,7 +198,7 @@ func TestReadLaunchProfile_NegativeHTTPPortReturnsErrLaunchProfileInvalid(t *tes
 
 	cfg := validTestGatewayConfig()
 	cfg.HTTPPort = -1
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)
@@ -187,7 +210,7 @@ func TestReadLaunchProfile_NegativeHTTPSPortReturnsErrLaunchProfileInvalid(t *te
 
 	cfg := validTestGatewayConfig()
 	cfg.HTTPSPort = -1
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)
@@ -199,7 +222,7 @@ func TestReadLaunchProfile_NegativeRateLimitRPSReturnsErrLaunchProfileInvalid(t 
 
 	cfg := validTestGatewayConfig()
 	cfg.RateLimitRPS = -1.0
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)
@@ -211,7 +234,7 @@ func TestReadLaunchProfile_NegativeRateLimitBurstReturnsErrLaunchProfileInvalid(
 
 	cfg := validTestGatewayConfig()
 	cfg.RateLimitBurst = -1
-	require.NoError(t, WriteLaunchProfile(fileSvc, cfg))
+	writeTestLaunchProfile(t, fileSvc, cfg)
 
 	_, err := ReadLaunchProfile(fileSvc)
 	require.Error(t, err)

@@ -228,7 +228,7 @@ _SUITE_SPECS_BY_ID: dict[str, SuiteSpec] = {
 # --- Suite registry completeness ---
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_choice_has_a_suite_spec():
     from g8e_evals.cli import _SYNTHETIC_SUITE_CHOICES
 
@@ -238,7 +238,7 @@ def test_every_synthetic_suite_choice_has_a_suite_spec():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_suite_spec_has_a_loader_with_matching_suite_id():
     for spec in _ALL_SUITE_SPECS:
         assert hasattr(spec.loader_class, "SUITE_ID"), (
@@ -249,7 +249,7 @@ def test_every_suite_spec_has_a_loader_with_matching_suite_id():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_suite_has_a_gold_set_directory_with_provenance_and_data():
     for spec in _ALL_SUITE_SPECS:
         assert spec.gold_set_dir.is_dir(), (
@@ -266,7 +266,7 @@ def test_every_suite_has_a_gold_set_directory_with_provenance_and_data():
 # --- Provenance-bound fixtures ---
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_provenance_output_sha256_matches_dataset():
     for spec in _ALL_SUITE_SPECS:
         if spec.is_partial_external:
@@ -279,7 +279,7 @@ def test_every_synthetic_suite_provenance_output_sha256_matches_dataset():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_provenance_output_rows_matches_dataset():
     for spec in _ALL_SUITE_SPECS:
         if spec.is_partial_external:
@@ -293,7 +293,7 @@ def test_every_synthetic_suite_provenance_output_rows_matches_dataset():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_provenance_benchmark_matches_suite_id():
     for spec in _ALL_SUITE_SPECS:
         provenance = json.loads(spec.provenance_path.read_text())
@@ -302,7 +302,7 @@ def test_every_synthetic_suite_provenance_benchmark_matches_suite_id():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_provenance_code_sha256_matches_loader_code():
     for spec in _ALL_SUITE_SPECS:
         if spec.is_partial_external:
@@ -321,7 +321,7 @@ def test_every_synthetic_suite_provenance_code_sha256_matches_loader_code():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_subset_provenance_transformation_code_sha256_matches():
     spec = _SUITE_SPECS_BY_ID["ifeval_subset"]
     provenance = json.loads(spec.provenance_path.read_text())
@@ -350,7 +350,7 @@ def test_ifeval_subset_provenance_transformation_code_sha256_matches():
     )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_subset_provenance_output_sha256_matches_dataset():
     spec = _SUITE_SPECS_BY_ID["ifeval_subset"]
     provenance = json.loads(spec.provenance_path.read_text())
@@ -361,7 +361,7 @@ def test_ifeval_subset_provenance_output_sha256_matches_dataset():
     )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_suite_provenance_has_required_fields():
     for spec in _ALL_SUITE_SPECS:
         provenance = json.loads(spec.provenance_path.read_text())
@@ -382,7 +382,7 @@ def test_every_suite_provenance_has_required_fields():
 # --- Grader-to-suite binding ---
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_grader_producer_suite_id_references_a_real_suite():
     for key, entry in GRADER_INVENTORY.items():
         for suite_id in entry.producer_suite_ids:
@@ -391,7 +391,7 @@ def test_every_grader_producer_suite_id_references_a_real_suite():
             )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_suite_id_referenced_by_at_least_one_grader():
     suites_with_graders = set()
     for entry in GRADER_INVENTORY.values():
@@ -406,7 +406,7 @@ def test_every_suite_id_referenced_by_at_least_one_grader():
 # --- Production observer boundaries ---
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_non_cross_cutting_suite_has_at_least_one_observer():
     for spec in _ALL_SUITE_SPECS:
         if spec.is_cross_cutting:
@@ -416,7 +416,7 @@ def test_every_non_cross_cutting_suite_has_at_least_one_observer():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_observer_is_a_concrete_class():
     for spec in _ALL_SUITE_SPECS:
         for obs_cls in spec.observers:
@@ -425,7 +425,7 @@ def test_every_observer_is_a_concrete_class():
             )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_cross_cutting_suites_produce_receipt_or_stage_evidence():
     cross_cutting_suites = [s for s in _ALL_SUITE_SPECS if s.is_cross_cutting]
     for spec in cross_cutting_suites:
@@ -443,7 +443,7 @@ def test_cross_cutting_suites_produce_receipt_or_stage_evidence():
 # --- No free-form known shape in grading inputs ---
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_forbidden_metadata_keys_cover_all_typed_assertion_field_names():
     from g8e_evals.cli import _ASSERTION_FIELD_TO_GRADER_ID
 
@@ -454,7 +454,7 @@ def test_forbidden_metadata_keys_cover_all_typed_assertion_field_names():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_grader_refs_derived_from_typed_assertions_not_free_form_metadata():
     from g8e_evals.cli import _ASSERTION_FIELD_TO_GRADER_ID
 
@@ -467,7 +467,7 @@ def test_grader_refs_derived_from_typed_assertions_not_free_form_metadata():
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_every_synthetic_suite_spec_has_a_simulator_or_cross_cutting():
     """Every non-cross-cutting synthetic suite has a local simulator or
     observer that interacts with a production-shaped system under test."""

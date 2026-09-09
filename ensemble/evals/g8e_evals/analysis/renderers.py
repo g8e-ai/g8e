@@ -171,9 +171,9 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
         lines.append("")
         lines.append(
             "| Metric | Version | Baseline | Comparison | Paired | Baseline Val | Comparison Val "
-            "| Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Bootstrap CI | Holm p | NI Margin | Gate |"
+            "| Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Paired t p | Wilcoxon p | Bootstrap CI | Holm p | NI Margin | Gate |"
         )
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for pc in a.comparisons:
             ci = (
                 f"[{_fmt_float(pc.bootstrap_ci_lower)}, {_fmt_float(pc.bootstrap_ci_upper)}]"
@@ -185,7 +185,8 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
                 f"| {pc.paired_count} | {_fmt_float(pc.baseline_value)} | {_fmt_float(pc.comparison_value)} "
                 f"| {_fmt_float(pc.absolute_delta)} | {_fmt_float(pc.relative_delta)} "
                 f"| {_fmt_float(pc.standardized_effect_size)} | {pc.direction.value} "
-                f"| {_fmt_float(pc.mcnemar_p_value)} | {ci} | {_fmt_float(pc.holm_corrected_p_value)} "
+                f"| {_fmt_float(pc.mcnemar_p_value)} | {_fmt_float(pc.paired_t_p_value)} "
+                f"| {_fmt_float(pc.wilcoxon_p_value)} | {ci} | {_fmt_float(pc.holm_corrected_p_value)} "
                 f"| {_fmt_float(pc.non_inferiority_margin)} | {pc.gate_decision.value} |"
             )
         lines.append("")
@@ -376,7 +377,7 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     if a.comparisons:
         lines.append("<h2>Paired Comparisons</h2>")
         lines.append("<table>")
-        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>")
+        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Paired t p</th><th>Wilcoxon p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>")
         lines.append("<tbody>")
         for pc in a.comparisons:
             ci = (
@@ -390,7 +391,8 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
                 f"<td>{_fmt_float(pc.baseline_value)}</td><td>{_fmt_float(pc.comparison_value)}</td>"
                 f"<td>{_fmt_float(pc.absolute_delta)}</td><td>{_fmt_float(pc.relative_delta)}</td>"
                 f"<td>{_fmt_float(pc.standardized_effect_size)}</td><td>{_esc(pc.direction.value)}</td>"
-                f"<td>{_fmt_float(pc.mcnemar_p_value)}</td><td>{ci}</td>"
+                f"<td>{_fmt_float(pc.mcnemar_p_value)}</td><td>{_fmt_float(pc.paired_t_p_value)}</td>"
+                f"<td>{_fmt_float(pc.wilcoxon_p_value)}</td><td>{ci}</td>"
                 f"<td>{_fmt_float(pc.holm_corrected_p_value)}</td><td>{_fmt_float(pc.non_inferiority_margin)}</td>"
                 f"<td>{_esc(pc.gate_decision.value)}</td></tr>"
             )
@@ -576,7 +578,9 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
                 f"base={_fmt_float(pc.baseline_value)} comp={_fmt_float(pc.comparison_value)} "
                 f"delta={_fmt_float(pc.absolute_delta)} reldelta={_fmt_float(pc.relative_delta)} "
                 f"es={_fmt_float(pc.standardized_effect_size)} dir={pc.direction.value} "
-                f"mcnemar_p={_fmt_float(pc.mcnemar_p_value)} ci={ci} "
+                f"mcnemar_p={_fmt_float(pc.mcnemar_p_value)} "
+                f"paired_t_p={_fmt_float(pc.paired_t_p_value)} "
+                f"wilcoxon_p={_fmt_float(pc.wilcoxon_p_value)} ci={ci} "
                 f"holm_p={_fmt_float(pc.holm_corrected_p_value)} "
                 f"ni_margin={_fmt_float(pc.non_inferiority_margin)} "
                 f"gate={pc.gate_decision.value}"

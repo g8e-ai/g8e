@@ -81,6 +81,14 @@ func TestParse_LowercaseCanonicalization(t *testing.T) {
 	assert.Equal(t, "your-app.lovable.app", o.RPID)
 }
 
+func TestParse_IDNAHostnameCanonicalized(t *testing.T) {
+	o, err := Parse("https://bücher.example")
+	require.NoError(t, err)
+	assert.Equal(t, "https://xn--bcher-kva.example", o.URL)
+	assert.Equal(t, "xn--bcher-kva.example", o.Hostname)
+	assert.Equal(t, "xn--bcher-kva.example", o.RPID)
+}
+
 func TestParse_TrailingSlashNormalized(t *testing.T) {
 	o, err := Parse("https://your-app.lovable.app/")
 	require.NoError(t, err)
@@ -159,19 +167,23 @@ func TestParse_RPIDNeverContainsPort(t *testing.T) {
 func TestValidateRPID_ExactMatch(t *testing.T) {
 	o, err := Parse("https://your-app.lovable.app")
 	require.NoError(t, err)
-	assert.NoError(t, ValidateRPID(o, "your-app.lovable.app"))
+	rpID, err := ValidateRPID(o, "your-app.lovable.app")
+	assert.NoError(t, err)
+	assert.Equal(t, "your-app.lovable.app", rpID)
 }
 
 func TestValidateRPID_ParentSuffix(t *testing.T) {
 	o, err := Parse("https://api.example.com")
 	require.NoError(t, err)
-	assert.NoError(t, ValidateRPID(o, "example.com"))
+	rpID, err := ValidateRPID(o, "example.com")
+	assert.NoError(t, err)
+	assert.Equal(t, "example.com", rpID)
 }
 
 func TestValidateRPID_Empty(t *testing.T) {
 	o, err := Parse("https://your-app.lovable.app")
 	require.NoError(t, err)
-	err = ValidateRPID(o, "")
+	_, err = ValidateRPID(o, "")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
@@ -179,7 +191,7 @@ func TestValidateRPID_Empty(t *testing.T) {
 func TestValidateRPID_UnrelatedDomain(t *testing.T) {
 	o, err := Parse("https://your-app.lovable.app")
 	require.NoError(t, err)
-	err = ValidateRPID(o, "other.com")
+	_, err = ValidateRPID(o, "other.com")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 }
@@ -187,7 +199,7 @@ func TestValidateRPID_UnrelatedDomain(t *testing.T) {
 func TestValidateRPID_PublicSuffixICANN(t *testing.T) {
 	o, err := Parse("https://your-app.example.com")
 	require.NoError(t, err)
-	err = ValidateRPID(o, "com")
+	_, err = ValidateRPID(o, "com")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 	assert.Contains(t, err.Error(), "public suffix")
@@ -196,7 +208,7 @@ func TestValidateRPID_PublicSuffixICANN(t *testing.T) {
 func TestValidateRPID_PublicSuffixMultiPart(t *testing.T) {
 	o, err := Parse("https://your-app.co.uk")
 	require.NoError(t, err)
-	err = ValidateRPID(o, "co.uk")
+	_, err = ValidateRPID(o, "co.uk")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrValidationFailed)
 	assert.Contains(t, err.Error(), "public suffix")
@@ -205,11 +217,15 @@ func TestValidateRPID_PublicSuffixMultiPart(t *testing.T) {
 func TestValidateRPID_LoopbackExactMatch(t *testing.T) {
 	o, err := Parse("http://localhost:3003")
 	require.NoError(t, err)
-	assert.NoError(t, ValidateRPID(o, "localhost"))
+	rpID, err := ValidateRPID(o, "localhost")
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost", rpID)
 }
 
 func TestValidateRPID_CaseInsensitive(t *testing.T) {
 	o, err := Parse("https://your-app.lovable.app")
 	require.NoError(t, err)
-	assert.NoError(t, ValidateRPID(o, "YOUR-APP.LOVABLE.APP"))
+	rpID, err := ValidateRPID(o, "YOUR-APP.LOVABLE.APP")
+	assert.NoError(t, err)
+	assert.Equal(t, "your-app.lovable.app", rpID)
 }

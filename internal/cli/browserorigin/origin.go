@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strings"
 
+	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
@@ -106,6 +107,12 @@ func Parse(raw string) (Origin, error) {
 	// Canonicalize scheme and hostname to lowercase.
 	scheme := strings.ToLower(u.Scheme)
 	hostname = strings.ToLower(hostname)
+	if net.ParseIP(hostname) == nil {
+		hostname, err = idna.Lookup.ToASCII(hostname)
+		if err != nil {
+			return Origin{}, fmt.Errorf("%w: frontend origin hostname is invalid: %w", constants.ErrValidationFailed, err)
+		}
+	}
 
 	loopback := isLoopback(hostname)
 
@@ -168,20 +175,23 @@ func Parse(raw string) (Origin, error) {
 // https://your-app.lovable.app, the override "lovable.app" is a valid parent
 // suffix only if "lovable.app" is not a public suffix. The override
 // "your-app.lovable.app" (exact match) is always valid.
-func ValidateRPID(origin Origin, rpID string) error {
+func ValidateRPID(origin Origin, rpID string) (string, error) {
 	if rpID == "" {
-		return fmt.Errorf("%w: passkey RP ID is required", constants.ErrValidationFailed)
+		return "", fmt.Errorf("%w: passkey RP ID is required", constants.ErrValidationFailed)
 	}
 
-	rpID = strings.ToLower(strings.TrimSpace(rpID))
+	rpID, err := idna.Lookup.ToASCII(strings.ToLower(strings.TrimSpace(rpID)))
+	if err != nil {
+		return "", fmt.Errorf("%w: passkey RP ID is invalid: %w", constants.ErrValidationFailed, err)
+	}
 
 	if rpID == origin.Hostname {
-		return nil
+		return rpID, nil
 	}
 
 	// The override must be a parent suffix: origin must end with ".<rpID>".
 	if !strings.HasSuffix(origin.Hostname, "."+rpID) {
-		return fmt.Errorf("%w: passkey RP ID %q must match or be a registrable suffix of origin host %q", constants.ErrValidationFailed, rpID, origin.Hostname)
+		return "", fmt.Errorf("%w: passkey RP ID %q must match or be a registrable suffix of origin host %q", constants.ErrValidationFailed, rpID, origin.Hostname)
 	}
 
 	// Reject public suffixes. A public suffix (e.g., "lovable.app" if it
@@ -190,17 +200,17 @@ func ValidateRPID(origin Origin, rpID string) error {
 	// credentials across unrelated tenants.
 	suffix, icann := publicsuffix.PublicSuffix(rpID)
 	if icann && rpID == suffix {
-		return fmt.Errorf("%w: passkey RP ID %q is a public suffix and cannot scope credentials across unrelated tenants", constants.ErrValidationFailed, rpID)
+		return "", fmt.Errorf("%w: passkey RP ID %q is a public suffix and cannot scope credentials across unrelated tenants", constants.ErrValidationFailed, rpID)
 	}
 	// Also reject known multi-part public suffixes from private registries
 	// (e.g., "lovable.app" if listed as a private suffix). publicsuffix
 	// returns icann=false for private entries, so check the non-ICANN case
 	// too.
 	if !icann && rpID == suffix {
-		return fmt.Errorf("%w: passkey RP ID %q is a private public suffix and cannot scope credentials across unrelated tenants", constants.ErrValidationFailed, rpID)
+		return "", fmt.Errorf("%w: passkey RP ID %q is a private public suffix and cannot scope credentials across unrelated tenants", constants.ErrValidationFailed, rpID)
 	}
 
-	return nil
+	return rpID, nil
 }
 
 // isLoopback reports whether host is a loopback development host.

@@ -39,6 +39,7 @@ Key properties:
 
 from __future__ import annotations
 
+import json
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,10 +48,20 @@ from g8e_evals.metrics import MetricDirection
 from g8e_evals.release_metric_set import MetricDomain
 
 
-ANALYSIS_SCHEMA_VERSION = "1.0.0"
-ANALYSIS_COMPUTATION_VERSION = "1.0.0"
+ANALYSIS_SCHEMA_VERSION = "1.1.0"
+ANALYSIS_COMPUTATION_VERSION = "1.1.0"
 
 _FLOAT_PRECISION = 10
+
+
+def canonical_model_json(model: BaseModel) -> str:
+    return json.dumps(
+        model.model_dump(mode="json", by_alias=True, exclude_none=False),
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 class GateDecisionStatus(StrEnum):
@@ -386,6 +397,10 @@ class PairedComparison(BaseModel):
 
     mcnemar_statistic: float | None = None
     mcnemar_p_value: float | None = None
+    paired_t_statistic: float | None = None
+    paired_t_p_value: float | None = None
+    wilcoxon_statistic: float | None = None
+    wilcoxon_p_value: float | None = None
 
     bootstrap_ci_lower: float | None = None
     bootstrap_ci_upper: float | None = None
@@ -552,11 +567,7 @@ class CanonicalEvalAnalysis(BaseModel):
         This is the byte-deterministic serialization. Identical inputs
         and analysis version produce byte-identical output.
         """
-        return self.model_dump_json(
-            by_alias=True,
-            exclude_none=False,
-            indent=0,
-        )
+        return canonical_model_json(self)
 
 
 __all__ = [
@@ -578,4 +589,5 @@ __all__ = [
     "PairedComparison",
     "PooledConfusionMatrix",
     "ReceiptCoverageAnalysis",
+    "canonical_model_json",
 ]

@@ -98,7 +98,7 @@ func TestBrowserConfigMatches_ExactMatchReturnsTrueNoDeltas(t *testing.T) {
 		PasskeyRpID:      "your-app.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.True(t, matched)
 	assert.Empty(t, deltas)
 }
@@ -115,7 +115,7 @@ func TestBrowserConfigMatches_MissingCORSOriginReturnsDelta(t *testing.T) {
 		PasskeyRpID:      "your-app.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.False(t, matched)
 	assert.Len(t, deltas, 1)
 	assert.Equal(t, "CORS origin (--cors-origin)", deltas[0].Field)
@@ -135,7 +135,7 @@ func TestBrowserConfigMatches_MismatchedRPIDReturnsDelta(t *testing.T) {
 		PasskeyRpID:      "old-rp-id.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.False(t, matched)
 	assert.Len(t, deltas, 1)
 	assert.Equal(t, "Passkey RP ID (--passkey-rp-id)", deltas[0].Field)
@@ -155,7 +155,7 @@ func TestBrowserConfigMatches_MissingPasskeyOriginReturnsDelta(t *testing.T) {
 		PasskeyRpID:      "your-app.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.False(t, matched)
 	assert.Len(t, deltas, 1)
 	assert.Equal(t, "Passkey RP origin (--passkey-rp-origin)", deltas[0].Field)
@@ -174,7 +174,7 @@ func TestBrowserConfigMatches_AllFieldsMismatchReturnsThreeDeltas(t *testing.T) 
 		PasskeyRpID:      "old.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.False(t, matched)
 	assert.Len(t, deltas, 3)
 	assert.Equal(t, "CORS origin (--cors-origin)", deltas[0].Field)
@@ -193,9 +193,28 @@ func TestBrowserConfigMatches_EmptySlicesProduceUnsetCurrentValue(t *testing.T) 
 		PasskeyRpID: "your-app.lovable.app",
 	}
 
-	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app")
+	matched, deltas := browserConfigMatches(profile, origin, "your-app.lovable.app", "")
 	assert.False(t, matched)
 	assert.Len(t, deltas, 2)
 	assert.Equal(t, "", deltas[0].Current)
 	assert.Equal(t, "", deltas[1].Current)
+}
+
+func TestBrowserConfigMatches_MismatchedRPNameReturnsDelta(t *testing.T) {
+	origin, err := browserorigin.Parse("https://your-app.lovable.app")
+	assert.NoError(t, err)
+
+	profile := serve.GatewayConfig{
+		AllowedOrigins:   []string{origin.URL},
+		PasskeyRpOrigins: []string{origin.URL},
+		PasskeyRpID:      origin.RPID,
+		PasskeyRpName:    "old-name",
+	}
+
+	matched, deltas := browserConfigMatches(profile, origin, origin.RPID, "new-name")
+	assert.False(t, matched)
+	assert.Len(t, deltas, 1)
+	assert.Equal(t, "Passkey RP name (--passkey-rp-name)", deltas[0].Field)
+	assert.Equal(t, "old-name", deltas[0].Current)
+	assert.Equal(t, "new-name", deltas[0].Proposed)
 }

@@ -146,7 +146,7 @@ def test_ifeval_verifier_unknown_instruction_type_fails_closed():
     assert not score.passed
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_subset_dataset_keys_match_boundary_selected_keys():
     data_path = _GOLD_SETS_DIR / "ifeval_subset" / "input_data.jsonl"
     rows = [json.loads(line) for line in data_path.read_text().splitlines() if line.strip()]
@@ -154,7 +154,7 @@ def test_ifeval_subset_dataset_keys_match_boundary_selected_keys():
     assert actual_keys == IFEVAL_SUBSET_BOUNDARY.selected_keys
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_subset_dataset_instruction_types_are_within_supported_set():
     """Every instruction type used in the subset dataset must be in the
     boundary's supported set. This prevents the subset from containing

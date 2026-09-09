@@ -41,6 +41,7 @@ from g8e_evals.analysis.canonical import (
     PairedComparison,
     PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
+    canonical_model_json,
 )
 from g8e_evals.analysis.non_inferiority import get_non_inferiority_margin
 from g8e_evals.arms import ARM_DEFINITIONS
@@ -85,6 +86,10 @@ class _RawComparison:
     direction: ComparisonDirection
     mcnemar_statistic: float | None
     mcnemar_p_value: float | None
+    paired_t_statistic: float | None
+    paired_t_p_value: float | None
+    wilcoxon_statistic: float | None
+    wilcoxon_p_value: float | None
     bootstrap_ci_lower: float | None
     bootstrap_ci_upper: float | None
     p_value: float | None
@@ -109,18 +114,83 @@ def _compute_input_content_hash(
     parts: list[str] = []
 
     for task in sorted(tasks, key=lambda t: t.task_id):
-        parts.append(task.model_dump_json())
+        parts.append(f"task:{canonical_model_json(task)}")
     for attempt in sorted(attempts, key=lambda a: (a.run_id, a.attempt_id)):
-        parts.append(attempt.model_dump_json())
+        parts.append(f"attempt:{canonical_model_json(attempt)}")
     for obs in sorted(metric_observations, key=lambda o: (o.metric_id, o.metric_version, o.attempt_id)):
-        parts.append(obs.model_dump_json())
+        parts.append(f"metric_observation:{canonical_model_json(obs)}")
     for receipt in sorted(receipts, key=lambda r: (r.run_id, r.receipt_id)):
-        parts.append(receipt.model_dump_json())
+        parts.append(f"receipt:{canonical_model_json(receipt)}")
     for stage in sorted(stages, key=lambda s: (s.run_id, s.stage_id)):
-        parts.append(stage.model_dump_json())
+        parts.append(f"stage:{canonical_model_json(stage)}")
 
     joined = "\n".join(parts)
     return hashlib.sha256(joined.encode()).hexdigest()
+
+
+def _validate_analysis_inputs(
+    tasks: Sequence[TaskDefinition],
+    attempts: Sequence[AttemptRecord],
+    metric_observations: Sequence[MetricObservation],
+    receipts: Sequence[ReceiptObservation],
+    stages: Sequence[StageObservation],
+    run_id: str,
+) -> None:
+    task_ids = [task.task_id for task in tasks]
+    if len(task_ids) != len(set(task_ids)):
+        raise ValueError("duplicate task ID")
+    task_by_id = {task.task_id: task for task in tasks}
+
+    attempt_ids = [attempt.attempt_id for attempt in attempts]
+    if len(attempt_ids) != len(set(attempt_ids)):
+        raise ValueError("duplicate attempt ID")
+    attempt_by_id = {attempt.attempt_id: attempt for attempt in attempts}
+    for attempt in attempts:
+        if attempt.run_id != run_id:
+            raise ValueError("attempt run does not match analysis run")
+        if attempt.task_id not in task_by_id:
+            raise ValueError("attempt references unknown task")
+
+    metric_keys: set[tuple[str, str, str]] = set()
+    for observation in metric_observations:
+        key = (observation.metric_id, observation.metric_version, observation.attempt_id)
+        if key in metric_keys:
+            raise ValueError("duplicate metric observation")
+        metric_keys.add(key)
+        attempt = attempt_by_id.get(observation.attempt_id)
+        if attempt is None:
+            raise ValueError("metric observation references unknown attempt")
+        if observation.run_id != run_id or observation.run_id != attempt.run_id:
+            raise ValueError("metric observation run does not match")
+        if observation.task_id != attempt.task_id:
+            raise ValueError("metric observation task does not match")
+        if observation.arm_id != attempt.arm_id:
+            raise ValueError("metric observation arm does not match")
+        DEFAULT_METRIC_REGISTRY.validate(observation)
+
+    receipt_ids: set[str] = set()
+    for receipt in receipts:
+        if receipt.receipt_id in receipt_ids:
+            raise ValueError("duplicate receipt ID")
+        receipt_ids.add(receipt.receipt_id)
+        attempt = attempt_by_id.get(receipt.attempt_id)
+        if attempt is None:
+            raise ValueError("receipt references unknown attempt")
+        if receipt.run_id != run_id or receipt.run_id != attempt.run_id:
+            raise ValueError("receipt run does not match")
+
+    stage_ids: set[str] = set()
+    for stage in stages:
+        if stage.stage_id in stage_ids:
+            raise ValueError("duplicate stage ID")
+        stage_ids.add(stage.stage_id)
+        attempt = attempt_by_id.get(stage.attempt_id)
+        if attempt is None:
+            raise ValueError("stage references unknown attempt")
+        if stage.run_id != run_id or stage.run_id != attempt.run_id:
+            raise ValueError("stage run does not match")
+        if stage.task_id != attempt.task_id:
+            raise ValueError("stage task does not match")
 
 
 def _compute_missingness(attempts: Sequence[AttemptRecord]) -> MissingnessBreakdown:
@@ -186,7 +256,20 @@ def _build_release_metric_lookup() -> dict[tuple[str, str], ReleaseMetricEntry]:
     return {(m.metric_id, m.metric_version): m for m in RELEASE_METRIC_SET.metrics}
 
 
+def _task_declares_metric(task: TaskDefinition, definition: MetricDefinition) -> bool:
+    grader_ref = definition.grader_ref
+    if grader_ref is None:
+        return False
+    return any(
+        grader.grader_id == grader_ref.grader_id
+        and grader.grader_version == grader_ref.grader_version
+        and grader.grader_class == grader_ref.grader_class
+        for grader in task.graders
+    )
+
+
 def _compute_metric_results(
+    tasks: Sequence[TaskDefinition],
     attempts: Sequence[AttemptRecord],
     metric_observations: Sequence[MetricObservation],
 ) -> list[MetricAnalysisResult]:
@@ -198,6 +281,7 @@ def _compute_metric_results(
     denominator.
     """
     release_lookup = _build_release_metric_lookup()
+    task_by_id = {task.task_id: task for task in tasks}
 
     # Group attempts by (arm_id)
     attempts_by_arm: dict[str, list[AttemptRecord]] = defaultdict(list)
@@ -217,8 +301,16 @@ def _compute_metric_results(
             continue
 
         for arm_id in sorted(attempts_by_arm.keys()):
-            arm_attempts = attempts_by_arm[arm_id]
             arm_obs = obs_by_key.get((definition.metric_id, definition.metric_version, arm_id), [])
+            observed_attempt_ids = {observation.attempt_id for observation in arm_obs}
+            arm_attempts = [
+                attempt
+                for attempt in attempts_by_arm[arm_id]
+                if attempt.attempt_id in observed_attempt_ids
+                or _task_declares_metric(task_by_id[attempt.task_id], definition)
+            ]
+            if not arm_attempts:
+                continue
 
             # Determine eligible attempts for this metric
             # An attempt is eligible if it has a MetricObservation with eligible=True
@@ -473,9 +565,9 @@ def _compute_gate_decisions(
         if mr.denominator == 0:
             status = GateDecisionStatus.NOT_APPLICABLE
             reason = "No eligible attempts for this metric and arm."
-        elif mr.missing_count > 0 and mr.missing_count == mr.eligible_count:
+        elif mr.missing_count > 0:
             status = GateDecisionStatus.INSUFFICIENT_DATA
-            reason = f"All {mr.missing_count} eligible attempts are missing observations."
+            reason = f"{mr.missing_count} of {mr.eligible_count} eligible attempts are missing observations."
         elif not release_entry.has_practical_threshold:
             status = GateDecisionStatus.UNSUPPORTED
             reason = "No practical threshold defined; calibration pending."
@@ -483,7 +575,7 @@ def _compute_gate_decisions(
             parsed_threshold, is_blocker = _parse_threshold(definition, mr.direction)
             threshold_value = parsed_threshold
             if threshold_value is not None and mr.value is not None:
-                passed = _check_threshold(mr.value, threshold_value, mr.direction, is_blocker)
+                passed = _check_threshold(mr.value, threshold_value, mr.direction)
                 status = GateDecisionStatus.PASS if passed else GateDecisionStatus.FAIL
                 if is_blocker:
                     reason = f"Release-blocker threshold {threshold_value} {'met' if passed else 'not met'}: measured {mr.value}."
@@ -539,7 +631,7 @@ def _parse_threshold(definition: MetricDefinition, direction: MetricDirection) -
     return None, False
 
 
-def _check_threshold(value: float, threshold: float, direction: MetricDirection, is_blocker: bool) -> bool:
+def _check_threshold(value: float, threshold: float, direction: MetricDirection) -> bool:
     """Check whether a measured value meets the practical threshold."""
     if direction == MetricDirection.LOWER_IS_BETTER:
         return value <= threshold
@@ -648,7 +740,10 @@ def _compute_paired_comparisons(
                 mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
 
                 # Paired t-test for continuous outcomes
-                _t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
+                t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
+                wilcoxon_stat, wilcoxon_p = statistics.wilcoxon_signed_rank_test(
+                    baseline_vals, comparison_vals,
+                )
 
                 # Bootstrap CI
                 ci_lower, ci_upper = statistics.bootstrap_ci(
@@ -694,6 +789,10 @@ def _compute_paired_comparisons(
                     direction=direction,
                     mcnemar_statistic=mcnemar_stat,
                     mcnemar_p_value=mcnemar_p,
+                    paired_t_statistic=t_stat,
+                    paired_t_p_value=t_p,
+                    wilcoxon_statistic=wilcoxon_stat,
+                    wilcoxon_p_value=wilcoxon_p,
                     bootstrap_ci_lower=ci_lower,
                     bootstrap_ci_upper=ci_upper,
                     p_value=p_value,
@@ -727,6 +826,10 @@ def _compute_paired_comparisons(
                 direction=rc.direction,
                 mcnemar_statistic=rc.mcnemar_statistic,
                 mcnemar_p_value=rc.mcnemar_p_value,
+                paired_t_statistic=rc.paired_t_statistic,
+                paired_t_p_value=rc.paired_t_p_value,
+                wilcoxon_statistic=rc.wilcoxon_statistic,
+                wilcoxon_p_value=rc.wilcoxon_p_value,
                 bootstrap_ci_lower=rc.bootstrap_ci_lower,
                 bootstrap_ci_upper=rc.bootstrap_ci_upper,
                 holm_corrected_p_value=corrected_p,
@@ -809,15 +912,23 @@ def compute_bridge_run_comparison(
     Returns comparisons sorted by ``(metric_id, metric_version)``.
     """
     # Build lookup of metric results by (metric_id, metric_version) -> value
-    # Pool across arms by taking the mean of non-None arm values
+    # Pool across arms using the metric's registered aggregation semantics.
     def _pool_metric_values(analysis: CanonicalEvalAnalysis) -> dict[tuple[str, str], float | None]:
-        by_metric: dict[tuple[str, str], list[float]] = defaultdict(list)
-        for mr in analysis.metric_results:
-            if mr.value is not None:
-                by_metric[(mr.metric_id, mr.metric_version)].append(mr.value)
+        by_metric: dict[tuple[str, str], list[MetricAnalysisResult]] = defaultdict(list)
+        for metric_result in analysis.metric_results:
+            by_metric[(metric_result.metric_id, metric_result.metric_version)].append(metric_result)
         result: dict[tuple[str, str], float | None] = {}
-        for key, values in by_metric.items():
-            result[key] = _round(sum(values) / len(values)) if values else None
+        for key, metric_results in by_metric.items():
+            definition = DEFAULT_METRIC_REGISTRY.get(*key)
+            if any(metric_result.missing_count > 0 for metric_result in metric_results):
+                result[key] = None
+                continue
+            numerator = sum(metric_result.numerator for metric_result in metric_results)
+            denominator = sum(metric_result.denominator for metric_result in metric_results)
+            if definition.aggregation == AggregationMethod.SUM:
+                result[key] = _round(numerator)
+            else:
+                result[key] = _round(numerator / denominator) if denominator > 0 else None
         return result
 
     old_values = _pool_metric_values(old_analysis)
@@ -907,6 +1018,8 @@ def compute_canonical_analysis(
     The computation is deterministic: identical inputs and analysis
     version produce byte-identical output.
     """
+    _validate_analysis_inputs(tasks, attempts, metric_observations, receipts, stages, run_id)
+
     input_summary = AnalysisInputSummary(
         task_count=len(tasks),
         attempt_count=len(attempts),
@@ -922,7 +1035,7 @@ def compute_canonical_analysis(
 
     arm_ids = sorted({a.arm_id.value for a in attempts})
 
-    metric_results = _compute_metric_results(attempts, metric_observations)
+    metric_results = _compute_metric_results(tasks, attempts, metric_observations)
     gate_decisions = _compute_gate_decisions(metric_results)
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
     confusion_matrices = _compute_confusion_matrices(attempts, metric_observations, tasks)

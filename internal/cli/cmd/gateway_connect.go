@@ -198,10 +198,10 @@ func runGatewayConnect(
 	// 2. Derive the RP ID (exact-host default or validated override).
 	rpID := origin.RPID
 	if rpIDOverride != "" {
-		if vErr := browserorigin.ValidateRPID(origin, rpIDOverride); vErr != nil {
-			return fmt.Errorf("gateway connect: validate RP ID override: %w", vErr)
+		rpID, err = browserorigin.ValidateRPID(origin, rpIDOverride)
+		if err != nil {
+			return fmt.Errorf("gateway connect: validate RP ID override: %w", err)
 		}
-		rpID = rpIDOverride
 	}
 	rpName := rpNameOverride
 	if rpName == "" {
@@ -209,8 +209,7 @@ func runGatewayConnect(
 	}
 
 	// 3. Load config and create file service.
-	cfg, err := configLoader("")
-	if err != nil {
+	if _, err := configLoader(""); err != nil {
 		return fmt.Errorf("gateway: load config: %w", err)
 	}
 
@@ -224,8 +223,6 @@ func runGatewayConnect(
 		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
-	apiURL := connectAPIBaseURL(cfg.OperatorHTTPSPort())
-
 	// 4. Check Gateway process state.
 	running, pid, err := pm.OperatorStatus()
 	if err != nil {
@@ -233,7 +230,7 @@ func runGatewayConnect(
 	}
 
 	if !running {
-		return connectStoppedGateway(cmd, origin, rpID, rpName, apiURL, cfg, fileSvc, pm, deps)
+		return connectStoppedGateway(cmd, origin, rpID, rpName, fileSvc, pm, deps, noSystemTrust, noOpen)
 	}
 
 	// Gateway is running. Determine whether the persisted launch profile
@@ -251,12 +248,14 @@ func runGatewayConnect(
 		return fmt.Errorf("gateway connect: read launch profile: %w", err)
 	}
 
-	matches, deltas := browserConfigMatches(profile.Config, origin, rpID)
+	apiURL := connectAPIBaseURL(profile.Config.HTTPSPort)
+	discoveryURL := connectDiscoveryURL(profile.Config.HTTPPort)
+	matches, deltas := browserConfigMatches(profile.Config, origin, rpID, rpName)
 	if matches {
 		renderConnectReview(cmd, origin, rpID, rpName, apiURL, gatewayStateMatching)
 		cmd.Println("Gateway is already running with the requested browser configuration.")
 		cmd.Println()
-		return connectTrustAndVerify(cmd, origin, rpID, rpName, apiURL, cfg, fileSvc, deps, noSystemTrust, noOpen)
+		return connectTrustAndVerify(cmd, origin, apiURL, discoveryURL, deps, noSystemTrust, noOpen)
 	}
 
 	// Configuration differs. Print the delta and ask for restart consent.
@@ -271,7 +270,7 @@ func runGatewayConnect(
 		}
 	}
 
-	return connectRestartGateway(cmd, origin, rpID, rpName, apiURL, cfg, profile, fileSvc, pm, deps, noSystemTrust, noOpen)
+	return connectRestartGateway(cmd, origin, rpID, rpName, profile, fileSvc, pm, deps, noSystemTrust, noOpen)
 }
 
 // connectStoppedGateway handles the state where no Gateway process is running.
@@ -281,14 +280,12 @@ func runGatewayConnect(
 func connectStoppedGateway(
 	cmd *cobra.Command,
 	origin browserorigin.Origin,
-	rpID, rpName, apiURL string,
-	cfg *config.Config,
+	rpID, rpName string,
 	fileSvc fs.RuntimeFileService,
 	pm *platform.ProcessManager,
 	deps connectDeps,
+	noSystemTrust, noOpen bool,
 ) error {
-	renderConnectReview(cmd, origin, rpID, rpName, apiURL, gatewayStateStopped)
-
 	// Load the existing launch profile when present; otherwise start from
 	// resolved defaults.
 	var baseCfg serve.GatewayConfig
@@ -306,10 +303,12 @@ func connectStoppedGateway(
 
 	// Apply the derived browser fields to a copy of the base config.
 	connectCfg := deriveConnectConfig(origin, rpID, rpName, baseCfg)
+	apiURL := connectAPIBaseURL(connectCfg.HTTPSPort)
+	renderConnectReview(cmd, origin, rpID, rpName, apiURL, gatewayStateStopped)
 
 	// Detect network identity and resolve cert mode.
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	identityResult := detectIdentity(context.Background(), logger, connectCfg.CertIdentityMode)
+	identityResult := detectIdentity(cmd.Context(), logger, connectCfg.CertIdentityMode)
 	if identityResult.ShouldFallback {
 		cmd.Println("Warning: Failed to detect network identity, falling back to localhost-only mode")
 	} else if identityResult.Identity != nil {
@@ -319,15 +318,18 @@ func connectStoppedGateway(
 	connectCfg.CertIdentityMode = identityResult.CertMode
 
 	cmd.Println("[g8e] Starting g8e Gateway service...")
-	if err := pm.StartOperator(platform.OperatorStartOptions{
-		GatewayConfig: connectCfg,
-	}); err != nil {
+	startOpts := platform.OperatorStartOptions{GatewayConfig: connectCfg}
+	if err := pm.StartOperator(&startOpts); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
+	connectCfg = startOpts.GatewayConfig
 
 	// Persist the complete validated launch profile after successful start.
 	if err := serve.WriteLaunchProfile(fileSvc, connectCfg); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		if stopErr := pm.StopOperator(); stopErr != nil {
+			return fmt.Errorf("%w: persist launch profile: %w; stop untracked gateway: %w", constants.ErrInternal, err, stopErr)
+		}
+		return fmt.Errorf("%w: persist launch profile: %w", constants.ErrInternal, err)
 	}
 
 	_, pid, err := pm.OperatorStatus()
@@ -337,7 +339,8 @@ func connectStoppedGateway(
 	cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 	cmd.Println()
 
-	return connectTrustAndVerify(cmd, origin, rpID, rpName, apiURL, cfg, fileSvc, deps, false, false)
+	apiURL = connectAPIBaseURL(connectCfg.HTTPSPort)
+	return connectTrustAndVerify(cmd, origin, apiURL, connectDiscoveryURL(connectCfg.HTTPPort), deps, noSystemTrust, noOpen)
 }
 
 // connectRestartGateway handles the state where a running Gateway's
@@ -348,8 +351,7 @@ func connectStoppedGateway(
 func connectRestartGateway(
 	cmd *cobra.Command,
 	origin browserorigin.Origin,
-	rpID, rpName, apiURL string,
-	cfg *config.Config,
+	rpID, rpName string,
 	profile serve.GatewayLaunchProfile,
 	fileSvc fs.RuntimeFileService,
 	pm *platform.ProcessManager,
@@ -361,7 +363,7 @@ func connectRestartGateway(
 
 	// Re-run network identity detection with the profile's cert mode.
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	identityResult := detectIdentity(context.Background(), logger, connectCfg.CertIdentityMode)
+	identityResult := detectIdentity(cmd.Context(), logger, connectCfg.CertIdentityMode)
 	if identityResult.ShouldFallback {
 		cmd.Println("Warning: Failed to detect network identity, falling back to localhost-only mode")
 	} else if identityResult.Identity != nil {
@@ -376,24 +378,30 @@ func connectRestartGateway(
 	}
 
 	cmd.Println("Starting g8e Gateway with updated configuration...")
-	if err := pm.StartOperator(platform.OperatorStartOptions{
-		GatewayConfig: connectCfg,
-	}); err != nil {
+	startOpts := platform.OperatorStartOptions{GatewayConfig: connectCfg}
+	if err := pm.StartOperator(&startOpts); err != nil {
 		// Rollback: attempt to restore the previously validated profile.
 		cmd.Printf("Failed to start Gateway with new configuration: %v\n", err)
 		cmd.Println("Attempting rollback to the previous configuration...")
-		if rbErr := pm.StartOperator(platform.OperatorStartOptions{
-			GatewayConfig: profile.Config,
-		}); rbErr != nil {
-			return fmt.Errorf("%w: start failed (%v); rollback also failed (%v)", constants.ErrProcessStartFailed, err, rbErr)
+		rollbackOpts := platform.OperatorStartOptions{GatewayConfig: profile.Config}
+		if rbErr := pm.StartOperator(&rollbackOpts); rbErr != nil {
+			return fmt.Errorf("%w: start failed: %w; rollback also failed: %w", constants.ErrProcessStartFailed, err, rbErr)
 		}
 		cmd.Println("Rollback successful. The previous configuration is active.")
-		return fmt.Errorf("%w: new configuration could not start; rolled back (%v)", constants.ErrProcessStartFailed, err)
+		return fmt.Errorf("%w: new configuration could not start; rolled back: %w", constants.ErrProcessStartFailed, err)
 	}
+	connectCfg = startOpts.GatewayConfig
 
 	// Persist the updated profile only after successful start.
 	if err := serve.WriteLaunchProfile(fileSvc, connectCfg); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		if stopErr := pm.StopOperator(); stopErr != nil {
+			return fmt.Errorf("%w: persist launch profile: %w; stop untracked gateway: %w", constants.ErrInternal, err, stopErr)
+		}
+		rollbackOpts := platform.OperatorStartOptions{GatewayConfig: profile.Config}
+		if rollbackErr := pm.StartOperator(&rollbackOpts); rollbackErr != nil {
+			return fmt.Errorf("%w: persist launch profile: %w; rollback: %w", constants.ErrInternal, err, rollbackErr)
+		}
+		return fmt.Errorf("%w: persist launch profile: %w", constants.ErrInternal, err)
 	}
 
 	_, pid, err := pm.OperatorStatus()
@@ -403,7 +411,8 @@ func connectRestartGateway(
 	cmd.Printf("[g8e] Gateway restarted (PID: %d)\n", pid)
 	cmd.Println()
 
-	return connectTrustAndVerify(cmd, origin, rpID, rpName, apiURL, cfg, fileSvc, deps, noSystemTrust, noOpen)
+	apiURL := connectAPIBaseURL(connectCfg.HTTPSPort)
+	return connectTrustAndVerify(cmd, origin, apiURL, connectDiscoveryURL(connectCfg.HTTPPort), deps, noSystemTrust, noOpen)
 }
 
 // connectTrustAndVerify runs the trust discovery, trust installation, HTTPS
@@ -414,16 +423,13 @@ func connectRestartGateway(
 func connectTrustAndVerify(
 	cmd *cobra.Command,
 	origin browserorigin.Origin,
-	rpID, rpName, apiURL string,
-	cfg *config.Config,
-	fileSvc fs.RuntimeFileService,
+	apiURL, discoveryURL string,
 	deps connectDeps,
 	noSystemTrust, noOpen bool,
 ) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// 1. Discover the live CA bundle from the Gateway's discovery endpoint.
-	discoveryURL := cfg.OperatorDiscoveryURL() + constants.APIPaths.WellKnownPKICABundle
 	discovery, err := deps.discoveryFetcher(ctx, discoveryURL, deps.now)
 	if err != nil {
 		return fmt.Errorf("gateway connect: discover trust bundle: %w", err)
@@ -471,6 +477,7 @@ func connectTrustAndVerify(
 			if errors.Is(err, constants.ErrSystemTrustUnsupported) {
 				cmd.Printf("Warning: OS trust store installation is unsupported on this platform (%v).\n", err)
 				renderManualTrustInstructions(cmd, apiURL, discovery.Fingerprint)
+				return fmt.Errorf("%w: %w", constants.ErrManualBrowserTrustRequired, err)
 			} else {
 				return fmt.Errorf("%w: %w", constants.ErrSystemTrustInstallFailed, err)
 			}
@@ -488,7 +495,8 @@ func connectTrustAndVerify(
 		cmd.Println("Trust state changed. Close all browser windows before continuing.")
 		cmd.Print("Press Enter when all browser windows are closed: ")
 		if !deps.continueFn("") {
-			cmd.Println("Browser restart gate declined. Proceeding without confirmation.")
+			cmd.Println("Browser restart gate declined. Browser handoff stopped.")
+			return constants.ErrBrowserRestartDeclined
 		}
 	}
 	cmd.Println()
@@ -500,7 +508,7 @@ func connectTrustAndVerify(
 	}
 
 	// 7. Run HTTPS health and CORS verification.
-	healthURL := connectHealthURL(cfg.OperatorHTTPSPort())
+	healthURL := apiURL + constants.APIPaths.Health
 	report, err := deps.verifier.Verify(ctx, frontendverify.VerifyOptions{
 		FrontendOrigin: origin,
 		APIURL:         healthURL,
@@ -541,10 +549,10 @@ func connectTrustAndVerify(
 // posture and log level. Used when no launch profile exists and the Gateway
 // is stopped.
 func defaultServeConfig() serve.GatewayConfig {
-	return serve.GatewayConfig{
+	return gatewayFlagsToServeConfig(resolveGatewayFlags(GatewayFlags{
 		Posture:  "doctrine",
 		LogLevel: "info",
-	}
+	}))
 }
 
 // deriveConnectConfig applies the derived browser fields (CORS origin, passkey
@@ -565,7 +573,7 @@ func deriveConnectConfig(origin browserorigin.Origin, rpID, rpName string, base 
 // fields against the requested frontend origin and RP ID. It returns true when
 // every field matches, and a slice of configDelta describing the fields that
 // differ. It is a pure read — it never mutates the profile.
-func browserConfigMatches(profile serve.GatewayConfig, origin browserorigin.Origin, rpID string) (bool, []configDelta) {
+func browserConfigMatches(profile serve.GatewayConfig, origin browserorigin.Origin, rpID, rpName string) (bool, []configDelta) {
 	var deltas []configDelta
 	matched := true
 
@@ -584,6 +592,15 @@ func browserConfigMatches(profile serve.GatewayConfig, origin browserorigin.Orig
 			Field:    "Passkey RP ID (--passkey-rp-id)",
 			Current:  profile.PasskeyRpID,
 			Proposed: rpID,
+		})
+	}
+
+	if profile.PasskeyRpName != rpName {
+		matched = false
+		deltas = append(deltas, configDelta{
+			Field:    "Passkey RP name (--passkey-rp-name)",
+			Current:  profile.PasskeyRpName,
+			Proposed: rpName,
 		})
 	}
 

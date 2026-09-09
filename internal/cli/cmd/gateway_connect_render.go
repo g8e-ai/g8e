@@ -160,3 +160,11 @@ func connectAPIBaseURL(httpsPort int) string {
 func connectHealthURL(httpsPort int) string {
 	return connectAPIBaseURL(httpsPort) + constants.APIPaths.Health
 }
+
+func connectDiscoveryURL(httpPort int) string {
+	port := httpPort
+	if port == 0 {
+		port = constants.Ports.OperatorHttp
+	}
+	return network.LocalhostHTTPURL(port) + constants.APIPaths.WellKnownPKICABundle
+}

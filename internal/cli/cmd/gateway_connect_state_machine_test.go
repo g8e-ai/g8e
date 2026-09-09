@@ -175,6 +175,7 @@ func TestGatewayConnectCmd_InvalidOriginReturnsErrValidationFailed(t *testing.T)
 	_, cfg := newCmdTestEnv(t)
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(nil), connectDeps{})
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -191,6 +192,7 @@ func TestGatewayConnectCmd_InvalidRPIDOverrideReturnsErrValidationFailed(t *test
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(nil), connectDeps{})
 	require.NoError(t, cmd.Flags().Set("passkey-rp-id", "unrelated.com"))
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -207,6 +209,7 @@ func TestGatewayConnectCmd_NoArgsReturnsUsageError(t *testing.T) {
 	_, cfg := newCmdTestEnv(t)
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(nil), connectDeps{})
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -223,6 +226,7 @@ func TestGatewayConnectCmd_RunningGatewayWithoutLaunchProfileFailsClosed(t *test
 	writePIDFile(t, fileSvc)
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), connectDeps{})
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -274,6 +278,7 @@ func TestGatewayConnectCmd_RunningGatewayWithMatchingConfigProceedsToVerify(t *t
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -322,6 +327,7 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigDeclinedRestartRetur
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -353,6 +359,7 @@ func TestGatewayConnectCmd_StoppedGatewayAttemptsStart(t *testing.T) {
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -395,6 +402,7 @@ func TestGatewayConnectCmd_TrustDeclinedReturnsErrManualBrowserTrustRequired(t *
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -445,6 +453,7 @@ func TestGatewayConnectCmd_NoSystemTrustSkipsInstallAndProceedsToManualTrust(t *
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
 	require.NoError(t, cmd.Flags().Set("no-system-trust", "true"))
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -497,6 +506,7 @@ func TestGatewayConnectCmd_TrustInstallWithConsentProceedsToVerify(t *testing.T)
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -551,6 +561,7 @@ func TestGatewayConnectCmd_StaleAnchorRemovalWithConsent(t *testing.T) {
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -568,6 +579,83 @@ func TestGatewayConnectCmd_StaleAnchorRemovalWithConsent(t *testing.T) {
 // TestGatewayConnectCmd_VerificationFailureReturnsErrCORSPreflightRejected
 // verifies that a CORS verification failure returns ErrCORSPreflightRejected
 // and does not print the frontend prompt.
+func TestGatewayConnectCmd_UnsupportedSystemTrustRequiresExplicitManualMode(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	writePIDFile(t, fileSvc)
+
+	origin, err := browserorigin.Parse("https://your-app.lovable.app")
+	require.NoError(t, err)
+	require.NoError(t, serve.WriteLaunchProfile(fileSvc, serve.GatewayConfig{
+		Posture:          "doctrine",
+		LogLevel:         "info",
+		CertIdentityMode: "localhost",
+		AllowedOrigins:   []string{origin.URL},
+		PasskeyRpOrigins: []string{origin.URL},
+		PasskeyRpID:      origin.RPID,
+		PasskeyRpName:    "g8e",
+	}))
+
+	discovery := stubDiscoveryResult(t)
+	deps := connectDeps{
+		trustInstaller: &stubTrustInstaller{installErr: constants.ErrSystemTrustUnsupported},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			return discovery, nil
+		},
+		confirm: func(string) bool { return true },
+		now:     time.Now,
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, []string{origin.URL})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrManualBrowserTrustRequired)
+	assert.NotContains(t, buf.String(), "Paste this into your frontend builder")
+}
+
+func TestGatewayConnectCmd_DeclinedBrowserRestartGateStopsHandoff(t *testing.T) {
+	fileSvc, cfg := newCmdTestEnv(t)
+	writePIDFile(t, fileSvc)
+
+	origin, err := browserorigin.Parse("https://your-app.lovable.app")
+	require.NoError(t, err)
+	require.NoError(t, serve.WriteLaunchProfile(fileSvc, serve.GatewayConfig{
+		Posture:          "doctrine",
+		LogLevel:         "info",
+		CertIdentityMode: "localhost",
+		AllowedOrigins:   []string{origin.URL},
+		PasskeyRpOrigins: []string{origin.URL},
+		PasskeyRpID:      origin.RPID,
+		PasskeyRpName:    "g8e",
+	}))
+
+	discovery := stubDiscoveryResult(t)
+	deps := connectDeps{
+		trustInstaller: &stubTrustInstaller{},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			return discovery, nil
+		},
+		confirm:    func(string) bool { return true },
+		continueFn: func(string) bool { return false },
+		now:        time.Now,
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err = cmd.RunE(cmd, []string{origin.URL})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrBrowserRestartDeclined)
+	assert.NotContains(t, buf.String(), "Paste this into your frontend builder")
+}
+
 func TestGatewayConnectCmd_VerificationFailureReturnsErrCORSPreflightRejected(t *testing.T) {
 	fileSvc, cfg := newCmdTestEnv(t)
 	writePIDFile(t, fileSvc)
@@ -605,6 +693,7 @@ func TestGatewayConnectCmd_VerificationFailureReturnsErrCORSPreflightRejected(t 
 	}
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

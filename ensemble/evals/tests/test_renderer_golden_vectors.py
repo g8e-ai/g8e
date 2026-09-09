@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Tier 1 golden-vector tests for the canonical analysis renderers.
+"""Tier 2 golden-vector tests for the canonical analysis renderers.
 
 Pins the Markdown, HTML, and CLI renderer output to committed frozen
 fixture files so that any unintended change to the renderer output is
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 from g8e_evals.analysis.canonical import (
     ANALYSIS_COMPUTATION_VERSION,

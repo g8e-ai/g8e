@@ -42,6 +42,7 @@ const (
 	CheckCORSCredentials  CheckName = "cors_credentials"
 	CheckCORSMethods      CheckName = "cors_methods"
 	CheckCORSHeaders      CheckName = "cors_headers"
+	CheckCORSVary         CheckName = "cors_vary"
 )
 
 // CheckStatus reports the outcome of a single verification step.
@@ -344,6 +345,21 @@ func (v *Verifier) checkCORS(ctx context.Context, client *http.Client, healthURL
 			Name:   CheckCORSHeaders,
 			Status: CheckPass,
 			Detail: "requested headers Content-Type, Authorization allowed",
+		})
+	}
+
+	vary := strings.Join(resp.Header.Values(constants.HeaderVary), ",")
+	if !methodAllowed(vary, constants.HeaderOrigin) {
+		results = append(results, CheckResult{
+			Name:   CheckCORSVary,
+			Status: CheckFail,
+			Detail: fmt.Sprintf("Vary is %q, expected to include Origin", vary),
+		})
+	} else {
+		results = append(results, CheckResult{
+			Name:   CheckCORSVary,
+			Status: CheckPass,
+			Detail: "responses vary by Origin",
 		})
 	}
 

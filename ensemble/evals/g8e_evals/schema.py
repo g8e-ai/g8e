@@ -3053,7 +3053,7 @@ class MetricObservation(BaseModel):
     this record carries the measured value and its provenance.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
 
     schema_version: str = SCHEMA_VERSION
     metric_id: str
@@ -3066,12 +3066,18 @@ class MetricObservation(BaseModel):
     value: float | None
     unit: str = ""
     eligible: bool = True
-    denominator_contribution: int = 1
+    denominator_contribution: int = Field(default=1, ge=0)
 
     verification_status: VerificationStatus = VerificationStatus.PENDING
     grader_class: GraderClass = GraderClass.DETERMINISTIC
 
     evidence_refs: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_evidence_refs(self) -> MetricObservation:
+        if len(self.evidence_refs) != len(set(self.evidence_refs)):
+            raise ValueError("metric observation evidence references must be unique")
+        return self
 
 
 class EvidenceEncryption(BaseModel):

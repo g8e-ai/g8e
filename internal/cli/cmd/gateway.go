@@ -490,11 +490,11 @@ Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 
 			gatewayCfg := gatewayFlagsToServeConfig(resolved)
 			gatewayCfg.CertIdentityMode = identityResult.CertMode
-			if err := pm.StartOperator(platform.OperatorStartOptions{
-				GatewayConfig: gatewayCfg,
-			}); err != nil {
+			startOpts := platform.OperatorStartOptions{GatewayConfig: gatewayCfg}
+			if err := pm.StartOperator(&startOpts); err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 			}
+			gatewayCfg = startOpts.GatewayConfig
 
 			_, pid, err = pm.OperatorStatus()
 			if err != nil {
@@ -506,7 +506,10 @@ Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 			// to posture-only defaults. Written only after StartOperator
 			// succeeds so the profile always reflects a known-good launch.
 			if err := serve.WriteLaunchProfile(fileSvc, gatewayCfg); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				if stopErr := pm.StopOperator(); stopErr != nil {
+					return fmt.Errorf("%w: persist launch profile: %w; stop untracked gateway: %w", constants.ErrInternal, err, stopErr)
+				}
+				return fmt.Errorf("%w: persist launch profile: %w", constants.ErrInternal, err)
 			}
 
 			externalIP := network.GetExternalInterfaceIP()
@@ -708,6 +711,7 @@ restart.`,
 			if err != nil {
 				return fmt.Errorf("gateway: read launch profile: %w", err)
 			}
+			previousConfig := profile.Config
 
 			running, _, err := pm.OperatorStatus()
 			if err != nil {
@@ -743,16 +747,31 @@ restart.`,
 			// value if detection failed and fell back to "localhost").
 			profile.Config.CertIdentityMode = identityResult.CertMode
 
-			if err := pm.StartOperator(platform.OperatorStartOptions{
-				GatewayConfig: profile.Config,
-			}); err != nil {
+			startOpts := platform.OperatorStartOptions{GatewayConfig: profile.Config}
+			if err := pm.StartOperator(&startOpts); err != nil {
+				if running {
+					rollbackOpts := platform.OperatorStartOptions{GatewayConfig: previousConfig}
+					if rollbackErr := pm.StartOperator(&rollbackOpts); rollbackErr != nil {
+						return fmt.Errorf("%w: restart: %w; rollback: %w", constants.ErrProcessStartFailed, err, rollbackErr)
+					}
+				}
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
+			profile.Config = startOpts.GatewayConfig
 
 			// Re-persist the profile with the resolved cert mode so the
 			// next restart uses the effective configuration.
 			if err := serve.WriteLaunchProfile(fileSvc, profile.Config); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+				if stopErr := pm.StopOperator(); stopErr != nil {
+					return fmt.Errorf("%w: persist launch profile: %w; stop untracked gateway: %w", constants.ErrInternal, err, stopErr)
+				}
+				if running {
+					rollbackOpts := platform.OperatorStartOptions{GatewayConfig: previousConfig}
+					if rollbackErr := pm.StartOperator(&rollbackOpts); rollbackErr != nil {
+						return fmt.Errorf("%w: persist launch profile: %w; rollback: %w", constants.ErrInternal, err, rollbackErr)
+					}
+				}
+				return fmt.Errorf("%w: persist launch profile: %w", constants.ErrInternal, err)
 			}
 
 			cmd.Println("g8e Gateway restarted successfully")

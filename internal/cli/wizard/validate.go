@@ -131,7 +131,8 @@ func validatePasskeyRP(rpID, origin string) error {
 	if err != nil {
 		return err
 	}
-	return browserorigin.ValidateRPID(parsed, rpID)
+	_, err = browserorigin.ValidateRPID(parsed, rpID)
+	return err
 }
 
 // validateDownstreamURL validates an optional downstream server URL.

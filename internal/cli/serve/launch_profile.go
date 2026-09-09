@@ -8,12 +8,16 @@
 package serve
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
 	"path/filepath"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/browserorigin"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/fs"
 )
@@ -61,6 +65,9 @@ func WriteLaunchProfile(fileSvc fs.RuntimeFileService, cfg GatewayConfig) error 
 	// subprocess re-detects identity on restart; a stale file path
 	// would point at a file that no longer exists.
 	profile.Config.NetworkIdentityFile = ""
+	if err := ValidateLaunchProfile(profile); err != nil {
+		return err
+	}
 
 	data, err := json.MarshalIndent(profile, "", "  ")
 	if err != nil {
@@ -86,8 +93,13 @@ func ReadLaunchProfile(fileSvc fs.RuntimeFileService) (GatewayLaunchProfile, err
 	}
 
 	var profile GatewayLaunchProfile
-	if err := json.Unmarshal(data, &profile); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&profile); err != nil {
 		return GatewayLaunchProfile{}, fmt.Errorf("%w: unmarshal: %w", constants.ErrLaunchProfileCorrupted, err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return GatewayLaunchProfile{}, fmt.Errorf("%w: multiple JSON values", constants.ErrLaunchProfileCorrupted)
 	}
 
 	if profile.Version != LaunchProfileVersion {
@@ -123,6 +135,15 @@ func ValidateLaunchProfile(profile GatewayLaunchProfile) error {
 	if cfg.HTTPSPort < 0 {
 		return fmt.Errorf("%w: https_port %d is negative", constants.ErrLaunchProfileInvalid, cfg.HTTPSPort)
 	}
+	if cfg.HTTPPort > 65535 {
+		return fmt.Errorf("%w: http_port %d exceeds 65535", constants.ErrLaunchProfileInvalid, cfg.HTTPPort)
+	}
+	if cfg.HTTPSPort > 65535 {
+		return fmt.Errorf("%w: https_port %d exceeds 65535", constants.ErrLaunchProfileInvalid, cfg.HTTPSPort)
+	}
+	if cfg.HTTPPort != 0 && cfg.HTTPPort == cfg.HTTPSPort {
+		return fmt.Errorf("%w: http_port and https_port must differ", constants.ErrLaunchProfileInvalid)
+	}
 
 	// Rate limits must be non-negative.
 	if cfg.RateLimitRPS < 0 {
@@ -138,7 +159,56 @@ func ValidateLaunchProfile(profile GatewayLaunchProfile) error {
 	if cfg.NetworkIdentityFile != "" {
 		return fmt.Errorf("%w: network_identity_file must be empty in a persisted profile", constants.ErrLaunchProfileInvalid)
 	}
+	if cfg.LogLevel != constants.LogLevelInfo && cfg.LogLevel != constants.LogLevelError && cfg.LogLevel != constants.LogLevelDebug {
+		return fmt.Errorf("%w: log_level %q is not recognized", constants.ErrLaunchProfileInvalid, cfg.LogLevel)
+	}
+	if cfg.CertIdentityMode != "" && cfg.CertIdentityMode != "full" && cfg.CertIdentityMode != "localhost" {
+		return fmt.Errorf("%w: cert_identity_mode %q is not recognized", constants.ErrLaunchProfileInvalid, cfg.CertIdentityMode)
+	}
+	for _, rawOrigin := range cfg.AllowedOrigins {
+		if _, err := browserorigin.Parse(rawOrigin); err != nil {
+			return fmt.Errorf("%w: allowed origin %q: %w", constants.ErrLaunchProfileInvalid, rawOrigin, err)
+		}
+	}
+	for _, rawOrigin := range cfg.PasskeyRpOrigins {
+		origin, err := browserorigin.Parse(rawOrigin)
+		if err != nil {
+			return fmt.Errorf("%w: passkey origin %q: %w", constants.ErrLaunchProfileInvalid, rawOrigin, err)
+		}
+		if _, err := browserorigin.ValidateRPID(origin, cfg.PasskeyRpID); err != nil {
+			return fmt.Errorf("%w: passkey RP configuration: %w", constants.ErrLaunchProfileInvalid, err)
+		}
+	}
+	if err := validateLaunchProfileURL(cfg.PublicBaseURL, false); err != nil {
+		return fmt.Errorf("%w: public_base_url: %w", constants.ErrLaunchProfileInvalid, err)
+	}
+	if err := validateLaunchProfileURL(cfg.ConsensusURL, true); err != nil {
+		return fmt.Errorf("%w: consensus_url: %w", constants.ErrLaunchProfileInvalid, err)
+	}
+	if err := validateLaunchProfileURL(cfg.MCPDownstreamURL, false); err != nil {
+		return fmt.Errorf("%w: mcp_downstream_url: %w", constants.ErrLaunchProfileInvalid, err)
+	}
+	if err := validateLaunchProfileURL(cfg.A2ADownstreamURL, false); err != nil {
+		return fmt.Errorf("%w: a2a_downstream_url: %w", constants.ErrLaunchProfileInvalid, err)
+	}
 
+	return nil
+}
+
+func validateLaunchProfileURL(raw string, httpsOnly bool) error {
+	if raw == "" {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	if parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return constants.ErrValidationFailed
+	}
+	if (httpsOnly && parsed.Scheme != "https") || (!httpsOnly && parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return constants.ErrValidationFailed
+	}
 	return nil
 }
 

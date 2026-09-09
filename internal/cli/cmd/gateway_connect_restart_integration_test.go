@@ -101,6 +101,7 @@ func TestGatewayConnectCmd_RunningGatewayWithDifferingConfigYesFlagAttemptsResta
 
 	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), fileSvcFactoryFor(fileSvc), deps)
 	require.NoError(t, cmd.Flags().Set("yes", "true"))
+	cmd.SetContext(t.Context())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

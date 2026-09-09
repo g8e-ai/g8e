@@ -101,6 +101,12 @@ A framework-neutral, atomic statement of technical behavior in the protocol comp
 
 ---
 
+## Danny-as-Code (DaC)
+
+A tongue-in-cheek counterpart to Infrastructure-as-Code (IaC): the operating method the author developed over thirty years of incident response, expressed as a machine-verifiable separation of proposal, authorization, execution, and evidence. The "Danny" is the author, who is real.
+
+---
+
 ## Deterministic Stage Evidence
 
 The canonical protobuf `g8e.operator.v1.DeterministicStageEvidence`, which records a typed governance or execution stage with monotonic timing, outcome, transaction and identity bindings, state roots, signer and signature digests, doctrine bundle identity, audit references, and parent-stage linkage. Current stage kinds cover L1, protocol L2, L3, L4 verification, receipt persistence, commitment append, and L5 execution.
