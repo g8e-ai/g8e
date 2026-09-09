@@ -658,10 +658,17 @@ def _produce_proof_property_observations(
 ) -> list[MetricObservation]:
     """Shared proof-property producer for L2-L5.
 
-    Checks: (1) the relevant stage kind is present for the attempt, (2)
-    the stage has the required signature/decision/commitment field, (3)
-    the stage binding matches run/attempt/task. Enforces arm
-    requirements (GOVERNED for L2/L4/L5, NOTARY for L3).
+    Checks: (1) at least one stage of the relevant kind is present for
+    the attempt, (2) every stage of that kind has the required
+    signature/decision/commitment field (fail-closed), (3) every stage
+    binding matches run/attempt/task. Enforces arm requirements
+    (GOVERNED for L2/L4/L5, NOTARY for L3).
+
+    A governed attempt with multiple receipts legitimately has multiple
+    stages of the same kind (one per receipt). The producer checks ALL
+    stages of the kind for the attempt and passes only if ALL have the
+    required field. A single observation per attempt summarizes whether
+    every stage of that kind has the required proof property.
     """
     definition = DEFAULT_METRIC_REGISTRY.get(metric_id, _GRADER_VERSION)
     attempt_map = _attempt_lookup(record)
@@ -680,25 +687,20 @@ def _produce_proof_property_observations(
             continue
 
         attempt_stages = stages_by_attempt[attempt_id]
-        if len(attempt_stages) != 1:
-            raise DerivedProducerError(
-                f"{metric_id}: expected exactly one {stage_kind.value} stage for "
-                f"attempt {attempt_id}, found {len(attempt_stages)}"
-            )
 
-        stage = attempt_stages[0]
-        if stage.run_id != record.run_id:
-            raise DerivedProducerError(
-                f"{metric_id}: stage run does not match analysis run for attempt {attempt_id}"
-            )
-        if stage.task_id != attempt.task_id:
-            raise DerivedProducerError(
-                f"{metric_id}: stage task does not match attempt task for attempt {attempt_id}"
-            )
+        for stage in attempt_stages:
+            if stage.run_id != record.run_id:
+                raise DerivedProducerError(
+                    f"{metric_id}: stage run does not match analysis run for attempt {attempt_id}"
+                )
+            if stage.task_id != attempt.task_id:
+                raise DerivedProducerError(
+                    f"{metric_id}: stage task does not match attempt task for attempt {attempt_id}"
+                )
 
-        field_value = getattr(stage, check_field)
-        passed = bool(field_value)
+        passed = all(bool(getattr(stage, check_field)) for stage in attempt_stages)
         verification = VerificationStatus.VERIFIED if passed else VerificationStatus.FAILED
+        evidence_refs = [stage.stage_id for stage in attempt_stages]
 
         results.append(MetricObservation(
             metric_id=metric_id,
@@ -713,7 +715,7 @@ def _produce_proof_property_observations(
             denominator_contribution=1,
             verification_status=verification,
             grader_class=SchemaGraderClass.ANALYSIS,
-            evidence_refs=[stage.stage_id],
+            evidence_refs=evidence_refs,
         ))
     return results
 

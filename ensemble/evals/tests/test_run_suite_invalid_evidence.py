@@ -453,11 +453,11 @@ async def test_run_suite_signed_l1_rejection_emits_verified_policy_grade(tmp_pat
 # ---------------------------------------------------------------------------
 
 def _assert_report_has_results(output_dir: Path, expected_answer: str) -> list[dict]:
-    """Find the single report directory and verify results.jsonl exists with one row."""
+    """Find the single report directory and verify diagnostic-results.jsonl exists with one row."""
     report_dirs = [p for p in output_dir.iterdir() if p.is_dir()]
     assert len(report_dirs) == 1, f"expected exactly one report dir, got {report_dirs}"
-    results_path = report_dirs[0] / "results.jsonl"
-    assert results_path.exists(), f"results.jsonl missing at {results_path}"
+    results_path = report_dirs[0] / "diagnostic-results.jsonl"
+    assert results_path.exists(), f"diagnostic-results.jsonl missing at {results_path}"
     lines = results_path.read_text().splitlines()
     assert len(lines) == 1, f"expected one result row, got {len(lines)}"
     row = json.loads(lines[0])

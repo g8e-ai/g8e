@@ -642,15 +642,15 @@ func TestObserveProducerController_HandleRunState_NegativeTaskCountRejected(t *t
 	controller := newProducerControllerTestEnv(t)
 
 	body, err := json.Marshal(models.ObserveProducerRunStateRequest{
-		SchemaVersion: constants.ObserveEventPayloadSchemaVersion,
-		RunID:         "run-neg",
-		RunKind:       models.RunKindInvestigation,
-		DisplayName:   "Neg",
-		Status:        models.RunLifecycleStatusRunning,
+		SchemaVersion:  constants.ObserveEventPayloadSchemaVersion,
+		RunID:          "run-neg",
+		RunKind:        models.RunKindInvestigation,
+		DisplayName:    "Neg",
+		Status:         models.RunLifecycleStatusRunning,
 		CompletedTasks: -1,
 		TotalTasks:     3,
-		ObservedAt:    time.Now().UTC(),
-		WebSessionID:  "web-1",
+		ObservedAt:     time.Now().UTC(),
+		WebSessionID:   "web-1",
 	})
 	require.NoError(t, err)
 
@@ -667,15 +667,15 @@ func TestObserveProducerController_HandleRunState_CompletedExceedsTotalRejected(
 	controller := newProducerControllerTestEnv(t)
 
 	body, err := json.Marshal(models.ObserveProducerRunStateRequest{
-		SchemaVersion: constants.ObserveEventPayloadSchemaVersion,
-		RunID:         "run-exceed",
-		RunKind:       models.RunKindInvestigation,
-		DisplayName:   "Exceed",
-		Status:        models.RunLifecycleStatusRunning,
+		SchemaVersion:  constants.ObserveEventPayloadSchemaVersion,
+		RunID:          "run-exceed",
+		RunKind:        models.RunKindInvestigation,
+		DisplayName:    "Exceed",
+		Status:         models.RunLifecycleStatusRunning,
 		CompletedTasks: 5,
 		TotalTasks:     3,
-		ObservedAt:    time.Now().UTC(),
-		WebSessionID:  "web-1",
+		ObservedAt:     time.Now().UTC(),
+		WebSessionID:   "web-1",
 	})
 	require.NoError(t, err)
 
@@ -721,15 +721,15 @@ func TestObserveProducerController_HandleRunState_ValidZeroCountersAccepted(t *t
 	controller := newProducerControllerTestEnv(t)
 
 	body, err := json.Marshal(models.ObserveProducerRunStateRequest{
-		SchemaVersion: constants.ObserveEventPayloadSchemaVersion,
-		RunID:         "run-zero",
-		RunKind:       models.RunKindInvestigation,
-		DisplayName:   "Zero",
-		Status:        models.RunLifecycleStatusRunning,
+		SchemaVersion:  constants.ObserveEventPayloadSchemaVersion,
+		RunID:          "run-zero",
+		RunKind:        models.RunKindInvestigation,
+		DisplayName:    "Zero",
+		Status:         models.RunLifecycleStatusRunning,
 		CompletedTasks: 0,
 		TotalTasks:     0,
-		ObservedAt:    time.Now().UTC(),
-		WebSessionID:  "web-1",
+		ObservedAt:     time.Now().UTC(),
+		WebSessionID:   "web-1",
 	})
 	require.NoError(t, err)
 

@@ -303,8 +303,16 @@ async def test_manifest_written_before_execution(tmp_path, monkeypatch):
     assert manifest.dataset_hash is not None
     assert manifest.prompt_bundle_hash is not None
     assert manifest.grader_bundle_hash is not None
-    summary = json.loads((report_dirs[0] / "summary.json").read_text())
-    assert summary["metadata"]["arms"] == ["doctrine"]
+    assert not (report_dirs[0] / "summary.json").exists(), "summary.json must not be written by the release path"
+    analysis_path = report_dirs[0] / "analysis.json"
+    assert analysis_path.exists(), "analysis.json must be written by the release path"
+    analysis = json.loads(analysis_path.read_text())
+    assert analysis["arm_ids"] == ["doctrine"]
+    assert (report_dirs[0] / "analysis-input.json").exists(), "analysis-input.json must be written by the release path"
+    assert (report_dirs[0] / "analysis.md").exists(), "analysis.md must be written by the release path"
+    assert (report_dirs[0] / "analysis.html").exists(), "analysis.html must be written by the release path"
+    assert (report_dirs[0] / "analysis.txt").exists(), "analysis.txt must be written by the release path"
+    assert not (report_dirs[0] / "results.jsonl").exists(), "results.jsonl must not be written by the release path"
 
 
 @pytest.mark.asyncio
@@ -824,9 +832,9 @@ async def test_governed_attempt_retains_every_transaction_correlated_receipt(tmp
     assert attempt.correlation_ids["transaction_id"] == "tx-command"
     assert attempt.state_snapshot_hash == state_fixture.fixture_sha256
     assert attempt.receipt_refs == [receipt.receipt_id for receipt in receipts]
-    legacy_result = json.loads((report_dir / "results.jsonl").read_text().splitlines()[0])
-    assert legacy_result["primary_transaction_id"] == "tx-command"
-    assert len(legacy_result["receipts"]) == 2
+    diagnostic_result = json.loads((report_dir / "diagnostic-results.jsonl").read_text().splitlines()[0])
+    assert diagnostic_result["primary_transaction_id"] == "tx-command"
+    assert len(diagnostic_result["receipts"]) == 2
     task_definition = TaskDefinition.model_validate_json(
         (report_dir / "tasks.jsonl").read_text().splitlines()[0]
     )
@@ -1058,12 +1066,12 @@ async def test_attempts_jsonl_written_with_schema_valid_records(tmp_path, monkey
     encrypted_content = artifact_path.read_text()
     assert "agent_trail" not in encrypted_content
     assert "agent_trail" in decrypt_evidence_artifact(encrypted_content, evidence[0], _evidence_key())
-    legacy_result = json.loads((report_dirs[0] / "results.jsonl").read_text())
-    assert "prompt" not in legacy_result
-    assert "answer" not in legacy_result
-    assert "chat_evidence" not in legacy_result
-    assert legacy_result["chat_evidence_ref"] == evidence[0].artifact_id
-    assert legacy_result["chat_evidence_sha256"] == evidence[0].sha256
+    diagnostic_result = json.loads((report_dirs[0] / "diagnostic-results.jsonl").read_text())
+    assert "prompt" not in diagnostic_result
+    assert "answer" not in diagnostic_result
+    assert "chat_evidence" not in diagnostic_result
+    assert diagnostic_result["chat_evidence_ref"] == evidence[0].artifact_id
+    assert diagnostic_result["chat_evidence_sha256"] == evidence[0].sha256
 
 
 @pytest.mark.asyncio

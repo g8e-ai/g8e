@@ -677,12 +677,23 @@ class TestProofPropertyProducers:
         assert len(results) == 1
         assert results[0].value == 0.0
 
-    def test_proof_property_rejects_multiple_stages(self) -> None:
+    def test_proof_property_passes_multiple_stages_all_valid(self) -> None:
         stage1 = _stage(stage_id="s1", kind=StageKind.PROTOCOL_L2, l2_signature_digest=_HASH)
         stage2 = _stage(stage_id="s2", kind=StageKind.PROTOCOL_L2, l2_signature_digest=_HASH)
         record = _record(stages=[stage1, stage2])
-        with pytest.raises(DerivedProducerError, match="expected exactly one"):
-            produce_l2_proof_property_observations(record)
+        results = produce_l2_proof_property_observations(record)
+        assert len(results) == 1
+        assert results[0].value == 1.0
+        assert set(results[0].evidence_refs) == {"s1", "s2"}
+
+    def test_proof_property_fails_closed_when_one_of_multiple_stages_lacks_field(self) -> None:
+        stage1 = _stage(stage_id="s1", kind=StageKind.PROTOCOL_L2, l2_signature_digest=_HASH)
+        stage2 = _stage(stage_id="s2", kind=StageKind.PROTOCOL_L2, l2_signature_digest="")
+        record = _record(stages=[stage1, stage2])
+        results = produce_l2_proof_property_observations(record)
+        assert len(results) == 1
+        assert results[0].value == 0.0
+        assert results[0].verification_status == VerificationStatus.FAILED
 
     def test_proof_property_rejects_wrong_run_binding(self) -> None:
         record = _record(

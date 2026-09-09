@@ -8,7 +8,7 @@
     "dashboard_safe": "The event carries a protocol-owned typed payload suitable for direct browser rendering in the live narrative stream. Restricted content is redacted or summarized by the event presentation registry.",
     "unsupported": "The event is registered but has no real producer, no protocol-owned payload schema, or contains content unsuitable for browser display. It remains inspectable in diagnostic views but never updates derived dashboard state."
   },
-  "_note": "The four observability dashboard events (app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, ai.eval.metric.recorded) are dashboard_safe by definition once their producers land. Until producers are wired in Phase 3, they are classified as unsupported.",
+  "_note": "The four observability dashboard events (app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, ai.eval.metric.recorded) are dashboard_safe by definition once their producers land. app.agent.status.updated and app.run.status.updated producers are verified through the Gateway mTLS producer endpoints (POST /api/v1/observe/producer/agent-state and /run-state) with real HTTP integration tests. ai.eval.run.completed and ai.eval.metric.recorded remain unsupported until the eval publication path lands.",
   "families": {
     "g8e.v1.ai.agent": {
       "classification": "produced_to_sse",
@@ -43,7 +43,7 @@
     "g8e.v1.app.agent": {
       "classification": "mixed",
       "dashboard_safe": true,
-      "description": "app.agent.activity.recorded is a governed document update for AgentActivityMetadata (governed_record_only). app.agent.status.updated is a dashboard_safe event with a protocol-owned payload but is unsupported until its producer lands in Phase 3."
+      "description": "app.agent.activity.recorded is a governed document update for AgentActivityMetadata (governed_record_only). app.agent.status.updated is a dashboard_safe event with a protocol-owned payload, produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/agent-state and verified by real HTTP integration tests."
     },
     "g8e.v1.app.case": {
       "classification": "produced_to_sse",
@@ -61,9 +61,9 @@
       "description": "Memory creation and update events. Emitted by the memory service. Safe for narrative display."
     },
     "g8e.v1.app.run": {
-      "classification": "unsupported",
-      "dashboard_safe": false,
-      "description": "app.run.status.updated is registered with a protocol-owned payload but has no real producer until Phase 3 wires the run state projection path. Classified unsupported until producers land."
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "app.run.status.updated is produced through the Gateway mTLS producer endpoint POST /api/v1/observe/producer/run-state with a protocol-owned payload, verified by real HTTP integration tests."
     },
     "g8e.v1.app.task": {
       "classification": "produced_to_sse",

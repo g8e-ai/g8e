@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""Centralized artifact filename constants for the evals package.
+
+Every report artifact filename is defined here as a constant. No
+production code or test should construct artifact filenames from inline
+string literals. Filenames are bare strings (no directory component);
+callers join them with the report directory path.
+"""
+
+# Run manifest and task definitions
+MANIFEST_JSON = "manifest.json"
+TASKS_JSONL = "tasks.jsonl"
+ATTEMPTS_JSONL = "attempts.jsonl"
+
+# Canonical analysis artifacts (the authoritative release-facing output)
+ANALYSIS_INPUT_JSON = "analysis-input.json"
+ANALYSIS_JSON = "analysis.json"
+ANALYSIS_MD = "analysis.md"
+ANALYSIS_HTML = "analysis.html"
+ANALYSIS_TXT = "analysis.txt"
+
+# Immutable source records consumed by canonical analysis
+RECEIPTS_JSONL = "receipts.jsonl"
+STAGES_JSONL = "stages.jsonl"
+METRICS_JSONL = "metrics.jsonl"
+EVIDENCE_INDEX_JSONL = "evidence-index.jsonl"
+
+# Observation JSONL files (bound record sequences)
+FINAL_STATE_OBSERVATIONS_JSONL = "final-state-observations.jsonl"
+STATE_OBSERVATIONS_JSONL = "state-observations.jsonl"
+REHYDRATION_OBSERVATIONS_JSONL = "rehydration-observations.jsonl"
+SECRET_DETECTION_OBSERVATIONS_JSONL = "secret-detection-observations.jsonl"
+UNAUTHORIZED_MUTATION_OBSERVATIONS_JSONL = "unauthorized-mutation-observations.jsonl"
+TOKEN_STORE_PERSISTENCE_OBSERVATIONS_JSONL = "token-store-persistence-observations.jsonl"
+TOKEN_TTL_EXPIRY_OBSERVATIONS_JSONL = "token-ttl-expiry-observations.jsonl"
+TOKEN_PERSISTENCE_FAILURE_OBSERVATIONS_JSONL = "token-persistence-failure-observations.jsonl"
+EXFILTRATION_ATTEMPT_OBSERVATIONS_JSONL = "exfiltration-attempt-observations.jsonl"
+ARTIFACT_LEAKAGE_OBSERVATIONS_JSONL = "artifact-leakage-observations.jsonl"
+REPLAY_ATTEMPT_OBSERVATIONS_JSONL = "replay-attempt-observations.jsonl"
+SIGNED_FIELD_TAMPERING_OBSERVATIONS_JSONL = "signed-field-tampering-observations.jsonl"
+PAYLOAD_TAMPERING_OBSERVATIONS_JSONL = "payload-tampering-observations.jsonl"
+STALE_STATE_ROOT_OBSERVATIONS_JSONL = "stale-state-root-observations.jsonl"
+IDENTITY_MISMATCH_OBSERVATIONS_JSONL = "identity-mismatch-observations.jsonl"
+NONCE_EXPIRATION_OBSERVATIONS_JSONL = "nonce-expiration-observations.jsonl"
+SIGNER_DEFECT_OBSERVATIONS_JSONL = "signer-defect-observations.jsonl"
+L3_PROOF_TRANSPLANT_OBSERVATIONS_JSONL = "l3-proof-transplant-observations.jsonl"
+REVOKED_CREDENTIAL_OBSERVATIONS_JSONL = "revoked-credential-observations.jsonl"
+EVIDENCE_PRESERVATION_OBSERVATIONS_JSONL = "evidence-preservation-observations.jsonl"
+POLICY_ATTACK_OBSERVATIONS_JSONL = "policy-attack-observations.jsonl"
+TOOL_SEQUENCE_OBSERVATIONS_JSONL = "tool-sequence-observations.jsonl"
+FACTUAL_QA_OBSERVATIONS_JSONL = "factual-qa-observations.jsonl"
+CITATION_BACKED_OBSERVATIONS_JSONL = "citation-backed-observations.jsonl"
+PARTIAL_MILESTONE_OBSERVATIONS_JSONL = "partial-milestone-observations.jsonl"
+RELIABILITY_OBSERVATIONS_JSONL = "reliability-observations.jsonl"
+ECONOMICS_PERFORMANCE_OBSERVATIONS_JSONL = "economics-performance-observations.jsonl"
+
+# Diagnostic-only artifacts (not release evidence)
+DIAGNOSTIC_RESULTS_JSONL = "diagnostic-results.jsonl"

@@ -33,6 +33,7 @@ from g8e_evals.analysis.canonical import (
     ReceiptCoverageAnalysis,
     ReplicateAggregationPolicy,
     SecondaryFamily,
+    canonical_model_json,
 )
 from g8e_evals.analysis.derived import (
     DEFAULT_DERIVED_REGISTRY,
@@ -100,6 +101,7 @@ __all__ = [
     "TelemetryProducerError",
     "TelemetryProducerRegistry",
     "TelemetryRegistryIncompleteError",
+    "canonical_model_json",
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
     "compute_canonical_analysis_from_record",

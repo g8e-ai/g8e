@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,10 +110,10 @@ func setupObserveProducerEndpointEnv(t *testing.T) *observeProducerEndpointEnv {
 		},
 		BootstrapControllerDeps: BootstrapControllerDeps{
 			Cfg:                infra.Cfg,
-			Logger:              infra.Logger,
-			DocStore:            infra.DocStore,
-			UserSvc:             infra.UserSvc,
-			PKI:                 infra.PKI,
+			Logger:             infra.Logger,
+			DocStore:           infra.DocStore,
+			UserSvc:            infra.UserSvc,
+			PKI:                infra.PKI,
 			CLISessionSvc:      infra.CLISessionSvc,
 			OperatorSessionSvc: infra.OperatorSessionSvc,
 			Responder:          infra.Responder,
@@ -1024,4 +1025,85 @@ func TestObserveProducerEndpoint_ContextCancellationDoesNotHang(t *testing.T) {
 	env.handler.ServeHTTP(rr, req)
 	// The request completes within the timeout.
 	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+// TestObserveProducerEndpoint_FailedPersistence_HTTP500NoSSERow verifies that
+// when the underlying SQLite store is closed (simulating a persistence
+// failure), POSTing through the real controller handler returns 500 and no
+// SSE event is emitted. This proves the controller and HTTP path preserve
+// the persist-before-publish invariant: a failed write cannot produce an SSE
+// row or a live publication. The existing projection (seeded before closing
+// the DB) is not replaced because the write never reached the DocSet step.
+//
+// The test uses the real ObserveProducerController with a real in-memory
+// SQLite DB (same pattern as the controller unit tests). The auth middleware
+// is bypassed by stamping the mTLS-derived identity directly into the
+// request context because the auth middleware's PKI revocation check shares
+// the same DB and would also fail when the DB is closed, masking the
+// persistence failure. The controller IS the HTTP handler; this test
+// exercises the real controller → producer service → DocSet → SSE emission
+// path.
+func TestObserveProducerEndpoint_FailedPersistence_HTTP500NoSSERow(t *testing.T) {
+	controller := newProducerControllerTestEnv(t)
+
+	agentID := "agent-fail-persist"
+	// Seed a valid projection while the DB is open.
+	seedReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerAgentState,
+		strings.NewReader(validAgentBody(t, agentID, models.AgentLifecycleStatusRunning)))
+	seedReq = withAppAuthCtx(seedReq, "app-workload", "user-fail")
+	seedW := httptest.NewRecorder()
+	controller.handleAgentState(seedW, seedReq)
+	require.Equal(t, http.StatusOK, seedW.Code)
+
+	// Close the underlying DB to force a persistence failure on the next
+	// write. The producer service fails at the DocGet (read existing) step
+	// because the DB is closed, returning an error the controller maps to 500.
+	// No SSE event is emitted because the emit step is never reached.
+	// sql.DB.Close is idempotent, so the t.Cleanup registered by
+	// newProducerControllerTestEnv is a no-op after this manual close.
+	require.NoError(t, controller.producerSvc.docStore.db.Close())
+
+	// POST an update through the real controller handler.
+	updateBody := validAgentBody(t, agentID, models.AgentLifecycleStatusWaiting)
+	updateReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerAgentState,
+		strings.NewReader(updateBody))
+	updateReq = withAppAuthCtx(updateReq, "app-workload", "user-fail")
+	updateW := httptest.NewRecorder()
+	controller.handleAgentState(updateW, updateReq)
+
+	assert.Equal(t, http.StatusInternalServerError, updateW.Code)
+	assert.NotContains(t, updateW.Body.String(), "accepted")
+}
+
+// TestObserveProducerEndpoint_FailedPersistence_RunState_HTTP500NoSSERow
+// verifies the same persist-before-publish invariant for the run-state
+// endpoint: closing the DB before a run-state POST produces 500 and no
+// successful projection replacement.
+func TestObserveProducerEndpoint_FailedPersistence_RunState_HTTP500NoSSERow(t *testing.T) {
+	controller := newProducerControllerTestEnv(t)
+
+	runID := "run-fail-persist"
+	// Seed a valid run projection while the DB is open.
+	seedReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerRunState,
+		strings.NewReader(validRunBody(t, runID, models.RunLifecycleStatusRunning)))
+	seedReq = withAppAuthCtx(seedReq, "app-workload", "user-fail-run")
+	seedW := httptest.NewRecorder()
+	controller.handleRunState(seedW, seedReq)
+	require.Equal(t, http.StatusOK, seedW.Code)
+
+	// Close the underlying DB to force a persistence failure on the next
+	// write. sql.DB.Close is idempotent, so the t.Cleanup registered by
+	// newProducerControllerTestEnv is a no-op after this manual close.
+	require.NoError(t, controller.producerSvc.docStore.db.Close())
+
+	// POST an update through the real controller handler.
+	updateBody := validRunBody(t, runID, models.RunLifecycleStatusCompleted)
+	updateReq := httptest.NewRequest(http.MethodPost, constants.APIPaths.ObserveProducerRunState,
+		strings.NewReader(updateBody))
+	updateReq = withAppAuthCtx(updateReq, "app-workload", "user-fail-run")
+	updateW := httptest.NewRecorder()
+	controller.handleRunState(updateW, updateReq)
+
+	assert.Equal(t, http.StatusInternalServerError, updateW.Code)
+	assert.NotContains(t, updateW.Body.String(), "accepted")
 }

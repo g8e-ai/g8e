@@ -39,6 +39,7 @@ from g8e.receipts import (
     verify_receipt_persistence_attestation,
 )
 from g8e_evals import __version__ as EVALS_VERSION
+from g8e_evals import constants as evals_constants
 from g8e_evals.arms import ALL_ARMS, GOVERNED_ARMS, Arm, GovernancePosture
 from g8e_evals.auth_bridge import AuthBridgeError, load_cli_auth_context
 from g8e_evals.graders import (
@@ -165,8 +166,17 @@ from g8e_evals.benchmarks.economics.simulator import LocalEconomicsPerformanceSi
 from g8e_evals.benchmarks.economics.observers import EconomicsPerformanceObserverImpl
 from g8e_evals.receipts.collector import ReceiptCollector
 from g8e_evals.receipts.verify import receipt_action_type
-from g8e_evals.report.aggregate import aggregate_results
-from g8e_evals.report.cli_renderer import render_summary
+from g8e_evals.analysis import (
+    ANALYSIS_COMPUTATION_VERSION,
+    ANALYSIS_SCHEMA_VERSION,
+    AnalysisInputRecord,
+    CanonicalEvalAnalysis,
+    canonical_model_json,
+    compute_canonical_analysis_from_record,
+    render_cli,
+    render_html,
+    render_markdown,
+)
 from g8e_evals.models import ScoreDetails, TaskMetadata
 
 console = Console()
@@ -2473,11 +2483,10 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         artifact_path.write_text(artifact.envelope_json)
 
-    # 10. Aggregate & Report
-    agg = aggregate_results(suite, results)
-    render_summary(agg, arm=config.arm)
-
-    # 11. Save legacy artifacts (results.jsonl, summary.json)
+    # 10. Write diagnostic-results.jsonl (non-authoritative diagnostic only)
+    #     BEFORE the invalid-evidence check so a failed run retains the
+    #     diagnostic surface. The canonical analysis (step 12) stays after
+    #     the invalid-evidence check so failed runs do not emit analysis.json.
     evidence_index_by_attempt = {
         artifact.index.attempt_id: artifact.index
         for artifact in encrypted_evidence_artifacts
@@ -2522,15 +2531,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             "timestamp": r.timestamp.isoformat()
         }
 
-    with open(report_dir / "results.jsonl", "w") as f:
+    with open(report_dir / evals_constants.DIAGNOSTIC_RESULTS_JSONL, "w") as f:
         for result, attempt in zip(results, attempt_records, strict=True):
             f.write(json.dumps(row_to_dict(result, attempt)) + "\n")
 
-    with open(report_dir / "summary.json", "w") as f:
-        f.write(json.dumps(agg.__dict__, indent=2))
-
-    console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
-
+    # 11. Validate evidence before producing canonical analysis. Invalid
+    #     evidence raises a typed failed run and retains the diagnostic
+    #     directory, but does not emit a passing canonical gate.
     policy_metrics_by_attempt = {
         metric.attempt_id: metric
         for metric in metric_records
@@ -2567,6 +2574,57 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         raise EvaluationRunError(
             f"run produced invalid evidence for task(s) {failed_ids}; diagnostic report retained at {report_dir}"
         )
+
+    # 12. Build the complete AnalysisInputRecord from every accumulated
+    #     record, run canonical analysis, and write the authoritative
+    #     analysis artifacts. Every observation class not produced by the
+    #     ifeval path defaults to an empty list (genuine absence, not a
+    #     complete-evidence claim).
+    analysis_input = AnalysisInputRecord(
+        run_id=run_id,
+        release_version=EVALS_VERSION,
+        tasks=task_defs,
+        attempts=attempt_records,
+        metric_observations=metric_records,
+        receipts=receipt_records,
+        stages=stage_records,
+        final_state_observations=final_state_records,
+        state_observations=state_records,
+        rehydration_observations=rehydration_records,
+        secret_detection_observations=secret_detection_records,
+        unauthorized_mutation_observations=unauthorized_mutation_records,
+        token_store_persistence_observations=token_store_persistence_records,
+        token_ttl_expiry_observations=token_ttl_expiry_records,
+        token_persistence_failure_observations=token_persistence_failure_records,
+        exfiltration_attempt_observations=exfiltration_attempt_records,
+        artifact_leakage_observations=artifact_leakage_records,
+        replay_attempt_observations=replay_attempt_records,
+        signed_field_tampering_observations=signed_field_tampering_records,
+        payload_tampering_observations=payload_tampering_records,
+        stale_state_root_observations=stale_state_root_records,
+        identity_mismatch_observations=identity_mismatch_records,
+        nonce_expiration_observations=nonce_expiration_records,
+        signer_defect_observations=signer_defect_records,
+        l3_proof_transplant_observations=l3_proof_transplant_records,
+        revoked_credential_observations=revoked_credential_records,
+        evidence_preservation_observations=evidence_preservation_records,
+    )
+
+    (report_dir / evals_constants.ANALYSIS_INPUT_JSON).write_text(
+        canonical_model_json(analysis_input)
+    )
+
+    analysis: CanonicalEvalAnalysis = compute_canonical_analysis_from_record(analysis_input)
+
+    (report_dir / evals_constants.ANALYSIS_JSON).write_text(
+        canonical_model_json(analysis)
+    )
+    (report_dir / evals_constants.ANALYSIS_MD).write_text(render_markdown(analysis))
+    (report_dir / evals_constants.ANALYSIS_HTML).write_text(render_html(analysis))
+    (report_dir / evals_constants.ANALYSIS_TXT).write_text(render_cli(analysis))
+    console.print(render_cli(analysis))
+
+    console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
 
 @main.command()
 @click.argument("report_dir", type=click.Path(exists=True, path_type=Path))

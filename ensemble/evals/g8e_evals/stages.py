@@ -382,7 +382,7 @@ def _receipt_stages(
         if outcome is None:
             raise ValueError(f"unknown deterministic stage outcome: {observation.outcome}")
         stages.append(StageObservation(
-            stage_id=observation.stage_id or f"{attempt_id}:receipt:{index}",
+            stage_id=observation.stage_id or f"{attempt_id}:receipt:{receipt.transaction_id}:{index}",
             attempt_id=attempt_id,
             run_id=run_id,
             kind=kind,
@@ -400,7 +400,7 @@ def _receipt_stages(
             acting_app_id=observation.acting_app_id,
             case_id=observation.case_id,
             investigation_id=observation.investigation_id,
-            task_id=observation.task_id,
+            task_id=task_id,
             state_root_before=observation.state_root_before,
             state_root_after=observation.state_root_after,
             signer_key_id=observation.signer_key_id,

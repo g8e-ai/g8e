@@ -1,0 +1,31 @@
+{
+  "name": "g8e-adapter",
+  "version": "0.1.0",
+  "description": "g8e audited browser adapter — generator-neutral integration core for the observe frontend. Builders (Lovable, Notion, other) wrap this adapter; they do not rewrite its transport code.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist coverage"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
