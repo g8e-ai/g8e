@@ -115,6 +115,14 @@ The verifier derives each key ID, matches it to `signer_key_id`, and verifies th
 
 This command does not validate the complete report graph, dataset hashes, encrypted evidence, commitment ledger, or trustworthiness of supplied public keys. It is a receipt-signature diagnostic primitive, not a complete offline bundle verifier. Complete eval verification requires the immutable bundle contract, signing identity, and assessed-trust policy defined in later phases.
 
+## Eval bundle signing identity and assessed trust
+
+The `g8e_evals.bundle.signing` module defines the dedicated Ed25519 eval-run signing identity and the external assessed-trust input. The signing identity is not an actuator receipt identity and is never represented as an `ActionReceipt`. `EvalSigningKey` wraps an Ed25519 key pair; its `key_id` is the hexadecimal encoding of the raw public key, matching the platform receipt verifier convention. `sign_bundle` signs the canonical manifest root and checksum root bytes, binding the signature algorithm, key ID, bundle ID, run ID, release version, and SHA-256 signed digest to each signature.
+
+The verifier never trusts a key merely because the bundle contains it. `EvalTrustStore` is the external assessed-trust input supplied by the verifier out of band from protocol-owned public-key metadata. `EvalTrustedKey` declares each key's algorithm, scope, validity window, revocation state, and provenance source. `verify_bundle_signature` assesses each signature against the trust store and fails closed for unknown, revoked, expired, wrong-scope, wrong-algorithm, malformed, and substituted keys and signatures. A signature is accepted only when both the manifest and checksum-root signatures are `TRUSTED`.
+
+The signing identity and trust models are defined but not yet wired into a `g8e-evals verify <bundle>` command. The complete offline verifier is implemented in a later phase.
+
 ## Published README evidence
 
 The reviewed snapshot under `docs/evidence/readme/current/` contains hash-safe projections rather than private report directories. The current publication preserves the v2.1.5 five-task Stage 1 diagnostic and adds a separately invoked v2.1.6 Stage 2 reproduction with campaign, source, component, image, and environment provenance. Both runs used the same local operator environment and produced no receipts, so the snapshot supports deterministic instruction-following comparison and independent execution state, not receipt, mutation, persistence, governance, compliance, causal, statistical, or external-audit claims.
