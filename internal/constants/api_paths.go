@@ -144,6 +144,14 @@ var APIPaths = struct {
 	ObserveEvalsByID     string `json:"observe_evals_by_id"`
 	ObserveDownloads     string `json:"observe_downloads"`
 	ObserveDownloadsByID string `json:"observe_downloads_by_id"`
+	// Observe producer routes (mTLS-authenticated, ensemble-only mutation
+	// surface for persisting agent and run state projections). These are
+	// never browser-accessible; the RouteAuthMTLS classification is
+	// explicit so the producer sub-prefix does not inherit the
+	// RouteAuthWebSession classification of the observe prefix.
+	ObserveProducerPrefix     string `json:"observe_producer_prefix"`
+	ObserveProducerAgentState string `json:"observe_producer_agent_state"`
+	ObserveProducerRunState   string `json:"observe_producer_run_state"`
 	// WebSocket prefix
 	WSPrefix string `json:"ws_prefix"`
 	// User routes
@@ -295,6 +303,10 @@ var APIPaths = struct {
 	ObserveEvalsByID:     "/api/v1/observe/evals/",
 	ObserveDownloads:     "/api/v1/observe/downloads",
 	ObserveDownloadsByID: "/api/v1/observe/downloads/",
+	// Observe producer routes (mTLS-authenticated, ensemble-only)
+	ObserveProducerPrefix:     "/api/v1/observe/producer/",
+	ObserveProducerAgentState: "/api/v1/observe/producer/agent-state",
+	ObserveProducerRunState:   "/api/v1/observe/producer/run-state",
 	// WebSocket prefix
 	WSPrefix: "/ws/",
 	// User routes

@@ -399,3 +399,42 @@ type ObserveBootstrapSnapshot struct {
 	Downloads     []DownloadArtifact     `json:"downloads"`
 	GeneratedAt   time.Time              `json:"generated_at"`
 }
+
+// ObserveProducerAgentStateRequest is the typed request body for the mTLS
+// producer endpoint POST /api/v1/observe/producer/agent-state. It carries the
+// AgentStatusUpdatedPayload fields plus the SSE routing target (exactly one of
+// web_session_id or cli_session_id). The gateway derives user_id from the mTLS
+// peer certificate, never from the request body.
+type ObserveProducerAgentStateRequest struct {
+	SchemaVersion string               `json:"schema_version"`
+	AgentID       string               `json:"agent_id"`
+	DisplayName   string               `json:"display_name"`
+	Role          string               `json:"role"`
+	Status        AgentLifecycleStatus `json:"status"`
+	RunID         string               `json:"run_id,omitempty"`
+	TaskID        string               `json:"task_id,omitempty"`
+	Model         string               `json:"model,omitempty"`
+	ObservedAt    time.Time            `json:"observed_at"`
+	WebSessionID  string               `json:"web_session_id,omitempty"`
+	CLISessionID  string               `json:"cli_session_id,omitempty"`
+}
+
+// ObserveProducerRunStateRequest is the typed request body for the mTLS
+// producer endpoint POST /api/v1/observe/producer/run-state. It carries the
+// RunStatusUpdatedPayload fields plus the SSE routing target. The gateway
+// derives user_id from the mTLS peer certificate, never from the request body.
+type ObserveProducerRunStateRequest struct {
+	SchemaVersion  string             `json:"schema_version"`
+	RunID          string             `json:"run_id"`
+	RunKind        RunKind            `json:"run_kind"`
+	DisplayName    string             `json:"display_name"`
+	Status         RunLifecycleStatus `json:"status"`
+	ActiveTaskID   string             `json:"active_task_id,omitempty"`
+	CompletedTasks int                `json:"completed_tasks"`
+	TotalTasks     int                `json:"total_tasks"`
+	StartedAt      *time.Time         `json:"started_at,omitempty"`
+	EndedAt        *time.Time         `json:"ended_at,omitempty"`
+	ObservedAt     time.Time          `json:"observed_at"`
+	WebSessionID   string             `json:"web_session_id,omitempty"`
+	CLISessionID   string             `json:"cli_session_id,omitempty"`
+}

@@ -183,5 +183,37 @@
     "latest_evals": {"type": "array", "items": "eval_summary", "required": true, "description": "Bounded list of latest eval summaries"},
     "downloads": {"type": "array", "items": "download_artifact", "required": true, "description": "Allowlisted download catalog"},
     "generated_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "observe_producer_agent_state_request": {
+    "_description": "Typed request body for the mTLS producer endpoint POST /api/v1/observe/producer/agent-state. Carries AgentStatusUpdatedPayload fields plus the SSE routing target (exactly one of web_session_id or cli_session_id). The gateway derives user_id from the mTLS peer certificate, never from the request body.",
+    "schema_version": {"type": "string", "required": true},
+    "agent_id": {"type": "string", "required": true, "description": "Stable agent identifier. The ensemble constructs this deterministically from user_id and persona_id to ensure cross-user uniqueness in the projection document key."},
+    "display_name": {"type": "string", "required": true, "description": "Human-readable agent name from the persona registry"},
+    "role": {"type": "string", "required": true, "description": "Agent role or persona"},
+    "status": {"type": "string", "required": true, "enum": ["idle", "queued", "running", "waiting", "completed", "failed", "offline"]},
+    "run_id": {"type": "string", "required": false, "description": "Owning run identifier when the agent is bound to a run"},
+    "task_id": {"type": "string", "required": false, "description": "Active task identifier when the agent is executing a task"},
+    "model": {"type": "string", "required": false, "description": "Resolved model identifier. May be empty before model resolution."},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp of the state change from the ensemble's own clock"},
+    "web_session_id": {"type": "string", "required": false, "description": "SSE routing target for browser sessions. Exactly one of web_session_id or cli_session_id is required."},
+    "cli_session_id": {"type": "string", "required": false, "description": "SSE routing target for CLI sessions. Exactly one of web_session_id or cli_session_id is required."}
+  },
+
+  "observe_producer_run_state_request": {
+    "_description": "Typed request body for the mTLS producer endpoint POST /api/v1/observe/producer/run-state. Carries RunStatusUpdatedPayload fields plus the SSE routing target. The gateway derives user_id from the mTLS peer certificate, never from the request body.",
+    "schema_version": {"type": "string", "required": true},
+    "run_id": {"type": "string", "required": true, "description": "Stable run identifier. For investigation runs, this is the investigation_id."},
+    "run_kind": {"type": "string", "required": true, "enum": ["investigation", "eval", "demo", "workflow"]},
+    "display_name": {"type": "string", "required": true, "description": "Human-readable run name (e.g. investigation title)"},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "active_task_id": {"type": "string", "required": false, "description": "Currently active task identifier"},
+    "completed_tasks": {"type": "integer", "required": true, "description": "Number of completed tasks in this run"},
+    "total_tasks": {"type": "integer", "required": true, "description": "Total number of tasks in this run"},
+    "started_at": {"type": "string", "format": "iso8601", "required": false, "description": "Run start timestamp"},
+    "ended_at": {"type": "string", "format": "iso8601", "required": false, "description": "Run end timestamp for terminal states"},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp of the state change from the ensemble's own clock"},
+    "web_session_id": {"type": "string", "required": false, "description": "SSE routing target for browser sessions. Exactly one of web_session_id or cli_session_id is required."},
+    "cli_session_id": {"type": "string", "required": false, "description": "SSE routing target for CLI sessions. Exactly one of web_session_id or cli_session_id is required."}
   }
 }

@@ -43,6 +43,7 @@ from g8e_evals.schema import (
     PersistenceAttestation,
     PolicyAttackObservation,
     ReceiptObservation,
+    RehydrationObservation,
     ReliabilityObservation,
     ReplayAttemptObservation,
     RevokedCredentialObservation,

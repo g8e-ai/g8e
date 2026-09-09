@@ -30,12 +30,15 @@ from g8e_evals.analysis.canonical import (
     PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
 )
-from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
+from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis, compute_canonical_analysis_from_record
+from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
+from g8e_evals.analysis import telemetry
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
     "ANALYSIS_SCHEMA_VERSION",
+    "AnalysisInputRecord",
     "AnalysisInputSummary",
     "BridgeRunComparison",
     "BridgeRunManifest",
@@ -54,8 +57,10 @@ __all__ = [
     "ReceiptCoverageAnalysis",
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
+    "compute_canonical_analysis_from_record",
     "render_cli",
     "render_html",
     "render_markdown",
     "statistics",
+    "telemetry",
 ]

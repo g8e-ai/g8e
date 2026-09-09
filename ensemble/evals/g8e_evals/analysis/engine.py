@@ -43,6 +43,7 @@ from g8e_evals.analysis.canonical import (
     ReceiptCoverageAnalysis,
     canonical_model_json,
 )
+from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.arms import ARM_DEFINITIONS
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
@@ -1112,6 +1113,29 @@ def compute_canonical_analysis(
         bridge_runs=[],
         bridge_run_comparisons=[],
         unsupported_claim_names=unsupported_claim_names,
+    )
+
+
+def compute_canonical_analysis_from_record(
+    record: AnalysisInputRecord,
+) -> CanonicalEvalAnalysis:
+    """Compute the canonical eval analysis from a complete immutable input record.
+
+    This is the record-based entry point that unpacks the
+    ``AnalysisInputRecord`` into the fields the engine currently
+    consumes (tasks, attempts, metric observations, receipts, stages).
+    As telemetry and derived-metric producers are implemented, the
+    engine will consume the additional observation sequences directly
+    from the record.
+    """
+    return compute_canonical_analysis(
+        tasks=record.tasks,
+        attempts=record.attempts,
+        metric_observations=record.metric_observations,
+        receipts=record.receipts,
+        stages=record.stages,
+        run_id=record.run_id,
+        release_version=record.release_version,
     )
 
 

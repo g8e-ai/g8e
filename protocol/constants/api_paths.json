@@ -103,5 +103,8 @@
   "observe_evals": "/api/v1/observe/evals",
   "observe_evals_by_id": "/api/v1/observe/evals/",
   "observe_downloads": "/api/v1/observe/downloads",
-  "observe_downloads_by_id": "/api/v1/observe/downloads/"
+  "observe_downloads_by_id": "/api/v1/observe/downloads/",
+  "observe_producer_prefix": "/api/v1/observe/producer/",
+  "observe_producer_agent_state": "/api/v1/observe/producer/agent-state",
+  "observe_producer_run_state": "/api/v1/observe/producer/run-state"
 }
