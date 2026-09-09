@@ -21,7 +21,6 @@ import pytest
 from g8e_evals.grader_inventory import (
     GRADER_INVENTORY,
     ConformanceCaseCategory,
-    GraderInventoryEntry,
     InventoryDriftError,
     ProducerPath,
     validate_inventory_against_registries,
@@ -67,7 +66,8 @@ def test_inventory_entries_have_non_empty_metric_ids():
     for entry in GRADER_INVENTORY.values():
         assert len(entry.metric_ids) >= 1
         for metric_id in entry.metric_ids:
-            assert metric_id and metric_id.strip()
+            assert metric_id
+            assert metric_id.strip()
 
 
 def test_inventory_metric_ids_are_registered():
@@ -174,7 +174,8 @@ def test_inventory_exclusion_categories_are_valid():
     for entry in GRADER_INVENTORY.values():
         for exclusion in entry.conformance_exclusions:
             assert exclusion.category in valid_categories
-            assert exclusion.reason and exclusion.reason.strip()
+            assert exclusion.reason
+            assert exclusion.reason.strip()
 
 
 def test_inventory_exclusions_are_unique_per_grader():
@@ -265,7 +266,7 @@ def test_validate_inventory_detects_unregistered_metric(monkeypatch):
 
 def test_inventory_entries_are_frozen():
     entry = GRADER_INVENTORY[("receipt_integrity", "1.0.0")]
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match=r"frozen|immutable|ValidationError"):
         entry.grader_id = "changed"
 
 

@@ -24,9 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/v2/internal/certs"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
-	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/httpclient"
 	"github.com/g8e-ai/g8e/v2/internal/models"
@@ -452,31 +450,20 @@ func (c *EnrollmentClient) CheckBootstrapStatus(ctx context.Context, baseURL str
 // fingerprint pin is applied — the live bundle IS the source of truth for
 // the pin, so pinning against the local bundle would be circular.
 //
+// Delegates to DiscoverLiveTrustBundle so identity enrollment and gw
+// connect share one implementation of root selection, chain verification,
+// and fingerprint formatting.
+//
 // See EnrollmentGateway.DiscoverGatewayCA for the contract.
 func (c *EnrollmentClient) DiscoverGatewayCA(ctx context.Context) ([]byte, string, error) {
 	discoveryURL := c.cfg.OperatorDiscoveryURL()
 	caURL := discoveryURL + constants.APIPaths.WellKnownPKICABundle
 
-	// Use the IPv4-only transport so `localhost` resolves to 127.0.0.1 on
-	// Windows (where the OS resolver returns ::1 first and the IDE's
-	// port-forward only listens on IPv4). The discovery surface is plain
-	// HTTP, so no TLS config is needed.
-	bundlePEM, err := certs.FetchTrustBundleWithClient(ctx, caURL, "", &http.Client{
-		Timeout:   15 * time.Second,
-		Transport: httpclient.NewIPv4Transport(nil),
-	})
+	result, err := DiscoverLiveTrustBundle(ctx, caURL, time.Now)
 	if err != nil {
 		return nil, "", err
 	}
-
-	roots, err := platform.ExtractRootAnchors(bundlePEM, time.Now)
-	if err != nil {
-		return nil, "", fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
-	}
-	if len(roots) == 0 {
-		return nil, "", constants.ErrSystemTrustInvalidAnchor
-	}
-	return bundlePEM, platform.CertFingerprint(roots[0]), nil
+	return result.BundlePEM, result.Fingerprint, nil
 }
 
 // postJSON is the centralized HTTP POST + JSON decode + status check

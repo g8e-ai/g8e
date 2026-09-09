@@ -19,8 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/serve"
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // These regression tests verify the Phase 2 fix: gatewayRestartCmdWithConfig
@@ -82,23 +82,23 @@ func TestGatewayRestartCmd_RestoresCompleteConfigFromProfile_AfterFix(t *testing
 
 	// Write a complete launch profile with browser-relevant fields.
 	profileCfg := serve.GatewayConfig{
-		Posture:           g8econfig.PostureConsensus,
-		HTTPPort:          8080,
-		HTTPSPort:         8443,
-		LogLevel:          "info",
-		CertIdentityMode:  "full",
-		PasskeyRpID:       "your-app.lovable.app",
-		PasskeyRpName:     "g8e",
-		PasskeyRpOrigins:  []string{"https://your-app.lovable.app"},
-		AllowedOrigins:    []string{"https://your-app.lovable.app"},
-		PublicBaseURL:     "https://your-app.lovable.app",
-		ConsensusID:       "trib-001",
-		ConsensusURL:      "https://localhost:8443/consensus/v1/deliberate",
-		MCPDownstreamURL:  "http://downstream:3000/mcp",
-		A2ADownstreamURL:  "http://downstream:3001/a2a",
-		RateLimitRPS:      5.0,
-		RateLimitBurst:    10,
-		DoctrineDir:       "/etc/g8e/doctrine",
+		Posture:          g8econfig.PostureConsensus,
+		HTTPPort:         8080,
+		HTTPSPort:        8443,
+		LogLevel:         "info",
+		CertIdentityMode: "full",
+		PasskeyRpID:      "your-app.lovable.app",
+		PasskeyRpName:    "g8e",
+		PasskeyRpOrigins: []string{"https://your-app.lovable.app"},
+		AllowedOrigins:   []string{"https://your-app.lovable.app"},
+		PublicBaseURL:    "https://your-app.lovable.app",
+		ConsensusID:      "trib-001",
+		ConsensusURL:     "https://localhost:8443/consensus/v1/deliberate",
+		MCPDownstreamURL: "http://downstream:3000/mcp",
+		A2ADownstreamURL: "http://downstream:3001/a2a",
+		RateLimitRPS:     5.0,
+		RateLimitBurst:   10,
+		DoctrineDir:      "/etc/g8e/doctrine",
 	}
 	require.NoError(t, serve.WriteLaunchProfile(fileSvc, profileCfg))
 
@@ -149,23 +149,23 @@ func TestGatewayRestartCmd_PreservesCompleteConfigFields_AfterFix(t *testing.T) 
 	// This is the exact configuration a `gw start` with browser flags
 	// would persist to the launch profile.
 	restartCfg := serve.GatewayConfig{
-		Posture:           g8econfig.PostureConsensus,
-		HTTPPort:          8080,
-		HTTPSPort:         8443,
-		LogLevel:          "info",
-		CertIdentityMode:  "full",
-		PasskeyRpID:       "your-app.lovable.app",
-		PasskeyRpName:     "g8e",
-		PasskeyRpOrigins:  []string{"https://your-app.lovable.app"},
-		AllowedOrigins:    []string{"https://your-app.lovable.app"},
-		PublicBaseURL:     "https://your-app.lovable.app",
-		ConsensusID:       "trib-001",
-		ConsensusURL:      "https://localhost:8443/consensus/v1/deliberate",
-		MCPDownstreamURL:  "http://downstream:3000/mcp",
-		A2ADownstreamURL:  "http://downstream:3001/a2a",
-		RateLimitRPS:      5.0,
-		RateLimitBurst:    10,
-		DoctrineDir:       "/etc/g8e/doctrine",
+		Posture:          g8econfig.PostureConsensus,
+		HTTPPort:         8080,
+		HTTPSPort:        8443,
+		LogLevel:         "info",
+		CertIdentityMode: "full",
+		PasskeyRpID:      "your-app.lovable.app",
+		PasskeyRpName:    "g8e",
+		PasskeyRpOrigins: []string{"https://your-app.lovable.app"},
+		AllowedOrigins:   []string{"https://your-app.lovable.app"},
+		PublicBaseURL:    "https://your-app.lovable.app",
+		ConsensusID:      "trib-001",
+		ConsensusURL:     "https://localhost:8443/consensus/v1/deliberate",
+		MCPDownstreamURL: "http://downstream:3000/mcp",
+		A2ADownstreamURL: "http://downstream:3001/a2a",
+		RateLimitRPS:     5.0,
+		RateLimitBurst:   10,
+		DoctrineDir:      "/etc/g8e/doctrine",
 	}
 
 	assert.NotEmpty(t, restartCfg.AllowedOrigins, RegressionMarkerAfterFix)

@@ -90,12 +90,15 @@ def _raw_artifact(evidence: Any, run_id: str, attempt_id: str) -> EvidenceArtifa
     )
 
 
-def _direct_stage(wire: dict[str, Any], run_id: str, attempt_id: str) -> StageObservation:
+def _direct_stage(
+    wire: dict[str, Any], run_id: str, attempt_id: str, task_id: str
+) -> StageObservation:
     usage_reported = wire.get("usage_reported") is True
     return StageObservation(
         stage_id=f"{attempt_id}:direct:1",
         attempt_id=attempt_id,
         run_id=run_id,
+        task_id=task_id,
         kind=StageKind.MODEL_INFERENCE,
         agent_role="direct",
         provider=str(wire.get("provider") or ""),
@@ -117,7 +120,7 @@ def _direct_stage(wire: dict[str, Any], run_id: str, attempt_id: str) -> StageOb
 
 
 def _chat_stages(
-    evidence: Any, run_id: str, attempt_id: str
+    evidence: Any, run_id: str, attempt_id: str, task_id: str
 ) -> tuple[list[StageObservation], int, tuple[int, int, int, int]]:
     stages: list[StageObservation] = []
     declared_primary_calls = 0
@@ -139,6 +142,7 @@ def _chat_stages(
                     stage_id=f"{attempt_id}:sse:{event.id or index}:scrub:{scrub_index}",
                     attempt_id=attempt_id,
                     run_id=run_id,
+                    task_id=task_id,
                     kind=StageKind.SCRUBBING,
                     agent_role="sentinel",
                     monotonic_start=float(observation.get("monotonic_start") or 0.0),
@@ -171,6 +175,7 @@ def _chat_stages(
                     stage_id=f"{attempt_id}:sse:{event.id or index}:call:{call_index}",
                     attempt_id=attempt_id,
                     run_id=run_id,
+                    task_id=task_id,
                     kind=StageKind.MODEL_INFERENCE,
                     agent_role=str(call.get("agent_role") or data.get("agent_mode") or "primary"),
                     provider=str(call.get("provider") or ""),
@@ -215,6 +220,7 @@ def _chat_stages(
                     stage_id=f"{attempt_id}:sse:{event.id or index}:call:{call_index}",
                     attempt_id=attempt_id,
                     run_id=run_id,
+                    task_id=task_id,
                     kind=model_call_event_kinds[event_type],
                     agent_role=str(call.get("agent_role") or "auditor"),
                     provider=str(call.get("provider") or ""),
@@ -269,6 +275,7 @@ def _chat_stages(
                 stage_id=f"{attempt_id}:sse:{event.id or index}",
                 attempt_id=attempt_id,
                 run_id=run_id,
+                task_id=task_id,
                 kind=kind,
                 agent_role=role,
                 provider=str(data.get("provider") or ""),
@@ -348,6 +355,7 @@ def _receipt_stages(
     receipt: ActionReceipt,
     run_id: str,
     attempt_id: str,
+    task_id: str,
     receipt_verified: bool,
 ) -> list[StageObservation]:
     kinds = {
@@ -412,6 +420,7 @@ def _receipt_stages(
             stage_id=f"{attempt_id}:receipt:{receipt.transaction_id}:persistence:final",
             attempt_id=attempt_id,
             run_id=run_id,
+            task_id=task_id,
             kind=StageKind.RECEIPT_PERSISTENCE,
             timing_source="signed_persistence_attestation",
             decision="verified" if receipt_verified else "unverified",
@@ -426,13 +435,14 @@ def _receipt_stages(
 
 
 def _grading_stages(
-    model_calls: list[ModelCallTelemetry], run_id: str, attempt_id: str
+    model_calls: list[ModelCallTelemetry], run_id: str, attempt_id: str, task_id: str
 ) -> list[StageObservation]:
     return [
         StageObservation(
             stage_id=f"{attempt_id}:grading:{index}",
             attempt_id=attempt_id,
             run_id=run_id,
+            task_id=task_id,
             kind=StageKind.GRADING,
             agent_role=call.agent_role,
             provider=call.provider,
@@ -463,12 +473,13 @@ def normalize_attempt_evidence(
     evidence: Any,
     run_id: str,
     attempt_id: str,
+    task_id: str,
     receipts: list[ReceiptEvidence] | None = None,
     grading_model_calls: list[ModelCallTelemetry] | None = None,
 ) -> NormalizedAttemptEvidence:
     wire = evidence.model_dump()
     if wire.get("binding") == "direct_provider":
-        stages = [_direct_stage(wire, run_id, attempt_id)]
+        stages = [_direct_stage(wire, run_id, attempt_id, task_id)]
         raw_evidence = None
         expected_call_count = 1
         reported_tokens = (
@@ -478,7 +489,9 @@ def normalize_attempt_evidence(
             _int(wire.get("cache_token_count")),
         )
     else:
-        stages, expected_call_count, reported_tokens = _chat_stages(evidence, run_id, attempt_id)
+        stages, expected_call_count, reported_tokens = _chat_stages(
+            evidence, run_id, attempt_id, task_id
+        )
         raw_evidence = _raw_artifact(evidence, run_id, attempt_id)
         stages = [
             stage.model_copy(update={"output_artifact_hash": stage.output_artifact_hash or raw_evidence.index.sha256})
@@ -490,10 +503,11 @@ def normalize_attempt_evidence(
                 receipt.action_receipt,
                 run_id,
                 attempt_id,
+                task_id,
                 receipt.verified,
             )
         )
-    grading_stages = _grading_stages(grading_model_calls or [], run_id, attempt_id)
+    grading_stages = _grading_stages(grading_model_calls or [], run_id, attempt_id, task_id)
     stages.extend(grading_stages)
     expected_call_count += len(grading_stages)
     reported_tokens = (

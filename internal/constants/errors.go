@@ -146,10 +146,10 @@ var (
 	// Launch profile errors. The launch profile is the complete validated
 	// configuration persisted after every successful managed background
 	// `gw start` and read by `gw restart` to reconstruct the prior launch.
-	ErrLaunchProfileMissing           = errors.New("launch profile not found")
-	ErrLaunchProfileCorrupted         = errors.New("launch profile is corrupted")
+	ErrLaunchProfileMissing            = errors.New("launch profile not found")
+	ErrLaunchProfileCorrupted          = errors.New("launch profile is corrupted")
 	ErrLaunchProfileVersionUnsupported = errors.New("launch profile version is unsupported")
-	ErrLaunchProfileInvalid           = errors.New("launch profile is invalid")
+	ErrLaunchProfileInvalid            = errors.New("launch profile is invalid")
 
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")
@@ -585,6 +585,15 @@ var (
 	ErrSystemTrustNoChainToAnchor    = errors.New("no certificate in the bundle chains to the identified root anchor")
 	ErrSystemTrustStaleRemovalDenied = errors.New("user declined removal of stale trust anchors")
 	ErrBrowserRestartDeclined        = errors.New("user declined to restart browser before passkey ceremony")
+
+	// Frontend connection trust and verification errors. These cover the
+	// distinct failure modes of the gw connect trust and verification flow.
+	ErrHTTPSCertificateVerification = errors.New("HTTPS certificate verification failed")
+	ErrCORSPreflightRejected        = errors.New("CORS preflight rejected or mismatched")
+	ErrManualBrowserTrustRequired   = errors.New("manual browser trust installation required")
+	ErrGatewayReadinessTimeout      = errors.New("gateway readiness check timed out")
+	ErrGatewayConfigMismatch        = errors.New("running gateway configuration does not match the requested configuration")
+	ErrManagedRestartDeclined       = errors.New("user declined the required managed gateway restart")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")

@@ -89,6 +89,7 @@ const (
 	HeaderOperatorID                    = "X-G8E-Operator-ID"
 	HeaderOperatorSessionID             = "X-G8E-Operator-Session-ID"
 	HeaderOrganizationID                = "X-G8E-Organization-ID"
+	HeaderOrigin                        = "Origin"
 	HeaderPragma                        = "Pragma"
 	HeaderRequestID                     = "X-G8E-Request-ID"
 	HeaderRequestedWith                 = "X-Requested-With"

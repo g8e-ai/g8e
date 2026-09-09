@@ -851,22 +851,17 @@ func (c *EnrollmentCoordinator) installSystemTrust(ctx context.Context, artifact
 		bundlePEM = []byte(artifacts.TrustBundlePEM)
 	}
 
-	// Step 2: Extract root anchors + primary fingerprint via the pure
-	// platform helpers. This is the KEEP fingerprint — it MUST come from
-	// the live bundle when discovery succeeded; the R5 warning above fires
-	// when it cannot.
-	rootAnchors, err := platform.ExtractRootAnchors(bundlePEM, c.clock)
+	// Step 2: Validate the bundle via the shared ValidateTrustBundle
+	// function so root selection, chain verification, and fingerprint
+	// formatting have one implementation. This is the KEEP fingerprint —
+	// it MUST come from the live bundle when discovery succeeded; the R5
+	// warning above fires when it cannot.
+	bundleResult, err := ValidateTrustBundle(bundlePEM, c.clock)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, err)
+		return false, err
 	}
-	if len(rootAnchors) == 0 {
-		return false, constants.ErrSystemTrustInvalidAnchor
-	}
-	if vErr := platform.VerifyRootUsable(rootAnchors, bundlePEM, c.clock); vErr != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrSystemTrustInvalidAnchor, vErr)
-	}
-	primary := rootAnchors[0]
-	keepFingerprint := platform.CertFingerprint(primary)
+	primary := bundleResult.PrimaryRoot
+	keepFingerprint := bundleResult.Fingerprint
 	// Prefer the live fingerprint from discovery (the source of truth) over
 	// the bundle's own fingerprint. When discovery was unreachable,
 	// keepFingerprint stays as the bundle's own fingerprint — this preserves

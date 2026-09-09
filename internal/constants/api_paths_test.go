@@ -49,8 +49,8 @@ func TestObserveAPIPathsJSONSync(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &raw))
 
 	cases := []struct {
-		jsonKey   string
-		goValue   string
+		jsonKey string
+		goValue string
 	}{
 		{"observe_prefix", APIPaths.ObservePrefix},
 		{"observe_bootstrap", APIPaths.ObserveBootstrap},

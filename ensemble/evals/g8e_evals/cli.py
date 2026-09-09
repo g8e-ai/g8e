@@ -1348,6 +1348,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 response.chat_evidence,
                 run_id,
                 attempt_id,
+                task.id,
                 receipts=response.receipts,
                 grading_model_calls=score.model_calls,
             )

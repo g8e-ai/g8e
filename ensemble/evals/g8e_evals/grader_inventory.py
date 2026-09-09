@@ -1031,9 +1031,9 @@ validate_inventory_against_registries()
 
 
 __all__ = [
+    "GRADER_INVENTORY",
     "ConformanceCaseCategory",
     "ConformanceExclusion",
-    "GRADER_INVENTORY",
     "GraderInventoryEntry",
     "InventoryDriftError",
     "ProducerPath",

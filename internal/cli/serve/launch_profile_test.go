@@ -18,38 +18,38 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/v2/internal/constants"
 	g8econfig "github.com/g8e-ai/g8e/v2/internal/config"
+	"github.com/g8e-ai/g8e/v2/internal/constants"
 )
 
 // validTestGatewayConfig returns a GatewayConfig with every field populated
 // to non-default values so round-trip tests can detect field loss.
 func validTestGatewayConfig() GatewayConfig {
 	return GatewayConfig{
-		Posture:            g8econfig.PostureConsensus,
-		HTTPPort:           8080,
-		HTTPSPort:          8443,
-		DataDir:            "/data",
-		PKIDir:             "/pki",
-		SecretsDir:         "/secrets",
-		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
-		PasskeyRpID:        "your-app.lovable.app",
-		PasskeyRpName:      "g8e",
-		PasskeyRpOrigins:   []string{"https://your-app.lovable.app"},
-		RateLimitRPS:       5.0,
-		RateLimitBurst:     10,
-		LogLevel:           "info",
-		CertIdentityMode:   "full",
+		Posture:             g8econfig.PostureConsensus,
+		HTTPPort:            8080,
+		HTTPSPort:           8443,
+		DataDir:             "/data",
+		PKIDir:              "/pki",
+		SecretsDir:          "/secrets",
+		VaultDir:            "/vault",
+		VaultKeyPath:        "/vault/key",
+		PasskeyRpID:         "your-app.lovable.app",
+		PasskeyRpName:       "g8e",
+		PasskeyRpOrigins:    []string{"https://your-app.lovable.app"},
+		RateLimitRPS:        5.0,
+		RateLimitBurst:      10,
+		LogLevel:            "info",
+		CertIdentityMode:    "full",
 		NetworkIdentityFile: "/tmp/ephemeral-identity.json",
-		ConsensusID:        "trib-001",
-		ConsensusURL:       "https://localhost:8443/consensus/v1/deliberate",
-		ConsensusBootstrap: "/etc/g8e/consensus-bootstrap.json",
-		MCPDownstreamURL:   "http://downstream:3000/mcp",
-		A2ADownstreamURL:   "http://downstream:3001/a2a",
-		PublicBaseURL:      "https://your-app.lovable.app",
-		AllowedOrigins:     []string{"https://your-app.lovable.app"},
-		DoctrineDir:        "/etc/g8e/doctrine",
+		ConsensusID:         "trib-001",
+		ConsensusURL:        "https://localhost:8443/consensus/v1/deliberate",
+		ConsensusBootstrap:  "/etc/g8e/consensus-bootstrap.json",
+		MCPDownstreamURL:    "http://downstream:3000/mcp",
+		A2ADownstreamURL:    "http://downstream:3001/a2a",
+		PublicBaseURL:       "https://your-app.lovable.app",
+		AllowedOrigins:      []string{"https://your-app.lovable.app"},
+		DoctrineDir:         "/etc/g8e/doctrine",
 	}
 }
 
@@ -104,7 +104,7 @@ func TestWriteLaunchProfile_PrivatePermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	if runtime.GOOS != "windows" {
-		assert.Equal(t, constants.PermFilePrivate, info.Mode().Perm(),
+		assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm(),
 			"launch profile must have private permissions (0600)")
 	}
 }
@@ -283,6 +283,9 @@ func TestValidateLaunchProfile_AcceptsAllValidPostures(t *testing.T) {
 	for _, p := range validPostures {
 		cfg := validTestGatewayConfig()
 		cfg.Posture = p
+		// ValidateLaunchProfile validates a persisted profile, which
+		// always has NetworkIdentityFile cleared by WriteLaunchProfile.
+		cfg.NetworkIdentityFile = ""
 		profile := GatewayLaunchProfile{Version: LaunchProfileVersion, Config: cfg}
 		assert.NoError(t, ValidateLaunchProfile(profile), "posture %s should be valid", p)
 	}

@@ -887,4 +887,3 @@ func TestCheckPortAvailable(t *testing.T) {
 		t.Error("expected error for port in use")
 	}
 }
-

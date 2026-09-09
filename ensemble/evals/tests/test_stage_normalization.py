@@ -45,7 +45,7 @@ def test_direct_provider_call_normalizes_to_one_model_stage():
         )
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert len(normalized.stages) == 1
     stage = normalized.stages[0]
@@ -84,7 +84,7 @@ def test_chat_trail_normalizes_primary_and_tribunal_model_stages():
         agent_trail=trail,
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert [(stage.kind, stage.agent_role) for stage in normalized.stages] == [
         (StageKind.TRIBUNAL_GENERATION, "axiom"),
@@ -114,7 +114,7 @@ def test_chat_trail_normalizes_failed_tribunal_generation_call():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert len(normalized.stages) == 1
     assert normalized.stages[0].kind == StageKind.TRIBUNAL_GENERATION
@@ -143,7 +143,7 @@ def test_chat_trail_normalizes_each_auditor_retry_as_a_model_stage():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert len(normalized.stages) == 2
     assert all(stage.kind == StageKind.TRIBUNAL_AUDITOR for stage in normalized.stages)
@@ -173,7 +173,7 @@ def test_chat_trail_normalizes_failed_auditor_call():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert len(normalized.stages) == 1
     assert normalized.stages[0].kind == StageKind.TRIBUNAL_AUDITOR
@@ -201,7 +201,7 @@ def test_chat_trail_normalizes_each_warden_call_as_a_grading_stage():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert len(normalized.stages) == 2
     assert all(stage.kind == StageKind.GRADING for stage in normalized.stages)
@@ -230,7 +230,7 @@ def test_chat_trail_normalizes_authoritative_scrubbing_observations():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     scrubbing_stages = [stage for stage in normalized.stages if stage.kind == StageKind.SCRUBBING]
     assert len(scrubbing_stages) == 1
@@ -319,6 +319,7 @@ def test_signed_receipt_normalizes_authoritative_deterministic_stage_evidence():
         evidence,
         run_id="run",
         attempt_id="attempt",
+        task_id="task-1",
         receipts=[ReceiptEvidence(action_receipt=receipt, verified=True)],
     )
 
@@ -394,6 +395,7 @@ def test_multiple_receipts_normalize_every_deterministic_and_persistence_stage()
         evidence,
         run_id="run",
         attempt_id="attempt",
+        task_id="task-1",
         receipts=receipts,
     )
 
@@ -437,6 +439,7 @@ def test_receipt_normalization_rejects_unknown_deterministic_stage_enums(kind, o
             evidence,
             run_id="run",
             attempt_id="attempt",
+            task_id="task-1",
             receipts=[ReceiptEvidence(action_receipt=receipt, verified=False)],
         )
 
@@ -465,6 +468,7 @@ def test_receipt_normalization_rejects_unknown_parent_stage():
             evidence,
             run_id="run",
             attempt_id="attempt",
+            task_id="task-1",
             receipts=[ReceiptEvidence(action_receipt=receipt, verified=False)],
         )
 
@@ -502,6 +506,7 @@ def test_eval_judge_calls_are_attached_to_stages_and_reconciliation():
         evidence,
         run_id="run",
         attempt_id="attempt",
+        task_id="task-1",
         grading_model_calls=judge_calls,
     )
 
@@ -538,7 +543,7 @@ def test_chat_usage_reconciliation_flags_token_total_mismatch():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert normalized.usage.reconciled is False
     assert normalized.usage.input_token_delta == -2
@@ -555,7 +560,7 @@ def test_direct_provider_missing_usage_is_not_treated_as_reported_zero():
         )
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     stage = normalized.stages[0]
     assert stage.input_tokens is None
@@ -581,7 +586,7 @@ def test_direct_provider_reported_zero_usage_remains_exact():
         )
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     stage = normalized.stages[0]
     assert stage.input_tokens == 0
@@ -610,7 +615,7 @@ def test_chat_usage_reconciliation_accounts_for_cache_tokens():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert normalized.stages[0].cache_tokens == 7
     assert normalized.usage.reported_cache_tokens == 7
@@ -637,7 +642,7 @@ def test_chat_usage_reconciliation_flags_uninstrumented_calls():
         ],
     )
 
-    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt")
+    normalized = normalize_attempt_evidence(evidence, run_id="run", attempt_id="attempt", task_id="task-1")
 
     assert normalized.usage.reconciled is False
     assert normalized.usage.expected_call_count == 2

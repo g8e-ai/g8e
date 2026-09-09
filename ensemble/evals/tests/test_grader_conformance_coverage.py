@@ -188,7 +188,7 @@ def test_conformance_test_file_exists():
 
 
 def test_every_authoritative_grader_has_conformance_tests():
-    for key, entry in GRADER_INVENTORY.items():
+    for entry in GRADER_INVENTORY.values():
         if entry.producer_path == ProducerPath.PARTIAL_EXTERNAL:
             continue
         assert entry.grader_id in _COVERAGE, (
@@ -199,7 +199,7 @@ def test_every_authoritative_grader_has_conformance_tests():
 @pytest.mark.parametrize("category", list(ConformanceCaseCategory))
 def test_every_authoritative_grader_covers_category(category: ConformanceCaseCategory):
     gaps: list[str] = []
-    for key, entry in GRADER_INVENTORY.items():
+    for entry in GRADER_INVENTORY.values():
         if entry.producer_path == ProducerPath.PARTIAL_EXTERNAL:
             continue
         required = entry.required_categories()
@@ -217,7 +217,7 @@ def test_every_authoritative_grader_covers_category(category: ConformanceCaseCat
 def test_conformance_coverage_summary():
     """Print a coverage summary. Fails if any required category is uncovered."""
     gaps: list[str] = []
-    for key, entry in GRADER_INVENTORY.items():
+    for entry in GRADER_INVENTORY.values():
         if entry.producer_path == ProducerPath.PARTIAL_EXTERNAL:
             continue
         required = entry.required_categories()

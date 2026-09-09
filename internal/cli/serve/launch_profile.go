@@ -36,7 +36,7 @@ const LaunchProfileVersion = 1
 // persisting a stale path would point at a file that no longer exists.
 type GatewayLaunchProfile struct {
 	Version int           `json:"version"`
-	Config GatewayConfig `json:"config"`
+	Config  GatewayConfig `json:"config"`
 }
 
 // launchProfileRelPath returns the runtime-relative path to the launch
