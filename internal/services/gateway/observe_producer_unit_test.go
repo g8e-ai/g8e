@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -270,6 +269,3 @@ func TestErrorConstants_ObserveProducerErrorsAreDistinct(t *testing.T) {
 	assert.True(t, errors.Is(constants.ErrObserveStaleUpdate, constants.ErrObserveStaleUpdate))
 	assert.False(t, errors.Is(constants.ErrObserveInvalidTransition, constants.ErrObserveStaleUpdate))
 }
-
-// keep time import used for future expansion of timestamp-based assertions.
-var _ = time.Time{}

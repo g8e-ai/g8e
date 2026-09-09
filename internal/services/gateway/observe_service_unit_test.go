@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/constants"
-	"github.com/g8e-ai/g8e/v2/internal/models"
 	"github.com/g8e-ai/g8e/v2/internal/response"
 	"github.com/g8e-ai/g8e/v2/internal/testutil"
 )
@@ -272,9 +271,6 @@ func mustEncodeBase64(t *testing.T, b []byte) string {
 	t.Helper()
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-
-// keep models import used for future expansion of typed assertions.
-var _ = models.ObserveBootstrapSnapshot{}
 
 func TestRouteAuthRegistry_ObservePrefixClassifiedWebSession(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)

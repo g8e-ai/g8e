@@ -2,7 +2,7 @@
 
 - Run ID: `run-empty-1`
 - Analysis schema version: `1.1.0`
-- Analysis computation version: `1.1.0`
+- Analysis computation version: `1.2.0`
 
 ## Input Summary
 

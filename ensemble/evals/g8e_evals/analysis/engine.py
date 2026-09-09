@@ -43,11 +43,11 @@ from g8e_evals.analysis.canonical import (
     ReceiptCoverageAnalysis,
     canonical_model_json,
 )
-from g8e_evals.analysis.non_inferiority import get_non_inferiority_margin
 from g8e_evals.arms import ARM_DEFINITIONS
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
     AggregationMethod,
+    ArmRequirement,
     DenominatorKind,
     EligibilityKind,
     MetricDefinition,
@@ -282,12 +282,28 @@ def _task_assertion_count(task: TaskDefinition, task_field: str | None) -> int:
     return 0
 
 
+def _arm_satisfies_requirement(attempt: AttemptRecord, requirement: ArmRequirement) -> bool:
+    """Check whether an attempt's arm satisfies the metric's arm requirement."""
+    if requirement == ArmRequirement.ANY:
+        return True
+    arm_def = ARM_DEFINITIONS.get(attempt.arm_id)
+    if arm_def is None:
+        return False
+    if requirement == ArmRequirement.GOVERNED:
+        return arm_def.uses_gateway
+    if requirement == ArmRequirement.NOTARY:
+        return attempt.arm_id.value == "notary"
+    return False
+
+
 def _metric_is_eligible(
     task: TaskDefinition,
     attempt: AttemptRecord,
     definition: MetricDefinition,
 ) -> bool:
     contract = definition.applicability
+    if not _arm_satisfies_requirement(attempt, contract.arm_requirement):
+        return False
     if contract.eligibility == EligibilityKind.TASK_SUITE:
         return task.suite_id == contract.suite_id
     if contract.eligibility == EligibilityKind.COMPLETED_ANSWER:
@@ -375,15 +391,33 @@ def _compute_metric_results(
             verification_counts: dict[str, int] = defaultdict(int)
             evidence_ref_count = 0
             obs_ids: list[str] = []
+            accepted_non_missing_obs: list[MetricObservation] = []
 
             for attempt in arm_attempts:
                 obs = obs_by_attempt.get(attempt.attempt_id)
+                task = task_by_id[attempt.task_id]
+                contract_eligible = _metric_is_eligible(task, attempt, definition)
                 if obs is not None:
-                    if obs.eligible:
+                    if obs.eligible and not contract_eligible:
+                        # Producer marked eligible=True but the typed contract
+                        # says the attempt is ineligible (wrong arm, wrong suite,
+                        # missing assertions, etc.). Reject the producer's flag;
+                        # the contract is the authority.
+                        not_eligible_count += 1
+                    elif not obs.eligible and contract_eligible:
+                        # Producer marked eligible=False but the typed contract
+                        # says the attempt is eligible. The producer cannot
+                        # remove an assigned attempt from the denominator by
+                        # setting a flag. Override to eligible+missing.
+                        eligible_count += 1
+                        missing_count += 1
+                        denominator += _missing_denominator_contribution(task, definition)
+                    elif obs.eligible:
                         eligible_count += 1
                         denominator += obs.denominator_contribution
                         if obs.value is not None:
                             numerator += obs.value * obs.denominator_contribution
+                            accepted_non_missing_obs.append(obs)
                         else:
                             missing_count += 1
                         verification_counts[obs.verification_status.value] += 1
@@ -398,16 +432,15 @@ def _compute_metric_results(
                     eligible_count += 1
                     missing_count += 1
                     denominator += _missing_denominator_contribution(
-                        task_by_id[attempt.task_id], definition,
+                        task, definition,
                     )
 
             # Compute aggregate value
             # When all eligible observations are missing, the value is None
             # (not 0.0) to distinguish "no data" from "measured zero".
             value: float | None = None
-            non_missing_obs = [obs for obs in arm_obs if obs.eligible and obs.value is not None]
-            non_missing_values = [obs.value for obs in non_missing_obs if obs.value is not None]
-            if denominator > 0 and non_missing_obs:
+            non_missing_values = [obs.value for obs in accepted_non_missing_obs if obs.value is not None]
+            if denominator > 0 and accepted_non_missing_obs:
                 if definition.aggregation == AggregationMethod.MEAN:
                     value = _round(sum(non_missing_values) / len(non_missing_values))
                 elif definition.aggregation in (AggregationMethod.PROPORTION, AggregationMethod.RATE, AggregationMethod.BOOLEAN_FRACTION):
@@ -610,15 +643,17 @@ def _compute_gate_decisions(
         definition = DEFAULT_METRIC_REGISTRY.get(mr.metric_id, mr.metric_version)
         threshold = definition.practical_threshold
         threshold_value = threshold.value if threshold is not None else None
-        ni_margin_entry = get_non_inferiority_margin(mr.metric_id, mr.metric_version)
-        ni_margin = ni_margin_entry.margin if ni_margin_entry is not None else None
+        ni_margin = definition.non_inferiority_margin
 
-        if mr.denominator == 0:
+        if mr.eligible_count == 0 and mr.missing_count == 0:
             status = GateDecisionStatus.NOT_APPLICABLE
             reason = "No eligible attempts for this metric and arm."
         elif mr.missing_count > 0:
             status = GateDecisionStatus.INSUFFICIENT_DATA
             reason = f"{mr.missing_count} of {mr.eligible_count} eligible attempts are missing observations."
+        elif mr.denominator == 0:
+            status = GateDecisionStatus.NOT_APPLICABLE
+            reason = "Denominator is zero for this metric and arm."
         elif threshold is None:
             status = GateDecisionStatus.UNSUPPORTED
             reason = "No practical threshold defined; calibration pending."
@@ -822,9 +857,9 @@ def _compute_paired_comparisons(
         p_values_for_correction: list[float] = [p if p is not None else 1.0 for p in p_values]
         holm_results = statistics.holm_correction(p_values_for_correction)
 
-        # Look up non-inferiority margin for this metric
-        ni_margin_entry = get_non_inferiority_margin(metric_id, metric_version)
-        ni_margin = ni_margin_entry.margin if ni_margin_entry is not None else None
+        # Look up non-inferiority margin from the metric definition
+        ni_definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
+        ni_margin = ni_definition.non_inferiority_margin
 
         for rc, (rank, corrected_p) in zip(raw_comparisons, holm_results, strict=True):
             comparisons.append(PairedComparison(
@@ -962,14 +997,14 @@ def compute_bridge_run_comparison(
             abs_delta = None
 
         # Gate decision: fail if a release-blocker metric regresses
-        ni_entry = get_non_inferiority_margin(metric_id, metric_version)
         definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
+        ni_margin = definition.non_inferiority_margin
 
         if old_val is None or new_val is None:
             status = GateDecisionStatus.INSUFFICIENT_DATA
             reason = "Metric present in only one analysis version."
-        elif ni_entry is not None and abs_delta is not None:
-            margin = ni_entry.margin
+        elif ni_margin is not None and abs_delta is not None:
+            margin = ni_margin
             direction = definition.direction
             if direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
                 # Regression = new < old by more than margin

@@ -736,14 +736,8 @@ func clampLimit(limit int) int {
 // query.
 func userFilter(userID string) []models.DocFilter {
 	return []models.DocFilter{
-		{Field: "user_id", Op: "==", Value: mustJSONString(userID)},
+		{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", userID))},
 	}
-}
-
-// mustJSONString encodes a string as a JSON string value.
-func mustJSONString(s string) json.RawMessage {
-	b, _ := json.Marshal(s)
-	return b
 }
 
 // sortRuns sorts run projections by observed_at DESC, run_id DESC in place.

@@ -2520,6 +2520,124 @@ class HumanWaitObservation(BaseModel):
         return self
 
 
+class GovernanceEnvelopeRecord(BaseModel):
+    """Immutable record of one governance envelope routed through the gateway.
+
+    Captures the envelope hash, layer disposition, and signing key used for
+    one action within an attempt. The envelope hash pins the exact
+    envelope content so that any mutation is detectable.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    envelope_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    envelope_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    layer_disposition: str = Field(min_length=1)
+    signer_key_id: str = Field(min_length=1)
+    created_at: datetime
+
+
+class PersistenceAttestation(BaseModel):
+    """Attestation that evidence was persisted to a durable store.
+
+    Records the persistence target, content hash, and persistence proof
+    for one piece of evidence within an attempt.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    attestation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    persistence_target: str = Field(min_length=1)
+    persisted_at: datetime
+    persisted_by: str = Field(min_length=1)
+
+
+class CommitmentAttestation(BaseModel):
+    """Attestation of a commitment hash for one action within an attempt.
+
+    Records the commitment hash, prior commitment hash (for chaining), and
+    the signer key that produced the commitment.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    attestation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    commitment_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    prior_commitment_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    signer_key_id: str = Field(min_length=1)
+    committed_at: datetime
+
+
+class AuditLinkRecord(BaseModel):
+    """One link in an audit chain for an attempt.
+
+    Records the audit record ID, prior audit record ID (for chaining),
+    and the audit entry hash so that the chain can be verified
+    independently.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    audit_link_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    audit_record_id: str = Field(min_length=1)
+    prior_audit_record_id: str | None = None
+    audit_entry_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    recorded_at: datetime
+
+
+class PriceTableEntry(BaseModel):
+    """One typed price entry binding a provider and model to a unit price.
+
+    The price table is an immutable input to the canonical analysis so
+    that ``provider_cost_usd`` can be computed deterministically from
+    observed token usage and the declared price table.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    input_token_price_usd: float = Field(ge=0.0)
+    output_token_price_usd: float = Field(ge=0.0)
+    thinking_token_price_usd: float = Field(default=0.0, ge=0.0)
+    cache_token_price_usd: float = Field(default=0.0, ge=0.0)
+    effective_at: datetime
+
+
+class TypedPriceTable(BaseModel):
+    """A typed price table binding provider/model identifiers to unit prices.
+
+    The price table is versioned and immutable. It is an input to the
+    canonical analysis so that cost metrics are deterministic and
+    reproducible.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    price_table_id: str = Field(min_length=1)
+    price_table_version: str = Field(min_length=1)
+    entries: list[PriceTableEntry] = Field(min_length=1)
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 

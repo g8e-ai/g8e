@@ -195,10 +195,10 @@ func NewObserveProducerService(docStore *DocumentStoreService, sseStore *SSEEven
 // if persistence fails (persist-before-publish).
 func (s *ObserveProducerService) UpdateAgentState(ctx context.Context, userID string, route SSERoute, payload models.AgentStatusUpdatedPayload) error {
 	if payload.AgentID == "" {
-		return fmt.Errorf("observe producer: update agent state: agent_id is required")
+		return fmt.Errorf("observe producer: update agent state: %w", constants.ErrObserveAgentIDRequired)
 	}
 	if payload.ObservedAt.IsZero() {
-		return fmt.Errorf("observe producer: update agent state: observed_at is required")
+		return fmt.Errorf("observe producer: update agent state: %w", constants.ErrObserveObservedAtRequired)
 	}
 	if err := route.validate(); err != nil {
 		return fmt.Errorf("observe producer: update agent state: %w", err)
@@ -268,10 +268,10 @@ func (s *ObserveProducerService) UpdateAgentState(ctx context.Context, userID st
 // persistence fails (persist-before-publish).
 func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID string, route SSERoute, payload models.RunStatusUpdatedPayload) error {
 	if payload.RunID == "" {
-		return fmt.Errorf("observe producer: update run state: run_id is required")
+		return fmt.Errorf("observe producer: update run state: %w", constants.ErrObserveRunIDRequired)
 	}
 	if payload.ObservedAt.IsZero() {
-		return fmt.Errorf("observe producer: update run state: observed_at is required")
+		return fmt.Errorf("observe producer: update run state: %w", constants.ErrObserveObservedAtRequired)
 	}
 	if err := route.validate(); err != nil {
 		return fmt.Errorf("observe producer: update run state: %w", err)
@@ -279,12 +279,13 @@ func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID stri
 
 	collection := marshaler.CollectionName(constants.CollectionObserveRuns)
 
-	// Read the existing projection to validate the transition and check
-	// staleness.
+	// Read the existing projection to validate the transition, check
+	// staleness, and preserve tasks and evidence-safe links.
 	existing, err := s.docStore.DocGet(collection, payload.RunID)
 	if err != nil {
 		return fmt.Errorf("observe producer: update run state: read existing: %w", err)
 	}
+	var existingProj *runProjection
 	if existing != nil {
 		var proj runProjection
 		if err := unmarshalDocData(existing, &proj); err != nil {
@@ -299,42 +300,31 @@ func (s *ObserveProducerService) UpdateRunState(ctx context.Context, userID stri
 		if payload.ObservedAt.Before(proj.ObservedAt) {
 			return fmt.Errorf("observe producer: update run state: %w: new observed_at %s before existing %s for run %s", constants.ErrObserveStaleUpdate, payload.ObservedAt.Format(time.RFC3339Nano), proj.ObservedAt.Format(time.RFC3339Nano), payload.RunID)
 		}
+		existingProj = &proj
 	}
 
 	// Persist the projection. Preserve tasks and evidence-safe links from
-	// the existing projection if the new payload does not supply them (the
-	// SSE payload carries summary fields, not the full detail).
-	var existingTasks []models.RunTask
-	var existingLinks []models.EvidenceSafeLink
-	var existingHasReceipts bool
-	var existingEvidenceCount int
-	if existing != nil {
-		var proj runProjection
-		if err := unmarshalDocData(existing, &proj); err == nil {
-			existingTasks = proj.Tasks
-			existingLinks = proj.EvidenceSafeLinks
-			existingHasReceipts = proj.HasReceipts
-			existingEvidenceCount = proj.EvidenceCount
-		}
-	}
-
+	// the existing projection (the SSE payload carries summary fields, not
+	// the full detail).
 	proj := runProjection{
-		UserID:            userID,
-		SchemaVersion:     constants.ObserveAPIReadModelSchemaVersion,
-		RunID:             payload.RunID,
-		RunKind:           payload.RunKind,
-		DisplayName:       payload.DisplayName,
-		Status:            payload.Status,
-		ActiveTaskID:      payload.ActiveTaskID,
-		CompletedTasks:    payload.CompletedTasks,
-		TotalTasks:        payload.TotalTasks,
-		Tasks:             existingTasks,
-		EvidenceSafeLinks: existingLinks,
-		StartedAt:         payload.StartedAt,
-		EndedAt:           payload.EndedAt,
-		HasReceipts:       existingHasReceipts,
-		EvidenceCount:     existingEvidenceCount,
-		ObservedAt:        payload.ObservedAt,
+		UserID:         userID,
+		SchemaVersion:  constants.ObserveAPIReadModelSchemaVersion,
+		RunID:          payload.RunID,
+		RunKind:        payload.RunKind,
+		DisplayName:    payload.DisplayName,
+		Status:         payload.Status,
+		ActiveTaskID:   payload.ActiveTaskID,
+		CompletedTasks: payload.CompletedTasks,
+		TotalTasks:     payload.TotalTasks,
+		StartedAt:      payload.StartedAt,
+		EndedAt:        payload.EndedAt,
+		ObservedAt:     payload.ObservedAt,
+	}
+	if existingProj != nil {
+		proj.Tasks = existingProj.Tasks
+		proj.EvidenceSafeLinks = existingProj.EvidenceSafeLinks
+		proj.HasReceipts = existingProj.HasReceipts
+		proj.EvidenceCount = existingProj.EvidenceCount
 	}
 	projBytes, err := json.Marshal(proj)
 	if err != nil {

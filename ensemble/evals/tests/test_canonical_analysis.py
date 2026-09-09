@@ -44,13 +44,18 @@ from g8e.operator.v1.operator_pb2 import (
 )
 from g8e_evals.schema import (
     AttemptRecord,
+    CanaryScrubbingAssertion,
+    FactualQAAssertion,
+    FactualQAMatchType,
     GraderReference,
     MetricObservation,
     PolicyOutcome,
     ReceiptObservation,
     RejectionLayer,
+    SecretDetectionAssertion,
     StageKind,
     StageObservation,
+    StateCollectionBoundary,
     TaskDefinition,
     TerminalStatus,
     VerificationStatus,
@@ -65,6 +70,10 @@ _ATTEMPT_ID = "attempt-test-1"
 def _make_task(
     task_id: str = _TASK_ID,
     expected_allow_block: PolicyOutcome | None = None,
+    graders: list[GraderReference] | None = None,
+    sensitive_canary_annotations: list[CanaryScrubbingAssertion] | None = None,
+    secret_detection_assertions: list[SecretDetectionAssertion] | None = None,
+    factual_qa_assertions: list[FactualQAAssertion] | None = None,
 ) -> TaskDefinition:
     return TaskDefinition(
         task_id=task_id,
@@ -74,9 +83,12 @@ def _make_task(
         prompt_length=10,
         expected_action_class="TEST_ACTION",
         compatible_arms=[Arm.DOCTRINE],
-        graders=[GraderReference(grader_id="receipt_integrity", grader_version="1.0.0")],
+        graders=graders if graders is not None else [GraderReference(grader_id="receipt_integrity", grader_version="1.0.0")],
         expected_allow_block_outcome=expected_allow_block,
         expected_rejection_layer=RejectionLayer.L1_DOCTRINE if expected_allow_block == PolicyOutcome.BLOCK else None,
+        sensitive_canary_annotations=sensitive_canary_annotations if sensitive_canary_annotations is not None else [],
+        secret_detection_assertions=secret_detection_assertions if secret_detection_assertions is not None else [],
+        factual_qa_assertions=factual_qa_assertions if factual_qa_assertions is not None else [],
     )
 
 
@@ -117,6 +129,38 @@ def _make_metric_obs(
         eligible=eligible,
         verification_status=verification_status,
         grader_class=definition.grader_class,
+    )
+
+
+def _canary_assertion(assertion_id: str = "canary-1") -> CanaryScrubbingAssertion:
+    return CanaryScrubbingAssertion(
+        assertion_id=assertion_id,
+        canary_sha256="a" * 64,
+        source="prompt",
+        input_artifact_sha256="b" * 64,
+        expected_output_artifact_sha256="c" * 64,
+        expected_scrub_type="api_key",
+        expected_occurrences=1,
+    )
+
+
+def _secret_detection_assertion(assertion_id: str = "sd-1") -> SecretDetectionAssertion:
+    return SecretDetectionAssertion(
+        assertion_id=assertion_id,
+        source="prompt",
+        input_artifact_sha256="d" * 64,
+        expected_sensitive_occurrences=1,
+        expected_benign_occurrences=0,
+        expected_sensitive_types=["api_key"],
+    )
+
+
+def _factual_qa_assertion(assertion_id: str = "fqa-1") -> FactualQAAssertion:
+    return FactualQAAssertion(
+        assertion_id=assertion_id,
+        match_type=FactualQAMatchType.EXACT_MATCH,
+        expected_answer="42",
+        collection_boundary=StateCollectionBoundary.OPERATOR_WORKLOAD,
     )
 
 
@@ -275,7 +319,7 @@ class TestCanonicalAnalysisModel:
 
     def test_analysis_versions_are_pinned(self) -> None:
         assert ANALYSIS_SCHEMA_VERSION == "1.1.0"
-        assert ANALYSIS_COMPUTATION_VERSION == "1.1.0"
+        assert ANALYSIS_COMPUTATION_VERSION == "1.2.0"
 
     def test_canonical_json_is_deterministic(self) -> None:
         """Two identical analyses produce byte-identical canonical JSON."""
@@ -619,7 +663,10 @@ class TestCanonicalAnalysisComputation:
 
     def test_gate_decision_unsupported_for_no_threshold(self) -> None:
         """A metric without a practical threshold gets UNSUPPORTED status."""
-        task = _make_task()
+        task = _make_task(
+            graders=[GraderReference(grader_id="secret_detection_precision", grader_version="1.0.0")],
+            secret_detection_assertions=[_secret_detection_assertion()],
+        )
         attempt = _make_attempt()
         obs = _make_metric_obs(metric_id="secret_detection_precision", value=0.8)
 
@@ -875,34 +922,34 @@ class TestCanonicalAnalysisComputation:
         """Multiple arms produce separate per-metric results."""
         task = _make_task()
         attempt_doctrine = _make_attempt(attempt_id="attempt-doctrine", arm_id=Arm.DOCTRINE)
-        attempt_direct = _make_attempt(attempt_id="attempt-direct", arm_id=Arm.DIRECT)
+        attempt_consensus = _make_attempt(attempt_id="attempt-consensus", arm_id=Arm.CONSENSUS)
         obs_doctrine = _make_metric_obs(
             metric_id="receipt_integrity",
             attempt_id="attempt-doctrine",
             arm_id=Arm.DOCTRINE,
             value=1.0,
         )
-        obs_direct = _make_metric_obs(
+        obs_consensus = _make_metric_obs(
             metric_id="receipt_integrity",
-            attempt_id="attempt-direct",
-            arm_id=Arm.DIRECT,
+            attempt_id="attempt-consensus",
+            arm_id=Arm.CONSENSUS,
             value=0.0,
         )
 
         analysis = compute_canonical_analysis(
             tasks=[task],
-            attempts=[attempt_doctrine, attempt_direct],
-            metric_observations=[obs_doctrine, obs_direct],
+            attempts=[attempt_doctrine, attempt_consensus],
+            metric_observations=[obs_doctrine, obs_consensus],
             receipts=[],
             stages=[],
             run_id=_RUN_ID,
         )
-        assert sorted(analysis.arm_ids) == ["direct", "doctrine"]
+        assert sorted(analysis.arm_ids) == ["consensus", "doctrine"]
         ri_results = [r for r in analysis.metric_results if r.metric_id == "receipt_integrity"]
         assert len(ri_results) == 2
         arm_values = {r.arm_id: r.value for r in ri_results}
         assert arm_values["doctrine"] == 1.0
-        assert arm_values["direct"] == 0.0
+        assert arm_values["consensus"] == 0.0
 
     def test_metric_results_sorted_by_metric_and_arm(self) -> None:
         """Metric results are sorted by (metric_id, arm_id)."""
@@ -961,7 +1008,10 @@ class TestCanonicalAnalysisComputation:
 
     def test_lower_is_better_threshold_check(self) -> None:
         """A lower-is-better metric with threshold 0.0 passes when value is 0.0."""
-        task = _make_task()
+        task = _make_task(
+            graders=[GraderReference(grader_id="model_boundary_raw_secret_rate", grader_version="1.0.0")],
+            sensitive_canary_annotations=[_canary_assertion()],
+        )
         attempt = _make_attempt()
         obs = _make_metric_obs(metric_id="model_boundary_raw_secret_rate", value=0.0)
 
@@ -980,7 +1030,10 @@ class TestCanonicalAnalysisComputation:
 
     def test_lower_is_better_threshold_fail(self) -> None:
         """A lower-is-better metric with threshold 0.0 fails when value is above 0.0."""
-        task = _make_task()
+        task = _make_task(
+            graders=[GraderReference(grader_id="model_boundary_raw_secret_rate", grader_version="1.0.0")],
+            sensitive_canary_annotations=[_canary_assertion()],
+        )
         attempt = _make_attempt()
         obs = _make_metric_obs(metric_id="model_boundary_raw_secret_rate", value=0.5)
 
@@ -2043,7 +2096,14 @@ class TestBridgeRunComparisons:
         run_id: str = "run-bridge-old",
     ) -> CanonicalEvalAnalysis:
         """Build a minimal canonical analysis with one metric result."""
-        task = _make_task()
+        # Set up the task with the right grader and assertions for the metric.
+        graders = [GraderReference(grader_id=metric_id, grader_version="1.0.0")]
+        task = _make_task(
+            graders=graders,
+            sensitive_canary_annotations=[_canary_assertion()] if metric_id == "model_boundary_raw_secret_rate" else None,
+            secret_detection_assertions=[_secret_detection_assertion()] if metric_id == "secret_detection_precision" else None,
+            factual_qa_assertions=[_factual_qa_assertion()] if metric_id == "factual_qa" else None,
+        )
         attempt = _make_attempt(
             attempt_id=f"attempt-{run_id}",
             arm_id=arm_id,

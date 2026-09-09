@@ -1283,6 +1283,9 @@ var (
 	ErrObserveDownloadNotFound = errors.New("observe: download not found")
 
 	// Observe producer errors (Phase 3: state projection persistence and SSE emission)
-	ErrObserveInvalidTransition = errors.New("observe: invalid state transition")
-	ErrObserveStaleUpdate       = errors.New("observe: stale update rejected")
+	ErrObserveInvalidTransition  = errors.New("observe: invalid state transition")
+	ErrObserveStaleUpdate        = errors.New("observe: stale update rejected")
+	ErrObserveAgentIDRequired    = errors.New("observe: agent_id is required")
+	ErrObserveRunIDRequired      = errors.New("observe: run_id is required")
+	ErrObserveObservedAtRequired = errors.New("observe: observed_at is required")
 )

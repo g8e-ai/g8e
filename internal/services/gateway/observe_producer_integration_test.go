@@ -409,7 +409,7 @@ func TestObserveProducer_UpdateAgentState_MissingAgentIDRejected(t *testing.T) {
 	}
 	err := producer.UpdateAgentState(ctx, "user-x", producerRoute("user-x"), payload)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "agent_id is required")
+	assert.True(t, errors.Is(err, constants.ErrObserveAgentIDRequired))
 }
 
 func TestObserveProducer_UpdateRunState_MissingRunIDRejected(t *testing.T) {
@@ -427,7 +427,7 @@ func TestObserveProducer_UpdateRunState_MissingRunIDRejected(t *testing.T) {
 	}
 	err := producer.UpdateRunState(ctx, "user-x", producerRoute("user-x"), payload)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "run_id is required")
+	assert.True(t, errors.Is(err, constants.ErrObserveRunIDRequired))
 }
 
 func TestObserveProducer_UpdateAgentState_InvalidRouteRejected(t *testing.T) {
@@ -446,7 +446,7 @@ func TestObserveProducer_UpdateAgentState_InvalidRouteRejected(t *testing.T) {
 	invalidRoute := SSERoute{UserID: "user-x"}
 	err := producer.UpdateAgentState(ctx, "user-x", invalidRoute, payload)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "sse route requires exactly one")
+	assert.True(t, errors.Is(err, constants.ErrGatewaySSERouteSessionRequired))
 }
 
 func TestObserveProducer_UpdateRunState_PreservesTasksAndEvidenceFromExisting(t *testing.T) {
