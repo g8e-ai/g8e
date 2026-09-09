@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Immutable eval bundle package: versioned manifest, path validation, and deterministic canonicalization."""
+"""Immutable eval bundle package: manifest, signing, production, and verification."""
 
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from g8e_evals.bundle.manifest import (
     ExternalReference,
     PrivacyClass,
 )
+from g8e_evals.bundle.produce import produce_bundle
 from g8e_evals.bundle.signing import (
     EVAL_SIGNING_ALGORITHM,
     EVAL_TRUST_SCOPE,
@@ -46,11 +47,22 @@ from g8e_evals.bundle.validation import (
     validate_no_missing_files,
     validate_no_orphans,
 )
+from g8e_evals.bundle.verify import (
+    VERIFICATION_REPORT_SCHEMA_VERSION,
+    LayerResult,
+    VerificationCancelled,
+    VerificationFailure,
+    VerificationFailureCode,
+    VerificationLayer,
+    VerificationReport,
+    verify_bundle,
+)
 
 __all__ = [
     "BUNDLE_MANIFEST_SCHEMA_VERSION",
     "EVAL_SIGNING_ALGORITHM",
     "EVAL_TRUST_SCOPE",
+    "VERIFICATION_REPORT_SCHEMA_VERSION",
     "ArtifactType",
     "BundleArtifactEntry",
     "BundleManifest",
@@ -65,16 +77,24 @@ __all__ = [
     "EvalTrustStore",
     "EvalTrustedKey",
     "ExternalReference",
+    "LayerResult",
     "PrivacyClass",
     "TrustStatus",
+    "VerificationCancelled",
+    "VerificationFailure",
+    "VerificationFailureCode",
+    "VerificationLayer",
+    "VerificationReport",
     "canonical_checksum_root_bytes",
     "canonical_manifest_bytes",
     "compute_checksum_root_hash",
     "compute_manifest_hash",
+    "produce_bundle",
     "sign_bundle",
     "validate_bundle_manifest",
     "validate_bundle_path",
     "validate_no_missing_files",
     "validate_no_orphans",
+    "verify_bundle",
     "verify_bundle_signature",
 ]

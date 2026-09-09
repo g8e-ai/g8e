@@ -62,3 +62,9 @@ ECONOMICS_PERFORMANCE_OBSERVATIONS_JSONL = "economics-performance-observations.j
 
 # Diagnostic-only artifacts (not release evidence)
 DIAGNOSTIC_RESULTS_JSONL = "diagnostic-results.jsonl"
+
+# Bundle metadata files (not listed as data artifacts in the manifest;
+# the verifier reads these as the verification contract, not as data)
+BUNDLE_MANIFEST_JSON = "bundle-manifest.json"
+CHECKSUM_ROOT_JSON = "checksum-root.json"
+BUNDLE_SIGNATURE_JSON = "bundle-signature.json"
