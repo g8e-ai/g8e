@@ -2255,7 +2255,7 @@ class TestPairedComparisons:
         from pydantic import ValidationError
         prereg = _make_preregistration({Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]})
         # Frozen models reject direct attribute mutation
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             prereg.baseline_arm_id = "doctrine"  # type: ignore[misc]
         # Extra fields are rejected at construction
         with pytest.raises(ValidationError):
