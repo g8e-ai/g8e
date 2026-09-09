@@ -151,7 +151,7 @@ class GraderReference(BaseModel):
     version, and class are bound together and cannot drift out of sync.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     grader_id: str = Field(min_length=1)
     grader_version: str = Field(min_length=1)
@@ -289,7 +289,7 @@ class EvidenceAccessPolicy(StrEnum):
 class ModelIdentity(BaseModel):
     """Exact model identification for one role in a run."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     role: str = Field(description="Agent role: primary, assistant, lite, etc.")
     provider: str = Field(description="Provider identifier: openai, anthropic, ollama, etc.")
@@ -303,7 +303,7 @@ class ModelIdentity(BaseModel):
 class RoleToModelMapping(BaseModel):
     """Mapping from agent role to exact model identity."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     primary: ModelIdentity | None = None
     assistant: ModelIdentity | None = None
@@ -314,7 +314,7 @@ class RoleToModelMapping(BaseModel):
 class SamplingSettings(BaseModel):
     """Sampling configuration declared for the run."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     max_output_tokens: int | None = None
     top_p: float | None = None
@@ -327,7 +327,7 @@ class SamplingSettings(BaseModel):
 class StackEnvironment(BaseModel):
     """Hardware and runtime environment metadata."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     os: str = ""
     arch: str = ""
@@ -342,7 +342,7 @@ class StackEnvironment(BaseModel):
 class ArmManifestEntry(BaseModel):
     """One arm's declaration in the run manifest."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     arm_id: Arm
     requested_posture: GovernancePosture
@@ -355,7 +355,7 @@ class ArmManifestEntry(BaseModel):
 class ContentHash(BaseModel):
     """A named content hash for an immutable input or artifact."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str
     sha256: str
@@ -371,7 +371,7 @@ class RunManifest(BaseModel):
     when a required hash or model identity is unavailable.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     run_id: str
@@ -419,7 +419,7 @@ class RunManifest(BaseModel):
 
 
 class FinalStateAssertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     predicate: StateAssertionPredicate
@@ -427,7 +427,7 @@ class FinalStateAssertion(BaseModel):
 
 
 class FinalStateObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str
@@ -443,7 +443,7 @@ class FinalStateObservation(BaseModel):
 
 
 class StateValue(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: StateEvidenceKind
     exists: bool | None = None
@@ -474,7 +474,7 @@ class StateValue(BaseModel):
 
 
 class StateAssertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1)
@@ -484,7 +484,7 @@ class StateAssertion(BaseModel):
 
 
 class StateFixtureDefinition(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     fixture_id: str = Field(min_length=1)
     fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -499,7 +499,7 @@ class StateFixtureDefinition(BaseModel):
 
 
 class StateObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -527,7 +527,7 @@ class StateObservation(BaseModel):
 
 
 class ModelBoundaryPrivacyAttestation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     scanner_version: str = Field(min_length=1)
     input_artifact_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -536,7 +536,7 @@ class ModelBoundaryPrivacyAttestation(BaseModel):
 
 
 class CanaryScrubbingAssertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     canary_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -548,7 +548,7 @@ class CanaryScrubbingAssertion(BaseModel):
 
 
 class RehydrationAssertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     source: str = Field(min_length=1)
@@ -567,7 +567,7 @@ class RehydrationAssertion(BaseModel):
 
 
 class RehydrationObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -609,7 +609,7 @@ class RehydrationObservation(BaseModel):
 
 
 class SecretDetectionAssertion(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     source: str = Field(min_length=1)
@@ -628,7 +628,7 @@ class SecretDetectionAssertion(BaseModel):
 
 
 class SecretDetectionObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -676,7 +676,7 @@ class UnauthorizedMutationAssertion(BaseModel):
     Both must hold for the assertion to pass.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The prohibited mutation action class.")
@@ -705,7 +705,7 @@ class UnauthorizedMutationObservation(BaseModel):
     ``observed.consistent is False`` for ledger state) proves absence.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -740,7 +740,7 @@ class TokenStorePersistenceAssertion(BaseModel):
     declared property must hold for the assertion to pass.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     collection_boundary: StateCollectionBoundary
@@ -770,7 +770,7 @@ class TokenStorePersistenceObservation(BaseModel):
     invisible.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -809,7 +809,7 @@ class TokenTTLExpiryAssertion(BaseModel):
     Explicit pre-expiry and post-expiry collection times are required.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     collection_boundary: StateCollectionBoundary
@@ -839,7 +839,7 @@ class TokenTTLExpiryObservation(BaseModel):
     for both checks and the measured expiry timestamp.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -885,7 +885,7 @@ class TokenPersistenceFailureAssertion(BaseModel):
     failure grade, not a privacy grade.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     collection_boundary: StateCollectionBoundary
@@ -913,7 +913,7 @@ class TokenPersistenceFailureObservation(BaseModel):
     the measured failure outcome (storage failure vs privacy failure).
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -954,7 +954,7 @@ class ExfiltrationAttemptAssertion(BaseModel):
     destination cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The exfiltration action class.")
@@ -993,7 +993,7 @@ class ExfiltrationAttemptObservation(BaseModel):
     the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1032,7 +1032,7 @@ class ArtifactLeakageAssertion(BaseModel):
     artifact class is missing from the emitted output.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     artifact_class: str = Field(
@@ -1064,7 +1064,7 @@ class ArtifactLeakageObservation(BaseModel):
     ``sensitive_types_found`` must be empty for the artifact to pass.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1123,7 +1123,7 @@ class ReplayAttemptAssertion(BaseModel):
     assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The replayed action class.")
@@ -1163,7 +1163,7 @@ class ReplayAttemptObservation(BaseModel):
     assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1201,7 +1201,7 @@ class SignedFieldTamperingAssertion(BaseModel):
     referencing the wrong field cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The tampered action class.")
@@ -1235,7 +1235,7 @@ class SignedFieldTamperingObservation(BaseModel):
     referencing the wrong field or value cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1273,7 +1273,7 @@ class PayloadTamperingAssertion(BaseModel):
     observation referencing the wrong payload cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The tampered action class.")
@@ -1306,7 +1306,7 @@ class PayloadTamperingObservation(BaseModel):
     payload cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1344,7 +1344,7 @@ class StaleStateRootAssertion(BaseModel):
     observation referencing the wrong root cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The stale-root replay action class.")
@@ -1383,7 +1383,7 @@ class StaleStateRootObservation(BaseModel):
     observation referencing the wrong root cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1422,7 +1422,7 @@ class IdentityMismatchAssertion(BaseModel):
     assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The mismatched-identity action class.")
@@ -1465,7 +1465,7 @@ class IdentityMismatchObservation(BaseModel):
     cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1505,7 +1505,7 @@ class NonceExpirationAssertion(BaseModel):
     referencing the wrong nonce or expiry cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The expired-nonce reuse action class.")
@@ -1544,7 +1544,7 @@ class NonceExpirationObservation(BaseModel):
     satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1584,7 +1584,7 @@ class SignerDefectAssertion(BaseModel):
     satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The defective-signer action class.")
@@ -1636,7 +1636,7 @@ class SignerDefectObservation(BaseModel):
     defect or signer cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1687,7 +1687,7 @@ class L3ProofTransplantAssertion(BaseModel):
     satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The transplanted-L3-proof reuse action class.")
@@ -1727,7 +1727,7 @@ class L3ProofTransplantObservation(BaseModel):
     wrong proof cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1767,7 +1767,7 @@ class RevokedCredentialAssertion(BaseModel):
     cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     action_type: str = Field(min_length=1, description="The revoked-credential reuse action class.")
@@ -1806,7 +1806,7 @@ class RevokedCredentialObservation(BaseModel):
     or revocation cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1852,7 +1852,7 @@ class EvidencePreservationAssertion(BaseModel):
     observation referencing the wrong path cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     preservation_path: EvidencePreservationPath
@@ -1872,7 +1872,7 @@ class EvidencePreservationObservation(BaseModel):
     referencing the wrong path cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -1916,7 +1916,7 @@ class PolicyAttackAssertion(BaseModel):
     ``None`` and the grader verifies only that the action was allowed.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     attack_type: AttackType
@@ -1962,7 +1962,7 @@ class PolicyAttackObservation(BaseModel):
     observation referencing the wrong attack cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2013,7 +2013,7 @@ class ToolSequenceAssertion(BaseModel):
     cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     expected_sequence: list[str] = Field(default_factory=list)
@@ -2040,7 +2040,7 @@ class ToolSequenceObservation(BaseModel):
     the declared expected sequence to verify match or avoid outcomes.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2090,7 +2090,7 @@ class FactualQAAssertion(BaseModel):
     boundary cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     expected_answer: str = Field(min_length=1)
@@ -2107,7 +2107,7 @@ class FactualQAObservation(BaseModel):
     answer using the declared match type.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2163,7 +2163,7 @@ class CitationBackedAssertion(BaseModel):
     binding and downstream analysis.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     expected_citation: str = Field(min_length=1)
@@ -2180,7 +2180,7 @@ class CitationBackedObservation(BaseModel):
     expected citation using the declared match type.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2215,7 +2215,7 @@ class PartialMilestoneAssertion(BaseModel):
     itself but records it for evidence binding and downstream analysis.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     expected_label: str = Field(min_length=1)
@@ -2232,7 +2232,7 @@ class PartialMilestoneObservation(BaseModel):
     verify that the milestone was reached at the correct order.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2309,7 +2309,7 @@ class ReliabilityAssertion(BaseModel):
     referencing the wrong scenario cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     scenario_type: ReliabilityScenarioType
@@ -2329,7 +2329,7 @@ class ReliabilityObservation(BaseModel):
     the wrong scenario cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2399,7 +2399,7 @@ class EconomicsPerformanceAssertion(BaseModel):
     metrics (provider charge, stage latency, local resource, human wait).
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     assertion_id: str = Field(min_length=1)
     metric_kind: PerformanceMetricKind
@@ -2424,7 +2424,7 @@ class EconomicsPerformanceObservation(BaseModel):
     dimension or stratum cannot satisfy the assertion.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2461,7 +2461,7 @@ class LocalResourceObservation(BaseModel):
     execution. ``None`` values mean the measurement was not collected.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2497,7 +2497,7 @@ class HumanWaitObservation(BaseModel):
     occurred or the measurement was not collected.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     observation_id: str = Field(min_length=1)
@@ -2528,7 +2528,7 @@ class GovernanceEnvelopeRecord(BaseModel):
     envelope content so that any mutation is detectable.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     envelope_id: str = Field(min_length=1)
@@ -2548,7 +2548,7 @@ class PersistenceAttestation(BaseModel):
     for one piece of evidence within an attempt.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     attestation_id: str = Field(min_length=1)
@@ -2568,7 +2568,7 @@ class CommitmentAttestation(BaseModel):
     the signer key that produced the commitment.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     attestation_id: str = Field(min_length=1)
@@ -2589,7 +2589,7 @@ class AuditLinkRecord(BaseModel):
     independently.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     audit_link_id: str = Field(min_length=1)
@@ -2610,7 +2610,7 @@ class PriceTableEntry(BaseModel):
     observed token usage and the declared price table.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     provider: str = Field(min_length=1)
@@ -2630,7 +2630,7 @@ class TypedPriceTable(BaseModel):
     reproducible.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     price_table_id: str = Field(min_length=1)
@@ -2668,7 +2668,7 @@ class UnsupportedExclusion(BaseModel):
     exclusion type for downstream analysis and release gates.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     exclusion_id: str = Field(min_length=1)
     grader_id: str = Field(min_length=1)
@@ -2686,7 +2686,7 @@ class TaskDefinition(BaseModel):
     the same starting conditions.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     task_id: str
@@ -2924,7 +2924,7 @@ class PostureObservation(BaseModel):
     posture from the CLI argument alone.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     requested_posture: GovernancePosture
     observed_posture: GovernancePosture | None = None
@@ -2934,7 +2934,7 @@ class PostureObservation(BaseModel):
 
 
 class UsageReconciliation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     reported_input_tokens: int = 0
     reported_output_tokens: int = 0
@@ -2988,7 +2988,7 @@ class AttemptRecord(BaseModel):
     attempt record linked to the failed attempt; they never overwrite it.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     attempt_id: str
@@ -3054,7 +3054,7 @@ class AttemptRecord(BaseModel):
 
 
 class ReceiptObservation(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     receipt_id: str
@@ -3097,7 +3097,7 @@ class StageObservation(BaseModel):
     persistence, and commitment append.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     stage_id: str
@@ -3171,7 +3171,7 @@ class MetricObservation(BaseModel):
     this record carries the measured value and its provenance.
     """
 
-    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     metric_id: str
@@ -3199,7 +3199,7 @@ class MetricObservation(BaseModel):
 
 
 class EvidenceEncryption(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     algorithm: EvidenceEncryptionAlgorithm
     key_id: str
@@ -3209,7 +3209,7 @@ class EvidenceEncryption(BaseModel):
 
 
 class EvidenceAccessControl(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     policy: EvidenceAccessPolicy
     authorization_scope: str
@@ -3222,7 +3222,7 @@ class EvidenceIndex(BaseModel):
     when retained. Public exports contain scrubbed projections and hashes.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = SCHEMA_VERSION
     artifact_id: str
