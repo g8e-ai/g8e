@@ -737,6 +737,12 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 			UserSvc:   userSvc,
 			Responder: ls.responder,
 		},
+		ObserveControllerDeps: ObserveControllerDeps{
+			Cfg:        cfg,
+			Logger:     logger,
+			ObserveSvc: NewObserveService(ls.docStore, logger),
+			Responder:  ls.responder,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("gateway: failed to create HTTP handler: %w", err)

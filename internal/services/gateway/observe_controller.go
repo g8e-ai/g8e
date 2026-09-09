@@ -21,10 +21,10 @@ import (
 
 // ObserveControllerDeps groups all dependencies for ObserveController.
 type ObserveControllerDeps struct {
-	Cfg       *config.Config
-	Logger    *slog.Logger
+	Cfg        *config.Config
+	Logger     *slog.Logger
 	ObserveSvc *ObserveService
-	Responder *response.Writer
+	Responder  *response.Writer
 }
 
 // ObserveController handles the passkey-scoped, read-only observability API.

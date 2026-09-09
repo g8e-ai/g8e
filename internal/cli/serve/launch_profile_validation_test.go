@@ -203,7 +203,7 @@ func TestValidateLaunchProfile_AcceptsHTTPMCPDownstreamURL(t *testing.T) {
 // with a clear panic if WriteFile is reached.
 func TestWriteLaunchProfile_RejectsInvalidConfigWithoutWriting(t *testing.T) {
 	tests := []struct {
-		name  string
+		name   string
 		mutate func(cfg *GatewayConfig)
 	}{
 		{

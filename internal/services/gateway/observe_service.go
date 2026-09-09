@@ -23,9 +23,9 @@ import (
 // Observe pagination defaults. Limits are bounded to prevent unbounded
 // queries; cursors are opaque base64url-encoded JSON for stable pagination.
 const (
-	ObserveDefaultLimit = 20
-	ObserveMaxLimit      = 100
-	ObserveMinLimit      = 1
+	ObserveDefaultLimit    = 20
+	ObserveMaxLimit        = 100
+	ObserveMinLimit        = 1
 	ObserveBootstrapRecent = 10
 	ObserveQueryCap        = 500
 )
@@ -64,27 +64,42 @@ func decodeCursor(s string) (observeCursor, error) {
 	return c, nil
 }
 
+// unmarshalDocData re-serializes a Document's Data map (map[string]json.RawMessage)
+// to JSON bytes and unmarshals into target. Document.Data is a field map, not
+// raw JSON, so it must be marshaled back to bytes before decoding into a typed
+// struct.
+func unmarshalDocData(doc *models.Document, target any) error {
+	b, err := json.Marshal(doc.Data)
+	if err != nil {
+		return fmt.Errorf("observe: marshal document data: %w", err)
+	}
+	if err := json.Unmarshal(b, target); err != nil {
+		return fmt.Errorf("observe: unmarshal document data: %w", err)
+	}
+	return nil
+}
+
 // runProjection is the persisted run projection document. It contains the
 // user_id ownership field plus all fields needed to derive both RunSummary
 // (list endpoint) and RunDetail (detail endpoint). Phase 3 producers write
 // these projections after successful persistence.
 type runProjection struct {
-	UserID            string                   `json:"user_id"`
-	SchemaVersion     string                   `json:"schema_version"`
-	RunID             string                   `json:"run_id"`
-	RunKind           models.RunKind           `json:"run_kind"`
-	DisplayName       string                   `json:"display_name"`
+	UserID            string                    `json:"user_id"`
+	SchemaVersion     string                    `json:"schema_version"`
+	RunID             string                    `json:"run_id"`
+	RunKind           models.RunKind            `json:"run_kind"`
+	DisplayName       string                    `json:"display_name"`
 	Status            models.RunLifecycleStatus `json:"status"`
-	ActiveTaskID      string                   `json:"active_task_id,omitempty"`
-	CompletedTasks    int                      `json:"completed_tasks"`
-	TotalTasks        int                      `json:"total_tasks"`
-	Tasks             []models.RunTask         `json:"tasks"`
+	ActiveTaskID      string                    `json:"active_task_id,omitempty"`
+	CompletedTasks    int                       `json:"completed_tasks"`
+	TotalTasks        int                       `json:"total_tasks"`
+	Tasks             []models.RunTask          `json:"tasks"`
 	EvidenceSafeLinks []models.EvidenceSafeLink `json:"evidence_safe_links"`
-	StartedAt         *time.Time               `json:"started_at,omitempty"`
-	EndedAt           *time.Time               `json:"ended_at,omitempty"`
-	HasReceipts       bool                     `json:"has_receipts"`
-	EvidenceCount     int                      `json:"evidence_count"`
-	ObservedAt        time.Time                `json:"observed_at"`
+	StartedAt         *time.Time                `json:"started_at,omitempty"`
+	EndedAt           *time.Time                `json:"ended_at,omitempty"`
+	HasReceipts       bool                      `json:"has_receipts"`
+	EvidenceCount     int                       `json:"evidence_count"`
+	ObservedAt        time.Time                 `json:"observed_at"`
 }
 
 // toSummary derives a RunSummary from the projection.
@@ -146,7 +161,7 @@ type agentStateProjection struct {
 // (list endpoint) and EvalDetail (detail endpoint). Phase 4 producers write
 // these projections after successful publication.
 type evalProjection struct {
-	UserID            string `json:"user_id"`
+	UserID string `json:"user_id"`
 	models.EvalDetail
 }
 
@@ -209,15 +224,24 @@ func (s *ObserveService) GetBootstrapSnapshot(ctx context.Context, userID string
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list runs: %w", err)
 	}
+	if len(runs) > ObserveBootstrapRecent {
+		runs = runs[:ObserveBootstrapRecent]
+	}
 
 	evals, err := s.listEvals(userID, observeCursor{}, ObserveBootstrapRecent)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list evals: %w", err)
 	}
+	if len(evals) > ObserveBootstrapRecent {
+		evals = evals[:ObserveBootstrapRecent]
+	}
 
 	downloads, err := s.listDownloads(userID, observeCursor{}, ObserveBootstrapRecent)
 	if err != nil {
 		return nil, fmt.Errorf("observe: bootstrap: list downloads: %w", err)
+	}
+	if len(downloads) > ObserveBootstrapRecent {
+		downloads = downloads[:ObserveBootstrapRecent]
 	}
 
 	var activeRun *models.RunSummary
@@ -372,7 +396,7 @@ func (s *ObserveService) listAgentStates(userID string) ([]models.AgentStateProj
 	agents := make([]models.AgentStateProjection, 0, len(docs))
 	for _, doc := range docs {
 		var proj agentStateProjection
-		if err := json.Unmarshal(doc.Data, &proj); err != nil {
+		if err := unmarshalDocData(doc, &proj); err != nil {
 			s.logger.Warn("observe: unmarshal agent state projection", "error", err, "doc_id", doc.ID)
 			continue
 		}
@@ -397,7 +421,7 @@ func (s *ObserveService) listRuns(userID string, cursor observeCursor, limit int
 	projections := make([]runProjection, 0, len(docs))
 	for _, doc := range docs {
 		var proj runProjection
-		if err := json.Unmarshal(doc.Data, &proj); err != nil {
+		if err := unmarshalDocData(doc, &proj); err != nil {
 			s.logger.Warn("observe: unmarshal run projection", "error", err, "doc_id", doc.ID)
 			continue
 		}
@@ -407,8 +431,14 @@ func (s *ObserveService) listRuns(userID string, cursor observeCursor, limit int
 	filtered := filterByCursor(projections, cursor, func(p runProjection) (time.Time, string) {
 		return p.ObservedAt, p.RunID
 	})
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+	// Fetch one extra item beyond the requested limit so the paginator can
+	// detect has_more. The paginator truncates back to limit.
+	fetchLimit := limit
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+	if fetchLimit > 0 && len(filtered) > fetchLimit {
+		filtered = filtered[:fetchLimit]
 	}
 	summaries := make([]models.RunSummary, 0, len(filtered))
 	for i := range filtered {
@@ -432,7 +462,7 @@ func (s *ObserveService) listEvals(userID string, cursor observeCursor, limit in
 	projections := make([]evalProjection, 0, len(docs))
 	for _, doc := range docs {
 		var proj evalProjection
-		if err := json.Unmarshal(doc.Data, &proj); err != nil {
+		if err := unmarshalDocData(doc, &proj); err != nil {
 			s.logger.Warn("observe: unmarshal eval projection", "error", err, "doc_id", doc.ID)
 			continue
 		}
@@ -442,8 +472,14 @@ func (s *ObserveService) listEvals(userID string, cursor observeCursor, limit in
 	filtered := filterByCursor(projections, cursor, func(p evalProjection) (time.Time, string) {
 		return p.ObservedAt, p.RunID
 	})
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+	// Fetch one extra item beyond the requested limit so the paginator can
+	// detect has_more. The paginator truncates back to limit.
+	fetchLimit := limit
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+	if fetchLimit > 0 && len(filtered) > fetchLimit {
+		filtered = filtered[:fetchLimit]
 	}
 	summaries := make([]models.EvalSummary, 0, len(filtered))
 	for i := range filtered {
@@ -467,7 +503,7 @@ func (s *ObserveService) listDownloads(userID string, cursor observeCursor, limi
 	projections := make([]downloadProjection, 0, len(docs))
 	for _, doc := range docs {
 		var proj downloadProjection
-		if err := json.Unmarshal(doc.Data, &proj); err != nil {
+		if err := unmarshalDocData(doc, &proj); err != nil {
 			s.logger.Warn("observe: unmarshal download projection", "error", err, "doc_id", doc.ID)
 			continue
 		}
@@ -477,8 +513,14 @@ func (s *ObserveService) listDownloads(userID string, cursor observeCursor, limi
 	filtered := filterByCursor(projections, cursor, func(p downloadProjection) (time.Time, string) {
 		return p.GeneratedAt, p.ArtifactID
 	})
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+	// Fetch one extra item beyond the requested limit so the paginator can
+	// detect has_more. The paginator truncates back to limit.
+	fetchLimit := limit
+	if limit > 0 {
+		fetchLimit = limit + 1
+	}
+	if fetchLimit > 0 && len(filtered) > fetchLimit {
+		filtered = filtered[:fetchLimit]
 	}
 	artifacts := make([]models.DownloadArtifact, 0, len(filtered))
 	for i := range filtered {
@@ -499,7 +541,7 @@ func (s *ObserveService) getRunProjection(userID, runID string) (*runProjection,
 		return nil, nil
 	}
 	var proj runProjection
-	if err := json.Unmarshal(doc.Data, &proj); err != nil {
+	if err := unmarshalDocData(doc, &proj); err != nil {
 		return nil, fmt.Errorf("observe: unmarshal run %s: %w", runID, err)
 	}
 	if proj.UserID != userID {
@@ -520,7 +562,7 @@ func (s *ObserveService) getEvalProjection(userID, runID string) (*evalProjectio
 		return nil, nil
 	}
 	var proj evalProjection
-	if err := json.Unmarshal(doc.Data, &proj); err != nil {
+	if err := unmarshalDocData(doc, &proj); err != nil {
 		return nil, fmt.Errorf("observe: unmarshal eval %s: %w", runID, err)
 	}
 	if proj.UserID != userID {
@@ -541,7 +583,7 @@ func (s *ObserveService) getDownloadProjection(userID, artifactID string) (*down
 		return nil, nil
 	}
 	var proj downloadProjection
-	if err := json.Unmarshal(doc.Data, &proj); err != nil {
+	if err := unmarshalDocData(doc, &proj); err != nil {
 		return nil, fmt.Errorf("observe: unmarshal download %s: %w", artifactID, err)
 	}
 	if proj.UserID != userID {
