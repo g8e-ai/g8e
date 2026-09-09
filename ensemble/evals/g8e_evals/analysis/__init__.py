@@ -42,6 +42,7 @@ from g8e_evals.analysis.telemetry import (
     TelemetryRegistryIncompleteError,
     run_all_telemetry_producers,
 )
+from g8e_evals.analysis import telemetry
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",

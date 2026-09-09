@@ -25,6 +25,8 @@ class FakeEventService:
     def __init__(self) -> None:
         self.published: list[SessionEvent | BackgroundEvent] = []
         self.command_events: list[dict] = []
+        self.agent_state_requests: list = []
+        self.run_state_requests: list = []
 
         # Initialize as a proper AsyncMock for call assertions
         # We manually record to self.published in the side_effect
@@ -112,3 +114,11 @@ class FakeEventService:
             payload=payload,
         )
         await self.publish(event)
+
+    async def publish_agent_state(self, request) -> None:
+        """Typed fake for publish_agent_state. Records the request."""
+        self.agent_state_requests.append(request)
+
+    async def publish_run_state(self, request) -> None:
+        """Typed fake for publish_run_state. Records the request."""
+        self.run_state_requests.append(request)

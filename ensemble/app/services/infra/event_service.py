@@ -7,12 +7,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.constants import EventType, G8EE_COMPONENT
 from app.models.base import G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.http_context import G8eHttpContext, RequestContext
+from app.models.internal_api import (
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+)
 from app.services.protocols import EventServiceProtocol, G8eClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -112,3 +117,65 @@ class EventService(EventServiceProtocol):
             payload=payload,
         )
         await self.publish(event)
+
+    async def publish_agent_state(
+        self, request: ObserveProducerAgentStateRequest
+    ) -> None:
+        """Best-effort agent-state projection push to the gateway observe producer.
+
+        Catches transport/network failures from the low-level client, logs one
+        warning with safe identifiers, and returns without raising. Cancellation
+        (asyncio.CancelledError) continues to propagate. Targetless requests
+        (no web_session_id and no cli_session_id) are skipped, mirroring the
+        SSE targetless-skip contract.
+        """
+        if not request.web_session_id and not request.cli_session_id:
+            logger.debug(
+                "Skipping observe agent-state push for targetless request "
+                "(agent_id=%s, status=%s)",
+                request.agent_id,
+                request.status,
+            )
+            return
+        try:
+            await self._internal_http_client.push_agent_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "observe agent-state push failed (non-blocking): %s",
+                exc,
+                extra={
+                    "agent_id": request.agent_id,
+                    "status": request.status,
+                },
+            )
+
+    async def publish_run_state(
+        self, request: ObserveProducerRunStateRequest
+    ) -> None:
+        """Best-effort run-state projection push to the gateway observe producer.
+
+        Same best-effort and targetless-skip semantics as publish_agent_state.
+        """
+        if not request.web_session_id and not request.cli_session_id:
+            logger.debug(
+                "Skipping observe run-state push for targetless request "
+                "(run_id=%s, status=%s)",
+                request.run_id,
+                request.status,
+            )
+            return
+        try:
+            await self._internal_http_client.push_run_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "observe run-state push failed (non-blocking): %s",
+                exc,
+                extra={
+                    "run_id": request.run_id,
+                    "status": request.status,
+                },
+            )
