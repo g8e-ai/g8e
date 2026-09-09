@@ -22,7 +22,7 @@ from g8e_evals.grader_inventory import (
     ProducerPath,
 )
 
-from .conformance.registry import ALL_CASES
+from conformance.registry import ALL_CASES
 
 pytestmark = pytest.mark.unit
 

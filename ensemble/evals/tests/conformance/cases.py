@@ -24,7 +24,7 @@ via rootdir-relative imports.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dc_replace
 
 from g8e_evals.grader_inventory import (
     GRADER_INVENTORY,
@@ -102,7 +102,7 @@ def _obs_ctx(
     update: dict,
 ) -> DeterministicGradingContext:
     obs = getattr(base, obs_field)[0].model_copy(update=update)
-    return base.model_copy(update={obs_field: [obs]})
+    return dc_replace(base, **{obs_field: [obs]})
 
 
 def _assertions_ctx(
@@ -111,7 +111,7 @@ def _assertions_ctx(
     assertions: list,
 ) -> DeterministicGradingContext:
     task = base.task.model_copy(update={assertion_field: assertions})
-    return base.model_copy(update={"task": task})
+    return dc_replace(base, task=task)
 
 
 def _missing_assertions_ctx(
@@ -126,7 +126,7 @@ def _duplicate_ctx(
     obs_field: str,
 ) -> DeterministicGradingContext:
     obs = getattr(base, obs_field)[0]
-    return base.model_copy(update={obs_field: [obs, obs.model_copy()]})
+    return dc_replace(base, **{obs_field: [obs, obs.model_copy()]})
 
 
 def _denominator_ctx(
@@ -141,7 +141,7 @@ def _denominator_ctx(
         update={"assertion_id": "denom-2", "observation_id": "denom-obs-2"}
     )
     task = base.task.model_copy(update={assertion_field: assertions + [second_assertion]})
-    return base.model_copy(update={obs_field: observations + [second_obs], "task": task})
+    return dc_replace(base, **{obs_field: observations + [second_obs]}, task=task)
 
 
 def _unverified_obs_ctx(

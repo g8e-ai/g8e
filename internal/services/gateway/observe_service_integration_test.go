@@ -31,17 +31,17 @@ import (
 func seedRunProjection(t *testing.T, svc *ObserveService, userID, runID string, observedAt time.Time, status models.RunLifecycleStatus) {
 	t.Helper()
 	proj := runProjection{
-		UserID:        userID,
-		SchemaVersion: constants.ObserveAPIReadModelSchemaVersion,
-		RunID:         runID,
-		RunKind:       models.RunKindInvestigation,
-		DisplayName:   "run " + runID,
-		Status:        status,
-		TotalTasks:    3,
+		UserID:         userID,
+		SchemaVersion:  constants.ObserveAPIReadModelSchemaVersion,
+		RunID:          runID,
+		RunKind:        models.RunKindInvestigation,
+		DisplayName:    "run " + runID,
+		Status:         status,
+		TotalTasks:     3,
 		CompletedTasks: 1,
-		HasReceipts:   true,
-		EvidenceCount: 2,
-		ObservedAt:    observedAt,
+		HasReceipts:    true,
+		EvidenceCount:  2,
+		ObservedAt:     observedAt,
 	}
 	b, err := json.Marshal(proj)
 	require.NoError(t, err)

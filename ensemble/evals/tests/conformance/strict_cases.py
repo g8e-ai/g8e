@@ -4,16 +4,13 @@
 #
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version  2.0.
-
 """Strict-grader conformance case builders for the 10 graders with unique logic.
-
 Each builder returns a list of ``ConformanceCase`` records covering every
 required category for its grader. Cases that fall under a typed exclusion in
 the inventory are skipped automatically.
 """
-
 from __future__ import annotations
-
+from dataclasses import replace as dc_replace
 from g8e_evals.grader_inventory import (
     GRADER_INVENTORY,
     ConformanceCaseCategory,
@@ -31,7 +28,6 @@ from g8e_evals.schema import (
     StateEvidenceKind,
     StateValue,
 )
-
 from test_authoritative_receipt_grader import (
     DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE,
     Arm,
@@ -51,17 +47,16 @@ from test_authoritative_receipt_grader import (
     _with_rehydration_observation_update,
     _with_secret_detection_observation_update,
 )
-
 from .cases import (
     VERSION,
     ConformanceCase,
     _denominator_ctx,
 )
-
-
+def _ctx_copy(base: DeterministicGradingContext, updates: dict) -> DeterministicGradingContext:
+    """Replace fields on a DeterministicGradingContext (frozen dataclass)."""
+    return dc_replace(base, **updates)
 def _make_add(gid: str, cases: list[ConformanceCase]):
     required = GRADER_INVENTORY[(gid, VERSION)].required_categories()
-
     def add(
         category: ConformanceCaseCategory,
         case_id: str,
@@ -88,20 +83,14 @@ def _make_add(gid: str, cases: list[ConformanceCase]):
                 raises=raises,
             )
         )
-
     return add
-
-
 # ---------------------------------------------------------------------------
 # receipt_integrity
 # ---------------------------------------------------------------------------
-
-
 def receipt_integrity_cases() -> list[ConformanceCase]:
     gid = "receipt_integrity"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -121,7 +110,7 @@ def receipt_integrity_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MISSING_EVIDENCE,
         "missing-receipts",
-        lambda: _context().model_copy(update={"receipts": []}),
+        lambda: _ctx_copy(_context(), {"receipts": []}),
         status=VerificationStatus.FAILED,
         value=0.0,
         failure="primary receipt",
@@ -138,8 +127,7 @@ def receipt_integrity_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-persistence",
-        lambda: _context().model_copy(
-            update={
+        lambda: _ctx_copy(_context(), {
                 "stages": [
                     _context().stages[0],
                     _context().stages[0].model_copy(update={"stage_id": "persistence-2"}),
@@ -177,8 +165,7 @@ def receipt_integrity_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_ACTION_BINDING,
         "wrong-action",
-        lambda: _context().model_copy(
-            update={
+        lambda: _ctx_copy(_context(), {
                 "receipts": [
                     _context().receipts[0].model_copy(update={"action_type": "EXECUTE_BASH"})
                 ]
@@ -196,18 +183,13 @@ def receipt_integrity_cases() -> list[ConformanceCase]:
         raises=UnsupportedGraderError,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # canary_scrubbing
 # ---------------------------------------------------------------------------
-
-
 def canary_scrubbing_cases() -> list[ConformanceCase]:
     gid = "canary_scrubbing"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     def _denominator():
         ctx = _canary_context()
         a1 = ctx.task.sensitive_canary_annotations[0]
@@ -227,8 +209,7 @@ def canary_scrubbing_cases() -> list[ConformanceCase]:
             "scrub_types": ["api_key"],
         })
         task = ctx.task.model_copy(update={"sensitive_canary_annotations": [a1, a2]})
-        return ctx.model_copy(update={"stages": [s1, s2], "task": task})
-
+        return _ctx_copy(ctx, {"stages": [s1, s2], "task": task})
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -248,7 +229,7 @@ def canary_scrubbing_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MISSING_EVIDENCE,
         "missing-stage",
-        lambda: _canary_context().model_copy(update={"stages": []}),
+        lambda: _ctx_copy(_canary_context(), {"stages": []}),
         status=VerificationStatus.FAILED,
         value=0.0,
         failure="exactly one matching scrubbing stage is required",
@@ -264,8 +245,7 @@ def canary_scrubbing_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-stage",
-        lambda: _canary_context().model_copy(
-            update={
+        lambda: _ctx_copy(_canary_context(), {
                 "stages": [
                     _canary_context().stages[0],
                     _canary_context().stages[0].model_copy(update={"stage_id": "scrub-2"}),
@@ -324,13 +304,9 @@ def canary_scrubbing_cases() -> list[ConformanceCase]:
         denom=2,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # model_boundary_raw_secret_rate
 # ---------------------------------------------------------------------------
-
-
 def _model_boundary_malformed() -> DeterministicGradingContext:
     """Construct an attestation where occurrences and types are inconsistent."""
     ctx = _model_boundary_context()
@@ -339,14 +315,11 @@ def _model_boundary_malformed() -> DeterministicGradingContext:
     assert attestation is not None
     malformed = attestation.model_copy(update={"raw_sensitive_types": []})
     new_stage = stage.model_copy(update={"model_boundary_privacy": malformed})
-    return ctx.model_copy(update={"stages": [new_stage]})
-
-
+    return _ctx_copy(ctx, {"stages": [new_stage]})
 def model_boundary_cases() -> list[ConformanceCase]:
     gid = "model_boundary_raw_secret_rate"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -382,8 +355,7 @@ def model_boundary_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-stage",
-        lambda: _model_boundary_context().model_copy(
-            update={
+        lambda: _ctx_copy(_model_boundary_context(), {
                 "stages": [
                     _model_boundary_context().stages[0],
                     _model_boundary_context().stages[0].model_copy(update={"stage_id": "model-call-2"}),
@@ -434,18 +406,13 @@ def model_boundary_cases() -> list[ConformanceCase]:
         raises=UnsupportedGraderError,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # exact_local_rehydration
 # ---------------------------------------------------------------------------
-
-
 def rehydration_cases() -> list[ConformanceCase]:
     gid = "exact_local_rehydration"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -550,17 +517,12 @@ def rehydration_cases() -> list[ConformanceCase]:
         denom=2,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # secret_detection_precision / secret_detection_recall
 # ---------------------------------------------------------------------------
-
-
 def secret_detection_cases(grader_id: str) -> list[ConformanceCase]:
     cases: list[ConformanceCase] = []
     add = _make_add(grader_id, cases)
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -665,18 +627,13 @@ def secret_detection_cases(grader_id: str) -> list[ConformanceCase]:
             failure="denominator is zero",
         )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # final_state_assertions
 # ---------------------------------------------------------------------------
-
-
 def final_state_cases() -> list[ConformanceCase]:
     gid = "final_state_assertions"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     def _denominator():
         ctx = _state_context()
         a1 = ctx.task.expected_final_state_assertions[0]
@@ -699,8 +656,7 @@ def final_state_cases() -> list[ConformanceCase]:
             verification_status=VerificationStatus.VERIFIED,
         )
         task = ctx.task.model_copy(update={"expected_final_state_assertions": [a1, a2]})
-        return ctx.model_copy(update={"final_state_observations": [o1, o2], "task": task})
-
+        return _ctx_copy(ctx, {"final_state_observations": [o1, o2], "task": task})
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -712,8 +668,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MEASURED_FAILURE,
         "observed-mismatch",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"state_root_after": "wrong-root"}
@@ -728,7 +683,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MISSING_EVIDENCE,
         "missing-observation",
-        lambda: _state_context().model_copy(update={"final_state_observations": []}),
+        lambda: _ctx_copy(_state_context(), {"final_state_observations": []}),
         status=VerificationStatus.FAILED,
         value=0.0,
         failure="final-state observation is missing",
@@ -736,8 +691,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MALFORMED_EVIDENCE,
         "unverified-observation",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"verification_status": VerificationStatus.FAILED}
@@ -752,8 +706,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-observation",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0],
                     _state_context().final_state_observations[0].model_copy(),
@@ -767,8 +720,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_RUN_BINDING,
         "wrong-run",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"run_id": "wrong-run"}
@@ -783,8 +735,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_ATTEMPT_BINDING,
         "wrong-attempt",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"attempt_id": "wrong-attempt"}
@@ -799,8 +750,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_TASK_BINDING,
         "wrong-task",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"task_id": "wrong-task"}
@@ -815,8 +765,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_ACTION_BINDING,
         "wrong-action",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"action_type": "EXECUTE_BASH"}
@@ -831,8 +780,7 @@ def final_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.WRONG_SOURCE_BINDING,
         "wrong-source",
-        lambda: _state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_state_context(), {
                 "final_state_observations": [
                     _state_context().final_state_observations[0].model_copy(
                         update={"source_receipt_id": "nonexistent"}
@@ -860,24 +808,18 @@ def final_state_cases() -> list[ConformanceCase]:
         denom=2,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # independent_state
 # ---------------------------------------------------------------------------
-
-
 def independent_state_cases() -> list[ConformanceCase]:
     gid = "independent_state"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     def _with_obs(update):
         ctx = _independent_state_context()
-        return ctx.model_copy(
-            update={"state_observations": [ctx.state_observations[0].model_copy(update=update)]}
+        return _ctx_copy(ctx, {
+            "state_observations": [ctx.state_observations[0].model_copy(update=update)]}
         )
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -897,7 +839,7 @@ def independent_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MISSING_EVIDENCE,
         "missing-observation",
-        lambda: _independent_state_context().model_copy(update={"state_observations": []}),
+        lambda: _ctx_copy(_independent_state_context(), {"state_observations": []}),
         status=VerificationStatus.FAILED,
         value=0.0,
         failure="exactly one state observation is required",
@@ -913,8 +855,7 @@ def independent_state_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-observation",
-        lambda: _independent_state_context().model_copy(
-            update={
+        lambda: _ctx_copy(_independent_state_context(), {
                 "state_observations": [
                     _independent_state_context().state_observations[0],
                     _independent_state_context().state_observations[0].model_copy(),
@@ -985,24 +926,18 @@ def independent_state_cases() -> list[ConformanceCase]:
         denom=2,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # policy_outcome
 # ---------------------------------------------------------------------------
-
-
 def policy_outcome_cases() -> list[ConformanceCase]:
     gid = "policy_outcome"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     def _with_receipt(update):
         ctx = _policy_context(expected_outcome=PolicyOutcome.ALLOW)
-        return ctx.model_copy(
-            update={"receipts": [ctx.receipts[0].model_copy(update=update)]}
+        return _ctx_copy(ctx, {
+            "receipts": [ctx.receipts[0].model_copy(update=update)]}
         )
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -1022,8 +957,8 @@ def policy_outcome_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MISSING_EVIDENCE,
         "missing-receipt",
-        lambda: _policy_context(expected_outcome=PolicyOutcome.ALLOW).model_copy(
-            update={"receipts": []}
+        lambda: _ctx_copy(_policy_context(expected_outcome=PolicyOutcome.ALLOW), {
+            "receipts": []}
         ),
         status=VerificationStatus.FAILED,
         value=0.0,
@@ -1040,8 +975,7 @@ def policy_outcome_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.DUPLICATE_EVIDENCE,
         "duplicate-receipt",
-        lambda: _policy_context(expected_outcome=PolicyOutcome.ALLOW).model_copy(
-            update={
+        lambda: _ctx_copy(_policy_context(expected_outcome=PolicyOutcome.ALLOW), {
                 "receipts": [
                     _policy_context(expected_outcome=PolicyOutcome.ALLOW).receipts[0],
                     _policy_context(expected_outcome=PolicyOutcome.ALLOW).receipts[0].model_copy(
@@ -1086,32 +1020,24 @@ def policy_outcome_cases() -> list[ConformanceCase]:
         raises=UnsupportedGraderError,
     )
     return cases
-
-
 # ---------------------------------------------------------------------------
 # protocol_chain
 # ---------------------------------------------------------------------------
-
-
 def _duplicate_protocol_stages() -> DeterministicGradingContext:
     ctx = _protocol_context()
     receipt = ctx.receipts[0].action_receipt
     stages = receipt.deterministic_stage_evidence
     stages[5].kind = DETERMINISTIC_STAGE_KIND_RECEIPT_PERSISTENCE
     return ctx
-
-
 def protocol_chain_cases() -> list[ConformanceCase]:
     gid = "protocol_chain"
     cases: list[ConformanceCase] = []
     add = _make_add(gid, cases)
-
     def _with_receipt(update):
         ctx = _protocol_context()
-        return ctx.model_copy(
-            update={"receipts": [ctx.receipts[0].model_copy(update=update)]}
+        return _ctx_copy(ctx, {
+            "receipts": [ctx.receipts[0].model_copy(update=update)]}
         )
-
     add(
         ConformanceCaseCategory.PASSING_EVIDENCE,
         "base",
@@ -1123,8 +1049,8 @@ def protocol_chain_cases() -> list[ConformanceCase]:
     add(
         ConformanceCaseCategory.MEASURED_FAILURE,
         "posture-mismatch",
-        lambda: _protocol_context().model_copy(
-            update={"attempt": _protocol_context().attempt.model_copy(update={"arm_id": Arm.DOCTRINE})}
+        lambda: _ctx_copy(_protocol_context(), {
+            "attempt": _protocol_context().attempt.model_copy(update={"arm_id": Arm.DOCTRINE})}
         ),
         status=VerificationStatus.FAILED,
         value=0.0,

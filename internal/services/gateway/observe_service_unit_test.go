@@ -260,10 +260,10 @@ func TestObserveController_RequireUserID_EmptyStringReturns401(t *testing.T) {
 func newTestObserveController(t *testing.T) *ObserveController {
 	t.Helper()
 	return &ObserveController{
-		cfg:       nil,
-		logger:    testutil.NewTestLogger(),
+		cfg:        nil,
+		logger:     testutil.NewTestLogger(),
 		observeSvc: nil,
-		responder: response.NewWriter(testutil.NewTestLogger()),
+		responder:  response.NewWriter(testutil.NewTestLogger()),
 	}
 }
 

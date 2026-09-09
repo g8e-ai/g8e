@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import pytest
 
-from .conformance.cases import ConformanceCase, case_id
-from .conformance.registry import cases_for_grader
-from .conformance.runner import assert_case_passes
+from conformance.cases import ConformanceCase, case_id
+from conformance.registry import cases_for_grader
+from conformance.runner import assert_case_passes
 
 pytestmark = pytest.mark.unit
 

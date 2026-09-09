@@ -346,7 +346,7 @@ func (s *ObserveService) GetEval(ctx context.Context, userID, runID string) (*mo
 	if proj == nil {
 		return nil, constants.ErrObserveEvalNotFound
 	}
-	detail := models.EvalDetail(proj.EvalDetail)
+	detail := proj.EvalDetail
 	return &detail, nil
 }
 
@@ -376,7 +376,7 @@ func (s *ObserveService) GetDownload(ctx context.Context, userID, artifactID str
 	if proj == nil {
 		return nil, constants.ErrObserveDownloadNotFound
 	}
-	artifact := models.DownloadArtifact(proj.DownloadArtifact)
+	artifact := proj.DownloadArtifact
 	return &artifact, nil
 }
 
@@ -524,7 +524,7 @@ func (s *ObserveService) listDownloads(userID string, cursor observeCursor, limi
 	}
 	artifacts := make([]models.DownloadArtifact, 0, len(filtered))
 	for i := range filtered {
-		artifacts = append(artifacts, models.DownloadArtifact(filtered[i].DownloadArtifact))
+		artifacts = append(artifacts, filtered[i].DownloadArtifact)
 	}
 	return artifacts, nil
 }
