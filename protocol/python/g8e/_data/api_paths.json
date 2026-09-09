@@ -95,5 +95,13 @@
   "deploy_script_windows": "/g8e-deploy.ps1",
   "health": "/api/v1/health",
   "state": "/api/v1/state",
-  "landing": "/"
+  "landing": "/",
+  "observe_prefix": "/api/v1/observe/",
+  "observe_bootstrap": "/api/v1/observe/bootstrap",
+  "observe_runs": "/api/v1/observe/runs",
+  "observe_runs_by_id": "/api/v1/observe/runs/",
+  "observe_evals": "/api/v1/observe/evals",
+  "observe_evals_by_id": "/api/v1/observe/evals/",
+  "observe_downloads": "/api/v1/observe/downloads",
+  "observe_downloads_by_id": "/api/v1/observe/downloads/"
 }

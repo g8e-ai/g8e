@@ -1199,6 +1199,22 @@
     "OperatorReceiptRecorded": {
       "_go_const": "EventOperatorReceiptRecorded",
       "value": "g8e.v1.operator.receipt.recorded"
+    },
+    "AppAgentStatusUpdated": {
+      "_go_const": "EventAppAgentStatusUpdated",
+      "value": "g8e.v1.app.agent.status.updated"
+    },
+    "AppRunStatusUpdated": {
+      "_go_const": "EventAppRunStatusUpdated",
+      "value": "g8e.v1.app.run.status.updated"
+    },
+    "AiEvalRunCompleted": {
+      "_go_const": "EventAiEvalRunCompleted",
+      "value": "g8e.v1.ai.eval.run.completed"
+    },
+    "AiEvalMetricRecorded": {
+      "_go_const": "EventAiEvalMetricRecorded",
+      "value": "g8e.v1.ai.eval.metric.recorded"
     }
   }
 }

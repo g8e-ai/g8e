@@ -68,6 +68,21 @@ func TestOtherNewEventConstants(t *testing.T) {
 	}
 }
 
+func TestObservabilityDashboardEventConstants(t *testing.T) {
+	cases := []struct {
+		goConst EventType
+		value   string
+	}{
+		{EventAppAgentStatusUpdated, "g8e.v1.app.agent.status.updated"},
+		{EventAppRunStatusUpdated, "g8e.v1.app.run.status.updated"},
+		{EventAiEvalRunCompleted, "g8e.v1.ai.eval.run.completed"},
+		{EventAiEvalMetricRecorded, "g8e.v1.ai.eval.metric.recorded"},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.value, string(tc.goConst))
+	}
+}
+
 func TestOperatorIntentEventConstants(t *testing.T) {
 	cases := []struct {
 		goConst EventType

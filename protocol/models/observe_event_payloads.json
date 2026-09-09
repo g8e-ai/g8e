@@ -1,0 +1,284 @@
+{
+  "_comment": "Canonical typed payloads for the observability dashboard event families. These are the data payloads carried inside SessionEventWire or BackgroundEventWire envelopes for the four dashboard event types: app.agent.status.updated, app.run.status.updated, ai.eval.run.completed, and ai.eval.metric.recorded. Producers emit these only after the corresponding state projection is persisted. All models exclude null fields on the wire.",
+
+  "_authority": "agent",
+  "_consumers": ["agent", "cli", "browser"],
+
+  "agent_status_updated_payload": {
+    "_description": "Payload for app.agent.status.updated events. Reports the current lifecycle state of a single agent persona. Distinct from app.agent.activity.recorded, which is a governed document update for AgentActivityMetadata.",
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "description": "Payload schema version identifier"
+    },
+    "agent_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable agent identifier"
+    },
+    "display_name": {
+      "type": "string",
+      "required": true,
+      "description": "Human-readable agent name"
+    },
+    "role": {
+      "type": "string",
+      "required": true,
+      "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Agent lifecycle state",
+      "enum": ["idle", "queued", "running", "waiting", "completed", "failed", "offline"]
+    },
+    "run_id": {
+      "type": "string",
+      "required": false,
+      "description": "Owning run identifier when the agent is bound to a run"
+    },
+    "task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Active task identifier when the agent is executing a task"
+    },
+    "model": {
+      "type": "string",
+      "required": false,
+      "description": "Model identifier when the agent is configured with a model"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp of the observation"
+    }
+  },
+
+  "run_status_updated_payload": {
+    "_description": "Payload for app.run.status.updated events. Reports the current lifecycle state of a run across investigations, evals, demos, and workflows.",
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "description": "Payload schema version identifier"
+    },
+    "run_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable run identifier"
+    },
+    "run_kind": {
+      "type": "string",
+      "required": true,
+      "description": "Run category",
+      "enum": ["investigation", "eval", "demo", "workflow"]
+    },
+    "display_name": {
+      "type": "string",
+      "required": true,
+      "description": "Human-readable run name"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Run lifecycle state",
+      "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]
+    },
+    "active_task_id": {
+      "type": "string",
+      "required": false,
+      "description": "Currently active task identifier"
+    },
+    "completed_tasks": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of completed tasks"
+    },
+    "total_tasks": {
+      "type": "integer",
+      "required": true,
+      "description": "Total number of tasks in the run"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "UTC timestamp when the run started"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false,
+      "description": "UTC timestamp when the run reached a terminal state"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp of the observation"
+    }
+  },
+
+  "eval_run_completed_payload": {
+    "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports terminal aggregate counts and the verification boundary of a completed eval run.",
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "description": "Payload schema version identifier"
+    },
+    "run_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable eval run identifier"
+    },
+    "suite_id": {
+      "type": "string",
+      "required": true,
+      "description": "Eval suite identifier"
+    },
+    "suite_version": {
+      "type": "string",
+      "required": true,
+      "description": "Eval suite version"
+    },
+    "arm_id": {
+      "type": "string",
+      "required": true,
+      "description": "Eval arm identifier"
+    },
+    "terminal_attempts": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of attempts that reached a terminal state"
+    },
+    "assigned_tasks": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of tasks assigned to the run"
+    },
+    "receipt_count": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of receipts in the report"
+    },
+    "verification_status": {
+      "type": "string",
+      "required": true,
+      "description": "Honest verification boundary label. Never 'verified' until the complete verifier exists.",
+      "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]
+    },
+    "published_projection_sha256": {
+      "type": "string",
+      "required": true,
+      "description": "SHA-256 hash of the persisted disclosure-safe projection"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp when the eval run completed"
+    }
+  },
+
+  "eval_metric_recorded_payload": {
+    "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its population, denominator, and verification status.",
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "description": "Payload schema version identifier"
+    },
+    "run_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable eval run identifier"
+    },
+    "metric_id": {
+      "type": "string",
+      "required": true,
+      "description": "Registered metric identifier"
+    },
+    "metric_version": {
+      "type": "string",
+      "required": true,
+      "description": "Metric schema version"
+    },
+    "value": {
+      "type": "number",
+      "required": false,
+      "description": "Metric value when available"
+    },
+    "unit": {
+      "type": "string",
+      "required": true,
+      "description": "Metric unit"
+    },
+    "eligible": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of eligible items in the measured population"
+    },
+    "denominator": {
+      "type": "integer",
+      "required": true,
+      "description": "Denominator for the metric population"
+    },
+    "verification_status": {
+      "type": "string",
+      "required": true,
+      "description": "Honest verification boundary label. Never 'verified' until the complete verifier exists.",
+      "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp when the metric was recorded"
+    }
+  },
+
+  "observed_measurement": {
+    "_description": "Shared typed measurement shape for displayed resource and throughput values. Every displayed measurement uses a typed value with source and observation time. Resource and throughput cards remain unavailable until real instrumentation exists.",
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "description": "Measurement schema version identifier"
+    },
+    "metric_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable metric identifier"
+    },
+    "value": {
+      "type": "number",
+      "required": true,
+      "description": "Measured value"
+    },
+    "unit": {
+      "type": "string",
+      "required": true,
+      "description": "Measurement unit"
+    },
+    "source_component": {
+      "type": "string",
+      "required": true,
+      "description": "Component that produced the measurement"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "UTC timestamp of the observation"
+    },
+    "window_seconds": {
+      "type": "number",
+      "required": false,
+      "description": "Sampling window duration in seconds when applicable"
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "description": "Measurement freshness status",
+      "enum": ["observed", "stale", "unavailable", "unsupported"]
+    }
+  }
+}

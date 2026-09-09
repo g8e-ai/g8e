@@ -36,6 +36,11 @@ from .events import (
     ChatThinkingPayload,
     ChatTurnCompletePayload,
     TriageClarificationQuestionsPayload,
+    AgentStatusUpdatedPayload,
+    RunStatusUpdatedPayload,
+    EvalRunCompletedPayload,
+    EvalMetricRecordedPayload,
+    ObservedMeasurement,
 )
 from .governance import (
     GovernanceEnvelope,
@@ -80,6 +85,11 @@ __all__ = [
     "ChatThinkingPayload",
     "ChatTurnCompletePayload",
     "TriageClarificationQuestionsPayload",
+    "AgentStatusUpdatedPayload",
+    "RunStatusUpdatedPayload",
+    "EvalRunCompletedPayload",
+    "EvalMetricRecordedPayload",
+    "ObservedMeasurement",
     "GovernanceEnvelope",
     "GovernanceMetadata",
     "GovernanceL1",

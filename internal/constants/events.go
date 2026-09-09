@@ -329,6 +329,15 @@ const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
 const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
 const EventOperatorReceiptRecorded EventType = "g8e.v1.operator.receipt.recorded"
 
+// Observability dashboard events. These carry protocol-owned typed payloads
+// (see protocol/models/observe_event_payloads.json) and are emitted by real
+// producers only after the corresponding state projection is persisted. They
+// are distinct from governed-document events such as app.agent.activity.recorded.
+const EventAppAgentStatusUpdated EventType = "g8e.v1.app.agent.status.updated"
+const EventAppRunStatusUpdated EventType = "g8e.v1.app.run.status.updated"
+const EventAiEvalRunCompleted EventType = "g8e.v1.ai.eval.run.completed"
+const EventAiEvalMetricRecorded EventType = "g8e.v1.ai.eval.metric.recorded"
+
 // Canonical governed-document request events. These are the deterministic
 // EventType values that MapActionTypeToEventType returns for the
 // DOCUMENT_UPDATE and DOCUMENT_DELETE action types. The app-level

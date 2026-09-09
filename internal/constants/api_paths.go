@@ -135,6 +135,15 @@ var APIPaths = struct {
 	DeployScriptWindows string `json:"deploy_script_windows"`
 	// Console SPA
 	ConsolePrefix string `json:"console_prefix"`
+	// Observe API routes (passkey-scoped, read-only observability surface)
+	ObservePrefix           string `json:"observe_prefix"`
+	ObserveBootstrap         string `json:"observe_bootstrap"`
+	ObserveRuns              string `json:"observe_runs"`
+	ObserveRunsByID          string `json:"observe_runs_by_id"`
+	ObserveEvals             string `json:"observe_evals"`
+	ObserveEvalsByID         string `json:"observe_evals_by_id"`
+	ObserveDownloads         string `json:"observe_downloads"`
+	ObserveDownloadsByID     string `json:"observe_downloads_by_id"`
 	// WebSocket prefix
 	WSPrefix string `json:"ws_prefix"`
 	// User routes
@@ -277,6 +286,15 @@ var APIPaths = struct {
 	DeployScriptWindows: "/" + DeployScriptFilenameWindows,
 	// Console SPA
 	ConsolePrefix: "/console/",
+	// Observe API routes (passkey-scoped, read-only observability surface)
+	ObservePrefix:           "/api/v1/observe/",
+	ObserveBootstrap:        "/api/v1/observe/bootstrap",
+	ObserveRuns:             "/api/v1/observe/runs",
+	ObserveRunsByID:         "/api/v1/observe/runs/",
+	ObserveEvals:            "/api/v1/observe/evals",
+	ObserveEvalsByID:        "/api/v1/observe/evals/",
+	ObserveDownloads:        "/api/v1/observe/downloads",
+	ObserveDownloadsByID:    "/api/v1/observe/downloads/",
 	// WebSocket prefix
 	WSPrefix: "/ws/",
 	// User routes

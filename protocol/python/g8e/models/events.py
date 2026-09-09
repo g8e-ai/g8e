@@ -140,3 +140,90 @@ class TriageClarificationQuestionsPayload(G8eBaseModel):
     intent_summary: str | None = None
     request_posture: str | None = None
     posture_confidence: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Observability dashboard event payloads (read-only frontend contract)
+#
+# These payloads back the four dashboard event families:
+#   g8e.v1.app.agent.status.updated
+#   g8e.v1.app.run.status.updated
+#   g8e.v1.ai.eval.run.completed
+#   g8e.v1.ai.eval.metric.recorded
+#
+# Producers emit these only after the corresponding state projection is
+# persisted. They are distinct from governed-document events such as
+# app.agent.activity.recorded. See protocol/models/observe_event_payloads.json
+# for the canonical wire shapes.
+# ---------------------------------------------------------------------------
+
+
+class AgentStatusUpdatedPayload(G8eBaseModel):
+    schema_version: str
+    agent_id: str
+    display_name: str
+    role: str
+    status: str
+    run_id: str | None = None
+    task_id: str | None = None
+    model: str | None = None
+    observed_at: UTCDatetime
+
+
+class RunStatusUpdatedPayload(G8eBaseModel):
+    schema_version: str
+    run_id: str
+    run_kind: str
+    display_name: str
+    status: str
+    active_task_id: str | None = None
+    completed_tasks: int
+    total_tasks: int
+    started_at: UTCDatetime | None = None
+    ended_at: UTCDatetime | None = None
+    observed_at: UTCDatetime
+
+
+class EvalRunCompletedPayload(G8eBaseModel):
+    schema_version: str
+    run_id: str
+    suite_id: str
+    suite_version: str
+    arm_id: str
+    terminal_attempts: int
+    assigned_tasks: int
+    receipt_count: int
+    verification_status: str
+    published_projection_sha256: str
+    completed_at: UTCDatetime
+
+
+class EvalMetricRecordedPayload(G8eBaseModel):
+    schema_version: str
+    run_id: str
+    metric_id: str
+    metric_version: str
+    value: float | None = None
+    unit: str
+    eligible: int
+    denominator: int
+    verification_status: str
+    recorded_at: UTCDatetime
+
+
+class ObservedMeasurement(G8eBaseModel):
+    """Shared typed measurement shape for displayed resource and throughput values.
+
+    Every displayed measurement uses a typed value with source and observation
+    time. Resource and throughput cards remain unavailable until real
+    instrumentation exists.
+    """
+
+    schema_version: str
+    metric_id: str
+    value: float
+    unit: str
+    source_component: str
+    observed_at: UTCDatetime
+    window_seconds: float | None = None
+    status: str
