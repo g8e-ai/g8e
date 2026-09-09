@@ -5,6 +5,12 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version.0.
 
+//go:build integration
+
+// These tests exercise the verifier against real TLS httptest servers
+// with temporary PKI certificates. They use network listeners and
+// therefore belong in Tier 2 (integration), not Tier 1.
+
 package frontendverify
 
 import (

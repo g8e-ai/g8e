@@ -5,6 +5,15 @@
 // As of the Change Date listed in the LICENSE file, this software is
 // released under the Apache License, Version 2.0.
 
+//go:build integration
+
+// These tests exercise the gw connect state machine through real
+// RuntimeFileService (newCmdTestEnv creates temp files), PID files,
+// and httptest TLS servers. They perform file I/O and use network
+// listeners and therefore belong in Tier 2 (integration), not Tier 1.
+// Pure-function tests for config matching and rendering live in
+// gateway_connect_config_match_test.go and gateway_connect_render_test.go.
+
 package cmd
 
 import (
