@@ -338,6 +338,16 @@ _INVENTORY: list[GraderInventoryEntry] = [
         cli_constant="_SECRET_DETECTION_PRECISION_GRADER_ID",
         producer_path=ProducerPath.SYNTHETIC,
         producer_suite_ids=["privacy_boundary_leakage"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="secret_detection_precision consumes secret-detection observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="secret_detection_precision consumes secret-detection observations, not collection-boundary observations",
+            ),
+        ],
     ),
     GraderInventoryEntry(
         grader_id="secret_detection_recall",
@@ -351,6 +361,16 @@ _INVENTORY: list[GraderInventoryEntry] = [
         cli_constant="_SECRET_DETECTION_RECALL_GRADER_ID",
         producer_path=ProducerPath.SYNTHETIC,
         producer_suite_ids=["privacy_boundary_leakage"],
+        conformance_exclusions=[
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="secret_detection_recall consumes secret-detection observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
+                reason="secret_detection_recall consumes secret-detection observations, not collection-boundary observations",
+            ),
+        ],
     ),
     GraderInventoryEntry(
         grader_id="final_state_assertions",
@@ -392,6 +412,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
                 reason="independent_state consumes state observations, not action-class receipts",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="independent_state is a proportion over declared assertions; not-applicable is not a valid outcome",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -414,6 +438,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
                 reason="policy_outcome consumes receipts and L4 stages, not source-bound observations",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="policy_outcome consumes receipts and L4 stages; receipts have no task_id field, so cross-task binding is not checkable",
             ),
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
@@ -445,6 +473,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.WRONG_SOURCE_BINDING,
                 reason="protocol_chain consumes receipts and deterministic stages, not source-bound observations",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_TASK_BINDING,
+                reason="protocol_chain consumes receipts and deterministic stages; receipts have no task_id field, so cross-task binding is not checkable",
             ),
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,

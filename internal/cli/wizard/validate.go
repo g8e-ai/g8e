@@ -12,7 +12,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strings"
+
+	"github.com/g8e-ai/g8e/v2/internal/cli/browserorigin"
 )
 
 // validatePublicBaseURL validates a public base URL.
@@ -122,29 +123,15 @@ func validateConsensusBootstrap(path, consensusID string) error {
 
 // validatePasskeyRP validates the passkey RP ID and origin together.
 // The RP ID must equal or be a registrable suffix of the origin hostname.
+// Validation is delegated to the centralized browserorigin package so the
+// wizard, explicit gateway flags, and `gw connect` share one implementation
+// of origin parsing, RP ID derivation, and public-suffix rejection.
 func validatePasskeyRP(rpID, origin string) error {
-	if rpID == "" {
-		return fmt.Errorf("passkey RP ID is required")
-	}
-	u, err := url.Parse(origin)
+	parsed, err := browserorigin.Parse(origin)
 	if err != nil {
-		return fmt.Errorf("wizard: validate passkey RP: %w", err)
+		return err
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("passkey origin must use http or https scheme")
-	}
-	originHost := u.Hostname()
-	if originHost == "" {
-		return fmt.Errorf("passkey origin must have a host")
-	}
-	// RP ID must equal the origin host or be a registrable suffix
-	if rpID == originHost {
-		return nil
-	}
-	if strings.HasSuffix(originHost, "."+rpID) {
-		return nil
-	}
-	return fmt.Errorf("passkey RP ID %q must match or be a registrable suffix of origin host %q", rpID, originHost)
+	return browserorigin.ValidateRPID(parsed, rpID)
 }
 
 // validateDownstreamURL validates an optional downstream server URL.
@@ -174,33 +161,12 @@ func validateDownstreamURL(s string) error {
 
 // validateCORSOrigin validates a CORS origin.
 // Must be an exact origin: scheme://host[:port] with no path, query, fragment, or user info.
+// Validation is delegated to the centralized browserorigin package so the
+// wizard, explicit gateway flags, and `gw connect` share one implementation
+// of origin parsing and canonicalization.
 func validateCORSOrigin(s string) error {
-	if s == "" {
-		return fmt.Errorf("CORS origin is required")
-	}
-	u, err := url.Parse(s)
-	if err != nil {
-		return fmt.Errorf("wizard: validate CORS origin: %w", err)
-	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("CORS origin must use http or https scheme, got %q", u.Scheme)
-	}
-	if u.User != nil {
-		return fmt.Errorf("CORS origin must not contain user info")
-	}
-	if u.Path != "" && u.Path != "/" {
-		return fmt.Errorf("CORS origin must not contain a path")
-	}
-	if u.RawQuery != "" {
-		return fmt.Errorf("CORS origin must not contain a query string")
-	}
-	if u.Fragment != "" {
-		return fmt.Errorf("CORS origin must not contain a fragment")
-	}
-	if u.Host == "" {
-		return fmt.Errorf("CORS origin must have a host")
-	}
-	return nil
+	_, err := browserorigin.Parse(s)
+	return err
 }
 
 // isLoopbackHost returns true for localhost, 127.0.0.1, and ::1.

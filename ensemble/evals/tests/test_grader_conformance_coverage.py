@@ -85,7 +85,7 @@ def _categorize_test(test_name: str) -> set[ConformanceCaseCategory]:
     if any(kw in name for kw in (
         "fails_closed", "fails_when", "partial_failure", "mixed_pass",
         "verified_failure", "reports_failed", "measures_verified_raw_secret_leakage",
-        "returns_verified_failure",
+        "returns_verified_failure", "fail_closed",
     )):
         categories.add(ConformanceCaseCategory.MEASURED_FAILURE)
 
@@ -93,7 +93,7 @@ def _categorize_test(test_name: str) -> set[ConformanceCaseCategory]:
     if any(kw in name for kw in (
         "missing_assertions", "missing_observation", "missing_primary_receipt",
         "missing_source_evidence", "fails_closed_without_observation",
-        "fails_closed_without_unique_verified_receipt",
+        "fails_closed_without_unique_verified_receipt", "missing",
     )):
         categories.add(ConformanceCaseCategory.MISSING_EVIDENCE)
 
@@ -155,7 +155,7 @@ def _categorize_test(test_name: str) -> set[ConformanceCaseCategory]:
     # invalid outcome, mismatched fields that indicate corruption not just
     # a different binding).
     if any(kw in name for kw in (
-        "unverifiable_evidence", "unverified_receipt", "unverified_observation",
+        "unverifiable", "unverified_receipt", "unverified_observation",
         "unverified", "invalid_l4_outcome", "ambiguous_failed_layers",
         "verified_l4_with_failed_prerequisite", "mismatched_evidence",
         "malform",

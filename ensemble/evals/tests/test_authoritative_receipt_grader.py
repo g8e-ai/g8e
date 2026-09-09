@@ -161,6 +161,7 @@ def _context(
             stage_id="persistence-1",
             attempt_id="attempt-1",
             run_id="run-1",
+            task_id="task-1",
             kind=StageKind.RECEIPT_PERSISTENCE,
             transaction_id="tx-1",
             decision="verified",
@@ -234,6 +235,82 @@ def test_deterministic_grader_registry_rejects_unsupported_grader_version():
         grade_deterministically("receipt_integrity", "2.0.0", _context())
 
 
+def _receipt_integrity_context_with_stage(**stage_update) -> DeterministicGradingContext:
+    context = _context()
+    stages = [context.stages[0].model_copy(update=stage_update)] if context.stages else []
+    return DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=stages,
+    )
+
+
+def test_receipt_integrity_grader_fails_when_action_type_mismatches():
+    context = _context()
+    receipts = [context.receipts[0].model_copy(update={"action_type": "EXECUTE_BASH"})]
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=receipts,
+        stages=context.stages,
+    )
+
+    result = grade_deterministically("receipt_integrity", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "primary receipt action does not match the expected action class"
+
+
+def test_receipt_integrity_grader_rejects_cross_attempt_persistence_stage():
+    context = _receipt_integrity_context_with_stage(attempt_id="other-attempt")
+
+    result = grade_deterministically("receipt_integrity", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "persistence stage attempt does not match"
+
+
+def test_receipt_integrity_grader_rejects_cross_run_persistence_stage():
+    context = _receipt_integrity_context_with_stage(run_id="other-run")
+
+    result = grade_deterministically("receipt_integrity", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "persistence stage run does not match"
+
+
+def test_receipt_integrity_grader_rejects_cross_task_persistence_stage():
+    context = _receipt_integrity_context_with_stage(task_id="other-task")
+
+    result = grade_deterministically("receipt_integrity", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "persistence stage task does not match"
+
+
+def test_receipt_integrity_grader_rejects_duplicate_persistence_stages():
+    context = _context()
+    duplicate_stage = context.stages[0].model_copy(update={"stage_id": "persistence-2"})
+    stages = [context.stages[0], duplicate_stage]
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=stages,
+    )
+
+    result = grade_deterministically("receipt_integrity", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "verified final-persistence evidence is missing"
+
+
 def _canary_context(
     *,
     output_hash: str = "b" * 64,
@@ -265,6 +342,7 @@ def _canary_context(
                 stage_id="scrub-1",
                 attempt_id=stage_attempt_id,
                 run_id="run-1",
+                task_id="task-1",
                 kind=StageKind.SCRUBBING,
                 source="conversation_history:user",
                 decision="modified",
@@ -323,6 +401,7 @@ def _model_boundary_context(
         stage_id="model-call-1",
         attempt_id="attempt-1",
         run_id="run-1",
+        task_id="task-1",
         kind=StageKind.MODEL_INFERENCE,
         input_artifact_hash="a" * 64,
         model_boundary_privacy=attestation,

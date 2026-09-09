@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/v2/internal/cli/browserorigin"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/network"
@@ -379,8 +380,12 @@ CORS preflight.`,
 // printEnrollConfig outputs a configuration snippet for the frontend developer.
 func printEnrollConfig(cmd *cobra.Command, origin, rpID, rpName, publicBaseURL string) {
 	if rpID == "" {
-		if u, err := url.Parse(origin); err == nil && u.Host != "" {
-			rpID = u.Host
+		// Derive the default RP ID from the centralized browser origin parser
+		// so the hostname (never host:port) is used. The previous
+		// implementation used url.URL.Host, which includes the port and
+		// produces invalid WebAuthn RP IDs for any ported origin.
+		if parsed, err := browserorigin.Parse(origin); err == nil {
+			rpID = parsed.RPID
 		} else {
 			rpID = "localhost"
 		}
@@ -439,19 +444,16 @@ func printEnrollConfig(cmd *cobra.Command, origin, rpID, rpName, publicBaseURL s
 	cmd.Printf("  --cors-origin %s --passkey-rp-origin %s\n", origin, origin)
 }
 
-// validateOrigin checks that the origin is a valid HTTPS or HTTP URL.
+// validateOrigin checks that the origin is a valid browser frontend origin.
+// Validation and canonicalization are delegated to the centralized
+// browserorigin package so the GUI enrollment command, the gateway wizard,
+// explicit gateway flags, and `gw connect` share one implementation of the
+// browser-origin security rules. The previous implementation accepted paths,
+// queries, fragments, and user information and did not canonicalize the
+// origin; the centralized parser rejects all of those.
 func validateOrigin(origin string) error {
-	u, err := url.Parse(origin)
-	if err != nil {
-		return fmt.Errorf("%w: invalid origin URL: %w", constants.ErrValidationFailed, err)
-	}
-	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("%w: origin must use http or https scheme, got %s", constants.ErrValidationFailed, u.Scheme)
-	}
-	if u.Host == "" {
-		return fmt.Errorf("%w: origin must have a host", constants.ErrValidationFailed)
-	}
-	return nil
+	_, err := browserorigin.Parse(origin)
+	return err
 }
 
 // guiEnrollmentFilePath returns the path to the GUI enrollment file.

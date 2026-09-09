@@ -39,7 +39,7 @@ func TestValidateOrigin(t *testing.T) {
 	}{
 		{"valid https", "https://my-app.lovable.app", false},
 		{"valid http", "http://localhost:3003", false},
-		{"valid http with path", "http://localhost:3003/app", false},
+		{"http with path rejected", "http://localhost:3003/app", true},
 		{"empty string", "", true},
 		{"ftp scheme", "ftp://example.com", true},
 		{"no scheme", "example.com", true},
