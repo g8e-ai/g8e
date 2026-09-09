@@ -370,6 +370,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.WRONG_BOUNDARY_BINDING,
                 reason="secret_detection_recall consumes secret-detection observations, not collection-boundary observations",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.NOT_APPLICABLE,
+                reason="secret_detection_recall denominator is TP+FN which equals expected_sensitive_occurrences (ge=1), so the denominator can never be zero with a valid assertion",
+            ),
         ],
     ),
     GraderInventoryEntry(

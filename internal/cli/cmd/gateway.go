@@ -379,11 +379,13 @@ it to a temporary JSON file in the runtime directory, and passes that file to
 the Gateway subprocess. --cert-mode localhost continues to use loopback-only
 identities, including IPv6 localhost when available.
 
-Posture Persistence: The gateway posture is persisted in
-.g8e/pids/operator.posture on startup. When using 'gateway restart', the
-current posture is read from this file and preserved. If the file is missing or
-corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
-'doctrine', 'consensus', 'ratify', and 'notary'.`,
+Posture Persistence: The complete launch configuration is persisted in
+.g8e/pids/operator-launch-profile.json on every successful background start. When
+using 'gateway restart', the full configuration (CORS, passkey, ports, posture,
+downstream routes, rate limits, doctrine, consensus, vault, cert mode, public
+base URL) is read from this profile and restored. If the profile is missing or
+malformed, the restart fails closed rather than falling back to default settings.
+Valid posture values are 'doctrine', 'consensus', 'ratify', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := configLoader("")
 			if err != nil {
@@ -496,6 +498,14 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			_, pid, err = pm.OperatorStatus()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
+			}
+
+			// Persist the complete validated launch profile so `gw restart`
+			// can reconstruct the full configuration rather than falling back
+			// to posture-only defaults. Written only after StartOperator
+			// succeeds so the profile always reflects a known-good launch.
+			if err := serve.WriteLaunchProfile(fileSvc, gatewayCfg); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			externalIP := network.GetExternalInterfaceIP()
@@ -669,9 +679,11 @@ func gatewayRestartCmdWithConfig(
 		Use:   "restart",
 		Short: "Restart the g8e Gateway",
 		Long: `Restart the g8e Gateway by stopping the current process and starting a new
-one. The current posture is read from the persisted posture file
-(.g8e/pids/operator.posture) and preserved across the restart. If the file is
-missing, the gateway defaults to 'doctrine' posture.`,
+one. The complete launch configuration is read from the persisted launch profile
+(.g8e/pids/operator-launch-profile.json) and restored across the restart. If the
+profile is missing, malformed, or unsupported, the restart fails closed rather
+than falling back to default settings. Network identity is re-detected on every
+restart.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := configLoader("")
 			if err != nil {
@@ -687,6 +699,15 @@ missing, the gateway defaults to 'doctrine' posture.`,
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
+			// Read the complete launch profile before stopping the
+			// gateway. Missing, malformed, or unsupported profiles fail
+			// closed — restart no longer falls back to posture-only
+			// defaults.
+			profile, err := serve.ReadLaunchProfile(fileSvc)
+			if err != nil {
+				return fmt.Errorf("gateway: read launch profile: %w", err)
+			}
+
 			running, _, err := pm.OperatorStatus()
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
@@ -700,27 +721,41 @@ missing, the gateway defaults to 'doctrine' posture.`,
 			}
 
 			cmd.Println("Starting g8e Gateway...")
-			currentPosture, err := pm.ReadPosture()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPostureReadFailed, err)
+			cmd.Printf("[g8e] Restarting with posture: %s\n", profile.Config.Posture)
+
+			// Re-run network identity detection with the persisted cert
+			// mode so the subprocess gets fresh identity state. The
+			// subprocess re-detects identity in foreground; the parent
+			// detection is for display and to resolve the effective mode
+			// (which may fall back to "localhost" on detection failure).
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			identityResult := detectIdentity(context.Background(), logger, profile.Config.CertIdentityMode)
+
+			if identityResult.ShouldFallback {
+				cmd.Printf("Warning: Failed to detect network identity, falling back to localhost-only mode\n")
+			} else if identityResult.Identity != nil {
+				cmd.Println(identityResult.Identity.FormatForDisplay())
+				cmd.Println()
 			}
-			if currentPosture == "" {
-				currentPosture = "doctrine"
-				cmd.Println("[g8e] Warning: No posture file found, restarting with default 'doctrine' posture.")
-			} else {
-				cmd.Printf("[g8e] Restarting with current posture: %s\n", currentPosture)
-			}
+
+			// Apply the resolved cert mode (may differ from the persisted
+			// value if detection failed and fell back to "localhost").
+			profile.Config.CertIdentityMode = identityResult.CertMode
+
 			if err := pm.StartOperator(platform.OperatorStartOptions{
-				GatewayConfig: serve.GatewayConfig{
-					Posture:  g8econfig.GatewayPosture(currentPosture),
-					LogLevel: "info",
-				},
+				GatewayConfig: profile.Config,
 			}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
+			// Re-persist the profile with the resolved cert mode so the
+			// next restart uses the effective configuration.
+			if err := serve.WriteLaunchProfile(fileSvc, profile.Config); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+
 			cmd.Println("g8e Gateway restarted successfully")
-			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
+			postureObj, _ := governance.ParseGovernancePosture(string(profile.Config.Posture))
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nConsole UI: %s/console/ (WebAuthn/passkey dashboard)\n", network.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 			if postureObj.RequiresL3Proof() {

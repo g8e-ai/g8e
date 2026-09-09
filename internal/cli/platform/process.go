@@ -174,38 +174,6 @@ func (pm *ProcessManager) deletePID(filename string) error {
 	return pm.fileSvc.Remove(context.Background(), relPath)
 }
 
-func (pm *ProcessManager) writePosture(posture string) error {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	return pm.fileSvc.WriteFile(context.Background(), relPath, []byte(posture), constants.PermFilePrivate)
-}
-
-func (pm *ProcessManager) readPosture() (string, error) {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	postureData, err := pm.fileSvc.ReadFile(context.Background(), relPath)
-	if err != nil {
-		if errors.Is(err, constants.ErrNotFound) {
-			return "", nil
-		}
-		return "", fmt.Errorf("%w: %w", constants.ErrPostureReadFailed, err)
-	}
-	posture := string(postureData)
-	// Validate posture is one of the allowed values
-	_, validPosture := constants.GetGovernancePostureRequirements(posture)
-	if posture != "" && !validPosture {
-		return "", fmt.Errorf("%w: invalid value '%s': must be %s, %s, %s, or %s", constants.ErrInvalidPosture, posture, constants.PostureDoctrine, constants.PostureConsensus, constants.PostureRatify, constants.PostureNotary)
-	}
-	return posture, nil
-}
-
-func (pm *ProcessManager) deletePosture() error {
-	relPath := filepath.Join(constants.PidDirname, constants.OperatorPostureFilename)
-	return pm.fileSvc.Remove(context.Background(), relPath)
-}
-
-func (pm *ProcessManager) ReadPosture() (string, error) {
-	return pm.readPosture()
-}
-
 // operatorBinaryName returns the canonical filename for the copied operator
 // binary in .g8e/bin, accounting for the platform-specific extension.
 func operatorBinaryName() string {
@@ -453,15 +421,6 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
 	}
 
-	if err := pm.writePosture(string(opts.Posture)); err != nil {
-		_ = cmd.Process.Kill()
-		_ = pm.deletePID(constants.OperatorPIDFilename)
-		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPostureWriteFailed, err, closeErr)
-		}
-		return fmt.Errorf("%w: %v", constants.ErrPostureWriteFailed, err)
-	}
-
 	if err := logHandle.Close(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
@@ -519,7 +478,7 @@ func (pm *ProcessManager) StopOperator() error {
 		return err
 	}
 
-	return pm.deletePosture()
+	return nil
 }
 
 func (pm *ProcessManager) OperatorStatus() (bool, int, error) {

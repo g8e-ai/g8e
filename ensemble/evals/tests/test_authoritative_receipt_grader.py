@@ -384,6 +384,131 @@ def test_canary_scrubbing_grader_fails_closed_on_mismatched_evidence(
     assert result.failure == failure
 
 
+def _canary_context_with_stage(**stage_update) -> DeterministicGradingContext:
+    context = _canary_context()
+    stage = context.stages[0].model_copy(update=stage_update)
+    return DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=[stage],
+    )
+
+
+def test_canary_scrubbing_grader_rejects_cross_attempt_observation():
+    context = _canary_context_with_stage(attempt_id="other-attempt")
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "scrubbing stage attempt does not match"
+
+
+def test_canary_scrubbing_grader_rejects_cross_run_observation():
+    context = _canary_context_with_stage(run_id="other-run")
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "scrubbing stage run does not match"
+
+
+def test_canary_scrubbing_grader_rejects_cross_task_observation():
+    context = _canary_context_with_stage(task_id="other-task")
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "scrubbing stage task does not match"
+
+
+def test_canary_scrubbing_grader_rejects_duplicate_scrubbing_stages():
+    context = _canary_context()
+    duplicate_stage = context.stages[0].model_copy(update={"stage_id": "scrub-2"})
+    stages = [context.stages[0], duplicate_stage]
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=stages,
+    )
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one matching scrubbing stage is required"
+
+
+def test_canary_scrubbing_grader_fails_closed_on_missing_scrubbing_stage():
+    context = _canary_context()
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=[],
+    )
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one matching scrubbing stage is required"
+
+
+def test_canary_scrubbing_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"canary_scrubbing@2\.0\.0"):
+        grade_deterministically("canary_scrubbing", "2.0.0", _canary_context())
+
+
+def test_canary_scrubbing_grader_rejects_source_mismatch():
+    context = _canary_context_with_stage(source="other-source")
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one matching scrubbing stage is required"
+
+
+def test_canary_scrubbing_grader_aggregates_multiple_assertions():
+    context = _canary_context()
+    assertion1 = context.task.sensitive_canary_annotations[0]
+    assertion2 = assertion1.model_copy(update={
+        "assertion_id": "canary-2",
+        "source": "conversation_history:assistant",
+        "input_artifact_sha256": "d" * 64,
+        "expected_output_artifact_sha256": "e" * 64,
+        "expected_scrub_type": "api_key",
+    })
+    stage1 = context.stages[0]
+    stage2 = stage1.model_copy(update={
+        "stage_id": "scrub-2",
+        "source": "conversation_history:assistant",
+        "input_artifact_hash": "d" * 64,
+        "output_artifact_hash": "e" * 64,
+        "scrub_count": 1,
+        "scrub_types": ["api_key"],
+    })
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "sensitive_canary_annotations": [assertion1, assertion2],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=[stage1, stage2],
+    )
+
+    result = grade_deterministically("canary_scrubbing", "1.0.0", context)
+
+    assert result.value == 1.0
+    assert result.verification_status == VerificationStatus.VERIFIED
+    assert set(result.evidence_refs) == {"scrub-1", "scrub-2"}
+
+
 def _model_boundary_context(
     *,
     raw_sensitive_occurrences: int = 0,
@@ -455,6 +580,90 @@ def test_model_boundary_grader_fails_closed_on_unverifiable_attestation(
     assert result.value == 0.0
     assert result.verification_status == VerificationStatus.FAILED
     assert result.failure == failure
+
+
+def _model_boundary_context_with_stage(**stage_update) -> DeterministicGradingContext:
+    context = _model_boundary_context()
+    stage = context.stages[0].model_copy(update=stage_update)
+    return DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=[stage],
+    )
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_cross_attempt_observation():
+    context = _model_boundary_context_with_stage(attempt_id="other-attempt")
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary stage attempt does not match"
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_cross_run_observation():
+    context = _model_boundary_context_with_stage(run_id="other-run")
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary stage run does not match"
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_cross_task_observation():
+    context = _model_boundary_context_with_stage(task_id="other-task")
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary stage task does not match"
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_duplicate_stages():
+    context = _model_boundary_context()
+    duplicate_stage = context.stages[0].model_copy(update={"stage_id": "model-call-2"})
+    stages = [context.stages[0], duplicate_stage]
+    context = DeterministicGradingContext(
+        task=context.task,
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=stages,
+    )
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary stages contain duplicate kinds"
+
+
+def test_model_boundary_raw_secret_rate_grader_fails_closed_on_missing_attestation():
+    context = _model_boundary_context(include_attestation=False)
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary privacy attestation is missing"
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_unsupported_version():
+    with pytest.raises(UnsupportedGraderError, match=r"model_boundary_raw_secret_rate@2\.0\.0"):
+        grade_deterministically("model_boundary_raw_secret_rate", "2.0.0", _model_boundary_context())
+
+
+def test_model_boundary_raw_secret_rate_grader_rejects_source_mismatch():
+    context = _model_boundary_context(input_hash="b" * 64)
+
+    result = grade_deterministically("model_boundary_raw_secret_rate", "1.0.0", context)
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "model-boundary privacy attestation payload hash does not match"
 
 
 def _secret_detection_context(
@@ -647,6 +856,113 @@ def test_secret_detection_precision_is_not_applicable_without_detected_occurrenc
     assert result.denominator_contribution == 0
     assert result.verification_status == VerificationStatus.NOT_APPLICABLE
     assert result.failure == "secret-detection precision denominator is zero"
+
+
+def test_secret_detection_graders_measured_failure_below_one():
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", _secret_detection_context())
+
+        assert result.value < 1.0
+        assert result.verification_status == VerificationStatus.VERIFIED
+        assert result.failure == f"secret-detection {grader_id.split('_')[-1]} is below one"
+
+
+def test_secret_detection_graders_aggregates_multiple_assertions():
+    context = _secret_detection_context()
+    assertion1 = context.task.secret_detection_assertions[0]
+    assertion2 = assertion1.model_copy(update={
+        "assertion_id": "secret-detection-2",
+        "source": "conversation_history:assistant",
+        "input_artifact_sha256": "d" * 64,
+    })
+    observation1 = context.secret_detection_observations[0]
+    observation2 = observation1.model_copy(update={
+        "observation_id": "secret-observation-2",
+        "assertion_id": assertion2.assertion_id,
+        "source": assertion2.source,
+        "input_artifact_sha256": assertion2.input_artifact_sha256,
+    })
+    context = DeterministicGradingContext(
+        task=context.task.model_copy(update={
+            "secret_detection_assertions": [assertion1, assertion2],
+        }),
+        attempt=context.attempt,
+        receipts=context.receipts,
+        stages=context.stages,
+        secret_detection_observations=[observation1, observation2],
+    )
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.VERIFIED
+        assert result.denominator_contribution == 6
+
+
+def test_secret_detection_graders_rejects_cross_attempt_observation():
+    context = _secret_detection_context(observation_attempt_id="other-attempt")
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "secret-detection observation attempt does not match"
+
+
+def test_secret_detection_graders_rejects_cross_run_observation():
+    context = _secret_detection_context(observation_run_id="other-run")
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "secret-detection observation context does not match"
+
+
+def test_secret_detection_graders_rejects_cross_task_observation():
+    context = _with_secret_detection_observation_update(
+        _secret_detection_context(),
+        task_id="other-task",
+    )
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "secret-detection observation context does not match"
+
+
+def test_secret_detection_graders_rejects_duplicate_observations():
+    context = _secret_detection_context(duplicate_observation=True)
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "exactly one secret-detection observation is required"
+
+
+def test_secret_detection_graders_fails_closed_on_missing_observation():
+    context = _secret_detection_context(include_observation=False)
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "secret-detection observation is missing"
+
+
+def test_secret_detection_graders_rejects_source_mismatch():
+    context = _with_secret_detection_observation_update(
+        _secret_detection_context(),
+        source="other-source",
+    )
+
+    for grader_id in ("secret_detection_precision", "secret_detection_recall"):
+        result = grade_deterministically(grader_id, "1.0.0", context)
+
+        assert result.verification_status == VerificationStatus.FAILED
+        assert result.failure == "secret-detection observation assertion binding does not match"
 
 
 def _rehydration_context(
@@ -862,6 +1178,93 @@ def test_exact_local_rehydration_grader_fails_closed_on_unverifiable_evidence(
     assert result.denominator_contribution == 0
     assert result.verification_status == VerificationStatus.FAILED
     assert result.failure == failure
+
+
+def test_exact_local_rehydration_grader_rejects_cross_attempt_observation():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _rehydration_context(observation_attempt_id="other-attempt"),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration observation attempt does not match"
+
+
+def test_exact_local_rehydration_grader_rejects_cross_run_observation():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _rehydration_context(observation_run_id="other-run"),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration observation context does not match"
+
+
+def test_exact_local_rehydration_grader_rejects_cross_task_observation():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _with_rehydration_observation_update(_rehydration_context(), task_id="other-task"),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration observation context does not match"
+
+
+def test_exact_local_rehydration_grader_rejects_duplicate_observations():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _rehydration_context(duplicate_observation=True),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "exactly one rehydration observation is required"
+
+
+def test_exact_local_rehydration_grader_fails_closed_on_missing_observation():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _rehydration_context(include_observation=False),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration observation is missing"
+
+
+def test_exact_local_rehydration_grader_rejects_boundary_mismatch():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _with_rehydration_observation_update(
+            _rehydration_context(),
+            execution_boundary="remote_provider",
+        ),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration did not execute at the local runtime boundary"
+
+
+def test_exact_local_rehydration_grader_rejects_source_mismatch():
+    result = grade_deterministically(
+        "exact_local_rehydration",
+        "1.0.0",
+        _with_rehydration_observation_update(_rehydration_context(), source="other-source"),
+    )
+
+    assert result.value == 0.0
+    assert result.verification_status == VerificationStatus.FAILED
+    assert result.failure == "rehydration observation assertion binding does not match"
 
 
 def _policy_context(

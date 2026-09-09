@@ -143,6 +143,14 @@ var (
 	ErrBinaryResolveFailed     = errors.New("failed to resolve operator binary")
 	ErrBinaryCopyFailed        = errors.New("failed to copy operator binary")
 
+	// Launch profile errors. The launch profile is the complete validated
+	// configuration persisted after every successful managed background
+	// `gw start` and read by `gw restart` to reconstruct the prior launch.
+	ErrLaunchProfileMissing           = errors.New("launch profile not found")
+	ErrLaunchProfileCorrupted         = errors.New("launch profile is corrupted")
+	ErrLaunchProfileVersionUnsupported = errors.New("launch profile version is unsupported")
+	ErrLaunchProfileInvalid           = errors.New("launch profile is invalid")
+
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")
 	ErrStatFailed           = errors.New("failed to stat path")

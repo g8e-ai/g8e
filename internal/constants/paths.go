@@ -360,6 +360,14 @@ const (
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
+
+	// Launch profile persisted after every successful managed background
+	// `gw start`. Read by `gw restart` to reconstruct the complete prior
+	// launch configuration (CORS, passkey, ports, posture, downstream
+	// routes, rate limits, doctrine, consensus, vault, cert mode, public
+	// base URL). Ephemeral network identity is re-detected on restart, not
+	// persisted. Stored under .g8e/pids/ alongside the PID file.
+	OperatorLaunchProfileFilename = "operator-launch-profile.json"
 )
 
 // Runtime directory constants for the .g8e/ state tree.
