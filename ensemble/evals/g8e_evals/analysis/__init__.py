@@ -30,6 +30,15 @@ from g8e_evals.analysis.canonical import (
     PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
 )
+from g8e_evals.analysis.derived import (
+    DEFAULT_DERIVED_REGISTRY,
+    DerivedObservationCollisionError,
+    DerivedProducerError,
+    DerivedProducerRegistry,
+    DerivedRegistryIncompleteError,
+    DuplicateDerivedProducerError,
+    run_all_derived_producers,
+)
 from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis, compute_canonical_analysis_from_record
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
@@ -42,11 +51,13 @@ from g8e_evals.analysis.telemetry import (
     TelemetryRegistryIncompleteError,
     run_all_telemetry_producers,
 )
+from g8e_evals.analysis import derived
 from g8e_evals.analysis import telemetry
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
     "ANALYSIS_SCHEMA_VERSION",
+    "DEFAULT_DERIVED_REGISTRY",
     "DEFAULT_TELEMETRY_REGISTRY",
     "AnalysisInputRecord",
     "AnalysisInputSummary",
@@ -55,7 +66,12 @@ __all__ = [
     "CanonicalEvalAnalysis",
     "ComparisonDirection",
     "ConfusionMatrix",
+    "DerivedObservationCollisionError",
+    "DerivedProducerError",
+    "DerivedProducerRegistry",
+    "DerivedRegistryIncompleteError",
     "DomainStratifiedResult",
+    "DuplicateDerivedProducerError",
     "DuplicateTelemetryProducerError",
     "GateDecision",
     "GateDecisionStatus",
@@ -73,9 +89,11 @@ __all__ = [
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
     "compute_canonical_analysis_from_record",
+    "derived",
     "render_cli",
     "render_html",
     "render_markdown",
+    "run_all_derived_producers",
     "run_all_telemetry_producers",
     "statistics",
     "telemetry",

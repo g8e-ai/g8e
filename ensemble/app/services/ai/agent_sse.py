@@ -45,6 +45,11 @@ from app.models.events import (
 from app.utils.timestamp import now
 from app.errors import ValidationError
 from app.services.infra.event_service import EventService
+from app.services.observe.payloads import (
+    build_agent_state_request,
+    build_investigation_run_state_request,
+    resolve_chat_persona_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +136,65 @@ async def deliver_via_sse(
                 exc,
             )
 
+    # Observe producer: resolve the active persona for agent-state projections.
+    # If the persona cannot be identified from the request, agent updates are
+    # omitted and that path is recorded as unsupported.
+    _persona_id = resolve_chat_persona_id(inputs.active_agent)
+    _run_display_name = ""
+    if inputs.investigation:
+        _run_display_name = inputs.investigation.case_title or ""
+
+    async def _push_agent_state(status: str) -> None:
+        """Best-effort agent-state projection push. Skips when persona is
+        unresolved or routing is targetless. Failures are caught at this
+        boundary and do not abort the stream."""
+        if _persona_id is None:
+            return
+        request = build_agent_state_request(
+            user_id=user_id,
+            persona_id=_persona_id,
+            status=status,
+            run_id=investigation_id,
+            model=inputs.model_to_use,
+            web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
+        )
+        if request is None:
+            return
+        try:
+            await event_service.publish_agent_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[SSE] observe agent-state push failed (non-blocking): %s",
+                exc,
+            )
+
+    async def _push_run_state(status: str) -> None:
+        """Best-effort investigation run-state projection push. The
+        investigation run is kept non-terminal during ordinary chat.
+        Failures are caught at this boundary and do not abort the stream."""
+        request = build_investigation_run_state_request(
+            run_id=investigation_id,
+            display_name=_run_display_name,
+            status=status,
+            user_id=user_id,
+            web_session_id=web_session_id,
+            cli_session_id=cli_session_id,
+        )
+        if request is None:
+            return
+        try:
+            await event_service.publish_run_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "[SSE] observe run-state push failed (non-blocking): %s",
+                exc,
+            )
+
     if has_sse:
         logger.info(
             "[SSE] Starting delivery: investigation_id=%s case_id=%s user_id=%s workflow=%s sentinel_mode=%s",
@@ -155,6 +219,9 @@ async def deliver_via_sse(
         EventType.AI_LLM_CHAT_ITERATION_STARTED,
         ChatProcessingStartedPayload(agent_mode=agent_mode),
     )
+    # Agent and investigation run enter running state when the chat iteration starts.
+    await _push_agent_state("running")
+    await _push_run_state("running")
 
     _turn = 0
     _thinking_started = False
@@ -261,6 +328,9 @@ async def deliver_via_sse(
                                 timestamp=now().isoformat(),
                             ),
                         )
+                        # Agent and run enter waiting while a universal tool is executing.
+                        await _push_agent_state("waiting")
+                        await _push_run_state("waiting")
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
                 exec_id = chunk.data.execution_id
@@ -312,6 +382,9 @@ async def deliver_via_sse(
                                 timestamp=now().isoformat(),
                             ),
                         )
+                        # Agent and run return to running after the universal tool result.
+                        await _push_agent_state("running")
+                        await _push_run_state("running")
 
                 _turn += 1
 
@@ -377,6 +450,8 @@ async def deliver_via_sse(
                     EventType.AI_LLM_CHAT_ITERATION_FAILED,
                     ChatErrorPayload(error=error_message),
                 )
+                # Agent enters failed state on a terminal model error.
+                await _push_agent_state("failed")
                 error_occurred = True
                 break  # Break instead of return to ensure post-loop code executes
 
@@ -404,6 +479,11 @@ async def deliver_via_sse(
                     agent_mode=agent_mode,
                 ),
             )
+            # Agent and run complete when the persona's turn work finishes.
+            # The investigation run is NOT marked terminal here; a later chat
+            # turn on the same investigation refreshes it as running.
+            await _push_agent_state("completed")
+            await _push_run_state("running")
 
         logger.info(
             "[SSE] Complete: investigation_id=%s has_citations=%s "
@@ -425,6 +505,8 @@ async def deliver_via_sse(
                 timestamp=now(),
             ),
         )
+        # Agent enters idle on cancellation; the run stays non-terminal.
+        await _push_agent_state("idle")
         raise
 
     except Exception as e:
@@ -433,3 +515,5 @@ async def deliver_via_sse(
             EventType.AI_LLM_CHAT_ITERATION_FAILED,
             ChatErrorPayload(error=str(e)),
         )
+        # Agent enters failed on an unexpected terminal exception.
+        await _push_agent_state("failed")

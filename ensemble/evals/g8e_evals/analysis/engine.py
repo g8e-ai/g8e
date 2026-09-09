@@ -46,6 +46,7 @@ from g8e_evals.analysis.canonical import (
     ReceiptCoverageAnalysis,
     canonical_model_json,
 )
+from g8e_evals.analysis.derived import run_all_derived_producers
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.telemetry import run_all_telemetry_producers
 from g8e_evals.arms import ARM_DEFINITIONS
@@ -444,6 +445,8 @@ def _metric_is_eligible(
         EligibilityKind.HUMAN_WAIT_OBSERVATION,
     ):
         return True
+    if contract.eligibility == EligibilityKind.DERIVED:
+        return False
     return False
 
 
@@ -525,8 +528,23 @@ def _compute_metric_results(
                 obs = obs_by_attempt.get(attempt.attempt_id)
                 task = task_by_id[attempt.task_id]
                 contract_eligible = _metric_is_eligible(task, attempt, definition)
+                is_derived = definition.applicability.eligibility == EligibilityKind.DERIVED
                 if obs is not None:
-                    if obs.eligible and not contract_eligible:
+                    if is_derived:
+                        if obs.eligible:
+                            eligible_count += 1
+                            denominator += obs.denominator_contribution
+                            if obs.value is not None:
+                                numerator += obs.value * obs.denominator_contribution
+                                accepted_non_missing_obs.append(obs)
+                            else:
+                                missing_count += 1
+                            verification_counts[obs.verification_status.value] += 1
+                            evidence_ref_count += len(obs.evidence_refs)
+                            obs_ids.append(_metric_observation_id(obs))
+                        else:
+                            not_eligible_count += 1
+                    elif obs.eligible and not contract_eligible:
                         # Producer marked eligible=True but the typed contract
                         # says the attempt is ineligible (wrong arm, wrong suite,
                         # missing assertions, etc.). Reject the producer's flag;
@@ -1207,6 +1225,7 @@ def compute_canonical_analysis_from_record(
     arm_ids = sorted({a.arm_id.value for a in record.attempts})
 
     all_metric_observations = run_all_telemetry_producers(record, record.metric_observations)
+    all_metric_observations = run_all_derived_producers(record, all_metric_observations)
 
     metric_results = _compute_metric_results(record.tasks, record.attempts, all_metric_observations)
     gate_decisions = _compute_gate_decisions(metric_results)

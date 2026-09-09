@@ -35,9 +35,14 @@ from app.models.investigations import (
 from app.models.operators import OperatorDocument
 from app.models.tool_results import TokenUsage
 from app.services.protocols import (
+    EventServiceProtocol,
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
     MemoryDataServiceProtocol,
+)
+from app.services.observe.payloads import (
+    build_investigation_run_state_request,
+    map_investigation_status_to_run_lifecycle,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,10 +54,12 @@ class InvestigationService:
         investigation_data_service: InvestigationDataServiceProtocol,
         operator_data_service: OperatorDataServiceProtocol,
         memory_data_service: MemoryDataServiceProtocol,
+        event_service: EventServiceProtocol | None = None,
     ):
         self._investigation_data_service = investigation_data_service
         self._operator_data_service = operator_data_service
         self._memory_data_service = memory_data_service
+        self._event_service = event_service
 
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol:
@@ -88,7 +95,11 @@ class InvestigationService:
         request: InvestigationCreateRequest,
     ) -> InvestigationModel:
         """Domain orchestration for creating a new investigation."""
-        return await self.investigation_data_service.create_investigation(request)
+        investigation = await self.investigation_data_service.create_investigation(request)
+        # Push a queued run projection after successful governed creation persistence.
+        # If creation fails, the data service raises before reaching here.
+        await self._push_run_projection(investigation, "queued")
+        return investigation
 
     async def get_investigation_context(
         self,
@@ -376,6 +387,10 @@ class InvestigationService:
             investigation_id, patch, request.context
         )
         logger.info("Updated investigation %s", investigation_id)
+        # Push a run projection after authoritative status persistence.
+        if "status" in changes:
+            run_status = map_investigation_status_to_run_lifecycle(investigation.status)
+            await self._push_run_projection(investigation, run_status)
         return investigation
 
     async def persist_ai_message(
@@ -412,6 +427,43 @@ class InvestigationService:
                 token_usage=token_usage,
             ),
         )
+
+    async def _push_run_projection(
+        self,
+        investigation: InvestigationModel,
+        status: str,
+    ) -> None:
+        """Best-effort investigation run-state projection push.
+
+        Derives the display name from the disclosure-safe case title only.
+        Routing targets come from the investigation's web_session_id; CLI
+        sessions are not associated with investigation creation. If the
+        event service is not injected or the routing is targetless, the
+        push is skipped. Failures are caught at this boundary and do not
+        abort the primary investigation write.
+        """
+        if self._event_service is None:
+            return
+        request = build_investigation_run_state_request(
+            run_id=investigation.id,
+            display_name=investigation.case_title or "",
+            status=status,
+            user_id=investigation.user_id or "",
+            web_session_id=investigation.web_session_id,
+            cli_session_id=None,
+        )
+        if request is None:
+            return
+        try:
+            await self._event_service.publish_run_state(request)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "observe run-state push failed for investigation %s (non-blocking): %s",
+                investigation.id,
+                exc,
+            )
 
 
 def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
