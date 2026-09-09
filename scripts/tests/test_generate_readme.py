@@ -615,7 +615,7 @@ class TestRenderReadme(unittest.TestCase):
             self.assertIn(component, rendered)
         self.assertIn("<summary>Inspect machine-generated eval evidence and reproduction details</summary>", rendered)
         self.assertNotIn("## Domain Applications", rendered)
-        self.assertLess(len(TEMPLATE.read_text().splitlines()), 180)
+        self.assertLess(len(TEMPLATE.read_text().splitlines()), 200)
 
     def test_missing_marker_fails(self) -> None:
         snapshot = gr.load_snapshot(VALID)
@@ -896,6 +896,103 @@ class TestStage2ReadmeEvidence(unittest.TestCase):
         self.assertIn("campaign-profile.json", rendered)
         self.assertIn("provenance.json", rendered)
         self.assertIn("comparison.json", rendered)
+
+
+class TestReadmeModelChoiceAndStage2Presentation(unittest.TestCase):
+    """Focused tests for the Model Choice and Stage 2 presentation slice."""
+
+    def test_stage2_role_table_headings_labeled_with_run_id_and_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage2_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Configured and Observed Model Roles — Original", rendered)
+        self.assertIn("run-2026-09-01-synthetic-a", rendered)
+        self.assertIn("Configured and Observed Model Roles — Reproduction", rendered)
+        self.assertIn("run-2026-09-07-stage2-reproduction", rendered)
+        self.assertNotIn("#### Configured and Observed Model Roles\n", rendered)
+
+    def test_stage2_eval_metrics_omits_combined_ifeval_row(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage2_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertNotIn("| 7/10 |", rendered)
+        self.assertIn("#### Stage 2 Reproduction Comparison", rendered)
+        self.assertIn("| Original | Stage 1 |", rendered)
+        self.assertIn("| Reproduction | Stage 2 |", rendered)
+        self.assertIn("/5 |", rendered)
+        self.assertIn("Stage 2 Reproduction Comparison table above is the authoritative split view", rendered)
+
+    def test_stage1_role_table_heading_includes_run_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage1_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("Configured and Observed Model Roles (run-2026-09-01-synthetic-a)", rendered)
+        self.assertNotIn("Configured and Observed Model Roles — Original", rendered)
+        self.assertNotIn("Configured and Observed Model Roles — Reproduction", rendered)
+
+    def test_format_rate_zero_returns_explicit_string(self) -> None:
+        self.assertEqual(gr._format_rate(0.0), "0.0%")
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = _make_stage1_snapshot(tmp)
+            run_rel = "eval/runs/run-2026-09-01-synthetic-a"
+            metrics_path = snapshot_dir / run_rel / "metrics.jsonl"
+            rows = [json.loads(line) for line in metrics_path.read_text().splitlines()]
+            for row in rows:
+                row["value"] = 0.0
+            _write_jsonl(metrics_path, rows)
+            summary_path = snapshot_dir / run_rel / "summary.json"
+            summary = json.loads(summary_path.read_text())
+            summary["numerator"] = 0
+            summary_path.write_text(json.dumps(summary))
+            _set_artifact_checksum(snapshot_dir, f"{run_rel}/metrics.jsonl")
+            _set_artifact_checksum(snapshot_dir, f"{run_rel}/summary.json")
+            snapshot = gr.load_snapshot(snapshot_dir)
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        self.assertIn("0.0%", rendered)
+
+    def test_readme_template_contains_model_choice_section(self) -> None:
+        template = TEMPLATE.read_text()
+        self.assertIn("## Model Choice", template)
+        self.assertIn("`primary`", template)
+        self.assertIn("`assistant`", template)
+        self.assertIn("`lite`", template)
+        self.assertIn("OpenAI", template)
+        self.assertIn("Anthropic", template)
+        self.assertIn("Gemini", template)
+        self.assertIn("Ollama", template)
+        self.assertIn("llama.cpp", template)
+        self.assertIn("docs/ensemble/llm-providers.md", template)
+        self.assertIn("docs/ensemble/agents.md", template)
+
+    def test_readme_template_contains_planned_model_evaluation_section(self) -> None:
+        template = TEMPLATE.read_text()
+        self.assertIn("## Planned Model Evaluation", template)
+        self.assertIn("candidate; not yet compared by g8e", template)
+        self.assertIn("tool-model baselines", template)
+        self.assertIn("Heavy SLM", template)
+        self.assertIn("Small reasoning", template)
+        self.assertIn("Tiny generative", template)
+        self.assertIn("Encoder-classifier", template)
+        for word in ("winner", "best", "outperforms"):
+            self.assertNotIn(word, template)
+        self.assertIn("ollama/gemma4:12b", template)
+        self.assertIn("ollama/gemma4:e4b", template)
+        self.assertIn("ollama/gemma4:e2b", template)
+
+    def test_rendered_readme_separates_measured_from_planned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = gr.load_snapshot(_make_stage2_snapshot(tmp))
+            rendered = gr.render_readme(snapshot, TEMPLATE.read_text())
+        details_start = rendered.find("<details>")
+        details_end = rendered.find("</details>")
+        evidence_block = rendered[details_start:details_end]
+        self.assertIn("gemma4:12b", evidence_block)
+        self.assertIn("gemma4:e4b", evidence_block)
+        self.assertIn("gemma4:e2b", evidence_block)
+        before_evidence = rendered[:details_start]
+        self.assertIn("candidate; not yet compared by g8e", before_evidence)
+        self.assertIn("watt-tool-8B", before_evidence)
+        self.assertNotIn("watt-tool-8B", evidence_block)
 
 
 class TestPromoteReadmeEvidence(unittest.TestCase):

@@ -113,7 +113,7 @@ class TestBundleArtifactEntry:
 
     def test_frozen_model_rejects_mutation(self) -> None:
         entry = _public_entry()
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             entry.path = "other.json"
 
     def test_extra_field_rejected(self) -> None:
@@ -209,7 +209,7 @@ class TestBundleManifest:
 
     def test_frozen_model_rejects_mutation(self) -> None:
         manifest = _minimal_manifest()
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             manifest.bundle_id = "other"
 
     def test_extra_field_rejected(self) -> None:
@@ -296,7 +296,7 @@ class TestExternalReference:
             byte_length=1,
             media_type="application/json",
         )
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             ref.reference_id = "other"
 
     def test_extra_field_rejected(self) -> None:
@@ -362,7 +362,7 @@ class TestChecksumRoot:
 
     def test_checksum_entry_frozen(self) -> None:
         entry = ChecksumEntry(path="manifest.json", sha256=_sha256(b"x"))
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             entry.path = "other"
 
     def test_checksum_entry_extra_rejected(self) -> None:
@@ -375,7 +375,7 @@ class TestChecksumRoot:
 
     def test_checksum_root_frozen(self) -> None:
         root = ChecksumRoot(entries=[ChecksumEntry(path="a", sha256=_sha256(b"a"))])
-        with pytest.raises((AttributeError, TypeError)):
+        with pytest.raises(ValidationError):
             root.entries = []
 
     def test_checksum_root_extra_rejected(self) -> None:

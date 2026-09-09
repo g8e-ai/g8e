@@ -121,6 +121,8 @@ The reviewed snapshot under `docs/evidence/readme/current/` contains hash-safe p
 
 The projection, provenance collection, exact-digest approval, and promotion procedures are documented in [Release Process](../devs/release_process.md#stage-1-real-agent-readme-evidence). `scripts/generate_readme.py` validates the promoted snapshot and renders `README.md`; it does not run evaluations, decrypt evidence, or verify signatures.
 
+The generated README distinguishes measured models from planned candidates. The only measured cohort is `ollama/gemma4:12b`, `ollama/gemma4:e4b`, and `ollama/gemma4:e2b` in the two existing five-task executions. The `## Planned Model Evaluation` section lists candidate model families labeled `candidate; not yet compared by g8e` with no ranks, scores, or performance claims. The candidate roster expands during the generative campaign Phase 0 as canonical identities and backend artifacts are resolved against primary upstream sources.
+
 ## Tests and lint
 
 From the repository root, run:

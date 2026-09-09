@@ -87,6 +87,32 @@ g8ee is the first-party ensemble, not a Gateway dependency. g8eg also accepts co
 - [Native applications](docs/guides/connect_apps_to_gateway.md) using workload identity and canonical envelopes.
 - [The Go and Python protocol libraries](docs/architecture/protocol.md) for shared schemas, constants, and identity helpers.
 
+## Model Choice
+
+g8ee is bring-your-own-model. The user supplies provider credentials and model names for each tier; g8e does not ship or favor a specific model. Three independently configurable capacity tiers route work to the right model, and five production provider adapters cover cloud and local backends.
+
+| Tier | Use |
+| --- | --- |
+| `primary` | Complex chat turns, tool-capable agent loops, and primary reasoning work |
+| `assistant` | Simple chat turns |
+| `lite` | Triage, Tribunal generation, risk analysis, title generation, memory extraction, and other concise or structured tasks |
+
+Supported providers: OpenAI, Anthropic, Gemini, Ollama, and llama.cpp. See [LLM Providers](docs/ensemble/llm-providers.md) for configuration and [Agents](docs/ensemble/agents.md) for which persona uses which tier.
+
+## Planned Model Evaluation
+
+The following model families are candidates for a future g8e comparison campaign. Every entry is `candidate; not yet compared by g8e`. Presence means scheduled discovery, not checkpoint, license, backend, or publication qualification. The only measured README cohort remains `ollama/gemma4:12b`, `ollama/gemma4:e4b`, and `ollama/gemma4:e2b` in the two existing five-task executions; see the public eval snapshot below for those results.
+
+| Cohort | Candidates |
+| --- | --- |
+| Proposed tool-model baselines | `watt-tool-8B`, `Hammer2.1-7b`, `xLAM-2-8b-fc-r`, `ToolACE-8B` |
+| Heavy SLM (~7-9B) | `Gemma 4 E4B-it`, `Qwen3-8B`, `Ministral-3-8B-Instruct-2512`, `Llama-3.1-8B-Instruct`, `DeepSeek-R1-Distill-Qwen-7B`, `Llama-3.1-Nemotron-Nano-8B-v1`, `Qwen2.5-7B-Instruct`, `Hermes-3-Llama-3.1-8B`, `Granite-3.3-8B-Instruct`, `Gemma-2-9B-it` |
+| Small reasoning (~2.5-5B) | `Gemma 4 E2B-it`, `Qwen3-4B`, `Phi-4-mini-reasoning`, `Ministral-3-3B-Reasoning-2512`, `Phi-4-mini-instruct`, `Llama-3.2-3B-Instruct`, `SmolLM3-3B`, `Gemma-3-4B-it`, `LFM2-2.6B`, `Qwen2.5-3B-Instruct` |
+| Tiny generative (~135M-1.7B) | `Gemma-3-270M-it`, `Qwen3-0.6B`, `Qwen2.5-0.5B-Instruct`, `LFM2-350M`, `LFM2-700M`, `SmolLM2-360M-Instruct`, `SmolLM2-135M-Instruct`, `Llama-3.2-1B-Instruct`, `TinyLlama-1.1B-Chat-v1.0`, `SmolLM2-1.7B-Instruct` |
+| Encoder-classifier (separately gated) | ModernBERT, DeBERTa-v3-small, MiniLM, DistilBERT |
+
+The encoder-classifier cohort is separately gated: it requires a labeled dataset, training protocol, and non-generative inference adapter before any binary-decision table appears. The generative campaign does not block on classifier readiness. The candidate roster expands during the generative campaign Phase 0 as canonical identities and backend artifacts are resolved.
+
 ## Deploy where the data lives
 
 The Gateway can run in the cloud, on-premises, or in a hybrid topology. Operators run beside the systems they govern and support Linux, macOS, and Windows targets on amd64 and arm64. The repository includes Docker deployment, remote Operator enrollment, air-gap workflows, deterministic demonstrations, and the evidence pipeline used for compliance reporting.

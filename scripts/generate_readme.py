@@ -1771,7 +1771,7 @@ def _format_rate(rate: float) -> str:
     if rate == 1.0:
         return "100.0%"
     if rate == 0.0:
-        "0.0%"
+        return "0.0%"
     return f"{rate * 100:.1f}%"
 
 
@@ -1885,13 +1885,22 @@ def _render_evidence_identity(snapshot: ProofSnapshot) -> str:
         f"| Model cohort | {_escape_cell('; '.join(sorted(model_cohorts)))} |",
         f"| Receipt verifier scope | {_escape_cell(m.receipt_verification.scope)} |",
     ])
+    execution_labels: dict[str, str] = {}
+    if snapshot.stage2 is not None:
+        execution_labels[snapshot.stage2.comparison.baseline_run_id] = "Original"
+        execution_labels[snapshot.stage2.comparison.reproduction_run_id] = "Reproduction"
     for run in stage1_runs:
         ref = next(ref for ref in m.eval_runs if ref.run_id == run.run_id)
         observed_roles = _observed_configured_roles(run)
         role_map = run.manifest["role_to_model"]
+        label = execution_labels.get(run.run_id)
+        if label is not None:
+            heading = f"#### Configured and Observed Model Roles — {label} ({run.run_id})"
+        else:
+            heading = f"#### Configured and Observed Model Roles ({run.run_id})"
         lines.extend([
             "",
-            "#### Configured and Observed Model Roles",
+            heading,
             "",
             "Configured role mappings come from the public manifest. A role is labeled observed only when retained provider-boundary stage telemetry matches its configured provider and model.",
             "",
@@ -1946,8 +1955,12 @@ def _render_eval_metrics(snapshot: ProofSnapshot) -> str:
     ]
 
     metrics_path = snapshot.manifest.eval_runs[0].metrics_path
+    suppressed_combined_ifeval = False
     for key in sorted(projections.keys()):
         p = projections[key]
+        if snapshot.stage2 is not None and p.metric_id == "ifeval_subset_verifier":
+            suppressed_combined_ifeval = True
+            continue
         if p.unit in ("pass_fail", "boolean"):
             value = f"{int(p.numerator)}"
             rate = _format_rate(p.rate)
@@ -1959,6 +1972,12 @@ def _render_eval_metrics(snapshot: ProofSnapshot) -> str:
             f"| {link} | {_escape_cell(p.metric_version)} | {_escape_cell(p.arm_id)} | "
             f"{_escape_cell(p.unit)} | {value} | {p.denominator} | {rate} | "
             f"{_escape_cell(p.verification_status)} | {p.task_count} |"
+        )
+    if suppressed_combined_ifeval:
+        lines.append("")
+        lines.append(
+            "The combined `ifeval_subset_verifier` row is omitted in this Stage 2 snapshot. "
+            "The Stage 2 Reproduction Comparison table above is the authoritative split view."
         )
 
     # Report missing metrics.
