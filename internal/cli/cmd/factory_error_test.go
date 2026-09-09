@@ -10,14 +10,19 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/v2/internal/cli/auth"
 	"github.com/g8e-ai/g8e/v2/internal/cli/config"
+	"github.com/g8e-ai/g8e/v2/internal/cli/frontendverify"
+	"github.com/g8e-ai/g8e/v2/internal/cli/platform"
 	"github.com/g8e-ai/g8e/v2/internal/constants"
 	"github.com/g8e-ai/g8e/v2/internal/services/compliance/evidence"
 	compliancereport "github.com/g8e-ai/g8e/v2/internal/services/compliance/report"
@@ -25,6 +30,27 @@ import (
 )
 
 var errFactory = errors.New("factory boom")
+
+// panickingTrustInstaller is a mock auth.SystemTrustInstaller that panics on
+// every method call. Used in factory-error tests to prove that downstream
+// dependencies are not reached when fileSvcFactory fails.
+type panickingTrustInstaller struct{}
+
+func (p *panickingTrustInstaller) IsTrusted(context.Context, string) (bool, error) {
+	panic("trustInstaller.IsTrusted should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) InstallRoot(context.Context, *x509.Certificate, string) error {
+	panic("trustInstaller.InstallRoot should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) ListStaleAnchors(context.Context, string) ([]platform.StaleAnchor, error) {
+	panic("trustInstaller.ListStaleAnchors should not be called when fileSvcFactory fails")
+}
+
+func (p *panickingTrustInstaller) RemoveStaleAnchors(context.Context, []platform.StaleAnchor) error {
+	panic("trustInstaller.RemoveStaleAnchors should not be called when fileSvcFactory fails")
+}
 
 // configLoaderFor returns a config loader that always returns the given cfg.
 func configLoaderFor(cfg *config.Config) func(string) (*config.Config, error) {
@@ -669,6 +695,41 @@ func TestDockerStartCmdWithConfig_FileSvcFactoryError(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
+	assert.ErrorIs(t, err, errFactory)
+}
+
+// --- Gateway connect command (Phase 4) ---
+
+// TestGatewayConnectCmdWithConfig_FileSvcFactoryError verifies that a
+// fileSvcFactory failure is surfaced as ErrFileServiceInit with the original
+// factory error preserved via errors.Is. The command must fail before reaching
+// any downstream dependency (ProcessManager, trust installer, verifier).
+func TestGatewayConnectCmdWithConfig_FileSvcFactoryError(t *testing.T) {
+	_, cfg := newCmdTestEnv(t)
+
+	deps := connectDeps{
+		trustInstaller: &panickingTrustInstaller{},
+		discoveryFetcher: func(context.Context, string, func() time.Time) (auth.TrustDiscoveryResult, error) {
+			panic("discoveryFetcher should not be called when fileSvcFactory fails")
+		},
+		verifier: frontendverify.NewVerifier(frontendverify.VerifierDeps{
+			HTTPClientFactory: func(*x509.CertPool, time.Duration) (*http.Client, error) {
+				panic("verifier should not be called when fileSvcFactory fails")
+			},
+		}),
+		browserOpener: func(string) error {
+			panic("browserOpener should not be called when fileSvcFactory fails")
+		},
+	}
+
+	cmd := gatewayConnectCmdWithConfig(configLoaderFor(cfg), failingFileSvcFactory(errFactory), deps)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.RunE(cmd, []string{"https://your-app.lovable.app"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrFileServiceInit)
 	assert.ErrorIs(t, err, errFactory)

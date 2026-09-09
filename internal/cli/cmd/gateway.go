@@ -276,6 +276,7 @@ func gatewayCmd() *cobra.Command {
 		gatewayStopCmd(),
 		gatewayStatusCmd(),
 		gatewayRestartCmd(),
+		gatewayConnectCmd(),
 		gatewayLogsCmd(),
 		gatewaySettingsCmd(),
 		gatewayResetCmd(),

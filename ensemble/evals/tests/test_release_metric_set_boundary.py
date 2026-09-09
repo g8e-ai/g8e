@@ -18,14 +18,22 @@ from __future__ import annotations
 import pytest
 
 from g8e_evals.grader_inventory import GRADER_INVENTORY, ProducerPath
-from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
+from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY, GraderClass
 from g8e_evals.release_metric_set import (
     MetricDomain,
     RELEASE_METRIC_SET,
     ReleaseMetricSet,
 )
 
-_TELEMETRY_METRIC_IDS = frozenset({"stage_usage_reconciled"})
+_TELEMETRY_METRIC_IDS = frozenset({
+    "stage_usage_reconciled",
+    "stage_latency_seconds",
+    "provider_usage_tokens",
+    "provider_cost_usd",
+    "local_resource_peak_memory_bytes",
+    "local_resource_cpu_seconds",
+    "human_wait_seconds",
+})
 
 
 @pytest.mark.unit
@@ -45,8 +53,9 @@ def test_release_metric_set_covers_every_registered_metric_with_grader_ref():
 @pytest.mark.unit
 def test_release_metric_set_does_not_include_metrics_without_grader_ref():
     """Metrics without a grader_ref (no authoritative producer) must not
-    be in the release set unless they have a partial-external producer or
-    are telemetry metrics produced by the stage normalization pipeline."""
+    be in the release set unless they have a partial-external producer,
+    are telemetry metrics produced by the stage normalization pipeline,
+    or are derived analysis metrics with GraderClass.ANALYSIS."""
     release_ids = RELEASE_METRIC_SET.metric_ids
     partial_external_grader_ids = {
         entry.grader_id for entry in GRADER_INVENTORY.values()
@@ -56,9 +65,14 @@ def test_release_metric_set_does_not_include_metrics_without_grader_ref():
         if definition.grader_ref is None:
             key = (definition.metric_id, definition.metric_version)
             if key in release_ids:
-                assert definition.metric_id in partial_external_grader_ids or definition.metric_id in _TELEMETRY_METRIC_IDS, (
+                assert (
+                    definition.metric_id in partial_external_grader_ids
+                    or definition.metric_id in _TELEMETRY_METRIC_IDS
+                    or definition.grader_class == GraderClass.ANALYSIS
+                ), (
                     f"metric {definition.metric_id}@{definition.metric_version} "
-                    f"has no grader_ref, is not partial-external, and is not telemetry but is in the release set"
+                    f"has no grader_ref, is not partial-external, is not telemetry, "
+                    f"and is not analysis but is in the release set"
                 )
 
 
@@ -175,14 +189,20 @@ def test_every_release_metric_entry_has_a_threshold_description():
 @pytest.mark.unit
 def test_release_metric_count_matches_registry():
     """The release set size must equal the number of registered metrics
-    that have an authoritative producer (grader_ref or partial-external)."""
+    that have an authoritative producer (grader_ref, partial-external,
+    telemetry, or analysis grader class)."""
     partial_external_grader_ids = {
         entry.grader_id for entry in GRADER_INVENTORY.values()
         if entry.producer_path == ProducerPath.PARTIAL_EXTERNAL
     }
     expected_count = sum(
         1 for d in DEFAULT_METRIC_REGISTRY.all_definitions()
-        if d.grader_ref is not None or d.metric_id in partial_external_grader_ids or d.metric_id in _TELEMETRY_METRIC_IDS
+        if (
+            d.grader_ref is not None
+            or d.metric_id in partial_external_grader_ids
+            or d.metric_id in _TELEMETRY_METRIC_IDS
+            or d.grader_class == GraderClass.ANALYSIS
+        )
     )
     assert len(RELEASE_METRIC_SET.metrics) == expected_count
 

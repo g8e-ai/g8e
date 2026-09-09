@@ -92,6 +92,8 @@ FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "partial_milestone_observation_refs",
     "reliability_observation_refs",
     "economics_performance_observation_refs",
+    "local_resource_observation_refs",
+    "human_wait_observation_refs",
     "unsupported_exclusion_refs",
 })
 
@@ -138,6 +140,7 @@ class GraderClass(StrEnum):
     DETERMINISTIC = "deterministic"
     HUMAN = "human"
     LLM_JUDGE = "llm_judge"
+    ANALYSIS = "analysis"
 
 
 class GraderReference(BaseModel):
@@ -2450,6 +2453,73 @@ class EconomicsPerformanceObservation(BaseModel):
         return self
 
 
+class LocalResourceObservation(BaseModel):
+    """Independently observed local resource usage for one attempt.
+
+    Records peak and average local resource consumption (memory in bytes,
+    CPU seconds, disk bytes, file descriptor count) during attempt
+    execution. ``None`` values mean the measurement was not collected.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    peak_memory_bytes: int | None = None
+    average_memory_bytes: int | None = None
+    cpu_seconds: float | None = None
+    disk_bytes_written: int | None = None
+    disk_bytes_read: int | None = None
+    peak_fd_count: int | None = None
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> LocalResourceObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified local-resource observation requires source evidence")
+        return self
+
+
+class HumanWaitObservation(BaseModel):
+    """Independently observed human wait time for one attempt.
+
+    Records the wall-clock duration the system waited for a human action
+    (approval, denial, input) during attempt execution. This is separate
+    from model latency and provider wait. ``None`` means no human wait
+    occurred or the measurement was not collected.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str = SCHEMA_VERSION
+    observation_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    human_wait_seconds: float | None = None
+    human_action_type: str = ""
+    collected_at: datetime
+    source_evidence_refs: list[str] = Field(default_factory=list)
+    source_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    verification_status: VerificationStatus = VerificationStatus.PENDING
+
+    @model_validator(mode="after")
+    def _validate_evidence_binding(self) -> HumanWaitObservation:
+        if self.verification_status == VerificationStatus.VERIFIED and (
+            not self.source_evidence_refs or self.source_evidence_sha256 is None
+        ):
+            raise ValueError("verified human-wait observation requires source evidence")
+        return self
+
+
 class ExclusionScope(StrEnum):
     """Why a grader is deliberately not assessed for a task.
 
@@ -2853,6 +2923,8 @@ class AttemptRecord(BaseModel):
     partial_milestone_observation_refs: list[str] = Field(default_factory=list)
     reliability_observation_refs: list[str] = Field(default_factory=list)
     economics_performance_observation_refs: list[str] = Field(default_factory=list)
+    local_resource_observation_refs: list[str] = Field(default_factory=list)
+    human_wait_observation_refs: list[str] = Field(default_factory=list)
     receipt_refs: list[str] = Field(default_factory=list)
     grade_refs: list[str] = Field(default_factory=list)
     unsupported_exclusion_refs: list[str] = Field(default_factory=list)

@@ -148,6 +148,31 @@ def _build_release_metrics() -> list[ReleaseMetricEntry]:
         "reliability": MetricDomain.RELIABILITY,
         "economics_performance": MetricDomain.ECONOMICS,
         "stage_usage_reconciled": MetricDomain.TELEMETRY,
+        # Derived analysis metrics
+        "allow_block_confusion_matrix": MetricDomain.GOVERNANCE,
+        "attack_success_rate": MetricDomain.GOVERNANCE_ADVERSARIAL,
+        "expected_layer_detection": MetricDomain.GOVERNANCE,
+        "balanced_accuracy": MetricDomain.GOVERNANCE,
+        "matthews_correlation_coefficient": MetricDomain.GOVERNANCE,
+        "harm_weighted_loss": MetricDomain.GOVERNANCE_ADVERSARIAL,
+        "l2_proof_property": MetricDomain.GOVERNANCE,
+        "l3_proof_property": MetricDomain.GOVERNANCE,
+        "l4_proof_property": MetricDomain.GOVERNANCE,
+        "l5_proof_property": MetricDomain.GOVERNANCE,
+        "receipt_linkage": MetricDomain.GOVERNANCE,
+        "envelope_linkage": MetricDomain.GOVERNANCE,
+        "state_linkage": MetricDomain.STATE,
+        "persistence_linkage": MetricDomain.GOVERNANCE,
+        "commitment_linkage": MetricDomain.GOVERNANCE,
+        "audit_linkage": MetricDomain.GOVERNANCE,
+        "evidence_validity": MetricDomain.RELIABILITY,
+        # New primary telemetry metrics
+        "stage_latency_seconds": MetricDomain.TELEMETRY,
+        "provider_usage_tokens": MetricDomain.TELEMETRY,
+        "provider_cost_usd": MetricDomain.ECONOMICS,
+        "local_resource_peak_memory_bytes": MetricDomain.TELEMETRY,
+        "local_resource_cpu_seconds": MetricDomain.TELEMETRY,
+        "human_wait_seconds": MetricDomain.TELEMETRY,
     }
 
     entries: list[ReleaseMetricEntry] = []
