@@ -505,6 +505,16 @@ const (
 	TestPathRepoRootFromCompliancePackage    = "../../.."
 	TestDataDirname                          = "testdata"
 	TestEvalSyntheticGovernanceBundleDirname = "governance_adversarial-synthetic-20260906-000000"
+
+	// Source-tree protocol path constants for contract tests in
+	// internal/constants and internal/models. These resolve canonical
+	// protocol JSON files relative to the package directory so tests do not
+	// hand-roll "../../protocol/..." literals.
+	ProtocolSourceTreeRootFromInternalPkg            = "../../"
+	ProtocolEventsJSONFilename                       = "events.json"
+	ProtocolEventDashboardClassificationJSONFilename = "event_dashboard_classification.json"
+	ProtocolObserveAPIJSONFilename                   = "observe_api.json"
+	ProtocolObserveEventPayloadsJSONFilename         = "observe_event_payloads.json"
 )
 
 // Consensus bootstrap config filename for declarative consensus seeding.

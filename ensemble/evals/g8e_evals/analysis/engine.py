@@ -23,6 +23,9 @@ import hashlib
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
+
+from pydantic import BaseModel
 
 from g8e_evals.analysis import statistics
 from g8e_evals.analysis.canonical import (
@@ -44,6 +47,7 @@ from g8e_evals.analysis.canonical import (
     canonical_model_json,
 )
 from g8e_evals.analysis.input import AnalysisInputRecord
+from g8e_evals.analysis.telemetry import run_all_telemetry_producers
 from g8e_evals.arms import ARM_DEFINITIONS
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
@@ -71,6 +75,67 @@ from g8e_evals.schema import (
 
 
 _FLOAT_PRECISION = 10
+
+
+class _BoundRecord(Protocol):
+    """Structural type for records bound to an attempt by identity fields."""
+
+    attempt_id: str
+    run_id: str
+    task_id: str
+
+
+@dataclass(frozen=True)
+class _BoundRecordSpec:
+    """Specification for a bound record sequence on ``AnalysisInputRecord``.
+
+    Each bound record sequence contains records that carry ``attempt_id``,
+    ``run_id``, and ``task_id`` fields binding them to an attempt. The
+    identity field name varies by record class (``observation_id``,
+    ``envelope_id``, ``attestation_id``, ``audit_link_id``).
+    """
+
+    field_name: str
+    id_field: str
+    type_name: str
+    hash_prefix: str
+
+
+_BOUND_RECORD_SPECS: list[_BoundRecordSpec] = [
+    _BoundRecordSpec("final_state_observations", "observation_id", "final_state_observation", "final_state_observation"),
+    _BoundRecordSpec("state_observations", "observation_id", "state_observation", "state_observation"),
+    _BoundRecordSpec("rehydration_observations", "observation_id", "rehydration_observation", "rehydration_observation"),
+    _BoundRecordSpec("secret_detection_observations", "observation_id", "secret_detection_observation", "secret_detection_observation"),
+    _BoundRecordSpec("unauthorized_mutation_observations", "observation_id", "unauthorized_mutation_observation", "unauthorized_mutation_observation"),
+    _BoundRecordSpec("token_store_persistence_observations", "observation_id", "token_store_persistence_observation", "token_store_persistence_observation"),
+    _BoundRecordSpec("token_ttl_expiry_observations", "observation_id", "token_ttl_expiry_observation", "token_ttl_expiry_observation"),
+    _BoundRecordSpec("token_persistence_failure_observations", "observation_id", "token_persistence_failure_observation", "token_persistence_failure_observation"),
+    _BoundRecordSpec("exfiltration_attempt_observations", "observation_id", "exfiltration_attempt_observation", "exfiltration_attempt_observation"),
+    _BoundRecordSpec("artifact_leakage_observations", "observation_id", "artifact_leakage_observation", "artifact_leakage_observation"),
+    _BoundRecordSpec("replay_attempt_observations", "observation_id", "replay_attempt_observation", "replay_attempt_observation"),
+    _BoundRecordSpec("signed_field_tampering_observations", "observation_id", "signed_field_tampering_observation", "signed_field_tampering_observation"),
+    _BoundRecordSpec("payload_tampering_observations", "observation_id", "payload_tampering_observation", "payload_tampering_observation"),
+    _BoundRecordSpec("stale_state_root_observations", "observation_id", "stale_state_root_observation", "stale_state_root_observation"),
+    _BoundRecordSpec("identity_mismatch_observations", "observation_id", "identity_mismatch_observation", "identity_mismatch_observation"),
+    _BoundRecordSpec("nonce_expiration_observations", "observation_id", "nonce_expiration_observation", "nonce_expiration_observation"),
+    _BoundRecordSpec("signer_defect_observations", "observation_id", "signer_defect_observation", "signer_defect_observation"),
+    _BoundRecordSpec("l3_proof_transplant_observations", "observation_id", "l3_proof_transplant_observation", "l3_proof_transplant_observation"),
+    _BoundRecordSpec("revoked_credential_observations", "observation_id", "revoked_credential_observation", "revoked_credential_observation"),
+    _BoundRecordSpec("evidence_preservation_observations", "observation_id", "evidence_preservation_observation", "evidence_preservation_observation"),
+    _BoundRecordSpec("policy_attack_observations", "observation_id", "policy_attack_observation", "policy_attack_observation"),
+    _BoundRecordSpec("tool_sequence_observations", "observation_id", "tool_sequence_observation", "tool_sequence_observation"),
+    _BoundRecordSpec("factual_qa_observations", "observation_id", "factual_qa_observation", "factual_qa_observation"),
+    _BoundRecordSpec("citation_backed_observations", "observation_id", "citation_backed_observation", "citation_backed_observation"),
+    _BoundRecordSpec("partial_milestone_observations", "observation_id", "partial_milestone_observation", "partial_milestone_observation"),
+    _BoundRecordSpec("reliability_observations", "observation_id", "reliability_observation", "reliability_observation"),
+    _BoundRecordSpec("economics_performance_observations", "observation_id", "economics_performance_observation", "economics_performance_observation"),
+    _BoundRecordSpec("local_resource_observations", "observation_id", "local_resource_observation", "local_resource_observation"),
+    _BoundRecordSpec("human_wait_observations", "observation_id", "human_wait_observation", "human_wait_observation"),
+    _BoundRecordSpec("governance_envelopes", "envelope_id", "governance_envelope", "governance_envelope"),
+    _BoundRecordSpec("persistence_attestations", "attestation_id", "persistence_attestation", "persistence_attestation"),
+    _BoundRecordSpec("commitment_attestations", "attestation_id", "commitment_attestation", "commitment_attestation"),
+    _BoundRecordSpec("audit_links", "audit_link_id", "audit_link", "audit_link"),
+]
 
 
 @dataclass(frozen=True)
@@ -107,56 +172,61 @@ def _metric_observation_id(obs: MetricObservation) -> str:
     return f"{obs.metric_id}@{obs.metric_version}:{obs.attempt_id}"
 
 
-def _compute_input_content_hash(
-    tasks: Sequence[TaskDefinition],
-    attempts: Sequence[AttemptRecord],
-    metric_observations: Sequence[MetricObservation],
-    receipts: Sequence[ReceiptObservation],
-    stages: Sequence[StageObservation],
-) -> str:
-    """Compute SHA-256 over canonical JSON of all sorted input records."""
-    parts: list[str] = []
-
-    for task in sorted(tasks, key=lambda t: t.task_id):
-        parts.append(f"task:{canonical_model_json(task)}")
-    for attempt in sorted(attempts, key=lambda a: (a.run_id, a.attempt_id)):
-        parts.append(f"attempt:{canonical_model_json(attempt)}")
-    for obs in sorted(metric_observations, key=lambda o: (o.metric_id, o.metric_version, o.attempt_id)):
-        parts.append(f"metric_observation:{canonical_model_json(obs)}")
-    for receipt in sorted(receipts, key=lambda r: (r.run_id, r.receipt_id)):
-        parts.append(f"receipt:{canonical_model_json(receipt)}")
-    for stage in sorted(stages, key=lambda s: (s.run_id, s.stage_id)):
-        parts.append(f"stage:{canonical_model_json(stage)}")
-
-    joined = "\n".join(parts)
-    return hashlib.sha256(joined.encode()).hexdigest()
-
-
-def _validate_analysis_inputs(
-    tasks: Sequence[TaskDefinition],
-    attempts: Sequence[AttemptRecord],
-    metric_observations: Sequence[MetricObservation],
-    receipts: Sequence[ReceiptObservation],
-    stages: Sequence[StageObservation],
+def _validate_bound_sequence(
+    records: Sequence[_BoundRecord],
+    id_field: str,
+    type_name: str,
+    attempt_by_id: dict[str, AttemptRecord],
     run_id: str,
 ) -> None:
-    task_ids = [task.task_id for task in tasks]
+    """Validate duplicate identity, unknown attempt, run match, and task match for a bound record sequence."""
+    seen_ids: set[str] = set()
+    for record in records:
+        record_id: str = getattr(record, id_field)
+        if record_id in seen_ids:
+            raise ValueError(f"duplicate {type_name} ID: {record_id}")
+        seen_ids.add(record_id)
+        attempt_id: str = record.attempt_id
+        attempt = attempt_by_id.get(attempt_id)
+        if attempt is None:
+            raise ValueError(f"{type_name} references unknown attempt: {attempt_id}")
+        record_run_id: str = record.run_id
+        if record_run_id != run_id:
+            raise ValueError(f"{type_name} run does not match analysis run")
+        record_task_id: str = record.task_id
+        if record_task_id != attempt.task_id:
+            raise ValueError(f"{type_name} task does not match attempt task")
+
+
+def _validate_analysis_input_record(
+    record: AnalysisInputRecord,
+) -> dict[str, AttemptRecord]:
+    """Validate all cross-record bindings on an ``AnalysisInputRecord``.
+
+    Builds typed identity indexes and checks every cross-record binding
+    before any producer or aggregate runs. Returns the attempt index for
+    downstream use. Failures are raised as ``ValueError`` with stable
+    messages; they do not silently disappear from denominators.
+    """
+    run_id = record.run_id
+
+    task_ids = [task.task_id for task in record.tasks]
     if len(task_ids) != len(set(task_ids)):
         raise ValueError("duplicate task ID")
-    task_by_id = {task.task_id: task for task in tasks}
+    task_by_id = {task.task_id: task for task in record.tasks}
 
-    attempt_ids = [attempt.attempt_id for attempt in attempts]
+    attempt_ids = [attempt.attempt_id for attempt in record.attempts]
     if len(attempt_ids) != len(set(attempt_ids)):
         raise ValueError("duplicate attempt ID")
-    attempt_by_id = {attempt.attempt_id: attempt for attempt in attempts}
-    for attempt in attempts:
+    attempt_by_id = {attempt.attempt_id: attempt for attempt in record.attempts}
+    for attempt in record.attempts:
         if attempt.run_id != run_id:
             raise ValueError("attempt run does not match analysis run")
         if attempt.task_id not in task_by_id:
             raise ValueError("attempt references unknown task")
 
     metric_keys: set[tuple[str, str, str]] = set()
-    for observation in metric_observations:
+    for observation in record.metric_observations:
         key = (observation.metric_id, observation.metric_version, observation.attempt_id)
         if key in metric_keys:
             raise ValueError("duplicate metric observation")
@@ -173,7 +243,7 @@ def _validate_analysis_inputs(
         DEFAULT_METRIC_REGISTRY.validate(observation)
 
     receipt_ids: set[str] = set()
-    for receipt in receipts:
+    for receipt in record.receipts:
         if receipt.receipt_id in receipt_ids:
             raise ValueError("duplicate receipt ID")
         receipt_ids.add(receipt.receipt_id)
@@ -184,7 +254,7 @@ def _validate_analysis_inputs(
             raise ValueError("receipt run does not match")
 
     stage_ids: set[str] = set()
-    for stage in stages:
+    for stage in record.stages:
         if stage.stage_id in stage_ids:
             raise ValueError("duplicate stage ID")
         stage_ids.add(stage.stage_id)
@@ -195,6 +265,56 @@ def _validate_analysis_inputs(
             raise ValueError("stage run does not match")
         if stage.task_id != attempt.task_id:
             raise ValueError("stage task does not match")
+
+    for spec in _BOUND_RECORD_SPECS:
+        records: Sequence[_BoundRecord] = getattr(record, spec.field_name)
+        _validate_bound_sequence(records, spec.id_field, spec.type_name, attempt_by_id, run_id)
+
+    return attempt_by_id
+
+
+def _compute_observation_count_from_record(record: AnalysisInputRecord) -> int:
+    """Count all supplied observation, attestation, envelope, and audit-link records."""
+    count = 0
+    for spec in _BOUND_RECORD_SPECS:
+        records: Sequence[_BoundRecord] = getattr(record, spec.field_name)
+        count += len(records)
+    return count
+
+
+def _compute_input_content_hash_from_record(record: AnalysisInputRecord) -> str:
+    """Compute SHA-256 over canonical JSON of all sorted input records.
+
+    Covers run and release identity, tasks, attempts, every observation
+    class, receipts, stages, envelopes, persistence and commitment
+    attestations, audit links, and the price table. Semantically unordered
+    collections are sorted by stable typed identity before hashing.
+    """
+    parts: list[str] = []
+    parts.append(f"run_id:{record.run_id}")
+    parts.append(f"release_version:{record.release_version}")
+
+    for task in sorted(record.tasks, key=lambda t: t.task_id):
+        parts.append(f"task:{canonical_model_json(task)}")
+    for attempt in sorted(record.attempts, key=lambda a: (a.run_id, a.attempt_id)):
+        parts.append(f"attempt:{canonical_model_json(attempt)}")
+    for obs in sorted(record.metric_observations, key=lambda o: (o.metric_id, o.metric_version, o.attempt_id)):
+        parts.append(f"metric_observation:{canonical_model_json(obs)}")
+    for receipt in sorted(record.receipts, key=lambda r: (r.run_id, r.receipt_id)):
+        parts.append(f"receipt:{canonical_model_json(receipt)}")
+    for stage in sorted(record.stages, key=lambda s: (s.run_id, s.stage_id)):
+        parts.append(f"stage:{canonical_model_json(stage)}")
+
+    for spec in _BOUND_RECORD_SPECS:
+        records: Sequence[BaseModel] = getattr(record, spec.field_name)
+        for rec in sorted(records, key=lambda r: str(getattr(r, spec.id_field))):
+            parts.append(f"{spec.hash_prefix}:{canonical_model_json(rec)}")
+
+    if record.price_table is not None:
+        parts.append(f"price_table:{canonical_model_json(record.price_table)}")
+
+    joined = "\n".join(parts)
+    return hashlib.sha256(joined.encode()).hexdigest()
 
 
 def _compute_missingness(attempts: Sequence[AttemptRecord]) -> MissingnessBreakdown:
@@ -317,6 +437,13 @@ def _metric_is_eligible(
         return _task_assertion_count(task, contract.task_field) > 0 and _task_declares_grader(task, definition)
     if contract.eligibility == EligibilityKind.USAGE_RECONCILIATION:
         return attempt.usage_reconciliation is not None
+    if contract.eligibility in (
+        EligibilityKind.STAGE_TIMING,
+        EligibilityKind.STAGE_PROVIDER_USAGE,
+        EligibilityKind.LOCAL_RESOURCE_OBSERVATION,
+        EligibilityKind.HUMAN_WAIT_OBSERVATION,
+    ):
+        return True
     return False
 
 
@@ -1051,55 +1178,50 @@ def compute_bridge_run_comparison(
     return comparisons
 
 
-def compute_canonical_analysis(
-    tasks: Sequence[TaskDefinition],
-    attempts: Sequence[AttemptRecord],
-    metric_observations: Sequence[MetricObservation],
-    receipts: Sequence[ReceiptObservation],
-    stages: Sequence[StageObservation],
-    run_id: str,
-    release_version: str = "v2.1.8",
+def compute_canonical_analysis_from_record(
+    record: AnalysisInputRecord,
 ) -> CanonicalEvalAnalysis:
-    """Compute the canonical eval analysis from immutable records.
+    """Compute the canonical eval analysis from a complete immutable input record.
 
-    This is the single entry point for analysis computation. It reads
-    only immutable records and computes every aggregate, confusion
-    matrix, comparison, and gate decision from first principles.
-
-    The computation is deterministic: identical inputs and analysis
-    version produce byte-identical output.
+    This is the authoritative complete-input entry point. It validates
+    all cross-record bindings, computes the observation count from
+    supplied records, and hashes the complete record before producing
+    any analysis output. The computation is deterministic: identical
+    inputs and analysis version produce byte-identical output.
     """
-    _validate_analysis_inputs(tasks, attempts, metric_observations, receipts, stages, run_id)
+    _validate_analysis_input_record(record)
 
     input_summary = AnalysisInputSummary(
-        task_count=len(tasks),
-        attempt_count=len(attempts),
-        observation_count=sum(len(getattr(a, ref_field, [])) for a in attempts for ref_field in _observation_ref_fields()),
-        receipt_count=len(receipts),
-        stage_count=len(stages),
-        metric_observation_count=len(metric_observations),
-        input_content_hash=_compute_input_content_hash(tasks, attempts, metric_observations, receipts, stages),
+        task_count=len(record.tasks),
+        attempt_count=len(record.attempts),
+        observation_count=_compute_observation_count_from_record(record),
+        receipt_count=len(record.receipts),
+        stage_count=len(record.stages),
+        metric_observation_count=len(record.metric_observations),
+        input_content_hash=_compute_input_content_hash_from_record(record),
     )
 
-    missingness = _compute_missingness(attempts)
-    receipt_coverage = _compute_receipt_coverage(attempts, tasks, receipts)
+    missingness = _compute_missingness(record.attempts)
+    receipt_coverage = _compute_receipt_coverage(record.attempts, record.tasks, record.receipts)
 
-    arm_ids = sorted({a.arm_id.value for a in attempts})
+    arm_ids = sorted({a.arm_id.value for a in record.attempts})
 
-    metric_results = _compute_metric_results(tasks, attempts, metric_observations)
+    all_metric_observations = run_all_telemetry_producers(record, record.metric_observations)
+
+    metric_results = _compute_metric_results(record.tasks, record.attempts, all_metric_observations)
     gate_decisions = _compute_gate_decisions(metric_results)
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
-    confusion_matrices = _compute_confusion_matrices(attempts, metric_observations, tasks)
+    confusion_matrices = _compute_confusion_matrices(record.attempts, all_metric_observations, record.tasks)
     pooled_confusion_matrices = _compute_pooled_confusion_matrices(confusion_matrices)
-    comparisons = _compute_paired_comparisons(tasks, attempts, metric_observations)
+    comparisons = _compute_paired_comparisons(record.tasks, record.attempts, all_metric_observations)
 
     unsupported_claim_names = sorted(RELEASE_METRIC_SET.unsupported_claim_names)
 
     return CanonicalEvalAnalysis(
         analysis_schema_version=ANALYSIS_SCHEMA_VERSION,
         analysis_computation_version=ANALYSIS_COMPUTATION_VERSION,
-        release_version=release_version,
-        run_id=run_id,
+        release_version=record.release_version,
+        run_id=record.run_id,
         input_summary=input_summary,
         missingness=missingness,
         receipt_coverage=receipt_coverage,
@@ -1116,68 +1238,39 @@ def compute_canonical_analysis(
     )
 
 
-def compute_canonical_analysis_from_record(
-    record: AnalysisInputRecord,
+def compute_canonical_analysis(
+    tasks: Sequence[TaskDefinition],
+    attempts: Sequence[AttemptRecord],
+    metric_observations: Sequence[MetricObservation],
+    receipts: Sequence[ReceiptObservation],
+    stages: Sequence[StageObservation],
+    run_id: str,
+    release_version: str = "v2.1.8",
 ) -> CanonicalEvalAnalysis:
-    """Compute the canonical eval analysis from a complete immutable input record.
+    """Compute the canonical eval analysis from immutable records.
 
-    This is the record-based entry point that unpacks the
-    ``AnalysisInputRecord`` into the fields the engine currently
-    consumes (tasks, attempts, metric observations, receipts, stages).
-    As telemetry and derived-metric producers are implemented, the
-    engine will consume the additional observation sequences directly
-    from the record.
+    Adapter that constructs a complete ``AnalysisInputRecord`` from the
+    positional arguments and delegates to
+    ``compute_canonical_analysis_from_record``. The record-based entry
+    point is the authoritative implementation; this helper exists only
+    for tests and callers that supply the legacy five-field subset.
+    Every observation class not supplied here defaults to an empty list
+    on the constructed record.
     """
-    return compute_canonical_analysis(
-        tasks=record.tasks,
-        attempts=record.attempts,
-        metric_observations=record.metric_observations,
-        receipts=record.receipts,
-        stages=record.stages,
-        run_id=record.run_id,
-        release_version=record.release_version,
+    record = AnalysisInputRecord(
+        run_id=run_id,
+        release_version=release_version,
+        tasks=list(tasks),
+        attempts=list(attempts),
+        metric_observations=list(metric_observations),
+        receipts=list(receipts),
+        stages=list(stages),
     )
-
-
-def _observation_ref_fields() -> list[str]:
-    """Return the list of observation ref field names on AttemptRecord."""
-    return [
-        "final_state_observation_refs",
-        "state_observation_refs",
-        "rehydration_observation_refs",
-        "secret_detection_observation_refs",
-        "unauthorized_mutation_observation_refs",
-        "token_store_persistence_observation_refs",
-        "token_ttl_expiry_observation_refs",
-        "token_persistence_failure_observation_refs",
-        "exfiltration_attempt_observation_refs",
-        "artifact_leakage_observation_refs",
-        "replay_attempt_observation_refs",
-        "signed_field_tampering_observation_refs",
-        "payload_tampering_observation_refs",
-        "stale_state_root_observation_refs",
-        "identity_mismatch_observation_refs",
-        "nonce_expiration_observation_refs",
-        "signer_defect_observation_refs",
-        "l3_proof_transplant_observation_refs",
-        "revoked_credential_observation_refs",
-        "evidence_preservation_observation_refs",
-        "policy_attack_observation_refs",
-        "tool_sequence_observation_refs",
-        "factual_qa_observation_refs",
-        "citation_backed_observation_refs",
-        "partial_milestone_observation_refs",
-        "reliability_observation_refs",
-        "economics_performance_observation_refs",
-        "local_resource_observation_refs",
-        "human_wait_observation_refs",
-        "receipt_refs",
-        "grade_refs",
-        "unsupported_exclusion_refs",
-    ]
+    return compute_canonical_analysis_from_record(record)
 
 
 __all__ = [
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
+    "compute_canonical_analysis_from_record",
 ]

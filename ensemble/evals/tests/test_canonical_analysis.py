@@ -445,7 +445,20 @@ class TestCanonicalAnalysisComputation:
             stages=[],
             run_id=_RUN_ID,
         )
-        assert {result.metric_id for result in analysis.metric_results} == {"receipt_integrity"}
+        # receipt_integrity is eligible because the task declares an expected
+        # action class and the receipt_integrity grader. Telemetry metrics
+        # are eligible for all attempts (eligibility is observation-dependent);
+        # with no source records they appear as missing. Other task-assertion
+        # metrics are not eligible because the task has no assertions.
+        assert {result.metric_id for result in analysis.metric_results} == {
+            "receipt_integrity",
+            "stage_latency_seconds",
+            "provider_usage_tokens",
+            "provider_cost_usd",
+            "local_resource_peak_memory_bytes",
+            "local_resource_cpu_seconds",
+            "human_wait_seconds",
+        }
 
     def test_denominator_preservation_model_failed(self) -> None:
         """A model-failed attempt is retained in the denominator."""

@@ -748,7 +748,7 @@ func (ls *GatewayModeService) initHTTPHandler() error {
 		ObserveProducerControllerDeps: ObserveProducerControllerDeps{
 			Cfg:          cfg,
 			Logger:       logger,
-			ProducerSvc:   ls.GetObserveProducerService(),
+			ProducerSvc:  ls.GetObserveProducerService(),
 			Responder:    ls.responder,
 			MaxBodyBytes: cfg.Gateway.MaxPayloadBytes,
 		},

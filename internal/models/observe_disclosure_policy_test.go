@@ -140,9 +140,16 @@ func TestObserveReadModelsRejectUnknownFields(t *testing.T) {
 }
 
 // TestObservePayloadSchemasExcludeRestrictedFields asserts that the canonical
-// protocol JSON schema files do not define any restricted field names. This
-// is a static disclosure check: if a restricted field appears in the schema,
-// the schema itself has been corrupted.
+// protocol JSON schema files do not define any restricted field names in
+// browser-facing read models. This is a static disclosure check: if a
+// restricted field appears in a browser-facing read model schema entry, the
+// schema itself has been corrupted.
+//
+// The producer request entries (observe_producer_agent_state_request,
+// observe_producer_run_state_request) are mTLS-internal and legitimately
+// carry web_session_id/cli_session_id as SSE routing targets — the gateway
+// derives user_id from the mTLS peer certificate, never from the request
+// body. They are excluded from this browser-disclosure check.
 func TestObservePayloadSchemasExcludeRestrictedFields(t *testing.T) {
 	restrictedFieldNames := []string{
 		"user_email", "email", "web_session_id", "cli_session_id", "session_id",
@@ -151,6 +158,13 @@ func TestObservePayloadSchemasExcludeRestrictedFields(t *testing.T) {
 		"host_path", "host_secret", "enrollment_token", "api_key",
 		"password", "credential", "private_key", "secret",
 	}
+	// Producer request entries are mTLS-internal and carry routing fields
+	// (web_session_id, cli_session_id) that are not browser-disclosed. They
+	// are excluded from the browser-disclosure check.
+	producerEntries := []string{
+		"observe_producer_agent_state_request",
+		"observe_producer_run_state_request",
+	}
 	schemaFiles := []string{
 		"../../protocol/models/observe_event_payloads.json",
 		"../../protocol/models/observe_api.json",
@@ -158,10 +172,27 @@ func TestObservePayloadSchemasExcludeRestrictedFields(t *testing.T) {
 	for _, path := range schemaFiles {
 		data, err := os.ReadFile(path)
 		require.NoError(t, err)
-		content := string(data)
-		for _, field := range restrictedFieldNames {
-			assert.NotContains(t, content, "\""+field+"\"",
-				"restricted field %q must not appear in %s", field, path)
+		var raw map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(data, &raw))
+		for entryName, entryData := range raw {
+			if strings.HasPrefix(entryName, "_") {
+				continue
+			}
+			isProducer := false
+			for _, p := range producerEntries {
+				if entryName == p {
+					isProducer = true
+					break
+				}
+			}
+			if isProducer {
+				continue
+			}
+			entryContent := string(entryData)
+			for _, field := range restrictedFieldNames {
+				assert.NotContains(t, entryContent, "\""+field+"\"",
+					"restricted field %q must not appear in browser-facing entry %s of %s", field, entryName, path)
+			}
 		}
 	}
 }

@@ -329,6 +329,55 @@ func TestRouteAuthRegistry_ObservePrefixFailClosedForUnknownSubPaths(t *testing.
 	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/observer-lookalike"))
 }
 
+// TestRouteAuthRegistry_ObserveProducerRoutesClassifiedMTLS asserts the two
+// mTLS producer endpoints classify as RouteAuthMTLS so only app workloads
+// (the g8ee ensemble) can push state projections.
+func TestRouteAuthRegistry_ObserveProducerRoutesClassifiedMTLS(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	producerPaths := []string{
+		constants.APIPaths.ObserveProducerAgentState,
+		constants.APIPaths.ObserveProducerRunState,
+	}
+	for _, path := range producerPaths {
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path),
+			"producer path %s should be RouteAuthMTLS", path)
+	}
+}
+
+// TestRouteAuthRegistry_ObserveProducerPrefixClassifiedMTLS asserts the
+// producer prefix classifies as RouteAuthMTLS so unknown producer sub-paths
+// fail closed to mTLS.
+func TestRouteAuthRegistry_ObserveProducerPrefixClassifiedMTLS(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.ObserveProducerPrefix+"unknown-sub-path"),
+		"unknown producer sub-path should inherit RouteAuthMTLS from prefix")
+}
+
+// TestRouteAuthRegistry_ObserveProducerRoutesDoNotLeakWebSession asserts the
+// producer routes do not inherit RouteAuthWebSession from the broader observe
+// prefix, and that lookalike prefixes fail closed.
+func TestRouteAuthRegistry_ObserveProducerRoutesDoNotLeakWebSession(t *testing.T) {
+	registry := NewRouteAuthRegistry(false)
+
+	// The producer routes are under /api/v1/observe/producer/ which is a
+	// sub-prefix of /api/v1/observe/ but must NOT inherit RouteAuthWebSession.
+	producerPaths := []string{
+		constants.APIPaths.ObserveProducerAgentState,
+		constants.APIPaths.ObserveProducerRunState,
+		constants.APIPaths.ObserveProducerPrefix + "other",
+	}
+	for _, path := range producerPaths {
+		assert.NotEqual(t, RouteAuthWebSession, registry.AuthMode(path),
+			"producer path %s must not inherit RouteAuthWebSession", path)
+	}
+
+	// A lookalike prefix that is not the exact observe prefix must fail closed.
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/observe-producer/agent-state"),
+		"lookalike prefix must fail closed to RouteAuthMTLS")
+}
+
 func TestRouteAuthRegistry_GenericRoutesRemainMTLS(t *testing.T) {
 	registry := NewRouteAuthRegistry(false)
 

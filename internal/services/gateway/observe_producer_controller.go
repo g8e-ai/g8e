@@ -8,7 +8,6 @@
 package gateway
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -23,11 +22,11 @@ import (
 // ObserveProducerControllerDeps groups all dependencies for
 // ObserveProducerController.
 type ObserveProducerControllerDeps struct {
-	Cfg           *config.Config
-	Logger        *slog.Logger
-	ProducerSvc   *ObserveProducerService
-	Responder     *response.Writer
-	MaxBodyBytes  int64
+	Cfg          *config.Config
+	Logger       *slog.Logger
+	ProducerSvc  *ObserveProducerService
+	Responder    *response.Writer
+	MaxBodyBytes int64
 }
 
 // ObserveProducerController handles the mTLS producer endpoints that the
@@ -127,8 +126,12 @@ func (c *ObserveProducerController) handleAgentState(w http.ResponseWriter, r *h
 		return
 	}
 	var req models.ObserveProducerAgentStateRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+	if err := decodeProducerRequest(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateAgentProducerRequest(req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	route := buildProducerRoute(userID, req.WebSessionID, req.CLISessionID)
@@ -147,7 +150,7 @@ func (c *ObserveProducerController) handleAgentState(w http.ResponseWriter, r *h
 		c.mapProducerError(w, err, "agent state")
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, map[string]any{"accepted": true})
+	c.responder.JSON(w, http.StatusOK, models.ObserveProducerResponse{Accepted: true})
 }
 
 // handleRunState accepts a typed run state update from the ensemble,
@@ -182,8 +185,12 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 		return
 	}
 	var req models.ObserveProducerRunStateRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+	if err := decodeProducerRequest(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateRunProducerRequest(req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	route := buildProducerRoute(userID, req.WebSessionID, req.CLISessionID)
@@ -204,14 +211,15 @@ func (c *ObserveProducerController) handleRunState(w http.ResponseWriter, r *htt
 		c.mapProducerError(w, err, "run state")
 		return
 	}
-	c.responder.JSON(w, http.StatusOK, map[string]any{"accepted": true})
+	c.responder.JSON(w, http.StatusOK, models.ObserveProducerResponse{Accepted: true})
 }
 
 // mapProducerError maps a typed observe producer error to the correct HTTP
-// status code. Invalid transitions, stale updates, and missing required
-// fields are 400. Cross-user ownership violations are 403. Route validation
-// errors (missing session) are 400. Persistence and SSE emission failures
-// are 500.
+// status code. Invalid transitions, stale updates, missing required fields,
+// and payload validation failures are 400. Cross-user ownership violations
+// (agent or run) are 403 with the same non-disclosing response so the HTTP
+// boundary does not reveal record existence. Route validation errors
+// (missing session) are 400. Persistence and SSE emission failures are 500.
 func (c *ObserveProducerController) mapProducerError(w http.ResponseWriter, err error, op string) {
 	switch {
 	case errors.Is(err, constants.ErrObserveInvalidTransition),
@@ -219,12 +227,21 @@ func (c *ObserveProducerController) mapProducerError(w http.ResponseWriter, err 
 		errors.Is(err, constants.ErrObserveAgentIDRequired),
 		errors.Is(err, constants.ErrObserveRunIDRequired),
 		errors.Is(err, constants.ErrObserveObservedAtRequired),
+		errors.Is(err, constants.ErrObserveUnsupportedSchemaVersion),
+		errors.Is(err, constants.ErrObserveAgentDisplayNameRequired),
+		errors.Is(err, constants.ErrObserveAgentRoleRequired),
+		errors.Is(err, constants.ErrObserveRunDisplayNameRequired),
+		errors.Is(err, constants.ErrObserveRunKindRequired),
+		errors.Is(err, constants.ErrObserveNegativeTaskCount),
+		errors.Is(err, constants.ErrObserveCompletedExceedsTotal),
+		errors.Is(err, constants.ErrObserveEndBeforeStart),
 		errors.Is(err, constants.ErrGatewaySSERouteUserIDRequired),
 		errors.Is(err, constants.ErrGatewaySSERouteSessionRequired),
 		errors.Is(err, constants.ErrGatewaySSERouteSessionMutuallyExclusive):
 		c.responder.Error(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, constants.ErrObserveRunNotFound):
-		c.responder.Error(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, constants.ErrObserveAgentNotFound),
+		errors.Is(err, constants.ErrObserveRunNotFound):
+		c.responder.Error(w, http.StatusForbidden, constants.ErrForbidden.Error())
 	default:
 		c.logger.Error("observe producer: "+op+" failed", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())

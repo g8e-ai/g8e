@@ -269,3 +269,15 @@ func TestErrorConstants_ObserveProducerErrorsAreDistinct(t *testing.T) {
 	assert.True(t, errors.Is(constants.ErrObserveStaleUpdate, constants.ErrObserveStaleUpdate))
 	assert.False(t, errors.Is(constants.ErrObserveInvalidTransition, constants.ErrObserveStaleUpdate))
 }
+
+// TestErrorConstants_ObserveAgentAndRunNotFoundAreDistinct ensures the agent
+// and run ownership sentinels are distinct internally so callers can
+// distinguish agent vs run ownership mismatches with errors.Is, while both
+// map to the same forbidden HTTP response at the controller boundary.
+func TestErrorConstants_ObserveAgentAndRunNotFoundAreDistinct(t *testing.T) {
+	assert.NotEqual(t, constants.ErrObserveAgentNotFound, constants.ErrObserveRunNotFound)
+	assert.True(t, errors.Is(constants.ErrObserveAgentNotFound, constants.ErrObserveAgentNotFound))
+	assert.True(t, errors.Is(constants.ErrObserveRunNotFound, constants.ErrObserveRunNotFound))
+	assert.False(t, errors.Is(constants.ErrObserveAgentNotFound, constants.ErrObserveRunNotFound),
+		"agent and run ownership sentinels must be distinguishable")
+}

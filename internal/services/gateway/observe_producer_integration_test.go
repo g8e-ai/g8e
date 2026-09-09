@@ -360,7 +360,7 @@ func TestObserveProducer_CrossUserIsolation_AgentOwnedByDifferentUserRejected(t 
 	}
 	err := producer.UpdateAgentState(ctx, "user-b", producerRoute("user-b"), updatePayload)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrObserveRunNotFound))
+	assert.True(t, errors.Is(err, constants.ErrObserveAgentNotFound))
 }
 
 func TestObserveProducer_CrossUserIsolation_RunOwnedByDifferentUserRejected(t *testing.T) {

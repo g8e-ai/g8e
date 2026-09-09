@@ -1288,4 +1288,23 @@ var (
 	ErrObserveAgentIDRequired    = errors.New("observe: agent_id is required")
 	ErrObserveRunIDRequired      = errors.New("observe: run_id is required")
 	ErrObserveObservedAtRequired = errors.New("observe: observed_at is required")
+
+	// Observe producer ownership sentinels. ErrObserveAgentNotFound and
+	// ErrObserveRunNotFound are distinct internally so callers can
+	// distinguish agent vs run ownership mismatches, but the HTTP boundary
+	// maps both to the same forbidden response to avoid disclosing record
+	// existence.
+	ErrObserveAgentNotFound = errors.New("observe: agent not found")
+
+	// Observe producer payload validation errors. These are checked at the
+	// Gateway boundary before persistence so permissive behavior does not
+	// become a dependency for real producers.
+	ErrObserveUnsupportedSchemaVersion = errors.New("observe: unsupported schema version")
+	ErrObserveAgentDisplayNameRequired = errors.New("observe: agent display_name is required")
+	ErrObserveAgentRoleRequired        = errors.New("observe: agent role is required")
+	ErrObserveRunDisplayNameRequired   = errors.New("observe: run display_name is required")
+	ErrObserveRunKindRequired          = errors.New("observe: run_kind is required")
+	ErrObserveNegativeTaskCount        = errors.New("observe: task count is negative")
+	ErrObserveCompletedExceedsTotal    = errors.New("observe: completed_tasks exceeds total_tasks")
+	ErrObserveEndBeforeStart           = errors.New("observe: ended_at precedes started_at")
 )

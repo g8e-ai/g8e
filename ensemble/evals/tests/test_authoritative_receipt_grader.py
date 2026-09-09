@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime
 from typing import cast
 
@@ -1746,7 +1747,9 @@ def test_protocol_chain_grader_fails_closed_on_contradictory_rejection_chain(
 
 def test_protocol_chain_grader_fails_closed_when_observed_posture_does_not_match_arm():
     context = _protocol_context()
-    context.attempt.posture.posture_match = False
+    updated_posture = context.attempt.posture.model_copy(update={"posture_match": False})
+    updated_attempt = context.attempt.model_copy(update={"posture": updated_posture})
+    context = dataclasses.replace(context, attempt=updated_attempt)
 
     result = grade_deterministically("protocol_chain", "1.0.0", context)
 

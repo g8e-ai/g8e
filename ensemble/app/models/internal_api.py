@@ -8,9 +8,14 @@
 from g8e.models.internal_api import ResourceCreationRequest as _G8eResourceCreationRequest
 from g8e.models.internal_api import ChatStartedResponse as _G8eChatStartedResponse
 from g8e.models.internal_api import ChatMessageRequest as _G8eChatMessageRequest
+from g8e.models.observe_api import (
+    ObserveProducerAgentStateRequest as _G8eObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest as _G8eObserveProducerRunStateRequest,
+    ObserveProducerResponse as _G8eObserveProducerResponse,
+)
 
 from app.models.attachments import AttachmentMetadata
-from app.models.base import ConfigDict, Field, G8eBaseModel, UTCDatetime
+from app.models.base import ConfigDict, Field, G8eBaseModel
 from app.models.cases import CaseModel
 from app.models.operators import PendingApproval
 from app.models.http_context import RequestContext
@@ -635,51 +640,6 @@ class OperatorLinkRequestPayload(G8eBaseModel):
     user_id: str
 
 
-class ObserveProducerAgentStateRequest(G8eBaseModel):
-    """Typed request body for POST /api/v1/observe/producer/agent-state.
-
-    Carries the AgentStatusUpdatedPayload fields plus the SSE routing target
-    (exactly one of web_session_id or cli_session_id). The gateway derives
-    user_id from the mTLS peer certificate, never from the request body.
-    """
-
-    schema_version: str
-    agent_id: str
-    display_name: str
-    role: str
-    status: str
-    run_id: str | None = None
-    task_id: str | None = None
-    model: str | None = None
-    observed_at: UTCDatetime
-    web_session_id: str | None = None
-    cli_session_id: str | None = None
-
-
-class ObserveProducerRunStateRequest(G8eBaseModel):
-    """Typed request body for POST /api/v1/observe/producer/run-state.
-
-    Carries the RunStatusUpdatedPayload fields plus the SSE routing target.
-    The gateway derives user_id from the mTLS peer certificate, never from
-    the request body.
-    """
-
-    schema_version: str
-    run_id: str
-    run_kind: str
-    display_name: str
-    status: str
-    active_task_id: str | None = None
-    completed_tasks: int
-    total_tasks: int
-    started_at: UTCDatetime | None = None
-    ended_at: UTCDatetime | None = None
-    observed_at: UTCDatetime
-    web_session_id: str | None = None
-    cli_session_id: str | None = None
-
-
-class ObserveProducerResponse(G8eBaseModel):
-    """Response for observe producer state push."""
-
-    accepted: bool = False
+ObserveProducerAgentStateRequest = _G8eObserveProducerAgentStateRequest
+ObserveProducerRunStateRequest = _G8eObserveProducerRunStateRequest
+ObserveProducerResponse = _G8eObserveProducerResponse

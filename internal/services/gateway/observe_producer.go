@@ -219,7 +219,7 @@ func (s *ObserveProducerService) UpdateAgentState(ctx context.Context, userID st
 			return fmt.Errorf("observe producer: update agent state: unmarshal existing: %w", err)
 		}
 		if proj.UserID != userID {
-			return fmt.Errorf("observe producer: update agent state: %w: agent %s owned by different user", constants.ErrObserveRunNotFound, payload.AgentID)
+			return fmt.Errorf("observe producer: update agent state: %w: agent %s owned by different user", constants.ErrObserveAgentNotFound, payload.AgentID)
 		}
 		if !isValidAgentTransition(proj.Status, payload.Status) {
 			return fmt.Errorf("observe producer: update agent state: %w: %s -> %s for agent %s", constants.ErrObserveInvalidTransition, proj.Status, payload.Status, payload.AgentID)

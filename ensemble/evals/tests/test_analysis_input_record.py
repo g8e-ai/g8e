@@ -476,8 +476,22 @@ class TestInputContentHashProtectsAllRecords:
         assert a1.input_summary.input_content_hash != a2.input_summary.input_content_hash
 
     def test_run_id_affects_hash(self) -> None:
-        r1 = AnalysisInputRecord(run_id="run-a", release_version=_RELEASE, tasks=[_minimal_task()], attempts=[_minimal_attempt()])
-        r2 = AnalysisInputRecord(run_id="run-b", release_version=_RELEASE, tasks=[_minimal_task()], attempts=[_minimal_attempt()])
+        attempt_a = AttemptRecord(
+            attempt_id=_ATTEMPT_ID,
+            run_id="run-a",
+            task_id=_TASK_ID,
+            arm_id=Arm.DOCTRINE,
+            terminal_status=TerminalStatus.COMPLETED,
+        )
+        attempt_b = AttemptRecord(
+            attempt_id=_ATTEMPT_ID,
+            run_id="run-b",
+            task_id=_TASK_ID,
+            arm_id=Arm.DOCTRINE,
+            terminal_status=TerminalStatus.COMPLETED,
+        )
+        r1 = AnalysisInputRecord(run_id="run-a", release_version=_RELEASE, tasks=[_minimal_task()], attempts=[attempt_a])
+        r2 = AnalysisInputRecord(run_id="run-b", release_version=_RELEASE, tasks=[_minimal_task()], attempts=[attempt_b])
         a1 = compute_canonical_analysis_from_record(r1)
         a2 = compute_canonical_analysis_from_record(r2)
         assert a1.input_summary.input_content_hash != a2.input_summary.input_content_hash

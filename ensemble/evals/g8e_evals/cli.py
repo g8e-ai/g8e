@@ -1419,180 +1419,220 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             attempt_receipts,
         )
         final_state_records.extend(final_state_observations)
-        attempt.final_state_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "final_state_observation_refs": [
             observation.observation_id for observation in final_state_observations
-        ]
+        ],
+        })
         state_observations = (
             await config.state_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.state_fixture and config.state_observer is not None
             else []
         )
         state_records.extend(state_observations)
-        attempt.state_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "state_observation_refs": [
             observation.observation_id for observation in state_observations
-        ]
+        ],
+        })
         rehydration_observations = (
             await config.rehydration_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.rehydration_assertions and config.rehydration_observer is not None
             else []
         )
         rehydration_records.extend(rehydration_observations)
-        attempt.rehydration_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "rehydration_observation_refs": [
             observation.observation_id for observation in rehydration_observations
-        ]
+        ],
+        })
         secret_detection_observations = (
             await config.secret_detection_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.secret_detection_assertions and config.secret_detection_observer is not None
             else []
         )
         secret_detection_records.extend(secret_detection_observations)
-        attempt.secret_detection_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "secret_detection_observation_refs": [
             observation.observation_id for observation in secret_detection_observations
-        ]
+        ],
+        })
         unauthorized_mutation_observations = (
             await config.unauthorized_mutation_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.unauthorized_mutation_assertions and config.unauthorized_mutation_observer is not None
             else []
         )
         unauthorized_mutation_records.extend(unauthorized_mutation_observations)
-        attempt.unauthorized_mutation_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "unauthorized_mutation_observation_refs": [
             observation.observation_id for observation in unauthorized_mutation_observations
-        ]
+        ],
+        })
         token_store_persistence_observations = (
             await config.token_store_persistence_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.token_store_persistence_assertions and config.token_store_persistence_observer is not None
             else []
         )
         token_store_persistence_records.extend(token_store_persistence_observations)
-        attempt.token_store_persistence_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "token_store_persistence_observation_refs": [
             observation.observation_id for observation in token_store_persistence_observations
-        ]
+        ],
+        })
         token_ttl_expiry_observations = (
             await config.token_ttl_expiry_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.token_ttl_expiry_assertions and config.token_ttl_expiry_observer is not None
             else []
         )
         token_ttl_expiry_records.extend(token_ttl_expiry_observations)
-        attempt.token_ttl_expiry_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "token_ttl_expiry_observation_refs": [
             observation.observation_id for observation in token_ttl_expiry_observations
-        ]
+        ],
+        })
         token_persistence_failure_observations = (
             await config.token_persistence_failure_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.token_persistence_failure_assertions and config.token_persistence_failure_observer is not None
             else []
         )
         token_persistence_failure_records.extend(token_persistence_failure_observations)
-        attempt.token_persistence_failure_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "token_persistence_failure_observation_refs": [
             observation.observation_id for observation in token_persistence_failure_observations
-        ]
+        ],
+        })
         exfiltration_attempt_observations = (
             await config.exfiltration_attempt_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.exfiltration_attempt_assertions and config.exfiltration_attempt_observer is not None
             else []
         )
         exfiltration_attempt_records.extend(exfiltration_attempt_observations)
-        attempt.exfiltration_attempt_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "exfiltration_attempt_observation_refs": [
             observation.observation_id for observation in exfiltration_attempt_observations
-        ]
+        ],
+        })
         artifact_leakage_observations = (
             await config.artifact_leakage_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.artifact_leakage_assertions and config.artifact_leakage_observer is not None
             else []
         )
         artifact_leakage_records.extend(artifact_leakage_observations)
-        attempt.artifact_leakage_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "artifact_leakage_observation_refs": [
             observation.observation_id for observation in artifact_leakage_observations
-        ]
+        ],
+        })
         replay_attempt_observations = (
             await config.replay_attempt_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.replay_attempt_assertions and config.replay_attempt_observer is not None
             else []
         )
         replay_attempt_records.extend(replay_attempt_observations)
-        attempt.replay_attempt_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "replay_attempt_observation_refs": [
             observation.observation_id for observation in replay_attempt_observations
-        ]
+        ],
+        })
         signed_field_tampering_observations = (
             await config.signed_field_tampering_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.signed_field_tampering_assertions and config.signed_field_tampering_observer is not None
             else []
         )
         signed_field_tampering_records.extend(signed_field_tampering_observations)
-        attempt.signed_field_tampering_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "signed_field_tampering_observation_refs": [
             observation.observation_id for observation in signed_field_tampering_observations
-        ]
+        ],
+        })
         payload_tampering_observations = (
             await config.payload_tampering_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.payload_tampering_assertions and config.payload_tampering_observer is not None
             else []
         )
         payload_tampering_records.extend(payload_tampering_observations)
-        attempt.payload_tampering_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "payload_tampering_observation_refs": [
             observation.observation_id for observation in payload_tampering_observations
-        ]
+        ],
+        })
         stale_state_root_observations = (
             await config.stale_state_root_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.stale_state_root_assertions and config.stale_state_root_observer is not None
             else []
         )
         stale_state_root_records.extend(stale_state_root_observations)
-        attempt.stale_state_root_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "stale_state_root_observation_refs": [
             observation.observation_id for observation in stale_state_root_observations
-        ]
+        ],
+        })
         identity_mismatch_observations = (
             await config.identity_mismatch_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.identity_mismatch_assertions and config.identity_mismatch_observer is not None
             else []
         )
         identity_mismatch_records.extend(identity_mismatch_observations)
-        attempt.identity_mismatch_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "identity_mismatch_observation_refs": [
             observation.observation_id for observation in identity_mismatch_observations
-        ]
+        ],
+        })
         nonce_expiration_observations = (
             await config.nonce_expiration_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.nonce_expiration_assertions and config.nonce_expiration_observer is not None
             else []
         )
         nonce_expiration_records.extend(nonce_expiration_observations)
-        attempt.nonce_expiration_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "nonce_expiration_observation_refs": [
             observation.observation_id for observation in nonce_expiration_observations
-        ]
+        ],
+        })
         signer_defect_observations = (
             await config.signer_defect_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.signer_defect_assertions and config.signer_defect_observer is not None
             else []
         )
         signer_defect_records.extend(signer_defect_observations)
-        attempt.signer_defect_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "signer_defect_observation_refs": [
             observation.observation_id for observation in signer_defect_observations
-        ]
+        ],
+        })
         l3_proof_transplant_observations = (
             await config.l3_proof_transplant_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.l3_proof_transplant_assertions and config.l3_proof_transplant_observer is not None
             else []
         )
         l3_proof_transplant_records.extend(l3_proof_transplant_observations)
-        attempt.l3_proof_transplant_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "l3_proof_transplant_observation_refs": [
             observation.observation_id for observation in l3_proof_transplant_observations
-        ]
+        ],
+        })
         revoked_credential_observations = (
             await config.revoked_credential_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.revoked_credential_assertions and config.revoked_credential_observer is not None
             else []
         )
         revoked_credential_records.extend(revoked_credential_observations)
-        attempt.revoked_credential_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "revoked_credential_observation_refs": [
             observation.observation_id for observation in revoked_credential_observations
-        ]
+        ],
+        })
         evidence_preservation_observations = (
             await config.evidence_preservation_observer.observe(task_defs_by_id[task.id], attempt)
             if task.metadata.evidence_preservation_assertions and config.evidence_preservation_observer is not None
             else []
         )
         evidence_preservation_records.extend(evidence_preservation_observations)
-        attempt.evidence_preservation_observation_refs = [
+        attempt = attempt.model_copy(update={
+            "evidence_preservation_observation_refs": [
             observation.observation_id for observation in evidence_preservation_observations
-        ]
+        ],
+        })
         grade_metrics = [
             MetricObservation(
                 metric_id=_IFEVAL_GRADER_ID,
@@ -2296,11 +2336,13 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         for metric in grade_metrics:
             DEFAULT_METRIC_REGISTRY.validate(metric)
         metric_records.extend(grade_metrics)
-        attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
-        attempt.unsupported_exclusion_refs = [
+        attempt = attempt.model_copy(update={"grade_refs": [metric.metric_id for metric in grade_metrics]})
+        attempt = attempt.model_copy(update={
+            "unsupported_exclusion_refs": [
             exclusion.exclusion_id
             for exclusion in task_defs_by_id[task.id].unsupported_exclusions
-        ]
+        ],
+        })
         attempt_records.append(attempt)
 
         status_color = "green" if score.passed else "red"
@@ -3096,9 +3138,11 @@ async def _run_synthetic_suite(
             observer = TokenStorePersistenceObserverImpl(store, store_sha, store_artifact_id)
             token_store_observations = await observer.observe(task_def, attempt)
             token_store_persistence_records.extend(token_store_observations)
-            attempt.token_store_persistence_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "token_store_persistence_observation_refs": [
                 obs.observation_id for obs in token_store_observations
-            ]
+            ],
+            })
 
         if task.metadata.token_ttl_expiry_assertions:
             ttl_token = params.get("ttl_token")
@@ -3131,9 +3175,11 @@ async def _run_synthetic_suite(
             )
             ttl_observations = await observer.observe(task_def, attempt)
             token_ttl_expiry_records.extend(ttl_observations)
-            attempt.token_ttl_expiry_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "token_ttl_expiry_observation_refs": [
                 obs.observation_id for obs in ttl_observations
-            ]
+            ],
+            })
 
         if task.metadata.token_persistence_failure_assertions:
             token_specs = params.get("tokens", [])
@@ -3174,9 +3220,11 @@ async def _run_synthetic_suite(
             )
             failure_observations = await observer.observe(task_def, attempt)
             token_persistence_failure_records.extend(failure_observations)
-            attempt.token_persistence_failure_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "token_persistence_failure_observation_refs": [
                 obs.observation_id for obs in failure_observations
-            ]
+            ],
+            })
 
         exfiltration_observations: list[ExfiltrationAttemptObservation] = []
         artifact_leakage_observations: list[ArtifactLeakageObservation] = []
@@ -3216,9 +3264,11 @@ async def _run_synthetic_suite(
             exfiltration_attempt_records.extend(exfiltration_observations)
             privacy_receipt_records.append(privacy_receipt)
             task_receipt_ids.append(privacy_receipt.receipt_id)
-            attempt.exfiltration_attempt_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "exfiltration_attempt_observation_refs": [
                 obs.observation_id for obs in exfiltration_observations
-            ]
+            ],
+            })
 
         if task.metadata.artifact_leakage_assertions:
             artifact_dir = report_dir / "artifacts" / task.id
@@ -3248,9 +3298,11 @@ async def _run_synthetic_suite(
                 }))
             artifact_leakage_records.extend(updated_artifact_obs)
             artifact_leakage_observations = updated_artifact_obs
-            attempt.artifact_leakage_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "artifact_leakage_observation_refs": [
                 obs.observation_id for obs in updated_artifact_obs
-            ]
+            ],
+            })
 
         if task.metadata.rehydration_assertions:
             rehydration_artifact_path = store_dir / "rehydration.json"
@@ -3294,9 +3346,11 @@ async def _run_synthetic_suite(
                 for obs in rehydration_observations
             ]
             rehydration_records.extend(rehydration_observations)
-            attempt.rehydration_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "rehydration_observation_refs": [
                 obs.observation_id for obs in rehydration_observations
-            ]
+            ],
+            })
 
         replay_observations: list[ReplayAttemptObservation] = []
         signed_field_observations: list[SignedFieldTamperingObservation] = []
@@ -3330,9 +3384,11 @@ async def _run_synthetic_suite(
             replay_attempt_records.extend(replay_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.replay_attempt_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "replay_attempt_observation_refs": [
                 obs.observation_id for obs in replay_observations
-            ]
+            ],
+            })
 
         if task.metadata.signed_field_tampering_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3356,9 +3412,11 @@ async def _run_synthetic_suite(
             signed_field_tampering_records.extend(signed_field_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.signed_field_tampering_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "signed_field_tampering_observation_refs": [
                 obs.observation_id for obs in signed_field_observations
-            ]
+            ],
+            })
 
         if task.metadata.nonce_expiration_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3382,9 +3440,11 @@ async def _run_synthetic_suite(
             nonce_expiration_records.extend(nonce_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.nonce_expiration_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "nonce_expiration_observation_refs": [
                 obs.observation_id for obs in nonce_observations
-            ]
+            ],
+            })
 
         if task.metadata.stale_state_root_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3408,9 +3468,11 @@ async def _run_synthetic_suite(
             stale_state_root_records.extend(stale_state_root_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.stale_state_root_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "stale_state_root_observation_refs": [
                 obs.observation_id for obs in stale_state_root_observations
-            ]
+            ],
+            })
 
         if task.metadata.signer_defect_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3434,9 +3496,11 @@ async def _run_synthetic_suite(
             signer_defect_records.extend(signer_defect_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.signer_defect_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "signer_defect_observation_refs": [
                 obs.observation_id for obs in signer_defect_observations
-            ]
+            ],
+            })
 
         if task.metadata.l3_proof_transplant_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3460,9 +3524,11 @@ async def _run_synthetic_suite(
             l3_proof_transplant_records.extend(l3_proof_transplant_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.l3_proof_transplant_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "l3_proof_transplant_observation_refs": [
                 obs.observation_id for obs in l3_proof_transplant_observations
-            ]
+            ],
+            })
 
         if task.metadata.revoked_credential_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3486,9 +3552,11 @@ async def _run_synthetic_suite(
             revoked_credential_records.extend(revoked_credential_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.revoked_credential_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "revoked_credential_observation_refs": [
                 obs.observation_id for obs in revoked_credential_observations
-            ]
+            ],
+            })
 
         if task.metadata.payload_tampering_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3512,9 +3580,11 @@ async def _run_synthetic_suite(
             payload_tampering_records.extend(payload_tampering_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.payload_tampering_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "payload_tampering_observation_refs": [
                 obs.observation_id for obs in payload_tampering_observations
-            ]
+            ],
+            })
 
         if task.metadata.identity_mismatch_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3538,9 +3608,11 @@ async def _run_synthetic_suite(
             identity_mismatch_records.extend(identity_mismatch_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.identity_mismatch_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "identity_mismatch_observation_refs": [
                 obs.observation_id for obs in identity_mismatch_observations
-            ]
+            ],
+            })
 
         if task.metadata.evidence_preservation_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3564,9 +3636,11 @@ async def _run_synthetic_suite(
             evidence_preservation_records.extend(evidence_preservation_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.evidence_preservation_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "evidence_preservation_observation_refs": [
                 obs.observation_id for obs in evidence_preservation_observations
-            ]
+            ],
+            })
 
         if task.metadata.policy_attack_assertions:
             simulator = LocalGovernanceSimulator()
@@ -3590,9 +3664,11 @@ async def _run_synthetic_suite(
             policy_attack_records.extend(policy_attack_observations)
             governance_receipt_records.append(governance_receipt)
             task_receipt_ids.append(governance_receipt.receipt_id)
-            attempt.policy_attack_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "policy_attack_observation_refs": [
                 obs.observation_id for obs in policy_attack_observations
-            ]
+            ],
+            })
 
         tool_sequence_observations: list[ToolSequenceObservation] = []
         if task.metadata.tool_sequence_assertions:
@@ -3615,9 +3691,11 @@ async def _run_synthetic_suite(
             observer = ToolSequenceObserverImpl(tool_sim, tool_index.sha256, tool_artifact_id)
             tool_sequence_observations = await observer.observe(task_def, attempt)
             tool_sequence_records.extend(tool_sequence_observations)
-            attempt.tool_sequence_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "tool_sequence_observation_refs": [
                 obs.observation_id for obs in tool_sequence_observations
-            ]
+            ],
+            })
 
         factual_qa_observations: list[FactualQAObservation] = []
         if task.metadata.factual_qa_assertions:
@@ -3640,9 +3718,11 @@ async def _run_synthetic_suite(
             observer = FactualQAObserverImpl(qa_sim, qa_index.sha256, qa_artifact_id)
             factual_qa_observations = await observer.observe(task_def, attempt)
             factual_qa_records.extend(factual_qa_observations)
-            attempt.factual_qa_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "factual_qa_observation_refs": [
                 obs.observation_id for obs in factual_qa_observations
-            ]
+            ],
+            })
 
         citation_backed_observations: list[CitationBackedObservation] = []
         if task.metadata.citation_backed_assertions:
@@ -3665,9 +3745,11 @@ async def _run_synthetic_suite(
             observer = CitationBackedObserverImpl(citation_sim, citation_index.sha256, citation_artifact_id)
             citation_backed_observations = await observer.observe(task_def, attempt)
             citation_backed_records.extend(citation_backed_observations)
-            attempt.citation_backed_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "citation_backed_observation_refs": [
                 obs.observation_id for obs in citation_backed_observations
-            ]
+            ],
+            })
 
         partial_milestone_observations: list[PartialMilestoneObservation] = []
         if task.metadata.partial_milestone_assertions:
@@ -3694,9 +3776,11 @@ async def _run_synthetic_suite(
             observer = PartialMilestoneObserverImpl(milestone_sim, milestone_index.sha256, milestone_artifact_id)
             partial_milestone_observations = await observer.observe(task_def, attempt)
             partial_milestone_records.extend(partial_milestone_observations)
-            attempt.partial_milestone_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "partial_milestone_observation_refs": [
                 obs.observation_id for obs in partial_milestone_observations
-            ]
+            ],
+            })
 
         reliability_observations: list[ReliabilityObservation] = []
         if task.metadata.reliability_assertions:
@@ -3729,9 +3813,11 @@ async def _run_synthetic_suite(
                 }))
             reliability_records.extend(updated_reliability_obs)
             reliability_observations = updated_reliability_obs
-            attempt.reliability_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "reliability_observation_refs": [
                 obs.observation_id for obs in updated_reliability_obs
-            ]
+            ],
+            })
 
         economics_performance_observations: list[EconomicsPerformanceObservation] = []
         if task.metadata.economics_performance_assertions:
@@ -3764,9 +3850,11 @@ async def _run_synthetic_suite(
                 }))
             economics_performance_records.extend(updated_econ_obs)
             economics_performance_observations = updated_econ_obs
-            attempt.economics_performance_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "economics_performance_observation_refs": [
                 obs.observation_id for obs in updated_econ_obs
-            ]
+            ],
+            })
 
         final_state_observations: list[FinalStateObservation] = []
         final_state_receipts: list[ReceiptObservation] = []
@@ -3797,9 +3885,11 @@ async def _run_synthetic_suite(
                 }))
             final_state_records.extend(updated_final_state_obs)
             final_state_observations = updated_final_state_obs
-            attempt.final_state_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "final_state_observation_refs": [
                 obs.observation_id for obs in updated_final_state_obs
-            ]
+            ],
+            })
 
         state_observations: list[StateObservation] = []
         if task.metadata.state_fixture:
@@ -3834,11 +3924,13 @@ async def _run_synthetic_suite(
             )
             state_observations = await observer.observe(task_def, attempt)
             state_records.extend(state_observations)
-            attempt.state_observation_refs = [
+            attempt = attempt.model_copy(update={
+                "state_observation_refs": [
                 obs.observation_id for obs in state_observations
-            ]
+            ],
+            })
 
-        attempt.ended_at = datetime.now(UTC)
+        attempt = attempt.model_copy(update={"ended_at": datetime.now(UTC)})
 
         grade_metrics: list[MetricObservation] = []
         if task.metadata.token_store_persistence_assertions:
@@ -4502,9 +4594,9 @@ async def _run_synthetic_suite(
                 f"task {task.id} produced no graded metrics: empty metric set is invalid evidence"
             )
 
-        attempt.receipt_refs = task_receipt_ids
+        attempt = attempt.model_copy(update={"receipt_refs": task_receipt_ids})
         metric_records.extend(grade_metrics)
-        attempt.grade_refs = [metric.metric_id for metric in grade_metrics]
+        attempt = attempt.model_copy(update={"grade_refs": [metric.metric_id for metric in grade_metrics]})
         for observations in synthetic_observation_groups:
             for observation in observations:
                 if observation.attempt_id == attempt_id:

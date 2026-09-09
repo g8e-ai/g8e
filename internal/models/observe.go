@@ -438,3 +438,11 @@ type ObserveProducerRunStateRequest struct {
 	WebSessionID   string             `json:"web_session_id,omitempty"`
 	CLISessionID   string             `json:"cli_session_id,omitempty"`
 }
+
+// ObserveProducerResponse is the typed response body for the mTLS producer
+// endpoints. It carries a single accepted flag indicating the gateway
+// accepted and persisted the projection. The response contains no record
+// identifiers, ownership fields, or echo of the request payload.
+type ObserveProducerResponse struct {
+	Accepted bool `json:"accepted"`
+}

@@ -66,6 +66,22 @@ class FakeEventService:
         # The AsyncMock's side_effect is _record_publish, which appends to self.published.
         await self.publish(event)
 
+    async def publish_reputation_event(
+        self,
+        event_type: EventType,
+        payload: G8eBaseModel,
+        g8e_context: G8eHttpContext,
+    ) -> None:
+        """Typed fake for publish_reputation_event."""
+        from app.models.http_context import RequestContext
+
+        event = SessionEvent.from_context(
+            context=RequestContext.from_app_context(g8e_context),
+            event_type=event_type,
+            payload=payload,
+        )
+        await self.publish(event)
+
     async def publish_investigation_event(
         self,
         investigation_id: str,

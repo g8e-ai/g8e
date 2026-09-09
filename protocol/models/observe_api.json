@@ -215,5 +215,10 @@
     "observed_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp of the state change from the ensemble's own clock"},
     "web_session_id": {"type": "string", "required": false, "description": "SSE routing target for browser sessions. Exactly one of web_session_id or cli_session_id is required."},
     "cli_session_id": {"type": "string", "required": false, "description": "SSE routing target for CLI sessions. Exactly one of web_session_id or cli_session_id is required."}
+  },
+
+  "observe_producer_response": {
+    "_description": "Typed response body for the mTLS producer endpoints. Carries a single accepted flag indicating the gateway accepted and persisted the projection. Contains no record identifiers, ownership fields, or echo of the request payload.",
+    "accepted": {"type": "boolean", "required": true, "description": "Whether the gateway accepted and persisted the projection"}
   }
 }

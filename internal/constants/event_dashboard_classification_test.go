@@ -10,6 +10,7 @@ package constants
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,10 +18,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// protocolConstantsPath resolves a canonical protocol constants JSON file
+// relative to the internal/constants package directory using the
+// ProtocolSourceTreeRootFromInternalPkg constant. It avoids hand-rolled
+// "../../protocol/constants/..." literals in contract tests.
+func protocolConstantsPath(filename string) string {
+	return filepath.Join(ProtocolSourceTreeRootFromInternalPkg, ProtocolDirname, ProtocolConstantsDirname, filename)
+}
+
 // TestEventDashboardClassificationJSONValidity asserts the classification
 // inventory file is valid JSON and contains the expected top-level keys.
 func TestEventDashboardClassificationJSONValidity(t *testing.T) {
-	data, err := os.ReadFile("../../protocol/constants/event_dashboard_classification.json")
+	data, err := os.ReadFile(protocolConstantsPath(ProtocolEventDashboardClassificationJSONFilename))
 	require.NoError(t, err)
 	assert.True(t, json.Valid(data), "event_dashboard_classification.json is valid JSON")
 
@@ -38,7 +47,7 @@ func TestEventDashboardClassificationJSONValidity(t *testing.T) {
 // dashboard classification inventory. This prevents silent drift when new
 // event families are registered.
 func TestEventDashboardClassificationCoversAllRegisteredFamilies(t *testing.T) {
-	eventsData, err := os.ReadFile("../../protocol/constants/events.json")
+	eventsData, err := os.ReadFile(protocolConstantsPath(ProtocolEventsJSONFilename))
 	require.NoError(t, err)
 	var events struct {
 		Events map[string]struct {
@@ -47,7 +56,7 @@ func TestEventDashboardClassificationCoversAllRegisteredFamilies(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(eventsData, &events.Events))
 
-	classData, err := os.ReadFile("../../protocol/constants/event_dashboard_classification.json")
+	classData, err := os.ReadFile(protocolConstantsPath(ProtocolEventDashboardClassificationJSONFilename))
 	require.NoError(t, err)
 	var classRaw struct {
 		Families map[string]struct {
@@ -79,7 +88,7 @@ func TestEventDashboardClassificationCoversAllRegisteredFamilies(t *testing.T) {
 // TestEventDashboardClassificationValues asserts that every classification
 // value in the inventory is one of the four documented categories.
 func TestEventDashboardClassificationValues(t *testing.T) {
-	data, err := os.ReadFile("../../protocol/constants/event_dashboard_classification.json")
+	data, err := os.ReadFile(protocolConstantsPath(ProtocolEventDashboardClassificationJSONFilename))
 	require.NoError(t, err)
 	var raw struct {
 		Families map[string]struct {

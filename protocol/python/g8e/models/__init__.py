@@ -56,6 +56,9 @@ from .observe_api import (
     EvalDetail,
     DownloadArtifact,
     ObserveBootstrapSnapshot,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+    ObserveProducerResponse,
 )
 from .governance import (
     GovernanceEnvelope,

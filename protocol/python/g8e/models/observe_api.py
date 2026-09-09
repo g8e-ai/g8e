@@ -13,7 +13,7 @@ wire shapes.
 
 from typing import Literal
 
-from .base import G8eBaseModel, UTCDatetime, Field
+from .base import ConfigDict, G8eBaseModel, UTCDatetime, Field
 from .events import ObservedMeasurement
 
 
@@ -224,3 +224,65 @@ class ObserveBootstrapSnapshot(G8eBaseModel):
     latest_evals: list[EvalSummary]
     downloads: list[DownloadArtifact]
     generated_at: UTCDatetime
+
+
+class ObserveProducerAgentStateRequest(G8eBaseModel):
+    """Typed request body for POST /api/v1/observe/producer/agent-state.
+
+    Carries the AgentStatusUpdatedPayload fields plus the SSE routing target
+    (exactly one of web_session_id or cli_session_id). The gateway derives
+    user_id from the mTLS peer certificate, never from the request body.
+    Unknown fields are rejected at the protocol boundary.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    schema_version: str
+    agent_id: str
+    display_name: str
+    role: str
+    status: AgentLifecycleStatus
+    run_id: str | None = None
+    task_id: str | None = None
+    model: str | None = None
+    observed_at: UTCDatetime
+    web_session_id: str | None = None
+    cli_session_id: str | None = None
+
+
+class ObserveProducerRunStateRequest(G8eBaseModel):
+    """Typed request body for POST /api/v1/observe/producer/run-state.
+
+    Carries the RunStatusUpdatedPayload fields plus the SSE routing target.
+    The gateway derives user_id from the mTLS peer certificate, never from
+    the request body. Unknown fields are rejected at the protocol boundary.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    schema_version: str
+    run_id: str
+    run_kind: RunKind
+    display_name: str
+    status: RunLifecycleStatus
+    active_task_id: str | None = None
+    completed_tasks: int
+    total_tasks: int
+    started_at: UTCDatetime | None = None
+    ended_at: UTCDatetime | None = None
+    observed_at: UTCDatetime
+    web_session_id: str | None = None
+    cli_session_id: str | None = None
+
+
+class ObserveProducerResponse(G8eBaseModel):
+    """Typed response body for the mTLS producer endpoints.
+
+    Carries a single accepted flag indicating the gateway accepted and
+    persisted the projection. Contains no record identifiers, ownership
+    fields, or echo of the request payload.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    accepted: bool = False

@@ -33,11 +33,20 @@ from g8e_evals.analysis.canonical import (
 from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis, compute_canonical_analysis_from_record
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
-from g8e_evals.analysis import telemetry
+from g8e_evals.analysis.telemetry import (
+    DEFAULT_TELEMETRY_REGISTRY,
+    DuplicateTelemetryProducerError,
+    TelemetryObservationCollisionError,
+    TelemetryProducerError,
+    TelemetryProducerRegistry,
+    TelemetryRegistryIncompleteError,
+    run_all_telemetry_producers,
+)
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
     "ANALYSIS_SCHEMA_VERSION",
+    "DEFAULT_TELEMETRY_REGISTRY",
     "AnalysisInputRecord",
     "AnalysisInputSummary",
     "BridgeRunComparison",
@@ -46,6 +55,7 @@ __all__ = [
     "ComparisonDirection",
     "ConfusionMatrix",
     "DomainStratifiedResult",
+    "DuplicateTelemetryProducerError",
     "GateDecision",
     "GateDecisionStatus",
     "MetricAnalysisResult",
@@ -55,12 +65,17 @@ __all__ = [
     "PairedComparison",
     "PooledConfusionMatrix",
     "ReceiptCoverageAnalysis",
+    "TelemetryObservationCollisionError",
+    "TelemetryProducerError",
+    "TelemetryProducerRegistry",
+    "TelemetryRegistryIncompleteError",
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
     "compute_canonical_analysis_from_record",
     "render_cli",
     "render_html",
     "render_markdown",
+    "run_all_telemetry_producers",
     "statistics",
     "telemetry",
 ]
