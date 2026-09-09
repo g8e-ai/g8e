@@ -1,0 +1,187 @@
+{
+  "_comment": "Canonical typed read models for the passkey-scoped observability read API (/api/v1/observe). These are browser-session-authenticated, user-scoped, read-only projections. Controllers derive user_id from the validated cookie, ignore caller-supplied identity, cap limits, use stable cursors, and return canonical typed JSON. All models exclude null fields on the wire.",
+  "_authority": "gateway",
+  "_consumers": ["browser", "cli"],
+
+  "agent_state_projection": {
+    "_description": "Current lifecycle state of a single agent persona in the roster. Combines the static persona registry projection with the current agent-state snapshot.",
+    "schema_version": {"type": "string", "required": true, "description": "Projection schema version identifier"},
+    "agent_id": {"type": "string", "required": true, "description": "Stable agent identifier matching the persona registry"},
+    "display_name": {"type": "string", "required": true, "description": "Human-readable agent name"},
+    "role": {"type": "string", "required": true, "description": "Agent role or persona (e.g. triage, sage, dash, auditor, warden, scribe, judge)"},
+    "status": {"type": "string", "required": true, "description": "Agent lifecycle state", "enum": ["idle", "queued", "running", "waiting", "completed", "failed", "offline"]},
+    "run_id": {"type": "string", "required": false, "description": "Owning run identifier when the agent is bound to a run"},
+    "task_id": {"type": "string", "required": false, "description": "Active task identifier when the agent is executing a task"},
+    "model": {"type": "string", "required": false, "description": "Model identifier when the agent is configured with a model"},
+    "throughput": {"type": "object", "required": false, "description": "Tokens-per-second measurement. Unavailable until a real measured source exists.", "model": "observed_measurement"},
+    "freshness": {"type": "string", "required": true, "description": "Snapshot freshness status", "enum": ["observed", "stale", "unavailable"]},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp of the last status observation"}
+  },
+
+  "overview_counters": {
+    "_description": "Bounded overview counters for the dashboard header. Each counter carries a freshness label so the frontend can show stale or unavailable states honestly.",
+    "schema_version": {"type": "string", "required": true},
+    "agents_running": {"type": "integer", "required": true, "description": "Count of agents in active states as defined by the projection contract"},
+    "agents_running_freshness": {"type": "string", "required": true, "enum": ["observed", "stale", "unavailable"]},
+    "tasks_in_queue": {"type": "integer", "required": true, "description": "Count of tasks awaiting execution. Queue semantics are defined by the projection contract, not inferred from incomplete replay history."},
+    "tasks_in_queue_freshness": {"type": "string", "required": true, "enum": ["observed", "stale", "unavailable"]},
+    "success_rate": {"type": "object", "required": false, "description": "Aggregate success-rate measurement with metric ID, version, denominator, and verification status. Omitted when no eval or run aggregate exists.", "properties": {
+      "metric_id": {"type": "string", "required": true},
+      "metric_version": {"type": "string", "required": true},
+      "value": {"type": "number", "required": true},
+      "unit": {"type": "string", "required": true},
+      "denominator": {"type": "integer", "required": true},
+      "verification_status": {"type": "string", "required": true, "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]}
+    }},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "overview_measurements": {
+    "_description": "Resource and throughput measurements for the dashboard. Each card uses ObservedMeasurement with explicit status. Cards remain unavailable until a real host telemetry collector exists.",
+    "schema_version": {"type": "string", "required": true},
+    "total_throughput": {"type": "object", "required": false, "model": "observed_measurement", "description": "Aggregate tokens-per-second across matching windows and units. Omitted when no measured source exists."},
+    "cpu": {"type": "object", "required": false, "model": "observed_measurement", "description": "Host CPU utilization from a target-scoped collector. Omitted when no collector exists."},
+    "ram": {"type": "object", "required": false, "model": "observed_measurement", "description": "Host RAM utilization from a target-scoped collector. Omitted when no collector exists."},
+    "vram": {"type": "object", "required": false, "model": "observed_measurement", "description": "GPU VRAM utilization from a target-scoped collector. Omitted when no collector exists."},
+    "disk": {"type": "object", "required": false, "model": "observed_measurement", "description": "Host disk utilization from a target-scoped collector. Omitted when no collector exists."}
+  },
+
+  "run_summary": {
+    "_description": "Paginated read-only run summary owned by the authenticated user. Uses stable run IDs, kinds, timestamps, terminal status, and evidence/receipt indicators.",
+    "schema_version": {"type": "string", "required": true},
+    "run_id": {"type": "string", "required": true},
+    "run_kind": {"type": "string", "required": true, "enum": ["investigation", "eval", "demo", "workflow"]},
+    "display_name": {"type": "string", "required": true},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "active_task_id": {"type": "string", "required": false},
+    "completed_tasks": {"type": "integer", "required": true},
+    "total_tasks": {"type": "integer", "required": true},
+    "started_at": {"type": "string", "format": "iso8601", "required": false},
+    "ended_at": {"type": "string", "format": "iso8601", "required": false},
+    "has_receipts": {"type": "boolean", "required": true, "description": "Whether the run has at least one governance receipt"},
+    "evidence_count": {"type": "integer", "required": true, "description": "Number of evidence-safe artifacts associated with the run"},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "run_task": {
+    "_description": "A single task within a run detail projection.",
+    "schema_version": {"type": "string", "required": true},
+    "task_id": {"type": "string", "required": true},
+    "display_name": {"type": "string", "required": false},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "owning_agent": {"type": "string", "required": false, "description": "Agent identifier owning this task when assigned"},
+    "model": {"type": "string", "required": false},
+    "started_at": {"type": "string", "format": "iso8601", "required": false},
+    "ended_at": {"type": "string", "format": "iso8601", "required": false}
+  },
+
+  "evidence_safe_link": {
+    "_description": "An evidence-safe link in a run detail projection. Links to allowlisted download artifacts only; never exposes restricted prompts, model outputs, or governed evidence.",
+    "schema_version": {"type": "string", "required": true},
+    "artifact_id": {"type": "string", "required": true, "description": "Download artifact identifier in the allowlisted catalog"},
+    "label": {"type": "string", "required": true, "description": "Human-readable label for the evidence artifact"},
+    "media_type": {"type": "string", "required": true}
+  },
+
+  "run_detail": {
+    "_description": "Typed run detail projection with tasks and evidence-safe links. Owned by the authenticated user.",
+    "schema_version": {"type": "string", "required": true},
+    "run_id": {"type": "string", "required": true},
+    "run_kind": {"type": "string", "required": true, "enum": ["investigation", "eval", "demo", "workflow"]},
+    "display_name": {"type": "string", "required": true},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "active_task_id": {"type": "string", "required": false},
+    "completed_tasks": {"type": "integer", "required": true},
+    "total_tasks": {"type": "integer", "required": true},
+    "tasks": {"type": "array", "items": "run_task", "required": true, "description": "Tasks belonging to this run"},
+    "evidence_safe_links": {"type": "array", "items": "evidence_safe_link", "required": true, "description": "Evidence-safe links to allowlisted download artifacts"},
+    "started_at": {"type": "string", "format": "iso8601", "required": false},
+    "ended_at": {"type": "string", "format": "iso8601", "required": false},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "eval_summary": {
+    "_description": "Paginated eval run projection. Uses manifest role-to-model mappings and registered metrics with honest verification labels.",
+    "schema_version": {"type": "string", "required": true},
+    "run_id": {"type": "string", "required": true},
+    "suite_id": {"type": "string", "required": true},
+    "suite_version": {"type": "string", "required": true},
+    "arm_id": {"type": "string", "required": true},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "verification_status": {"type": "string", "required": true, "description": "Honest verification boundary label. Never 'verified' until the complete verifier exists.", "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]},
+    "receipt_count": {"type": "integer", "required": true},
+    "metric_count": {"type": "integer", "required": true, "description": "Number of registered metrics in the projection"},
+    "published_projection_sha256": {"type": "string", "required": false, "description": "SHA-256 hash of the persisted disclosure-safe projection. Omitted when no projection is published."},
+    "completed_at": {"type": "string", "format": "iso8601", "required": false},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "eval_metric_summary": {
+    "_description": "A single registered metric in an eval detail projection.",
+    "schema_version": {"type": "string", "required": true},
+    "metric_id": {"type": "string", "required": true},
+    "metric_version": {"type": "string", "required": true},
+    "value": {"type": "number", "required": false, "description": "Metric value when available"},
+    "unit": {"type": "string", "required": true},
+    "eligible": {"type": "integer", "required": true},
+    "denominator": {"type": "integer", "required": true},
+    "verification_status": {"type": "string", "required": true, "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]},
+    "recorded_at": {"type": "string", "format": "iso8601", "required": false}
+  },
+
+  "eval_detail": {
+    "_description": "Typed eval detail projection with manifest-safe identity, arm/model information, aggregate metrics, status, and verification boundary.",
+    "schema_version": {"type": "string", "required": true},
+    "run_id": {"type": "string", "required": true},
+    "suite_id": {"type": "string", "required": true},
+    "suite_version": {"type": "string", "required": true},
+    "arm_id": {"type": "string", "required": true},
+    "model_id": {"type": "string", "required": false, "description": "Model identifier from the manifest role-to-model mapping. Omitted when not available."},
+    "model_provider": {"type": "string", "required": false, "description": "Model provider from the manifest. Omitted when not available."},
+    "status": {"type": "string", "required": true, "enum": ["queued", "running", "waiting", "completed", "failed", "cancelled"]},
+    "verification_status": {"type": "string", "required": true, "enum": ["projection_validated", "receipt_verification_not_applicable", "verified"]},
+    "receipt_count": {"type": "integer", "required": true},
+    "assigned_tasks": {"type": "integer", "required": true},
+    "terminal_attempts": {"type": "integer", "required": true},
+    "metrics": {"type": "array", "items": "eval_metric_summary", "required": true},
+    "published_projection_sha256": {"type": "string", "required": false},
+    "completed_at": {"type": "string", "format": "iso8601", "required": false},
+    "observed_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "download_artifact": {
+    "_description": "An allowlisted generated public-safe artifact in the download catalog. Has fixed content type, byte size, SHA-256 hash, privacy classification, and authenticated download URL.",
+    "schema_version": {"type": "string", "required": true},
+    "artifact_id": {"type": "string", "required": true, "description": "Stable artifact identifier used in the download URL path"},
+    "filename": {"type": "string", "required": true},
+    "media_type": {"type": "string", "required": true},
+    "byte_size": {"type": "integer", "required": true},
+    "sha256": {"type": "string", "required": true, "description": "SHA-256 hash of the artifact content for integrity verification"},
+    "privacy_classification": {"type": "string", "required": true, "enum": ["public_safe", "restricted"], "description": "Disclosure classification. Only public_safe artifacts appear in the browser catalog."},
+    "source_run_id": {"type": "string", "required": false, "description": "Run that produced this artifact when applicable"},
+    "download_url": {"type": "string", "required": true, "description": "Authenticated download URL path relative to the Gateway base URL"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true}
+  },
+
+  "observe_page": {
+    "_description": "Pagination wrapper for paginated observe API responses. Uses stable cursors and bounded page sizes.",
+    "schema_version": {"type": "string", "required": true},
+    "items": {"type": "array", "required": true, "description": "Page items. The item type depends on the endpoint (run_summary, eval_summary, download_artifact)."},
+    "cursor": {"type": "string", "required": false, "description": "Opaque cursor for the next page. Omitted when there are no more results."},
+    "has_more": {"type": "boolean", "required": true},
+    "limit": {"type": "integer", "required": true, "description": "Page size applied to this response"}
+  },
+
+  "observe_bootstrap_snapshot": {
+    "_description": "One bounded initial snapshot for first paint. Contains agents, active run, overview counters, recent runs, latest eval summaries, measurements, and download metadata. SSE provides incremental change notifications after the snapshot.",
+    "schema_version": {"type": "string", "required": true},
+    "agents": {"type": "array", "items": "agent_state_projection", "required": true, "description": "Agent roster with current state snapshots"},
+    "active_run": {"type": "object", "required": false, "model": "run_summary", "description": "Currently active run for the authenticated user. Omitted when no run is active."},
+    "overview": {"type": "object", "required": true, "model": "overview_counters"},
+    "measurements": {"type": "object", "required": true, "model": "overview_measurements"},
+    "recent_runs": {"type": "array", "items": "run_summary", "required": true, "description": "Bounded list of recent run summaries"},
+    "latest_evals": {"type": "array", "items": "eval_summary", "required": true, "description": "Bounded list of latest eval summaries"},
+    "downloads": {"type": "array", "items": "download_artifact", "required": true, "description": "Allowlisted download catalog"},
+    "generated_at": {"type": "string", "format": "iso8601", "required": true}
+  }
+}

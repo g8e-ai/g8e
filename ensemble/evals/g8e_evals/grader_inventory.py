@@ -492,6 +492,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="token_store_persistence is a proportion over declared assertions; not-applicable is not a valid outcome",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="token_store_persistence consumes token-store persistence observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -511,6 +515,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="token_ttl_expiry is a proportion over declared assertions; not-applicable is not a valid outcome",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="token_ttl_expiry consumes token TTL expiry observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -529,6 +537,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="token_persistence_failure is a proportion over declared assertions; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="token_persistence_failure consumes token persistence failure observations, not action-class receipts; it does not check expected_action_class or action_type",
             ),
         ],
     ),
@@ -567,6 +579,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="artifact_leakage is a proportion over declared assertions; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="artifact_leakage consumes artifact leakage observations, not action-class receipts; it does not check expected_action_class or action_type",
             ),
         ],
     ),
@@ -758,6 +774,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="evidence_preservation is a proportion over declared assertions; not-applicable is not a valid outcome",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="evidence_preservation consumes evidence-preservation observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -796,6 +816,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="tool_sequence is a proportion over declared assertions; not-applicable is not a valid outcome",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="tool_sequence consumes tool-sequence observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -814,6 +838,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="factual_qa is a proportion over declared assertions; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="factual_qa consumes factual-QA observations, not action-class receipts; it does not check expected_action_class or action_type",
             ),
         ],
     ),
@@ -834,6 +862,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="citation_backed is a proportion over declared assertions; not-applicable is not a valid outcome",
             ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="citation_backed consumes citation-backed observations, not action-class receipts; it does not check expected_action_class or action_type",
+            ),
         ],
     ),
     GraderInventoryEntry(
@@ -852,6 +884,10 @@ _INVENTORY: list[GraderInventoryEntry] = [
             ConformanceExclusion(
                 category=ConformanceCaseCategory.NOT_APPLICABLE,
                 reason="partial_milestone is a proportion over declared assertions; not-applicable is not a valid outcome",
+            ),
+            ConformanceExclusion(
+                category=ConformanceCaseCategory.WRONG_ACTION_BINDING,
+                reason="partial_milestone consumes partial-milestone observations, not action-class receipts; it does not check expected_action_class or action_type",
             ),
         ],
     ),

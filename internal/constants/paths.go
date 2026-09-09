@@ -704,6 +704,9 @@ const (
 	MediaTypeHTML                                 = "text/html; charset=utf-8"
 	MediaTypeText                                 = "text/plain; charset=utf-8"
 	EvalRunMaxRecords                             = 4096
+	ObserveEventPayloadSchemaVersion              = "1.0.0"
+	ObserveMeasurementSchemaVersion               = "1.0.0"
+	ObserveAPIReadModelSchemaVersion              = "1.0.0"
 	EvidenceGraphVerifierID                       = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion                  = "1.0.0"
 	EvidenceGraphMaxBytes                         = 64 << 20
