@@ -952,13 +952,19 @@ class TestMixedAttemptAndWiring:
         good_obs = _metric_obs(metric_id="policy_outcome", attempt_id="good", value=0.0)
         bad_obs = _metric_obs(metric_id="policy_outcome", attempt_id="bad", value=0.0)
         good_stage = _stage(stage_id="gs", kind=StageKind.PROTOCOL_L2, attempt_id="good", l2_signature_digest=_HASH)
-        bad_stage1 = _stage(stage_id="bs1", kind=StageKind.PROTOCOL_L2, attempt_id="bad", l2_signature_digest=_HASH)
-        bad_stage2 = _stage(stage_id="bs2", kind=StageKind.PROTOCOL_L2, attempt_id="bad", l2_signature_digest=_HASH)
+        bad_stage = StageObservation(
+            stage_id="bs1",
+            attempt_id="bad",
+            run_id="wrong-run",
+            kind=StageKind.PROTOCOL_L2,
+            task_id=_TASK_ID,
+            l2_signature_digest=_HASH,
+        )
         record = _record(
             tasks=[task],
             attempts=[good_attempt, bad_attempt],
             metric_observations=[good_obs, bad_obs],
-            stages=[good_stage, bad_stage1, bad_stage2],
+            stages=[good_stage, bad_stage],
         )
-        with pytest.raises(DerivedProducerError, match="expected exactly one"):
+        with pytest.raises(DerivedProducerError, match="run does not match"):
             run_all_derived_producers(record, [])

@@ -829,7 +829,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     report_dir = output_dir / f"{suite}-{ts}"
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest_path = report_dir / "manifest.json"
+    manifest_path = report_dir / evals_constants.MANIFEST_JSON
     manifest_path.write_text(manifest.model_dump_json(indent=2))
 
     collector = ReceiptCollector(config.operator_url, cli_context=config.auth_context)
@@ -1129,7 +1129,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         for t in tasks
     ]
     task_defs_by_id = {task.task_id: task for task in task_defs}
-    with open(report_dir / "tasks.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TASKS_JSONL, "w") as f:
         for td in task_defs:
             f.write(td.model_dump_json() + "\n")
 
@@ -2374,99 +2374,99 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         )
 
     # 9. Write attempts.jsonl
-    with open(report_dir / "attempts.jsonl", "w") as f:
+    with open(report_dir / evals_constants.ATTEMPTS_JSONL, "w") as f:
         for ar in attempt_records:
             f.write(ar.model_dump_json() + "\n")
 
-    with open(report_dir / "receipts.jsonl", "w") as f:
+    with open(report_dir / evals_constants.RECEIPTS_JSONL, "w") as f:
         for receipt in receipt_records:
             f.write(receipt.model_dump_json() + "\n")
 
-    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.FINAL_STATE_OBSERVATIONS_JSONL, "w") as f:
         for observation in final_state_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "state-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.STATE_OBSERVATIONS_JSONL, "w") as f:
         for observation in state_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "rehydration-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REHYDRATION_OBSERVATIONS_JSONL, "w") as f:
         for observation in rehydration_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "secret-detection-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.SECRET_DETECTION_OBSERVATIONS_JSONL, "w") as f:
         for observation in secret_detection_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "unauthorized-mutation-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.UNAUTHORIZED_MUTATION_OBSERVATIONS_JSONL, "w") as f:
         for observation in unauthorized_mutation_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "token-store-persistence-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_STORE_PERSISTENCE_OBSERVATIONS_JSONL, "w") as f:
         for observation in token_store_persistence_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "token-ttl-expiry-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_TTL_EXPIRY_OBSERVATIONS_JSONL, "w") as f:
         for observation in token_ttl_expiry_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "token-persistence-failure-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_PERSISTENCE_FAILURE_OBSERVATIONS_JSONL, "w") as f:
         for observation in token_persistence_failure_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "exfiltration-attempt-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EXFILTRATION_ATTEMPT_OBSERVATIONS_JSONL, "w") as f:
         for observation in exfiltration_attempt_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "artifact-leakage-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.ARTIFACT_LEAKAGE_OBSERVATIONS_JSONL, "w") as f:
         for observation in artifact_leakage_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REPLAY_ATTEMPT_OBSERVATIONS_JSONL, "w") as f:
         for observation in replay_attempt_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.SIGNED_FIELD_TAMPERING_OBSERVATIONS_JSONL, "w") as f:
         for observation in signed_field_tampering_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.PAYLOAD_TAMPERING_OBSERVATIONS_JSONL, "w") as f:
         for observation in payload_tampering_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.STALE_STATE_ROOT_OBSERVATIONS_JSONL, "w") as f:
         for observation in stale_state_root_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "identity-mismatch-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.IDENTITY_MISMATCH_OBSERVATIONS_JSONL, "w") as f:
         for observation in identity_mismatch_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.NONCE_EXPIRATION_OBSERVATIONS_JSONL, "w") as f:
         for observation in nonce_expiration_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.SIGNER_DEFECT_OBSERVATIONS_JSONL, "w") as f:
         for observation in signer_defect_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "l3-proof-transplant-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.L3_PROOF_TRANSPLANT_OBSERVATIONS_JSONL, "w") as f:
         for observation in l3_proof_transplant_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REVOKED_CREDENTIAL_OBSERVATIONS_JSONL, "w") as f:
         for observation in revoked_credential_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "evidence-preservation-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EVIDENCE_PRESERVATION_OBSERVATIONS_JSONL, "w") as f:
         for observation in evidence_preservation_records:
             f.write(observation.model_dump_json() + "\n")
 
-    with open(report_dir / "stages.jsonl", "w") as f:
+    with open(report_dir / evals_constants.STAGES_JSONL, "w") as f:
         for stage in stage_records:
             f.write(stage.model_dump_json() + "\n")
 
-    with open(report_dir / "metrics.jsonl", "w") as f:
+    with open(report_dir / evals_constants.METRICS_JSONL, "w") as f:
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")
 
@@ -2474,7 +2474,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         encrypt_evidence_artifact(artifact, evidence_key)
         for artifact in evidence_artifacts
     ]
-    with open(report_dir / "evidence-index.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EVIDENCE_INDEX_JSONL, "w") as f:
         for artifact in encrypted_evidence_artifacts:
             f.write(artifact.index.model_dump_json() + "\n")
 
@@ -2657,13 +2657,13 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         )
         sys.exit(1)
 
-    receipts_path = report_dir / "receipts.jsonl"
+    receipts_path = report_dir / evals_constants.RECEIPTS_JSONL
     if not receipts_path.exists():
         raise click.ClickException(f"receipts.jsonl not found in {report_dir}")
 
     run_id = ""
     if json_output:
-        manifest_path = report_dir / "manifest.json"
+        manifest_path = report_dir / evals_constants.MANIFEST_JSON
         if not manifest_path.exists():
             raise click.ClickException(f"manifest.json not found in {report_dir}")
         try:
@@ -3016,7 +3016,7 @@ async def _run_synthetic_suite(
     ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     report_dir = output_dir / f"{suite}-synthetic-{ts}"
     report_dir.mkdir(parents=True, exist_ok=True)
-    (report_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))
+    (report_dir / evals_constants.MANIFEST_JSON).write_text(manifest.model_dump_json(indent=2))
 
     per_run_key = _generate_per_run_key()
     canary_values = _extract_canary_values(tasks)
@@ -3070,7 +3070,7 @@ async def _run_synthetic_suite(
             graders=grader_refs,
         ))
     task_defs_by_id = {td.task_id: td for td in task_defs}
-    with open(report_dir / "tasks.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TASKS_JSONL, "w") as f:
         for td in task_defs:
             f.write(td.model_dump_json() + "\n")
 
@@ -4670,94 +4670,151 @@ async def _run_synthetic_suite(
         color = "green" if status == "PASS" else "red"
         console.print(f"  [cyan]{task.id}[/cyan] [{color}]{status}[/{color}]")
 
-    with open(report_dir / "attempts.jsonl", "w") as f:
+    with open(report_dir / evals_constants.ATTEMPTS_JSONL, "w") as f:
         for ar in attempt_records:
             f.write(ar.model_dump_json() + "\n")
-    with open(report_dir / "token-store-persistence-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_STORE_PERSISTENCE_OBSERVATIONS_JSONL, "w") as f:
         for obs in token_store_persistence_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "token-ttl-expiry-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_TTL_EXPIRY_OBSERVATIONS_JSONL, "w") as f:
         for obs in token_ttl_expiry_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "token-persistence-failure-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOKEN_PERSISTENCE_FAILURE_OBSERVATIONS_JSONL, "w") as f:
         for obs in token_persistence_failure_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "exfiltration-attempt-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EXFILTRATION_ATTEMPT_OBSERVATIONS_JSONL, "w") as f:
         for obs in exfiltration_attempt_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "artifact-leakage-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.ARTIFACT_LEAKAGE_OBSERVATIONS_JSONL, "w") as f:
         for obs in artifact_leakage_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "rehydration-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REHYDRATION_OBSERVATIONS_JSONL, "w") as f:
         for obs in rehydration_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "replay-attempt-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REPLAY_ATTEMPT_OBSERVATIONS_JSONL, "w") as f:
         for obs in replay_attempt_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "signed-field-tampering-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.SIGNED_FIELD_TAMPERING_OBSERVATIONS_JSONL, "w") as f:
         for obs in signed_field_tampering_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "payload-tampering-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.PAYLOAD_TAMPERING_OBSERVATIONS_JSONL, "w") as f:
         for obs in payload_tampering_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "nonce-expiration-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.NONCE_EXPIRATION_OBSERVATIONS_JSONL, "w") as f:
         for obs in nonce_expiration_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "stale-state-root-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.STALE_STATE_ROOT_OBSERVATIONS_JSONL, "w") as f:
         for obs in stale_state_root_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "identity-mismatch-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.IDENTITY_MISMATCH_OBSERVATIONS_JSONL, "w") as f:
         for obs in identity_mismatch_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "signer-defect-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.SIGNER_DEFECT_OBSERVATIONS_JSONL, "w") as f:
         for obs in signer_defect_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "l3-proof-transplant-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.L3_PROOF_TRANSPLANT_OBSERVATIONS_JSONL, "w") as f:
         for obs in l3_proof_transplant_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "revoked-credential-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.REVOKED_CREDENTIAL_OBSERVATIONS_JSONL, "w") as f:
         for obs in revoked_credential_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "evidence-preservation-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EVIDENCE_PRESERVATION_OBSERVATIONS_JSONL, "w") as f:
         for obs in evidence_preservation_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "policy-attack-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.POLICY_ATTACK_OBSERVATIONS_JSONL, "w") as f:
         for obs in policy_attack_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "tool-sequence-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.TOOL_SEQUENCE_OBSERVATIONS_JSONL, "w") as f:
         for obs in tool_sequence_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "factual-qa-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.FACTUAL_QA_OBSERVATIONS_JSONL, "w") as f:
         for obs in factual_qa_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "citation-backed-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.CITATION_BACKED_OBSERVATIONS_JSONL, "w") as f:
         for obs in citation_backed_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "partial-milestone-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.PARTIAL_MILESTONE_OBSERVATIONS_JSONL, "w") as f:
         for obs in partial_milestone_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "reliability-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.RELIABILITY_OBSERVATIONS_JSONL, "w") as f:
         for obs in reliability_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "economics-performance-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.ECONOMICS_PERFORMANCE_OBSERVATIONS_JSONL, "w") as f:
         for obs in economics_performance_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "final-state-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.FINAL_STATE_OBSERVATIONS_JSONL, "w") as f:
         for obs in final_state_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "state-observations.jsonl", "w") as f:
+    with open(report_dir / evals_constants.STATE_OBSERVATIONS_JSONL, "w") as f:
         for obs in state_records:
             f.write(obs.model_dump_json() + "\n")
-    with open(report_dir / "receipts.jsonl", "w") as f:
+    with open(report_dir / evals_constants.RECEIPTS_JSONL, "w") as f:
         for obs in [*privacy_receipt_records, *governance_receipt_records]:
             f.write(obs.model_dump_json() + "\n")
-    (report_dir / "stages.jsonl").write_text("")
-    with open(report_dir / "metrics.jsonl", "w") as f:
+    (report_dir / evals_constants.STAGES_JSONL).write_text("")
+    with open(report_dir / evals_constants.METRICS_JSONL, "w") as f:
         for metric in metric_records:
             f.write(metric.model_dump_json() + "\n")
-    with open(report_dir / "evidence-index.jsonl", "w") as f:
+    with open(report_dir / evals_constants.EVIDENCE_INDEX_JSONL, "w") as f:
         for index in evidence_index_records:
             f.write(index.model_dump_json() + "\n")
+
+    # Build the complete AnalysisInputRecord from every accumulated
+    # record, run canonical analysis, and write the authoritative
+    # analysis artifacts. The synthetic path produces observation classes
+    # the ifeval path does not (policy_attack, tool_sequence, factual_qa,
+    # citation_backed, partial_milestone, reliability,
+    # economics_performance, state). Classes not produced default to an
+    # empty list (genuine absence, not a complete-evidence claim).
+    all_receipts = [*privacy_receipt_records, *governance_receipt_records]
+    analysis_input = AnalysisInputRecord(
+        run_id=run_id,
+        release_version=EVALS_VERSION,
+        tasks=task_defs,
+        attempts=attempt_records,
+        metric_observations=metric_records,
+        receipts=all_receipts,
+        stages=[],
+        final_state_observations=final_state_records,
+        state_observations=state_records,
+        rehydration_observations=rehydration_records,
+        token_store_persistence_observations=token_store_persistence_records,
+        token_ttl_expiry_observations=token_ttl_expiry_records,
+        token_persistence_failure_observations=token_persistence_failure_records,
+        exfiltration_attempt_observations=exfiltration_attempt_records,
+        artifact_leakage_observations=artifact_leakage_records,
+        replay_attempt_observations=replay_attempt_records,
+        signed_field_tampering_observations=signed_field_tampering_records,
+        payload_tampering_observations=payload_tampering_records,
+        stale_state_root_observations=stale_state_root_records,
+        identity_mismatch_observations=identity_mismatch_records,
+        nonce_expiration_observations=nonce_expiration_records,
+        signer_defect_observations=signer_defect_records,
+        l3_proof_transplant_observations=l3_proof_transplant_records,
+        revoked_credential_observations=revoked_credential_records,
+        evidence_preservation_observations=evidence_preservation_records,
+        policy_attack_observations=policy_attack_records,
+        tool_sequence_observations=tool_sequence_records,
+        factual_qa_observations=factual_qa_records,
+        citation_backed_observations=citation_backed_records,
+        partial_milestone_observations=partial_milestone_records,
+        reliability_observations=reliability_records,
+        economics_performance_observations=economics_performance_records,
+    )
+
+    (report_dir / evals_constants.ANALYSIS_INPUT_JSON).write_text(
+        canonical_model_json(analysis_input)
+    )
+
+    analysis: CanonicalEvalAnalysis = compute_canonical_analysis_from_record(analysis_input)
+
+    (report_dir / evals_constants.ANALYSIS_JSON).write_text(
+        canonical_model_json(analysis)
+    )
+    (report_dir / evals_constants.ANALYSIS_MD).write_text(render_markdown(analysis))
+    (report_dir / evals_constants.ANALYSIS_HTML).write_text(render_html(analysis))
+    (report_dir / evals_constants.ANALYSIS_TXT).write_text(render_cli(analysis))
+    console.print(render_cli(analysis))
 
     _scan_report_for_canary_leaks(report_dir, canary_values, per_run_key)
 

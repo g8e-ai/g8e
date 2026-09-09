@@ -15,14 +15,17 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc --build",
+    "build:host": "vite build --config host/vite.config.ts",
+    "dev:host": "vite --config host/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
-    "clean": "rm -rf dist coverage"
+    "lint": "tsc --noEmit && tsc --noEmit -p host/tsconfig.json",
+    "clean": "rm -rf dist coverage host/dist"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
+    "vite": "^5.4.11",
     "vitest": "^2.1.9"
   },
   "engines": {

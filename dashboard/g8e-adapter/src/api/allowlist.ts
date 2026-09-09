@@ -78,8 +78,11 @@ export class EndpointNotAllowedError extends Error {
 }
 
 export function resolveEndpoint(method: string, path: string): AllowedEndpoint {
+  // Strip the query string before matching. Query parameters (cursor, limit,
+  // since_id) are part of the request, not the route identity.
+  const pathOnly = path.split('?')[0];
   for (const ep of ALLOWED_ENDPOINTS) {
-    if (ep.method === method && ep.pathPattern.test(path)) {
+    if (ep.method === method && ep.pathPattern.test(pathOnly)) {
       return ep;
     }
   }
