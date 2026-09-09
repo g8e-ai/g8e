@@ -226,6 +226,16 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.ObserveDownloads, h.observeController.handleListDownloads)
 	mux.Handle(constants.APIPaths.ObserveDownloadsByID, http.HandlerFunc(h.observeController.handleGetDownload))
 
+	// Observe producer endpoints (RouteAuthMTLS — mTLS-authenticated app
+	// workload only, never browser-accessible). The g8ee ensemble calls
+	// these endpoints to report agent and run state changes. The unified
+	// auth middleware enforces mTLS and stamps context with the app
+	// identity and delegated user_id; the controller rejects non-app
+	// callers. These are registered after the read-only observe routes so
+	// the producer prefix does not shadow any by-id read path.
+	mux.HandleFunc(constants.APIPaths.ObserveProducerAgentState, h.observeProducerController.handleAgentState)
+	mux.HandleFunc(constants.APIPaths.ObserveProducerRunState, h.observeProducerController.handleRunState)
+
 	var handler http.Handler = mux
 	if h.authMiddleware != nil {
 		handler = h.authMiddleware.Middleware(mux)

@@ -29,6 +29,9 @@ from app.models.internal_api import (
     SSEPushResponse,
     OperatorLinkResponse,
     OperatorLinkRequestPayload,
+    ObserveProducerAgentStateRequest,
+    ObserveProducerRunStateRequest,
+    ObserveProducerResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -368,3 +371,97 @@ class InternalHttpClient:
                 component=G8EE_COMPONENT,
                 cause=e,
             ) from e
+
+    async def push_agent_state(
+        self,
+        request: ObserveProducerAgentStateRequest,
+    ) -> ObserveProducerResponse:
+        """POST an agent state update to the gateway observe producer endpoint.
+
+        The gateway derives user_id from the mTLS peer certificate, persists
+        the agent state projection, and emits an app.agent.status.updated SSE
+        event after successful persistence (persist-before-publish). A
+        projection push failure is logged as a warning and raised as a
+        NetworkError so the caller can decide whether to abort primary work;
+        call sites treat this as non-blocking per the wiring contract.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.OBSERVE_PRODUCER_AGENT_STATE,
+                json_data=request,
+            )
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Agent state push failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Agent state push rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "agent_id": request.agent_id,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Agent state push returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "agent_id": request.agent_id,
+                },
+            )
+
+        return ObserveProducerResponse.model_validate(response.json())
+
+    async def push_run_state(
+        self,
+        request: ObserveProducerRunStateRequest,
+    ) -> ObserveProducerResponse:
+        """POST a run state update to the gateway observe producer endpoint.
+
+        The gateway derives user_id from the mTLS peer certificate, persists
+        the run state projection, and emits an app.run.status.updated SSE
+        event after successful persistence (persist-before-publish). A
+        projection push failure is logged as a warning and raised as a
+        NetworkError so the caller can decide whether to abort primary work;
+        call sites treat this as non-blocking per the wiring contract.
+        """
+        self._ensure_mtls()
+        try:
+            response = await self._http.post(
+                GatewayAPIPaths.OBSERVE_PRODUCER_RUN_STATE,
+                json_data=request,
+            )
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-CLIENT] Run state push failed: {e}",
+                component=G8EE_COMPONENT,
+                cause=e,
+            ) from e
+
+        if not response.is_success:
+            logger.warning(
+                "[HTTP-CLIENT] Run state push rejected",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "run_id": request.run_id,
+                },
+            )
+            raise NetworkError(
+                f"[HTTP-CLIENT] Run state push returned HTTP {response.status_code}",
+                component=G8EE_COMPONENT,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "run_id": request.run_id,
+                },
+            )
+
+        return ObserveProducerResponse.model_validate(response.json())
