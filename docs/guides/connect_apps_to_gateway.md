@@ -521,11 +521,11 @@ The in-tree Ensemble (`g8ee`) and Dashboard (`g8ed`) clients implement that rese
 
 ---
 
-## GUI Enrollment
+## Browser Frontend Connection
 
-The `g8e auth enroll gui` command tree manages local integration metadata for external browser frontends such as React or Lovable applications. It does not create a server-side app identity, change Gateway configuration, or restart the Gateway. The running Gateway must already have matching CORS and WebAuthn settings.
+A browser-hosted frontend (React, Lovable, Vue, vanilla JS) connects to the Gateway over HTTPS using WebAuthn passkeys and session cookies. The Gateway does not create a server-side app identity for browser frontends; it authorizes them through CORS and WebAuthn RP configuration on the running process.
 
-The current `gui enroll` implementation sends its CORS preflight to the plain-HTTP health endpoint, while the plain-HTTP router does not apply the Gateway CORS middleware. Consequently, `gui enroll` fails its preflight before it persists `.g8e/gui_enrollments.json`, even when the HTTPS surface has the requested origin configured. The browser integration itself uses the HTTPS surface and can be configured with the Gateway flags below. `gui verify` only prints a manual checklist; it does not execute those checks. Treat the GUI enrollment commands as local tooling with this current limitation, not as a server-side authorization step.
+For a browser-hosted frontend on the same computer as the Gateway, `./g8e gw connect <frontend-origin>` is the guided one-command workflow: it validates the origin, derives the RP ID, starts or restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process. The advanced `gw start` flags below remain available for multi-origin and public deployments.
 
 With the HTTPS CORS and WebAuthn settings configured, the frontend can:
 - Authenticate users via WebAuthn passkeys
@@ -537,70 +537,6 @@ With the HTTPS CORS and WebAuthn settings configured, the frontend can:
 - Frontend application served on a known origin, such as `http://localhost:3003` or `https://my-app.lovable.app`.
 - Gateway running with that exact origin in both `--cors-origin` and `--passkey-rp-origin`.
 - For a non-localhost frontend, `--passkey-rp-id` set to the frontend hostname or a registrable parent-domain suffix. For example: `./g8e gw start --cors-origin https://my-app.lovable.app --passkey-rp-origin https://my-app.lovable.app --passkey-rp-id my-app.lovable.app`. The Gateway has one RP ID, so all configured browser origins must be valid for that RP ID.
-
-### Commands
-
-#### `g8e auth enroll gui enroll`
-
-Attempt to validate and persist a frontend origin in the local enrollment file. This command currently encounters the plain-HTTP CORS limitation described above.
-
-```bash
-g8e auth enroll gui enroll --origin <url> [flags]
-```
-
-Flags:
-- `--origin` (required): Frontend application origin URL (e.g., `https://my-app.lovable.app`)
-- `--passkey-rp-id`: RP ID printed in the generated frontend snippet. When omitted, the command uses the parsed origin host value; specify this flag explicitly for origins containing a port. This option does not reconfigure the running Gateway, whose `--passkey-rp-id` must match.
-- `--passkey-rp-name`: RP display name printed in the snippet (default: `g8e`).
-- `--public-base-url`: Gateway base URL printed in the snippet. The command checks reachability and emits a warning, rather than failing, if this URL cannot be reached.
-
-The command:
-1. Validates the origin URL
-2. Sends an `OPTIONS` preflight to the plain-HTTP health endpoint on the default localhost port and checks `Access-Control-Allow-Origin`.
-3. If `--public-base-url` is provided, checks its health endpoint and prints a warning if the check fails.
-4. Persists the origin to `.g8e/gui_enrollments.json`.
-5. Outputs a TypeScript configuration snippet for the frontend developer.
-
-The enrollment and verification commands construct their local URLs with the default localhost ports 8080 and 8443; they do not discover custom `--http-port` or `--https-port` values. Persistence and snippet output happen only after the preflight succeeds. In the current Gateway, the plain-HTTP health response has no CORS headers, so that preflight does not succeed.
-
-#### `g8e auth enroll gui show`
-
-Display all enrolled frontend origins and configuration snippets.
-
-```bash
-g8e auth enroll gui show
-g8e auth enroll gui show --json    # machine-readable JSON output for scripting
-g8e auth enroll gui list           # alias for "show"
-```
-
-#### `g8e auth enroll gui remove`
-
-Remove an enrolled frontend application origin from the enrollment file.
-
-```bash
-g8e auth enroll gui remove --origin <url>
-```
-
-Flags:
-- `--origin` (required): Frontend application origin URL to remove
-
-The command:
-1. Validates the origin URL
-2. Removes the origin from `gui_enrollments.json` in the g8e runtime directory
-
-The gateway's CORS and passkey RP configuration is unchanged. To stop accepting the origin, restart the gateway without the corresponding `--cors-origin` and `--passkey-rp-origin` flags.
-
-Returns `not found` error if the origin is not enrolled.
-
-#### `g8e auth enroll gui verify`
-
-Verify gateway connectivity and CORS configuration for a frontend origin.
-
-```bash
-g8e auth enroll gui verify --origin <url>
-```
-
-Checks enrollment status and prints a verification checklist with gateway endpoint URLs for manual testing, including health, CORS preflight, SSE, and WebAuthn passkey endpoints.
 
 ### Frontend Integration Checklist
 
@@ -627,13 +563,20 @@ The frontend integration uses these settings:
 
 ### Example: Lovable Integration
 
+For a browser-hosted Lovable app on the same computer as the Gateway:
+
+```bash
+./g8e gw connect https://my-app.lovable.app
+```
+
+For a multi-origin or public deployment, use the advanced flags directly:
+
 ```bash
 ./g8e gw start \
   --cors-origin https://my-app.lovable.app \
   --passkey-rp-origin https://my-app.lovable.app \
   --passkey-rp-id my-app.lovable.app
 
-# Configure the frontend directly; gui enroll currently fails its HTTP preflight.
 # const API_BASE_URL = 'https://localhost:8443';
 # const PASSKEY_RP_ID = 'my-app.lovable.app';
 # const PASSKEY_RP_NAME = 'g8e';
@@ -643,6 +586,14 @@ Add this configuration to the Lovable project and follow [Connect a Lovable App]
 
 ### Example: Custom React App
 
+For a local React dev server on the same computer as the Gateway:
+
+```bash
+./g8e gw connect http://localhost:3000
+```
+
+For a multi-origin or public deployment, use the advanced flags directly:
+
 ```bash
 ./g8e gw start \
   --cors-origin http://localhost:3000 \
@@ -650,16 +601,14 @@ Add this configuration to the Lovable project and follow [Connect a Lovable App]
   --passkey-rp-id localhost
 
 # Configure the frontend with API_BASE_URL=https://localhost:8443 and PASSKEY_RP_ID=localhost.
-# This prints the current manual checklist; it does not perform the checks.
-g8e auth enroll gui verify --origin http://localhost:3000
 ```
 
-### GUI Enrollment Troubleshooting
+### Browser Frontend Troubleshooting
 
 #### CORS Errors
 
 If the browser blocks requests with CORS errors:
-- Verify the Gateway was started with the frontend's exact origin in `--cors-origin`; the local `gui_enrollments.json` file does not affect server authorization.
+- Verify the Gateway was started with the frontend's exact origin in `--cors-origin`. The Gateway's CORS and passkey RP configuration is the only server-side authorization; no local file changes Gateway behavior.
 - Verify the same origin is present in `--passkey-rp-origin` for WebAuthn ceremonies.
 - Check that `credentials: 'include'` is set on all `fetch` calls.
 
@@ -667,8 +616,7 @@ If the browser blocks requests with CORS errors:
 
 If WebAuthn registration fails with "RP ID does not match":
 - Verify the Gateway was started with an RP ID that is the frontend origin hostname or a registrable suffix; it must not include a scheme or port.
-- Keep the generated frontend configuration aligned with the same value, for example `g8e auth enroll gui enroll --origin https://app.example.com --passkey-rp-id example.com`.
-- Restart the Gateway with `--passkey-rp-id example.com --passkey-rp-origin https://app.example.com` if its active configuration differs.
+- Restart the Gateway with `--passkey-rp-id example.com --passkey-rp-origin https://app.example.com` if its active configuration differs. For a same-computer Lovable or React app, `./g8e gw connect <origin>` derives the exact-host RP ID automatically.
 
 #### SSE Connection Refused
 

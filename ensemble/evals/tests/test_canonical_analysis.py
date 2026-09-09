@@ -33,7 +33,7 @@ from g8e_evals.analysis.canonical import (
     ComparisonDirection,
     ReceiptCoverageAnalysis,
 )
-from g8e_evals.analysis.engine import compute_canonical_analysis
+from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
 from g8e_evals.arms import Arm
 from g8e_evals.metrics import MetricDirection
 from g8e_evals.release_metric_set import MetricDomain, RELEASE_METRIC_SET
@@ -701,6 +701,104 @@ class TestCanonicalAnalysisComputation:
         assert cm.true_positive == 0
         assert cm.true_negative == 0
 
+    def test_pooled_confusion_matrix_sums_arm_level_matrices(self) -> None:
+        """Pooled confusion matrices sum arm-level TP/FP/TN/FN across arms."""
+        task_allow = _make_task(task_id="task-allow", expected_allow_block=PolicyOutcome.ALLOW)
+        task_block = _make_task(task_id="task-block", expected_allow_block=PolicyOutcome.BLOCK)
+        attempt_allow_doctrine = _make_attempt(attempt_id="attempt-allow-d", task_id="task-allow", arm_id=Arm.DOCTRINE)
+        attempt_block_doctrine = _make_attempt(attempt_id="attempt-block-d", task_id="task-block", arm_id=Arm.DOCTRINE)
+        attempt_allow_direct = _make_attempt(attempt_id="attempt-allow-r", task_id="task-allow", arm_id=Arm.DIRECT)
+        attempt_block_direct = _make_attempt(attempt_id="attempt-block-r", task_id="task-block", arm_id=Arm.DIRECT)
+        obs_allow_d = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-allow-d", task_id="task-allow", arm_id=Arm.DOCTRINE, value=1.0)
+        obs_block_d = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-block-d", task_id="task-block", arm_id=Arm.DOCTRINE, value=1.0)
+        obs_allow_r = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-allow-r", task_id="task-allow", arm_id=Arm.DIRECT, value=0.0)
+        obs_block_r = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-block-r", task_id="task-block", arm_id=Arm.DIRECT, value=0.0)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task_allow, task_block],
+            attempts=[attempt_allow_doctrine, attempt_block_doctrine, attempt_allow_direct, attempt_block_direct],
+            metric_observations=[obs_allow_d, obs_block_d, obs_allow_r, obs_block_r],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        pooled = [p for p in analysis.pooled_confusion_matrices if p.metric_id == "policy_outcome"]
+        assert len(pooled) == 1
+        p = pooled[0]
+        # Doctrine: TP=1, TN=1, FP=0, FN=0
+        # Direct: TP=0, TN=0, FP=1, FN=1
+        # Pooled: TP=1, TN=1, FP=1, FN=1
+        assert p.true_positive == 1
+        assert p.true_negative == 1
+        assert p.false_positive == 1
+        assert p.false_negative == 1
+        assert p.arm_count == 2
+        assert p.arm_ids == ["direct", "doctrine"]
+        assert p.pooling_method == "preregistered_simple_summation_across_arms"
+
+    def test_pooled_confusion_matrix_properties(self) -> None:
+        """Pooled confusion matrix derived properties match arm-level computation."""
+        task_allow = _make_task(task_id="task-allow", expected_allow_block=PolicyOutcome.ALLOW)
+        task_block = _make_task(task_id="task-block", expected_allow_block=PolicyOutcome.BLOCK)
+        attempt_allow = _make_attempt(attempt_id="attempt-allow", task_id="task-allow")
+        attempt_block = _make_attempt(attempt_id="attempt-block", task_id="task-block")
+        obs_allow = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-allow", task_id="task-allow", value=1.0)
+        obs_block = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-block", task_id="task-block", value=1.0)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task_allow, task_block],
+            attempts=[attempt_allow, attempt_block],
+            metric_observations=[obs_allow, obs_block],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        pooled = next(p for p in analysis.pooled_confusion_matrices if p.metric_id == "policy_outcome")
+        assert pooled.total == 2
+        assert pooled.accuracy == 1.0
+        assert pooled.balanced_accuracy == 1.0
+        assert pooled.matthews_correlation_coefficient == 1.0
+
+    def test_pooled_confusion_matrix_empty_when_no_confusion_metrics(self) -> None:
+        """No confusion metrics produces no pooled confusion matrices."""
+        task = _make_task()
+        attempt = _make_attempt()
+        obs = _make_metric_obs(metric_id="receipt_integrity", value=1.0)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task],
+            attempts=[attempt],
+            metric_observations=[obs],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.pooled_confusion_matrices == []
+
+    def test_pooled_confusion_matrix_sorted_by_metric_id(self) -> None:
+        """Pooled confusion matrices are sorted by (metric_id, metric_version)."""
+        task_allow = _make_task(task_id="task-allow", expected_allow_block=PolicyOutcome.ALLOW)
+        task_block = _make_task(task_id="task-block", expected_allow_block=PolicyOutcome.BLOCK)
+        attempt_allow = _make_attempt(attempt_id="attempt-allow", task_id="task-allow")
+        attempt_block = _make_attempt(attempt_id="attempt-block", task_id="task-block")
+        obs_allow_po = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-allow", task_id="task-allow", value=1.0)
+        obs_block_po = _make_metric_obs(metric_id="policy_outcome", attempt_id="attempt-block", task_id="task-block", value=1.0)
+        obs_allow_pa = _make_metric_obs(metric_id="policy_attack", attempt_id="attempt-allow", task_id="task-allow", value=1.0)
+        obs_block_pa = _make_metric_obs(metric_id="policy_attack", attempt_id="attempt-block", task_id="task-block", value=1.0)
+
+        analysis = compute_canonical_analysis(
+            tasks=[task_allow, task_block],
+            attempts=[attempt_allow, attempt_block],
+            metric_observations=[obs_allow_po, obs_block_po, obs_allow_pa, obs_block_pa],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        metric_ids = [p.metric_id for p in analysis.pooled_confusion_matrices]
+        assert metric_ids == sorted(metric_ids)
+        assert "policy_attack" in metric_ids
+        assert "policy_outcome" in metric_ids
+
     def test_domain_stratified_results_group_by_domain(self) -> None:
         """Domain-stratified results group metric results by domain."""
         task = _make_task()
@@ -1314,8 +1412,10 @@ class TestPairedComparisons:
         cmp = next(c for c in analysis.comparisons if c.metric_id == "canary_scrubbing")
         # Continuous metric uses t-test, McNemar may still be computed but p-value comes from t-test
         # The diffs are [0.3, 0.3, 0.3] which has zero variance, so t-test returns (None, None)
-        # When t-test returns None, the p_value is None, and the gate decision is INSUFFICIENT_DATA
-        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+        # canary_scrubbing has a non-inferiority margin of 0.0 (zero leakage tolerance)
+        # The bootstrap CI is [0.3, 0.3] and the lower bound (0.3) >= -margin (0.0), so PASS
+        assert cmp.non_inferiority_margin == 0.0
+        assert cmp.gate_decision == GateDecisionStatus.PASS
 
     def test_paired_comparisons_bootstrap_ci_deterministic(self) -> None:
         """Bootstrap CI is deterministic for identical inputs."""
@@ -1405,10 +1505,17 @@ class TestPairedComparisons:
             for i in range(1, len(corrected_ps)):
                 assert corrected_ps[i] >= corrected_ps[i - 1]
 
-    def test_paired_comparisons_gate_decision_pass_when_significant(self) -> None:
-        """Gate decision is PASS when corrected p < 0.05 and delta is non-zero."""
+    def test_paired_comparisons_gate_decision_fail_when_inferior(self) -> None:
+        """Gate decision is FAIL when the comparison is inferior (worse beyond the margin).
+
+        receipt_integrity has a non-inferiority margin of 0.0 (any evidence
+        failure is a release blocker). When the comparison arm is worse than
+        the baseline by more than 0.0, the bootstrap CI lower bound crosses
+        the margin and the gate fails.
+        """
         # 7 tasks with all discordant pairs: baseline all pass, comparison all fail
-        # McNemar p-value for b=7, c=0, n=7: 2 * (0.5)^7 = 0.015625 < 0.05
+        # Diffs = [-1.0]*7, bootstrap CI = [-1.0, -1.0]
+        # CI lower bound (-1.0) < -margin (0.0) → FAIL
         tasks, attempts, observations = _make_multi_arm_scenario(
             arm_values={Arm.DIRECT: [1.0] * 7, Arm.DOCTRINE: [0.0] * 7},
             task_ids=[f"task-{i}" for i in range(1, 8)],
@@ -1422,13 +1529,43 @@ class TestPairedComparisons:
             run_id=_RUN_ID,
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
-        assert cmp.gate_decision == GateDecisionStatus.PASS
-        assert cmp.holm_corrected_p_value is not None
-        assert cmp.holm_corrected_p_value < 0.05
-        assert cmp.absolute_delta != 0.0
+        assert cmp.non_inferiority_margin == 0.0
+        assert cmp.gate_decision == GateDecisionStatus.FAIL
+        assert cmp.absolute_delta == -1.0
 
-    def test_paired_comparisons_gate_decision_insufficient_data_when_p_value_none(self) -> None:
-        """Gate decision is INSUFFICIENT_DATA when the p-value is None (no discordant pairs)."""
+    def test_paired_comparisons_gate_decision_pass_when_non_inferior(self) -> None:
+        """Gate decision is PASS when the comparison is non-inferior (within the margin).
+
+        When the comparison arm is better than or equal to the baseline, the
+        bootstrap CI lower bound does not cross the margin and the gate passes.
+        """
+        # 7 tasks: comparison all pass, baseline all fail
+        # Diffs = [1.0]*7, bootstrap CI = [1.0, 1.0]
+        # CI lower bound (1.0) >= -margin (0.0) → PASS
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.0] * 7, Arm.DOCTRINE: [1.0] * 7},
+            task_ids=[f"task-{i}" for i in range(1, 8)],
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
+        assert cmp.non_inferiority_margin == 0.0
+        assert cmp.gate_decision == GateDecisionStatus.PASS
+
+    def test_paired_comparisons_gate_decision_pass_when_no_degradation(self) -> None:
+        """Gate decision is PASS when there is no degradation (all same values).
+
+        When both arms produce identical results, the bootstrap CI is [0.0, 0.0]
+        and the lower bound (0.0) >= -margin (0.0), so the gate passes.
+        The p-value may be None (no discordant pairs) but the non-inferiority
+        gate uses the CI, not the p-value.
+        """
         # All same values: no discordant pairs, McNemar returns (None, None)
         tasks, attempts, observations = _make_multi_arm_scenario(
             arm_values={Arm.DIRECT: [1.0, 1.0, 1.0], Arm.DOCTRINE: [1.0, 1.0, 1.0]},
@@ -1444,11 +1581,19 @@ class TestPairedComparisons:
         )
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.mcnemar_p_value is None
-        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+        assert cmp.non_inferiority_margin == 0.0
+        assert cmp.gate_decision == GateDecisionStatus.PASS
 
-    def test_paired_comparisons_gate_decision_insufficient_data_when_not_significant(self) -> None:
-        """Gate decision is INSUFFICIENT_DATA when corrected p > 0.05."""
-        # 3 tasks with mixed discordant: b=2, c=1, p-value ≈ 1.0 (not significant)
+    def test_paired_comparisons_gate_decision_fail_when_ci_crosses_margin(self) -> None:
+        """Gate decision is FAIL when the bootstrap CI crosses the non-inferiority margin.
+
+        When the comparison is worse on average and the CI lower bound is
+        below the margin, the gate fails even if the p-value is not
+        significant. The non-inferiority gate uses the CI, not the p-value.
+        """
+        # 3 tasks with mixed: DIRECT=[1.0, 1.0, 0.0], DOCTRINE=[0.0, 0.0, 1.0]
+        # Diffs = [-1.0, -1.0, 1.0], mean = -0.333
+        # Bootstrap CI lower bound will be negative, crossing the 0.0 margin
         tasks, attempts, observations = _make_multi_arm_scenario(
             arm_values={Arm.DIRECT: [1.0, 1.0, 0.0], Arm.DOCTRINE: [0.0, 0.0, 1.0]},
             task_ids=["task-1", "task-2", "task-3"],
@@ -1464,8 +1609,8 @@ class TestPairedComparisons:
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         assert cmp.mcnemar_p_value is not None
         assert cmp.holm_corrected_p_value is not None
-        assert cmp.holm_corrected_p_value > 0.05
-        assert cmp.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+        assert cmp.non_inferiority_margin == 0.0
+        assert cmp.gate_decision == GateDecisionStatus.FAIL
 
     def test_paired_comparisons_sorted_by_metric_and_arms(self) -> None:
         """Comparisons are sorted by (metric_id, baseline_arm_id, comparison_arm_id)."""
@@ -1775,3 +1920,197 @@ class TestPairedComparisons:
         cmp = next(c for c in analysis.comparisons if c.metric_id == "receipt_integrity")
         # All diffs are -1.0 (constant), so variance is 0 and Cohen's d is None
         assert cmp.standardized_effect_size is None
+
+    def test_non_inferiority_gate_pass_when_within_margin(self) -> None:
+        """Non-inferiority gate passes when degradation is within the margin.
+
+        factual_qa has a non-inferiority margin of 0.05 (HIGHER_IS_BETTER).
+        When the comparison arm scores 0.03 lower than the baseline, the
+        bootstrap CI lower bound (-0.03) >= -margin (-0.05), so the gate passes.
+        """
+        # Baseline (DIRECT) scores 0.90, comparison (DOCTRINE) scores 0.87
+        # Diffs = [-0.03]*7, bootstrap CI = [-0.03, -0.03]
+        # CI lower bound (-0.03) >= -margin (-0.05) → PASS
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.87] * 7},
+            task_ids=[f"task-{i}" for i in range(1, 8)],
+            metric_id="factual_qa",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "factual_qa")
+        assert cmp.non_inferiority_margin == 0.05
+        assert cmp.gate_decision == GateDecisionStatus.PASS
+
+    def test_non_inferiority_gate_fail_when_outside_margin(self) -> None:
+        """Non-inferiority gate fails when degradation exceeds the margin.
+
+        factual_qa has a non-inferiority margin of 0.05 (HIGHER_IS_BETTER).
+        When the comparison arm scores 0.10 lower than the baseline, the
+        bootstrap CI lower bound (-0.10) < -margin (-0.05), so the gate fails.
+        """
+        # Baseline (DIRECT) scores 0.90, comparison (DOCTRINE) scores 0.80
+        # Diffs = [-0.10]*7, bootstrap CI = [-0.10, -0.10]
+        # CI lower bound (-0.10) < -margin (-0.05) → FAIL
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [0.90] * 7, Arm.DOCTRINE: [0.80] * 7},
+            task_ids=[f"task-{i}" for i in range(1, 8)],
+            metric_id="factual_qa",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "factual_qa")
+        assert cmp.non_inferiority_margin == 0.05
+        assert cmp.gate_decision == GateDecisionStatus.FAIL
+
+    def test_non_inferiority_gate_none_for_metrics_without_margin(self) -> None:
+        """Metrics without a non-inferiority margin use the default superiority gate."""
+        # eval_judge has no non-inferiority margin
+        tasks, attempts, observations = _make_multi_arm_scenario(
+            arm_values={Arm.DIRECT: [3.0, 3.0, 3.0], Arm.DOCTRINE: [4.0, 4.0, 4.0]},
+            task_ids=["task-1", "task-2", "task-3"],
+            metric_id="eval_judge",
+        )
+        analysis = compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        cmp = next(c for c in analysis.comparisons if c.metric_id == "eval_judge")
+        assert cmp.non_inferiority_margin is None
+
+
+class TestBridgeRunComparisons:
+    """Tests for bridge-run comparison computation between two analysis versions."""
+
+    @staticmethod
+    def _make_analysis_with_metric(
+        metric_id: str,
+        arm_id: Arm,
+        value: float,
+        run_id: str = "run-bridge-old",
+    ) -> CanonicalEvalAnalysis:
+        """Build a minimal canonical analysis with one metric result."""
+        task = _make_task()
+        attempt = _make_attempt(attempt_id=f"attempt-{run_id}", arm_id=arm_id)
+        obs = _make_metric_obs(
+            metric_id=metric_id,
+            attempt_id=f"attempt-{run_id}",
+            arm_id=arm_id,
+            value=value,
+        )
+        return compute_canonical_analysis(
+            tasks=[task],
+            attempts=[attempt],
+            metric_observations=[obs],
+            receipts=[],
+            stages=[],
+            run_id=run_id,
+        )
+
+    def test_bridge_run_comparison_pass_when_no_change(self) -> None:
+        """Bridge comparison passes when old and new values are identical."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
+        assert ri.old_value == 1.0
+        assert ri.new_value == 1.0
+        assert ri.absolute_delta == 0.0
+        assert ri.gate_decision == GateDecisionStatus.PASS
+
+    def test_bridge_run_comparison_fail_when_blocker_regresses(self) -> None:
+        """Bridge comparison fails when a release-blocker metric regresses beyond margin."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 0.0, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
+        assert ri.old_value == 1.0
+        assert ri.new_value == 0.0
+        assert ri.absolute_delta == -1.0
+        assert ri.gate_decision == GateDecisionStatus.FAIL
+
+    def test_bridge_run_comparison_pass_when_utility_within_margin(self) -> None:
+        """Bridge comparison passes when utility metric stays within the 0.05 margin."""
+        old = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-old")
+        new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.87, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        qa = next(c for c in comparisons if c.metric_id == "factual_qa")
+        assert qa.old_value == 0.90
+        assert qa.new_value == 0.87
+        assert qa.absolute_delta == -0.03
+        assert qa.gate_decision == GateDecisionStatus.PASS
+
+    def test_bridge_run_comparison_fail_when_utility_outside_margin(self) -> None:
+        """Bridge comparison fails when utility metric regresses beyond the 0.05 margin."""
+        old = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-old")
+        new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.80, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        qa = next(c for c in comparisons if c.metric_id == "factual_qa")
+        assert qa.absolute_delta == -0.10
+        assert qa.gate_decision == GateDecisionStatus.FAIL
+
+    def test_bridge_run_comparison_insufficient_data_when_metric_missing(self) -> None:
+        """Bridge comparison is INSUFFICIENT_DATA when a metric is in only one version."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        # New analysis has a different metric
+        new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
+        assert ri.old_value == 1.0
+        assert ri.new_value is None
+        assert ri.gate_decision == GateDecisionStatus.INSUFFICIENT_DATA
+
+    def test_bridge_run_comparison_sorted_by_metric_id(self) -> None:
+        """Bridge comparisons are sorted by (bridge_id, metric_id, metric_version)."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        metric_ids = [c.metric_id for c in comparisons]
+        assert metric_ids == sorted(metric_ids)
+
+    def test_bridge_run_comparison_deterministic(self) -> None:
+        """Bridge comparison is deterministic for identical inputs."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 0.5, "run-new")
+        c1 = compute_bridge_run_comparison("bridge-1", old, new)
+        c2 = compute_bridge_run_comparison("bridge-1", old, new)
+        assert [c.model_dump() for c in c1] == [c.model_dump() for c in c2]
+
+    def test_bridge_run_comparison_model_is_frozen(self) -> None:
+        """BridgeRunComparison model is frozen."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        with pytest.raises(Exception, match="frozen"):
+            comparisons[0].gate_decision = GateDecisionStatus.PASS
+
+    def test_canonical_analysis_has_empty_bridge_run_comparisons_by_default(self) -> None:
+        """A fresh canonical analysis has empty bridge_run_comparisons."""
+        task = _make_task()
+        attempt = _make_attempt()
+        analysis = compute_canonical_analysis(
+            tasks=[task],
+            attempts=[attempt],
+            metric_observations=[],
+            receipts=[],
+            stages=[],
+            run_id=_RUN_ID,
+        )
+        assert analysis.bridge_run_comparisons == []
+        assert analysis.bridge_runs == []

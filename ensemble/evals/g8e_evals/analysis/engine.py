@@ -29,6 +29,7 @@ from g8e_evals.analysis.canonical import (
     ANALYSIS_COMPUTATION_VERSION,
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
+    BridgeRunComparison,
     CanonicalEvalAnalysis,
     ComparisonDirection,
     ConfusionMatrix,
@@ -38,8 +39,10 @@ from g8e_evals.analysis.canonical import (
     MetricAnalysisResult,
     MissingnessBreakdown,
     PairedComparison,
+    PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
 )
+from g8e_evals.analysis.non_inferiority import get_non_inferiority_margin
 from g8e_evals.arms import ARM_DEFINITIONS
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
@@ -399,6 +402,51 @@ def _compute_confusion_matrices(
     return matrices
 
 
+_POOLING_METHOD = "preregistered_simple_summation_across_arms"
+
+
+def _compute_pooled_confusion_matrices(
+    confusion_matrices: list[ConfusionMatrix],
+) -> list[PooledConfusionMatrix]:
+    """Compute preregistered pooled confusion matrices across arms.
+
+    Sums the arm-level ``ConfusionMatrix`` TP/FP/TN/FN counts into a
+    single pooled estimate per metric. The pooling rule (simple
+    summation across arms) is declared before analysis and applied
+    uniformly. A hierarchical model that accounts for arm-level
+    variance is not implemented in v2.1.8.
+
+    Returns pooled matrices sorted by ``(metric_id, metric_version)``.
+    """
+    by_metric: dict[tuple[str, str], list[ConfusionMatrix]] = defaultdict(list)
+    for cm in confusion_matrices:
+        by_metric[(cm.metric_id, cm.metric_version)].append(cm)
+
+    pooled: list[PooledConfusionMatrix] = []
+    for (metric_id, metric_version), arm_matrices in sorted(by_metric.items()):
+        arm_ids = sorted(cm.arm_id for cm in arm_matrices)
+        tp = sum(cm.true_positive for cm in arm_matrices)
+        fp = sum(cm.false_positive for cm in arm_matrices)
+        tn = sum(cm.true_negative for cm in arm_matrices)
+        fn = sum(cm.false_negative for cm in arm_matrices)
+        domain = arm_matrices[0].domain
+        pooled.append(PooledConfusionMatrix(
+            metric_id=metric_id,
+            metric_version=metric_version,
+            domain=domain,
+            arm_count=len(arm_matrices),
+            arm_ids=arm_ids,
+            true_positive=tp,
+            false_positive=fp,
+            true_negative=tn,
+            false_negative=fn,
+            pooling_method=_POOLING_METHOD,
+        ))
+
+    pooled.sort(key=lambda p: (p.metric_id, p.metric_version))
+    return pooled
+
+
 def _compute_gate_decisions(
     metric_results: list[MetricAnalysisResult],
 ) -> list[GateDecision]:
@@ -419,6 +467,8 @@ def _compute_gate_decisions(
         threshold_desc = release_entry.threshold_description
         definition = DEFAULT_METRIC_REGISTRY.get(mr.metric_id, mr.metric_version)
         threshold_value: float | None = None
+        ni_margin_entry = get_non_inferiority_margin(mr.metric_id, mr.metric_version)
+        ni_margin = ni_margin_entry.margin if ni_margin_entry is not None else None
 
         if mr.denominator == 0:
             status = GateDecisionStatus.NOT_APPLICABLE
@@ -450,6 +500,7 @@ def _compute_gate_decisions(
             threshold_description=threshold_desc,
             measured_value=mr.value,
             threshold_value=threshold_value,
+            non_inferiority_margin=ni_margin,
             status=status,
             reason=reason,
         ))
@@ -657,6 +708,10 @@ def _compute_paired_comparisons(
         p_values_for_correction: list[float] = [p if p is not None else 1.0 for p in p_values]
         holm_results = statistics.holm_correction(p_values_for_correction)
 
+        # Look up non-inferiority margin for this metric
+        ni_margin_entry = get_non_inferiority_margin(metric_id, metric_version)
+        ni_margin = ni_margin_entry.margin if ni_margin_entry is not None else None
+
         for rc, (rank, corrected_p) in zip(raw_comparisons, holm_results, strict=True):
             comparisons.append(PairedComparison(
                 metric_id=rc.metric_id,
@@ -676,8 +731,10 @@ def _compute_paired_comparisons(
                 bootstrap_ci_upper=rc.bootstrap_ci_upper,
                 holm_corrected_p_value=corrected_p,
                 holm_rank=rank,
+                non_inferiority_margin=ni_margin,
                 gate_decision=_paired_gate_decision(
                     rc.p_value, corrected_p, rc.absolute_delta, definition.direction,
+                    ni_margin, rc.bootstrap_ci_lower, rc.bootstrap_ci_upper,
                 ),
             ))
 
@@ -690,13 +747,42 @@ def _paired_gate_decision(
     corrected_p_value: float,
     abs_delta: float,
     direction: MetricDirection,
+    non_inferiority_margin: float | None,
+    bootstrap_ci_lower: float | None,
+    bootstrap_ci_upper: float | None,
 ) -> GateDecisionStatus:
     """Determine the gate decision for a paired comparison.
 
-    A comparison passes only when the Holm-corrected p-value is below
-    0.05 AND the absolute delta is practically meaningful (non-zero).
-    Statistical significance alone cannot pass a release.
+    When a non-inferiority margin is defined, the gate uses the
+    bootstrap confidence interval of the paired delta: the comparison
+    is non-inferior when the relevant CI bound does not cross the
+    margin. For HIGHER_IS_BETTER and BINARY_PASS_FAIL metrics, the
+    lower CI bound must be >= -margin. For LOWER_IS_BETTER metrics,
+    the upper CI bound must be <= margin.
+
+    When no non-inferiority margin is defined, the gate uses the
+    default superiority test: Holm-corrected p-value < 0.05 AND a
+    practically meaningful (non-zero) absolute delta. Statistical
+    significance alone cannot pass a release.
     """
+    if non_inferiority_margin is not None:
+        # Non-inferiority testing via bootstrap CI
+        if bootstrap_ci_lower is None or bootstrap_ci_upper is None:
+            return GateDecisionStatus.INSUFFICIENT_DATA
+        if direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
+            # Delta = comparison - baseline. Non-inferior if lower bound >= -margin.
+            if bootstrap_ci_lower >= -non_inferiority_margin:
+                return GateDecisionStatus.PASS
+            return GateDecisionStatus.FAIL
+        if direction == MetricDirection.LOWER_IS_BETTER:
+            # Delta = comparison - baseline. Non-inferior if upper bound <= margin.
+            if bootstrap_ci_upper <= non_inferiority_margin:
+                return GateDecisionStatus.PASS
+            return GateDecisionStatus.FAIL
+        # NEUTRAL direction: no non-inferiority test
+        return GateDecisionStatus.UNSUPPORTED
+
+    # Default superiority gate: significance + practical significance
     if raw_p_value is None:
         return GateDecisionStatus.INSUFFICIENT_DATA
     if corrected_p_value > 0.05:
@@ -704,6 +790,103 @@ def _paired_gate_decision(
     if abs_delta == 0.0:
         return GateDecisionStatus.INSUFFICIENT_DATA
     return GateDecisionStatus.PASS
+
+
+def compute_bridge_run_comparison(
+    bridge_id: str,
+    old_analysis: CanonicalEvalAnalysis,
+    new_analysis: CanonicalEvalAnalysis,
+) -> list[BridgeRunComparison]:
+    """Compute per-metric bridge-run comparisons between two analysis versions.
+
+    Compares old and new ``CanonicalEvalAnalysis`` instances produced by
+    executing old and new suite, grader, metric, doctrine, or analysis
+    versions over the same model cohort. For each metric present in both
+    analyses, records the old and new values and a gate decision that
+    fails when any release-blocker metric regresses beyond its
+    non-inferiority margin.
+
+    Returns comparisons sorted by ``(metric_id, metric_version)``.
+    """
+    # Build lookup of metric results by (metric_id, metric_version) -> value
+    # Pool across arms by taking the mean of non-None arm values
+    def _pool_metric_values(analysis: CanonicalEvalAnalysis) -> dict[tuple[str, str], float | None]:
+        by_metric: dict[tuple[str, str], list[float]] = defaultdict(list)
+        for mr in analysis.metric_results:
+            if mr.value is not None:
+                by_metric[(mr.metric_id, mr.metric_version)].append(mr.value)
+        result: dict[tuple[str, str], float | None] = {}
+        for key, values in by_metric.items():
+            result[key] = _round(sum(values) / len(values)) if values else None
+        return result
+
+    old_values = _pool_metric_values(old_analysis)
+    new_values = _pool_metric_values(new_analysis)
+
+    all_keys = sorted(set(old_values.keys()) | set(new_values.keys()))
+
+    comparisons: list[BridgeRunComparison] = []
+    for (metric_id, metric_version) in all_keys:
+        old_val = old_values.get((metric_id, metric_version))
+        new_val = new_values.get((metric_id, metric_version))
+
+        if old_val is not None and new_val is not None:
+            abs_delta = _round(new_val - old_val)
+        else:
+            abs_delta = None
+
+        # Gate decision: fail if a release-blocker metric regresses
+        ni_entry = get_non_inferiority_margin(metric_id, metric_version)
+        definition = DEFAULT_METRIC_REGISTRY.get(metric_id, metric_version)
+
+        if old_val is None or new_val is None:
+            status = GateDecisionStatus.INSUFFICIENT_DATA
+            reason = "Metric present in only one analysis version."
+        elif ni_entry is not None and abs_delta is not None:
+            margin = ni_entry.margin
+            direction = definition.direction
+            if direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
+                # Regression = new < old by more than margin
+                if abs_delta < -margin:
+                    status = GateDecisionStatus.FAIL
+                    reason = f"Regression exceeds non-inferiority margin {margin}: delta {abs_delta}."
+                else:
+                    status = GateDecisionStatus.PASS
+                    reason = f"Non-inferior within margin {margin}: delta {abs_delta}."
+            elif direction == MetricDirection.LOWER_IS_BETTER:
+                # Regression = new > old by more than margin
+                if abs_delta > margin:
+                    status = GateDecisionStatus.FAIL
+                    reason = f"Regression exceeds non-inferiority margin {margin}: delta {abs_delta}."
+                else:
+                    status = GateDecisionStatus.PASS
+                    reason = f"Non-inferior within margin {margin}: delta {abs_delta}."
+            else:
+                status = GateDecisionStatus.UNSUPPORTED
+                reason = "Neutral direction; no non-inferiority test."
+        elif abs_delta is not None and abs_delta == 0.0:
+            status = GateDecisionStatus.PASS
+            reason = "No change between versions."
+        elif abs_delta is not None:
+            status = GateDecisionStatus.INSUFFICIENT_DATA
+            reason = "No non-inferiority margin; delta requires manual review."
+        else:
+            status = GateDecisionStatus.INSUFFICIENT_DATA
+            reason = "Insufficient data for comparison."
+
+        comparisons.append(BridgeRunComparison(
+            bridge_id=bridge_id,
+            metric_id=metric_id,
+            metric_version=metric_version,
+            old_value=old_val,
+            new_value=new_val,
+            absolute_delta=abs_delta,
+            gate_decision=status,
+            reason=reason,
+        ))
+
+    comparisons.sort(key=lambda c: (c.bridge_id, c.metric_id, c.metric_version))
+    return comparisons
 
 
 def compute_canonical_analysis(
@@ -743,6 +926,7 @@ def compute_canonical_analysis(
     gate_decisions = _compute_gate_decisions(metric_results)
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
     confusion_matrices = _compute_confusion_matrices(attempts, metric_observations, tasks)
+    pooled_confusion_matrices = _compute_pooled_confusion_matrices(confusion_matrices)
     comparisons = _compute_paired_comparisons(tasks, attempts, metric_observations)
 
     unsupported_claim_names = sorted(RELEASE_METRIC_SET.unsupported_claim_names)
@@ -759,9 +943,11 @@ def compute_canonical_analysis(
         metric_results=metric_results,
         domain_stratified_results=domain_stratified,
         confusion_matrices=confusion_matrices,
+        pooled_confusion_matrices=pooled_confusion_matrices,
         comparisons=comparisons,
         gate_decisions=gate_decisions,
         bridge_runs=[],
+        bridge_run_comparisons=[],
         unsupported_claim_names=unsupported_claim_names,
     )
 
@@ -805,5 +991,6 @@ def _observation_ref_fields() -> list[str]:
 
 
 __all__ = [
+    "compute_bridge_run_comparison",
     "compute_canonical_analysis",
 ]

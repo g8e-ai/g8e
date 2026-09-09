@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect a Lovable App
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-09
+Version: v2.1.8
 
 ---
 
@@ -18,50 +18,44 @@ In Lovable, open the app preview in a new tab and copy its URL. This guide uses 
 
 Use only the origin: keep `https://` and the hostname, but remove any path or trailing slash.
 
-## 1. Start the Gateway
+## 1. Connect
 
-Replace every `your-app.lovable.app` below with your Lovable app's hostname, then run:
+Run one command, replacing the origin with your Lovable app's URL:
 
 ```bash
-./g8e gw start \
-  --passkey-rp-id your-app.lovable.app \
-  --passkey-rp-origin https://your-app.lovable.app \
-  --cors-origin https://your-app.lovable.app
+./g8e gw connect https://your-app.lovable.app
 ```
 
-Leave the Gateway running.
+The CLI validates the origin, derives the passkey RP ID (`your-app.lovable.app`, never the shared `lovable.app` parent), starts or restarts the Gateway with the correct CORS and passkey settings when needed, installs the local Gateway certificate into your OS trust store with explicit consent, and verifies HTTPS and CORS against the running process.
 
-## 2. Open the Local Gateway
+If the Gateway is already running with the correct configuration, the command verifies without restarting. If the configuration differs, it asks whether to restart; pass `--yes` to approve non-interactively.
 
-In the same browser, open:
+If you decline system trust installation (or your platform is managed), the command prints the local Gateway URL and certificate fingerprint for manual browser trust. Add `--no-system-trust` to select that path explicitly.
 
-[https://localhost:8443/api/v1/health](https://localhost:8443/api/v1/health)
+## 2. Paste the Prompt
 
-If the browser shows a certificate warning, continue to the local site. A successful response confirms that the browser can reach the Gateway.
-
-## 3. Tell Lovable to Connect
-
-Paste this into Lovable:
+After verification succeeds, the CLI prints a prompt. Paste it into Lovable:
 
 ```text
 Connect this app to the g8e Gateway at https://localhost:8443. Make all Gateway requests directly from the browser, not from an edge function or server. Include credentials: "include" on every fetch request and withCredentials: true on every EventSource connection.
 ```
 
-## 4. Test the App
+Then open the app in a new browser tab, not inside the Lovable editor preview. The embedded editor iframe can block loopback and WebAuthn permissions; a top-level tab can request them.
 
-Open the Lovable app in a new browser tab, not inside the editor preview. If the browser asks for permission to access devices on your local network, select **Allow**.
-
-The app now connects directly from your browser to the local Gateway.
+If the browser asks for permission to access devices on your local network, select **Allow**.
 
 ## If It Does Not Connect
 
-- **`Failed to fetch`**: Confirm the Gateway is running, reopen the local health URL, and allow local-network access.
-- **CORS error**: Confirm the URL passed to both origin flags exactly matches the Lovable app origin.
-- **WebAuthn `SecurityError`**: Confirm `--passkey-rp-id` contains only the Lovable app hostname and test in a new tab.
+- **`Failed to fetch`**: Confirm the Gateway is running (`./g8e gw status`), allow local-network access, and rerun `./g8e gw connect <origin>`.
+- **CORS error**: Rerun `./g8e gw connect <origin>`; the command verifies CORS against the running Gateway and reports mismatches.
+- **WebAuthn `SecurityError`**: Test in a new top-level tab, not the Lovable editor preview. The CLI derives the exact-host RP ID automatically.
 - **Authenticated requests return `401`**: Confirm Lovable added `credentials: "include"` to every request.
+- **Certificate warning**: Approve system trust installation when `gw connect` prompts, or follow the manual trust instructions it prints when you decline.
 
 ## When You Need a Tunnel
 
-Use a tunnel only when the Gateway must be reached from another computer, by another user, or by Lovable edge functions and cloud-side tests. A public deployment also requires publicly trusted HTTPS.
+Use a tunnel only when the Gateway must be reached from another computer, by another user, or by Lovable edge functions and cloud-side tests. A public deployment also requires publicly trusted HTTPS. See [Cloudflare Tunnel Integration](./cloudflare_tunnel.md).
 
-For production setup and complete API and WebAuthn details, see [Build a g8e-Compatible Frontend](./build_frontend.md).
+## Advanced Configuration
+
+`gw connect` accepts one origin and derives the safest defaults. For multi-origin deployments, public tunnels, custom ports, or other advanced Gateway settings, use `./g8e gw start` with explicit flags. See [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference.

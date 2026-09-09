@@ -12,9 +12,9 @@ Version: v2.1.7
 
 ## Overview
 
-This guide connects an **existing** frontend UI to the g8e Gateway. If you are building a frontend from scratch, see [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. This guide covers gateway configuration, frontend enrollment, WebAuthn authentication, SSE streaming, approval flows, and passkey management.
+This guide connects an **existing** frontend UI to the g8e Gateway. If you are building a frontend from scratch, see [Build a g8e-Compatible Frontend](./build_frontend.md) for the full reference. This guide covers gateway configuration, WebAuthn authentication, SSE streaming, approval flows, and passkey management.
 
-The `g8e auth enroll gui` command family records external frontend origins and generates integration configuration. The `enroll` command validates the origin, attempts to verify the local gateway's CORS response, optionally checks a public gateway URL, persists the origin locally, and prints a TypeScript configuration snippet. It does not configure or restart the gateway, and it does not verify the gateway's passkey RP configuration. Step 2 documents the current CORS-probe limitation.
+For a browser-hosted frontend on the same computer as the Gateway, `./g8e gw connect <frontend-origin>` is the guided one-command workflow: it validates the origin, derives the RP ID, starts or restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process. The advanced `gw start` flags below remain available for multi-origin and public deployments.
 
 ### Architecture
 
@@ -97,45 +97,9 @@ The cookie has a 24-hour TTL. The gateway validates it on every session-authenti
 
 ---
 
-## Step 2: Enroll Your Frontend Origin
+## Step 2: Add the API Configuration
 
-The frontend enrollment command records an origin and generates a configuration snippet:
-
-```bash
-g8e auth enroll gui enroll --origin https://your-app.example.com --passkey-rp-id example.com
-```
-
-> **Current v2.1.7 limitation:** The command sends its CORS probe to `http://localhost:8080/api/v1/health`, but the gateway attaches CORS middleware only to the HTTPS router on port 8443. A standard gateway therefore returns no `Access-Control-Allow-Origin` header, and the command exits before it saves the enrollment or prints the snippet. The probe also ignores custom gateway ports. Verify CORS against the HTTPS gateway in Step 9 and configure the frontend directly as described in Step 3 until this command is corrected.
-
-Optional flags:
-
-- `--passkey-rp-id`: RP ID written to the generated snippet. Pass this explicitly. When omitted, the command derives it from the parsed URL host, which includes the port for origins such as `http://localhost:3003` and is not a valid WebAuthn RP ID.
-- `--passkey-rp-name`: RP display name written to the generated snippet (default: `g8e`).
-- `--public-base-url`: Gateway base URL written to the generated snippet. The command performs a health check at this URL, but a failed check produces a warning and does not fail enrollment.
-
-These flags affect generated output only. They do not change the running gateway's RP, CORS, or public URL configuration.
-
-When its CORS probe succeeds, this command:
-
-1. Validates the origin URL.
-2. Sends a CORS preflight to the gateway's local plain-HTTP health endpoint on the default gateway port and verifies that the response allows the origin.
-3. Checks gateway health at `--public-base-url`, when provided, and warns if the check fails.
-4. Persists the origin to the runtime enrollment file (`.g8e/gui_enrollments.json` under the configured runtime root).
-5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `PASSKEY_RP_NAME`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths.
-
-Copy the emitted snippet into the frontend project as a starting point. Correct its L3 redirect example to `${API_BASE_URL}/api/v1/approve/${txHash}`. The current generator emits `${API_BASE_URL}/approve/${txHash}`, which is not a registered gateway route.
-
-### Other Enrollment Commands
-
-- `g8e auth enroll gui show` (alias: `g8e auth enroll gui list`): Displays all enrolled frontend origins and regenerated configuration snippets. Supports `--json` for scripting.
-- `g8e auth enroll gui verify --origin https://your-app.example.com`: Checks whether the origin appears in the local enrollment file and prints URLs, sample commands, and a manual checklist using the default ports. It does not execute health, CORS, WebAuthn, cookie, SSE, or authenticated-route checks.
-- `g8e auth enroll gui remove --origin https://your-app.example.com`: Removes an origin from the enrollment file. It does not change the running gateway configuration.
-
----
-
-## Step 3: Add the API Configuration
-
-Use the TypeScript snippet from `g8e auth enroll gui enroll` when available, or define the equivalent configuration directly while the Step 2 probe limitation applies. The key elements are:
+Define the API configuration directly. The key elements are:
 
 ### API Base URL and Fetch Wrapper
 
@@ -175,7 +139,7 @@ The gateway also serves a full OpenAPI/Swagger specification at `/swagger/doc.js
 
 ---
 
-## Step 4: Wire Up WebAuthn Authentication
+## Step 3: Wire Up WebAuthn Authentication
 
 The frontend implements WebAuthn passkey flows with the browser's `navigator.credentials` API. The gateway sends binary WebAuthn values as unpadded base64url strings, while the browser API requires `ArrayBuffer` values. Decode `challenge`, registration `user.id`, and every credential descriptor `id` before calling the browser API. Encode `rawId`, `clientDataJSON`, `attestationObject`, `authenticatorData`, `signature`, and `userHandle` before verification.
 
@@ -226,7 +190,7 @@ Handle error responses from the challenge and verify endpoints:
 
 ---
 
-## Step 5: Wire Up the SSE Live Audit Stream
+## Step 4: Wire Up the SSE Live Audit Stream
 
 ### Connection
 
@@ -253,7 +217,7 @@ The gateway also exposes a WebSocket pub/sub endpoint at `/api/v1/pubsub/stream`
 
 ---
 
-## Step 6: Wire Up Approval Flows
+## Step 5: Wire Up Approval Flows
 
 ### Pending Approvals
 
@@ -284,7 +248,7 @@ Clear secret-bearing enrollment tokens with `history.replaceState` immediately a
 
 ---
 
-## Step 7: Add Passkey Management
+## Step 6: Add Passkey Management
 
 ### List Passkeys
 
@@ -304,7 +268,7 @@ Run `g8e auth enroll user`. The CLI opens the embedded gateway console, which co
 
 ---
 
-## Step 8: Handle Errors and Edge Cases
+## Step 7: Handle Errors and Edge Cases
 
 - **401 from session-authenticated routes**: Clear user state and show the sign-in flow; handle token-gated route failures within their own flow.
 - **`needs_setup: true`** on authenticate challenge: Tell the user that the supplied user ID has no passkey and direct them to CLI token-gated enrollment.
@@ -314,15 +278,9 @@ Run `g8e auth enroll user`. The CLI opens the embedded gateway console, which co
 
 ---
 
-## Step 9: Verify the Integration
+## Step 8: Verify the Integration
 
-Run the enrollment inspection command:
-
-```bash
-g8e auth enroll gui verify --origin https://your-app.example.com
-```
-
-This command confirms the local enrollment record and prints instructions; it does not execute the checks. Manually verify in the browser:
+For a browser-hosted frontend on the same computer as the Gateway, `./g8e gw connect <frontend-origin>` performs HTTPS health and CORS verification against the running process automatically. For multi-origin or public deployments, verify manually in the browser:
 
 - [ ] **CORS headers**: Open browser DevTools, Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your frontend origin and `Access-Control-Allow-Credentials: true` is present.
 - [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with `204 No Content` before actual POST requests.
@@ -348,7 +306,7 @@ This command confirms the local enrollment record and prints instructions; it do
 
 **Fix**: Restart the gateway with the correct flags: `./g8e gw start --cors-origin https://your-app.example.com --passkey-rp-origin https://your-app.example.com`
 
-Then make an allowed-origin request to the gateway's HTTPS URL and inspect the CORS response headers in browser DevTools. The v2.1.7 `gui enroll` command cannot verify the standard HTTPS router because of the Step 2 transport mismatch.
+For a guided one-command workflow on a local Gateway, run `./g8e gw connect https://your-app.example.com`, which validates the origin, derives the RP ID, restarts the Gateway with the correct CORS and passkey settings when needed, installs local trust with consent, and verifies HTTPS and CORS against the running process.
 
 ### Passkey RP Mismatch
 

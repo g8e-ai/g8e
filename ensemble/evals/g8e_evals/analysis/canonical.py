@@ -215,6 +215,71 @@ class ConfusionMatrix(BaseModel):
         return round(numerator / (denominator_sq ** 0.5), _FLOAT_PRECISION)
 
 
+class PooledConfusionMatrix(BaseModel):
+    """Preregistered pooled confusion matrix across all arms for one metric.
+
+    Sums the arm-level ``ConfusionMatrix`` TP/FP/TN/FN counts into a
+    single pooled estimate. This is the preregistered pooling approach:
+    the pooling rule (simple summation across arms) is declared before
+    analysis and applied uniformly. A hierarchical model that accounts
+    for arm-level variance is not implemented in v2.1.8 and remains an
+    explicit unsupported option.
+
+    Published after arm-level confusion matrices so that readers can
+    inspect model-specific results before the pooled score.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric_id: str = Field(min_length=1)
+    metric_version: str = Field(min_length=1)
+    domain: MetricDomain
+
+    arm_count: int = Field(ge=0, description="Number of arm-level matrices pooled.")
+    arm_ids: list[str] = Field(
+        default_factory=list,
+        description="Sorted arm IDs whose matrices were pooled.",
+    )
+
+    true_positive: int = Field(ge=0)
+    false_positive: int = Field(ge=0)
+    true_negative: int = Field(ge=0)
+    false_negative: int = Field(ge=0)
+
+    pooling_method: str = Field(
+        min_length=1,
+        description="Declared pooling rule applied before analysis.",
+    )
+
+    @property
+    def total(self) -> int:
+        return self.true_positive + self.false_positive + self.true_negative + self.false_negative
+
+    @property
+    def accuracy(self) -> float:
+        if self.total == 0:
+            return 0.0
+        return round((self.true_positive + self.true_negative) / self.total, _FLOAT_PRECISION)
+
+    @property
+    def balanced_accuracy(self) -> float:
+        tpr = self.true_positive / (self.true_positive + self.false_negative) if (self.true_positive + self.false_negative) > 0 else 0.0
+        tnr = self.true_negative / (self.true_negative + self.false_positive) if (self.true_negative + self.false_positive) > 0 else 0.0
+        return round((tpr + tnr) / 2.0, _FLOAT_PRECISION)
+
+    @property
+    def matthews_correlation_coefficient(self) -> float:
+        tp = self.true_positive
+        fp = self.false_positive
+        tn = self.true_negative
+        fn = self.false_negative
+        numerator = tp * tn - fp * fn
+        denominator_sq = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+        if denominator_sq == 0:
+            return 0.0
+        return round(numerator / (denominator_sq ** 0.5), _FLOAT_PRECISION)
+
+
 class MetricAnalysisResult(BaseModel):
     """Aggregated result for one metric across one arm.
 
@@ -272,6 +337,26 @@ class DomainStratifiedResult(BaseModel):
     not_applicable_metric_count: int = Field(ge=0)
 
 
+class NonInferiorityMargin(BaseModel):
+    """Typed non-inferiority margin for a release metric.
+
+    Declares the maximum acceptable degradation when comparing a new arm
+    against a reference arm. Non-inferiority is assessed via the bootstrap
+    confidence interval of the paired delta: the comparison is
+    non-inferior when the CI bound does not cross the margin.
+
+    A margin of 0.0 means any degradation is unacceptable (equivalent to
+    a strict release-blocker threshold in the paired setting).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric_id: str = Field(min_length=1)
+    metric_version: str = Field(min_length=1)
+    margin: float = Field(ge=0.0, description="Maximum acceptable absolute degradation in the comparison direction.")
+    description: str = Field(min_length=1)
+
+
 class PairedComparison(BaseModel):
     """Paired comparison between two arms over identical task instances.
 
@@ -307,6 +392,11 @@ class PairedComparison(BaseModel):
 
     holm_corrected_p_value: float | None = None
     holm_rank: int | None = None
+
+    non_inferiority_margin: float | None = Field(
+        default=None,
+        description="Non-inferiority margin for this metric, if defined. None when no margin is declared.",
+    )
 
     gate_decision: GateDecisionStatus = GateDecisionStatus.INSUFFICIENT_DATA
 
@@ -361,6 +451,30 @@ class BridgeRunManifest(BaseModel):
     new_analysis_hash: str | None = None
 
 
+class BridgeRunComparison(BaseModel):
+    """Typed comparison between old and new analysis versions over the same model cohort.
+
+    Built from two ``CanonicalEvalAnalysis`` instances produced by
+    executing old and new suite, grader, metric, doctrine, or analysis
+    versions over the same model cohort. Records per-metric deltas and
+    a gate decision that fails when any release-blocker metric regresses
+    beyond its non-inferiority margin.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    bridge_id: str = Field(min_length=1)
+    metric_id: str = Field(min_length=1)
+    metric_version: str = Field(min_length=1)
+
+    old_value: float | None = None
+    new_value: float | None = None
+    absolute_delta: float | None = None
+
+    gate_decision: GateDecisionStatus = GateDecisionStatus.INSUFFICIENT_DATA
+    reason: str = Field(min_length=1)
+
+
 class CanonicalEvalAnalysis(BaseModel):
     """Versioned canonical machine-readable eval analysis.
 
@@ -402,6 +516,11 @@ class CanonicalEvalAnalysis(BaseModel):
         description="Allow/block confusion matrices, sorted by (metric_id, arm_id).",
     )
 
+    pooled_confusion_matrices: list[PooledConfusionMatrix] = Field(
+        default_factory=list,
+        description="Preregistered pooled confusion matrices across arms, sorted by (metric_id, metric_version).",
+    )
+
     comparisons: list[PairedComparison] = Field(
         default_factory=list,
         description="Paired comparisons between arms, sorted by (metric_id, baseline_arm_id, comparison_arm_id).",
@@ -415,6 +534,11 @@ class CanonicalEvalAnalysis(BaseModel):
     bridge_runs: list[BridgeRunManifest] = Field(
         default_factory=list,
         description="Bridge-run manifests, sorted by bridge_id.",
+    )
+
+    bridge_run_comparisons: list[BridgeRunComparison] = Field(
+        default_factory=list,
+        description="Bridge-run per-metric comparisons, sorted by (bridge_id, metric_id, metric_version).",
     )
 
     unsupported_claim_names: list[str] = Field(
@@ -439,6 +563,7 @@ __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
     "ANALYSIS_SCHEMA_VERSION",
     "AnalysisInputSummary",
+    "BridgeRunComparison",
     "BridgeRunManifest",
     "CanonicalEvalAnalysis",
     "ComparisonDirection",
@@ -449,6 +574,8 @@ __all__ = [
     "MetricAnalysisResult",
     "MissingnessBreakdown",
     "MissingnessReason",
+    "NonInferiorityMargin",
     "PairedComparison",
+    "PooledConfusionMatrix",
     "ReceiptCoverageAnalysis",
 ]

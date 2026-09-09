@@ -14,6 +14,7 @@ from g8e_evals.analysis.canonical import (
     ANALYSIS_COMPUTATION_VERSION,
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
+    BridgeRunComparison,
     BridgeRunManifest,
     CanonicalEvalAnalysis,
     ComparisonDirection,
@@ -24,15 +25,18 @@ from g8e_evals.analysis.canonical import (
     MetricAnalysisResult,
     MissingnessBreakdown,
     MissingnessReason,
+    NonInferiorityMargin,
     PairedComparison,
+    PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
 )
-from g8e_evals.analysis.engine import compute_canonical_analysis
+from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
     "ANALYSIS_SCHEMA_VERSION",
     "AnalysisInputSummary",
+    "BridgeRunComparison",
     "BridgeRunManifest",
     "CanonicalEvalAnalysis",
     "ComparisonDirection",
@@ -43,8 +47,11 @@ __all__ = [
     "MetricAnalysisResult",
     "MissingnessBreakdown",
     "MissingnessReason",
+    "NonInferiorityMargin",
     "PairedComparison",
+    "PooledConfusionMatrix",
     "ReceiptCoverageAnalysis",
+    "compute_bridge_run_comparison",
     "compute_canonical_analysis",
     "statistics",
 ]
