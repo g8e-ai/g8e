@@ -53,6 +53,10 @@ g8e ships two Docker Compose deployment modes that serve different purposes and 
 
 The two modes share the repo-root `Dockerfile` (the Go gateway/operator image) but are otherwise independent: the unified compose adds the ensemble and dashboard services and uses a single flat network, while the per-demo composes use isolated multi-network topologies and are scoped to a single org.
 
+## Browser Frontend Connection
+
+The demo composes exercise containerized governance scenarios driven by the CLI; they do not cover browser frontend connection. To connect a browser-hosted frontend (React, Lovable, Vue) running on the same computer as a local Gateway, run `./g8e gw connect <frontend-origin>`. The guided command validates the origin, derives the passkey RP ID, starts or restarts the Gateway with the correct CORS and passkey settings, installs local certificate trust with consent, and verifies HTTPS and CORS against the running process. See [Connect a Lovable App](../docs/guides/lovable.md) for the minimal one-command journey and [Build a g8e-Compatible Frontend](../docs/guides/build_frontend.md) for the full frontend reference.
+
 ## Network Topology
 
 Each org deploys five isolated networks:

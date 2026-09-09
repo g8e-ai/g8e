@@ -545,7 +545,7 @@ The frontend integration uses these settings:
 - **CORS**: All `fetch` calls must include `credentials: 'include'`
 - **Passkey RP**: The RP ID returned in WebAuthn options must equal the Gateway's configured RP ID and must be the frontend origin hostname or a registrable suffix of it. RP IDs never include a scheme or port.
 - **SSE**: Construct `EventSource` with `{ withCredentials: true }`. The Gateway derives the user and web-session route from the authenticated cookie; do not send `web_session_id` in the query string.
-- **Session cookie**: The Gateway sets the HttpOnly, Secure `g8e_web_session_cookie`. When any cross-origin origin is configured, the cookie uses `SameSite=None`; otherwise it uses `SameSite=Lax`.
+- **Session cookie**: The Gateway sets the HttpOnly, Secure `g8e_web_session_cookie`. When any cross-origin origin is configured, the cookie uses `SameSite=None`; otherwise it uses `SameSite=Lax`. Browsers that block third-party cookies reject `SameSite=None` cookies; deploy both origins on the same site or proxy the Gateway through the frontend origin in that case.
 
 #### Key Endpoints
 
@@ -625,6 +625,13 @@ If SSE connections fail:
 - Check that the `EventSource` uses `{ withCredentials: true }`.
 - Do not add `web_session_id`, `cli_session_id`, or `user_id` to the browser stream URL; the Gateway derives the route from authenticated request context.
 - If the frontend is cross-origin, verify the exact origin is allowed and the cookie was issued with `SameSite=None; Secure`.
+
+#### Session Cookie Blocked by Browser Policy
+
+If authenticated requests return `401` after a successful passkey login:
+- The frontend and Gateway are cross-site, so the session cookie is `SameSite=None`. Browsers that block third-party cookies reject it.
+- The Gateway cannot detect or override browser cookie policy. Deploy both origins on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party.
+- A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation. `./g8e gw connect` verifies HTTPS and CORS for the same-machine case but does not verify cookie acceptance.
 
 ---
 

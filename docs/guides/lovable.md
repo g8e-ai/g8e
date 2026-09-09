@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect a Lovable App
 
-Last Updated: 2026-09-09
-Version: v2.1.8
+Last Updated: 2026-09-08
+Version: v2.1.7
 
 ---
 
@@ -44,12 +44,19 @@ Then open the app in a new browser tab, not inside the Lovable editor preview. T
 
 If the browser asks for permission to access devices on your local network, select **Allow**.
 
+## Browser Limitations
+
+The CLI verifies Gateway HTTPS and CORS, but two browser-controlled restrictions are outside its control:
+
+- **Local Network Access**: When the frontend requests `https://localhost:8443`, browsers may prompt for permission to access devices on your local network. Select **Allow**. The CLI cannot accept this prompt for you. If you miss the prompt, reload the page or check the browser's site permissions and re-enable local network access.
+- **Third-party cookies**: The Gateway session cookie is `SameSite=None` because the frontend origin (`your-app.lovable.app`) and the Gateway origin (`localhost`) are cross-site. Browsers that block third-party cookies reject the session cookie, so authenticated requests return `401` even after a successful passkey login. The CLI cannot detect or override browser cookie policy. If your browser blocks third-party cookies, deploy the frontend and Gateway on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party. A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation.
+
 ## If It Does Not Connect
 
 - **`Failed to fetch`**: Confirm the Gateway is running (`./g8e gw status`), allow local-network access, and rerun `./g8e gw connect <origin>`.
 - **CORS error**: Rerun `./g8e gw connect <origin>`; the command verifies CORS against the running Gateway and reports mismatches.
 - **WebAuthn `SecurityError`**: Test in a new top-level tab, not the Lovable editor preview. The CLI derives the exact-host RP ID automatically.
-- **Authenticated requests return `401`**: Confirm Lovable added `credentials: "include"` to every request.
+- **Authenticated requests return `401`**: Confirm Lovable added `credentials: "include"` to every request. If `credentials: "include"` is set and login succeeds but authenticated calls still return `401`, your browser may be blocking the cross-site session cookie as a third-party cookie; see Browser Limitations above.
 - **Certificate warning**: Approve system trust installation when `gw connect` prompts, or follow the manual trust instructions it prints when you decline.
 
 ## When You Need a Tunnel

@@ -5,7 +5,7 @@
 # As of the Change Date listed in the LICENSE file, this software is
 # released under the Apache License, Version 2.0.
 
-"""Canonical eval analysis package: versioned model, computation engine, and paired statistical estimators."""
+"""Canonical eval analysis package: versioned model, computation engine, paired statistical estimators, and deterministic renderers."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from g8e_evals.analysis.canonical import (
     ReceiptCoverageAnalysis,
 )
 from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
+from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
 
 __all__ = [
     "ANALYSIS_COMPUTATION_VERSION",
@@ -53,5 +54,8 @@ __all__ = [
     "ReceiptCoverageAnalysis",
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
+    "render_cli",
+    "render_html",
+    "render_markdown",
     "statistics",
 ]

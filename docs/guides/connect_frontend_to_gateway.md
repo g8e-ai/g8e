@@ -43,6 +43,8 @@ The gateway's embedded SPA at `/console/` implements passkey registration and au
 
 ## Step 1: Configure the Gateway for Your Frontend Origin
 
+This step uses the advanced `gw start` flags for multi-origin and public deployments. For a single-origin local frontend, run `./g8e gw connect <frontend-origin>` instead; it derives the CORS and passkey settings automatically. Use the flags below only when you need multiple origins, a public tunnel, or custom ports.
+
 The gateway starts with CORS and passkey RP settings that match the frontend app's origin. WebAuthn ceremonies execute in the frontend page, so the RP ID is the frontend hostname or a registrable domain suffix of it, not necessarily the gateway hostname. An RP ID contains only a hostname or domain; it never includes a scheme or port. The browser rejects ceremonies when the RP ID is not valid for the page's origin.
 
 Start the gateway with CORS and passkey RP flags matching your frontend origin:

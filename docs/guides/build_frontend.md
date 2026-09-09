@@ -45,6 +45,8 @@ The g8e Gateway ships with an embedded, single-file vanilla JavaScript console S
 
 ## Gateway-Side Configuration
 
+The flags below are the advanced interface for multi-origin and public deployments. For a single-origin local frontend, `./g8e gw connect <frontend-origin>` derives these settings automatically; skip this section unless you need multiple origins, a public tunnel, or custom ports.
+
 The gateway starts with CORS and passkey RP settings that match the frontend app's origin. WebAuthn ceremonies execute in the frontend page, so the RP ID is the frontend hostname or a registrable domain suffix of it, not necessarily the gateway hostname. An RP ID contains only a hostname or domain: it never includes a scheme or port. The browser rejects ceremonies when the RP ID is not valid for the page's origin.
 
 ```bash
@@ -93,6 +95,10 @@ The gateway sets a `g8e_web_session_cookie` cookie after successful passkey regi
 - **`SameSite=None`**: Automatically set when `AllowedOrigins` is non-empty (required for cross-origin cookie delivery).
 
 The cookie has a 24-hour TTL. The gateway validates the cookie on every authenticated request by looking up the session ID in its database and checking expiry.
+
+### Third-Party Cookie Blocking
+
+When the frontend and Gateway are cross-site (for example, a hosted frontend at `https://your-app.lovable.app` calling `https://localhost:8443`), the session cookie is `SameSite=None` so the browser sends it cross-origin. Browsers that block third-party cookies reject `SameSite=None` cookies, so authenticated requests return `401` even after a successful passkey login. The Gateway cannot detect or override browser cookie policy. If the browser blocks the cookie, deploy both origins on the same site or proxy Gateway requests through the frontend origin so the cookie is first-party. A tunnel does not guarantee cookie acceptance and is not a universal fix for this limitation. For the same-machine local workflow, `./g8e gw connect` verifies HTTPS and CORS but does not claim to verify cookie acceptance.
 
 ---
 

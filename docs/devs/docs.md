@@ -138,7 +138,7 @@ This catalog covers every first-party documentation surface in the repository. I
 - [Getting Started](../guides/getting_started.md), [Unified Stack](../guides/unified_stack.md), and [Docker Gateway](../guides/docker_gateway.md): Primary installation, deployment, bootstrap, and owner-approval workflows.
 - [Build Gateway](../guides/build_gateway.md), [Build Operator](../guides/build_operator.md), [Connect Operator](../guides/connect_operator_to_gateway.md), and [Air Gap](../guides/air_gap.md): Core component deployment and disconnected operation.
 - [Build Apps](../guides/build_apps.md), [Connect Apps](../guides/connect_apps_to_gateway.md), [Build Frontend](../guides/build_frontend.md), and [Connect Frontend](../guides/connect_frontend_to_gateway.md): Public client and browser integration paths.
-- [Cloudflare Tunnel](../guides/cloudflare_tunnel.md) and [Lovable](../guides/lovable.md): Optional external frontend and tunnel integration.
+- [Lovable](../guides/lovable.md): One-command local browser frontend connection via `gw connect`. [Cloudflare Tunnel](../guides/cloudflare_tunnel.md): Optional public tunnel integration for remote access.
 - [Sovereignty Gauntlet](../guides/sovereignty_gauntlet.md): Evidence-oriented demonstration and README evidence collection workflow.
 - [UX Smoke Test](../guides/ux_smoke_test.md): Manual product-surface verification.
 
