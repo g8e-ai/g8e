@@ -43,7 +43,12 @@ from g8e_evals.analysis.derived import (
     DuplicateDerivedProducerError,
     run_all_derived_producers,
 )
-from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis, compute_canonical_analysis_from_record
+from g8e_evals.analysis.engine import (
+    BridgeManifestValidationError,
+    compute_bridge_run_comparison,
+    compute_canonical_analysis,
+    compute_canonical_analysis_from_record,
+)
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
 from g8e_evals.analysis.telemetry import (
@@ -65,6 +70,7 @@ __all__ = [
     "DEFAULT_TELEMETRY_REGISTRY",
     "AnalysisInputRecord",
     "AnalysisInputSummary",
+    "BridgeManifestValidationError",
     "BridgeRunComparison",
     "BridgeRunManifest",
     "CanonicalEvalAnalysis",

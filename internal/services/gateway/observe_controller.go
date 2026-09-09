@@ -196,12 +196,12 @@ func (c *ObserveController) handleGetRun(w http.ResponseWriter, r *http.Request)
 	}
 	detail, err := c.observeSvc.GetRun(r.Context(), userID, runID)
 	if err != nil {
+		if errors.Is(err, constants.ErrObserveRunNotFound) {
+			c.responder.Error(w, http.StatusNotFound, constants.ErrObserveRunNotFound.Error())
+			return
+		}
 		c.logger.Error("observe: get run failed", "error", err, "user_id", userID, "run_id", runID)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
-		return
-	}
-	if detail == nil {
-		c.responder.Error(w, http.StatusNotFound, constants.ErrObserveRunNotFound.Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, detail)
@@ -278,12 +278,12 @@ func (c *ObserveController) handleGetEval(w http.ResponseWriter, r *http.Request
 	}
 	detail, err := c.observeSvc.GetEval(r.Context(), userID, runID)
 	if err != nil {
+		if errors.Is(err, constants.ErrObserveEvalNotFound) {
+			c.responder.Error(w, http.StatusNotFound, constants.ErrObserveEvalNotFound.Error())
+			return
+		}
 		c.logger.Error("observe: get eval failed", "error", err, "user_id", userID, "run_id", runID)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
-		return
-	}
-	if detail == nil {
-		c.responder.Error(w, http.StatusNotFound, constants.ErrObserveEvalNotFound.Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, detail)
@@ -362,12 +362,12 @@ func (c *ObserveController) handleGetDownload(w http.ResponseWriter, r *http.Req
 	}
 	artifact, err := c.observeSvc.GetDownload(r.Context(), userID, artifactID)
 	if err != nil {
+		if errors.Is(err, constants.ErrObserveDownloadNotFound) {
+			c.responder.Error(w, http.StatusNotFound, constants.ErrObserveDownloadNotFound.Error())
+			return
+		}
 		c.logger.Error("observe: get download failed", "error", err, "user_id", userID, "artifact_id", artifactID)
 		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
-		return
-	}
-	if artifact == nil {
-		c.responder.Error(w, http.StatusNotFound, constants.ErrObserveDownloadNotFound.Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, artifact)

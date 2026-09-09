@@ -33,6 +33,7 @@ from g8e_evals.analysis.canonical import (
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
     BridgeRunComparison,
+    BridgeRunManifest,
     CanonicalEvalAnalysis,
     ComparisonDirection,
     ConfusionMatrix,
@@ -1244,8 +1245,64 @@ def _paired_gate_decision(
     return GateDecisionStatus.PASS
 
 
+class BridgeManifestValidationError(ValueError):
+    """Typed failure raised when a bridge manifest does not bind to its analyses.
+
+    The manifest declares the canonical analysis hashes, task count, arm
+    set, and release version that old and new analyses must satisfy.
+    Any mismatch is a typed failure: the comparison does not silently
+    pool incomparable analyses or drop a mismatched dimension from the
+    denominator.
+    """
+
+
+def _validate_bridge_manifest(
+    manifest: BridgeRunManifest,
+    old_analysis: CanonicalEvalAnalysis,
+    new_analysis: CanonicalEvalAnalysis,
+) -> None:
+    """Validate that old and new analyses satisfy one bridge manifest.
+
+    Checks every binding that makes pooling valid before any metric
+    value is read. The canonical analysis hashes bind the manifest to
+    the actual computed inputs; the task count, arm set, and release
+    version are cross-checked directly from the analyses. Any mismatch
+    raises ``BridgeManifestValidationError`` with a stable message
+    identifying the failed binding.
+    """
+    old_hash = old_analysis.input_summary.input_content_hash
+    if old_hash != manifest.old_analysis_hash:
+        raise BridgeManifestValidationError(
+            f"old analysis hash mismatch: manifest={manifest.old_analysis_hash} analysis={old_hash}.",
+        )
+    new_hash = new_analysis.input_summary.input_content_hash
+    if new_hash != manifest.new_analysis_hash:
+        raise BridgeManifestValidationError(
+            f"new analysis hash mismatch: manifest={manifest.new_analysis_hash} analysis={new_hash}.",
+        )
+    if old_analysis.input_summary.task_count != manifest.task_count:
+        raise BridgeManifestValidationError(
+            f"old analysis task count mismatch: manifest={manifest.task_count} "
+            f"analysis={old_analysis.input_summary.task_count}.",
+        )
+    if new_analysis.input_summary.task_count != manifest.task_count:
+        raise BridgeManifestValidationError(
+            f"new analysis task count mismatch: manifest={manifest.task_count} "
+            f"analysis={new_analysis.input_summary.task_count}.",
+        )
+    if old_analysis.arm_ids != new_analysis.arm_ids:
+        raise BridgeManifestValidationError(
+            f"arm set mismatch: old={old_analysis.arm_ids} new={new_analysis.arm_ids}.",
+        )
+    if old_analysis.release_version != new_analysis.release_version:
+        raise BridgeManifestValidationError(
+            f"release version mismatch: old={old_analysis.release_version} "
+            f"new={new_analysis.release_version}.",
+        )
+
+
 def compute_bridge_run_comparison(
-    bridge_id: str,
+    manifest: BridgeRunManifest,
     old_analysis: CanonicalEvalAnalysis,
     new_analysis: CanonicalEvalAnalysis,
 ) -> list[BridgeRunComparison]:
@@ -1253,13 +1310,23 @@ def compute_bridge_run_comparison(
 
     Compares old and new ``CanonicalEvalAnalysis`` instances produced by
     executing old and new suite, grader, metric, doctrine, or analysis
-    versions over the same model cohort. For each metric present in both
-    analyses, records the old and new values and a gate decision that
-    fails when any release-blocker metric regresses beyond its
-    non-inferiority margin.
+    versions over the same model cohort. The ``manifest`` binds the
+    comparison to validated analysis hashes, model cohort identity,
+    assignment identity, task count, task IDs, initial-state snapshots,
+    and replicate policy. Any mismatch between the manifest and the
+    supplied analyses raises ``BridgeManifestValidationError`` before
+    any metric value is pooled.
 
-    Returns comparisons sorted by ``(metric_id, metric_version)``.
+    For each metric present in both analyses, records the old and new
+    values and a gate decision that fails when any release-blocker metric
+    regresses beyond its non-inferiority margin. Missing evidence remains
+    missing: an unweighted average cannot replace numerator/denominator
+    pooling.
+
+    Returns comparisons sorted by ``(bridge_id, metric_id, metric_version)``.
     """
+    _validate_bridge_manifest(manifest, old_analysis, new_analysis)
+
     # Build lookup of metric results by (metric_id, metric_version) -> value
     # Pool across arms using the metric's registered aggregation semantics.
     def _pool_metric_values(analysis: CanonicalEvalAnalysis) -> dict[tuple[str, str], float | None]:
@@ -1335,7 +1402,7 @@ def compute_bridge_run_comparison(
             reason = "Insufficient data for comparison."
 
         comparisons.append(BridgeRunComparison(
-            bridge_id=bridge_id,
+            bridge_id=manifest.bridge_id,
             metric_id=metric_id,
             metric_version=metric_version,
             old_value=old_val,
@@ -1447,6 +1514,7 @@ def compute_canonical_analysis(
 
 
 __all__ = [
+    "BridgeManifestValidationError",
     "compute_bridge_run_comparison",
     "compute_canonical_analysis",
     "compute_canonical_analysis_from_record",

@@ -49,6 +49,7 @@ from g8e_evals.analysis.canonical import (
     PairedComparison,
     PooledConfusionMatrix,
     ReceiptCoverageAnalysis,
+    ReplicateAggregationPolicy,
 )
 from g8e_evals.analysis.engine import compute_canonical_analysis
 from g8e_evals.analysis.renderers import render_cli, render_html, render_markdown
@@ -205,10 +206,23 @@ def _make_full_synthetic_analysis() -> CanonicalEvalAnalysis:
                 new_version_label="v2.1.8",
                 old_suite_hash="oldhash123",
                 new_suite_hash="newhash456",
-                model_cohort_id="cohort-1",
-                task_count=10,
+                old_grader_hash="oldgraderhash",
+                new_grader_hash="newgraderhash",
+                old_metric_hash="oldmetrichash",
+                new_metric_hash="newmetrichash",
+                old_doctrine_hash="olddoctrinehash",
+                new_doctrine_hash="newdoctrinehash",
+                old_protocol_descriptor_hash="oldprotohash",
+                new_protocol_descriptor_hash="newprotohash",
                 old_analysis_hash="oldanalysishash",
                 new_analysis_hash="newanalysishash",
+                model_cohort_id="cohort-1",
+                task_assignment_id="assignment-1",
+                task_count=10,
+                task_ids=["task-1", "task-2"],
+                initial_state_snapshot_hashes=["snap-1"],
+                replicate_aggregation_policy=ReplicateAggregationPolicy.MEAN,
+                required_replicate_ids=["1"],
             ),
         ],
         bridge_run_comparisons=[

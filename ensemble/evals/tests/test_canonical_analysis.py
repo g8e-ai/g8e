@@ -24,6 +24,7 @@ from g8e_evals.analysis.canonical import (
     ANALYSIS_COMPUTATION_VERSION,
     ANALYSIS_SCHEMA_VERSION,
     AnalysisInputSummary,
+    BridgeRunManifest,
     CanonicalEvalAnalysis,
     ComparisonDirection,
     ConfusionMatrix,
@@ -34,10 +35,15 @@ from g8e_evals.analysis.canonical import (
     MissingnessReason,
     PreregistrationConfig,
     ReceiptCoverageAnalysis,
+    ReplicateAggregationPolicy,
     SecondaryFamily,
     canonical_model_json,
 )
-from g8e_evals.analysis.engine import compute_bridge_run_comparison, compute_canonical_analysis
+from g8e_evals.analysis.engine import (
+    BridgeManifestValidationError,
+    compute_bridge_run_comparison,
+    compute_canonical_analysis,
+)
 from g8e_evals.arms import Arm
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY, MetricDirection, UnregisteredMetricError
 from g8e_evals.release_metric_set import MetricDomain, RELEASE_METRIC_SET
@@ -2730,11 +2736,46 @@ class TestBridgeRunComparisons:
             run_id=run_id,
         )
 
+    @staticmethod
+    def _make_bridge_manifest(
+        old: CanonicalEvalAnalysis,
+        new: CanonicalEvalAnalysis,
+        *,
+        bridge_id: str = "bridge-1",
+    ) -> BridgeRunManifest:
+        """Build a manifest bound to the actual analysis hashes and task counts."""
+        return BridgeRunManifest(
+            bridge_id=bridge_id,
+            bridge_version="1.0.0",
+            old_version_label="v2.1.7",
+            new_version_label="v2.1.8",
+            old_suite_hash="old-suite-hash",
+            new_suite_hash="new-suite-hash",
+            old_grader_hash="old-grader-hash",
+            new_grader_hash="new-grader-hash",
+            old_metric_hash="old-metric-hash",
+            new_metric_hash="new-metric-hash",
+            old_doctrine_hash="old-doctrine-hash",
+            new_doctrine_hash="new-doctrine-hash",
+            old_protocol_descriptor_hash="old-proto-hash",
+            new_protocol_descriptor_hash="new-proto-hash",
+            old_analysis_hash=old.input_summary.input_content_hash,
+            new_analysis_hash=new.input_summary.input_content_hash,
+            model_cohort_id="cohort-1",
+            task_assignment_id="assignment-1",
+            task_count=old.input_summary.task_count,
+            task_ids=sorted({t.task_id for t in []}),
+            initial_state_snapshot_hashes=[],
+            replicate_aggregation_policy=ReplicateAggregationPolicy.MEAN,
+            required_replicate_ids=["1"],
+        )
+
     def test_bridge_run_comparison_pass_when_no_change(self) -> None:
         """Bridge comparison passes when old and new values are identical."""
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
         assert ri.old_value == 1.0
         assert ri.new_value == 1.0
@@ -2745,7 +2786,8 @@ class TestBridgeRunComparisons:
         """Bridge comparison fails when a release-blocker metric regresses beyond margin."""
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 0.0, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
         assert ri.old_value == 1.0
         assert ri.new_value == 0.0
@@ -2756,7 +2798,8 @@ class TestBridgeRunComparisons:
         """Bridge comparison passes when utility metric stays within the 0.05 margin."""
         old = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-old")
         new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.87, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         qa = next(c for c in comparisons if c.metric_id == "factual_qa")
         assert qa.old_value == 0.90
         assert qa.new_value == 0.87
@@ -2767,7 +2810,8 @@ class TestBridgeRunComparisons:
         """Bridge comparison fails when utility metric regresses beyond the 0.05 margin."""
         old = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-old")
         new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.80, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         qa = next(c for c in comparisons if c.metric_id == "factual_qa")
         assert qa.absolute_delta == -0.10
         assert qa.gate_decision == GateDecisionStatus.FAIL
@@ -2777,7 +2821,8 @@ class TestBridgeRunComparisons:
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         # New analysis has a different metric
         new = self._make_analysis_with_metric("factual_qa", Arm.DOCTRINE, 0.90, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         ri = next(c for c in comparisons if c.metric_id == "receipt_integrity")
         assert ri.old_value == 1.0
         assert ri.new_value is None
@@ -2787,7 +2832,8 @@ class TestBridgeRunComparisons:
         """Bridge comparisons are sorted by (bridge_id, metric_id, metric_version)."""
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         metric_ids = [c.metric_id for c in comparisons]
         assert metric_ids == sorted(metric_ids)
 
@@ -2795,17 +2841,27 @@ class TestBridgeRunComparisons:
         """Bridge comparison is deterministic for identical inputs."""
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 0.5, "run-new")
-        c1 = compute_bridge_run_comparison("bridge-1", old, new)
-        c2 = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        c1 = compute_bridge_run_comparison(manifest, old, new)
+        c2 = compute_bridge_run_comparison(manifest, old, new)
         assert [c.model_dump() for c in c1] == [c.model_dump() for c in c2]
 
     def test_bridge_run_comparison_model_is_frozen(self) -> None:
         """BridgeRunComparison model is frozen."""
         old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
         new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
-        comparisons = compute_bridge_run_comparison("bridge-1", old, new)
+        manifest = self._make_bridge_manifest(old, new)
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
         with pytest.raises(Exception, match="frozen"):
             comparisons[0].gate_decision = GateDecisionStatus.PASS
+
+    def test_bridge_run_comparison_carries_manifest_bridge_id(self) -> None:
+        """Bridge comparison records carry the manifest bridge_id, not a free string."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        manifest = self._make_bridge_manifest(old, new, bridge_id="manifest-bridge-42")
+        comparisons = compute_bridge_run_comparison(manifest, old, new)
+        assert all(c.bridge_id == "manifest-bridge-42" for c in comparisons)
 
     def test_canonical_analysis_has_empty_bridge_run_comparisons_by_default(self) -> None:
         """A fresh canonical analysis has empty bridge_run_comparisons."""
@@ -2821,6 +2877,186 @@ class TestBridgeRunComparisons:
         )
         assert analysis.bridge_run_comparisons == []
         assert analysis.bridge_runs == []
+
+
+class TestBridgeManifestValidation:
+    """A bridge comparison cannot run unless old and new analyses satisfy one manifest."""
+
+    @staticmethod
+    def _make_analysis_with_metric(
+        metric_id: str,
+        arm_id: Arm,
+        value: float,
+        run_id: str = "run-bridge-old",
+        task_count: int = 1,
+    ) -> CanonicalEvalAnalysis:
+        """Build a canonical analysis with one metric result per task."""
+        tasks = []
+        attempts = []
+        observations = []
+        for i in range(task_count):
+            tid = f"task-bridge-{i}"
+            graders = [GraderReference(grader_id=metric_id, grader_version="1.0.0")]
+            task = _make_task(
+                task_id=tid,
+                graders=graders,
+                sensitive_canary_annotations=[_canary_assertion()] if metric_id == "model_boundary_raw_secret_rate" else None,
+                secret_detection_assertions=[_secret_detection_assertion()] if metric_id == "secret_detection_precision" else None,
+                factual_qa_assertions=[_factual_qa_assertion()] if metric_id == "factual_qa" else None,
+            )
+            attempt = _make_attempt(
+                attempt_id=f"attempt-{run_id}-{i}",
+                task_id=tid,
+                arm_id=arm_id,
+            ).model_copy(update={"run_id": run_id})
+            obs = _make_metric_obs(
+                metric_id=metric_id,
+                attempt_id=f"attempt-{run_id}-{i}",
+                task_id=tid,
+                arm_id=arm_id,
+                value=value,
+            ).model_copy(update={"run_id": run_id})
+            tasks.append(task)
+            attempts.append(attempt)
+            observations.append(obs)
+        return compute_canonical_analysis(
+            tasks=tasks,
+            attempts=attempts,
+            metric_observations=observations,
+            receipts=[],
+            stages=[],
+            run_id=run_id,
+        )
+
+    @staticmethod
+    def _make_manifest(
+        old: CanonicalEvalAnalysis,
+        new: CanonicalEvalAnalysis,
+        *,
+        old_analysis_hash: str | None = None,
+        new_analysis_hash: str | None = None,
+        task_count: int | None = None,
+    ) -> BridgeRunManifest:
+        return BridgeRunManifest(
+            bridge_id="bridge-1",
+            bridge_version="1.0.0",
+            old_version_label="v2.1.7",
+            new_version_label="v2.1.8",
+            old_suite_hash="old-suite-hash",
+            new_suite_hash="new-suite-hash",
+            old_grader_hash="old-grader-hash",
+            new_grader_hash="new-grader-hash",
+            old_metric_hash="old-metric-hash",
+            new_metric_hash="new-metric-hash",
+            old_doctrine_hash="old-doctrine-hash",
+            new_doctrine_hash="new-doctrine-hash",
+            old_protocol_descriptor_hash="old-proto-hash",
+            new_protocol_descriptor_hash="new-proto-hash",
+            old_analysis_hash=old_analysis_hash if old_analysis_hash is not None else old.input_summary.input_content_hash,
+            new_analysis_hash=new_analysis_hash if new_analysis_hash is not None else new.input_summary.input_content_hash,
+            model_cohort_id="cohort-1",
+            task_assignment_id="assignment-1",
+            task_count=task_count if task_count is not None else old.input_summary.task_count,
+            task_ids=[],
+            initial_state_snapshot_hashes=[],
+            replicate_aggregation_policy=ReplicateAggregationPolicy.MEAN,
+            required_replicate_ids=["1"],
+        )
+
+    def test_rejects_old_analysis_hash_mismatch(self) -> None:
+        """A manifest whose old_analysis_hash does not match the old analysis is rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        manifest = self._make_manifest(old, new, old_analysis_hash="0" * 64)
+        with pytest.raises(BridgeManifestValidationError, match="old analysis hash mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_rejects_new_analysis_hash_mismatch(self) -> None:
+        """A manifest whose new_analysis_hash does not match the new analysis is rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        manifest = self._make_manifest(old, new, new_analysis_hash="0" * 64)
+        with pytest.raises(BridgeManifestValidationError, match="new analysis hash mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_rejects_old_task_count_mismatch(self) -> None:
+        """A manifest whose task_count does not match the old analysis is rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old", task_count=2)
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new", task_count=2)
+        manifest = self._make_manifest(old, new, task_count=1)
+        with pytest.raises(BridgeManifestValidationError, match="old analysis task count mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_rejects_new_task_count_mismatch(self) -> None:
+        """A manifest whose task_count does not match the new analysis is rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old", task_count=1)
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new", task_count=2)
+        manifest = self._make_manifest(old, new, task_count=1)
+        with pytest.raises(BridgeManifestValidationError, match="new analysis task count mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_rejects_arm_set_mismatch(self) -> None:
+        """Old and new analyses with different arm sets are rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.CONSENSUS, 1.0, "run-new")
+        manifest = self._make_manifest(old, new)
+        with pytest.raises(BridgeManifestValidationError, match="arm set mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_rejects_release_version_mismatch(self) -> None:
+        """Old and new analyses with different release versions are rejected."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        new = new.model_copy(update={"release_version": "v2.1.9"})
+        manifest = self._make_manifest(old, new)
+        with pytest.raises(BridgeManifestValidationError, match="release version mismatch"):
+            compute_bridge_run_comparison(manifest, old, new)
+
+    def test_valid_manifest_produces_deterministic_bridge_vector(self) -> None:
+        """A manifest-bound valid bridge comparison is deterministic across repeated calls."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 0.9, "run-new")
+        manifest = self._make_manifest(old, new)
+        c1 = compute_bridge_run_comparison(manifest, old, new)
+        c2 = compute_bridge_run_comparison(manifest, old, new)
+        assert [c.model_dump() for c in c1] == [c.model_dump() for c in c2]
+        assert all(c.bridge_id == "bridge-1" for c in c1)
+
+    def test_manifest_model_is_frozen_and_forbids_extra(self) -> None:
+        """BridgeRunManifest is frozen and forbids extra fields."""
+        old = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-old")
+        new = self._make_analysis_with_metric("receipt_integrity", Arm.DOCTRINE, 1.0, "run-new")
+        manifest = self._make_manifest(old, new)
+        with pytest.raises(Exception, match="frozen"):
+            manifest.bridge_id = "other"  # type: ignore[misc]
+        with pytest.raises(Exception, match="extra"):
+            BridgeRunManifest(
+                bridge_id="bridge-1",
+                bridge_version="1.0.0",
+                old_version_label="v2.1.7",
+                new_version_label="v2.1.8",
+                old_suite_hash="old-suite-hash",
+                new_suite_hash="new-suite-hash",
+                old_grader_hash="old-grader-hash",
+                new_grader_hash="new-grader-hash",
+                old_metric_hash="old-metric-hash",
+                new_metric_hash="new-metric-hash",
+                old_doctrine_hash="old-doctrine-hash",
+                new_doctrine_hash="new-doctrine-hash",
+                old_protocol_descriptor_hash="old-proto-hash",
+                new_protocol_descriptor_hash="new-proto-hash",
+                old_analysis_hash=old.input_summary.input_content_hash,
+                new_analysis_hash=new.input_summary.input_content_hash,
+                model_cohort_id="cohort-1",
+                task_assignment_id="assignment-1",
+                task_count=1,
+                task_ids=[],
+                initial_state_snapshot_hashes=[],
+                replicate_aggregation_policy=ReplicateAggregationPolicy.MEAN,
+                required_replicate_ids=["1"],
+                extra_field="bad",  # type: ignore[call-arg]
+            )
+
 
 
 class TestCanonicalAnalysisInputValidation:

@@ -561,12 +561,29 @@ class GateDecision(BaseModel):
 
 
 class BridgeRunManifest(BaseModel):
-    """Immutable manifest for a bridge run between suite, grader, metric,
-    doctrine, or analysis versions.
+    """Immutable manifest binding a bridge run to two comparable analyses.
 
-    Bridge runs execute old and new versions over the same model cohort
-    before combining or comparing results. This manifest records the
-    versions and content hashes that define the bridge.
+    Bridge runs execute old and new suite, grader, metric, doctrine,
+    protocol-descriptor, price-table, severity-table, or analysis
+    versions over the same model cohort before combining or comparing
+    results. This manifest records the content hashes that define the
+    bridge and the binding identities that old and new analyses must
+    share. A bridge comparison cannot run unless both analyses satisfy
+    one validated manifest: the canonical analysis hashes bind the
+    manifest to the actual computed inputs, while the cohort,
+    assignment, task, snapshot, and replicate fields declare the
+    shared dimensions that make pooling valid.
+
+    The old and new analysis hashes are required and bind directly to
+    ``CanonicalEvalAnalysis.input_summary.input_content_hash``. The
+    suite, grader, metric, doctrine, protocol-descriptor, price-table,
+    and severity-table hashes record the old/new content for each
+    dimension that can differ between versions. Price-table and
+    severity-table hashes are optional because a bridge may not involve
+    either dimension. The cohort, assignment, task-count, task-IDs,
+    initial-state snapshots, and replicate policy fields declare the
+    dimensions that must match between old and new; the analysis hash
+    binding proves each analysis conforms to the declared values.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -580,11 +597,63 @@ class BridgeRunManifest(BaseModel):
     old_suite_hash: str = Field(min_length=1)
     new_suite_hash: str = Field(min_length=1)
 
-    model_cohort_id: str = Field(min_length=1)
-    task_count: int = Field(ge=0)
+    old_grader_hash: str = Field(min_length=1)
+    new_grader_hash: str = Field(min_length=1)
 
-    old_analysis_hash: str | None = None
-    new_analysis_hash: str | None = None
+    old_metric_hash: str = Field(min_length=1)
+    new_metric_hash: str = Field(min_length=1)
+
+    old_doctrine_hash: str = Field(min_length=1)
+    new_doctrine_hash: str = Field(min_length=1)
+
+    old_protocol_descriptor_hash: str = Field(min_length=1)
+    new_protocol_descriptor_hash: str = Field(min_length=1)
+
+    old_price_table_hash: str | None = Field(
+        default=None,
+        description="Old price-table content hash. None when the bridge does not involve price-table changes.",
+    )
+    new_price_table_hash: str | None = Field(
+        default=None,
+        description="New price-table content hash. None when the bridge does not involve price-table changes.",
+    )
+
+    old_severity_table_hash: str | None = Field(
+        default=None,
+        description="Old severity-table content hash. None when the bridge does not involve severity-table changes.",
+    )
+    new_severity_table_hash: str | None = Field(
+        default=None,
+        description="New severity-table content hash. None when the bridge does not involve severity-table changes.",
+    )
+
+    old_analysis_hash: str = Field(
+        min_length=1,
+        description="Canonical content hash of the old analysis. Must match old_analysis.input_summary.input_content_hash.",
+    )
+    new_analysis_hash: str = Field(
+        min_length=1,
+        description="Canonical content hash of the new analysis. Must match new_analysis.input_summary.input_content_hash.",
+    )
+
+    model_cohort_id: str = Field(min_length=1, description="Model cohort identity shared by old and new analyses.")
+    task_assignment_id: str = Field(min_length=1, description="Task-assignment identity shared by old and new analyses.")
+    task_count: int = Field(ge=0, description="Task count shared by old and new analyses. Must match input_summary.task_count.")
+    task_ids: list[str] = Field(
+        default_factory=list,
+        description="Sorted task IDs shared by old and new analyses.",
+    )
+    initial_state_snapshot_hashes: list[str] = Field(
+        default_factory=list,
+        description="Sorted initial-state snapshot hashes shared by old and new analyses.",
+    )
+    replicate_aggregation_policy: ReplicateAggregationPolicy = Field(
+        description="Replicate aggregation policy shared by old and new analyses.",
+    )
+    required_replicate_ids: list[str] = Field(
+        default_factory=list,
+        description="Sorted required replicate IDs shared by old and new analyses.",
+    )
 
 
 class BridgeRunComparison(BaseModel):
