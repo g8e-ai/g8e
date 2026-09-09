@@ -1,7 +1,7 @@
 # Documentation Guide
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-09
+Version: v2.1.8
 
 This guide defines how maintainers and AI agents audit, write, generate, review, and cross-link g8e documentation. The current working tree is the source of truth for current behavior. Historical release notes and evidence artifacts describe only their stated release, run, or assessment scope.
 

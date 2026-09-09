@@ -13,6 +13,15 @@ import pytest
 TIER_MARKERS = ("unit", "integration", "e2e")
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--regenerate-golden-vectors",
+        action="store_true",
+        default=False,
+        help="Regenerate golden-vector fixture files for renderers instead of testing against them.",
+    )
+
+
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         tiers = [marker for marker in TIER_MARKERS if item.get_closest_marker(marker)]

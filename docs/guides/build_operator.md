@@ -5,8 +5,8 @@ parent: Guides
 
 # Build and Run a g8e Operator
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-09
+Version: v2.1.8
 
 ---
 
@@ -210,7 +210,7 @@ The Operator uses a SPIFFE URI SAN in its mTLS certificate and a host-local Ed25
 The public Go module is the repository root module:
 
 ```bash
-go get github.com/g8e-ai/g8e/v2@v2.1.7
+go get github.com/g8e-ai/g8e/v2@v2.1.8
 ```
 
 Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/g8e/...`. The key packages are:
@@ -222,7 +222,7 @@ Generated protocol packages live under `github.com/g8e-ai/g8e/v2/protocol/proto/
 The Python package includes generated protobuf modules, constants, dynamic enums, Pydantic models, and receipt verification helpers:
 
 ```bash
-pip install g8e==2.1.7
+pip install g8e==2.1.8
 ```
 
 See [Protocol Library](../architecture/protocol.md) for package contents, schemas, examples, and generation commands.

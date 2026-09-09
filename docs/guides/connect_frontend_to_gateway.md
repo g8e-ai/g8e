@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect an Existing Frontend to g8e Gateway
 
-Last Updated: 2026-09-08
-Version: v2.1.7
+Last Updated: 2026-09-09
+Version: v2.1.8
 
 ---
 
