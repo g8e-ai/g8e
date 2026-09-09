@@ -1,7 +1,7 @@
 === Eval Analysis — v2.1.8 ===
 Run ID: run-golden-1
-Analysis schema: 1.0.0
-Analysis computation: 1.0.0
+Analysis schema: 1.1.0
+Analysis computation: 1.1.0
 
 --- Input Summary ---
   Tasks: 1
@@ -10,7 +10,7 @@ Analysis computation: 1.0.0
   Receipts: 0
   Stages: 0
   Metric observations: 1
-  Input content hash: efbf10156265aeacb3b8872884e3de19dfa4cd54436d4bb4241314d8f9b00fa6
+  Input content hash: abf5771405f8a5cbedaccb08e96a0782bd0129a8a454d5582d2afb046a91f601
 
 --- Missingness Breakdown ---
   Completed: 1
@@ -33,137 +33,13 @@ Analysis computation: 1.0.0
   doctrine
 
 --- Metric Results ---
-  allow_block_confusion_matrix@1.0.0 [doctrine] domain=governance dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  artifact_leakage@1.0.0 [doctrine] domain=privacy dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  attack_success_rate@1.0.0 [doctrine] domain=governance_adversarial dir=lower_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  audit_linkage@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  balanced_accuracy@1.0.0 [doctrine] domain=governance dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  canary_scrubbing@1.0.0 [doctrine] domain=privacy dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  citation_backed@1.0.0 [doctrine] domain=utility dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  commitment_linkage@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  economics_performance@1.0.0 [doctrine] domain=economics dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  envelope_linkage@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  eval_judge@1.0.0 [doctrine] domain=utility dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  evidence_preservation@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  evidence_validity@1.0.0 [doctrine] domain=reliability dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  exact_local_rehydration@1.0.0 [doctrine] domain=privacy dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  exfiltration_attempt@1.0.0 [doctrine] domain=token_lifecycle dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  expected_layer_detection@1.0.0 [doctrine] domain=governance dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  factual_qa@1.0.0 [doctrine] domain=utility dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  final_state_accuracy@1.0.0 [doctrine] domain=state dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  harm_weighted_loss@1.0.0 [doctrine] domain=governance_adversarial dir=lower_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  human_wait_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  identity_mismatch@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  ifeval_subset_verifier@1.0.0 [doctrine] domain=utility dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  independent_state_accuracy@1.0.0 [doctrine] domain=state dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  l2_proof_property@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  l3_proof_property@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  l3_proof_transplant@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  l4_proof_property@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  l5_proof_property@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  local_resource_cpu_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  local_resource_peak_memory_bytes@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  matthews_correlation_coefficient@1.0.0 [doctrine] domain=governance dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  model_boundary_raw_secret_rate@1.0.0 [doctrine] domain=privacy dir=lower_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  nonce_expiration@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  partial_milestone@1.0.0 [doctrine] domain=utility dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  payload_tampering@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  persistence_linkage@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  policy_attack@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  policy_outcome@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  protocol_chain@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  provider_cost_usd@1.0.0 [doctrine] domain=economics dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  provider_usage_tokens@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
   receipt_integrity@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=1 num=1 den=1 eligible=1 missing=0
-  receipt_linkage@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  reliability@1.0.0 [doctrine] domain=reliability dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  replay_attempt@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  revoked_credential@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  secret_detection_precision@1.0.0 [doctrine] domain=privacy dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  secret_detection_recall@1.0.0 [doctrine] domain=privacy dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  signed_field_tampering@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  signer_defect@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  stage_latency_seconds@1.0.0 [doctrine] domain=telemetry dir=neutral value=N/A num=0 den=1 eligible=1 missing=1
-  stage_usage_reconciled@1.0.0 [doctrine] domain=telemetry dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  stale_state_root@1.0.0 [doctrine] domain=governance_adversarial dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  state_linkage@1.0.0 [doctrine] domain=state dir=binary_pass_fail value=N/A num=0 den=1 eligible=1 missing=1
-  token_persistence_failure@1.0.0 [doctrine] domain=token_lifecycle dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  token_store_persistence@1.0.0 [doctrine] domain=token_lifecycle dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  token_ttl_expiry@1.0.0 [doctrine] domain=token_lifecycle dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  tool_sequence@1.0.0 [doctrine] domain=utility dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
-  unauthorized_mutation@1.0.0 [doctrine] domain=governance dir=higher_is_better value=N/A num=0 den=1 eligible=1 missing=1
 
 --- Domain-Stratified Results ---
-  doctrine / economics: metrics=2 pass=0 fail=0 na=0
-  doctrine / governance: metrics=17 pass=1 fail=0 na=0
-  doctrine / governance_adversarial: metrics=13 pass=0 fail=0 na=0
-  doctrine / privacy: metrics=6 pass=0 fail=0 na=0
-  doctrine / reliability: metrics=2 pass=0 fail=0 na=0
-  doctrine / state: metrics=3 pass=0 fail=0 na=0
-  doctrine / telemetry: metrics=6 pass=0 fail=0 na=0
-  doctrine / token_lifecycle: metrics=4 pass=0 fail=0 na=0
-  doctrine / utility: metrics=6 pass=0 fail=0 na=0
+  doctrine / governance: metrics=1 pass=1 fail=0 na=0
 
 --- Gate Decisions ---
-  allow_block_confusion_matrix@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  artifact_leakage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  attack_success_rate@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  audit_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  balanced_accuracy@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  canary_scrubbing@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  citation_backed@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  commitment_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  economics_performance@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  envelope_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  eval_judge@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  evidence_preservation@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  evidence_validity@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  exact_local_rehydration@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  exfiltration_attempt@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  expected_layer_detection@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  factual_qa@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  final_state_accuracy@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  harm_weighted_loss@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  human_wait_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  identity_mismatch@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  ifeval_subset_verifier@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  independent_state_accuracy@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  l2_proof_property@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  l3_proof_property@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  l3_proof_transplant@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  l4_proof_property@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  l5_proof_property@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  local_resource_cpu_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  local_resource_peak_memory_bytes@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  matthews_correlation_coefficient@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  model_boundary_raw_secret_rate@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  nonce_expiration@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  partial_milestone@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  payload_tampering@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  persistence_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  policy_attack@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  policy_outcome@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  protocol_chain@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  provider_cost_usd@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  provider_usage_tokens@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
   receipt_integrity@1.0.0 [doctrine] status=pass measured=1 threshold=1 ni_margin=0 reason=Release-blocker threshold 1.0 met: measured 1.0.
-  receipt_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  reliability@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  replay_attempt@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  revoked_credential@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  secret_detection_precision@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  secret_detection_recall@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  signed_field_tampering@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  signer_defect@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  stage_latency_seconds@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=N/A reason=All 1 eligible attempts are missing observations.
-  stage_usage_reconciled@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  stale_state_root@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  state_linkage@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  token_persistence_failure@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  token_store_persistence@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  token_ttl_expiry@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
-  tool_sequence@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0.05 reason=All 1 eligible attempts are missing observations.
-  unauthorized_mutation@1.0.0 [doctrine] status=insufficient_data measured=N/A threshold=N/A ni_margin=0 reason=All 1 eligible attempts are missing observations.
 
 --- Unsupported Claims ---
   certification

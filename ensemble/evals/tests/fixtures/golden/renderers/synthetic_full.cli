@@ -1,7 +1,7 @@
 === Eval Analysis — v2.1.8 ===
 Run ID: run-golden-1
-Analysis schema: 1.0.0
-Analysis computation: 1.0.0
+Analysis schema: 1.1.0
+Analysis computation: 1.1.0
 
 --- Input Summary ---
   Tasks: 2
@@ -46,7 +46,7 @@ Analysis computation: 1.0.0
   policy_outcome@1.0.0 arms=1 (doctrine) TP=3 FP=1 TN=2 FN=0 acc=0.8333333333 bacc=0.8333333333 mcc=0.7071067812 pool=preregistered_simple_summation_across_arms
 
 --- Paired Comparisons ---
-  receipt_integrity@1.0.0 direct->doctrine paired=7 base=1 comp=1 delta=0 reldelta=0 es=N/A dir=neutral mcnemar_p=N/A ci=[0, 0] holm_p=1 ni_margin=0 gate=pass
+  receipt_integrity@1.0.0 direct->doctrine paired=7 base=1 comp=1 delta=0 reldelta=0 es=N/A dir=neutral mcnemar_p=N/A paired_t_p=N/A wilcoxon_p=N/A ci=[0, 0] holm_p=1 ni_margin=0 gate=pass
 
 --- Gate Decisions ---
   receipt_integrity@1.0.0 [doctrine] status=pass measured=1 threshold=1 ni_margin=0 reason=Release-blocker threshold 1.0 met: measured 1.0.

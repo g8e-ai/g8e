@@ -1,8 +1,8 @@
 # Eval Analysis — v2.1.8
 
 - Run ID: `run-golden-1`
-- Analysis schema version: `1.0.0`
-- Analysis computation version: `1.0.0`
+- Analysis schema version: `1.1.0`
+- Analysis computation version: `1.1.0`
 
 ## Input Summary
 
@@ -66,9 +66,9 @@
 
 ## Paired Comparisons
 
-| Metric | Version | Baseline | Comparison | Paired | Baseline Val | Comparison Val | Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Bootstrap CI | Holm p | NI Margin | Gate |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| receipt_integrity | 1.0.0 | direct | doctrine | 7 | 1 | 1 | 0 | 0 | N/A | neutral | N/A | [0, 0] | 1 | 0 | pass |
+| Metric | Version | Baseline | Comparison | Paired | Baseline Val | Comparison Val | Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Paired t p | Wilcoxon p | Bootstrap CI | Holm p | NI Margin | Gate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| receipt_integrity | 1.0.0 | direct | doctrine | 7 | 1 | 1 | 0 | 0 | N/A | neutral | N/A | N/A | N/A | [0, 0] | 1 | 0 | pass |
 
 ## Gate Decisions
 
