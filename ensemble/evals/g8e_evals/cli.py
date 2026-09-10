@@ -544,7 +544,14 @@ def main():
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
               help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
 def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, preregistration):
-    """Run a benchmark suite"""
+    """Run a single-arm diagnostic against one model and one arm.
+
+    This command is a diagnostic: it executes one arm against one model
+    mapping and produces one run. It does not create a campaign identity,
+    assignment manifest, or randomized schedule. For authoritative
+    multi-arm, multi-cohort campaign execution, use the ``campaign``
+    command instead.
+    """
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
     # has no session matching that id. Fail fast with an actionable hint
@@ -599,6 +606,170 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
+
+
+@main.command(name="campaign")
+@click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
+@click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
+              help="Path to a JSON preregistration config file that declares the campaign arms, cohorts, replicates, and metrics.")
+@click.option("--campaign-id", required=True,
+              help="Campaign identity (must match the preregistration's campaign authority).")
+@click.option("--release-version", default=EVALS_VERSION,
+              help="Release version bound to the campaign manifest.")
+@click.option("--seed", type=int, required=True,
+              help="Frozen randomization seed for the deterministic schedule.")
+@click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
+@click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
+@click.option("--max-retries", type=int, default=1,
+              help="Maximum infrastructure retries per assignment.")
+@click.option("--max-requests", type=int, default=None,
+              help="Maximum total provider requests before the campaign stops with a typed budget-exhausted outcome.")
+@click.option("--max-usd", type=float, default=None,
+              help="Maximum total provider spending in USD before the campaign stops.")
+def campaign(suite, preregistration, campaign_id, release_version, seed, output_dir, gold_set, max_retries, max_requests, max_usd):
+    """Run an authoritative multi-arm, multi-cohort campaign.
+
+    Creates one campaign identity, one report directory, one assignment
+    manifest, one randomized schedule, and one final canonical analysis.
+    Resume reads the persisted schedule and existing attempts; it does
+    not rerandomize or discard failures.
+    """
+    from g8e_evals.runner import CampaignRunner, CampaignSpec, CampaignRunnerError
+    from g8e_evals.campaign import (
+        InitialStateAssignmentManifest,
+        ModelCohort,
+        RetryPolicy,
+        RoleModelBinding,
+        SamplingSettings,
+        TaskAssignmentManifest,
+        compute_initial_state_hash,
+        compute_model_cohort_hash,
+        compute_task_assignment_hash,
+    )
+    from g8e_evals.schema import ProviderBudget
+
+    prereg_config = load_preregistration(preregistration)
+
+    if suite == "ifeval_subset":
+        if not gold_set:
+            raise click.UsageError("--gold-set is required for ifeval_subset")
+        loader = IFEvalLoader(gold_set)
+        tasks = list(loader.load())
+        provenance = load_provenance(gold_set.with_name("provenance.json"))
+        suite_id = provenance.benchmark
+        suite_version = provenance.output.sha256[:12]
+        dataset_hash = provenance.output.sha256
+    else:
+        raise click.UsageError(f"unknown suite: {suite}")
+
+    # Build cohorts from the preregistration's model cohort IDs. The
+    # cohort role bindings are content-addressed; the caller is
+    # responsible for supplying a preregistration whose cohort IDs
+    # match the frozen R0 campaign spec.
+    cohorts: list[ModelCohort] = []
+    for cohort_id in prereg_config.model_cohort_ids:
+        # Default single-role binding for the direct arm. The
+        # ensemble_ungoverned arm would add assistant/lite roles; that
+        # wiring is part of R7 (live topology restoration).
+        bindings = [RoleModelBinding(
+            role="primary",
+            model_id=cohort_id.replace("cohort-", "").replace("-", ":"),
+            provider="ollama",
+            endpoint="http://192.168.1.2:11434",
+            sampling_settings=SamplingSettings(temperature=0.0, top_p=1.0, max_tokens=4096, seed=seed),
+            timeout_seconds=120.0,
+            seed_capable=True,
+        )]
+        ch = compute_model_cohort_hash(cohort_id, bindings)
+        cohorts.append(ModelCohort(cohort_id=cohort_id, role_bindings=bindings, content_hash=ch))
+
+    task_ids = [t.id for t in tasks]
+    task_assignment = TaskAssignmentManifest(
+        task_assignment_id="task-assignment-v1",
+        suite_id=suite_id,
+        dataset_hash=dataset_hash,
+        task_ids=task_ids,
+        content_hash=compute_task_assignment_hash("task-assignment-v1", suite_id, dataset_hash, task_ids),
+    )
+
+    initial_state = InitialStateAssignmentManifest(
+        initial_state_assignment_id="no-initial-state-v1",
+        state_type="no_initial_state",
+        snapshot_hash="0" * 64,
+        content_hash=compute_initial_state_hash("no-initial-state-v1", "no_initial_state", "0" * 64),
+    )
+
+    retry_policy = RetryPolicy(
+        max_retries=max_retries,
+        retryable_terminal_statuses=["infrastructure_failed"],
+    )
+
+    provider_budget = None
+    if max_usd is not None or max_requests is not None:
+        provider_budget = ProviderBudget(
+            max_usd=max_usd if max_usd is not None else 0.0,
+            max_requests=max_requests,
+        )
+
+    prompt_bundle = "\n".join(t.prompt for t in tasks).encode()
+    prompt_bundle_hash = hashlib.sha256(prompt_bundle).hexdigest()
+
+    spec = CampaignSpec(
+        campaign_id=campaign_id,
+        release_version=release_version,
+        suite=suite,
+        suite_id=suite_id,
+        suite_version=suite_version,
+        dataset_hash=dataset_hash,
+        prompt_bundle_hash=prompt_bundle_hash,
+        grader_bundle_hash=hashlib.sha256(b"ifeval_subset_verifier:1.0.0").hexdigest(),
+        preregistration=prereg_config,
+        cohorts=cohorts,
+        task_assignment=task_assignment,
+        initial_state=initial_state,
+        retry_policy=retry_policy,
+        randomization_seed=seed,
+        provider_budget=provider_budget,
+    )
+
+    # The campaign command uses the IFEval verifier as the grader and
+    # a direct-provider SUT factory. The SUT factory is injected so the
+    # runner remains testable with fake SUTs. Production wiring that
+    # routes through g8ee for ensemble_ungoverned is part of R7.
+    from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
+
+    def sut_factory(cohort: ModelCohort, arm):
+        from g8e_evals.harness import LLMRoleConfig, SUTConfig
+        model_id = cohort.role_bindings[0].model_id
+        endpoint = cohort.role_bindings[0].endpoint
+        config = SUTConfig(
+            g8ee_url="",
+            primary=LLMRoleConfig(provider="ollama", model=model_id, endpoint=endpoint),
+            arm=arm,
+        )
+        return DirectProviderSUT(config)
+
+    runner = CampaignRunner(
+        spec=spec,
+        sut_factory=sut_factory,
+        tasks=tasks,
+        grader=IFEvalVerifier(),
+        output_dir=output_dir,
+    )
+
+    try:
+        result = asyncio.run(runner.run())
+    except CampaignRunnerError as error:
+        raise click.ClickException(str(error)) from error
+
+    console = Console()
+    console.print(f"[cyan]Campaign[/cyan] {result.campaign_id}")
+    console.print(f"  [green]status[/green] {result.status.value}")
+    console.print(f"  [green]stop_reason[/green] {result.stop_reason.value if result.stop_reason else 'none'}")
+    console.print(f"  [green]assignments[/green] {result.assignment_count}")
+    console.print(f"  [green]attempts[/green] {result.terminal_attempt_count}")
+    console.print(f"  [green]report[/green] {result.report_dir}")
+
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None):
     # 1. Load benchmark
