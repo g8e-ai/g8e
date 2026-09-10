@@ -122,12 +122,13 @@ const bundlePrivacyClassPublic = "public"
 // validateEvalPublicationRequest validates the eval publication payload
 // fields at the Gateway boundary. It checks the supported schema version,
 // non-empty bundle_id and run_id, a verified verification report (ok=true),
-// at least one public artifact in the bundle manifest, rooted relative
-// artifact paths, non-empty media types, 64-char hex SHA-256 hashes,
-// non-negative byte sizes, no duplicate download artifact IDs, and no
-// restricted artifacts in the download catalog. Content hash and size
-// verification against the base64-encoded bytes is performed by the producer
-// service when persisting the artifact.
+// non-empty arm_ids, non-empty campaign_id, at least one public artifact in
+// the bundle manifest, rooted relative artifact paths, non-empty media types,
+// 64-char hex SHA-256 hashes, non-negative byte sizes, no duplicate download
+// artifact IDs, no restricted artifacts in the download catalog, and that each
+// metric carries model_cohort_id and arm_id that are in the declared sets.
+// Content hash and size verification against the base64-encoded bytes is
+// performed by the producer service when persisting the artifact.
 func validateEvalPublicationRequest(req models.ObserveProducerEvalPublicationRequest) error {
 	if req.SchemaVersion != supportedPublicationSchemaVersion {
 		return fmt.Errorf("observe producer: validate eval publication: %w: got %q", constants.ErrObserveUnsupportedSchemaVersion, req.SchemaVersion)
@@ -140,6 +141,39 @@ func validateEvalPublicationRequest(req models.ObserveProducerEvalPublicationReq
 	}
 	if !req.VerificationReport.OK {
 		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationNotVerified)
+	}
+	if len(req.ArmIDs) == 0 {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationArmIDsRequired)
+	}
+	if req.CampaignID == "" {
+		return fmt.Errorf("observe producer: validate eval publication: %w", constants.ErrObservePublicationCampaignIDRequired)
+	}
+	// Build declared sets for metric stratum validation. model_cohort_ids may
+	// be empty for single-arm diagnostic runs; in that case metrics must
+	// carry empty model_cohort_id. arm_ids is always non-empty (checked above).
+	armSet := make(map[string]struct{}, len(req.ArmIDs))
+	for _, a := range req.ArmIDs {
+		armSet[a] = struct{}{}
+	}
+	cohortSet := make(map[string]struct{}, len(req.ModelCohortIDs))
+	for _, c := range req.ModelCohortIDs {
+		cohortSet[c] = struct{}{}
+	}
+	for _, m := range req.Metrics {
+		if m.ModelCohortID == "" && len(cohortSet) > 0 {
+			return fmt.Errorf("observe producer: validate eval publication: %w: metric %q", constants.ErrObservePublicationMetricCohortMissing, m.MetricID)
+		}
+		if m.ArmID == "" {
+			return fmt.Errorf("observe producer: validate eval publication: %w: metric %q", constants.ErrObservePublicationMetricCohortMissing, m.MetricID)
+		}
+		if len(cohortSet) > 0 {
+			if _, ok := cohortSet[m.ModelCohortID]; !ok {
+				return fmt.Errorf("observe producer: validate eval publication: %w: metric %q cohort %q", constants.ErrObservePublicationMetricCohortUnknown, m.MetricID, m.ModelCohortID)
+			}
+		}
+		if _, ok := armSet[m.ArmID]; !ok {
+			return fmt.Errorf("observe producer: validate eval publication: %w: metric %q arm %q", constants.ErrObservePublicationMetricCohortUnknown, m.MetricID, m.ArmID)
+		}
 	}
 	if err := validateBundleManifestWire(req.BundleManifest); err != nil {
 		return err

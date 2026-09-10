@@ -146,13 +146,15 @@ class RunDetail(G8eBaseModel):
 
 
 class EvalSummary(G8eBaseModel):
-    """Paginated eval run projection."""
+    """Paginated eval run projection with campaign dimensions."""
 
     schema_version: str
     run_id: str
     suite_id: str
     suite_version: str
-    arm_id: str
+    campaign_id: str
+    arm_ids: list[str]
+    model_cohort_ids: list[str]
     status: RunLifecycleStatus
     verification_status: EvalVerificationStatus
     receipt_count: int
@@ -163,11 +165,13 @@ class EvalSummary(G8eBaseModel):
 
 
 class EvalMetricSummary(G8eBaseModel):
-    """A single registered metric in an eval detail projection."""
+    """A single registered metric in an eval detail projection, stratified by cohort and arm."""
 
     schema_version: str
     metric_id: str
     metric_version: str
+    model_cohort_id: str
+    arm_id: str
     value: float | None = None
     unit: str
     eligible: int
@@ -177,15 +181,15 @@ class EvalMetricSummary(G8eBaseModel):
 
 
 class EvalDetail(G8eBaseModel):
-    """Typed eval detail projection."""
+    """Typed eval detail projection with campaign dimensions and cohort-stratified metrics."""
 
     schema_version: str
     run_id: str
     suite_id: str
     suite_version: str
-    arm_id: str
-    model_id: str | None = None
-    model_provider: str | None = None
+    campaign_id: str
+    arm_ids: list[str]
+    model_cohort_ids: list[str]
     status: RunLifecycleStatus
     verification_status: EvalVerificationStatus
     receipt_count: int
@@ -433,11 +437,16 @@ class ObserveProducerDownloadArtifactInput(G8eBaseModel):
 class ObserveProducerEvalPublicationRequest(G8eBaseModel):
     """Typed request body for POST /api/v1/observe/producer/eval-publication.
 
-    Carries the verified bundle manifest, the verification report, and
-    the download catalog with base64 content for public-safe artifacts.
-    The gateway derives user_id from the mTLS peer certificate, never
-    from the request body. The request carries no user_id field; unknown
-    identity fields are rejected.
+    Carries the verified bundle manifest, the verification report, the
+    campaign-aware eval projection fields extracted from the canonical
+    analysis and campaign records by the publisher, and the download
+    catalog with base64 content for public-safe artifacts. The gateway
+    derives user_id from the mTLS peer certificate, never from the
+    request body. The request carries no user_id field; unknown identity
+    fields are rejected. Campaign dimensions (campaign_id, arm_ids,
+    model_cohort_ids, assignment_count) replace the former single arm_id
+    and single model_id/model_provider scalars so a multi-arm,
+    multi-cohort campaign publishes as one projection.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
@@ -448,9 +457,10 @@ class ObserveProducerEvalPublicationRequest(G8eBaseModel):
     release_version: str
     suite_id: str
     suite_version: str
-    arm_id: str
-    model_id: str | None = None
-    model_provider: str | None = None
+    campaign_id: str
+    arm_ids: list[str]
+    model_cohort_ids: list[str]
+    assignment_count: int
     receipt_count: int
     assigned_tasks: int
     terminal_attempts: int

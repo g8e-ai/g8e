@@ -784,14 +784,21 @@
       }
     },
     "eval_detail": {
-      "_description": "Typed eval detail projection with manifest-safe identity, arm/model information, aggregate metrics, status, and verification boundary.",
-      "arm_id": {
+      "_description": "Typed eval detail projection with campaign dimensions, cohort-stratified aggregate metrics, status, and verification boundary. Model identity is per-cohort (carried via model_cohort_ids), not a single scalar.",
+      "arm_ids": {
+        "description": "All arm IDs in the campaign. A single-arm diagnostic carries one entry.",
+        "items": "string",
         "required": true,
-        "type": "string"
+        "type": "array"
       },
       "assigned_tasks": {
         "required": true,
         "type": "integer"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records.",
+        "required": true,
+        "type": "string"
       },
       "completed_at": {
         "format": "iso8601",
@@ -803,15 +810,11 @@
         "required": true,
         "type": "array"
       },
-      "model_id": {
-        "description": "Model identifier from the manifest role-to-model mapping. Omitted when not available.",
-        "required": false,
-        "type": "string"
-      },
-      "model_provider": {
-        "description": "Model provider from the manifest. Omitted when not available.",
-        "required": false,
-        "type": "string"
+      "model_cohort_ids": {
+        "description": "All model cohort IDs in the campaign. Empty for single-arm diagnostic runs without campaign records.",
+        "items": "string",
+        "required": true,
+        "type": "array"
       },
       "observed_at": {
         "format": "iso8601",
@@ -869,7 +872,12 @@
       }
     },
     "eval_metric_recorded_payload": {
-      "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its population, denominator, and verification status.",
+      "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its cohort and arm stratum, population, denominator, and verification status.",
+      "arm_id": {
+        "description": "Arm identity for this metric stratum.",
+        "required": true,
+        "type": "string"
+      },
       "denominator": {
         "description": "Denominator for the metric population",
         "required": true,
@@ -887,6 +895,11 @@
       },
       "metric_version": {
         "description": "Metric schema version",
+        "required": true,
+        "type": "string"
+      },
+      "model_cohort_id": {
+        "description": "Model cohort identity for this metric stratum. Empty for single-arm diagnostic runs without campaign records.",
         "required": true,
         "type": "string"
       },
@@ -928,7 +941,12 @@
       }
     },
     "eval_metric_summary": {
-      "_description": "A single registered metric in an eval detail projection.",
+      "_description": "A single registered metric in an eval detail projection, stratified by model cohort and arm.",
+      "arm_id": {
+        "description": "Arm identity for this metric stratum.",
+        "required": true,
+        "type": "string"
+      },
       "denominator": {
         "required": true,
         "type": "integer"
@@ -942,6 +960,11 @@
         "type": "string"
       },
       "metric_version": {
+        "required": true,
+        "type": "string"
+      },
+      "model_cohort_id": {
+        "description": "Model cohort identity. Empty for single-arm diagnostic runs without campaign records.",
         "required": true,
         "type": "string"
       },
@@ -974,16 +997,22 @@
       }
     },
     "eval_run_completed_payload": {
-      "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports terminal aggregate counts and the verification boundary of a completed eval run.",
-      "arm_id": {
-        "description": "Eval arm identifier",
+      "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports campaign dimensions, terminal aggregate counts, and the verification boundary of a completed eval run. Carries arm_ids (list) and campaign_id so a multi-arm, multi-cohort campaign renders as one event.",
+      "arm_ids": {
+        "description": "All arm IDs in the campaign. A single-arm diagnostic carries one entry.",
+        "items": "string",
         "required": true,
-        "type": "string"
+        "type": "array"
       },
       "assigned_tasks": {
         "description": "Number of tasks assigned to the run",
         "required": true,
         "type": "integer"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records.",
+        "required": true,
+        "type": "string"
       },
       "completed_at": {
         "description": "UTC timestamp when the eval run completed",
@@ -1038,8 +1067,15 @@
       }
     },
     "eval_summary": {
-      "_description": "Paginated eval run projection. Uses manifest role-to-model mappings and registered metrics with honest verification labels.",
-      "arm_id": {
+      "_description": "Paginated eval run projection. Carries campaign dimensions (campaign_id, arm_ids, model_cohort_ids) so a multi-arm, multi-cohort campaign renders as one projection. Uses registered metrics with honest verification labels.",
+      "arm_ids": {
+        "description": "All arm IDs in the campaign. A single-arm diagnostic carries one entry.",
+        "items": "string",
+        "required": true,
+        "type": "array"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records.",
         "required": true,
         "type": "string"
       },
@@ -1052,6 +1088,12 @@
         "description": "Number of registered metrics in the projection",
         "required": true,
         "type": "integer"
+      },
+      "model_cohort_ids": {
+        "description": "All model cohort IDs in the campaign. Empty for single-arm diagnostic runs without campaign records.",
+        "items": "string",
+        "required": true,
+        "type": "array"
       },
       "observed_at": {
         "format": "iso8601",
@@ -1396,14 +1438,20 @@
       }
     },
     "observe_producer_eval_publication_request": {
-      "_description": "Typed request body for the mTLS publication endpoint POST /api/v1/observe/producer/eval-publication. Carries the verified bundle manifest, the verification report, the eval projection fields extracted from the canonical analysis by the publisher, and the download catalog with base64 content for public-safe artifacts. The gateway derives user_id from the mTLS peer certificate, never from the request body. The request carries no user_id field; unknown identity fields are rejected.",
-      "arm_id": {
-        "description": "Eval arm identity from the canonical analysis",
+      "_description": "Typed request body for the mTLS publication endpoint POST /api/v1/observe/producer/eval-publication. Carries the verified bundle manifest, the verification report, the campaign-aware eval projection fields extracted from the canonical analysis and campaign records by the publisher, and the download catalog with base64 content for public-safe artifacts. The gateway derives user_id from the mTLS peer certificate, never from the request body. The request carries no user_id field; unknown identity fields are rejected. Campaign dimensions (campaign_id, arm_ids, model_cohort_ids, assignment_count) replace the former single arm_id and single model_id/model_provider scalars so a multi-arm, multi-cohort campaign publishes as one projection.",
+      "arm_ids": {
+        "description": "All arm IDs in the campaign from the canonical analysis. A single-arm diagnostic carries one entry.",
+        "items": "string",
         "required": true,
-        "type": "string"
+        "type": "array"
       },
       "assigned_tasks": {
         "description": "Number of assigned tasks in the eval run",
+        "required": true,
+        "type": "integer"
+      },
+      "assignment_count": {
+        "description": "Total Cartesian assignment count from the analysis input summary. Zero for single-arm diagnostic runs without campaign records.",
         "required": true,
         "type": "integer"
       },
@@ -1418,6 +1466,11 @@
         "required": true,
         "type": "object"
       },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records.",
+        "required": true,
+        "type": "string"
+      },
       "cli_session_id": {
         "description": "SSE routing target for CLI sessions. Exactly one of web_session_id or cli_session_id is required.",
         "required": false,
@@ -1430,20 +1483,16 @@
         "type": "array"
       },
       "metrics": {
-        "description": "Registered metric rows from the canonical analysis",
+        "description": "Cohort-and-arm-stratified metric rows from the canonical analysis. Each carries model_cohort_id and arm_id.",
         "items": "eval_metric_summary",
         "required": true,
         "type": "array"
       },
-      "model_id": {
-        "description": "Model identifier from the canonical analysis, absent if unresolved",
-        "required": false,
-        "type": "string"
-      },
-      "model_provider": {
-        "description": "Model provider from the canonical analysis, absent if unresolved",
-        "required": false,
-        "type": "string"
+      "model_cohort_ids": {
+        "description": "All model cohort IDs in the campaign from the campaign records. Empty for single-arm diagnostic runs without campaign records.",
+        "items": "string",
+        "required": true,
+        "type": "array"
       },
       "receipt_count": {
         "description": "Number of receipts in the verified bundle",

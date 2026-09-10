@@ -301,7 +301,10 @@ class TestBuildPublicationRequest:
         assert request.release_version == "v2.1.8"
         assert request.suite_id == "ifeval_subset"
         assert request.suite_version == "1.0.0"
-        assert request.arm_id == Arm.DOCTRINE.value
+        assert request.arm_ids == [Arm.DOCTRINE.value]
+        assert request.campaign_id == ""
+        assert request.model_cohort_ids == []
+        assert request.assignment_count == 0
         assert request.receipt_count == analysis.input_summary.receipt_count
         assert request.assigned_tasks == analysis.input_summary.task_count
         assert request.terminal_attempts == analysis.input_summary.attempt_count
@@ -391,6 +394,8 @@ class TestBuildPublicationRequest:
         for summary, result in zip(summaries, analysis.metric_results, strict=True):
             assert summary.metric_id == result.metric_id
             assert summary.metric_version == result.metric_version
+            assert summary.model_cohort_id == result.model_cohort_id
+            assert summary.arm_id == result.arm_id
             assert summary.value == result.value
             assert summary.unit == result.unit
             assert summary.eligible == result.eligible_count
@@ -458,7 +463,10 @@ class TestBuildPublicationRequest:
         assert "release_version" in parsed
         assert "suite_id" in parsed
         assert "suite_version" in parsed
-        assert "arm_id" in parsed
+        assert "campaign_id" in parsed
+        assert "arm_ids" in parsed
+        assert "model_cohort_ids" in parsed
+        assert "assignment_count" in parsed
         assert "receipt_count" in parsed
         assert "assigned_tasks" in parsed
         assert "terminal_attempts" in parsed
@@ -684,10 +692,14 @@ class TestCrossLanguageContract:
         dumped = request.model_dump(mode="json", by_alias=True, exclude_none=False)
 
         # These are the exact JSON field names from the Go struct tags in
-        # internal/models/eval_bundle.go ObserveProducerEvalPublicationRequest.
+        # internal/models/eval_bundle.go ObserveProducerEvalPublicationRequest
+        # after the campaign-aware evolution: arm_id -> arm_ids, model_id and
+        # model_provider removed, campaign_id/model_cohort_ids/assignment_count
+        # added.
         expected_fields = {
             "schema_version", "bundle_id", "run_id", "release_version",
-            "suite_id", "suite_version", "arm_id", "model_id", "model_provider",
+            "suite_id", "suite_version",
+            "campaign_id", "arm_ids", "model_cohort_ids", "assignment_count",
             "receipt_count", "assigned_tasks", "terminal_attempts",
             "metrics", "verification_report", "bundle_manifest",
             "downloads", "web_session_id", "cli_session_id",
@@ -709,7 +721,10 @@ class TestCrossLanguageContract:
             "release_version": "v",
             "suite_id": "s",
             "suite_version": "1.0.0",
-            "arm_id": "a",
+            "campaign_id": "",
+            "arm_ids": ["a"],
+            "model_cohort_ids": [],
+            "assignment_count": 0,
             "receipt_count": 0,
             "assigned_tasks": 0,
             "terminal_attempts": 0,
@@ -747,7 +762,10 @@ class TestCrossLanguageContract:
             "release_version": "v",
             "suite_id": "s",
             "suite_version": "1.0.0",
-            "arm_id": "a",
+            "campaign_id": "",
+            "arm_ids": ["a"],
+            "model_cohort_ids": [],
+            "assignment_count": 0,
             "receipt_count": 0,
             "assigned_tasks": 0,
             "terminal_attempts": 0,

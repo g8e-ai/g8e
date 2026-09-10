@@ -172,7 +172,9 @@ export interface EvalSummary {
   run_id: string;
   suite_id: string;
   suite_version: string;
-  arm_id: string;
+  campaign_id: string;
+  arm_ids: String[];
+  model_cohort_ids: String[];
   status: RunLifecycleStatus;
   verification_status: EvalVerificationStatus;
   receipt_count: number;
@@ -186,6 +188,8 @@ export interface EvalMetricSummary {
   schema_version: string;
   metric_id: string;
   metric_version: string;
+  model_cohort_id: string;
+  arm_id: string;
   value?: number;
   unit: string;
   eligible: number;
@@ -199,9 +203,9 @@ export interface EvalDetail {
   run_id: string;
   suite_id: string;
   suite_version: string;
-  arm_id: string;
-  model_id?: string;
-  model_provider?: string;
+  campaign_id: string;
+  arm_ids: String[];
+  model_cohort_ids: String[];
   status: RunLifecycleStatus;
   verification_status: EvalVerificationStatus;
   receipt_count: number;
@@ -269,7 +273,8 @@ export interface EvalRunCompletedPayload {
   run_id: string;
   suite_id: string;
   suite_version: string;
-  arm_id: string;
+  campaign_id: string;
+  arm_ids: String[];
   terminal_attempts: number;
   assigned_tasks: number;
   receipt_count: number;
@@ -283,6 +288,8 @@ export interface EvalMetricRecordedPayload {
   run_id: string;
   metric_id: string;
   metric_version: string;
+  model_cohort_id: string;
+  arm_id: string;
   value?: number;
   unit: string;
   eligible: number;
@@ -436,7 +443,9 @@ export function isEvalSummary(value: unknown): value is EvalSummary {
   if (!(typeof v.run_id === 'string')) return false; /* run_id */
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
-  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
+  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => isString(x)))) return false; /* model_cohort_ids */
   if (!(typeof v.status === 'string' && (RUN_LIFECYCLE_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
   if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */
@@ -453,6 +462,8 @@ export function isEvalMetricSummary(value: unknown): value is EvalMetricSummary 
   if (!(typeof v.schema_version === 'string')) return false; /* schema_version */
   if (!(typeof v.metric_id === 'string')) return false; /* metric_id */
   if (!(typeof v.metric_version === 'string')) return false; /* metric_version */
+  if (!(typeof v.model_cohort_id === 'string')) return false; /* model_cohort_id */
+  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
   if (v.value !== undefined && !(typeof v.value === 'number')) return false; /* value */
   if (!(typeof v.unit === 'string')) return false; /* unit */
   if (!(typeof v.eligible === 'number' && Number.isInteger(v.eligible))) return false; /* eligible */
@@ -469,9 +480,9 @@ export function isEvalDetail(value: unknown): value is EvalDetail {
   if (!(typeof v.run_id === 'string')) return false; /* run_id */
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
-  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
-  if (v.model_id !== undefined && !(typeof v.model_id === 'string')) return false; /* model_id */
-  if (v.model_provider !== undefined && !(typeof v.model_provider === 'string')) return false; /* model_provider */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
+  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => isString(x)))) return false; /* model_cohort_ids */
   if (!(typeof v.status === 'string' && (RUN_LIFECYCLE_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
   if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */
@@ -554,7 +565,8 @@ export function isEvalRunCompletedPayload(value: unknown): value is EvalRunCompl
   if (!(typeof v.run_id === 'string')) return false; /* run_id */
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
-  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
+  if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
   if (!(typeof v.terminal_attempts === 'number' && Number.isInteger(v.terminal_attempts))) return false; /* terminal_attempts */
   if (!(typeof v.assigned_tasks === 'number' && Number.isInteger(v.assigned_tasks))) return false; /* assigned_tasks */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */
@@ -571,6 +583,8 @@ export function isEvalMetricRecordedPayload(value: unknown): value is EvalMetric
   if (!(typeof v.run_id === 'string')) return false; /* run_id */
   if (!(typeof v.metric_id === 'string')) return false; /* metric_id */
   if (!(typeof v.metric_version === 'string')) return false; /* metric_version */
+  if (!(typeof v.model_cohort_id === 'string')) return false; /* model_cohort_id */
+  if (!(typeof v.arm_id === 'string')) return false; /* arm_id */
   if (v.value !== undefined && !(typeof v.value === 'number')) return false; /* value */
   if (!(typeof v.unit === 'string')) return false; /* unit */
   if (!(typeof v.eligible === 'number' && Number.isInteger(v.eligible))) return false; /* eligible */

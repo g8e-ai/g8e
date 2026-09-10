@@ -120,7 +120,7 @@
   },
 
   "eval_run_completed_payload": {
-    "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports terminal aggregate counts and the verification boundary of a completed eval run.",
+    "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports campaign dimensions, terminal aggregate counts, and the verification boundary of a completed eval run. Carries arm_ids (list) and campaign_id so a multi-arm, multi-cohort campaign renders as one event.",
     "schema_version": {
       "type": "string",
       "required": true,
@@ -141,10 +141,16 @@
       "required": true,
       "description": "Eval suite version"
     },
-    "arm_id": {
+    "campaign_id": {
       "type": "string",
       "required": true,
-      "description": "Eval arm identifier"
+      "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records."
+    },
+    "arm_ids": {
+      "type": "array",
+      "items": "string",
+      "required": true,
+      "description": "All arm IDs in the campaign. A single-arm diagnostic carries one entry."
     },
     "terminal_attempts": {
       "type": "integer",
@@ -181,7 +187,7 @@
   },
 
   "eval_metric_recorded_payload": {
-    "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its population, denominator, and verification status.",
+    "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its cohort and arm stratum, population, denominator, and verification status.",
     "schema_version": {
       "type": "string",
       "required": true,
@@ -201,6 +207,16 @@
       "type": "string",
       "required": true,
       "description": "Metric schema version"
+    },
+    "model_cohort_id": {
+      "type": "string",
+      "required": true,
+      "description": "Model cohort identity for this metric stratum. Empty for single-arm diagnostic runs without campaign records."
+    },
+    "arm_id": {
+      "type": "string",
+      "required": true,
+      "description": "Arm identity for this metric stratum."
     },
     "value": {
       "type": "number",

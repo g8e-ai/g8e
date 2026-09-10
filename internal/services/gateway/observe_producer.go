@@ -431,6 +431,14 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 	completedAt := now
 
 	// Build the eval projection from the verified request fields.
+	armIDs := req.ArmIDs
+	if armIDs == nil {
+		armIDs = []string{}
+	}
+	modelCohortIDs := req.ModelCohortIDs
+	if modelCohortIDs == nil {
+		modelCohortIDs = []string{}
+	}
 	proj := evalProjection{
 		UserID: userID,
 		EvalDetail: models.EvalDetail{
@@ -438,9 +446,9 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 			RunID:              req.RunID,
 			SuiteID:            req.SuiteID,
 			SuiteVersion:       req.SuiteVersion,
-			ArmID:              req.ArmID,
-			ModelID:            req.ModelID,
-			ModelProvider:      req.ModelProvider,
+			CampaignID:         req.CampaignID,
+			ArmIDs:             armIDs,
+			ModelCohortIDs:     modelCohortIDs,
 			Status:             models.RunLifecycleStatusCompleted,
 			VerificationStatus: models.EvalVerificationVerified,
 			ReceiptCount:       req.ReceiptCount,
@@ -554,7 +562,8 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 		RunID:                     req.RunID,
 		SuiteID:                   req.SuiteID,
 		SuiteVersion:              req.SuiteVersion,
-		ArmID:                     req.ArmID,
+		CampaignID:                req.CampaignID,
+		ArmIDs:                    armIDs,
 		TerminalAttempts:          req.TerminalAttempts,
 		AssignedTasks:             req.AssignedTasks,
 		ReceiptCount:              req.ReceiptCount,
@@ -574,6 +583,8 @@ func (s *ObserveProducerService) PublishEval(ctx context.Context, userID string,
 			RunID:              req.RunID,
 			MetricID:           metric.MetricID,
 			MetricVersion:      metric.MetricVersion,
+			ModelCohortID:      metric.ModelCohortID,
+			ArmID:              metric.ArmID,
 			Value:              metric.Value,
 			Unit:               metric.Unit,
 			Eligible:           metric.Eligible,

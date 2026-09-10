@@ -115,12 +115,15 @@ type ObserveProducerDownloadArtifactInput struct {
 
 // ObserveProducerEvalPublicationRequest is the typed request body for the mTLS
 // publication endpoint POST /api/v1/observe/producer/eval-publication. It
-// carries the verified bundle manifest, the verification report, the eval
-// projection fields extracted from the canonical analysis by the publisher,
-// and the download catalog with base64 content for public-safe artifacts. The
-// gateway derives user_id from the mTLS peer certificate, never from the
-// request body. The request carries no user_id field; unknown identity fields
-// are rejected.
+// carries the verified bundle manifest, the verification report, the
+// campaign-aware eval projection fields extracted from the canonical analysis
+// and campaign records by the publisher, and the download catalog with base64
+// content for public-safe artifacts. The gateway derives user_id from the
+// mTLS peer certificate, never from the request body. The request carries no
+// user_id field; unknown identity fields are rejected. Campaign dimensions
+// (CampaignID, ArmIDs, ModelCohortIDs, AssignmentCount) replace the former
+// single ArmID and single ModelID/ModelProvider scalars so a multi-arm,
+// multi-cohort campaign publishes as one projection.
 type ObserveProducerEvalPublicationRequest struct {
 	SchemaVersion      string                                 `json:"schema_version"`
 	BundleID           string                                 `json:"bundle_id"`
@@ -128,9 +131,10 @@ type ObserveProducerEvalPublicationRequest struct {
 	ReleaseVersion     string                                 `json:"release_version"`
 	SuiteID            string                                 `json:"suite_id"`
 	SuiteVersion       string                                 `json:"suite_version"`
-	ArmID              string                                 `json:"arm_id"`
-	ModelID            string                                 `json:"model_id,omitempty"`
-	ModelProvider      string                                 `json:"model_provider,omitempty"`
+	CampaignID         string                                 `json:"campaign_id"`
+	ArmIDs             []string                                `json:"arm_ids"`
+	ModelCohortIDs     []string                                `json:"model_cohort_ids"`
+	AssignmentCount    int                                    `json:"assignment_count"`
 	ReceiptCount       int                                    `json:"receipt_count"`
 	AssignedTasks      int                                    `json:"assigned_tasks"`
 	TerminalAttempts   int                                    `json:"terminal_attempts"`

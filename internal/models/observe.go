@@ -112,14 +112,16 @@ type RunStatusUpdatedPayload struct {
 
 // EvalRunCompletedPayload is the payload for ai.eval.run.completed events.
 // It is emitted only after the eval projection is persisted. It reports
-// terminal aggregate counts and the verification boundary of a completed
-// eval run.
+// campaign dimensions, terminal aggregate counts, and the verification
+// boundary of a completed eval run. Carries arm_ids (list) and campaign_id
+// so a multi-arm, multi-cohort campaign renders as one event.
 type EvalRunCompletedPayload struct {
 	SchemaVersion             string                 `json:"schema_version"`
 	RunID                     string                 `json:"run_id"`
 	SuiteID                   string                 `json:"suite_id"`
 	SuiteVersion              string                 `json:"suite_version"`
-	ArmID                     string                 `json:"arm_id"`
+	CampaignID                string                 `json:"campaign_id"`
+	ArmIDs                    []string               `json:"arm_ids"`
 	TerminalAttempts          int                    `json:"terminal_attempts"`
 	AssignedTasks             int                    `json:"assigned_tasks"`
 	ReceiptCount              int                    `json:"receipt_count"`
@@ -129,13 +131,15 @@ type EvalRunCompletedPayload struct {
 }
 
 // EvalMetricRecordedPayload is the payload for ai.eval.metric.recorded events.
-// It reports a single registered metric value with its population,
-// denominator, and verification status.
+// It reports a single registered metric value with its cohort and arm stratum,
+// population, denominator, and verification status.
 type EvalMetricRecordedPayload struct {
 	SchemaVersion      string                 `json:"schema_version"`
 	RunID              string                 `json:"run_id"`
 	MetricID           string                 `json:"metric_id"`
 	MetricVersion      string                 `json:"metric_version"`
+	ModelCohortID      string                 `json:"model_cohort_id"`
+	ArmID              string                 `json:"arm_id"`
 	Value              *float64               `json:"value,omitempty"`
 	Unit               string                 `json:"unit"`
 	Eligible           int                    `json:"eligible"`
@@ -304,15 +308,18 @@ type RunDetail struct {
 	ObservedAt        time.Time          `json:"observed_at"`
 }
 
-// EvalSummary is the paginated eval run projection. It uses manifest
-// role-to-model mappings and registered metrics with honest verification
-// labels.
+// EvalSummary is the paginated eval run projection. It carries campaign
+// dimensions (campaign_id, arm_ids, model_cohort_ids) so a multi-arm,
+// multi-cohort campaign renders as one projection. Uses registered metrics
+// with honest verification labels.
 type EvalSummary struct {
 	SchemaVersion             string                 `json:"schema_version"`
 	RunID                     string                 `json:"run_id"`
 	SuiteID                   string                 `json:"suite_id"`
 	SuiteVersion              string                 `json:"suite_version"`
-	ArmID                     string                 `json:"arm_id"`
+	CampaignID                string                 `json:"campaign_id"`
+	ArmIDs                    []string               `json:"arm_ids"`
+	ModelCohortIDs            []string               `json:"model_cohort_ids"`
 	Status                    RunLifecycleStatus     `json:"status"`
 	VerificationStatus        EvalVerificationStatus `json:"verification_status"`
 	ReceiptCount              int                    `json:"receipt_count"`
@@ -322,11 +329,14 @@ type EvalSummary struct {
 	ObservedAt                time.Time              `json:"observed_at"`
 }
 
-// EvalMetricSummary is a single registered metric in an eval detail projection.
+// EvalMetricSummary is a single registered metric in an eval detail projection,
+// stratified by model cohort and arm.
 type EvalMetricSummary struct {
 	SchemaVersion      string                 `json:"schema_version"`
 	MetricID           string                 `json:"metric_id"`
 	MetricVersion      string                 `json:"metric_version"`
+	ModelCohortID      string                 `json:"model_cohort_id"`
+	ArmID              string                 `json:"arm_id"`
 	Value              *float64               `json:"value,omitempty"`
 	Unit               string                 `json:"unit"`
 	Eligible           int                    `json:"eligible"`
@@ -335,16 +345,18 @@ type EvalMetricSummary struct {
 	RecordedAt         *time.Time             `json:"recorded_at,omitempty"`
 }
 
-// EvalDetail is the typed eval detail projection with manifest-safe identity,
-// arm/model information, aggregate metrics, status, and verification boundary.
+// EvalDetail is the typed eval detail projection with campaign dimensions,
+// cohort-stratified aggregate metrics, status, and verification boundary.
+// Model identity is per-cohort (carried via model_cohort_ids), not a single
+// scalar.
 type EvalDetail struct {
 	SchemaVersion             string                 `json:"schema_version"`
 	RunID                     string                 `json:"run_id"`
 	SuiteID                   string                 `json:"suite_id"`
 	SuiteVersion              string                 `json:"suite_version"`
-	ArmID                     string                 `json:"arm_id"`
-	ModelID                   string                 `json:"model_id,omitempty"`
-	ModelProvider             string                 `json:"model_provider,omitempty"`
+	CampaignID                string                 `json:"campaign_id"`
+	ArmIDs                    []string               `json:"arm_ids"`
+	ModelCohortIDs            []string               `json:"model_cohort_ids"`
 	Status                    RunLifecycleStatus     `json:"status"`
 	VerificationStatus        EvalVerificationStatus `json:"verification_status"`
 	ReceiptCount              int                    `json:"receipt_count"`

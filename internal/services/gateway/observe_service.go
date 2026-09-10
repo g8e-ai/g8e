@@ -167,12 +167,22 @@ type evalProjection struct {
 
 // toSummary derives an EvalSummary from the projection.
 func (e *evalProjection) toSummary() models.EvalSummary {
+	armIDs := e.ArmIDs
+	if armIDs == nil {
+		armIDs = []string{}
+	}
+	modelCohortIDs := e.ModelCohortIDs
+	if modelCohortIDs == nil {
+		modelCohortIDs = []string{}
+	}
 	return models.EvalSummary{
 		SchemaVersion:             e.SchemaVersion,
 		RunID:                     e.RunID,
 		SuiteID:                   e.SuiteID,
 		SuiteVersion:              e.SuiteVersion,
-		ArmID:                     e.ArmID,
+		CampaignID:                e.CampaignID,
+		ArmIDs:                    armIDs,
+		ModelCohortIDs:            modelCohortIDs,
 		Status:                    e.Status,
 		VerificationStatus:        e.VerificationStatus,
 		ReceiptCount:              e.ReceiptCount,

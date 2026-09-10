@@ -1324,6 +1324,10 @@ var (
 	ErrObservePublicationContentHashMismatch = errors.New("observe: download content hash does not match sha256")
 	ErrObservePublicationContentSizeMismatch = errors.New("observe: download content size does not match byte_size")
 	ErrObservePublicationArtifactOversized   = errors.New("observe: download artifact exceeds max bytes")
+	ErrObservePublicationArmIDsRequired      = errors.New("observe: arm_ids is required and must be non-empty")
+	ErrObservePublicationCampaignIDRequired   = errors.New("observe: campaign_id is required")
+	ErrObservePublicationMetricCohortMissing  = errors.New("observe: metric is missing model_cohort_id or arm_id")
+	ErrObservePublicationMetricCohortUnknown  = errors.New("observe: metric model_cohort_id or arm_id not in declared sets")
 
 	// Observe download streaming errors (Phase 4: authenticated byte
 	// streaming with hash and size verification).

@@ -189,7 +189,8 @@ class EvalRunCompletedPayload(G8eBaseModel):
     run_id: str
     suite_id: str
     suite_version: str
-    arm_id: str
+    campaign_id: str
+    arm_ids: list[str]
     terminal_attempts: int
     assigned_tasks: int
     receipt_count: int
@@ -203,6 +204,8 @@ class EvalMetricRecordedPayload(G8eBaseModel):
     run_id: str
     metric_id: str
     metric_version: str
+    model_cohort_id: str
+    arm_id: str
     value: float | None = None
     unit: str
     eligible: int

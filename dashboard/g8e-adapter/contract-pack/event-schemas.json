@@ -95,7 +95,12 @@
       }
     },
     "eval_metric_recorded_payload": {
-      "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its population, denominator, and verification status.",
+      "_description": "Payload for ai.eval.metric.recorded events. Reports a single registered metric value with its cohort and arm stratum, population, denominator, and verification status.",
+      "arm_id": {
+        "description": "Arm identity for this metric stratum.",
+        "required": true,
+        "type": "string"
+      },
       "denominator": {
         "description": "Denominator for the metric population",
         "required": true,
@@ -113,6 +118,11 @@
       },
       "metric_version": {
         "description": "Metric schema version",
+        "required": true,
+        "type": "string"
+      },
+      "model_cohort_id": {
+        "description": "Model cohort identity for this metric stratum. Empty for single-arm diagnostic runs without campaign records.",
         "required": true,
         "type": "string"
       },
@@ -154,16 +164,22 @@
       }
     },
     "eval_run_completed_payload": {
-      "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports terminal aggregate counts and the verification boundary of a completed eval run.",
-      "arm_id": {
-        "description": "Eval arm identifier",
+      "_description": "Payload for ai.eval.run.completed events. Emitted only after the eval projection is persisted. Reports campaign dimensions, terminal aggregate counts, and the verification boundary of a completed eval run. Carries arm_ids (list) and campaign_id so a multi-arm, multi-cohort campaign renders as one event.",
+      "arm_ids": {
+        "description": "All arm IDs in the campaign. A single-arm diagnostic carries one entry.",
+        "items": "string",
         "required": true,
-        "type": "string"
+        "type": "array"
       },
       "assigned_tasks": {
         "description": "Number of tasks assigned to the run",
         "required": true,
         "type": "integer"
+      },
+      "campaign_id": {
+        "description": "Campaign identity from the campaign manifest. Empty for single-arm diagnostic runs without campaign records.",
+        "required": true,
+        "type": "string"
       },
       "completed_at": {
         "description": "UTC timestamp when the eval run completed",
