@@ -56,4 +56,5 @@ const (
 	CollectionObserveVerificationProgress CollectionName = "observe_verification_progress"
 	CollectionObservePublicationProgress  CollectionName = "observe_publication_progress"
 	CollectionObserveSourceFreshness      CollectionName = "observe_source_freshness"
+	CollectionPublicFeedOutbox            CollectionName = "public_feed_outbox"
 )

@@ -355,6 +355,14 @@ const EventAiEvalPublicationCompleted EventType = "g8e.v1.ai.eval.publication.co
 const EventAiEvalHeartbeat EventType = "g8e.v1.ai.eval.heartbeat"
 const EventAiEvalStopRequested EventType = "g8e.v1.ai.eval.stop.requested"
 
+// Public feed events (O3-public-feed: outbound publisher and signed
+// append-only batches). These events are produced by the Gateway's
+// outbound publisher and are dashboard-safe.
+const EventPublicFeedBatchExported EventType = "g8e.v1.public.feed.batch.exported"
+const EventPublicFeedBatchAcknowledged EventType = "g8e.v1.public.feed.batch.acknowledged"
+const EventPublicFeedProofPublished EventType = "g8e.v1.public.feed.proof.published"
+const EventPublicFeedKeyRotated EventType = "g8e.v1.public.feed.key.rotated"
+
 // Canonical governed-document request events. These are the deterministic
 // EventType values that MapActionTypeToEventType returns for the
 // DOCUMENT_UPDATE and DOCUMENT_DELETE action types. The app-level

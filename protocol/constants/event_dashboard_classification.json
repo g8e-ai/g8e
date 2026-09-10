@@ -25,6 +25,11 @@
       "dashboard_safe": true,
       "description": "ai.eval.run.completed and ai.eval.metric.recorded are emitted by the ensemble through the Gateway mTLS eval publication endpoint (POST /api/v1/observe/producer/eval-publication) after the bundle verification report confirms ok=true and the eval projection, download catalog, and run projection are persisted. The live campaign events (ai.eval.cycle.started, ai.eval.cycle.completed, ai.eval.assignment.started, ai.eval.assignment.completed, ai.eval.model_role.invoked, ai.eval.metric.available, ai.eval.verifier.completed, ai.eval.proof.available, ai.eval.publication.completed, ai.eval.heartbeat, ai.eval.stop.requested) are emitted by the observe producer after persisting the corresponding projection (persist-before-event). Each live event carries a monotonic source_sequence and a unique event_id for ordering, replay, and duplicate suppression. Safe for narrative display; verification status, metric summaries, role-combination identity, and stop reasons shown as non-actionable notices."
     },
+    "g8e.v1.public.feed": {
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "Public feed events (batch.exported, batch.acknowledged, proof.published, key.rotated) emitted by the Gateway outbound publisher. The publisher signs append-only batches and exports them to a hosted mirror over outbound HTTPS. Safe for narrative display; export status, acknowledgment, proof availability, and key rotation shown as non-actionable notices."
+    },
     "g8e.v1.ai.llm": {
       "classification": "produced_to_sse",
       "dashboard_safe": true,

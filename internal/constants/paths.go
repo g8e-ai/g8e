@@ -516,6 +516,7 @@ const (
 	ProtocolEventDashboardClassificationJSONFilename = "event_dashboard_classification.json"
 	ProtocolObserveAPIJSONFilename                   = "observe_api.json"
 	ProtocolObserveEventPayloadsJSONFilename         = "observe_event_payloads.json"
+	ProtocolPublicFeedJSONFilename                   = "public_feed.json"
 )
 
 // Consensus bootstrap config filename for declarative consensus seeding.
@@ -847,4 +848,34 @@ const (
 	SupervisorLedgerFilename      = "cycle-ledger.jsonl"
 	SupervisorLockFilename        = "supervisor.lock"
 	SupervisorStateFilename       = "state.json"
+)
+
+// Public feed runtime path constants (O3-public-feed: outbound publisher,
+// signed append-only batches, ordered outbox, and content-addressed proof
+// packages).
+const (
+	PublicFeedDirname              = "public-feed"
+	PublicFeedOutboxFilename       = "outbox.jsonl"
+	PublicFeedSnapshotFilename     = "snapshot.json"
+	PublicFeedExportConfigFilename = "export-config.json"
+	PublicFeedSigningKeyFilename   = "signing-key.ed25519"
+	PublicProofsDirname            = "public-proofs"
+	PublicProofCatalogFilename     = "proof-catalog.json"
+	PublicProofManifestFilename    = "proof-manifest.json"
+)
+
+// Public feed schema and protocol version constants.
+const (
+	PublicFeedProtocolVersion       = "1.0.0"
+	PublicFeedSchemaVersion         = "1.0.0"
+	PublicProofManifestSchemaVersion = "1.0.0"
+	PublicProofCatalogSchemaVersion  = "1.0.0"
+	PublicFeedBatchMaxRecords       = 100
+	PublicFeedBatchMaxBytes         = 4 << 20
+	PublicFeedRetryMaxAttempts      = 5
+	PublicFeedRetryInitialBackoff   = 1
+	PublicFeedRetryMaxBackoff       = 60
+	PublicFeedAckWindowSeconds      = 300
+	PublicFeedMaxArtifactBytes      = 64 << 20
+	PublicFeedZeroHashHex           = "0000000000000000000000000000000000000000000000000000000000000000"
 )

@@ -1259,6 +1259,22 @@
     "AiEvalStopRequested": {
       "_go_const": "EventAiEvalStopRequested",
       "value": "g8e.v1.ai.eval.stop.requested"
+    },
+    "PublicFeedBatchExported": {
+      "_go_const": "EventPublicFeedBatchExported",
+      "value": "g8e.v1.public.feed.batch.exported"
+    },
+    "PublicFeedBatchAcknowledged": {
+      "_go_const": "EventPublicFeedBatchAcknowledged",
+      "value": "g8e.v1.public.feed.batch.acknowledged"
+    },
+    "PublicFeedProofPublished": {
+      "_go_const": "EventPublicFeedProofPublished",
+      "value": "g8e.v1.public.feed.proof.published"
+    },
+    "PublicFeedKeyRotated": {
+      "_go_const": "EventPublicFeedKeyRotated",
+      "value": "g8e.v1.public.feed.key.rotated"
     }
   }
 }
