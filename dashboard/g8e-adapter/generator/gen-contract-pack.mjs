@@ -292,7 +292,15 @@ function validatorForType(field, accessor) {
       break;
     case 'array':
       if (field.items) {
-        conds.push(`Array.isArray(${accessor}) && ${accessor}.every((x) => is${pascalCase(field.items)}(x))`);
+        if (field.items === 'string') {
+          conds.push(`Array.isArray(${accessor}) && ${accessor}.every((x) => typeof x === 'string')`);
+        } else if (field.items === 'integer' || field.items === 'number') {
+          conds.push(`Array.isArray(${accessor}) && ${accessor}.every((x) => typeof x === 'number')`);
+        } else if (field.items === 'boolean') {
+          conds.push(`Array.isArray(${accessor}) && ${accessor}.every((x) => typeof x === 'boolean')`);
+        } else {
+          conds.push(`Array.isArray(${accessor}) && ${accessor}.every((x) => is${pascalCase(field.items)}(x))`);
+        }
       } else {
         conds.push(`Array.isArray(${accessor})`);
       }
@@ -746,7 +754,9 @@ function generateFixtures() {
         run_id: 'eval-001',
         suite_id: 'suite-a',
         suite_version: '1.0.0',
-        arm_id: 'arm-1',
+        campaign_id: '',
+        arm_ids: ['arm-1'],
+        model_cohort_ids: [],
         status: 'completed',
         verification_status: 'projection_validated',
         receipt_count: 3,

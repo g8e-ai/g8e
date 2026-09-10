@@ -444,8 +444,8 @@ export function isEvalSummary(value: unknown): value is EvalSummary {
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
   if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
-  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
-  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => isString(x)))) return false; /* model_cohort_ids */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => typeof x === 'string'))) return false; /* arm_ids */
+  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => typeof x === 'string'))) return false; /* model_cohort_ids */
   if (!(typeof v.status === 'string' && (RUN_LIFECYCLE_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
   if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */
@@ -481,8 +481,8 @@ export function isEvalDetail(value: unknown): value is EvalDetail {
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
   if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
-  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
-  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => isString(x)))) return false; /* model_cohort_ids */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => typeof x === 'string'))) return false; /* arm_ids */
+  if (!(Array.isArray(v.model_cohort_ids) && v.model_cohort_ids.every((x) => typeof x === 'string'))) return false; /* model_cohort_ids */
   if (!(typeof v.status === 'string' && (RUN_LIFECYCLE_STATUSES as readonly string[]).includes(v.status))) return false; /* status */
   if (!(typeof v.verification_status === 'string' && (EVAL_VERIFICATION_STATUSES as readonly string[]).includes(v.verification_status))) return false; /* verification_status */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */
@@ -566,7 +566,7 @@ export function isEvalRunCompletedPayload(value: unknown): value is EvalRunCompl
   if (!(typeof v.suite_id === 'string')) return false; /* suite_id */
   if (!(typeof v.suite_version === 'string')) return false; /* suite_version */
   if (!(typeof v.campaign_id === 'string')) return false; /* campaign_id */
-  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => isString(x)))) return false; /* arm_ids */
+  if (!(Array.isArray(v.arm_ids) && v.arm_ids.every((x) => typeof x === 'string'))) return false; /* arm_ids */
   if (!(typeof v.terminal_attempts === 'number' && Number.isInteger(v.terminal_attempts))) return false; /* terminal_attempts */
   if (!(typeof v.assigned_tasks === 'number' && Number.isInteger(v.assigned_tasks))) return false; /* assigned_tasks */
   if (!(typeof v.receipt_count === 'number' && Number.isInteger(v.receipt_count))) return false; /* receipt_count */

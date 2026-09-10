@@ -15,6 +15,7 @@ records.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import UTC, datetime
 from importlib.metadata import version as distribution_version
@@ -75,6 +76,7 @@ from g8e_evals.schema import (
     TaskDefinition,
 )
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
+from g8e_evals.suites import SUITE_REGISTRY
 
 pytestmark = pytest.mark.integration
 
@@ -178,7 +180,7 @@ def _patch_loader(monkeypatch, tasks: list[Task]) -> None:
         def load(self):
             yield from tasks
 
-    monkeypatch.setattr(cli, "IFEvalLoader", _StubLoader)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], loader_factory=_StubLoader))
 
 
 def _patch_provenance(monkeypatch) -> None:
@@ -211,7 +213,7 @@ def _patch_provenance(monkeypatch) -> None:
         partition="development",
         domain_strata=["utility"],
     )
-    monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], provenance_loader=lambda _path: provenance))
 
 
 def _patch_source_build_provenance_env(monkeypatch) -> None:
@@ -255,7 +257,7 @@ def _patch_verifier(
 ) -> MagicMock:
     verifier = MagicMock()
     verifier.verify.return_value = _score(passed, model_calls)
-    monkeypatch.setattr(cli, "IFEvalVerifier", lambda: verifier)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 
 

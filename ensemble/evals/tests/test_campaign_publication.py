@@ -33,8 +33,7 @@ from g8e_evals.analysis import canonical_model_json, compute_canonical_analysis_
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.arms import Arm
 from g8e_evals.bundle import build_publication_request
-from g8e_evals.bundle.manifest import BundleArtifactEntry, BundleManifest, PrivacyClass
-from g8e_evals.bundle.publish import PublicationError
+from g8e_evals.bundle.manifest import ArtifactType, BundleArtifactEntry, BundleManifest, PrivacyClass
 from g8e_evals.bundle.verify import VerificationReport
 from g8e_evals.campaign import (
     CampaignAssignment,
@@ -68,7 +67,6 @@ from g8e_evals.schema import (
     TerminalStatus,
     VerificationStatus,
 )
-from g8e.models.observe_api import ObserveProducerEvalPublicationRequest
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +358,7 @@ def _make_bundle_manifest(bundle_dir: Path) -> BundleManifest:
         privacy_class=PrivacyClass.PUBLIC,
         sha256=sha,
         byte_length=len(public_content),
-        artifact_type="analysis_json",
+        artifact_type=ArtifactType.ANALYSIS_JSON,
         record_count=1,
     )
     return BundleManifest(
@@ -374,7 +372,7 @@ def _make_bundle_manifest(bundle_dir: Path) -> BundleManifest:
 
 def _make_verification_report() -> VerificationReport:
     """Build a minimal passing verification report for the campaign bundle."""
-    from g8e_evals.bundle.verify import LayerResult, VerificationFailure, VerificationLayer
+    from g8e_evals.bundle.verify import LayerResult, VerificationLayer
     layers = [
         LayerResult(layer=vl, passed=True, failure_count=0)
         for vl in VerificationLayer

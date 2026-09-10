@@ -17,6 +17,7 @@ output.
 from __future__ import annotations
 
 import hashlib
+import dataclasses
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ from g8e_evals.benchmarks.ifeval.provenance import (
 )
 from g8e_evals.evidence import EvidenceEncryptionKey
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig
+from g8e_evals.suites import SUITE_REGISTRY
 
 pytestmark = pytest.mark.integration
 
@@ -84,7 +86,7 @@ def _make_preregistration() -> PreregistrationConfig:
 
 
 def _patch_loader(monkeypatch, tasks) -> None:
-    monkeypatch.setattr(cli, "IFEvalLoader", lambda _path: SimpleNamespace(load=lambda: iter(tasks)))
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], loader_factory=lambda _path: SimpleNamespace(load=lambda: iter(tasks))))
 
 
 def _patch_provenance(monkeypatch) -> None:
@@ -110,7 +112,7 @@ def _patch_provenance(monkeypatch) -> None:
         partition="development",
         domain_strata=["utility"],
     )
-    monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], provenance_loader=lambda _path: provenance))
 
 
 def _patch_source_build_provenance_env(monkeypatch) -> None:
@@ -149,7 +151,7 @@ def _patch_verifier(monkeypatch) -> MagicMock:
     verifier.verify.return_value = Score(
         task_id="1001", passed=True, details=ScoreDetails(), model_calls=[],
     )
-    monkeypatch.setattr(cli, "IFEvalVerifier", lambda: verifier)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 
 

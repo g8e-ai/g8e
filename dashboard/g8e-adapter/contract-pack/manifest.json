@@ -26,7 +26,7 @@
     },
     {
       "path": "fixtures/partial-verification.json",
-      "sha256": "f843db5ce8a1bed2046e2707acbca34673c3592be26a184e9b0f6ffc36a14be1"
+      "sha256": "755b1bf08416412b6e2733542de49d292981f78b99d2e09d8b6edf7e2f517ab4"
     },
     {
       "path": "fixtures/reconnect.json",
@@ -54,7 +54,7 @@
     },
     {
       "path": "models.ts",
-      "sha256": "86d6b8329a759c0ce993a01287600708915df8f9cfdf0f63259598ab727de02d"
+      "sha256": "59bf2e6829b419ad21f97514b67a1b07d20f95632c312b6d2dd86757e6b24834"
     },
     {
       "path": "observe.openapi.json",

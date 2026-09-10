@@ -272,6 +272,7 @@ class TestSessionTypeExplicit:
     def test_web_session_id_env_does_not_leak_into_auth_context(self, fake_pki, monkeypatch):
         """G8E_WEB_SESSION_ID in the environment must not populate AuthContext.web_session_id."""
         monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-leak-attempt")
+        monkeypatch.setenv("G8E_APP_TRUST_BUNDLE", str(fake_pki["bundle"]))
         ctx = AuthContext.from_env(
             operator_session_id="sess-1",
             cli_context=CLIAuthContext(
@@ -288,6 +289,7 @@ class TestSessionTypeExplicit:
     def test_to_request_context_never_inherits_web_session_id(self, fake_pki, monkeypatch):
         """to_request_context() must produce web_session_id=None when no explicit web_session_id is passed."""
         monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-leak-attempt")
+        monkeypatch.setenv("G8E_APP_TRUST_BUNDLE", str(fake_pki["bundle"]))
         ctx = AuthContext.from_env(
             operator_session_id="sess-1",
             cli_context=CLIAuthContext(
@@ -311,6 +313,7 @@ class TestSessionTypeExplicit:
         projection). The explicit parameter wins; the environment never does.
         """
         monkeypatch.setenv("G8E_WEB_SESSION_ID", "web-env-should-not-leak")
+        monkeypatch.setenv("G8E_APP_TRUST_BUNDLE", str(fake_pki["bundle"]))
         ctx = AuthContext.from_env(
             operator_session_id="sess-1",
             cli_context=CLIAuthContext(
@@ -330,6 +333,7 @@ class TestSessionTypeExplicit:
         """The default source_component is CLIENT, which enforces web/cli mutual exclusivity."""
         monkeypatch.delenv("G8E_SOURCE_COMPONENT", raising=False)
         monkeypatch.delenv("G8E_WEB_SESSION_ID", raising=False)
+        monkeypatch.setenv("G8E_APP_TRUST_BUNDLE", str(fake_pki["bundle"]))
         ctx = AuthContext.from_env(
             operator_session_id="sess-1",
             cli_context=CLIAuthContext(

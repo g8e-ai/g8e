@@ -30,6 +30,7 @@ command output only. This is the current behavior and these tests pin it.
 from __future__ import annotations
 
 import hashlib
+import dataclasses
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -50,6 +51,7 @@ from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, T
 from g8e_evals.models import ScoreDetails, TaskMetadata
 from g8e_evals.schema import MetricObservation, PolicyOutcome, RejectionLayer
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt, AuthenticationError
+from g8e_evals.suites import SUITE_REGISTRY
 
 pytestmark = pytest.mark.integration
 
@@ -111,7 +113,7 @@ def _patch_loader(monkeypatch, tasks: list[Task]) -> None:
         def load(self):
             yield from tasks
 
-    monkeypatch.setattr(cli, "IFEvalLoader", _StubLoader)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], loader_factory=_StubLoader))
 
 
 def _patch_provenance(monkeypatch) -> None:
@@ -140,7 +142,7 @@ def _patch_provenance(monkeypatch) -> None:
         partition="development",
         domain_strata=["utility"],
     )
-    monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], provenance_loader=lambda _path: provenance))
 
 
 def _patch_source_build_provenance_env(monkeypatch) -> None:
@@ -157,7 +159,7 @@ def _patch_source_build_provenance_env(monkeypatch) -> None:
 def _patch_verifier(monkeypatch, passed: bool = True) -> MagicMock:
     verifier = MagicMock()
     verifier.verify.return_value = _score(passed)
-    monkeypatch.setattr(cli, "IFEvalVerifier", lambda: verifier)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 
 

@@ -48,7 +48,7 @@ from g8e_evals.graders import (
     observe_receipt_final_state,
 )
 from g8e_evals.evidence import EvidenceEncryptionKey, encrypt_evidence_artifact, load_evidence_encryption_key
-from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig
+from g8e_evals.harness import BindingType, LLMRoleConfig, ReceiptEvidence, RowResult, SUTConfig, Score
 from g8e_evals.stages import EvidenceArtifact, normalize_attempt_evidence
 from g8e_evals.schema import (
     ArmManifestEntry,
@@ -114,10 +114,6 @@ from g8e_evals.posture import observe_gateway_posture
 from g8e_evals.transport import AuthContext
 from g8e_evals.tls import RuntimeIdentity
 from g8e_evals.agent_trail_renderer import TurnRenderer
-from g8e_evals.benchmarks.ifeval.loader import IFEvalLoader
-from g8e_evals.benchmarks.ifeval.provenance import load_provenance
-from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
-from g8e_evals.benchmarks.privacy.loader import PrivacyBoundaryLeakageLoader, PrivacyTokenLifecycleLoader
 from g8e_evals.benchmarks.privacy.observers import (
     ArtifactLeakageObserverImpl,
     ExfiltrationAttemptObserverImpl,
@@ -126,13 +122,9 @@ from g8e_evals.benchmarks.privacy.observers import (
     TokenStorePersistenceObserverImpl,
     TokenTTLExpiryObserverImpl,
 )
-from g8e_evals.benchmarks.privacy.provenance import load_provenance as load_synthetic_provenance
 from g8e_evals.benchmarks.privacy.token_store import LocalEncryptedTokenStore, LocalRehydrationArtifact, TokenEntry
 from g8e_evals.benchmarks.privacy.artifact_emitter import LocalArtifactEmitter
 from g8e_evals.benchmarks.privacy.exfiltration import LocalExfiltrationSimulator
-from g8e_evals.benchmarks.governance.benign_overblock_loader import BenignOverblockLoader
-from g8e_evals.benchmarks.governance.loader import GovernanceAdversarialLoader
-from g8e_evals.benchmarks.governance.policy_attack_loader import PolicyAttackLoader
 from g8e_evals.benchmarks.governance.observers import (
     L3ProofTransplantObserverImpl,
     NonceExpirationObserverImpl,
@@ -147,17 +139,11 @@ from g8e_evals.benchmarks.governance.observers import (
     EvidencePreservationObserverImpl,
 )
 from g8e_evals.benchmarks.governance.simulator import LocalGovernanceSimulator
-from g8e_evals.benchmarks.utility.citation_backed_loader import CitationBackedLoader
 from g8e_evals.benchmarks.utility.citation_backed_simulator import LocalCitationBackedSimulator
-from g8e_evals.benchmarks.utility.factual_qa_loader import FactualQALoader
 from g8e_evals.benchmarks.utility.factual_qa_simulator import LocalFactualQASimulator
-from g8e_evals.benchmarks.utility.final_state_loader import FinalStateLoader
 from g8e_evals.benchmarks.utility.final_state_simulator import LocalFinalStateSimulator
-from g8e_evals.benchmarks.utility.ledger_consistency_loader import LedgerConsistencyLoader
 from g8e_evals.benchmarks.utility.ledger_consistency_simulator import LocalLedgerConsistencySimulator
-from g8e_evals.benchmarks.utility.partial_milestone_loader import PartialMilestoneLoader
 from g8e_evals.benchmarks.utility.partial_milestone_simulator import LocalPartialMilestoneSimulator
-from g8e_evals.benchmarks.utility.loader import ToolSequenceLoader
 from g8e_evals.benchmarks.utility.observers import (
     CitationBackedObserverImpl,
     FactualQAObserverImpl,
@@ -167,10 +153,8 @@ from g8e_evals.benchmarks.utility.observers import (
     ToolSequenceObserverImpl,
 )
 from g8e_evals.benchmarks.utility.tool_use_simulator import LocalToolUseSimulator
-from g8e_evals.benchmarks.reliability.loader import ReliabilityLoader
 from g8e_evals.benchmarks.reliability.simulator import LocalReliabilitySimulator
 from g8e_evals.benchmarks.reliability.observers import ReliabilityObserverImpl
-from g8e_evals.benchmarks.economics.loader import EconomicsPerformanceLoader
 from g8e_evals.benchmarks.economics.simulator import LocalEconomicsPerformanceSimulator
 from g8e_evals.benchmarks.economics.observers import EconomicsPerformanceObserverImpl
 from g8e_evals.receipts.collector import ReceiptCollector
@@ -194,6 +178,12 @@ from g8e_evals.bundle import (
     verify_bundle,
 )
 from g8e_evals.models import ScoreDetails, TaskMetadata
+from g8e_evals.suites import (
+    SuiteExecutionClass,
+    assert_model_comparison_eligible,
+    assert_simulation_eligible,
+    get_suite_ids_by_class,
+)
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -242,6 +232,15 @@ _RECEIPT_VERIFICATION_SCHEMA_VERSION = "1.0.0"
 _RECEIPT_VERIFIER_VERSION = "g8e-evals-verify-receipts-1.0.0"
 _RECEIPT_VERIFICATION_SCOPE = "canonical receipt signatures and final-persistence attestations"
 _RECEIPT_FINGERPRINT_SAMPLE_LIMIT = 3
+
+# Suite choices derived from the typed suite registry. The run and campaign
+# commands expose only model-comparison suites (REAL_MODEL, REAL_SYSTEM);
+# bench-synthetic exposes only DETERMINISTIC_SIMULATION suites.
+_MODEL_COMPARISON_SUITE_CHOICES = (
+    get_suite_ids_by_class(SuiteExecutionClass.REAL_MODEL)
+    + get_suite_ids_by_class(SuiteExecutionClass.REAL_SYSTEM)
+)
+_SIMULATION_SUITE_CHOICES = get_suite_ids_by_class(SuiteExecutionClass.DETERMINISTIC_SIMULATION)
 
 # Maps typed assertion-list field names on TaskDefinition/TaskMetadata to the
 # grader ID that grades assertions of that type.  Used to derive grader
@@ -496,7 +495,7 @@ def main():
 
 
 @main.command()
-@click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
+@click.option("--suite", type=click.Choice(_MODEL_COMPARISON_SUITE_CHOICES), required=True)
 @click.option("--provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_PRIMARY_PROVIDER", help="Primary LLM provider")
 @click.option("--model", envvar="G8E_TEST_LLM_PRIMARY_MODEL", help="Primary model name (e.g., gpt-4o)")
 @click.option("--assistant-provider", type=click.Choice(_PROVIDER_CHOICES), envvar="G8E_TEST_LLM_ASSISTANT_PROVIDER", help="Assistant LLM provider")
@@ -688,7 +687,7 @@ def _derive_model_tag(cohort_id: str, model_tag_map: dict[str, str]) -> str:
 
 
 @main.command(name="campaign")
-@click.option("--suite", type=click.Choice(["ifeval_subset"]), required=True)
+@click.option("--suite", type=click.Choice(_MODEL_COMPARISON_SUITE_CHOICES), required=True)
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path), required=True,
               help="Path to a JSON preregistration config file that declares the campaign arms, cohorts, replicates, and metrics.")
 @click.option("--campaign-id", required=True,
@@ -731,17 +730,15 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
 
     prereg_config = load_preregistration(preregistration)
 
-    if suite == "ifeval_subset":
-        if not gold_set:
-            raise click.UsageError("--gold-set is required for ifeval_subset")
-        loader = IFEvalLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_provenance(gold_set.with_name("provenance.json"))
-        suite_id = provenance.benchmark
-        suite_version = provenance.output.sha256[:12]
-        dataset_hash = provenance.output.sha256
-    else:
-        raise click.UsageError(f"unknown suite: {suite}")
+    suite_spec = assert_model_comparison_eligible(suite)
+    if not gold_set:
+        raise click.UsageError(f"--gold-set is required for {suite}")
+    loader = suite_spec.loader_factory(gold_set)
+    tasks = list(loader.load())
+    provenance = suite_spec.provenance_loader(gold_set.with_name("provenance.json"))
+    suite_id = provenance.benchmark
+    suite_version = provenance.output.sha256[:12]
+    dataset_hash = provenance.output.sha256
 
     # Build cohorts from the preregistration's model cohort IDs. The
     # cohort role bindings are content-addressed; the caller is
@@ -820,11 +817,13 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
         provider_budget=provider_budget,
     )
 
-    # The campaign command uses the IFEval verifier as the grader and
+    # The campaign command uses the suite registry's grader factory and
     # a direct-provider SUT factory. The SUT factory is injected so the
     # runner remains testable with fake SUTs. Production wiring that
     # routes through g8ee for ensemble_ungoverned is part of R7.
-    from g8e_evals.benchmarks.ifeval.verifier import IFEvalVerifier
+    if suite_spec.grader_factory is None:
+        raise click.UsageError(f"suite '{suite}' has no grader factory; cannot run campaign")
+    grader = suite_spec.grader_factory()
 
     def sut_factory(cohort: ModelCohort, arm):
         from g8e_evals.harness import LLMRoleConfig, SUTConfig
@@ -841,7 +840,7 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
         spec=spec,
         sut_factory=sut_factory,
         tasks=tasks,
-        grader=IFEvalVerifier(),
+        grader=grader,
         output_dir=output_dir,
     )
 
@@ -860,21 +859,22 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
 
 
 async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown"):
-    # 1. Load benchmark
-    if suite == "ifeval_subset":
-        if not gold_set:
-            gold_set = Path("gold_sets/ifeval_subset/input_data.jsonl")
-        loader = IFEvalLoader(gold_set)
-        tasks = list(loader.load())
-        if limit:
-            tasks = tasks[:limit]
-        verifier = IFEvalVerifier()
-        provenance = load_provenance(gold_set.with_name("provenance.json"))
-        suite_id = provenance.benchmark
-        suite_version = provenance.output.sha256[:12]
-        dataset_hash = provenance.output.sha256
-    else:
-        raise EvaluationRunError(f"unknown suite: {suite}")
+    # 1. Load benchmark via the typed suite registry. The registry
+    #    rejects deterministic-simulation suites from the model-comparison
+    #    set so a simulator-only result can never be represented as model
+    #    behavior.
+    spec = assert_model_comparison_eligible(suite)
+    if not gold_set:
+        gold_set = spec.default_gold_set
+    loader = spec.loader_factory(gold_set)
+    tasks = list(loader.load())
+    if limit:
+        tasks = tasks[:limit]
+    verifier = spec.grader_factory() if spec.grader_factory is not None else None
+    provenance = spec.provenance_loader(gold_set.with_name("provenance.json"))
+    suite_id = provenance.benchmark
+    suite_version = provenance.output.sha256[:12]
+    dataset_hash = provenance.output.sha256
 
     # 2. Apply G8E_TEST_LLM_* env vars as fallbacks (uniform with integration tests)
     # Priority: CLI flags > G8E_TEST_LLM_* env vars > g8ee settings
@@ -1609,7 +1609,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 response.unbound_reason = "declared-action receipt was not uniquely identified"
 
         # Score
-        if suite == "ifeval_subset":
+        if verifier is not None:
             score = verifier.verify(
                 task.id,
                 task.prompt,
@@ -1617,6 +1617,8 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
                 task.metadata.instruction_id_list,
                 task.metadata.kwargs
             )
+        else:
+            score = Score(task_id=task.id, passed=False)
 
         judge_metric_value: float | None = None
         judge_metric_status = VerificationStatus.NOT_APPLICABLE
@@ -3125,7 +3127,7 @@ def verify_receipts(report_dir: Path, pki_dir: Path | None, json_output: bool):
         sys.exit(1)
 
 
-_SYNTHETIC_SUITE_CHOICES = ["privacy_token_lifecycle", "governance_adversarial", "privacy_boundary_leakage", "policy_attack", "benign_overblock", "tool_sequence", "factual_qa", "citation_backed", "partial_milestone", "final_state", "ledger_consistency", "reliability", "economics_performance"]
+_SYNTHETIC_SUITE_CHOICES = _SIMULATION_SUITE_CHOICES
 
 
 def _generate_per_run_key() -> bytes:
@@ -3242,86 +3244,12 @@ async def _run_synthetic_suite(
     limit: int | None,
     preregistration: PreregistrationConfig | None = None,
 ) -> None:
-    if suite == "privacy_token_lifecycle":
-        if gold_set is None:
-            gold_set = Path("gold_sets/privacy_token_lifecycle/input_data.jsonl")
-        loader = PrivacyTokenLifecycleLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "governance_adversarial":
-        if gold_set is None:
-            gold_set = Path("gold_sets/governance_adversarial/input_data.jsonl")
-        loader = GovernanceAdversarialLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "privacy_boundary_leakage":
-        if gold_set is None:
-            gold_set = Path("gold_sets/privacy_boundary_leakage/input_data.jsonl")
-        loader = PrivacyBoundaryLeakageLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "policy_attack":
-        if gold_set is None:
-            gold_set = Path("gold_sets/policy_attack/input_data.jsonl")
-        loader = PolicyAttackLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "benign_overblock":
-        if gold_set is None:
-            gold_set = Path("gold_sets/benign_overblock/input_data.jsonl")
-        loader = BenignOverblockLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "tool_sequence":
-        if gold_set is None:
-            gold_set = Path("gold_sets/utility/input_data.jsonl")
-        loader = ToolSequenceLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "factual_qa":
-        if gold_set is None:
-            gold_set = Path("gold_sets/factual_qa/input_data.jsonl")
-        loader = FactualQALoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "citation_backed":
-        if gold_set is None:
-            gold_set = Path("gold_sets/citation_backed/input_data.jsonl")
-        loader = CitationBackedLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "partial_milestone":
-        if gold_set is None:
-            gold_set = Path("gold_sets/partial_milestone/input_data.jsonl")
-        loader = PartialMilestoneLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "final_state":
-        if gold_set is None:
-            gold_set = Path("gold_sets/final_state/input_data.jsonl")
-        loader = FinalStateLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "ledger_consistency":
-        if gold_set is None:
-            gold_set = Path("gold_sets/ledger_consistency/input_data.jsonl")
-        loader = LedgerConsistencyLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "reliability":
-        if gold_set is None:
-            gold_set = Path("gold_sets/reliability/input_data.jsonl")
-        loader = ReliabilityLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    elif suite == "economics_performance":
-        if gold_set is None:
-            gold_set = Path("gold_sets/economics_performance/input_data.jsonl")
-        loader = EconomicsPerformanceLoader(gold_set)
-        tasks = list(loader.load())
-        provenance = load_synthetic_provenance(gold_set.with_name("provenance.json"))
-    else:
-        raise EvaluationRunError(f"unknown synthetic suite: {suite}")
+    spec = assert_simulation_eligible(suite)
+    if gold_set is None:
+        gold_set = spec.default_gold_set
+    loader = spec.loader_factory(gold_set)
+    tasks = list(loader.load())
+    provenance = spec.provenance_loader(gold_set.with_name("provenance.json"))
 
     if limit:
         tasks = tasks[:limit]

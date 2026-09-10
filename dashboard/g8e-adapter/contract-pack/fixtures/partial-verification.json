@@ -7,9 +7,13 @@
     "generated_at": "2026-09-09T12:00:00Z",
     "latest_evals": [
       {
-        "arm_id": "arm-1",
+        "arm_ids": [
+          "arm-1"
+        ],
+        "campaign_id": "",
         "completed_at": "2026-09-09T12:00:00Z",
         "metric_count": 2,
+        "model_cohort_ids": [],
         "observed_at": "2026-09-09T12:00:00Z",
         "published_projection_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "receipt_count": 3,

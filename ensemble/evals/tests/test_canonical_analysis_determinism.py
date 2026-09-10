@@ -23,6 +23,7 @@ so identical inputs must produce identical output bytes.
 from __future__ import annotations
 
 import uuid
+import dataclasses
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -36,6 +37,7 @@ from g8e_evals.auth_bridge import CLIAuthContext
 from g8e_evals.evidence import EvidenceEncryptionKey
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
+from g8e_evals.suites import SUITE_REGISTRY
 
 pytestmark = pytest.mark.integration
 
@@ -90,7 +92,7 @@ def _patch_loader(monkeypatch, tasks: list[Task]) -> None:
         def load(self):
             yield from tasks
 
-    monkeypatch.setattr(cli, "IFEvalLoader", _StubLoader)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], loader_factory=_StubLoader))
 
 
 def _patch_provenance(monkeypatch) -> None:
@@ -123,7 +125,7 @@ def _patch_provenance(monkeypatch) -> None:
         partition="development",
         domain_strata=["utility"],
     )
-    monkeypatch.setattr(cli, "load_provenance", lambda _path: provenance)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], provenance_loader=lambda _path: provenance))
 
 
 def _patch_source_build_provenance_env(monkeypatch) -> None:
@@ -167,7 +169,7 @@ def _patch_verifier(
 ) -> MagicMock:
     verifier = MagicMock()
     verifier.verify.return_value = _score(passed, model_calls)
-    monkeypatch.setattr(cli, "IFEvalVerifier", lambda: verifier)
+    monkeypatch.setitem(SUITE_REGISTRY, "ifeval_subset", dataclasses.replace(SUITE_REGISTRY["ifeval_subset"], grader_factory=lambda: verifier))
     return verifier
 
 

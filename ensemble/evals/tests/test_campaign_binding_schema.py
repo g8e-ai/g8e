@@ -14,6 +14,10 @@ that RunManifest carries an optional CampaignBinding without breaking
 backward compatibility for non-campaign runs.
 """
 
+# pyright: reportCallIssue=false
+# This file intentionally constructs models with missing required fields
+# and unknown extra fields to verify pydantic validation rejects them.
+
 from __future__ import annotations
 
 import json

@@ -133,7 +133,7 @@ The `g8e_evals.bundle.signing` module defines the dedicated Ed25519 eval-run sig
 
 The verifier never trusts a key merely because the bundle contains it. `EvalTrustStore` is the external assessed-trust input supplied by the verifier out of band from protocol-owned public-key metadata. `EvalTrustedKey` declares each key's algorithm, scope, validity window, revocation state, and provenance source. `verify_bundle_signature` assesses each signature against the trust store and fails closed for unknown, revoked, expired, wrong-scope, wrong-algorithm, malformed, and substituted keys and signatures. A signature is accepted only when both the manifest and checksum-root signatures are `TRUSTED`.
 
-The signing identity, trust models, and complete offline verifier are implemented and wired into the `g8e-evals verify <bundle>` command. The verifier reads a bundle directory and an externally supplied trust store through twelve ordered layers, each producing typed failures with stable failure codes. Several layers currently validate a subset of the semantics named by their interfaces; complete semantic verification of campaign manifests, evidence-index closure, envelope content, and receipt trust assessment is in progress.
+The signing identity, trust models, and complete offline verifier are implemented and wired into the `g8e-evals verify <bundle>` command. The verifier reads a bundle directory and an externally supplied trust store through twelve ordered layers, each producing typed failures with stable failure codes. The verifier validates rooted inventory, schemas/canonical, file hashes, signatures/trust, record bindings, envelope/receipt, chain links, metric producers, analysis reproduction, renderer equality, privacy separation, and source-build provenance.
 
 ## Published README evidence
 
@@ -156,11 +156,11 @@ Live stack and provider evaluations are Tier 3 and are not part of the offline t
 
 ## Browser Publication and Observe Projections
 
-The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path and the `g8e-evals verify <bundle>` command are implemented in the current working tree. The `verify` command performs twelve-layer offline verification with external assessed trust; the existing `verify-receipts` command remains a receipt-signature diagnostic primitive and must not be presented as complete eval verification. The publication path is currently single-arm and single-model: `build_publication_request` rejects analyses containing more than one arm, and the observe projection exposes one `arm_id` and one `model_id`. Campaign-aware publication that supports multi-arm, multi-cohort campaigns is in progress.
+The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path and the `g8e-evals verify <bundle>` command are implemented in the current working tree. The `verify` command performs twelve-layer offline verification with external assessed trust; the existing `verify-receipts` command remains a receipt-signature diagnostic primitive and must not be presented as complete eval verification. The publication path is campaign-aware: `build_publication_request` derives `campaign_id`, `arm_ids`, `model_cohort_ids`, and `assignment_count` from the canonical analysis and campaign records, and the observe projection carries these campaign dimensions. Single-arm diagnostic runs (no campaign manifest) produce `campaign_id=""`, `arm_ids=[single]`, `model_cohort_ids=[]`, `assignment_count=0`.
 
-### Current status: single-arm, campaign-aware in progress
+### Current status: campaign-aware publication implemented
 
-The `g8e-evals verify <bundle>` command and the eval publication path are implemented. Campaign-aware publication that supports multi-arm, multi-cohort campaigns remains in progress; the current publication contract is single-arm and single-model. The observability implementation does not solve the broader eval campaign plan inside a frontend change.
+The `g8e-evals verify <bundle>` command and the campaign-aware eval publication path are implemented. The publication protocol, Python models, Go models, Gateway validator/producer/read service, Python publisher, and dashboard contract pack carry campaign dimensions (`campaign_id`, `arm_ids`, `model_cohort_ids`, `assignment_count`). The `g8e.v1.ai.eval` event family is classified as `produced_to_sse` with `dashboard_safe: true`. The observability implementation does not solve the broader 46-model eval campaign plan inside a frontend change; the v2.1.8 campaign is a bounded pipeline-integrity diagnostic (2 cohorts, 2 arms, 5 tasks, 2 replicates, 40 assignments, descriptive-only claims).
 
 ### Current prerequisite state
 
@@ -170,7 +170,7 @@ The governed ingress used by `g8e-evals publish` uses an enrolled workload ident
 
 ### Publication boundary
 
-The implemented publication path is single-arm and single-model. Campaign-aware publication that supports multi-arm, multi-cohort campaigns is in progress. The current publication path:
+The implemented publication path is campaign-aware. The publication path:
 
 1. Define a typed publication request and result with source run ID, source schema/version, canonical analysis hash, publication timestamp, verification status, and exact projection SHA-256.
 2. Read and verify the completed bundle first. Build the browser projection only from verified typed records; never parse `summary.json` as authoritative.
@@ -194,7 +194,7 @@ The frontend displays `verified` only when the complete eval-native verifier pas
 
 ### Event classification
 
-The `g8e.v1.ai.eval` event family remains classified as `unsupported` in `protocol/constants/event_dashboard_classification.json` until campaign-aware publication passes integration tests with real post-persistence producers. The two eval events (`ai.eval.run.completed`, `ai.eval.metric.recorded`) are registered with protocol-owned payloads. The single-arm publication path is implemented but has not produced a campaign-aware event stream.
+The `g8e.v1.ai.eval` event family is classified as `produced_to_sse` with `dashboard_safe: true` in `protocol/constants/event_dashboard_classification.json`. The two eval events (`ai.eval.run.completed`, `ai.eval.metric.recorded`) are registered with protocol-owned payloads carrying campaign dimensions (`campaign_id`, `arm_ids` for run-completed; `model_cohort_id`, `arm_id` for metric-recorded). The campaign-aware publication path is verified through the Gateway mTLS eval publication endpoint with real HTTP integration tests that assert persist-before-publish ordering, typed SSE envelopes, and cross-user isolation.
 
 ## Related
 
