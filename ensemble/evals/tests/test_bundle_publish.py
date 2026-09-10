@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import ValidationError
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 from g8e.constants import API_PATHS, CLI_SESSION_ID_HEADER
 from g8e.models.observe_api import (
@@ -698,73 +698,75 @@ class TestCrossLanguageContract:
 
     def test_python_request_rejects_unknown_fields(self) -> None:
         """The Python model enforces extra='forbid' for unknown field rejection."""
+        valid_payload = {
+            "schema_version": "1.0.0",
+            "bundle_id": "b",
+            "run_id": "r",
+            "release_version": "v",
+            "suite_id": "s",
+            "suite_version": "1.0.0",
+            "arm_id": "a",
+            "receipt_count": 0,
+            "assigned_tasks": 0,
+            "terminal_attempts": 0,
+            "metrics": [],
+            "verification_report": {
+                "schema_version": "1.0.0",
+                "bundle_id": "b",
+                "run_id": "r",
+                "release_version": "v",
+                "verified_at": "2026-01-01T00:00:00Z",
+                "ok": True,
+                "layers": [],
+            },
+            "bundle_manifest": {
+                "schema_version": "1.0.0",
+                "bundle_id": "b",
+                "run_id": "r",
+                "release_version": "v",
+                "created_at": "2026-01-01T00:00:00Z",
+                "artifacts": [],
+            },
+            "downloads": [],
+            "web_session_id": "ws-1",
+        }
+        payload_with_unknown = {**valid_payload, "unknown_field": "bad"}
         with pytest.raises(ValidationError):
-            ObserveProducerEvalPublicationRequest(
-                schema_version="1.0.0",
-                bundle_id="b",
-                run_id="r",
-                release_version="v",
-                suite_id="s",
-                suite_version="1.0.0",
-                arm_id="a",
-                receipt_count=0,
-                assigned_tasks=0,
-                terminal_attempts=0,
-                metrics=[],
-                verification_report={
-                    "schema_version": "1.0.0",
-                    "bundle_id": "b",
-                    "run_id": "r",
-                    "release_version": "v",
-                    "verified_at": "2026-01-01T00:00:00Z",
-                    "ok": True,
-                    "layers": [],
-                },
-                bundle_manifest={
-                    "schema_version": "1.0.0",
-                    "bundle_id": "b",
-                    "run_id": "r",
-                    "release_version": "v",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "artifacts": [],
-                },
-                downloads=[],
-                web_session_id="ws-1",
-                unknown_field="bad",
-            )
+            ObserveProducerEvalPublicationRequest.model_validate(payload_with_unknown)
 
     def test_python_request_rejects_user_id(self) -> None:
         """The request model must not accept a user_id field."""
+        valid_payload = {
+            "schema_version": "1.0.0",
+            "bundle_id": "b",
+            "run_id": "r",
+            "release_version": "v",
+            "suite_id": "s",
+            "suite_version": "1.0.0",
+            "arm_id": "a",
+            "receipt_count": 0,
+            "assigned_tasks": 0,
+            "terminal_attempts": 0,
+            "metrics": [],
+            "verification_report": {
+                "schema_version": "1.0.0",
+                "bundle_id": "b",
+                "run_id": "r",
+                "release_version": "v",
+                "verified_at": "2026-01-01T00:00:00Z",
+                "ok": True,
+                "layers": [],
+            },
+            "bundle_manifest": {
+                "schema_version": "1.0.0",
+                "bundle_id": "b",
+                "run_id": "r",
+                "release_version": "v",
+                "created_at": "2026-01-01T00:00Z",
+                "artifacts": [],
+            },
+            "downloads": [],
+        }
+        payload_with_user_id = {**valid_payload, "user_id": "should-be-rejected"}
         with pytest.raises(ValidationError):
-            ObserveProducerEvalPublicationRequest(
-                schema_version="1.0.0",
-                bundle_id="b",
-                run_id="r",
-                release_version="v",
-                suite_id="s",
-                suite_version="1.0.0",
-                arm_id="a",
-                receipt_count=0,
-                assigned_tasks=0,
-                terminal_attempts=0,
-                metrics=[],
-                verification_report={
-                    "schema_version": "1.0.0",
-                    "bundle_id": "b",
-                    "run_id": "r",
-                    "release_version": "v",
-                    "verified_at": "2026-01-01T00:00:00Z",
-                    "ok": True,
-                    "layers": [],
-                },
-                bundle_manifest={
-                    "schema_version": "1.0.0",
-                    "bundle_id": "b",
-                    "run_id": "r",
-                    "release_version": "v",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "artifacts": [],
-                },
-                downloads=[],
-                user_id="should-be-rejected",
-            )
+            ObserveProducerEvalPublicationRequest.model_validate(payload_with_user_id)

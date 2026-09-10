@@ -133,7 +133,7 @@ The `g8e_evals.bundle.signing` module defines the dedicated Ed25519 eval-run sig
 
 The verifier never trusts a key merely because the bundle contains it. `EvalTrustStore` is the external assessed-trust input supplied by the verifier out of band from protocol-owned public-key metadata. `EvalTrustedKey` declares each key's algorithm, scope, validity window, revocation state, and provenance source. `verify_bundle_signature` assesses each signature against the trust store and fails closed for unknown, revoked, expired, wrong-scope, wrong-algorithm, malformed, and substituted keys and signatures. A signature is accepted only when both the manifest and checksum-root signatures are `TRUSTED`.
 
-The signing identity and trust models are defined but not yet wired into a `g8e-evals verify <bundle>` command. The complete offline verifier is implemented in a later phase.
+The signing identity, trust models, and complete offline verifier are implemented and wired into the `g8e-evals verify <bundle>` command. The verifier reads a bundle directory and an externally supplied trust store through twelve ordered layers, each producing typed failures with stable failure codes. Several layers currently validate a subset of the semantics named by their interfaces; complete semantic verification of campaign manifests, evidence-index closure, envelope content, and receipt trust assessment is in progress.
 
 ## Published README evidence
 
@@ -156,21 +156,21 @@ Live stack and provider evaluations are Tier 3 and are not part of the offline t
 
 ## Browser Publication and Observe Projections
 
-The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path that produces these projections from a verified eval bundle is not yet implemented. The complete `g8e-evals verify <bundle>` prerequisite does not exist in the current working tree; the existing `verify-receipts` command verifies only receipt signatures and final-persistence attestations and must not be presented as complete eval verification.
+The observe frontend exposes eval summaries, eval details, and downloads through the browser-scoped observe read API. The eval publication path and the `g8e-evals verify <bundle>` command are implemented in the current working tree. The `verify` command performs twelve-layer offline verification with external assessed trust; the existing `verify-receipts` command remains a receipt-signature diagnostic primitive and must not be presented as complete eval verification. The publication path is currently single-arm and single-model: `build_publication_request` rejects analyses containing more than one arm, and the observe projection exposes one `arm_id` and one `model_id`. Campaign-aware publication that supports multi-arm, multi-cohort campaigns is in progress.
 
-### Current status: blocked
+### Current status: single-arm, campaign-aware in progress
 
-Eval publication (Phase 4 of the observability frontend plan) remains blocked until the eval compliance plan provides a versioned canonical analysis and a complete fail-closed `g8e-evals verify <bundle>` result. The observability implementation does not solve the broader eval plan inside a frontend change. No provisional `verify` command is added that overstates coverage.
+The `g8e-evals verify <bundle>` command and the eval publication path are implemented. Campaign-aware publication that supports multi-arm, multi-cohort campaigns remains in progress; the current publication contract is single-arm and single-model. The observability implementation does not solve the broader eval campaign plan inside a frontend change.
 
-### Required prerequisite
+### Current prerequisite state
 
-The eval owner must expose a typed verified-bundle result containing run identity, suite and arm identity, assigned and terminal counts, registered metric rows, receipt count, source schema/version, canonical analysis hash, verification report, and public/restricted artifact classification. Verification statuses map to `projection_validated`, `receipt_verification_not_applicable`, and `verified`. The `verified` status requires the complete eval-native verifier; receipt-only verification cannot produce it.
+The `g8e-evals verify <bundle>` command produces a typed verified-bundle result containing run identity, suite and arm identity, assigned and terminal counts, registered metric rows, receipt count, source schema/version, canonical analysis hash, verification report, and public/restricted artifact classification. Verification statuses map to `projection_validated`, `receipt_verification_not_applicable`, and `verified`. The `verified` status requires the complete eval-native verifier; receipt-only verification cannot produce it. Several semantic verification layers are incomplete; the verifier exists but does not yet validate the full semantics named by every layer interface.
 
 The governed ingress used by `g8e-evals publish` uses an enrolled workload identity or existing governed CLI ingress, never a browser session and never an unauthenticated route.
 
-### Publication boundary (when the prerequisite lands)
+### Publication boundary
 
-When the prerequisite is available, eval publication will:
+The implemented publication path is single-arm and single-model. Campaign-aware publication that supports multi-arm, multi-cohort campaigns is in progress. The current publication path:
 
 1. Define a typed publication request and result with source run ID, source schema/version, canonical analysis hash, publication timestamp, verification status, and exact projection SHA-256.
 2. Read and verify the completed bundle first. Build the browser projection only from verified typed records; never parse `summary.json` as authoritative.
@@ -186,15 +186,15 @@ When the prerequisite is available, eval publication will:
 
 The observe frontend displays verification labels honestly:
 
-- `verified` — requires the complete eval-native verifier (not yet implemented).
+- `verified` — requires the complete eval-native verifier; the verifier is implemented but several semantic layers are incomplete.
 - `projection_validated` — the projection was validated against the verified bundle.
 - `receipt_verification_not_applicable` — receipt verification is not applicable to this run.
 
-The frontend never displays `verified` until the complete verifier exists. Partial verification is shown as `projection_validated`, never as `verified`.
+The frontend displays `verified` only when the complete eval-native verifier passes every layer. Partial verification is shown as `projection_validated`, never as `verified`.
 
 ### Event classification
 
-The `g8e.v1.ai.eval` event family remains classified as `unsupported` in `protocol/constants/event_dashboard_classification.json` until the eval publication path lands and real post-persistence producers pass integration tests. The two eval events (`ai.eval.run.completed`, `ai.eval.metric.recorded`) are registered with protocol-owned payloads but have no real producer.
+The `g8e.v1.ai.eval` event family remains classified as `unsupported` in `protocol/constants/event_dashboard_classification.json` until campaign-aware publication passes integration tests with real post-persistence producers. The two eval events (`ai.eval.run.completed`, `ai.eval.metric.recorded`) are registered with protocol-owned payloads. The single-arm publication path is implemented but has not produced a campaign-aware event stream.
 
 ## Related
 

@@ -30,7 +30,7 @@ from g8e.receipts import (
 from g8e_evals.cli import main
 from g8e_evals.schema import ReceiptObservation, RunManifest
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 _EXPECTED_FIELDS = {
     "schema_version",

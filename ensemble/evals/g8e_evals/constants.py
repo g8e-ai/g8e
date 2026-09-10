@@ -68,3 +68,10 @@ DIAGNOSTIC_RESULTS_JSONL = "diagnostic-results.jsonl"
 BUNDLE_MANIFEST_JSON = "bundle-manifest.json"
 CHECKSUM_ROOT_JSON = "checksum-root.json"
 BUNDLE_SIGNATURE_JSON = "bundle-signature.json"
+
+# Campaign contract artifacts (the authoritative campaign records)
+CAMPAIGN_MANIFEST_JSON = "campaign-manifest.json"
+CAMPAIGN_ASSIGNMENTS_JSONL = "campaign-assignments.jsonl"
+CAMPAIGN_COHORTS_JSONL = "campaign-cohorts.jsonl"
+CAMPAIGN_SCHEDULE_JSON = "campaign-schedule.json"
+CAMPAIGN_RETRY_POLICY_JSON = "campaign-retry-policy.json"

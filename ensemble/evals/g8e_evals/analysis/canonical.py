@@ -41,9 +41,11 @@ from __future__ import annotations
 
 import json
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from g8e_evals.arms import Arm
 from g8e_evals.metrics import MetricDirection
 from g8e_evals.release_metric_set import MetricDomain
 
@@ -471,6 +473,60 @@ class PreregistrationConfig(BaseModel):
     bootstrap_seed: int = Field(ge=0, description="Seed for the deterministic bootstrap generator.")
 
     significance_level: float = Field(gt=0.0, lt=1.0, description="Significance level for gate decisions.")
+
+    @model_validator(mode="after")
+    def _validate_preregistration(self) -> Self:
+        if self.baseline_arm_id in self.comparison_arm_ids:
+            raise ValueError(
+                f"baseline arm {self.baseline_arm_id!r} cannot also be a comparison arm"
+            )
+        if len(self.comparison_arm_ids) != len(set(self.comparison_arm_ids)):
+            raise ValueError(
+                f"duplicate comparison arm IDs: {self.comparison_arm_ids}"
+            )
+        if len(self.model_cohort_ids) != len(set(self.model_cohort_ids)):
+            raise ValueError(
+                f"duplicate model cohort IDs: {self.model_cohort_ids}"
+            )
+        if len(self.required_replicate_ids) != len(set(self.required_replicate_ids)):
+            raise ValueError(
+                f"duplicate replicate IDs: {self.required_replicate_ids}"
+            )
+        if self.required_replicate_count != len(self.required_replicate_ids):
+            raise ValueError(
+                f"required_replicate_count ({self.required_replicate_count}) "
+                f"!= len(required_replicate_ids) ({len(self.required_replicate_ids)})"
+            )
+        valid_arm_ids = {arm.value for arm in Arm}
+        if self.baseline_arm_id not in valid_arm_ids:
+            raise ValueError(
+                f"baseline_arm_id {self.baseline_arm_id!r} is not a known arm: {sorted(valid_arm_ids)}"
+            )
+        for arm_id in self.comparison_arm_ids:
+            if arm_id not in valid_arm_ids:
+                raise ValueError(
+                    f"comparison arm ID {arm_id!r} is not a known arm: {sorted(valid_arm_ids)}"
+                )
+        family_names = [f.family_name for f in self.secondary_families]
+        if len(family_names) != len(set(family_names)):
+            raise ValueError(
+                f"duplicate secondary family names: {family_names}"
+            )
+        all_metric_ids: list[str] = []
+        for f in self.secondary_families:
+            all_metric_ids.extend(f.metric_ids)
+        if len(all_metric_ids) != len(set(all_metric_ids)):
+            raise ValueError(
+                f"metric appears in multiple secondary families: {all_metric_ids}"
+            )
+        primary_set = set(self.primary_metric_ids)
+        for f in self.secondary_families:
+            overlap = primary_set & set(f.metric_ids)
+            if overlap:
+                raise ValueError(
+                    f"primary metrics cannot be in a secondary family: {sorted(overlap)}"
+                )
+        return self
 
 
 class PairedComparison(BaseModel):

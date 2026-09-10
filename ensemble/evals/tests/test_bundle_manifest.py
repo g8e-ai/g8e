@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 from g8e_evals.bundle import (
     BUNDLE_MANIFEST_SCHEMA_VERSION,

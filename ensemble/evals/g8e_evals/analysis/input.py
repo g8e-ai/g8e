@@ -21,6 +21,13 @@ class.
 from pydantic import BaseModel, ConfigDict, Field
 
 from g8e_evals.analysis.canonical import PreregistrationConfig
+from g8e_evals.campaign import (
+    CampaignAssignment,
+    CampaignManifest,
+    ExecutionSchedule,
+    ModelCohort,
+    RetryPolicy,
+)
 from g8e_evals.schema import (
     AttemptRecord,
     ArtifactLeakageObservation,
@@ -125,6 +132,12 @@ class AnalysisInputRecord(BaseModel):
 
     price_table: TypedPriceTable | None = None
     preregistration: PreregistrationConfig | None = None
+
+    campaign_manifest: CampaignManifest | None = None
+    model_cohorts: list[ModelCohort] = Field(default_factory=list)
+    campaign_assignments: list[CampaignAssignment] = Field(default_factory=list)
+    execution_schedule: ExecutionSchedule | None = None
+    retry_policy: RetryPolicy | None = None
 
 
 __all__ = [

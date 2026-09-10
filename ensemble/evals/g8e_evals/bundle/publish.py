@@ -23,7 +23,7 @@ from __future__ import annotations
 import base64
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from g8e.constants import API_PATHS, CLI_SESSION_ID_HEADER
 from g8e.models.observe_api import (
@@ -31,6 +31,7 @@ from g8e.models.observe_api import (
     BundleManifestWire,
     EvidenceEncryptionWire,
     EvalMetricSummary,
+    EvalVerificationStatus,
     ExternalReferenceWire,
     LayerResultWire,
     ObserveProducerDownloadArtifactInput,
@@ -45,7 +46,7 @@ from g8e_evals.analysis import CanonicalEvalAnalysis, canonical_model_json
 from g8e_evals.bundle.manifest import BundleManifest, PrivacyClass
 from g8e_evals.bundle.signing import EvalTrustStore
 from g8e_evals.bundle.verify import VerificationReport, verify_bundle
-from g8e_evals.schema import RunManifest, VerificationStatus
+from g8e_evals.schema import EvidenceEncryptionAlgorithm, RunManifest, VerificationStatus
 
 if TYPE_CHECKING:
     from g8e_evals.transport import AuthContext
@@ -65,7 +66,7 @@ class PublicationError(Exception):
     """Raised when bundle verification or publication fails."""
 
 
-def _map_metric_verification_status(counts: dict[str, int]) -> str:
+def _map_metric_verification_status(counts: dict[str, int]) -> EvalVerificationStatus:
     """Map per-metric verification status counts to a single wire status.
 
     The wire ``EvalVerificationStatus`` has three values:
@@ -143,6 +144,21 @@ def _build_verification_report_wire(report: VerificationReport) -> VerificationR
     )
 
 
+def _resolve_encryption_algorithm(algorithm: EvidenceEncryptionAlgorithm) -> Literal["aes-256-gcm"]:
+    """Resolve the evals-internal encryption algorithm to the wire literal.
+
+    The wire ``EvidenceEncryptionWire.algorithm`` accepts only
+    ``Literal["aes-256-gcm"]``. The evals-internal
+    ``EvidenceEncryptionAlgorithm`` enum currently has one member with
+    the same value. This function validates the enum member and returns
+    the protocol-owned literal so Pyright can verify type safety without
+    casts or type ignores.
+    """
+    if algorithm is EvidenceEncryptionAlgorithm.AES_256_GCM:
+        return "aes-256-gcm"
+    raise PublicationError(f"Unsupported encryption algorithm: {algorithm}")
+
+
 def _build_manifest_wire(manifest: BundleManifest) -> BundleManifestWire:
     """Build the wire bundle manifest from the typed bundle manifest."""
     artifacts = [
@@ -156,7 +172,7 @@ def _build_manifest_wire(manifest: BundleManifest) -> BundleManifestWire:
             record_count=a.record_count,
             encryption=(
                 EvidenceEncryptionWire(
-                    algorithm=a.encryption.algorithm,
+                    algorithm=_resolve_encryption_algorithm(a.encryption.algorithm),
                     key_id=a.encryption.key_id,
                     aad_sha256=a.encryption.aad_sha256,
                     ciphertext_sha256=a.encryption.ciphertext_sha256,

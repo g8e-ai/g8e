@@ -38,7 +38,7 @@ from g8e.receipts import (
 from g8e_evals.cli import main
 from g8e_evals.schema import ReceiptObservation
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 def _generate_keypair() -> tuple[str, str, str]:

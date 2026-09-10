@@ -76,7 +76,7 @@ from g8e_evals.schema import (
 )
 from g8e_evals.sut.g8ee_chat import AgentTrailEvent, ChatEvaluationReceipt
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 
 def _evidence_key() -> EvidenceEncryptionKey:

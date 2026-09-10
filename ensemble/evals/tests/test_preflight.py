@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.unit
 
 from g8e_evals.preflight import (
     ENV_BUILD_ID,
@@ -105,6 +104,7 @@ def _valid_request(**overrides: object) -> PreflightRequest:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestPreflightRequestConstruction:
     """Verify PreflightRequest is a frozen dataclass with typed fields."""
 
@@ -129,6 +129,7 @@ class TestPreflightRequestConstruction:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestCredentialPresence:
     """Fail closed when a non-keyless provider is missing its API key."""
 
@@ -156,6 +157,7 @@ class TestCredentialPresence:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestProviderModel:
     """Fail closed when provider is set but model is missing (or vice versa)."""
 
@@ -177,6 +179,7 @@ class TestProviderModel:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestEndpointValidation:
     """Fail closed when an endpoint is not a valid http(s) URL."""
 
@@ -200,6 +203,7 @@ class TestEndpointValidation:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSamplingValidation:
     """Fail closed when sampling parameters are out of valid ranges."""
 
@@ -249,6 +253,7 @@ class TestSamplingValidation:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSeedSupport:
     """Fail closed when a seed is requested but the provider declares no seed support."""
 
@@ -276,6 +281,7 @@ class TestSeedSupport:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestStackImage:
     """Fail closed when stack image digests are declared but empty."""
 
@@ -301,6 +307,7 @@ class TestStackImage:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestNetworkMode:
     """Fail closed when network mode is not one of the allowed values."""
 
@@ -328,6 +335,7 @@ class TestNetworkMode:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestStackEnvironmentMetadata:
     """Fail closed when OS, runtime version, or arch metadata is missing."""
 
@@ -358,6 +366,7 @@ class TestStackEnvironmentMetadata:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestRedactedConfigLeak:
     """Fail closed when the redacted config leaks a sensitive key fragment."""
 
@@ -384,6 +393,7 @@ class TestRedactedConfigLeak:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestContentHashes:
     """Fail closed when a required content hash is missing or invalid."""
 
@@ -429,6 +439,7 @@ class TestContentHashes:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestPreregistration:
     """Fail closed when a preregistration hash is declared but invalid."""
 
@@ -458,6 +469,7 @@ class TestPreregistration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestProviderBudget:
     """Fail closed when a provider budget is declared but invalid.
 
@@ -489,6 +501,7 @@ class TestProviderBudget:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSourceBuildProvenance:
     """Fail closed when source/build provenance is required but unavailable."""
 
@@ -523,6 +536,7 @@ class TestSourceBuildProvenance:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSourceBuildProvenanceProductionPostureGating:
     """Production-posture runs require provenance; non-production runs skip the env fallback.
 
@@ -564,6 +578,7 @@ class TestSourceBuildProvenanceProductionPostureGating:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSourceBuildProvenanceFromEnv:
     """Load source/build provenance from environment variables set by the trusted build system."""
 
@@ -616,6 +631,7 @@ class TestSourceBuildProvenanceFromEnv:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestProviderBudgetFromEnv:
     """Load provider budget from environment variables."""
 
@@ -656,6 +672,8 @@ class TestProviderBudgetFromEnv:
 
 class TestComputeSourceTreeStateHash:
     """Compute a deterministic SHA-256 over the source tree state."""
+
+    pytestmark = pytest.mark.integration
 
     def test_deterministic_hash(self, tmp_path: Path) -> None:
         (tmp_path / "a.txt").write_text("hello")
@@ -704,6 +722,7 @@ class TestComputeSourceTreeStateHash:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestDetectStackEnvironment:
     """Detect the current stack environment from the runtime."""
 
@@ -719,6 +738,7 @@ class TestDetectStackEnvironment:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestSourceBuildProvenanceSchema:
     """Verify SourceBuildProvenance is frozen, extra-forbid, and validates fields."""
 
@@ -749,6 +769,7 @@ class TestSourceBuildProvenanceSchema:
             SourceBuildProvenance(source_revision="abc", source_tree_state_hash="not-hex")
 
 
+@pytest.mark.unit
 class TestProviderBudgetSchema:
     """Verify ProviderBudget is frozen, extra-forbid, and validates fields."""
 
@@ -775,6 +796,7 @@ class TestProviderBudgetSchema:
             ProviderBudget(max_usd=10.0, max_tokens=-1)
 
 
+@pytest.mark.unit
 class TestRunManifestProvenanceFields:
     """Verify RunManifest carries the new provenance and budget fields."""
 

@@ -29,7 +29,6 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.unit
 
 from g8e_evals import constants as evals_constants
 from g8e_evals.analysis import canonical_model_json, compute_canonical_analysis_from_record
@@ -230,6 +229,7 @@ class TestPublicFixtureBundleVerification:
     """A public-only fixture bundle is verified in a network-disabled clean
     environment without restricted plaintext or decryption keys."""
 
+    @pytest.mark.integration
     def test_public_bundle_has_no_restricted_artifacts(self, tmp_path: Path) -> None:
         """The public fixture bundle contains no RESTRICTED artifacts and no
         encryption metadata. Public verification requires no decryption keys."""
@@ -248,6 +248,7 @@ class TestPublicFixtureBundleVerification:
                 f"Public fixture bundle must not carry encryption metadata: {entry.path}"
             )
 
+    @pytest.mark.integration
     def test_public_bundle_verified_ok_with_external_trust(self, tmp_path: Path) -> None:
         """The typed verification report is ok=True with all twelve layers
         passing when the trust store is supplied externally."""
@@ -268,6 +269,7 @@ class TestPublicFixtureBundleVerification:
                 f"{[f.message for f in report.failures if f.layer == layer_result.layer]}"
             )
 
+    @pytest.mark.integration
     def test_verification_requires_no_network_access(self, tmp_path: Path) -> None:
         """The verifier reads only the bundle directory and the externally
         supplied trust store. It requires no originating service, runtime
@@ -296,6 +298,7 @@ class TestPublicFixtureBundleVerification:
             f"Verification should succeed without network: {[(f.layer.name, f.code.value) for f in report.failures]}"
         )
 
+    @pytest.mark.integration
     def test_deterministic_analysis_reproduction_passes(self, tmp_path: Path) -> None:
         """Layer 9 (ANALYSIS_REPRODUCTION) reproduces the canonical analysis
         from analysis-input.json and matches the stored analysis.json."""
@@ -311,6 +314,7 @@ class TestPublicFixtureBundleVerification:
             f"{[f.message for f in report.failures if f.layer == VerificationLayer.ANALYSIS_REPRODUCTION]}"
         )
 
+    @pytest.mark.integration
     def test_renderer_byte_equality_passes(self, tmp_path: Path) -> None:
         """Layer 10 (RENDERER_EQUALITY) re-renders Markdown, HTML, and CLI from
         the reproduced analysis and matches the stored bytes."""
@@ -326,6 +330,7 @@ class TestPublicFixtureBundleVerification:
             f"{[f.message for f in report.failures if f.layer == VerificationLayer.RENDERER_EQUALITY]}"
         )
 
+    @pytest.mark.integration
     def test_report_is_deterministic_across_verifications(self, tmp_path: Path) -> None:
         """Two verifications of the same public bundle produce identical
         failure sets (ignoring verified_at)."""
@@ -345,6 +350,7 @@ class TestNoInBundleTrust:
     supplied externally by the verifier from protocol-owned public-key
     metadata. A key embedded in the bundle is never trusted by the verifier."""
 
+    @pytest.mark.integration
     def test_signed_bundle_without_trust_store_fails(self, tmp_path: Path) -> None:
         """A signed bundle without an external trust store fails with
         TRUST_STORE_MISSING, not ok."""
@@ -356,6 +362,7 @@ class TestNoInBundleTrust:
         codes = [f.code for f in report.failures if f.layer == VerificationLayer.SIGNATURES_TRUST]
         assert VerificationFailureCode.TRUST_STORE_MISSING in codes
 
+    @pytest.mark.integration
     def test_signed_bundle_with_empty_trust_store_fails(self, tmp_path: Path) -> None:
         """A signed bundle with an empty external trust store fails with
         SIGNATURE_UNKNOWN_KEY. The verifier never trusts a key merely because
@@ -368,6 +375,7 @@ class TestNoInBundleTrust:
         codes = [f.code for f in report.failures if f.layer == VerificationLayer.SIGNATURES_TRUST]
         assert VerificationFailureCode.SIGNATURE_UNKNOWN_KEY in codes
 
+    @pytest.mark.integration
     def test_bundle_signature_file_is_not_trusted_as_key_source(self, tmp_path: Path) -> None:
         """The bundle-signature.json file in the bundle directory contains the
         key_id but the verifier never reads it as a trust source. Removing the
@@ -390,6 +398,7 @@ class TestMutationMatrixCoverage:
     assert the aggregate coverage by importing and counting the mutation
     matrix test collection."""
 
+    @pytest.mark.unit
     def test_mutation_matrix_covers_all_protected_classes(self) -> None:
         """The mutation matrix test module defines tests for every protected
         record class: manifest, task, attempt, posture observation, state

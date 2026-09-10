@@ -37,7 +37,7 @@ from g8e_evals.evidence import EvidenceEncryptionKey
 from g8e_evals.harness import BindingType, LLMRoleConfig, Response, SUTConfig, Task
 from g8e_evals.models import ScoreDetails
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 _FIXED_DATETIME = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 _FIXED_UUID = uuid.UUID("00000000-0000-0000-0000-000000000001")

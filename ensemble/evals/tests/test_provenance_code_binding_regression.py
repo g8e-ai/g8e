@@ -124,7 +124,7 @@ def _write_code_file(root: Path, rel_path: str, content: bytes = b"# test code\n
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_rejects_code_tampering(tmp_path: Path):
     """A declared code_sha256 that does not match the actual file digest is rejected."""
     code_rel = "g8e_evals/benchmarks/privacy/loader.py"
@@ -140,7 +140,7 @@ def test_synthetic_validate_provenance_rejects_code_tampering(tmp_path: Path):
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_accepts_correct_code_digest(tmp_path: Path):
     """A declared code_sha256 that matches the actual file digest is accepted."""
     code_rel = "g8e_evals/benchmarks/privacy/loader.py"
@@ -154,7 +154,7 @@ def test_synthetic_validate_provenance_accepts_correct_code_digest(tmp_path: Pat
     )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_validate_provenance_rejects_code_tampering(tmp_path: Path):
     """A declared transformation code_sha256 that does not match the actual file digest is rejected."""
     code_rel = "g8e_evals/benchmarks/ifeval/import_subset.py"
@@ -173,7 +173,7 @@ def test_ifeval_validate_provenance_rejects_code_tampering(tmp_path: Path):
         validate_ifeval_provenance(provenance, trusted_root=tmp_path)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_validate_provenance_rejects_fixture_tampering(tmp_path: Path):
     """A declared fixture_sha256 that does not match the actual file digest is rejected."""
     code_rel = "g8e_evals/benchmarks/ifeval/import_subset.py"
@@ -192,7 +192,7 @@ def test_ifeval_validate_provenance_rejects_fixture_tampering(tmp_path: Path):
         validate_ifeval_provenance(provenance, trusted_root=tmp_path)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_rejects_missing_code_file(tmp_path: Path):
     """A code_path that does not exist under the trusted root is rejected."""
     provenance = _make_synthetic_provenance(
@@ -241,7 +241,7 @@ def test_resolve_under_root_rejects_empty_string():
         _resolve_under_root("", Path("/tmp"))
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_resolve_under_root_rejects_path_escaping_root(tmp_path: Path):
     """A code_path that resolves outside the trusted root via symlink is rejected.
 
@@ -261,7 +261,7 @@ def test_resolve_under_root_rejects_path_escaping_root(tmp_path: Path):
         _resolve_under_root("escape", sub)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_rejects_traversal_code_path(tmp_path: Path):
     """validate_provenance rejects a code_path with traversal sequences."""
     provenance = _make_synthetic_provenance(
@@ -277,7 +277,7 @@ def test_synthetic_validate_provenance_rejects_traversal_code_path(tmp_path: Pat
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_rejects_absolute_code_path(tmp_path: Path):
     """validate_provenance rejects an absolute code_path."""
     provenance = _make_synthetic_provenance(
@@ -298,7 +298,7 @@ def test_synthetic_validate_provenance_rejects_absolute_code_path(tmp_path: Path
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_synthetic_validate_provenance_rejects_suite_substitution(tmp_path: Path):
     """A provenance benchmark that does not match the loader's SUITE_ID is rejected."""
     code_rel = "g8e_evals/benchmarks/privacy/loader.py"
@@ -317,7 +317,7 @@ def test_synthetic_validate_provenance_rejects_suite_substitution(tmp_path: Path
         )
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 def test_ifeval_validate_provenance_rejects_suite_substitution(tmp_path: Path):
     """An IFEval provenance benchmark that does not match the suite_id is rejected."""
     code_rel = "g8e_evals/benchmarks/ifeval/import_subset.py"

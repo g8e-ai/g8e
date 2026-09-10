@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-pytestmark = pytest.mark.unit
+pytestmark = pytest.mark.integration
 
 from g8e_evals import constants as evals_constants
 from g8e_evals.analysis import canonical_model_json, compute_canonical_analysis_from_record

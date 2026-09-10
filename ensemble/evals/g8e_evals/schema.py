@@ -3028,6 +3028,7 @@ class AttemptRecord(BaseModel):
     model_cohort_id: str = ""
     state_snapshot_hash: str = ""
     replicate_id: str = "1"
+    assignment_id: str = ""
     assignment_order: int = 0
 
     started_at: datetime | None = None

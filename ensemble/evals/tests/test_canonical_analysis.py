@@ -2660,41 +2660,25 @@ class TestPairedComparisons:
             )
 
     def test_duplicate_metric_in_secondary_families_rejected(self) -> None:
-        """A metric in two secondary families fails closed."""
-        tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
-            task_ids=["task-1", "task-2"],
-        )
-        prereg = _make_preregistration(
-            {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
-            secondary_families=[
-                SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
-                SecondaryFamily(family_name="fam2", metric_ids=["receipt_integrity"]),
-            ],
-        )
-        with pytest.raises(ValueError, match="belongs to multiple secondary families"):
-            compute_canonical_analysis(
-                tasks=tasks, attempts=attempts, metric_observations=observations,
-                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        """A metric in two secondary families fails closed at model construction."""
+        with pytest.raises(ValueError, match="multiple secondary families"):
+            _make_preregistration(
+                {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+                secondary_families=[
+                    SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
+                    SecondaryFamily(family_name="fam2", metric_ids=["receipt_integrity"]),
+                ],
             )
 
     def test_primary_metric_in_secondary_family_rejected(self) -> None:
-        """A metric that is both primary and in a secondary family fails closed."""
-        tasks, attempts, observations = _make_multi_arm_scenario(
-            arm_values={Arm.DIRECT: [1.0, 1.0], Arm.DOCTRINE: [0.0, 0.0]},
-            task_ids=["task-1", "task-2"],
-        )
-        prereg = _make_preregistration(
-            {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
-            primary_metric_ids=["receipt_integrity"],
-            secondary_families=[
-                SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
-            ],
-        )
-        with pytest.raises(ValueError, match="both primary and in secondary family"):
-            compute_canonical_analysis(
-                tasks=tasks, attempts=attempts, metric_observations=observations,
-                receipts=[], stages=[], run_id=_RUN_ID, preregistration=prereg,
+        """A metric that is both primary and in a secondary family fails closed at model construction."""
+        with pytest.raises(ValueError, match="cannot be in a secondary family"):
+            _make_preregistration(
+                {Arm.DIRECT: [1.0], Arm.DOCTRINE: [0.0]},
+                primary_metric_ids=["receipt_integrity"],
+                secondary_families=[
+                    SecondaryFamily(family_name="fam1", metric_ids=["receipt_integrity"]),
+                ],
             )
 
 

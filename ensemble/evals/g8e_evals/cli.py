@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Protocol
 
 import click
+from pydantic import ValidationError
 from rich.console import Console
 
 from app.constants import LLMProvider
@@ -176,6 +177,7 @@ from g8e_evals.receipts.verify import receipt_action_type
 from g8e_evals.analysis import (
     AnalysisInputRecord,
     CanonicalEvalAnalysis,
+    PreregistrationConfig,
     canonical_model_json,
     compute_canonical_analysis_from_record,
     render_cli,
@@ -436,6 +438,33 @@ class EvaluationRunError(Exception):
     pass
 
 
+def load_preregistration(path: Path) -> PreregistrationConfig:
+    """Load a preregistration configuration from a JSON file.
+
+    Reads the file, parses it as JSON, and validates it as a frozen
+    :class:`PreregistrationConfig`. File-not-found, JSON-decode, and
+    schema-validation failures are wrapped as :class:`EvaluationRunError`
+    so the run fails closed with an actionable message.
+    """
+    try:
+        raw = path.read_text()
+    except OSError as e:
+        raise EvaluationRunError(f"preregistration: could not read {path}: {e}") from e
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise EvaluationRunError(f"preregistration: invalid JSON in {path}: {e}") from e
+    try:
+        return PreregistrationConfig.model_validate(data)
+    except ValidationError as e:
+        raise EvaluationRunError(f"preregistration: invalid schema in {path}: {e}") from e
+
+
+def compute_preregistration_hash(config: PreregistrationConfig) -> str:
+    """Compute a stable SHA-256 content hash over the canonical JSON of a preregistration config."""
+    return hashlib.sha256(canonical_model_json(config).encode()).hexdigest()
+
+
 def _create_eval_judge(config: LLMRoleConfig) -> EvalJudge:
     if not config.provider or not config.model:
         raise EvaluationRunError("eval judge requires both provider and model")
@@ -512,7 +541,9 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key):
+@click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, preregistration):
     """Run a benchmark suite"""
     # Reject the well-known footgun: passing the operator_id UUID as
     # --operator-session-id silently 401s downstream because the Gateway
@@ -560,12 +591,16 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         headless=headless,
     )
 
+    prereg_config: PreregistrationConfig | None = None
+    if preregistration is not None:
+        prereg_config = load_preregistration(preregistration)
+
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None):
     # 1. Load benchmark
     if suite == "ifeval_subset":
         if not gold_set:
@@ -843,7 +878,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         sampling=SamplingSettings(),
         content_hashes=content_hashes,
         required_content_hash_names=frozenset({"dataset", "prompt_bundle", "grader_bundle"}),
-        preregistration_hash=None,
+        preregistration_hash=compute_preregistration_hash(preregistration) if preregistration is not None else None,
         redacted_config={},
         stack_environment=stack_env,
         source_build_provenance=source_build_provenance,
@@ -2656,6 +2691,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         l3_proof_transplant_observations=l3_proof_transplant_records,
         revoked_credential_observations=revoked_credential_records,
         evidence_preservation_observations=evidence_preservation_records,
+        preregistration=preregistration,
     )
 
     (report_dir / evals_constants.ANALYSIS_INPUT_JSON).write_text(
@@ -2912,7 +2948,9 @@ def _scan_report_for_canary_leaks(
 @click.option("--gold-set", type=click.Path(exists=True, path_type=Path))
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("reports"))
 @click.option("--limit", type=int, help="Limit number of tasks to run")
-def bench_synthetic(suite: str, gold_set: Path | None, output_dir: Path, limit: int | None):
+@click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
+              help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
+def bench_synthetic(suite: str, gold_set: Path | None, output_dir: Path, limit: int | None, preregistration: Path | None):
     """Run a synthetic deterministic suite without a real LLM provider.
 
     Synthetic suites exercise the observer and grader pipeline against
@@ -2923,8 +2961,11 @@ def bench_synthetic(suite: str, gold_set: Path | None, output_dir: Path, limit: 
     graders, validates every metric against the registry, and writes
     per-attempt evidence to a report directory.
     """
+    prereg_config: PreregistrationConfig | None = None
+    if preregistration is not None:
+        prereg_config = load_preregistration(preregistration)
     try:
-        asyncio.run(_run_synthetic_suite(suite, gold_set, output_dir, limit))
+        asyncio.run(_run_synthetic_suite(suite, gold_set, output_dir, limit, preregistration=prereg_config))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
@@ -2934,6 +2975,7 @@ async def _run_synthetic_suite(
     gold_set: Path | None,
     output_dir: Path,
     limit: int | None,
+    preregistration: PreregistrationConfig | None = None,
 ) -> None:
     if suite == "privacy_token_lifecycle":
         if gold_set is None:
@@ -3073,7 +3115,7 @@ async def _run_synthetic_suite(
         sampling=SamplingSettings(),
         content_hashes=content_hashes,
         required_content_hash_names=frozenset({"dataset", "prompt_bundle", "grader_bundle"}),
-        preregistration_hash=None,
+        preregistration_hash=compute_preregistration_hash(preregistration) if preregistration is not None else None,
         redacted_config={},
         stack_environment=stack_env,
         source_build_provenance=source_build_provenance,
@@ -4885,6 +4927,7 @@ async def _run_synthetic_suite(
         partial_milestone_observations=partial_milestone_records,
         reliability_observations=reliability_records,
         economics_performance_observations=economics_performance_records,
+        preregistration=preregistration,
     )
 
     (report_dir / evals_constants.ANALYSIS_INPUT_JSON).write_text(

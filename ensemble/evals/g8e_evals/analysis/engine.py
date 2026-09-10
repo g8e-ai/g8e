@@ -331,6 +331,17 @@ def _compute_input_content_hash_from_record(record: AnalysisInputRecord) -> str:
     if record.preregistration is not None:
         parts.append(f"preregistration:{canonical_model_json(record.preregistration)}")
 
+    if record.campaign_manifest is not None:
+        parts.append(f"campaign_manifest:{canonical_model_json(record.campaign_manifest)}")
+    for cohort in sorted(record.model_cohorts, key=lambda c: c.cohort_id):
+        parts.append(f"model_cohort:{canonical_model_json(cohort)}")
+    for assignment in sorted(record.campaign_assignments, key=lambda a: a.assignment_id):
+        parts.append(f"campaign_assignment:{canonical_model_json(assignment)}")
+    if record.execution_schedule is not None:
+        parts.append(f"execution_schedule:{canonical_model_json(record.execution_schedule)}")
+    if record.retry_policy is not None:
+        parts.append(f"retry_policy:{canonical_model_json(record.retry_policy)}")
+
     joined = "\n".join(parts)
     return hashlib.sha256(joined.encode()).hexdigest()
 
