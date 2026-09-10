@@ -235,14 +235,14 @@ const (
 
 // Docker constants for the root unified-stack compose deployment.
 const (
-	DockerComposeFile          = "docker-compose.yml"
-	DockerBootstrappedProfile  = "bootstrapped"
-	DockerCrossEnrollProfile   = "cross-enrollment"
-	DockerGatewayContainer     = "g8e-gateway"
-	DockerOperatorContainer    = "g8e-operator"
-	DockerEnsembleContainer    = "ensemble"
-	DockerDashboardContainer   = "dashboard"
-	DockerProjectPrefix        = "g8e"
+	DockerComposeFile         = "docker-compose.yml"
+	DockerBootstrappedProfile = "bootstrapped"
+	DockerCrossEnrollProfile  = "cross-enrollment"
+	DockerGatewayContainer    = "g8e-gateway"
+	DockerOperatorContainer   = "g8e-operator"
+	DockerEnsembleContainer   = "ensemble"
+	DockerDashboardContainer  = "dashboard"
+	DockerProjectPrefix       = "g8e"
 )
 
 // Demos constants for organization names, doctrine files, and compose config.
@@ -730,7 +730,7 @@ const (
 	ObserveDownloadsDirname                       = "observe-downloads"
 	ObserveDownloadArtifactMaxBytes               = 64 << 20
 	BundleManifestSchemaVersion                   = "1.0.0"
-	VerificationReportSchemaVersion                = "1.0.0"
+	VerificationReportSchemaVersion               = "1.0.0"
 	EvidenceGraphVerifierID                       = "g8e-evidence-graph-verifier"
 	EvidenceGraphVerifierVersion                  = "1.0.0"
 	EvidenceGraphMaxBytes                         = 64 << 20

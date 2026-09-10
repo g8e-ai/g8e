@@ -1310,14 +1310,14 @@ var (
 
 	// Observe eval publication errors (Phase 4: eval projection
 	// publication and download artifact streaming).
-	ErrObservePublicationBundleIDRequired   = errors.New("observe: bundle_id is required")
-	ErrObservePublicationRunIDRequired      = errors.New("observe: run_id is required")
-	ErrObservePublicationNotVerified        = errors.New("observe: verification report is not ok")
-	ErrObservePublicationNoPublicArtifacts  = errors.New("observe: no public artifacts in bundle manifest")
-	ErrObservePublicationArtifactIDRequired = errors.New("observe: download artifact_id is required")
-	ErrObservePublicationFilenameRequired   = errors.New("observe: download filename is required")
-	ErrObservePublicationSHA256Invalid      = errors.New("observe: download sha256 is not 64-char hex")
-	ErrObservePublicationMediaTypeRequired  = errors.New("observe: download media_type is required")
+	ErrObservePublicationBundleIDRequired    = errors.New("observe: bundle_id is required")
+	ErrObservePublicationRunIDRequired       = errors.New("observe: run_id is required")
+	ErrObservePublicationNotVerified         = errors.New("observe: verification report is not ok")
+	ErrObservePublicationNoPublicArtifacts   = errors.New("observe: no public artifacts in bundle manifest")
+	ErrObservePublicationArtifactIDRequired  = errors.New("observe: download artifact_id is required")
+	ErrObservePublicationFilenameRequired    = errors.New("observe: download filename is required")
+	ErrObservePublicationSHA256Invalid       = errors.New("observe: download sha256 is not 64-char hex")
+	ErrObservePublicationMediaTypeRequired   = errors.New("observe: download media_type is required")
 	ErrObservePublicationByteSizeNegative    = errors.New("observe: download byte_size is negative")
 	ErrObservePublicationDuplicateArtifactID = errors.New("observe: duplicate download artifact_id")
 	ErrObservePublicationRestrictedArtifact  = errors.New("observe: restricted artifact in download catalog")
@@ -1327,7 +1327,7 @@ var (
 
 	// Observe download streaming errors (Phase 4: authenticated byte
 	// streaming with hash and size verification).
-	ErrObserveDownloadHashMismatch     = errors.New("observe: download hash mismatch")
+	ErrObserveDownloadHashMismatch    = errors.New("observe: download hash mismatch")
 	ErrObserveDownloadSizeMismatch    = errors.New("observe: download size mismatch")
 	ErrObserveDownloadOversized       = errors.New("observe: download exceeds max bytes")
 	ErrObserveDownloadSymlinkRejected = errors.New("observe: download symlink rejected")

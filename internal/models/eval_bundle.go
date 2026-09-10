@@ -13,11 +13,11 @@ import "time"
 // ensemble/evals/g8e_evals/schema.py for cross-language wire compatibility.
 // Restricted artifacts carry encryption metadata; public artifacts do not.
 type EvidenceEncryptionWire struct {
-	Algorithm          string `json:"algorithm"`
-	KeyID              string `json:"key_id"`
-	AADSHA256          string `json:"aad_sha256"`
-	CiphertextSHA256   string `json:"ciphertext_sha256"`
-	CiphertextByteLength int64 `json:"ciphertext_byte_length"`
+	Algorithm            string `json:"algorithm"`
+	KeyID                string `json:"key_id"`
+	AADSHA256            string `json:"aad_sha256"`
+	CiphertextSHA256     string `json:"ciphertext_sha256"`
+	CiphertextByteLength int64  `json:"ciphertext_byte_length"`
 }
 
 // BundleArtifactEntryWire mirrors the Python BundleArtifactEntry model from
@@ -26,25 +26,25 @@ type EvidenceEncryptionWire struct {
 // SHA-256 hash, byte length, semantic record identity, record count, and
 // optional encryption metadata for restricted artifacts.
 type BundleArtifactEntryWire struct {
-	Path         string                   `json:"path"`
-	MediaType    string                   `json:"media_type"`
-	PrivacyClass string                   `json:"privacy_class"`
-	SHA256       string                   `json:"sha256"`
-	ByteLength   int64                    `json:"byte_length"`
-	ArtifactType string                   `json:"artifact_type"`
-	RecordCount  int                      `json:"record_count"`
-	Encryption   *EvidenceEncryptionWire  `json:"encryption,omitempty"`
+	Path         string                  `json:"path"`
+	MediaType    string                  `json:"media_type"`
+	PrivacyClass string                  `json:"privacy_class"`
+	SHA256       string                  `json:"sha256"`
+	ByteLength   int64                   `json:"byte_length"`
+	ArtifactType string                  `json:"artifact_type"`
+	RecordCount  int                     `json:"record_count"`
+	Encryption   *EvidenceEncryptionWire `json:"encryption,omitempty"`
 }
 
 // ExternalReferenceWire mirrors the Python ExternalReference model. It is a
 // content-addressed reference to an artifact outside the bundle.
 type ExternalReferenceWire struct {
-	ReferenceID    string `json:"reference_id"`
-	ContentSHA256  string `json:"content_sha256"`
-	ByteLength     int64  `json:"byte_length"`
-	MediaType      string `json:"media_type"`
-	Description    string `json:"description"`
-	SourceURI      string `json:"source_uri"`
+	ReferenceID   string `json:"reference_id"`
+	ContentSHA256 string `json:"content_sha256"`
+	ByteLength    int64  `json:"byte_length"`
+	MediaType     string `json:"media_type"`
+	Description   string `json:"description"`
+	SourceURI     string `json:"source_uri"`
 }
 
 // BundleManifestWire mirrors the Python BundleManifest model from
@@ -53,15 +53,15 @@ type ExternalReferenceWire struct {
 // reads this as a typed input from the verified bundle; it does not recompute
 // canonical analysis.
 type BundleManifestWire struct {
-	SchemaVersion        string                   `json:"schema_version"`
-	BundleID             string                   `json:"bundle_id"`
-	RunID                string                   `json:"run_id"`
-	ReleaseVersion       string                   `json:"release_version"`
-	CreatedAt            time.Time                `json:"created_at"`
-	Artifacts            []BundleArtifactEntryWire `json:"artifacts"`
-	ExternalReferences   []ExternalReferenceWire  `json:"external_references"`
-	ManifestContentSHA256 string                  `json:"manifest_content_sha256"`
-	ChecksumRootSHA256   string                   `json:"checksum_root_sha256"`
+	SchemaVersion         string                    `json:"schema_version"`
+	BundleID              string                    `json:"bundle_id"`
+	RunID                 string                    `json:"run_id"`
+	ReleaseVersion        string                    `json:"release_version"`
+	CreatedAt             time.Time                 `json:"created_at"`
+	Artifacts             []BundleArtifactEntryWire `json:"artifacts"`
+	ExternalReferences    []ExternalReferenceWire   `json:"external_references"`
+	ManifestContentSHA256 string                    `json:"manifest_content_sha256"`
+	ChecksumRootSHA256    string                    `json:"checksum_root_sha256"`
 }
 
 // LayerResultWire mirrors the Python LayerResult model from
@@ -103,7 +103,7 @@ type VerificationReportWire struct {
 // content for a single public-safe artifact. Restricted artifacts are never
 // transmitted; only public_safe artifacts appear in the download catalog.
 type ObserveProducerDownloadArtifactInput struct {
-	ArtifactID           string                        `json:"artifact_id"`
+	ArtifactID            string                        `json:"artifact_id"`
 	Filename              string                        `json:"filename"`
 	MediaType             string                        `json:"media_type"`
 	ByteSize              int64                         `json:"byte_size"`
@@ -122,22 +122,22 @@ type ObserveProducerDownloadArtifactInput struct {
 // request body. The request carries no user_id field; unknown identity fields
 // are rejected.
 type ObserveProducerEvalPublicationRequest struct {
-	SchemaVersion      string                                `json:"schema_version"`
-	BundleID           string                                `json:"bundle_id"`
-	RunID              string                                `json:"run_id"`
-	ReleaseVersion     string                                `json:"release_version"`
-	SuiteID            string                                `json:"suite_id"`
-	SuiteVersion       string                                `json:"suite_version"`
-	ArmID              string                                `json:"arm_id"`
-	ModelID            string                                `json:"model_id,omitempty"`
-	ModelProvider      string                                `json:"model_provider,omitempty"`
-	ReceiptCount       int                                   `json:"receipt_count"`
-	AssignedTasks      int                                   `json:"assigned_tasks"`
-	TerminalAttempts   int                                   `json:"terminal_attempts"`
-	Metrics            []EvalMetricSummary                   `json:"metrics"`
-	VerificationReport VerificationReportWire                `json:"verification_report"`
-	BundleManifest     BundleManifestWire                    `json:"bundle_manifest"`
+	SchemaVersion      string                                 `json:"schema_version"`
+	BundleID           string                                 `json:"bundle_id"`
+	RunID              string                                 `json:"run_id"`
+	ReleaseVersion     string                                 `json:"release_version"`
+	SuiteID            string                                 `json:"suite_id"`
+	SuiteVersion       string                                 `json:"suite_version"`
+	ArmID              string                                 `json:"arm_id"`
+	ModelID            string                                 `json:"model_id,omitempty"`
+	ModelProvider      string                                 `json:"model_provider,omitempty"`
+	ReceiptCount       int                                    `json:"receipt_count"`
+	AssignedTasks      int                                    `json:"assigned_tasks"`
+	TerminalAttempts   int                                    `json:"terminal_attempts"`
+	Metrics            []EvalMetricSummary                    `json:"metrics"`
+	VerificationReport VerificationReportWire                 `json:"verification_report"`
+	BundleManifest     BundleManifestWire                     `json:"bundle_manifest"`
 	Downloads          []ObserveProducerDownloadArtifactInput `json:"downloads"`
-	WebSessionID       string                                `json:"web_session_id,omitempty"`
-	CLISessionID       string                                `json:"cli_session_id,omitempty"`
+	WebSessionID       string                                 `json:"web_session_id,omitempty"`
+	CLISessionID       string                                 `json:"cli_session_id,omitempty"`
 }
