@@ -119,6 +119,94 @@ Live reports additionally contain encrypted evidence envelopes and `diagnostic-r
 
 The external live evidence key is never embedded in the report. Retaining it allows named key holders to decrypt restricted evidence out of band; deleting it makes those encrypted artifacts unrecoverable.
 
+## Report lifecycle
+
+A report progresses through distinct lifecycle states, each with specific evidence and validation properties.
+
+### Partial reports
+
+A report directory is partial when one or more required artifacts are missing. The `is_report_complete` function in `g8e_evals/report/completeness.py` checks for the presence of `manifest.json`, `attempts.jsonl`, `metrics.jsonl`, and `analysis.json`. A partial report returns `False`; it is never treated as complete. A corrupted artifact (invalid JSON in `manifest.json` or `analysis.json`) raises `ReportCompletenessError` rather than returning `False`, distinguishing corruption from incompleteness.
+
+A process-killed partial directory remains immutable evidence of interruption but is never treated as complete. Resume creates a new report directory for a missing or replacement assignment and writes a new index generation.
+
+### Complete reports
+
+A report is complete only when all required artifacts exist and are internally consistent. The standalone report validator (`validate_standalone_report` in `g8e_evals/report/validate.py`) checks manifest, expected terminal attempts, metrics, evidence index, analysis summary, and report checksum. It returns a typed `StandaloneReportResult` with `ok`, `checked_layers`, and `failures`.
+
+### Finalized reports
+
+A report is finalized only after its manifest, expected terminal attempts, metrics, evidence index, summary, and report checksum validate. The campaign runner writes a `FINALIZATION` index generation after all assignments are complete and the campaign is finalized. The finalization generation carries the complete report checksums and assignment dispositions.
+
+### Index generations and supersession
+
+The campaign runner writes append-only index generations to `campaign-index.jsonl`. Each `IndexGeneration` carries a parent-generation hash, creation reason (`INITIAL`, `RESUME`, `SUPERSESSION`, `FINALIZATION`), complete report checksums, and assignment dispositions. The first generation has a zero parent hash (`"0" * 64`); each subsequent generation's parent hash must match the previous generation's content hash. Generation numbers are contiguous starting from zero.
+
+Each assignment has exactly one disposition per generation: `EFFECTIVE` (exactly one effective valid report), `SUPERSEDED` (replaced due to interruption or infrastructure failure), `QUALIFICATION` (typed qualification outcome: unavailable, license-blocked, incompatible, out-of-memory, backend-unsupported), or `UNAVAILABLE` (no report). Exactly one effective valid report exists per publishable assignment.
+
+Supersession is permitted only for interrupted or infrastructure-invalid assignments. A completed valid assignment cannot be superseded. Model, governance, human, timeout, and invalid-evidence failures are assignment-scoped and cannot be superseded. Result-aware discretionary reruns create a new campaign revision and cannot replace an unfavorable valid result.
+
+Resume reads the persisted schedule and existing attempts without rerandomizing or discarding failures. Resume creates a new `RESUME` index generation rather than mutating existing ones.
+
+## Evidence semantics
+
+Every artifact in a report directory has defined evidence semantics: what it proves, what it does not prove, and how it is bound.
+
+### Manifest (`manifest.json`)
+
+The `RunManifest` binds the run identity, suite identity, eval package version, selected arm, requested posture, role-to-model mapping, runtime environment, content hashes, source/build provenance, provider budget, and stack environment. It is written before task execution. Content hashes bind the task bundle, prompt bundle, grader bundle, and dataset to immutable SHA-256 digests. The manifest is the root evidence record; all other artifacts reference it.
+
+### Attempts (`attempts.jsonl`)
+
+Each `AttemptRecord` records a terminal outcome (completed, model failure, governance rejection, human denial, timeout, infrastructure failure, or invalid evidence) and references receipts, observations, stages, metrics, and evidence by stable identifier. Every effective attempt must be terminal. A completed attempt must have at least one bound metric.
+
+### Metrics (`metrics.jsonl`)
+
+Each `MetricObservation` is a versioned metric observation linked to an attempt and evidence. Metrics are registered by metric ID and version with unit, direction, eligible population, denominator semantics, missing-value policy, aggregation method, uncertainty method, evidence requirements, grader class, and any release threshold. The runner rejects unregistered metrics and rows whose unit or grader class does not match the registry. Consumers aggregate only eligible rows according to each metric definition and keep unsupported exclusions out of the denominator.
+
+### Evidence index (`evidence-index.jsonl`)
+
+Each evidence index entry records content hash, byte length, classification (public or restricted), storage location, and access metadata for an indexed artifact. Raw prompts, model outputs, and agent trails are restricted evidence stored as AES-256-GCM envelopes with authenticated index metadata. Analytical records retain hashes, lengths, counts, types, and evidence references instead of raw restricted values.
+
+### Analysis (`analysis.json`, `analysis-input.json`)
+
+The canonical analysis is the authoritative release-facing output. `analysis-input.json` is the complete validated `AnalysisInputRecord` containing every immutable input that can influence analysis, with a content hash over the canonical bytes. `analysis.json` is produced by `compute_canonical_analysis_from_record` and includes metric results, confusion matrices, paired comparisons, and preregistration metadata. The analysis is reproducible: the same input record always produces the same analysis output.
+
+### Report checksum (`report-checksum.json`)
+
+The optional report checksum file records a SHA-256 over the report's canonical content. The standalone report validator checks the checksum if present; a mismatch fails closed.
+
+### Campaign index (`campaign-index.jsonl`)
+
+The append-only campaign index records every index generation with its parent-generation hash, creation reason, report checksums, and assignment dispositions. The index chain is the campaign-level evidence record: it proves that the campaign progressed through valid states, that exactly one effective valid report exists per publishable assignment, and that supersession followed the frozen policy.
+
+### Statistical analysis (`StatisticalAnalysisRecord`)
+
+The optional `StatisticalAnalysisRecord` on `CanonicalEvalAnalysis` records the statistical method, independent unit, population, correction family, estimates, intervals, practical thresholds, and claim status. Descriptive-only evidence produces no winner, superiority, production-suitability, or broad-quality language.
+
+## Security requirements
+
+The evals package enforces security through fail-closed checks at every boundary.
+
+### Fail-closed validation
+
+Preflight, bundle verification, campaign verification, standalone report validation, source provenance verification, and public projection all fail closed on any discrepancy. A missing, corrupted, or inconsistent artifact is an error, not a warning. Unknown fields are rejected by `extra="forbid"` on every typed model. Path traversal, symlinks, duplicate identities, missing references, invalid parent-stage graphs, digest mismatches, and incomplete evidence are rejected.
+
+### Source provenance
+
+Source provenance is checksum-bound from an explicit reviewed inclusion manifest. The verifier checks for missing files, escaping files (on disk but not in the manifest), duplicate paths, symlinks, path traversal, checksum mismatch, byte-length mismatch, and manifest-hash mismatch. All checks fail closed. The runner never runs ad hoc Git commands to populate source/build provenance; all provenance comes from environment variables set by the trusted build system or CI pipeline.
+
+### Public projection safety
+
+Public projections contain only allowlisted fields: campaign identity, variant identity, task identity, metric identity, numerator, denominator, rate, unit, verification status, and evidence link. No raw prompts, outputs, keys, credentials, private endpoints, machine-specific paths, evidence-key metadata, encrypted artifact locations, private download locations, or fields outside the explicit schema allowlist cross the projection boundary. The projection function fails closed on any prohibited field, unknown field, non-finite value, or path traversal in the evidence link.
+
+### File safety
+
+The campaign verifier checks that every required artifact is a regular file (not a symlink). The source provenance verifier rejects symlinks anywhere in the source tree. The bundle verifier validates rooted inventory, rejects path traversal, and enforces file size and count limits. Evidence keys and encrypted artifacts are stored with owner-only permissions; symlinks and group/other access are rejected.
+
+### Restricted evidence
+
+Raw prompts, model outputs, and agent trails are restricted evidence. The live runner requires an owner-only key file and stores these artifacts as AES-256-GCM envelopes. The external evidence key is never embedded in the report. Analytical records retain hashes, lengths, counts, and types instead of raw restricted values. The disclosure policy excludes prompts, outputs, chain-of-thought, raw trails, user email, session IDs, host paths, credentials, evidence keys, encrypted-evidence key-discovery metadata, and private host data from public projections.
+
 ## Verify receipts
 
 `verify-receipts` is a diagnostic primitive, not complete eval verification. Reverify receipt signatures with `uv run --locked g8e-evals verify-receipts <report-directory> --pki-dir <verifier-pki-directory>`. The PKI directory must contain each producing signer's `*Actuator_pub.pem` file. Add `--json` for a machine-readable result bound to the run ID in a valid manifest.
@@ -145,6 +233,16 @@ The generated README distinguishes measured models from planned candidates. The 
 
 ## Tests and lint
 
+The standalone eval package uses a three-tier test model. Every test must declare exactly one tier marker (`unit`, `integration`, or `e2e`); tests without a marker are rejected at collection time.
+
+| Tier | Name | Marker | External dependencies | Execution time |
+| --- | --- | --- | --- | --- |
+| 1 | Unit | `@pytest.mark.unit` | None (no filesystem, process, network, database, or provider) | < 10ms per test |
+| 2 | Integration | `@pytest.mark.integration` | Local filesystem, subprocess, or in-process dependencies | < 2s per suite |
+| 3 | E2E | `@pytest.mark.e2e` | Live g8e stack or provider | < 30s per suite |
+
+Tier 1 tests are pure: they use stubs and mocks for external dependencies only, never touch the filesystem, spawn processes, open network connections, access databases, or call providers. Tier 2 tests use real local filesystem operations, in-process pub/sub, and local PKI certificates. Tier 3 tests require a live g8e stack or remote provider and are not part of the offline test targets.
+
 From the repository root, run:
 
 - `make evals-test`: Tier 1 and Tier 2 tests.
@@ -152,7 +250,7 @@ From the repository root, run:
 - `make evals-test-integration`: Tier 2 tests with local files, subprocesses, or in-process dependencies.
 - `make evals-lint`: Ruff and Pyright checks for the standalone package.
 
-Live stack and provider evaluations are Tier 3 and are not part of the offline test targets.
+Live stack and provider evaluations are Tier 3 and are not part of the offline test targets. Test filenames describe their scope (e.g., `test_source_provenance.py`, `test_campaign_verifier.py`); generic names like `edge_test.py` or `coverage_test.py` are not used. Test function names describe the specific behavior being verified, not generic categories.
 
 ## Model registry and campaign profile
 
@@ -175,6 +273,34 @@ The 46-model comparison campaign requires a typed, versioned private model regis
 ### Campaign subcommands
 
 The `g8e-evals campaign` command is a Click group with `run`, `validate`, and `plan` subcommands. `run` executes a campaign with a frozen specification (the existing v2.1.8 pipeline-integrity campaign). `validate` performs side-effect-free validation of a campaign profile against a model registry: it loads both, checks variant ID consistency and hash matching, and reports the result without making provider calls, writing files, or starting network operations. `plan` produces a deterministic dry-run output showing exact run, task, warm-up, measured-call, disk, and declared remote-cost ceilings without making provider calls.
+
+`campaign run` creates one campaign identity, one report directory, one assignment manifest, one randomized schedule, and one final canonical analysis. Resume reads the persisted schedule and existing attempts; it does not rerandomize or discard failures. The runner writes append-only index generations (`campaign-index.jsonl`) recording `INITIAL`, `RESUME`, and `FINALIZATION` generations, each carrying a parent-generation hash, creation reason, report checksums, and assignment dispositions.
+
+`campaign validate` loads a campaign profile and model registry, checks that every generative variant ID exists in the registry, every model-to-tier assignment references a variant in the registry, and the profile's model registry hash matches the registry's content hash. It prints the campaign ID, revision, variant count, benchmark count, task count, repetition count, track count, and registry identity.
+
+`campaign plan` computes the deterministic Fisher-Yates schedule from the frozen profile seed and prints the exact run order, schedule seed, total assignments, warm-up calls, measured calls, and disk ceiling without executing any assignments. The same inputs always produce the same output.
+
+### Campaign verification
+
+The offline campaign verifier (`g8e_evals.campaign_verify.verify_campaign`) reads a campaign report directory and checks the complete matrix without network access, provider calls, or external services. It emits a typed `CampaignVerificationReport` with verification status, campaign identity, verified index generation hash, checked layers, and typed failures. A campaign with missing or inconsistent cells cannot produce a passing publication candidate.
+
+The verifier checks nine ordered layers:
+
+1. **file_safety**: Required artifacts exist as regular files (no symlinks). Required artifacts: `manifest.json`, `attempts.jsonl`, `metrics.jsonl`, `analysis.json`, `campaign-manifest.json`, `campaign-assignments.jsonl`, `campaign-index.jsonl`.
+2. **standalone_report**: The report passes standalone report validation (manifest, attempts, metrics, evidence index, analysis, report checksum).
+3. **campaign_manifest**: `campaign-manifest.json` is a valid `CampaignManifest`.
+4. **index_chain**: Index generations form a valid append-only parent-hash chain with contiguous generation numbers starting from zero.
+5. **duplicate_effective**: No duplicate effective assignments in any generation. Exactly one effective valid report per publishable assignment.
+6. **cell_coverage**: Every campaign assignment has a disposition in the final index generation.
+7. **terminal_attempts**: Every effective attempt is terminal (completed, model failure, governance rejection, human denial, timeout, infrastructure failure, or invalid evidence).
+8. **metric_binding**: Every completed attempt has at least one bound metric.
+9. **manifest_identity**: Run manifest content hashes are present and consistent with the campaign manifest.
+
+### Source provenance
+
+Source provenance is collected from an explicit reviewed inclusion manifest (`g8e_evals/provenance.py`) without relying on repository history. The manifest is a frozen, `extra="forbid"` typed model listing every expected source file with its relative path, SHA-256, and byte length. A manifest hash binds the entire manifest content so any tampering is detected.
+
+The verifier (`verify_source_provenance`) checks the manifest against the on-disk source tree in seven ordered layers: manifest hash, duplicate paths, path traversal, symlink scan, missing files, escaping files, and checksum verification (SHA-256 and byte length). All layers run regardless of earlier failures so the result reports every discrepancy. Missing, escaping, duplicate, symlinked, or changed source entries fail closed.
 
 ## Browser Publication and Observe Projections
 
