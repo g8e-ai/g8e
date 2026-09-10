@@ -11,7 +11,6 @@ import hashlib
 import json
 import logging
 import os
-import platform
 import sys
 import uuid
 from collections.abc import Sequence
@@ -67,7 +66,6 @@ from g8e_evals.schema import (
     PostureObservation,
     PayloadTamperingObservation,
     PrivacyClassification,
-    ProviderBudget,
     ReceiptObservation,
     RehydrationObservation,
     ReplayAttemptObservation,
@@ -76,7 +74,6 @@ from g8e_evals.schema import (
     SamplingSettings,
     SecretDetectionObservation,
     SignedFieldTamperingObservation,
-    SourceBuildProvenance,
     StaleStateRootObservation,
     IdentityMismatchObservation,
     NonceExpirationObservation,
@@ -85,7 +82,6 @@ from g8e_evals.schema import (
     RevokedCredentialObservation,
     EvidencePreservationObservation,
     PolicyAttackObservation,
-    StackEnvironment,
     ToolSequenceObservation,
     FactualQAObservation,
     CitationBackedObservation,
@@ -104,7 +100,6 @@ from g8e_evals.schema import (
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.preflight import (
-    KEYLESS_PROVIDERS as _PREFLIGHT_KEYLESS_PROVIDERS,
     PreflightError as _PreflightError,
     PreflightRequest as _PreflightRequest,
     detect_stack_environment as _detect_stack_environment,
@@ -4981,7 +4976,7 @@ def verify_cmd(
 ):
     """Verify an eval bundle offline with complete fail-closed verification.
 
-    Runs eleven ordered verification layers: rooted inventory and limits;
+    Runs twelve ordered verification layers: rooted inventory and limits;
     schemas and canonical bytes; file hashes and references; manifest and
     checksum signatures and assessed trust; run/task/attempt bindings;
     envelope/receipt correlation; persistence, state, posture, stage chain,

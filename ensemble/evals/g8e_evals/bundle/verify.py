@@ -1366,7 +1366,7 @@ def verify_bundle(
 
     Reads the bundle directory and the externally supplied trust store.
     Requires no originating service, runtime directory, network access, or
-    in-bundle trust policy. Verification proceeds through eleven ordered
+    in-bundle trust policy. Verification proceeds through twelve ordered
     layers. A cancelled verification raises ``VerificationCancelled`` and
     does not emit a valid report.
     """

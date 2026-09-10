@@ -16,8 +16,6 @@ pipeline.
 
 from __future__ import annotations
 
-import hashlib
-import os
 from pathlib import Path
 
 import pytest
@@ -34,7 +32,6 @@ from g8e_evals.preflight import (
     ENV_PROVIDER_BUDGET_MAX_USD,
     ENV_SOURCE_REVISION,
     ENV_SOURCE_TREE_STATE_HASH,
-    KEYLESS_PROVIDERS,
     PreflightError,
     PreflightFailureCode,
     PreflightRequest,
@@ -112,8 +109,10 @@ class TestPreflightRequestConstruction:
     """Verify PreflightRequest is a frozen dataclass with typed fields."""
 
     def test_request_is_frozen(self) -> None:
+        from dataclasses import FrozenInstanceError
+
         request = _valid_request()
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             request.provider = "openai"  # type: ignore[misc]
 
     def test_request_carries_all_fields(self) -> None:
@@ -724,17 +723,19 @@ class TestSourceBuildProvenanceSchema:
     """Verify SourceBuildProvenance is frozen, extra-forbid, and validates fields."""
 
     def test_frozen(self) -> None:
+        from pydantic import ValidationError
+
         provenance = _valid_provenance()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             provenance.source_revision = "other"  # type: ignore[misc]
 
     def test_extra_field_rejected(self) -> None:
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
-            SourceBuildProvenance(  # type: ignore[call-arg]
+            SourceBuildProvenance(
                 source_revision="abc",
                 source_tree_state_hash=_VALID_SHA256,
-                extra_field="bad",
+                extra_field="bad",  # type: ignore[call-arg]
             )
 
     def test_empty_source_revision_rejected(self) -> None:
@@ -752,8 +753,10 @@ class TestProviderBudgetSchema:
     """Verify ProviderBudget is frozen, extra-forbid, and validates fields."""
 
     def test_frozen(self) -> None:
+        from pydantic import ValidationError
+
         budget = ProviderBudget(max_usd=10.0)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             budget.max_usd = 20.0  # type: ignore[misc]
 
     def test_extra_field_rejected(self) -> None:
@@ -811,9 +814,9 @@ class TestRunManifestProvenanceFields:
         from pydantic import ValidationError
         from g8e_evals.schema import RunManifest
         with pytest.raises(ValidationError):
-            RunManifest(  # type: ignore[call-arg]
+            RunManifest(
                 run_id="r1",
                 suite_id="s",
                 suite_version="1.0",
-                source_revision="abc",
+                source_revision="abc",  # type: ignore[call-arg]
             )

@@ -28,6 +28,7 @@ import os
 import platform
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from g8e_evals.schema import (
     ContentHash,
@@ -505,7 +506,7 @@ def load_provider_budget_from_env() -> ProviderBudget | None:
     )
 
 
-def compute_source_tree_state_hash(source_root: object) -> str:
+def compute_source_tree_state_hash(source_root: str | Path) -> str:
     """Compute a deterministic SHA-256 over the source tree state.
 
     The source root must be a path-like object pointing at the directory
@@ -516,8 +517,6 @@ def compute_source_tree_state_hash(source_root: object) -> str:
     directly; the runner calls it only when the trusted build system
     has not already supplied a hash via environment variables.
     """
-    from pathlib import Path
-
     root = Path(source_root)
     if not root.is_dir():
         raise PreflightError(
