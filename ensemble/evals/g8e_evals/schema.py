@@ -362,6 +362,36 @@ class ContentHash(BaseModel):
     byte_length: int = 0
 
 
+class SourceBuildProvenance(BaseModel):
+    """Typed source and build provenance supplied by trusted build or CI metadata.
+
+    The runner never runs ad hoc Git commands to populate these fields.
+    The values come from environment variables set by the trusted build
+    system or CI pipeline (e.g. ``G8E_EVALS_SOURCE_REVISION``,
+    ``G8E_EVALS_SOURCE_TREE_STATE_HASH``). Preflight fails before
+    execution when a required field is unavailable.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_revision: str = Field(min_length=1, description="Source revision identifier from trusted build metadata (e.g. commit hash).")
+    source_tree_state_hash: str = Field(pattern=r"^[0-9a-f]{64}$", description="SHA-256 over the source tree state from trusted build metadata.")
+    build_id: str = Field(default="", description="Build identifier from the trusted build system.")
+    build_system: str = Field(default="", description="Build system name (e.g. github-actions, local).")
+    ci_run_id: str = Field(default="", description="CI run identifier, empty for local builds.")
+    ci_url: str = Field(default="", description="CI run URL, empty for local builds.")
+
+
+class ProviderBudget(BaseModel):
+    """Typed provider spending budget declared before execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_usd: float = Field(ge=0, description="Maximum spending in USD across the run.")
+    max_tokens: int | None = Field(default=None, ge=0, description="Maximum total tokens, None for no token limit.")
+    max_requests: int | None = Field(default=None, ge=0, description="Maximum total requests, None for no request limit.")
+
+
 class RunManifest(BaseModel):
     """Immutable run manifest written before execution begins.
 
@@ -381,8 +411,8 @@ class RunManifest(BaseModel):
     orchestrator_version: str = ""
     experiment_preregistration_hash: str | None = None
 
-    source_revision: str = ""
-    source_tree_state_hash: str = ""
+    source_build_provenance: SourceBuildProvenance | None = None
+    provider_budget: ProviderBudget | None = None
 
     content_hashes: list[ContentHash] = Field(default_factory=list)
 

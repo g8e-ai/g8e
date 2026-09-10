@@ -67,13 +67,16 @@ from g8e_evals.schema import (
     PostureObservation,
     PayloadTamperingObservation,
     PrivacyClassification,
+    ProviderBudget,
     ReceiptObservation,
     RehydrationObservation,
     ReplayAttemptObservation,
     RoleToModelMapping,
     RunManifest,
+    SamplingSettings,
     SecretDetectionObservation,
     SignedFieldTamperingObservation,
+    SourceBuildProvenance,
     StaleStateRootObservation,
     IdentityMismatchObservation,
     NonceExpirationObservation,
@@ -100,6 +103,15 @@ from g8e_evals.schema import (
     VerificationStatus,
 )
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
+from g8e_evals.preflight import (
+    KEYLESS_PROVIDERS as _PREFLIGHT_KEYLESS_PROVIDERS,
+    PreflightError as _PreflightError,
+    PreflightRequest as _PreflightRequest,
+    detect_stack_environment as _detect_stack_environment,
+    load_provider_budget_from_env as _load_provider_budget_from_env,
+    load_source_build_provenance_from_env as _load_source_build_provenance_from_env,
+    run_preflight as _run_preflight,
+)
 from g8e_evals.sut.direct_provider import DirectProviderSUT
 from g8e_evals.sut.g8ee_chat import ChatEvaluationReceipt, G8eeChatSUT, AuthenticationError
 from g8e_evals.posture import observe_gateway_posture
@@ -808,6 +820,43 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         is_production_posture=arm_def.is_production_posture,
     )
 
+    # 5a. Load source/build provenance and provider budget from the
+    #     trusted build environment. Preflight fails before execution
+    #     when a required identity or hash is unavailable. The runner
+    #     never runs ad hoc Git commands; the values come from
+    #     environment variables set by the trusted build system or CI.
+    try:
+        source_build_provenance = _load_source_build_provenance_from_env()
+    except _PreflightError as e:
+        raise EvaluationRunError(f"preflight failed: {e}") from e
+    try:
+        provider_budget = _load_provider_budget_from_env()
+    except _PreflightError as e:
+        raise EvaluationRunError(f"preflight failed: {e}") from e
+
+    stack_env = _detect_stack_environment()
+
+    # 5b. Run typed preflight validation. Each check is single-purpose
+    #     and fails closed with a typed ``PreflightFailureCode``.
+    preflight_request = _PreflightRequest(
+        provider=config.primary.provider,
+        model=config.primary.model,
+        api_key=config.primary.api_key,
+        endpoint=config.primary.endpoint,
+        sampling=SamplingSettings(),
+        content_hashes=content_hashes,
+        required_content_hash_names=frozenset({"dataset", "prompt_bundle", "grader_bundle"}),
+        preregistration_hash=None,
+        redacted_config={},
+        stack_environment=stack_env,
+        source_build_provenance=source_build_provenance,
+        provider_budget=provider_budget,
+    )
+    try:
+        _run_preflight(preflight_request)
+    except _PreflightError as e:
+        raise EvaluationRunError(f"preflight failed: {e}") from e
+
     manifest = RunManifest(
         run_id=run_id,
         suite_id=suite_id,
@@ -821,11 +870,9 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
             lite=lite_identity,
             judge=judge_identity,
         ),
-        stack_environment=StackEnvironment(
-            os=platform.platform(),
-            arch=platform.machine(),
-            runtime_version=platform.python_version(),
-        ),
+        source_build_provenance=source_build_provenance,
+        provider_budget=provider_budget,
+        stack_environment=stack_env,
     )
 
     # 6. Create report directory and write manifest BEFORE execution.
@@ -3005,6 +3052,41 @@ async def _run_synthetic_suite(
         is_production_posture=False,
     )
 
+    # Load source/build provenance and provider budget from the trusted
+    # build environment. The synthetic suite is a non-production path, so
+    # source/build provenance is optional; when the environment variables
+    # are absent, the manifest records None. Preflight still validates
+    # content hashes and stack environment.
+    try:
+        source_build_provenance = _load_source_build_provenance_from_env()
+    except _PreflightError:
+        source_build_provenance = None
+    try:
+        provider_budget = _load_provider_budget_from_env()
+    except _PreflightError:
+        provider_budget = None
+
+    stack_env = _detect_stack_environment()
+
+    preflight_request = _PreflightRequest(
+        provider=None,
+        model=None,
+        api_key=None,
+        endpoint=None,
+        sampling=SamplingSettings(),
+        content_hashes=content_hashes,
+        required_content_hash_names=frozenset({"dataset", "prompt_bundle", "grader_bundle"}),
+        preregistration_hash=None,
+        redacted_config={},
+        stack_environment=stack_env,
+        source_build_provenance=source_build_provenance,
+        provider_budget=provider_budget,
+    )
+    try:
+        _run_preflight(preflight_request)
+    except _PreflightError as e:
+        raise EvaluationRunError(f"preflight failed: {e}") from e
+
     manifest = RunManifest(
         run_id=run_id,
         suite_id=suite_id,
@@ -3013,11 +3095,9 @@ async def _run_synthetic_suite(
         arms=[arm_entry],
         content_hashes=content_hashes,
         role_to_model=RoleToModelMapping(),
-        stack_environment=StackEnvironment(
-            os=platform.platform(),
-            arch=platform.machine(),
-            runtime_version=platform.python_version(),
-        ),
+        source_build_provenance=source_build_provenance,
+        provider_budget=provider_budget,
+        stack_environment=stack_env,
     )
 
     ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")

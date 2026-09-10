@@ -135,6 +135,7 @@ class VerificationLayer(IntEnum):
     ANALYSIS_REPRODUCTION = 9
     RENDERER_EQUALITY = 10
     PRIVACY_SEPARATION = 11
+    SOURCE_BUILD_PROVENANCE = 12
 
 
 class VerificationFailureCode(StrEnum):
@@ -217,6 +218,12 @@ class VerificationFailureCode(StrEnum):
     # Layer 11: Privacy separation
     RESTRICTED_WITHOUT_ENCRYPTION = "restricted_without_encryption"
     RESTRICTED_PLAINTEXT_EXPOSED = "restricted_plaintext_exposed"
+
+    # Layer 12: Source/build provenance
+    SOURCE_BUILD_PROVENANCE_MISSING = "source_build_provenance_missing"
+    SOURCE_REVISION_MISSING = "source_revision_missing"
+    SOURCE_TREE_STATE_HASH_MISSING = "source_tree_state_hash_missing"
+    SOURCE_TREE_STATE_HASH_INVALID = "source_tree_state_hash_invalid"
 
 
 class VerificationCancelled(Exception):
@@ -1267,6 +1274,85 @@ def _verify_privacy_separation(
 
 
 # ---------------------------------------------------------------------------
+# Layer 12: Source/build provenance
+# ---------------------------------------------------------------------------
+
+
+def _verify_source_build_provenance(
+    bundle_root: Path,
+    manifest: BundleManifest | None,
+) -> list[VerificationFailure]:
+    """Verify source/build provenance bound into the run manifest.
+
+    Reads ``manifest.json`` and checks that ``source_build_provenance`` is
+    present and valid when the run declares a production posture. A
+    non-production run may omit source/build provenance, but when it is
+    present, the fields must be valid. The verifier never trusts
+    in-bundle provenance for release claims; this layer checks internal
+    consistency, not external trust.
+    """
+    failures: list[VerificationFailure] = []
+
+    if manifest is None:
+        return failures
+
+    run_manifest_path = bundle_root / evals_constants.MANIFEST_JSON
+    if not run_manifest_path.exists():
+        return failures
+
+    try:
+        run_manifest_data = json.loads(run_manifest_path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        # Already reported by layer 5 (record bindings) as RUN_ID_MISMATCH.
+        return failures
+
+    provenance_data = run_manifest_data.get("source_build_provenance")
+    arms = run_manifest_data.get("arms", [])
+    is_production = any(
+        arm.get("is_production_posture", False) for arm in arms if isinstance(arm, dict)
+    )
+
+    if provenance_data is None:
+        if is_production:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
+                code=VerificationFailureCode.SOURCE_BUILD_PROVENANCE_MISSING,
+                record_id="run_manifest",
+                message="production-posture run manifest is missing source_build_provenance",
+            ))
+        return failures
+
+    source_revision = provenance_data.get("source_revision", "")
+    if not source_revision:
+        failures.append(VerificationFailure(
+            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
+            code=VerificationFailureCode.SOURCE_REVISION_MISSING,
+            record_id="run_manifest",
+            message="source_build_provenance.source_revision is empty",
+        ))
+
+    source_tree_state_hash = provenance_data.get("source_tree_state_hash", "")
+    if not source_tree_state_hash:
+        failures.append(VerificationFailure(
+            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
+            code=VerificationFailureCode.SOURCE_TREE_STATE_HASH_MISSING,
+            record_id="run_manifest",
+            message="source_build_provenance.source_tree_state_hash is empty",
+        ))
+    elif len(source_tree_state_hash) != 64 or not all(
+        c in "0123456789abcdef" for c in source_tree_state_hash
+    ):
+        failures.append(VerificationFailure(
+            layer=VerificationLayer.SOURCE_BUILD_PROVENANCE,
+            code=VerificationFailureCode.SOURCE_TREE_STATE_HASH_INVALID,
+            record_id="run_manifest",
+            message="source_build_provenance.source_tree_state_hash is not a 64-char hex string",
+        ))
+
+    return failures
+
+
+# ---------------------------------------------------------------------------
 # Main verification function
 # ---------------------------------------------------------------------------
 
@@ -1365,6 +1451,10 @@ def verify_bundle(
     # Layer 11: Public/restricted separation
     _check_cancel(cancel_event)
     all_failures += _verify_privacy_separation(manifest)
+
+    # Layer 12: Source/build provenance
+    _check_cancel(cancel_event)
+    all_failures += _verify_source_build_provenance(bundle_root, manifest)
 
     # Build per-layer results.
     layer_results: list[LayerResult] = []
