@@ -52,13 +52,29 @@ from g8e_evals.registry import (
 _HASH = "a" * 64
 
 
+def _compute_finalization_hash() -> str:
+    from g8e_evals.index import compute_index_generation_hash
+    return compute_index_generation_hash(
+        generation_number=1,
+        parent_generation_hash=_HASH,
+        creation_reason="finalization",
+        report_checksums=[_HASH],
+        assignment_dispositions=[
+            {"assignment_id": "assignment-1", "disposition": "effective"},
+        ],
+    )
+
+
+_FINALIZATION_HASH = _compute_finalization_hash()
+
+
 def _make_verification_report(*, ok: bool = True) -> CampaignVerificationReport:
     return CampaignVerificationReport(
         verification_schema_version="1.0.0",
         campaign_id="campaign-1",
         campaign_revision="1",
         ok=ok,
-        verified_index_generation_hash=_HASH,
+        verified_index_generation_hash=_FINALIZATION_HASH,
         checked_layers=["file_safety", "index_chain", "finalization"],
         failures=[] if ok else ["file_safety: missing manifest.json"],
     )
@@ -186,34 +202,70 @@ def _make_provenance_manifest(tmp_path: Path) -> SourceInclusionManifest:
     )
 
 
-def _make_projection_records() -> list[dict]:
+def _make_metric_records() -> list[dict]:
+    return [
+        {
+            "schema_version": "1.41.0",
+            "metric_id": "ifeval_subset_verifier",
+            "metric_version": "1.0.0",
+            "attempt_id": "run-1:assignment-1:0",
+            "run_id": "run-1",
+            "arm_id": "direct",
+            "task_id": "task-1",
+            "value": 1.0,
+            "unit": "boolean",
+            "eligible": True,
+            "denominator_contribution": 1,
+            "verification_status": "verified",
+            "grader_class": "deterministic",
+            "evidence_refs": [],
+        },
+    ]
+
+
+def _make_attempt_records() -> list[dict]:
+    return [
+        {
+            "schema_version": "1.41.0",
+            "attempt_id": "run-1:assignment-1:0",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "arm_id": "direct",
+            "model_cohort_id": "cohort-qwen3-8b-q4_0",
+            "replicate_id": "replicate-1",
+            "assignment_id": "assignment-1",
+            "assignment_order": 0,
+            "terminal_status": "completed",
+        },
+    ]
+
+
+def _make_assignment_records() -> list[dict]:
     return [
         {
             "campaign_id": "campaign-1",
-            "campaign_revision": "1",
-            "variant_id": "qwen3-8b-q4_0",
-            "task_id": "task-1",
-            "metric_id": "ifeval_subset_verifier",
-            "numerator": 8,
-            "denominator": 10,
-            "rate": 0.8,
-            "unit": "boolean",
-            "verification_status": "verified",
-            "evidence_link": "proofs/run-1/analysis.json",
-        },
-    ]
-
-
-def _make_disposition_records() -> list[dict]:
-    return [
-        {
             "assignment_id": "assignment-1",
-            "disposition": "effective",
-            "variant_id": "qwen3-8b-q4_0",
             "task_id": "task-1",
-            "reason": "",
+            "model_cohort_id": "cohort-qwen3-8b-q4_0",
+            "arm_id": "direct",
+            "initial_state_assignment_id": "no-initial-state-v1",
+            "replicate_id": "replicate-1",
+            "schedule_position": 0,
         },
     ]
+
+
+def _make_index_generation(verified_hash: str) -> dict:
+    return {
+        "generation_number": 1,
+        "parent_generation_hash": _HASH,
+        "creation_reason": "finalization",
+        "report_checksums": [_HASH],
+        "assignment_dispositions": [
+            {"assignment_id": "assignment-1", "disposition": "effective"},
+        ],
+        "content_hash": _FINALIZATION_HASH,
+    }
 
 
 def _make_statistical_analysis_record() -> dict:
@@ -230,24 +282,39 @@ def _make_statistical_analysis_record() -> dict:
 def _build_report_dir(
     tmp_path: Path,
     *,
-    projection_records: list[dict] | None = None,
-    disposition_records: list[dict] | None = None,
+    metric_records: list[dict] | None = None,
+    attempt_records: list[dict] | None = None,
+    assignment_records: list[dict] | None = None,
+    index_generation: dict | None = None,
+    statistical_analysis: dict | None = None,
 ) -> Path:
     report_dir = tmp_path / "report"
     report_dir.mkdir(parents=True)
-    if projection_records is None:
-        projection_records = _make_projection_records()
-    if disposition_records is None:
-        disposition_records = _make_disposition_records()
-    # Write projections JSONL
-    proj_path = report_dir / "campaign-projections.jsonl"
-    proj_path.write_text("".join(json.dumps(r) + "\n" for r in projection_records))
-    # Write dispositions JSONL
-    disp_path = report_dir / "campaign-dispositions.jsonl"
-    disp_path.write_text("".join(json.dumps(r) + "\n" for r in disposition_records))
-    # Write statistical analysis
-    stat_path = report_dir / "campaign-statistical-analysis.json"
-    stat_path.write_text(json.dumps(_make_statistical_analysis_record()))
+    if metric_records is None:
+        metric_records = _make_metric_records()
+    if attempt_records is None:
+        attempt_records = _make_attempt_records()
+    if assignment_records is None:
+        assignment_records = _make_assignment_records()
+    if index_generation is None:
+        index_generation = _make_index_generation(_HASH)
+    if statistical_analysis is None:
+        statistical_analysis = _make_statistical_analysis_record()
+    (report_dir / "metrics.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in metric_records)
+    )
+    (report_dir / "attempts.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in attempt_records)
+    )
+    (report_dir / "campaign-assignments.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in assignment_records)
+    )
+    (report_dir / "campaign-index.jsonl").write_text(
+        json.dumps(index_generation) + "\n"
+    )
+    (report_dir / "campaign-statistical-analysis.json").write_text(
+        json.dumps(statistical_analysis)
+    )
     return report_dir
 
 
@@ -351,7 +418,7 @@ def test_projector_writes_verification_ref(tmp_path: Path) -> None:
     data = json.loads((candidate / CAMPAIGN_VERIFICATION_REF_JSON).read_text())
     assert data["ok"] is True
     assert data["campaign_id"] == "campaign-1"
-    assert data["verified_index_generation_hash"] == _HASH
+    assert data["verified_index_generation_hash"] == _FINALIZATION_HASH
 
 
 def test_projector_writes_provenance_ref(tmp_path: Path) -> None:

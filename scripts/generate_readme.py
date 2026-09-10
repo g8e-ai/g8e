@@ -2370,6 +2370,32 @@ def _render_model_comparison(snapshot: ProofSnapshot) -> str:
                 f"| {_escape_cell(p.get('verification_status', ''))} |"
             )
 
+    variant_summaries = mc.get("variant_summaries")
+    if isinstance(variant_summaries, list) and variant_summaries:
+        lines.append("")
+        lines.append("#### Per-Variant Summary")
+        lines.append("")
+        lines.append("| Variant | Metric | Pass Rate | Passes | Total | Tasks | Repetitions |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for s in sorted(
+            variant_summaries,
+            key=lambda x: (x.get("variant_id", ""), x.get("metric_id", "")),
+        ):
+            rate = s.get("rate", 0.0)
+            if isinstance(rate, (int, float)):
+                rate_str = _format_rate(float(rate))
+            else:
+                rate_str = "N/A"
+            lines.append(
+                f"| {_escape_cell(s.get('variant_id', ''))} "
+                f"| {_escape_cell(s.get('metric_id', ''))} "
+                f"| {rate_str} "
+                f"| {s.get('numerator', 0)} "
+                f"| {s.get('denominator', 0)} "
+                f"| {s.get('task_count', 0)} "
+                f"| {s.get('repetition_count', 0)} |"
+            )
+
     dispositions = mc.get("dispositions")
     if isinstance(dispositions, list) and dispositions:
         lines.append("")

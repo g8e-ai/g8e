@@ -33,10 +33,14 @@ from typing import Any, Self
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from g8e_evals.constants import (
+    ATTEMPTS_JSONL,
+    CAMPAIGN_ASSIGNMENTS_JSONL,
+    CAMPAIGN_INDEX_JSONL,
     CAMPAIGN_PROJECTIONS_JSONL,
     CAMPAIGN_PROVENANCE_JSON,
     CAMPAIGN_STATISTICAL_ANALYSIS_JSON,
     CAMPAIGN_VERIFICATION_REF_JSON,
+    METRICS_JSONL,
     MODEL_CAMPAIGN_JSON,
     PUBLICATION_SCHEMA_V4,
 )
@@ -45,7 +49,6 @@ from g8e_evals.index import (
     CampaignVerificationReport,
 )
 from g8e_evals.profile import CampaignProfile
-from g8e_evals.projection import project_to_public
 from g8e_evals.provenance import SourceInclusionManifest
 from g8e_evals.registry import ModelRegistry
 
@@ -117,6 +120,41 @@ class CampaignProjectionRow(BaseModel):
     def _validate_row(self) -> Self:
         if _check_traversal(self.evidence_link):
             raise ValueError(f"traversal in evidence_link: {self.evidence_link!r}")
+        if not math.isfinite(self.rate):
+            raise ValueError(f"non-finite rate: {self.rate!r}")
+        return self
+
+
+class CampaignVariantSummaryRow(BaseModel):
+    """Per-variant aggregated descriptive statistics for one metric.
+
+    Aggregates all per-assignment projection rows for one variant and
+    one metric into a single pass-rate summary. The numerator is the
+    total positive outcomes across all tasks and repetitions; the
+    denominator is the total measured outcomes. The rate is numerator
+    divided by denominator. Task count, repetition count, terminal
+    count, superseded count, invalid count, and missing count are
+    reported so a reader can inspect completeness without pooling
+    distinct variants.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    variant_id: str = Field(min_length=1, description="Model variant ID.")
+    metric_id: str = Field(min_length=1, description="Metric ID.")
+    numerator: int = Field(ge=0, description="Total positive outcomes across all tasks and repetitions.")
+    denominator: int = Field(ge=0, description="Total measured outcomes across all tasks and repetitions.")
+    rate: float = Field(ge=0.0, le=1.0, description="Numerator divided by denominator.")
+    unit: str = Field(min_length=1, description="Metric unit.")
+    task_count: int = Field(ge=0, description="Number of distinct tasks measured.")
+    repetition_count: int = Field(ge=0, description="Number of repetitions per task.")
+    terminal_count: int = Field(ge=0, description="Number of terminal (completed) attempts.")
+    superseded_count: int = Field(ge=0, description="Number of superseded attempts.")
+    invalid_count: int = Field(ge=0, description="Number of invalid attempts.")
+    missing_count: int = Field(ge=0, description="Number of missing observations (eligible but unmeasured).")
+
+    @model_validator(mode="after")
+    def _validate_summary(self) -> Self:
         if not math.isfinite(self.rate):
             raise ValueError(f"non-finite rate: {self.rate!r}")
         return self
@@ -301,6 +339,9 @@ class ModelCampaignRef(BaseModel):
     efficiency_observations: list[CampaignEfficiencyObservation] = Field(
         default_factory=list, description="Typed efficiency observations.",
     )
+    variant_summaries: list[CampaignVariantSummaryRow] = Field(
+        default_factory=list, description="Per-variant aggregated descriptive statistics.",
+    )
     statistical_analysis: CampaignStatisticalAnalysisRef = Field(description="Statistical analysis record reference.")
     provenance: CampaignProvenanceRef = Field(description="Source provenance reference.")
     caveats: list[CampaignCaveat] = Field(
@@ -324,6 +365,7 @@ class ModelCampaignRef(BaseModel):
             dispositions=self.dispositions,
             comparison_rows=self.comparison_rows,
             efficiency_observations=self.efficiency_observations,
+            variant_summaries=self.variant_summaries,
             statistical_analysis=self.statistical_analysis,
             provenance=self.provenance,
             caveats=self.caveats,
@@ -351,6 +393,7 @@ def compute_model_campaign_hash(
     dispositions: list[CampaignDispositionRow],
     comparison_rows: list[CampaignComparisonRow],
     efficiency_observations: list[CampaignEfficiencyObservation],
+    variant_summaries: list[CampaignVariantSummaryRow] = (),
     statistical_analysis: CampaignStatisticalAnalysisRef,
     provenance: CampaignProvenanceRef,
     caveats: list[CampaignCaveat] | list[str],
@@ -388,6 +431,10 @@ def compute_model_campaign_hash(
             "efficiency_observations": [
                 json.loads(e.model_dump_json())
                 for e in sorted(efficiency_observations, key=lambda e: e.variant_id)
+            ],
+            "variant_summaries": [
+                json.loads(s.model_dump_json())
+                for s in sorted(variant_summaries, key=lambda s: (s.variant_id, s.metric_id))
             ],
             "statistical_analysis": json.loads(statistical_analysis.model_dump_json()),
             "provenance": json.loads(provenance.model_dump_json()),
@@ -491,6 +538,234 @@ def _read_jsonl_dicts(path: Path) -> list[dict]:
     return records
 
 
+def _extract_variant_id(model_cohort_id: str) -> str:
+    """Extract the variant ID from a cohort ID.
+
+    Cohort IDs follow the convention ``cohort-{variant_id}`` established
+    by ``derive_cohorts_from_registry`` in the campaign runner.
+    """
+    prefix = "cohort-"
+    if model_cohort_id.startswith(prefix):
+        return model_cohort_id[len(prefix):]
+    return model_cohort_id
+
+
+def _extract_repetition(replicate_id: str) -> int:
+    """Extract the repetition number from a replicate ID.
+
+    Replicate IDs follow the convention ``replicate-{n}`` where n is a
+    positive integer (1-indexed).
+    """
+    prefix = "replicate-"
+    if replicate_id.startswith(prefix):
+        return int(replicate_id[len(prefix):])
+    return 1
+
+
+def _generate_projections(
+    *,
+    report_dir: Path,
+    campaign_id: str,
+    campaign_revision: str,
+) -> list[CampaignProjectionRow]:
+    """Generate safe public projection rows from campaign metrics and attempts.
+
+    Reads ``metrics.jsonl`` and ``attempts.jsonl`` from the report
+    directory, joins them via ``attempt_id``, and produces one
+    ``CampaignProjectionRow`` per measured metric. The variant ID is
+    extracted from the attempt's ``model_cohort_id`` and the repetition
+    from the attempt's ``replicate_id``.
+    """
+    metrics_path = report_dir / METRICS_JSONL
+    attempts_path = report_dir / ATTEMPTS_JSONL
+    if not metrics_path.exists() or not attempts_path.exists():
+        return []
+
+    attempts_by_id: dict[str, dict] = {}
+    for raw in _read_jsonl_dicts(attempts_path):
+        aid = raw.get("attempt_id")
+        if aid:
+            attempts_by_id[aid] = raw
+
+    rows: list[CampaignProjectionRow] = []
+    for raw_metric in _read_jsonl_dicts(metrics_path):
+        attempt_id = raw_metric.get("attempt_id", "")
+        attempt = attempts_by_id.get(attempt_id)
+        if attempt is None:
+            continue
+        variant_id = _extract_variant_id(attempt.get("model_cohort_id", ""))
+        task_id = raw_metric.get("task_id", "")
+        metric_id = raw_metric.get("metric_id", "")
+        value = raw_metric.get("value", 0.0)
+        unit = raw_metric.get("unit", "boolean")
+        verification_status = raw_metric.get("verification_status", "verified")
+        repetition = _extract_repetition(attempt.get("replicate_id", "replicate-1"))
+        numerator = round(value)
+        denominator = int(raw_metric.get("denominator_contribution", 1))
+        rate = numerator / denominator if denominator > 0 else 0.0
+        evidence_link = f"proofs/{variant_id}/{task_id}/rep-{repetition}.json"
+        rows.append(CampaignProjectionRow(
+            campaign_id=campaign_id,
+            campaign_revision=campaign_revision,
+            variant_id=variant_id,
+            task_id=task_id,
+            metric_id=metric_id,
+            numerator=numerator,
+            denominator=denominator,
+            rate=rate,
+            unit=unit,
+            verification_status=verification_status,
+            evidence_link=evidence_link,
+            repetition=repetition,
+        ))
+    return rows
+
+
+def _generate_dispositions(
+    *,
+    report_dir: Path,
+    verified_index_generation_hash: str,
+) -> list[CampaignDispositionRow]:
+    """Generate typed disposition rows from the verified index generation.
+
+    Reads ``campaign-index.jsonl`` and finds the generation whose
+    ``content_hash`` matches the verified index generation hash. Then
+    reads ``campaign-assignments.jsonl`` to join each disposition with
+    its variant ID and task ID.
+    """
+    index_path = report_dir / CAMPAIGN_INDEX_JSONL
+    assignments_path = report_dir / CAMPAIGN_ASSIGNMENTS_JSONL
+    if not index_path.exists() or not assignments_path.exists():
+        return []
+
+    assignments_by_id: dict[str, dict] = {}
+    for raw in _read_jsonl_dicts(assignments_path):
+        aid = raw.get("assignment_id")
+        if aid:
+            assignments_by_id[aid] = raw
+
+    matching_gen: dict | None = None
+    for raw in _read_jsonl_dicts(index_path):
+        if raw.get("content_hash") == verified_index_generation_hash:
+            matching_gen = raw
+            break
+    if matching_gen is None:
+        return []
+
+    rows: list[CampaignDispositionRow] = []
+    for disp in matching_gen.get("assignment_dispositions", []):
+        assignment_id = disp.get("assignment_id", "")
+        assignment = assignments_by_id.get(assignment_id, {})
+        variant_id = _extract_variant_id(assignment.get("model_cohort_id", ""))
+        task_id = assignment.get("task_id", "")
+        rows.append(CampaignDispositionRow(
+            assignment_id=assignment_id,
+            disposition=disp.get("disposition", "effective"),
+            variant_id=variant_id,
+            task_id=task_id,
+            reason=disp.get("reason", ""),
+        ))
+    return rows
+
+
+def _generate_variant_summaries(
+    projections: list[CampaignProjectionRow],
+) -> list[CampaignVariantSummaryRow]:
+    """Aggregate per-assignment projection rows into per-variant summaries.
+
+    For each distinct ``(variant_id, metric_id)`` pair, computes the
+    total numerator (positive outcomes), total denominator (measured
+    outcomes), rate, distinct task count, repetition count, and terminal
+    count. Superseded, invalid, and missing counts are zero for
+    effective-only projections (the projector only includes effective
+    runs). Results are sorted by ``(variant_id, metric_id)``.
+    """
+    if not projections:
+        return []
+
+    grouped: dict[tuple[str, str], list[CampaignProjectionRow]] = {}
+    for row in projections:
+        key = (row.variant_id, row.metric_id)
+        grouped.setdefault(key, []).append(row)
+
+    summaries: list[CampaignVariantSummaryRow] = []
+    for (variant_id, metric_id), rows in sorted(grouped.items()):
+        numerator = sum(r.numerator for r in rows)
+        denominator = sum(r.denominator for r in rows)
+        rate = numerator / denominator if denominator > 0 else 0.0
+        task_count = len({r.task_id for r in rows})
+        repetition_count = max(r.repetition for r in rows) if rows else 0
+        terminal_count = len(rows)
+        unit = rows[0].unit if rows else "boolean"
+        summaries.append(CampaignVariantSummaryRow(
+            variant_id=variant_id,
+            metric_id=metric_id,
+            numerator=numerator,
+            denominator=denominator,
+            rate=rate,
+            unit=unit,
+            task_count=task_count,
+            repetition_count=repetition_count,
+            terminal_count=terminal_count,
+            superseded_count=0,
+            invalid_count=0,
+            missing_count=0,
+        ))
+    return summaries
+
+
+def _generate_statistical_analysis(
+    *,
+    report_dir: Path,
+    campaign_profile: CampaignProfile,
+) -> CampaignStatisticalAnalysisRef:
+    """Generate the statistical analysis reference for the campaign.
+
+    If a ``campaign-statistical-analysis.json`` file exists in the report
+    directory, it is read and validated. Otherwise, a descriptive-only
+    record is generated from the campaign profile's task population and
+    claim boundary.
+    """
+    stat_path = report_dir / CAMPAIGN_STATISTICAL_ANALYSIS_JSON
+    if stat_path.exists():
+        stat_data = json.loads(stat_path.read_text())
+        return CampaignStatisticalAnalysisRef(
+            method=stat_data["method"],
+            independent_unit=stat_data["independent_unit"],
+            population=stat_data["population"],
+            correction_family=stat_data["correction_family"],
+            claim_status=stat_data["claim_status"],
+            content_hash=stat_data["content_hash"],
+        )
+
+    method = "descriptive"
+    independent_unit = campaign_profile.unit_of_analysis
+    population = len(campaign_profile.task_ids)
+    correction_family = "none"
+    claim_status = campaign_profile.claim_boundary.value
+    stat_payload = json.dumps(
+        {
+            "method": method,
+            "independent_unit": independent_unit,
+            "population": population,
+            "correction_family": correction_family,
+            "claim_status": claim_status,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    content_hash = _sha256(stat_payload)
+    return CampaignStatisticalAnalysisRef(
+        method=method,
+        independent_unit=independent_unit,
+        population=population,
+        correction_family=correction_family,
+        claim_status=claim_status,
+        content_hash=content_hash,
+    )
+
+
 def project_campaign_v4(
     *,
     report_dir: Path,
@@ -522,60 +797,27 @@ def project_campaign_v4(
     if candidate_dir.exists():
         raise ValueError(f"candidate directory already exists: {candidate_dir}")
 
-    # Read projection records from the report directory and project each
-    # through the safe public projection allowlist.
-    proj_path = report_dir / CAMPAIGN_PROJECTIONS_JSONL
-    raw_projections = _read_jsonl_dicts(proj_path) if proj_path.exists() else []
-    projection_rows: list[CampaignProjectionRow] = []
-    for raw in raw_projections:
-        repetition = raw.pop("repetition", 1)
-        public = project_to_public(raw)
-        projection_rows.append(CampaignProjectionRow(
-            campaign_id=public.campaign_id,
-            campaign_revision=public.campaign_revision,
-            variant_id=public.variant_id,
-            task_id=public.task_id,
-            metric_id=public.metric_id,
-            numerator=public.numerator,
-            denominator=public.denominator,
-            rate=public.rate,
-            unit=public.unit,
-            verification_status=public.verification_status,
-            evidence_link=public.evidence_link,
-            repetition=repetition,
-        ))
-
-    # Read disposition records from the report directory.
-    disp_path = report_dir / "campaign-dispositions.jsonl"
-    raw_dispositions = _read_jsonl_dicts(disp_path) if disp_path.exists() else []
-    disposition_rows: list[CampaignDispositionRow] = []
-    for raw in raw_dispositions:
-        disposition_rows.append(CampaignDispositionRow(
-            assignment_id=raw["assignment_id"],
-            disposition=raw["disposition"],
-            variant_id=raw["variant_id"],
-            task_id=raw["task_id"],
-            reason=raw.get("reason", ""),
-        ))
-
-    # Read the statistical analysis record from the report directory.
-    stat_path = report_dir / CAMPAIGN_STATISTICAL_ANALYSIS_JSON
-    stat_data = json.loads(stat_path.read_text()) if stat_path.exists() else {
-        "method": "descriptive",
-        "independent_unit": "task",
-        "population": 0,
-        "correction_family": "none",
-        "claim_status": "descriptive_only",
-        "content_hash": "0" * 64,
-    }
-    stat_ref = CampaignStatisticalAnalysisRef(
-        method=stat_data["method"],
-        independent_unit=stat_data["independent_unit"],
-        population=stat_data["population"],
-        correction_family=stat_data["correction_family"],
-        claim_status=stat_data["claim_status"],
-        content_hash=stat_data["content_hash"],
+    # Generate projection rows from the campaign's metrics and attempts.
+    projection_rows = _generate_projections(
+        report_dir=report_dir,
+        campaign_id=campaign_profile.campaign_id,
+        campaign_revision=campaign_profile.campaign_revision,
     )
+
+    # Generate disposition rows from the verified index generation.
+    disposition_rows = _generate_dispositions(
+        report_dir=report_dir,
+        verified_index_generation_hash=verification.verified_index_generation_hash,
+    )
+
+    # Generate the statistical analysis reference.
+    stat_ref = _generate_statistical_analysis(
+        report_dir=report_dir,
+        campaign_profile=campaign_profile,
+    )
+
+    # Generate per-variant aggregated descriptive summaries.
+    variant_summaries = _generate_variant_summaries(projection_rows)
 
     # Build safe projections from the profile and registry.
     profile_projection = _project_profile(campaign_profile)
@@ -597,6 +839,7 @@ def project_campaign_v4(
         dispositions=disposition_rows,
         comparison_rows=[],
         efficiency_observations=[],
+        variant_summaries=variant_summaries,
         statistical_analysis=stat_ref,
         provenance=provenance_ref,
         caveats=caveats,
@@ -616,6 +859,7 @@ def project_campaign_v4(
         dispositions=disposition_rows,
         comparison_rows=[],
         efficiency_observations=[],
+        variant_summaries=variant_summaries,
         statistical_analysis=stat_ref,
         provenance=provenance_ref,
         caveats=[CampaignCaveat(c) for c in caveats],
@@ -717,6 +961,19 @@ def validate_publication_v4(candidate_dir: Path) -> PublicationValidatorResult:
                 )
             seen_keys.add(key)
 
+    # Layer 4b: variant summaries validation — no duplicate (variant_id, metric_id) pairs
+    checked_layers.append("variant_summaries")
+    if ref is not None:
+        seen_summary_keys: set[tuple[str, str]] = set()
+        for summary in ref.variant_summaries:
+            key = (summary.variant_id, summary.metric_id)
+            if key in seen_summary_keys:
+                failures.append(
+                    f"duplicate variant summary identity: variant={summary.variant_id!r}, "
+                    f"metric={summary.metric_id!r}"
+                )
+            seen_summary_keys.add(key)
+
     # Layer 5: statistical analysis validation
     checked_layers.append("statistical_analysis")
     stat_path = candidate_dir / CAMPAIGN_STATISTICAL_ANALYSIS_JSON
@@ -786,6 +1043,7 @@ __all__ = [
     "CampaignProjectionRow",
     "CampaignProvenanceRef",
     "CampaignStatisticalAnalysisRef",
+    "CampaignVariantSummaryRow",
     "ModelCampaignRef",
     "PublicationSchemaV4",
     "PublicationValidatorResult",

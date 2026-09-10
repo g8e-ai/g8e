@@ -77,8 +77,9 @@ flowchart LR
     EdgeGW["g8eg Gateway\nedge site"] -- "outbound mTLS\ndial-out, no inbound port" --> CloudGW
     EdgeDev1["g8eo Operator\nedge device 1\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
     EdgeDev2["g8eo Operator\nedge device 2\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
-    EdgeDev1 --> Data1["Local data, keys,\nand evidence"]
-    EdgeDev2 --> Data2["Local data, keys,\nand evidence"]
+    EdgeGW2["g8eg Gateway\nedge site"] -- "outbound mTLS\ndial-out, no inbound port" --> CloudGW
+    EdgeDev3["g8eo Operator\nedge device 3\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW2
+    EdgeDev4["g8eo Operator\nedge device 4\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW2
 ```
 
 Admitted envelopes flow downstream through the cascade: the cloud gateway admits work, the edge gateway pulls it over its outbound connection, and each edge device pulls its share from the edge gateway over its own outbound connection. Receipts and state evidence flow back the same path, signed and persisted at each owner boundary. No device in the cascade listens on an inbound management port, and no edge device needs a route to the cloud.
