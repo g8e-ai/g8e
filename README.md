@@ -67,6 +67,22 @@ flowchart LR
 
 Read the [governance architecture](docs/architecture/governance.md) for posture semantics and the [protocol specification](protocol/docs/spec.md) for the canonical wire contract.
 
+### Cascading outbound-only connections
+
+A gateway can enroll as an operator of another gateway. Each enrollment is an outbound mTLS dial-out, so a gateway deployed at the edge can pull work from a cloud gateway, and edge devices with no route to the cloud can in turn pull work from that edge gateway. The cascade keeps every hop on a dial-out connection with no inbound port, so cloud AI agents reach edge devices that have no direct route to the cloud at all.
+
+```mermaid
+flowchart LR
+    Cloud["AI models, g8ee Ensemble\n(cloud)"] <--> CloudGW["g8eg Gateway\ncloud"]
+    EdgeGW["g8eg Gateway\nedge site"] -- "outbound mTLS\ndial-out, no inbound port" --> CloudGW
+    EdgeDev1["g8eo Operator\nedge device 1\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
+    EdgeDev2["g8eo Operator\nedge device 2\nno route to cloud"] -- "outbound mTLS\ndial-out, no inbound port" --> EdgeGW
+    EdgeDev1 --> Data1["Local data, keys,\nand evidence"]
+    EdgeDev2 --> Data2["Local data, keys,\nand evidence"]
+```
+
+Admitted envelopes flow downstream through the cascade: the cloud gateway admits work, the edge gateway pulls it over its outbound connection, and each edge device pulls its share from the edge gateway over its own outbound connection. Receipts and state evidence flow back the same path, signed and persisted at each owner boundary. No device in the cascade listens on an inbound management port, and no edge device needs a route to the cloud.
+
 ## What the boundary enforces
 
 - **Data custody stays local.** Raw data, vault keys, execution state, and authoritative audit evidence remain with the Operator host. Models receive scrubbed projections and commitments.

@@ -5124,21 +5124,14 @@ async def _run_synthetic_suite(
 @click.argument("report_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.argument("bundle_dir", type=click.Path(path_type=Path))
 @click.option("--bundle-id", required=True, help="Unique bundle identity")
-@click.option("--run-id", required=True, help="Run identity from the run manifest")
-@click.option("--release-version", required=True, help="Release version")
 @click.option("--signing-key-seed", type=click.Path(exists=True, path_type=Path),
               help="Path to a 32-byte Ed25519 seed file for deterministic signing")
-@click.option("--trust-store", type=click.Path(exists=True, path_type=Path),
-              help="Path to a JSON EvalTrustStore file (for reference, not stored in bundle)")
 @click.option("--json", "json_output", is_flag=True, help="Emit machine-readable manifest JSON")
 def bundle_cmd(
     report_dir: Path,
     bundle_dir: Path,
     bundle_id: str,
-    run_id: str,
-    release_version: str,
     signing_key_seed: Path | None,
-    trust_store: Path | None,
     json_output: bool,
 ):
     """Create an immutable eval bundle from a report directory.
@@ -5148,6 +5141,10 @@ def bundle_cmd(
     dedicated Ed25519 eval-run signing identity, and writes the bundle to
     the bundle directory. The bundle is the immutable contract that
     offline verification checks against.
+
+    The run ID and release version are derived from the validated report
+    records (run manifest and analysis input), not from caller-supplied
+    values.
     """
     signing_key: EvalSigningKey | None = None
     if signing_key_seed is not None:
@@ -5161,8 +5158,6 @@ def bundle_cmd(
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id=bundle_id,
-        run_id=run_id,
-        release_version=release_version,
         signing_key=signing_key,
     )
 

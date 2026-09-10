@@ -7,18 +7,26 @@
 
 """Eval bundle production: create an immutable bundle from a report directory.
 
-Reads every artifact in a report directory, builds a typed versioned
-``BundleManifest`` and ``ChecksumRoot``, optionally signs them with a
-dedicated Ed25519 eval-run signing identity, and writes the bundle to a
-directory. The bundle is the immutable contract that offline verification
-checks against.
+Recursively inventories every artifact in a report directory, classifies
+each by its normalized relative path and typed report contract, builds a
+typed versioned ``BundleManifest`` and ``ChecksumRoot``, optionally signs
+them with a dedicated Ed25519 eval-run signing identity, and writes the
+bundle to a directory through a staging/atomic-finalize boundary. The
+bundle is the immutable contract that offline verification checks
+against.
+
+Unknown files fail closed. Symlinks, absolute paths, traversal segments,
+backslashes, null bytes, duplicate normalized paths, and source paths
+outside the report root are rejected. The destination must be empty or
+non-existent; stale files are never mixed with new content.
 """
 
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from g8e_evals import constants as evals_constants
@@ -40,8 +48,8 @@ from g8e_evals.schema import EvidenceEncryption
 
 
 # Mapping from report-directory filenames to (ArtifactType, PrivacyClass).
-# Files not in this mapping are included as OBSERVATION_FILE/PUBLIC by
-# default, or DIAGNOSTIC/INTERNAL if they are the diagnostic results file.
+# Classified by basename for root-level files. Nested evidence files
+# under ``evidence/`` are classified by directory prefix.
 _ARTIFACT_TYPE_MAP: dict[str, tuple[ArtifactType, PrivacyClass]] = {
     evals_constants.MANIFEST_JSON: (ArtifactType.RUN_MANIFEST, PrivacyClass.PUBLIC),
     evals_constants.TASKS_JSONL: (ArtifactType.TASKS, PrivacyClass.PUBLIC),
@@ -49,13 +57,19 @@ _ARTIFACT_TYPE_MAP: dict[str, tuple[ArtifactType, PrivacyClass]] = {
     evals_constants.RECEIPTS_JSONL: (ArtifactType.RECEIPTS, PrivacyClass.PUBLIC),
     evals_constants.STAGES_JSONL: (ArtifactType.STAGES, PrivacyClass.PUBLIC),
     evals_constants.METRICS_JSONL: (ArtifactType.METRICS, PrivacyClass.PUBLIC),
-    evals_constants.EVIDENCE_INDEX_JSONL: (ArtifactType.EVIDENCE_INDEX, PrivacyClass.RESTRICTED),
+    evals_constants.EVIDENCE_INDEX_JSONL: (ArtifactType.EVIDENCE_INDEX, PrivacyClass.INTERNAL),
     evals_constants.ANALYSIS_INPUT_JSON: (ArtifactType.ANALYSIS_INPUT, PrivacyClass.PUBLIC),
     evals_constants.ANALYSIS_JSON: (ArtifactType.ANALYSIS_JSON, PrivacyClass.PUBLIC),
     evals_constants.ANALYSIS_MD: (ArtifactType.ANALYSIS_MD, PrivacyClass.PUBLIC),
     evals_constants.ANALYSIS_HTML: (ArtifactType.ANALYSIS_HTML, PrivacyClass.PUBLIC),
     evals_constants.ANALYSIS_TXT: (ArtifactType.ANALYSIS_TXT, PrivacyClass.PUBLIC),
     evals_constants.DIAGNOSTIC_RESULTS_JSONL: (ArtifactType.DIAGNOSTIC, PrivacyClass.INTERNAL),
+    evals_constants.CAMPAIGN_MANIFEST_JSON: (ArtifactType.CAMPAIGN_MANIFEST, PrivacyClass.PUBLIC),
+    evals_constants.CAMPAIGN_ASSIGNMENTS_JSONL: (ArtifactType.CAMPAIGN_ASSIGNMENTS, PrivacyClass.PUBLIC),
+    evals_constants.CAMPAIGN_COHORTS_JSONL: (ArtifactType.CAMPAIGN_COHORTS, PrivacyClass.PUBLIC),
+    evals_constants.CAMPAIGN_SCHEDULE_JSON: (ArtifactType.CAMPAIGN_SCHEDULE, PrivacyClass.PUBLIC),
+    evals_constants.CAMPAIGN_RETRY_POLICY_JSON: (ArtifactType.CAMPAIGN_RETRY_POLICY, PrivacyClass.PUBLIC),
+    evals_constants.CAMPAIGN_STATUS_JSON: (ArtifactType.CAMPAIGN_STATUS, PrivacyClass.INTERNAL),
 }
 
 # Observation JSONL files that map to OBSERVATION_FILE/PUBLIC.
@@ -89,6 +103,9 @@ _OBSERVATION_FILES = {
     evals_constants.ECONOMICS_PERFORMANCE_OBSERVATIONS_JSONL,
 }
 
+# Directory prefix for nested encrypted evidence artifacts.
+_EVIDENCE_DIR_PREFIX = "evidence/"
+
 # Media type by file extension.
 _MEDIA_TYPES = {
     ".json": "application/json",
@@ -96,7 +113,12 @@ _MEDIA_TYPES = {
     ".md": "text/markdown",
     ".html": "text/html",
     ".txt": "text/plain",
+    ".enc": "application/octet-stream",
 }
+
+
+class BundleProductionError(ValueError):
+    """Raised when bundle production encounters an invalid report directory."""
 
 
 def _sha256(data: bytes) -> str:
@@ -108,12 +130,68 @@ def _media_type(filename: str) -> str:
     return _MEDIA_TYPES.get(ext, "application/octet-stream")
 
 
-def _artifact_type_and_privacy(filename: str) -> tuple[ArtifactType, PrivacyClass]:
-    if filename in _ARTIFACT_TYPE_MAP:
-        return _ARTIFACT_TYPE_MAP[filename]
-    if filename in _OBSERVATION_FILES:
+def _normalize_relative_path(file_path: Path, report_root: Path) -> str:
+    """Compute and validate the normalized relative path from the report root.
+
+    Rejects symlinks, absolute paths, backslashes, null bytes, traversal
+    segments, and paths outside the report root. Returns the POSIX-style
+    relative path.
+    """
+    # Resolve the report root to handle any symlinks in the path itself.
+    resolved_root = report_root.resolve()
+
+    # Check for symlinks in the file path itself.
+    if file_path.is_symlink():
+        raise BundleProductionError(f"symlink rejected in report: {file_path}")
+
+    # Resolve the file path and check it is inside the report root.
+    resolved_file = file_path.resolve()
+    try:
+        rel = resolved_file.relative_to(resolved_root)
+    except ValueError as exc:
+        raise BundleProductionError(
+            f"file outside report root: {file_path} (resolved: {resolved_file})"
+        ) from exc
+
+    rel_posix = rel.as_posix()
+
+    if not rel_posix:
+        raise BundleProductionError(f"empty relative path: {file_path}")
+
+    if "\x00" in rel_posix:
+        raise BundleProductionError(f"null byte in path: {file_path}")
+
+    if "\\" in rel_posix:
+        raise BundleProductionError(f"backslash in path: {file_path}")
+
+    parts = PurePosixPath(rel_posix).parts
+    if ".." in parts or "." in parts:
+        raise BundleProductionError(f"traversal or dot segment in path: {file_path}")
+
+    return rel_posix
+
+
+def _classify_artifact(rel_path: str) -> tuple[ArtifactType, PrivacyClass]:
+    """Classify an artifact by its normalized relative path.
+
+    Root-level files are classified by basename using ``_ARTIFACT_TYPE_MAP``
+    or ``_OBSERVATION_FILES``. Files under ``evidence/`` are classified as
+    ``EVIDENCE_ARTIFACT`` / ``RESTRICTED``. Unknown files fail closed.
+    """
+    # Nested evidence files under evidence/ directory.
+    if rel_path.startswith(_EVIDENCE_DIR_PREFIX):
+        return (ArtifactType.EVIDENCE_ARTIFACT, PrivacyClass.RESTRICTED)
+
+    # Root-level files classified by basename.
+    basename = PurePosixPath(rel_path).name
+    if basename in _ARTIFACT_TYPE_MAP:
+        return _ARTIFACT_TYPE_MAP[basename]
+    if basename in _OBSERVATION_FILES:
         return (ArtifactType.OBSERVATION_FILE, PrivacyClass.PUBLIC)
-    return (ArtifactType.DIAGNOSTIC, PrivacyClass.INTERNAL)
+
+    raise BundleProductionError(
+        f"unknown file in report directory, not in any typed report contract: {rel_path}"
+    )
 
 
 def _count_jsonl_records(content: bytes) -> int:
@@ -121,16 +199,100 @@ def _count_jsonl_records(content: bytes) -> int:
     return sum(1 for line in content.splitlines() if line.strip())
 
 
+def _load_evidence_encryption_map(report_dir: Path) -> dict[str, EvidenceEncryption]:
+    """Load encryption metadata for nested evidence artifacts from evidence-index.jsonl.
+
+    Returns a mapping from ``storage_location`` to ``EvidenceEncryption``.
+    If the evidence index file does not exist or is empty, returns an empty
+    mapping.
+    """
+    evidence_index_path = report_dir / evals_constants.EVIDENCE_INDEX_JSONL
+    if not evidence_index_path.exists():
+        return {}
+
+    from g8e_evals.schema import EvidenceIndex
+
+    result: dict[str, EvidenceEncryption] = {}
+    for line in evidence_index_path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        record = EvidenceIndex.model_validate_json(line)
+        if record.storage_location and record.encryption is not None:
+            result[record.storage_location] = record.encryption
+    return result
+
+
+def _derive_run_id(report_dir: Path) -> str:
+    """Derive the run ID from the run manifest in the report directory.
+
+    Parses ``manifest.json`` and extracts the ``run_id`` field. The run
+    manifest is not fully schema-validated at production time; the verifier
+    performs full schema validation in layer 2. Raises
+    ``BundleProductionError`` if the manifest is missing, invalid JSON, or
+    lacks a ``run_id`` field.
+    """
+    import json as _json
+
+    manifest_path = report_dir / evals_constants.MANIFEST_JSON
+    if not manifest_path.exists():
+        raise BundleProductionError(
+            f"run manifest not found in report directory: {manifest_path}"
+        )
+    try:
+        manifest_data = _json.loads(manifest_path.read_text())
+    except Exception as exc:
+        raise BundleProductionError(
+            f"invalid run manifest JSON in report directory: {exc}"
+        ) from exc
+    run_id = manifest_data.get("run_id")
+    if not run_id or not isinstance(run_id, str):
+        raise BundleProductionError(
+            "run manifest missing or invalid run_id field"
+        )
+    return run_id
+
+
+def _derive_release_version(report_dir: Path) -> str:
+    """Derive the release version from the analysis input in the report directory.
+
+    Parses ``analysis-input.json`` and extracts the ``release_version``
+    field. The analysis input is not fully schema-validated at production
+    time; the verifier performs full schema validation in layer 2. Raises
+    ``BundleProductionError`` if the analysis input is missing, invalid
+    JSON, or lacks a ``release_version`` field.
+    """
+    import json as _json
+
+    analysis_input_path = report_dir / evals_constants.ANALYSIS_INPUT_JSON
+    if not analysis_input_path.exists():
+        raise BundleProductionError(
+            f"analysis input not found in report directory: {analysis_input_path}"
+        )
+    try:
+        analysis_data = _json.loads(analysis_input_path.read_text())
+    except Exception as exc:
+        raise BundleProductionError(
+            f"invalid analysis input JSON in report directory: {exc}"
+        ) from exc
+    release_version = analysis_data.get("release_version")
+    if not release_version or not isinstance(release_version, str):
+        raise BundleProductionError(
+            "analysis input missing or invalid release_version field"
+        )
+    return release_version
+
+
 def _build_artifact_entry(
-    filename: str,
+    rel_path: str,
     content: bytes,
     encryption: EvidenceEncryption | None = None,
 ) -> BundleArtifactEntry:
-    artifact_type, privacy_class = _artifact_type_and_privacy(filename)
-    record_count = _count_jsonl_records(content) if filename.endswith(".jsonl") else 0
+    artifact_type, privacy_class = _classify_artifact(rel_path)
+    record_count = _count_jsonl_records(content) if rel_path.endswith(".jsonl") else 0
     return BundleArtifactEntry(
-        path=filename,
-        media_type=_media_type(filename),
+        path=rel_path,
+        media_type=_media_type(rel_path),
         privacy_class=privacy_class,
         sha256=_sha256(content),
         byte_length=len(content),
@@ -140,42 +302,125 @@ def _build_artifact_entry(
     )
 
 
+def _inventory_report_dir(report_dir: Path) -> list[tuple[str, Path]]:
+    """Recursively inventory all regular files in the report directory.
+
+    Rejects symlinks (files and directories), absolute paths, backslashes,
+    null bytes, traversal segments, duplicate normalized paths, and source
+    paths outside the report root. Returns a sorted list of
+    (normalized_relative_path, absolute_path) pairs.
+    """
+    seen: set[str] = set()
+    entries: list[tuple[str, Path]] = []
+
+    for file_path in sorted(report_dir.rglob("*")):
+        if file_path.is_dir():
+            # Reject symlink directories.
+            if file_path.is_symlink():
+                raise BundleProductionError(
+                    f"symlink directory rejected in report: {file_path}"
+                )
+            continue
+
+        if file_path.is_symlink():
+            raise BundleProductionError(f"symlink rejected in report: {file_path}")
+
+        if not file_path.is_file():
+            raise BundleProductionError(f"non-regular file in report: {file_path}")
+
+        rel_path = _normalize_relative_path(file_path, report_dir)
+
+        if rel_path in seen:
+            raise BundleProductionError(f"duplicate normalized path: {rel_path}")
+        seen.add(rel_path)
+
+        entries.append((rel_path, file_path))
+
+    return entries
+
+
 def produce_bundle(
     report_dir: Path,
     bundle_dir: Path,
     bundle_id: str,
-    run_id: str,
-    release_version: str,
     signing_key: EvalSigningKey | None = None,
     created_at: datetime | None = None,
     restricted_encryption: EvidenceEncryption | None = None,
+    diagnostic: bool = False,
 ) -> BundleManifest:
     """Create an immutable bundle from a report directory.
 
-    Reads every regular file in ``report_dir``, builds a typed
-    ``BundleManifest`` and ``ChecksumRoot``, optionally signs them, and
-    writes the bundle to ``bundle_dir``. Returns the manifest.
+    Recursively inventories every regular file in ``report_dir``, classifies
+    each by its normalized relative path and typed report contract, builds a
+    typed ``BundleManifest`` and ``ChecksumRoot``, signs them, and writes the
+    bundle to ``bundle_dir`` through a staging/atomic-finalize boundary.
+    Returns the manifest.
+
+    A release bundle requires a signing key. If ``signing_key`` is None and
+    ``diagnostic`` is False, production fails closed. If ``diagnostic`` is
+    True, an unsigned bundle may be produced for local debugging only; such a
+    bundle cannot pass complete verification or publication.
+
+    The ``run_id`` and ``release_version`` are derived from the validated
+    report records (run manifest and analysis input), not from caller-supplied
+    values. Unknown files fail closed. Symlinks, absolute paths, traversal
+    segments, backslashes, null bytes, duplicate normalized paths, and source
+    paths outside the report root are rejected. The destination must be empty
+    or non-existent; stale files are never mixed with new content.
     """
     report_dir = Path(report_dir)
     bundle_dir = Path(bundle_dir)
     if created_at is None:
-        from datetime import UTC, datetime
         created_at = datetime.now(UTC)
 
-    bundle_dir.mkdir(parents=True, exist_ok=True)
+    # R5.6: A release bundle requires a signing key. Unsigned bundles are
+    # only permitted in explicitly named diagnostic mode.
+    if signing_key is None and not diagnostic:
+        raise BundleProductionError(
+            "release bundle requires a signing key; pass diagnostic=True for "
+            "unsigned local debugging bundles that cannot pass verification"
+        )
 
-    # Collect all regular files in the report directory (no subdirectories).
-    files: list[Path] = sorted(
-        f for f in report_dir.iterdir() if f.is_file() and not f.is_symlink()
-    )
+    # R5.4: Reject a non-empty destination instead of mixing with stale files.
+    if bundle_dir.exists() and any(bundle_dir.iterdir()):
+        raise BundleProductionError(
+            f"bundle destination is not empty: {bundle_dir}"
+        )
 
-    # Build artifact entries.
+    # R5.5: Derive run_id and release_version from validated report records.
+    run_id = _derive_run_id(report_dir)
+    release_version = _derive_release_version(report_dir)
+
+    # R5.2: Recursively inventory the report directory.
+    inventory = _inventory_report_dir(report_dir)
+
+    # R5.7: Load per-artifact encryption metadata from evidence-index.jsonl.
+    evidence_encryption_map = _load_evidence_encryption_map(report_dir)
+
+    # Read each source file once and build artifact entries.
     entries: list[BundleArtifactEntry] = []
-    for file_path in files:
+    file_contents: list[tuple[str, bytes]] = []
+    for rel_path, file_path in inventory:
         content = file_path.read_bytes()
-        filename = file_path.name
-        encryption = restricted_encryption if _artifact_type_and_privacy(filename)[1] == PrivacyClass.RESTRICTED else None
-        entry = _build_artifact_entry(filename, content, encryption)
+        file_contents.append((rel_path, content))
+
+        # Determine encryption metadata for this artifact.
+        encryption: EvidenceEncryption | None = None
+        _artifact_type, privacy_class = _classify_artifact(rel_path)
+        if privacy_class == PrivacyClass.RESTRICTED:
+            # Use per-artifact encryption from the evidence index for nested
+            # evidence files. Fall back to caller-supplied
+            # restricted_encryption for other restricted artifacts.
+            if rel_path in evidence_encryption_map:
+                encryption = evidence_encryption_map[rel_path]
+            elif restricted_encryption is not None:
+                encryption = restricted_encryption
+            else:
+                raise BundleProductionError(
+                    f"restricted artifact without encryption metadata: {rel_path}"
+                )
+
+        entry = _build_artifact_entry(rel_path, content, encryption)
         entries.append(entry)
 
     # Build manifest with empty self-hash fields.
@@ -210,23 +455,36 @@ def produce_bundle(
     manifest_hash = compute_manifest_hash(manifest)
     manifest = manifest.model_copy(update={"manifest_content_sha256": manifest_hash})
 
-    # Write all files to the bundle directory.
-    for file_path in files:
-        shutil.copy2(file_path, bundle_dir / file_path.name)
+    # R5.4: Write to a staging directory, then atomically rename to the
+    # final bundle directory.
+    staging_dir = bundle_dir.parent / f"{bundle_dir.name}.staging"
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir)
+    staging_dir.mkdir(parents=True)
+
+    # Write all data files to the staging directory.
+    for rel_path, content in file_contents:
+        dest = staging_dir / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
 
     # Write manifest and checksum root.
     from g8e_evals.analysis.canonical import canonical_model_json
-    (bundle_dir / evals_constants.BUNDLE_MANIFEST_JSON).write_text(canonical_model_json(manifest))
-    (bundle_dir / evals_constants.CHECKSUM_ROOT_JSON).write_text(canonical_model_json(checksum_root))
+    (staging_dir / evals_constants.BUNDLE_MANIFEST_JSON).write_text(canonical_model_json(manifest))
+    (staging_dir / evals_constants.CHECKSUM_ROOT_JSON).write_text(canonical_model_json(checksum_root))
 
     # Sign and write signature if a signing key is provided.
     if signing_key is not None:
         signature = sign_bundle(manifest, checksum_root, signing_key, created_at)
-        (bundle_dir / evals_constants.BUNDLE_SIGNATURE_JSON).write_text(canonical_model_json(signature))
+        (staging_dir / evals_constants.BUNDLE_SIGNATURE_JSON).write_text(canonical_model_json(signature))
+
+    # R5.4: Atomically finalize by renaming the staging directory.
+    os.replace(staging_dir, bundle_dir)
 
     return manifest
 
 
 __all__ = [
+    "BundleProductionError",
     "produce_bundle",
 ]

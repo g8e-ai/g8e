@@ -46,7 +46,6 @@ from g8e_evals.campaign import (
 from g8e_evals.harness import Response, Task
 from g8e_evals.models import TaskMetadata
 from g8e_evals.runner import (
-    CAMPAIGN_STATUS_JSON,
     CampaignRunner,
     CampaignSpec,
     CampaignStopReason,
@@ -60,6 +59,7 @@ from g8e_evals.constants import (
     CAMPAIGN_ASSIGNMENTS_JSONL,
     CAMPAIGN_MANIFEST_JSON,
     CAMPAIGN_SCHEDULE_JSON,
+    CAMPAIGN_STATUS_JSON,
     METRICS_JSONL,
 )
 

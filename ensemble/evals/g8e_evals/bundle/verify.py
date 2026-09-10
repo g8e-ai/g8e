@@ -777,7 +777,11 @@ def _verify_signatures_trust(
 
 
 def _read_jsonl[T: BaseModel](bundle_root: Path, filename: str, model_cls: type[T]) -> list[T]:
-    """Read a JSONL file and deserialize each line as a typed model."""
+    """Read a JSONL file and deserialize each line as a typed model.
+
+    Silently skips invalid lines. Use ``_read_jsonl_strict`` for required
+    artifacts where invalid lines must produce schema failures.
+    """
     path = bundle_root / filename
     if not path.exists():
         return []
@@ -791,6 +795,38 @@ def _read_jsonl[T: BaseModel](bundle_root: Path, filename: str, model_cls: type[
         except ValidationError:
             continue
     return records
+
+
+def _read_jsonl_strict[T: BaseModel](
+    bundle_root: Path,
+    filename: str,
+    model_cls: type[T],
+) -> tuple[list[T], list[VerificationFailure]]:
+    """Read a JSONL file and deserialize each line as a typed model.
+
+    Unlike ``_read_jsonl``, invalid lines produce ``SCHEMA_INVALID`` failures
+    rather than being silently skipped. Returns the parsed records and a list
+    of verification failures for any invalid lines.
+    """
+    path = bundle_root / filename
+    if not path.exists():
+        return [], []
+    records: list[T] = []
+    failures: list[VerificationFailure] = []
+    for line_num, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(model_cls.model_validate_json(line))
+        except (ValidationError, Exception) as exc:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.SCHEMAS_CANONICAL,
+                code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                record_id=f"{filename}:{line_num}",
+                message=f"invalid {model_cls.__name__} at {filename} line {line_num}: {exc}",
+            ))
+    return records, failures
 
 
 def _verify_record_bindings(
@@ -824,10 +860,16 @@ def _verify_record_bindings(
                 message="run manifest is not valid JSON",
             ))
 
-    # Read tasks and attempts.
+    # Read tasks and attempts with strict typed parsing.
     from g8e_evals.schema import AttemptRecord, TaskDefinition
-    tasks = _read_jsonl(bundle_root, evals_constants.TASKS_JSONL, TaskDefinition)
-    attempts = _read_jsonl(bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord)
+    tasks, task_failures = _read_jsonl_strict(
+        bundle_root, evals_constants.TASKS_JSONL, TaskDefinition,
+    )
+    attempts, attempt_failures = _read_jsonl_strict(
+        bundle_root, evals_constants.ATTEMPTS_JSONL, AttemptRecord,
+    )
+    failures.extend(task_failures)
+    failures.extend(attempt_failures)
 
     # Check per-file record count limits.
     for filename, records in [
@@ -938,6 +980,25 @@ def _verify_envelope_receipt(
                 record_id=receipt.receipt_id,
                 message=f"receipt {receipt.receipt_id} run_id {receipt.run_id} != attempt {attempt.attempt_id} run_id {attempt.run_id}",
             ))
+        # R5.11: Do not trust the stored `verified` boolean as authoritative.
+        # The verifier must reverify receipt signatures and persistence
+        # attestations against externally assessed actuator trust. A stored
+        # `verified=True` does not prove anything without the trust store.
+        # This check flags receipts that claim verification without proof
+        # material; the actual signature reverification requires the actuator
+        # trust store which is separate from the eval bundle trust store.
+        if receipt.verified:
+            # The receipt claims verification. Check that the action_receipt
+            # contains proof material (transaction hash and deterministic
+            # stage evidence). A hash-only receipt without canonical envelope
+            # bytes or a content-addressed reference is insufficient.
+            if not receipt.action_receipt or not receipt.action_receipt.transaction_hash:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.ENVELOPE_RECEIPT,
+                    code=VerificationFailureCode.RECEIPT_RUN_MISMATCH,
+                    record_id=receipt.receipt_id,
+                    message=f"receipt {receipt.receipt_id} claims verified but lacks action receipt proof material",
+                ))
 
     return failures
 
@@ -997,6 +1058,120 @@ def _verify_chain_links(
                 message=f"stage {stage.stage_id} task_id {stage.task_id} != attempt task_id {attempt.task_id}",
             ))
 
+    # R5.13: Verify persistence attestations against declared proof strength.
+    # These records are embedded in analysis-input.json, not separate JSONL files.
+    from g8e_evals.analysis.input import AnalysisInputRecord
+    analysis_input_path = bundle_root / evals_constants.ANALYSIS_INPUT_JSON
+    persistence_records: list = []
+    commitment_records: list = []
+    audit_records: list = []
+    if analysis_input_path.exists():
+        try:
+            ai = AnalysisInputRecord.model_validate_json(analysis_input_path.read_text())
+            persistence_records = ai.persistence_attestations
+            commitment_records = ai.commitment_attestations
+            audit_records = ai.audit_links
+        except Exception:
+            pass  # Schema errors are reported by layer 9.
+
+    for pa in persistence_records:
+        if pa.attempt_id not in attempt_by_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_UNKNOWN_ATTEMPT,
+                record_id=pa.attestation_id,
+                message=f"persistence attestation {pa.attestation_id} references unknown attempt {pa.attempt_id}",
+            ))
+            continue
+        attempt = attempt_by_id[pa.attempt_id]
+        if pa.run_id != attempt.run_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_RUN_MISMATCH,
+                record_id=pa.attestation_id,
+                message=f"persistence attestation {pa.attestation_id} run_id {pa.run_id} != attempt run_id {attempt.run_id}",
+            ))
+        if pa.task_id != attempt.task_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_TASK_MISMATCH,
+                record_id=pa.attestation_id,
+                message=f"persistence attestation {pa.attestation_id} task_id {pa.task_id} != attempt task_id {attempt.task_id}",
+            ))
+        if not pa.content_sha256:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.SIGNATURE_MALFORMED,
+                record_id=pa.attestation_id,
+                message=f"persistence attestation {pa.attestation_id} lacks content_sha256 proof material",
+            ))
+
+    # R5.13: Verify commitment attestations.
+    for ca in commitment_records:
+        if ca.attempt_id not in attempt_by_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_UNKNOWN_ATTEMPT,
+                record_id=ca.attestation_id,
+                message=f"commitment attestation {ca.attestation_id} references unknown attempt {ca.attempt_id}",
+            ))
+            continue
+        attempt = attempt_by_id[ca.attempt_id]
+        if ca.run_id != attempt.run_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_RUN_MISMATCH,
+                record_id=ca.attestation_id,
+                message=f"commitment attestation {ca.attestation_id} run_id {ca.run_id} != attempt run_id {attempt.run_id}",
+            ))
+        if ca.task_id != attempt.task_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_TASK_MISMATCH,
+                record_id=ca.attestation_id,
+                message=f"commitment attestation {ca.attestation_id} task_id {ca.task_id} != attempt task_id {attempt.task_id}",
+            ))
+        if not ca.commitment_hash:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.SIGNATURE_MALFORMED,
+                record_id=ca.attestation_id,
+                message=f"commitment attestation {ca.attestation_id} lacks commitment_hash proof material",
+            ))
+
+    # R5.13: Verify audit links.
+    for al in audit_records:
+        if al.attempt_id not in attempt_by_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_UNKNOWN_ATTEMPT,
+                record_id=al.audit_link_id,
+                message=f"audit link {al.audit_link_id} references unknown attempt {al.attempt_id}",
+            ))
+            continue
+        attempt = attempt_by_id[al.attempt_id]
+        if al.run_id != attempt.run_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_RUN_MISMATCH,
+                record_id=al.audit_link_id,
+                message=f"audit link {al.audit_link_id} run_id {al.run_id} != attempt run_id {attempt.run_id}",
+            ))
+        if al.task_id != attempt.task_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.STAGE_TASK_MISMATCH,
+                record_id=al.audit_link_id,
+                message=f"audit link {al.audit_link_id} task_id {al.task_id} != attempt task_id {attempt.task_id}",
+            ))
+        if not al.audit_entry_sha256:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.CHAIN_LINKS,
+                code=VerificationFailureCode.SIGNATURE_MALFORMED,
+                record_id=al.audit_link_id,
+                message=f"audit link {al.audit_link_id} lacks audit_entry_sha256 proof material",
+            ))
+
     return failures
 
 
@@ -1049,6 +1224,295 @@ def _verify_metric_producers(
                 record_id=f"{metric.metric_id}:{metric.attempt_id}",
                 message=f"metric observation invalid: {exc}",
             ))
+
+    return failures
+
+
+# ---------------------------------------------------------------------------
+# Evidence index semantic verification (R5.9)
+# ---------------------------------------------------------------------------
+
+
+def _verify_evidence_index_semantics(
+    bundle_root: Path,
+    manifest: BundleManifest | None,
+) -> list[VerificationFailure]:
+    """Verify EvidenceIndex semantic closure.
+
+    Validates unique artifact IDs, unique storage paths, run and attempt
+    bindings, ciphertext digest and length for encrypted envelopes, and
+    that every ``storage_location`` resolves to an included bundle artifact
+    or an external reference in the manifest.
+    """
+    failures: list[VerificationFailure] = []
+
+    if manifest is None:
+        return failures
+
+    evidence_index_path = bundle_root / evals_constants.EVIDENCE_INDEX_JSONL
+    if not evidence_index_path.exists():
+        return failures
+
+    from g8e_evals.schema import EvidenceIndex
+
+    records: list[EvidenceIndex] = []
+    for line_num, line in enumerate(evidence_index_path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(EvidenceIndex.model_validate_json(line))
+        except (ValidationError, Exception) as exc:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                record_id=f"{evals_constants.EVIDENCE_INDEX_JSONL}:{line_num}",
+                message=f"invalid EvidenceIndex at line {line_num}: {exc}",
+            ))
+
+    if not records:
+        return failures
+
+    # Check unique artifact IDs.
+    seen_ids: set[str] = set()
+    for r in records:
+        if r.artifact_id in seen_ids:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.DUPLICATE_IDENTITY,
+                record_id=r.artifact_id,
+                message=f"duplicate evidence artifact_id: {r.artifact_id}",
+            ))
+        seen_ids.add(r.artifact_id)
+
+    # Check unique storage paths.
+    seen_paths: set[str] = set()
+    for r in records:
+        if r.storage_location and r.storage_location in seen_paths:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.DUPLICATE_IDENTITY,
+                record_id=r.storage_location,
+                message=f"duplicate evidence storage_location: {r.storage_location}",
+            ))
+        seen_paths.add(r.storage_location)
+
+    # Build manifest artifact path set and external reference set.
+    manifest_paths = {e.path for e in manifest.artifacts}
+    external_refs = {r.reference_id for r in manifest.external_references}
+
+    # Verify each evidence index record.
+    for r in records:
+        # Run binding.
+        if r.run_id != manifest.run_id:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.RUN_ID_MISMATCH,
+                record_id=r.artifact_id,
+                message=f"evidence {r.artifact_id} run_id {r.run_id} != manifest {manifest.run_id}",
+            ))
+
+        # Storage location resolution.
+        if r.storage_location:
+            if r.storage_location not in manifest_paths and r.storage_location not in external_refs:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.METRIC_PRODUCERS,
+                    code=VerificationFailureCode.MISSING_FILE,
+                    record_id=r.storage_location,
+                    message=f"evidence storage_location {r.storage_location} not in manifest artifacts or external references",
+                ))
+            elif r.storage_location in manifest_paths:
+                # Verify ciphertext digest and length for encrypted envelopes.
+                if r.encryption is not None:
+                    artifact_path = bundle_root / r.storage_location
+                    if artifact_path.exists():
+                        actual_bytes = artifact_path.read_bytes()
+                        import hashlib
+                        actual_hash = hashlib.sha256(actual_bytes).hexdigest()
+                        if actual_hash != r.encryption.ciphertext_sha256:
+                            failures.append(VerificationFailure(
+                                layer=VerificationLayer.METRIC_PRODUCERS,
+                                code=VerificationFailureCode.FILE_HASH_MISMATCH,
+                                record_id=r.storage_location,
+                                message=f"evidence ciphertext hash mismatch for {r.storage_location}: "
+                                        f"index={r.encryption.ciphertext_sha256} actual={actual_hash}",
+                            ))
+                        if len(actual_bytes) != r.encryption.ciphertext_byte_length:
+                            failures.append(VerificationFailure(
+                                layer=VerificationLayer.METRIC_PRODUCERS,
+                                code=VerificationFailureCode.FILE_HASH_MISMATCH,
+                                record_id=r.storage_location,
+                                message=f"evidence ciphertext length mismatch for {r.storage_location}: "
+                                        f"index={r.encryption.ciphertext_byte_length} actual={len(actual_bytes)}",
+                            ))
+                    else:
+                        failures.append(VerificationFailure(
+                            layer=VerificationLayer.METRIC_PRODUCERS,
+                            code=VerificationFailureCode.MISSING_FILE,
+                            record_id=r.storage_location,
+                            message=f"evidence artifact file not found: {r.storage_location}",
+                        ))
+
+        # Restricted evidence must have encryption.
+        from g8e_evals.schema import PrivacyClassification
+        if r.privacy_classification == PrivacyClassification.RESTRICTED and r.encryption is None:
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.METRIC_PRODUCERS,
+                code=VerificationFailureCode.RESTRICTED_WITHOUT_ENCRYPTION,
+                record_id=r.artifact_id,
+                message=f"restricted evidence {r.artifact_id} without encryption metadata",
+            ))
+
+    return failures
+
+
+# ---------------------------------------------------------------------------
+# Campaign authority verification (R5.10)
+# ---------------------------------------------------------------------------
+
+
+def _verify_campaign_authority(
+    bundle_root: Path,
+    manifest: BundleManifest | None,
+) -> list[VerificationFailure]:
+    """Verify campaign manifest, assignments, schedule, cohorts, and retry policy.
+
+    Before analysis reproduction, verify that the campaign contract files are
+    present, parseable, and internally consistent. A bundle must not pass when
+    a required campaign file is omitted from both the manifest and analysis
+    input.
+    """
+    failures: list[VerificationFailure] = []
+
+    if manifest is None:
+        return failures
+
+    # Check if campaign files are present in the manifest.
+    manifest_paths = {e.path for e in manifest.artifacts}
+    has_campaign_manifest = evals_constants.CAMPAIGN_MANIFEST_JSON in manifest_paths
+    has_campaign_assignments = evals_constants.CAMPAIGN_ASSIGNMENTS_JSONL in manifest_paths
+
+    # If no campaign files are present, this is not a campaign bundle; skip.
+    if not has_campaign_manifest and not has_campaign_assignments:
+        return failures
+
+    # Verify campaign manifest is present and parseable.
+    campaign_manifest_path = bundle_root / evals_constants.CAMPAIGN_MANIFEST_JSON
+    if has_campaign_manifest:
+        if not campaign_manifest_path.exists():
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.MISSING_FILE,
+                record_id=evals_constants.CAMPAIGN_MANIFEST_JSON,
+                message="campaign manifest in manifest but file missing from bundle",
+            ))
+        else:
+            try:
+                from g8e_evals.campaign import CampaignManifest as CM
+                CM.model_validate_json(campaign_manifest_path.read_text())
+            except Exception as exc:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                    code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                    record_id=evals_constants.CAMPAIGN_MANIFEST_JSON,
+                    message=f"invalid campaign manifest: {exc}",
+                ))
+
+    # Verify campaign assignments are present and parseable.
+    if has_campaign_assignments:
+        assignments_path = bundle_root / evals_constants.CAMPAIGN_ASSIGNMENTS_JSONL
+        if not assignments_path.exists():
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.MISSING_FILE,
+                record_id=evals_constants.CAMPAIGN_ASSIGNMENTS_JSONL,
+                message="campaign assignments in manifest but file missing from bundle",
+            ))
+        else:
+            from g8e_evals.campaign import CampaignAssignment
+            for line_num, line in enumerate(assignments_path.read_text().splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    CampaignAssignment.model_validate_json(line)
+                except Exception as exc:
+                    failures.append(VerificationFailure(
+                        layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                        code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                        record_id=f"{evals_constants.CAMPAIGN_ASSIGNMENTS_JSONL}:{line_num}",
+                        message=f"invalid campaign assignment at line {line_num}: {exc}",
+                    ))
+
+    # Verify campaign cohorts are present and parseable.
+    cohorts_path = bundle_root / evals_constants.CAMPAIGN_COHORTS_JSONL
+    if evals_constants.CAMPAIGN_COHORTS_JSONL in manifest_paths:
+        if not cohorts_path.exists():
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.MISSING_FILE,
+                record_id=evals_constants.CAMPAIGN_COHORTS_JSONL,
+                message="campaign cohorts in manifest but file missing from bundle",
+            ))
+        else:
+            from g8e_evals.campaign import ModelCohort
+            for line_num, line in enumerate(cohorts_path.read_text().splitlines(), 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ModelCohort.model_validate_json(line)
+                except Exception as exc:
+                    failures.append(VerificationFailure(
+                        layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                        code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                        record_id=f"{evals_constants.CAMPAIGN_COHORTS_JSONL}:{line_num}",
+                        message=f"invalid model cohort at line {line_num}: {exc}",
+                    ))
+
+    # Verify campaign schedule is present and parseable.
+    schedule_path = bundle_root / evals_constants.CAMPAIGN_SCHEDULE_JSON
+    if evals_constants.CAMPAIGN_SCHEDULE_JSON in manifest_paths:
+        if not schedule_path.exists():
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.MISSING_FILE,
+                record_id=evals_constants.CAMPAIGN_SCHEDULE_JSON,
+                message="campaign schedule in manifest but file missing from bundle",
+            ))
+        else:
+            try:
+                from g8e_evals.campaign import ExecutionSchedule
+                ExecutionSchedule.model_validate_json(schedule_path.read_text())
+            except Exception as exc:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                    code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                    record_id=evals_constants.CAMPAIGN_SCHEDULE_JSON,
+                    message=f"invalid campaign schedule: {exc}",
+                ))
+
+    # Verify retry policy is present and parseable.
+    retry_path = bundle_root / evals_constants.CAMPAIGN_RETRY_POLICY_JSON
+    if evals_constants.CAMPAIGN_RETRY_POLICY_JSON in manifest_paths:
+        if not retry_path.exists():
+            failures.append(VerificationFailure(
+                layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                code=VerificationFailureCode.MISSING_FILE,
+                record_id=evals_constants.CAMPAIGN_RETRY_POLICY_JSON,
+                message="campaign retry policy in manifest but file missing from bundle",
+            ))
+        else:
+            try:
+                from g8e_evals.campaign import RetryPolicy
+                RetryPolicy.model_validate_json(retry_path.read_text())
+            except Exception as exc:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.ANALYSIS_REPRODUCTION,
+                    code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                    record_id=evals_constants.CAMPAIGN_RETRY_POLICY_JSON,
+                    message=f"invalid campaign retry policy: {exc}",
+                ))
 
     return failures
 
@@ -1161,15 +1625,20 @@ def _verify_source_record_cross_check(
 
         # Read JSONL records as canonical JSON strings.
         jsonl_records: list[str] = []
-        for line in jsonl_path.read_text().splitlines():
+        for line_num, line in enumerate(jsonl_path.read_text().splitlines(), 1):
             line = line.strip()
             if not line:
                 continue
             try:
                 obj = json.loads(line)
                 jsonl_records.append(json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
-            except (json.JSONDecodeError, ValueError):
-                continue
+            except (json.JSONDecodeError, ValueError) as exc:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.SCHEMAS_CANONICAL,
+                    code=VerificationFailureCode.MANIFEST_SCHEMA_INVALID,
+                    record_id=f"{filename}:{line_num}",
+                    message=f"invalid JSON at {filename} line {line_num}: {exc}",
+                ))
 
         # Read analysis-input.json field records as canonical JSON strings.
         ai_field = ai_raw.get(field_name, [])
@@ -1268,6 +1737,17 @@ def _verify_privacy_separation(
                     code=VerificationFailureCode.RESTRICTED_PLAINTEXT_EXPOSED,
                     record_id=entry.path,
                     message=f"public artifact carries encryption metadata (should be restricted): {entry.path}",
+                ))
+        # R5.7: INTERNAL artifacts are plaintext metadata (e.g. evidence-index.jsonl).
+        # They must not carry blanket encryption metadata; only RESTRICTED
+        # artifacts (encrypted ciphertext) carry encryption metadata.
+        if entry.privacy_class == PrivacyClass.INTERNAL:
+            if entry.encryption is not None:
+                failures.append(VerificationFailure(
+                    layer=VerificationLayer.PRIVACY_SEPARATION,
+                    code=VerificationFailureCode.RESTRICTED_PLAINTEXT_EXPOSED,
+                    record_id=entry.path,
+                    message=f"internal plaintext artifact carries encryption metadata (only restricted ciphertext should): {entry.path}",
                 ))
 
     return failures
@@ -1436,6 +1916,14 @@ def verify_bundle(
     # Layer 8: Metric producers
     _check_cancel(cancel_event)
     all_failures += _verify_metric_producers(bundle_root, manifest)
+
+    # R5.9: Evidence index semantic verification (part of layer 8).
+    _check_cancel(cancel_event)
+    all_failures += _verify_evidence_index_semantics(bundle_root, manifest)
+
+    # R5.10: Campaign authority verification (before analysis reproduction).
+    _check_cancel(cancel_event)
+    all_failures += _verify_campaign_authority(bundle_root, manifest)
 
     # Layer 9: Canonical analysis reproduction
     _check_cancel(cancel_event)

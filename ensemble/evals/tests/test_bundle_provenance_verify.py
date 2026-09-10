@@ -216,12 +216,12 @@ def _produce_bundle(
         budget=budget,
         is_production=is_production,
     )
+    if signing_key is None:
+        signing_key = EvalSigningKey.from_seed(_SEED)
     produce_bundle(
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-1",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
     )

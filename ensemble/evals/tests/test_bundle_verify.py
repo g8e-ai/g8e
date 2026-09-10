@@ -51,6 +51,7 @@ from g8e_evals.schema import (
     AttemptRecord,
     MetricObservation,
     ReceiptObservation,
+    RunManifest,
     StageKind,
     StageObservation,
     TaskDefinition,
@@ -156,12 +157,12 @@ def _build_report_dir(report_dir: Path) -> None:
     stage = _minimal_stage()
 
     # Write source records.
-    (report_dir / evals_constants.MANIFEST_JSON).write_text(json.dumps({
-        "run_id": "run-1",
-        "suite_id": "ifeval_subset",
-        "started_at": _TS.isoformat(),
-        "ended_at": _TS.isoformat(),
-    }, sort_keys=True))
+    run_manifest = RunManifest(
+        run_id="run-1",
+        suite_id="ifeval_subset",
+        suite_version="1.0.0",
+    )
+    (report_dir / evals_constants.MANIFEST_JSON).write_text(canonical_model_json(run_manifest))
     (report_dir / evals_constants.TASKS_JSONL).write_text(canonical_model_json(task) + "\n")
     (report_dir / evals_constants.ATTEMPTS_JSONL).write_text(canonical_model_json(attempt) + "\n")
     (report_dir / evals_constants.METRICS_JSONL).write_text(canonical_model_json(metric) + "\n")
@@ -191,16 +192,20 @@ def _build_report_dir(report_dir: Path) -> None:
 
 
 def _produce_valid_bundle(tmp_path: Path, signing_key: EvalSigningKey | None = None) -> Path:
-    """Produce a valid bundle from a minimal report directory."""
+    """Produce a valid bundle from a minimal report directory.
+
+    Defaults to a deterministic signing key so the bundle is signed unless
+    the caller explicitly passes ``signing_key=None`` with ``diagnostic=True``.
+    """
     report_dir = tmp_path / "report"
     bundle_dir = tmp_path / "bundle"
     _build_report_dir(report_dir)
+    if signing_key is None:
+        signing_key = EvalSigningKey.from_seed(b"k" * 32)
     produce_bundle(
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-1",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
     )
@@ -381,8 +386,18 @@ class TestSignaturesTrust:
     """Layer 4: manifest/checksum signatures and assessed trust."""
 
     def test_unsigned_bundle_without_trust_store_passes_other_layers(self, tmp_path: Path) -> None:
-        """An unsigned bundle without a trust store: signature layer fails, others pass."""
-        bundle_dir = _produce_valid_bundle(tmp_path, signing_key=None)
+        """An unsigned diagnostic bundle without a trust store: signature layer fails, others pass."""
+        report_dir = tmp_path / "report"
+        bundle_dir = tmp_path / "bundle"
+        _build_report_dir(report_dir)
+        produce_bundle(
+            report_dir=report_dir,
+            bundle_dir=bundle_dir,
+            bundle_id="bundle-1",
+            signing_key=None,
+            created_at=_TS,
+            diagnostic=True,
+        )
         report = verify_bundle(bundle_dir, trust_store=None)
         layer4 = next(lr for lr in report.layers if lr.layer == VerificationLayer.SIGNATURES_TRUST)
         assert not layer4.passed

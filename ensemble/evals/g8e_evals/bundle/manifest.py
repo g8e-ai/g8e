@@ -44,6 +44,20 @@ class PrivacyClass(StrEnum):
     RESTRICTED = "restricted"
 
 
+class BundleProjection(StrEnum):
+    """Projection contract for a bundle.
+
+    A ``PRIVATE`` projection may contain authenticated ciphertext for
+    restricted evidence alongside public and internal metadata. A
+    ``PUBLIC`` projection contains only safe metadata plus authenticated
+    ciphertext or content-addressed external references permitted by
+    policy; no internal or restricted plaintext is included.
+    """
+
+    PRIVATE = "private"
+    PUBLIC = "public"
+
+
 class ArtifactType(StrEnum):
     """Semantic record identity of a bundle artifact.
 
@@ -66,6 +80,13 @@ class ArtifactType(StrEnum):
     METRICS = "metrics"
     AUDIT_LINKS = "audit_links"
     EVIDENCE_INDEX = "evidence_index"
+    EVIDENCE_ARTIFACT = "evidence_artifact"
+    CAMPAIGN_MANIFEST = "campaign_manifest"
+    CAMPAIGN_ASSIGNMENTS = "campaign_assignments"
+    CAMPAIGN_COHORTS = "campaign_cohorts"
+    CAMPAIGN_SCHEDULE = "campaign_schedule"
+    CAMPAIGN_RETRY_POLICY = "campaign_retry_policy"
+    CAMPAIGN_STATUS = "campaign_status"
     ANALYSIS_INPUT = "analysis_input"
     ANALYSIS_JSON = "analysis_json"
     ANALYSIS_MD = "analysis_md"

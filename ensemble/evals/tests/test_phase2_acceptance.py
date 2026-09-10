@@ -22,7 +22,6 @@ requiring restricted plaintext.
 
 from __future__ import annotations
 
-import json
 import socket
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,6 +53,7 @@ from g8e_evals.schema import (
     AttemptRecord,
     MetricObservation,
     ReceiptObservation,
+    RunManifest,
     StageKind,
     StageObservation,
     TaskDefinition,
@@ -155,12 +155,12 @@ def _build_public_report_dir(report_dir: Path) -> None:
     receipt = _public_receipt()
     stage = _public_stage()
 
-    (report_dir / evals_constants.MANIFEST_JSON).write_text(json.dumps({
-        "run_id": "run-1",
-        "suite_id": "ifeval_subset",
-        "started_at": _TS.isoformat(),
-        "ended_at": _TS.isoformat(),
-    }, sort_keys=True))
+    run_manifest = RunManifest(
+        run_id="run-1",
+        suite_id="ifeval_subset",
+        suite_version="1.0.0",
+    )
+    (report_dir / evals_constants.MANIFEST_JSON).write_text(canonical_model_json(run_manifest))
     (report_dir / evals_constants.TASKS_JSONL).write_text(canonical_model_json(task) + "\n")
     (report_dir / evals_constants.ATTEMPTS_JSONL).write_text(canonical_model_json(attempt) + "\n")
     (report_dir / evals_constants.METRICS_JSONL).write_text(canonical_model_json(metric) + "\n")
@@ -197,8 +197,6 @@ def _produce_public_bundle(tmp_path: Path, signing_key: EvalSigningKey) -> Path:
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-phase2-acceptance",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
     )

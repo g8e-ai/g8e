@@ -204,16 +204,20 @@ def _build_report_dir(report_dir: Path) -> None:
 
 
 def _produce_valid_bundle(tmp_path: Path, signing_key: EvalSigningKey | None = None) -> Path:
-    """Produce a valid bundle from a minimal report directory."""
+    """Produce a valid bundle from a minimal report directory.
+
+    Defaults to a deterministic signing key so the bundle is signed unless
+    the caller explicitly passes ``signing_key=None`` with ``diagnostic=True``.
+    """
     report_dir = tmp_path / "report"
     bundle_dir = tmp_path / "bundle"
     _build_report_dir(report_dir)
+    if signing_key is None:
+        signing_key = EvalSigningKey.from_seed(b"k" * 32)
     produce_bundle(
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-1",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
     )

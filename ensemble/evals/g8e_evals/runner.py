@@ -82,6 +82,7 @@ from g8e_evals.constants import (
     CAMPAIGN_MANIFEST_JSON,
     CAMPAIGN_RETRY_POLICY_JSON,
     CAMPAIGN_SCHEDULE_JSON,
+    CAMPAIGN_STATUS_JSON,
     MANIFEST_JSON,
     METRICS_JSONL,
     TASKS_JSONL,
@@ -106,8 +107,6 @@ from g8e_evals.schema import (
     TerminalStatus,
     VerificationStatus,
 )
-
-CAMPAIGN_STATUS_JSON = "campaign-status.json"
 
 SCHEDULE_ALGORITHM_ID = "fisher_yates_shuffle"
 SCHEDULE_ALGORITHM_VERSION = "1.0.0"
@@ -878,7 +877,6 @@ class CampaignRunner:
 
 
 __all__ = [
-    "CAMPAIGN_STATUS_JSON",
     "CampaignResult",
     "CampaignRunner",
     "CampaignRunnerError",

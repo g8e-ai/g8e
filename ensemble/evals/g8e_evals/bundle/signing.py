@@ -42,6 +42,7 @@ from g8e_evals.bundle.manifest import BundleManifest, ChecksumRoot
 
 EVAL_SIGNING_ALGORITHM = "ed25519"
 EVAL_TRUST_SCOPE = "eval-bundle"
+ACTUATOR_TRUST_SCOPE = "actuator-evidence"
 
 
 class TrustStatus(StrEnum):
@@ -401,6 +402,7 @@ def verify_bundle_signature(
 
 
 __all__ = [
+    "ACTUATOR_TRUST_SCOPE",
     "EVAL_SIGNING_ALGORITHM",
     "EVAL_TRUST_SCOPE",
     "BundleSignature",

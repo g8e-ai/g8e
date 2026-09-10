@@ -80,6 +80,7 @@ from g8e_evals.schema import (
     PersistenceAttestation,
     PrivacyClassification,
     ReceiptObservation,
+    RunManifest,
     SecretDetectionObservation,
     StateCollectionBoundary,
     StateEvidenceKind,
@@ -190,12 +191,12 @@ def _build_report_dir(report_dir: Path) -> None:
     receipt = _minimal_receipt()
     stage = _minimal_stage()
 
-    (report_dir / evals_constants.MANIFEST_JSON).write_text(json.dumps({
-        "run_id": "run-1",
-        "suite_id": "ifeval_subset",
-        "started_at": _TS.isoformat(),
-        "ended_at": _TS.isoformat(),
-    }, sort_keys=True))
+    run_manifest = RunManifest(
+        run_id="run-1",
+        suite_id="ifeval_subset",
+        suite_version="1.0.0",
+    )
+    (report_dir / evals_constants.MANIFEST_JSON).write_text(canonical_model_json(run_manifest))
     (report_dir / evals_constants.TASKS_JSONL).write_text(canonical_model_json(task) + "\n")
     (report_dir / evals_constants.ATTEMPTS_JSONL).write_text(canonical_model_json(attempt) + "\n")
     (report_dir / evals_constants.METRICS_JSONL).write_text(canonical_model_json(metric) + "\n")
@@ -269,20 +270,27 @@ def _minimal_secret_detection_observation() -> SecretDetectionObservation:
     )
 
 
+_EVIDENCE_STORAGE_LOCATION = "evidence/attempt-1/provider-request.json.enc"
+_EVIDENCE_CIPHERTEXT = b"\x00" * 42
+
+
 def _minimal_evidence_index() -> EvidenceIndex:
     return EvidenceIndex(
         artifact_id="evidence-1",
         run_id="run-1",
         attempt_id="attempt-1",
-        media_type=EvidenceMediaType.APPLICATION_JSON,
-        sha256="0" * 64,
+        media_type=EvidenceMediaType.APPLICATION_OCTET_STREAM,
+        schema_ref="provider-request/v1",
+        byte_length=len(_EVIDENCE_CIPHERTEXT),
+        sha256=_sha256(_EVIDENCE_CIPHERTEXT),
         privacy_classification=PrivacyClassification.RESTRICTED,
+        storage_location=_EVIDENCE_STORAGE_LOCATION,
         encryption=EvidenceEncryption(
             algorithm=EvidenceEncryptionAlgorithm.AES_256_GCM,
             key_id="key-1",
             aad_sha256="0" * 64,
-            ciphertext_sha256="1" * 64,
-            ciphertext_byte_length=42,
+            ciphertext_sha256=_sha256(_EVIDENCE_CIPHERTEXT),
+            ciphertext_byte_length=len(_EVIDENCE_CIPHERTEXT),
         ),
     )
 
@@ -360,12 +368,12 @@ def _build_rich_report_dir(report_dir: Path) -> None:
     commitment = _minimal_commitment_attestation()
     audit_link = _minimal_audit_link()
 
-    (report_dir / evals_constants.MANIFEST_JSON).write_text(json.dumps({
-        "run_id": "run-1",
-        "suite_id": "ifeval_subset",
-        "started_at": _TS.isoformat(),
-        "ended_at": _TS.isoformat(),
-    }, sort_keys=True))
+    run_manifest = RunManifest(
+        run_id="run-1",
+        suite_id="ifeval_subset",
+        suite_version="1.0.0",
+    )
+    (report_dir / evals_constants.MANIFEST_JSON).write_text(canonical_model_json(run_manifest))
     (report_dir / evals_constants.TASKS_JSONL).write_text(canonical_model_json(task) + "\n")
     (report_dir / evals_constants.ATTEMPTS_JSONL).write_text(canonical_model_json(attempt) + "\n")
     (report_dir / evals_constants.METRICS_JSONL).write_text(canonical_model_json(metric) + "\n")
@@ -384,6 +392,11 @@ def _build_rich_report_dir(report_dir: Path) -> None:
     (report_dir / evals_constants.EVIDENCE_INDEX_JSONL).write_text(
         canonical_model_json(evidence_idx) + "\n"
     )
+
+    # Write the nested encrypted evidence file referenced by the evidence index.
+    evidence_path = report_dir / _EVIDENCE_STORAGE_LOCATION
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(_EVIDENCE_CIPHERTEXT)
 
     analysis_input = AnalysisInputRecord(
         run_id="run-1",
@@ -422,32 +435,27 @@ def _produce_valid_rich_bundle(tmp_path: Path, signing_key: EvalSigningKey | Non
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-1",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
-        restricted_encryption=EvidenceEncryption(
-            algorithm=EvidenceEncryptionAlgorithm.AES_256_GCM,
-            key_id="key-1",
-            aad_sha256="0" * 64,
-            ciphertext_sha256="1" * 64,
-            ciphertext_byte_length=42,
-        ),
     )
     return bundle_dir
 
 
 def _produce_valid_bundle(tmp_path: Path, signing_key: EvalSigningKey | None = None) -> Path:
-    """Produce a valid signed bundle from a minimal report directory."""
+    """Produce a valid signed bundle from a minimal report directory.
+
+    Defaults to a deterministic signing key so the bundle is signed unless
+    the caller explicitly passes ``signing_key=None`` with ``diagnostic=True``.
+    """
     report_dir = tmp_path / "report"
     bundle_dir = tmp_path / "bundle"
     _build_report_dir(report_dir)
+    if signing_key is None:
+        signing_key = EvalSigningKey.from_seed(_SEED)
     produce_bundle(
         report_dir=report_dir,
         bundle_dir=bundle_dir,
         bundle_id="bundle-1",
-        run_id="run-1",
-        release_version="v2.1.8",
         signing_key=signing_key,
         created_at=_TS,
     )
@@ -1490,10 +1498,10 @@ class TestRestrictedArtifactHandling:
         bundle_dir = _produce_valid_rich_bundle(tmp_path, signing_key=signing_key)
         manifest_path = bundle_dir / evals_constants.BUNDLE_MANIFEST_JSON
         manifest = BundleManifest.model_validate_json(manifest_path.read_text())
-        # Find the evidence-index entry (restricted) and strip its encryption.
+        # Find the nested evidence artifact (restricted) and strip its encryption.
         new_entries = []
         for entry in manifest.artifacts:
-            if entry.path == evals_constants.EVIDENCE_INDEX_JSONL:
+            if entry.path == _EVIDENCE_STORAGE_LOCATION:
                 new_entries.append(entry.model_copy(update={"encryption": None}))
             else:
                 new_entries.append(entry)

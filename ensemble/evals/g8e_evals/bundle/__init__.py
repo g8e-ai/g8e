@@ -20,6 +20,7 @@ from g8e_evals.bundle.manifest import (
     ArtifactType,
     BundleArtifactEntry,
     BundleManifest,
+    BundleProjection,
     ChecksumEntry,
     ChecksumRoot,
     ExternalReference,
@@ -28,6 +29,7 @@ from g8e_evals.bundle.manifest import (
 from g8e_evals.bundle.produce import produce_bundle
 from g8e_evals.bundle.publish import PublicationError, build_publication_request, publish_bundle
 from g8e_evals.bundle.signing import (
+    ACTUATOR_TRUST_SCOPE,
     EVAL_SIGNING_ALGORITHM,
     EVAL_TRUST_SCOPE,
     BundleSignature,
@@ -60,6 +62,7 @@ from g8e_evals.bundle.verify import (
 )
 
 __all__ = [
+    "ACTUATOR_TRUST_SCOPE",
     "BUNDLE_MANIFEST_SCHEMA_VERSION",
     "EVAL_SIGNING_ALGORITHM",
     "EVAL_TRUST_SCOPE",
@@ -69,6 +72,7 @@ __all__ = [
     "BundleManifest",
     "BundleManifestValidationError",
     "BundlePathError",
+    "BundleProjection",
     "BundleSignature",
     "BundleSignatureVerificationResult",
     "ChecksumEntry",
