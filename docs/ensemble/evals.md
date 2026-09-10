@@ -48,7 +48,7 @@ Each synthetic task must declare at least one typed assertion with a registered 
 
 ### Live run evidence
 
-The live runner completes authentication and provider preflight before creating a report directory. It then writes `manifest.json` before task execution and records the suite identity, eval package version, selected arm, requested posture, role-to-model mapping, runtime environment, and content hashes. The manifest schema also defines source revision, source tree state, sampling, context-limit, preregistration, and redacted-configuration fields, but the current CLI does not populate those fields. A report therefore does not establish source-state or sampling provenance unless a separate reviewed process binds it.
+The live runner completes authentication and provider preflight before creating a report directory. It then writes `manifest.json` before task execution and records the suite identity, eval package version, selected arm, requested posture, role-to-model mapping, runtime environment, content hashes, source/build provenance, provider budget, and stack environment. Preflight fails before any task executes when a required identity, hash, capability, or provenance field is unavailable.
 
 Attempts use typed terminal states for completion, model failure, governance rejection, human denial, timeout, infrastructure failure, and invalid evidence. Normalized stages cover model inference, Tribunal generation and auditing, L1 doctrine, protocol L2, L3 ceremony, L4 verification, L5 execution, scrubbing, rehydration, receipt persistence, commitment append, and grading. Model stages record available timing, usage, retry, finish-reason, boundary-hash, and privacy-attestation data; missing provider usage remains missing rather than being estimated.
 
@@ -61,6 +61,18 @@ Raw prompts, model outputs, and agent trails are restricted evidence. The live r
 ### Metric contract
 
 Every metric is registered by metric ID and version with its unit, direction, eligible population, denominator semantics, missing-value policy, aggregation method, uncertainty method, evidence requirements, grader class, and any release threshold. The runner rejects unregistered metrics and rows whose unit or grader class does not match the registry. Consumers aggregate only eligible rows according to each metric definition and keep unsupported exclusions out of the denominator.
+
+### Preflight and source/build provenance
+
+`g8e_evals.preflight` runs typed validation before any task executes and fails closed with a stable `PreflightFailureCode` when a required identity, hash, capability, or provenance field is unavailable. The runner never runs ad hoc Git commands to populate source/build provenance; all provenance comes from environment variables set by the trusted build system or CI pipeline. Each of the 15 ordered checks is single-purpose: provider/model presence, credential presence (keyless providers exempt), endpoint validation, sampling parameter ranges, seed support, stack image digests, network mode, OS metadata, runtime version, hardware metadata, redacted configuration leak detection, content hash presence and validity, preregistration hash, provider budget, and source/build provenance.
+
+Source/build provenance is a typed `SourceBuildProvenance` model binding the source revision, source tree state hash (64-char hex), and optional build ID, build system, CI run ID, and CI URL. The trusted build system supplies these through environment variables: `G8E_EVALS_SOURCE_REVISION`, `G8E_EVALS_SOURCE_TREE_STATE_HASH`, `G8E_EVALS_BUILD_ID`, `G8E_EVALS_BUILD_SYSTEM`, `G8E_EVALS_CI_RUN_ID`, and `G8E_EVALS_CI_URL`. The `compute_source_tree_state_hash` function produces a deterministic SHA-256 over the source tree when the build system has not already supplied a hash; it rejects symlinks and requires a directory root.
+
+Provider budget is a typed `ProviderBudget` model with `max_usd` (required, non-negative) and optional `max_tokens` and `max_requests` (non-negative). The build system supplies these through `G8E_EVALS_PROVIDER_BUDGET_MAX_USD`, `G8E_EVALS_PROVIDER_BUDGET_MAX_TOKENS`, and `G8E_EVALS_PROVIDER_BUDGET_MAX_REQUESTS`.
+
+Production-posture runs (the live `g8e-evals run` path) require source/build provenance and fail before execution when it is unavailable. Non-production runs (the synthetic `g8e-evals bench-synthetic` path) may omit provenance entirely; the check skips the env-var fallback when `is_production_posture=False` and no provenance is supplied on the request. When provenance is supplied on the request, it is always validated regardless of posture.
+
+Bundle verification layer 12 (`SOURCE_BUILD_PROVENANCE`) binds source/build provenance into the signed bundle and verification report. It checks that `source_build_provenance` is present for production-posture runs, validates `source_revision` is non-empty, and validates `source_tree_state_hash` is a 64-char hex string. Non-production runs may omit provenance.
 
 ## Run live evaluations
 
