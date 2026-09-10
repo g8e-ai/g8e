@@ -47,13 +47,19 @@ from g8e_evals.constants import (
     EVIDENCE_INDEX_JSONL,
     MANIFEST_JSON,
     METRICS_JSONL,
+    RESOURCE_OBSERVATIONS_JSONL,
     TASKS_JSONL,
 )
 from g8e_evals.index import (
+    AssignmentDisposition,
     CampaignVerificationReport,
+    IndexCreationReason,
     IndexGeneration,
+    ResourceObservation,
     validate_index_chain,
     validate_no_duplicate_effective_assignments,
+    validate_resource_observations,
+    validate_supersession_policy,
 )
 from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
@@ -281,6 +287,62 @@ def verify_campaign(report_dir: Path) -> CampaignVerificationReport:
                     f"{bai.backend_name!r} does not match role_to_model primary provider "
                     f"{primary.provider!r}"
                 )
+
+    # Layer 11: finalization — the last index generation is FINALIZATION
+    checked_layers.append("finalization")
+    if generations:
+        last_gen = generations[-1]
+        if last_gen.creation_reason != IndexCreationReason.FINALIZATION:
+            failures.append(
+                f"final index generation is not FINALIZATION: "
+                f"got {last_gen.creation_reason.value!r}"
+            )
+
+    # Layer 12: supersession policy — SUPERSESSION generations must be policy-valid
+    checked_layers.append("supersession_policy")
+    if len(generations) >= 2:
+        for i, gen in enumerate(generations):
+            if gen.creation_reason != IndexCreationReason.SUPERSESSION:
+                continue
+            # Find the prior generation's disposition for each superseded assignment
+            prior_gen = generations[i - 1] if i > 0 else None
+            if prior_gen is None:
+                continue
+            prior_dispositions: dict[str, AssignmentDisposition] = {
+                d.assignment_id: d.disposition
+                for d in prior_gen.assignment_dispositions
+            }
+            for entry in gen.assignment_dispositions:
+                prior_disp = prior_dispositions.get(entry.assignment_id)
+                if prior_disp is None:
+                    continue
+                try:
+                    validate_supersession_policy(
+                        prior_disposition=prior_disp,
+                        prior_terminal_status=prior_disp.value,
+                        new_creation_reason=gen.creation_reason,
+                    )
+                except ValueError as e:
+                    failures.append(
+                        f"supersession policy violation in generation "
+                        f"{gen.generation_number}: {e}"
+                    )
+
+    # Layer 13: resource observations — validate if present
+    checked_layers.append("resource_observation")
+    resource_obs_path = report_dir / RESOURCE_OBSERVATIONS_JSONL
+    if resource_obs_path.exists():
+        if resource_obs_path.is_symlink():
+            failures.append(f"symlink rejected for resource observations: {resource_obs_path.name}")
+        elif not resource_obs_path.is_file():
+            failures.append(f"resource observations is not a regular file: {resource_obs_path.name}")
+        else:
+            try:
+                obs_records = _read_jsonl_dicts(resource_obs_path)
+                observations = [ResourceObservation.model_validate(r) for r in obs_records]
+                validate_resource_observations(observations)
+            except (ValidationError, ValueError, json.JSONDecodeError) as e:
+                failures.append(f"resource observation validation failed: {e}")
 
     ok = len(failures) == 0
     return CampaignVerificationReport(

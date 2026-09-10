@@ -382,7 +382,7 @@ class TestFullExecution:
         )
         result = asyncio.run(runner.run())
 
-        assert result.status == CampaignStatus.COMPLETED
+        assert result.status == CampaignStatus.FINALIZED
         assert result.stop_reason == CampaignStopReason.COMPLETED
         expected = len(_TASK_IDS) * len(_COHORT_IDS) * len(_ARM_IDS) * len(_REPLICATE_IDS)
         assert result.assignment_count == expected
@@ -420,7 +420,7 @@ class TestFullExecution:
             assert attempt["assignment_order"] >= 0
             assert attempt["terminal_status"] == TerminalStatus.COMPLETED.value
 
-    def test_campaign_status_transitions_to_completed(self, tmp_path: Path):
+    def test_campaign_status_transitions_to_finalized(self, tmp_path: Path):
         spec = _make_spec()
         runner = CampaignRunner(
             spec=spec,
@@ -433,7 +433,7 @@ class TestFullExecution:
 
         status_path = result.report_dir / CAMPAIGN_STATUS_JSON
         status = json.loads(status_path.read_text())
-        assert status["status"] == CampaignStatus.COMPLETED.value
+        assert status["status"] == CampaignStatus.FINALIZED.value
         assert status["stop_reason"] == CampaignStopReason.COMPLETED.value
 
 
@@ -453,7 +453,7 @@ class TestResume:
             output_dir=tmp_path,
         )
         result1 = asyncio.run(runner.run())
-        assert result1.status == CampaignStatus.COMPLETED
+        assert result1.status == CampaignStatus.FINALIZED
 
         # Second run on the same report dir should reuse the schedule and
         # not re-execute any assignments.
@@ -468,7 +468,7 @@ class TestResume:
         runner2._report_dir = result1.report_dir
         result2 = asyncio.run(runner2.run())
 
-        assert result2.status == CampaignStatus.COMPLETED
+        assert result2.status == CampaignStatus.FINALIZED
         assert result2.report_dir == result1.report_dir
         # Same number of attempts (no re-execution)
         assert result2.terminal_attempt_count == result1.terminal_attempt_count
@@ -517,7 +517,7 @@ class TestRetry:
         )
         result = asyncio.run(runner.run())
 
-        assert result.status == CampaignStatus.COMPLETED
+        assert result.status == CampaignStatus.FINALIZED
         # Each assignment should have 2 attempts (1 failed + 1 success)
         attempts_text = (result.report_dir / ATTEMPTS_JSONL).read_text().strip().splitlines()
         expected_assignments = len(_TASK_IDS) * len(_COHORT_IDS) * len(_ARM_IDS) * len(_REPLICATE_IDS)
@@ -625,7 +625,7 @@ class TestBudgetStop:
             output_dir=tmp_path,
         )
         result = asyncio.run(runner.run())
-        assert result.status == CampaignStatus.COMPLETED
+        assert result.status == CampaignStatus.FINALIZED
 
 
 # ---------------------------------------------------------------------------

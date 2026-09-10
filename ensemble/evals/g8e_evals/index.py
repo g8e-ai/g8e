@@ -427,13 +427,19 @@ class ResourceObservation(BaseModel):
 
     Records model load time, peak resident memory, peak accelerator
     memory, artifact bytes, measured energy, end-to-end latency,
-    provider-call latency, and output throughput. Every observation is
-    bound to run ID, model variant ID, task block, hardware identity,
-    collection tool/version, and source evidence hash.
+    provider-call latency, output throughput, and hidden reasoning
+    throughput. Every observation is bound to run ID, model variant ID,
+    task block, hardware identity, collection tool/version, and source
+    evidence hash.
 
     Accelerator memory is a measured value, never inferred from parameter
     count or quantization labels. When no calibrated energy source
     exists, ``measured_energy_joules`` is ``None``.
+
+    Output throughput is reported visible output tokens divided by
+    eligible provider-call duration. Hidden reasoning throughput is
+    reported separately when the model exposes it; it is ``None`` when
+    not available.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -453,14 +459,62 @@ class ResourceObservation(BaseModel):
     end_to_end_latency_seconds: float = Field(gt=0.0, description="End-to-end task latency in seconds.")
     provider_call_latency_seconds: float = Field(gt=0.0, description="Provider-call latency in seconds.")
     output_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Output throughput in tokens per second. None when not measured.")
+    hidden_reasoning_throughput_tokens_per_second: float | None = Field(default=None, ge=0.0, description="Hidden reasoning throughput in tokens per second. None when not available.")
 
 
-def validate_resource_observations(observations: list[ResourceObservation]) -> None:
+class ResourceObserverContract(BaseModel):
+    """Frozen typed contract for the external resource observer.
+
+    Defines the observed process/container/device scope, baseline
+    subtraction policy, sampling interval, synchronization boundaries,
+    observer clock domain, multi-tenant exclusion rule, and
+    unsupported-platform behavior. Every resource observation must
+    comply with this contract.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    process_scope: str = Field(
+        min_length=1,
+        description="Observed process/container/device scope (e.g. single_process, container, device).",
+    )
+    baseline_subtraction_policy: str = Field(
+        min_length=1,
+        description="Baseline subtraction policy (e.g. idle_baseline, no_subtraction).",
+    )
+    sampling_interval_seconds: float = Field(
+        gt=0.0,
+        description="Sampling interval in seconds.",
+    )
+    synchronization_boundary: str = Field(
+        min_length=1,
+        description="Synchronization boundary (e.g. provider_call, task_start_to_end).",
+    )
+    observer_clock_domain: str = Field(
+        min_length=1,
+        description="Observer clock domain (e.g. monotonic, wall_clock).",
+    )
+    multi_tenant_exclusion_rule: str = Field(
+        min_length=1,
+        description="Multi-tenant exclusion rule (e.g. exclusive_access, cgroup_isolation).",
+    )
+    unsupported_platform_behavior: str = Field(
+        min_length=1,
+        description="Behavior when the platform does not support observation (e.g. skip_observation, fail_closed).",
+    )
+
+
+def validate_resource_observations(
+    observations: list[ResourceObservation],
+    *,
+    contract: ResourceObserverContract | None = None,
+) -> None:
     """Validate a list of resource observations.
 
     Rejects duplicate (run_id, task_block, model_variant_id) tuples.
     Each observation must be a valid ``ResourceObservation`` with all
-    required bindings.
+    required bindings. When a ``contract`` is provided, the observations
+    are validated against the contract's scope and policy.
     """
     seen: set[tuple[str, str, str]] = set()
     for obs in observations:
@@ -510,6 +564,7 @@ __all__ = [
     "IndexCreationReason",
     "IndexGeneration",
     "ResourceObservation",
+    "ResourceObserverContract",
     "SupersessionPolicy",
     "TierObservationRecord",
     "VariantMetricAggregate",

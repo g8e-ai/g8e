@@ -90,6 +90,7 @@ from g8e_evals.constants import (
     CAMPAIGN_STATUS_JSON,
     MANIFEST_JSON,
     METRICS_JSONL,
+    REPORT_CHECKSUM_JSON,
     TASKS_JSONL,
 )
 from g8e_evals.harness import Response, Task
@@ -103,11 +104,13 @@ from g8e_evals.index import (
 from g8e_evals.metrics import DEFAULT_METRIC_REGISTRY
 from g8e_evals.profile import CampaignProfile
 from g8e_evals.registry import ModelRegistry
+from g8e_evals.report.validate import validate_standalone_report
 from g8e_evals.schema import (
     ArmManifestEntry,
     AttemptRecord,
     BackendArtifactIdentity,
     CampaignBinding,
+    CampaignTrack,
     ContentHash,
     GraderClass,
     GraderReference,
@@ -594,6 +597,11 @@ class CampaignRunner:
         records = _read_jsonl(self.report_dir / ATTEMPTS_JSONL, AttemptRecord)
         return cast(list[AttemptRecord], records)
 
+    def _load_existing_metrics(self) -> list[MetricObservation]:
+        """Load existing metrics from the report directory (for resume)."""
+        records = _read_jsonl(self.report_dir / METRICS_JSONL, MetricObservation)
+        return cast(list[MetricObservation], records)
+
     def _completed_assignment_ids(self, attempts: list[AttemptRecord]) -> set[str]:
         """Return the set of assignment IDs that have a non-infrastructure-failed terminal attempt.
 
@@ -652,18 +660,28 @@ class CampaignRunner:
             ))
         return dispositions
 
-    def _compute_report_checksums(self, attempts: list[AttemptRecord]) -> list[str]:
-        """Compute SHA-256 checksums of complete reports (attempts and metrics)."""
-        attempts_hash = hashlib.sha256(
-            json.dumps(
-                [json.loads(a.model_dump_json()) for a in attempts],
-                allow_nan=False,
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode(),
-        ).hexdigest()
-        return [attempts_hash]
+    def _compute_report_checksums(
+        self,
+        attempts: list[AttemptRecord],
+        metrics: list[MetricObservation] | None = None,
+    ) -> list[str]:
+        """Compute SHA-256 checksums of complete reports (attempts and metrics).
+
+        The checksum covers canonical JSON of both attempts and metrics,
+        matching the standalone report validator's computation.
+        """
+        attempts_data = [json.loads(a.model_dump_json()) for a in attempts]
+        metrics_data = (
+            [json.loads(m.model_dump_json()) for m in metrics] if metrics else []
+        )
+        payload = json.dumps(
+            {"attempts": attempts_data, "metrics": metrics_data},
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return [hashlib.sha256(payload.encode()).hexdigest()]
 
     def _write_index_generation(
         self,
@@ -1076,8 +1094,9 @@ class CampaignRunner:
             # Resume: create a new index generation
             last_gen = existing_generations[-1]
             existing_attempts = self._load_existing_attempts()
+            existing_metrics = self._load_existing_metrics()
             dispositions = self._compute_assignment_dispositions(assignments, existing_attempts)
-            checksums = self._compute_report_checksums(existing_attempts)
+            checksums = self._compute_report_checksums(existing_attempts, existing_metrics)
             # If any assignment has infrastructure_failed status, create a
             # SUPERSESSION generation; otherwise create a RESUME generation.
             has_infra_failures = any(
@@ -1105,8 +1124,9 @@ class CampaignRunner:
                 assignment_dispositions=[],
             )
 
-        # 6. Load existing attempts (for resume)
+        # 6. Load existing attempts and metrics (for resume)
         existing_attempts = self._load_existing_attempts()
+        existing_metrics = self._load_existing_metrics()
         completed_ids = self._completed_assignment_ids(existing_attempts)
 
         # 7. Execute assignments in schedule order
@@ -1114,7 +1134,7 @@ class CampaignRunner:
         task_by_id = self._task_by_id()
 
         all_attempts: list[AttemptRecord] = list(existing_attempts)
-        all_metrics: list[MetricObservation] = []
+        all_metrics: list[MetricObservation] = list(existing_metrics)
         stop_reason: CampaignStopReason | None = None
         request_count = 0
         max_requests = self.spec.provider_budget.max_requests if self.spec.provider_budget else None
@@ -1203,18 +1223,30 @@ class CampaignRunner:
         _write_atomic(self.report_dir / ANALYSIS_HTML, render_html(analysis))
         _write_atomic(self.report_dir / ANALYSIS_TXT, render_cli(analysis))
 
-        # 10b. Write finalization index generation
-        all_generations = self._load_existing_generations()
-        last_gen = all_generations[-1]
-        final_dispositions = self._compute_assignment_dispositions(assignments, all_attempts)
-        final_checksums = self._compute_report_checksums(all_attempts)
-        self._write_index_generation(
-            generation_number=last_gen.generation_number + 1,
-            parent_generation_hash=last_gen.content_hash,
-            creation_reason=IndexCreationReason.FINALIZATION,
-            report_checksums=final_checksums,
-            assignment_dispositions=final_dispositions,
+        # 10b. Write report checksum
+        report_checksum = self._compute_report_checksums(all_attempts, all_metrics)[0]
+        _write_atomic(
+            self.report_dir / REPORT_CHECKSUM_JSON,
+            json.dumps({"checksum": report_checksum}, indent=2),
         )
+
+        # 10c. Finalize only when the campaign completed and the report validates
+        if final_status == CampaignStatus.COMPLETED:
+            standalone = validate_standalone_report(self.report_dir)
+            if standalone.ok:
+                all_generations = self._load_existing_generations()
+                last_gen = all_generations[-1]
+                final_dispositions = self._compute_assignment_dispositions(assignments, all_attempts)
+                self._write_index_generation(
+                    generation_number=last_gen.generation_number + 1,
+                    parent_generation_hash=last_gen.content_hash,
+                    creation_reason=IndexCreationReason.FINALIZATION,
+                    report_checksums=[report_checksum],
+                    assignment_dispositions=final_dispositions,
+                )
+                final_status = CampaignStatus.FINALIZED
+            else:
+                final_status = CampaignStatus.FAILED_INTEGRITY
 
         # 11. Update campaign status
         self._write_campaign_status(final_status, stop_reason)

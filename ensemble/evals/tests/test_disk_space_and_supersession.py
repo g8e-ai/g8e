@@ -231,7 +231,7 @@ class TestSupersessionGeneration:
             output_dir=tmp_path,
         )
         result = asyncio.run(runner.run())
-        assert result.status.value == "completed"
+        assert result.status.value == "finalized"
 
         # Verify the attempts show infrastructure_failed
         attempts_path = result.report_dir / ATTEMPTS_JSONL
