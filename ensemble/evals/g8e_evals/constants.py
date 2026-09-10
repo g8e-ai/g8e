@@ -83,3 +83,6 @@ CAMPAIGN_VERIFICATION_REPORT_JSON = "campaign-verification-report.json"
 
 # Report checksum (optional per-report checksum file for standalone validation)
 REPORT_CHECKSUM_JSON = "report-checksum.json"
+
+# Source inclusion manifest (explicit reviewed list of source files with checksums)
+SOURCE_INCLUSION_MANIFEST_JSON = "source-inclusion-manifest.json"
