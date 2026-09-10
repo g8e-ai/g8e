@@ -20,9 +20,9 @@
   },
   "families": {
     "g8e.v1.ai.eval": {
-      "classification": "unsupported",
-      "dashboard_safe": false,
-      "description": "ai.eval.run.completed and ai.eval.metric.recorded are registered with protocol-owned payloads but have no real producer until Phase 3 wires the eval publication path. Classified unsupported until producers land."
+      "classification": "produced_to_sse",
+      "dashboard_safe": true,
+      "description": "ai.eval.run.completed and ai.eval.metric.recorded are emitted by the ensemble through the Gateway mTLS eval publication endpoint (POST /api/v1/observe/producer/eval-publication) after the bundle verification report confirms ok=true and the eval projection, download catalog, and run projection are persisted. Safe for narrative display; verification status and metric summaries shown as non-actionable notices."
     },
     "g8e.v1.app.agent": {
       "classification": "mixed",
