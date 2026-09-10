@@ -31,7 +31,7 @@ from g8e_evals.arms import Arm, GovernancePosture
 from g8e_evals.receipts.verify import receipt_action_type
 
 
-SCHEMA_VERSION = "1.40.0"
+SCHEMA_VERSION = "1.41.0"
 
 FORBIDDEN_METADATA_KEYS: frozenset[str] = frozenset({
     "state_fixture",
@@ -392,6 +392,86 @@ class ProviderBudget(BaseModel):
     max_requests: int | None = Field(default=None, ge=0, description="Maximum total requests, None for no request limit.")
 
 
+class CampaignTrack(StrEnum):
+    """Track classification for a campaign run.
+
+    The direct track calls the model with the benchmark prompt directly.
+    The tier_fitness track substitutes one g8ee model tier while holding
+    all other tier mappings and routing policy fixed. The governed track
+    runs a fixed finalist cohort through the complete governance gauntlet.
+    """
+
+    DIRECT = "direct"
+    TIER_FITNESS = "tier_fitness"
+    GOVERNED = "governed"
+
+
+class BackendArtifactIdentity(BaseModel):
+    """Immutable backend and artifact identity for a measured run.
+
+    Records the exact backend, served model tag, artifact digest, and
+    quantization so the campaign verifier can reject a run whose provider
+    telemetry model string matches while its immutable artifact identity
+    does not.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    backend_name: str = Field(min_length=1, description="Backend provider name (e.g. ollama, llama.cpp).")
+    backend_version: str = Field(default="", description="Backend version string.")
+    served_model_tag: str = Field(min_length=1, description="Exact served model tag or ID (e.g. qwen3:8b).")
+    artifact_digest: str = Field(min_length=64, max_length=64, description="SHA-256 of the served model artifact.")
+    artifact_bytes: int = Field(default=0, ge=0, description="Artifact file size in bytes, 0 when unmeasured.")
+    quantization: str = Field(default="", description="Quantization policy label (e.g. q4_0, fp16).")
+    tensor_format: str = Field(default="", description="Tensor format label (e.g. gguf, safetensors).")
+
+
+class TokenizerTemplateIdentity(BaseModel):
+    """Immutable tokenizer and chat-template identity for a measured run.
+
+    Records the tokenizer digest, chat template hash, and prompt
+    serialization version so the campaign verifier can detect template
+    or tokenizer drift across runs that claim the same model variant.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tokenizer_digest: str = Field(min_length=64, max_length=64, description="SHA-256 of the tokenizer configuration.")
+    chat_template_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the chat template bytes.")
+    prompt_serialization_version: str = Field(default="", description="Prompt serialization format version.")
+
+
+class CampaignBinding(BaseModel):
+    """Typed campaign binding for a measured run.
+
+    Binds a run to its campaign identity, assignment, model variant,
+    track, target tier, repetition, frozen profile and registry hashes,
+    backend and artifact identity, tokenizer and template identity, and
+    reasoning and constrained-decoding modes. Non-campaign runs leave
+    this field None; campaign runs require every field.
+
+    The campaign verifier rejects a run whose provider telemetry model
+    string matches while its immutable artifact or settings identity
+    does not.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    campaign_id: str = Field(min_length=1, description="Campaign identity.")
+    campaign_revision: str = Field(min_length=1, description="Campaign revision identifier.")
+    assignment_id: str = Field(min_length=1, description="Campaign assignment identifier.")
+    model_variant_id: str = Field(min_length=1, description="Stable campaign model-variant ID.")
+    track: CampaignTrack = Field(description="Campaign track: direct, tier_fitness, or governed.")
+    target_tier: str | None = Field(default=None, description="Target g8ee tier for tier-fitness track; None for direct and governed tracks.")
+    repetition: int = Field(ge=0, description="Repetition index within the assignment.")
+    campaign_profile_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the frozen campaign profile.")
+    model_registry_hash: str = Field(min_length=64, max_length=64, description="SHA-256 of the frozen model registry.")
+    backend_artifact_identity: BackendArtifactIdentity = Field(description="Immutable backend and artifact identity.")
+    tokenizer_template_identity: TokenizerTemplateIdentity = Field(description="Immutable tokenizer and template identity.")
+    reasoning_mode: str = Field(default="", description="Reasoning mode label (e.g. none, thinking).")
+    constrained_decoding_mode: str = Field(default="", description="Constrained decoding mode label (e.g. none, json_schema).")
+
+
 class RunManifest(BaseModel):
     """Immutable run manifest written before execution begins.
 
@@ -413,6 +493,7 @@ class RunManifest(BaseModel):
 
     source_build_provenance: SourceBuildProvenance | None = None
     provider_budget: ProviderBudget | None = None
+    campaign_binding: CampaignBinding | None = None
 
     content_hashes: list[ContentHash] = Field(default_factory=list)
 

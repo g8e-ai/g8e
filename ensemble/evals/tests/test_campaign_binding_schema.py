@@ -1,0 +1,449 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Use of this source code is governed by the Business Source License
+# included in the LICENSE file.
+#
+# As of the Change Date listed in the LICENSE file, this software is
+# released under the Apache License, Version 2.0.
+
+"""Tier 1 tests for CampaignBinding schema and RunManifest campaign bindings.
+
+Verifies that the CampaignBinding typed model and its sub-models
+(BackendArtifactIdentity, TokenizerTemplateIdentity) enforce strict
+field validation, reject unknown fields, round-trip through JSON, and
+that RunManifest carries an optional CampaignBinding without breaking
+backward compatibility for non-campaign runs.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from pydantic import ValidationError
+
+from g8e_evals.arms import Arm, GovernancePosture
+from g8e_evals.schema import (
+    ArmManifestEntry,
+    CampaignBinding,
+    CampaignTrack,
+    BackendArtifactIdentity,
+    TokenizerTemplateIdentity,
+    RunManifest,
+)
+
+
+pytestmark = pytest.mark.unit
+
+
+_VALID_HASH = "a" * 64
+
+
+def _backend_artifact_identity() -> BackendArtifactIdentity:
+    return BackendArtifactIdentity(
+        backend_name="ollama",
+        backend_version="0.1.48",
+        served_model_tag="qwen3:8b",
+        artifact_digest=_VALID_HASH,
+        artifact_bytes=8_000_000_000,
+        quantization="q4_0",
+        tensor_format="gguf",
+    )
+
+
+def _tokenizer_template_identity() -> TokenizerTemplateIdentity:
+    return TokenizerTemplateIdentity(
+        tokenizer_digest=_VALID_HASH,
+        chat_template_hash=_VALID_HASH,
+        prompt_serialization_version="1.0",
+    )
+
+
+def _campaign_binding(
+    *,
+    track: CampaignTrack = CampaignTrack.DIRECT,
+    target_tier: str | None = None,
+) -> CampaignBinding:
+    return CampaignBinding(
+        campaign_id="v2.1.8-ifeval-pipeline-integrity",
+        campaign_revision="1",
+        assignment_id="assign-001",
+        model_variant_id="qwen3-8b-q4_0",
+        track=track,
+        target_tier=target_tier,
+        repetition=0,
+        campaign_profile_hash=_VALID_HASH,
+        model_registry_hash=_VALID_HASH,
+        backend_artifact_identity=_backend_artifact_identity(),
+        tokenizer_template_identity=_tokenizer_template_identity(),
+        reasoning_mode="none",
+        constrained_decoding_mode="none",
+    )
+
+
+class TestCampaignTrack:
+    def test_direct_track_value(self):
+        assert CampaignTrack.DIRECT.value == "direct"
+
+    def test_tier_fitness_track_value(self):
+        assert CampaignTrack.TIER_FITNESS.value == "tier_fitness"
+
+    def test_governed_track_value(self):
+        assert CampaignTrack.GOVERNED.value == "governed"
+
+
+class TestBackendArtifactIdentity:
+    def test_round_trip_preserves_all_fields(self):
+        identity = _backend_artifact_identity()
+        restored = BackendArtifactIdentity.model_validate_json(identity.model_dump_json())
+        assert restored == identity
+
+    def test_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                backend_name="ollama",
+                served_model_tag="qwen3:8b",
+                artifact_digest=_VALID_HASH,
+                extra_field="bad",
+            )
+
+    def test_requires_backend_name(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                served_model_tag="qwen3:8b",
+                artifact_digest=_VALID_HASH,
+            )
+
+    def test_requires_served_model_tag(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                backend_name="ollama",
+                artifact_digest=_VALID_HASH,
+            )
+
+    def test_requires_artifact_digest(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                backend_name="ollama",
+                served_model_tag="qwen3:8b",
+            )
+
+    def test_rejects_short_artifact_digest(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                backend_name="ollama",
+                served_model_tag="qwen3:8b",
+                artifact_digest="short",
+            )
+
+    def test_artifact_bytes_defaults_to_zero(self):
+        identity = BackendArtifactIdentity(
+            backend_name="ollama",
+            served_model_tag="qwen3:8b",
+            artifact_digest=_VALID_HASH,
+        )
+        assert identity.artifact_bytes == 0
+
+    def test_rejects_negative_artifact_bytes(self):
+        with pytest.raises(ValidationError):
+            BackendArtifactIdentity(
+                backend_name="ollama",
+                served_model_tag="qwen3:8b",
+                artifact_digest=_VALID_HASH,
+                artifact_bytes=-1,
+            )
+
+
+class TestTokenizerTemplateIdentity:
+    def test_round_trip_preserves_all_fields(self):
+        identity = _tokenizer_template_identity()
+        restored = TokenizerTemplateIdentity.model_validate_json(identity.model_dump_json())
+        assert restored == identity
+
+    def test_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            TokenizerTemplateIdentity(
+                tokenizer_digest=_VALID_HASH,
+                chat_template_hash=_VALID_HASH,
+                extra_field="bad",
+            )
+
+    def test_requires_tokenizer_digest(self):
+        with pytest.raises(ValidationError):
+            TokenizerTemplateIdentity(chat_template_hash=_VALID_HASH)
+
+    def test_requires_chat_template_hash(self):
+        with pytest.raises(ValidationError):
+            TokenizerTemplateIdentity(tokenizer_digest=_VALID_HASH)
+
+    def test_rejects_short_hashes(self):
+        with pytest.raises(ValidationError):
+            TokenizerTemplateIdentity(
+                tokenizer_digest="short",
+                chat_template_hash=_VALID_HASH,
+            )
+
+
+class TestCampaignBinding:
+    def test_round_trip_preserves_all_fields(self):
+        binding = _campaign_binding()
+        restored = CampaignBinding.model_validate_json(binding.model_dump_json())
+        assert restored == binding
+
+    def test_rejects_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+                extra_field="bad",
+            )
+
+    def test_requires_campaign_id(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_assignment_id(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_model_variant_id(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_track(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_campaign_profile_hash(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_model_registry_hash(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_backend_artifact_identity(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_requires_tokenizer_template_identity(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+            )
+
+    def test_rejects_negative_repetition(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=-1,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_target_tier_optional_for_direct_track(self):
+        binding = _campaign_binding(track=CampaignTrack.DIRECT, target_tier=None)
+        assert binding.target_tier is None
+
+    def test_target_tier_set_for_tier_fitness_track(self):
+        binding = _campaign_binding(track=CampaignTrack.TIER_FITNESS, target_tier="primary")
+        assert binding.target_tier == "primary"
+
+    def test_rejects_short_profile_hash(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash="short",
+                model_registry_hash=_VALID_HASH,
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+    def test_rejects_short_registry_hash(self):
+        with pytest.raises(ValidationError):
+            CampaignBinding(
+                campaign_id="c1",
+                campaign_revision="1",
+                assignment_id="a1",
+                model_variant_id="v1",
+                track=CampaignTrack.DIRECT,
+                repetition=0,
+                campaign_profile_hash=_VALID_HASH,
+                model_registry_hash="short",
+                backend_artifact_identity=_backend_artifact_identity(),
+                tokenizer_template_identity=_tokenizer_template_identity(),
+            )
+
+
+class TestRunManifestCampaignBinding:
+    def test_manifest_without_campaign_binding_is_backward_compatible(self):
+        manifest = RunManifest(
+            run_id="r1",
+            suite_id="s",
+            suite_version="1.0",
+        )
+        assert manifest.campaign_binding is None
+
+    def test_manifest_with_campaign_binding_round_trips(self):
+        manifest = RunManifest(
+            run_id="r1",
+            suite_id="s",
+            suite_version="1.0",
+            arms=[ArmManifestEntry(
+                arm_id=Arm.DIRECT,
+                requested_posture=GovernancePosture.NONE,
+                uses_g8ee=False,
+                uses_gateway=False,
+                receipt_binding=False,
+                is_production_posture=False,
+            )],
+            campaign_binding=_campaign_binding(),
+        )
+        json_str = manifest.model_dump_json()
+        restored = RunManifest.model_validate_json(json_str)
+        assert restored.campaign_binding is not None
+        assert restored.campaign_binding.campaign_id == "v2.1.8-ifeval-pipeline-integrity"
+        assert restored.campaign_binding.track == CampaignTrack.DIRECT
+        assert restored.campaign_binding.model_variant_id == "qwen3-8b-q4_0"
+        assert restored.campaign_binding.backend_artifact_identity.backend_name == "ollama"
+        assert restored.campaign_binding.tokenizer_template_identity.tokenizer_digest == _VALID_HASH
+
+    def test_manifest_campaign_binding_appears_in_json(self):
+        manifest = RunManifest(
+            run_id="r1",
+            suite_id="s",
+            suite_version="1.0",
+            campaign_binding=_campaign_binding(),
+        )
+        json_str = manifest.model_dump_json()
+        data = json.loads(json_str)
+        assert "campaign_binding" in data
+        assert data["campaign_binding"]["campaign_id"] == "v2.1.8-ifeval-pipeline-integrity"
+        assert data["campaign_binding"]["track"] == "direct"
+
+    def test_manifest_without_campaign_binding_has_null_in_json(self):
+        manifest = RunManifest(
+            run_id="r1",
+            suite_id="s",
+            suite_version="1.0",
+        )
+        json_str = manifest.model_dump_json()
+        data = json.loads(json_str)
+        assert data["campaign_binding"] is None
+
+    def test_manifest_rejects_campaign_binding_with_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            RunManifest(
+                run_id="r1",
+                suite_id="s",
+                suite_version="1.0",
+                campaign_binding=CampaignBinding(
+                    campaign_id="c1",
+                    campaign_revision="1",
+                    assignment_id="a1",
+                    model_variant_id="v1",
+                    track=CampaignTrack.DIRECT,
+                    repetition=0,
+                    campaign_profile_hash=_VALID_HASH,
+                    model_registry_hash=_VALID_HASH,
+                    backend_artifact_identity=_backend_artifact_identity(),
+                    tokenizer_template_identity=_tokenizer_template_identity(),
+                ),
+                extra_field="bad",
+            )

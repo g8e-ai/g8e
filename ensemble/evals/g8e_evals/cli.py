@@ -511,16 +511,16 @@ def main():
               help="Stream the agent's response text inline as chunks arrive")
 @click.option("--idle-timeout", type=float, default=10.0,
               help="Seconds without an SSE event before declaring a task idle")
-@click.option("--g8ee-url", envvar="G8E_G8EE_URL", required=True,
-              help="URL of the g8ee application endpoint.")
+@click.option("--g8ee-url", envvar="G8E_G8EE_URL",
+              help="URL of the g8ee application endpoint. Required for ensemble and governed arms; not used by the direct arm.")
 @click.option("--operator-url", default=f"https://localhost:{PORTS['ports']['OperatorHttps']['value']}")
 @click.option("--operator-session-id", envvar="G8E_OPERATOR_SESSION_ID",
               help="Operator session id override. The default comes from the canonical CLI identity.")
 @click.option("--g8e-cli", default="./g8e", envvar="G8E_CLI_BIN", show_default=True,
               help="Path to the g8e CLI used to load the canonical authentication context.")
 @click.option("--auth-project-root", type=click.Path(path_type=Path, file_okay=False),
-              envvar="G8E_AUTH_PROJECT_ROOT", required=True,
-              help="Project root containing the canonical CLI runtime identity.")
+              envvar="G8E_AUTH_PROJECT_ROOT",
+              help="Project root containing the canonical CLI runtime identity. Required for ensemble and governed arms; not used by the direct arm.")
 @click.option("--arm", type=click.Choice([a.value for a in ALL_ARMS]), default=Arm.ENSEMBLE_UNGOVERNED.value,
               help="Experiment arm: direct (raw provider call), ensemble_ungoverned (g8ee without governance), doctrine (L1), consensus (L1+L2), notary (L1+L2+L3)")
 @click.option("--state-root", default="test-state-root-v1")
@@ -542,9 +542,19 @@ def main():
 @click.option("--web-search-project", envvar="G8E_WEB_SEARCH_PROJECT", help="Web search project ID")
 @click.option("--web-search-app", envvar="G8E_WEB_SEARCH_APP", help="Web search app ID")
 @click.option("--web-search-api-key", envvar="G8E_WEB_SEARCH_API_KEY", help="Web search API key")
+@click.option("--temperature", type=float, default=None,
+              help="Sampling temperature [0.0, 2.0]. None for provider default.")
+@click.option("--top-p", type=float, default=None,
+              help="Nucleus sampling threshold (0.0, 1.0]. None for provider default.")
+@click.option("--max-tokens", type=int, default=None,
+              help="Maximum output tokens. None for provider default.")
+@click.option("--seed", type=int, default=None,
+              help="Deterministic sampling seed. Requires --seed-support when set.")
+@click.option("--seed-support", type=click.Choice(["none", "deterministic", "unknown"]), default="unknown",
+              help="Backend seed support declaration: none (no seed support), deterministic (seed supported), unknown (unverified).")
 @click.option("--preregistration", type=click.Path(exists=True, dir_okay=False, path_type=Path),
               help="Path to a JSON preregistration config file for paired analysis and Holm correction.")
-def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, preregistration):
+def run(suite, model, provider, assistant_model, assistant_provider, lite_model, lite_provider, judge_model, judge_provider, headless, verbose_text, idle_timeout, g8ee_url, operator_url, operator_session_id, g8e_cli, auth_project_root, arm, state_root, output_dir, evidence_key_file, gold_set, limit, l2_key, l2_key_id, primary_api_key, primary_endpoint, assistant_api_key, assistant_endpoint, lite_api_key, lite_endpoint, judge_api_key, judge_endpoint, web_search_project, web_search_app, web_search_api_key, temperature, top_p, max_tokens, seed, seed_support, preregistration):
     """Run a single-arm diagnostic against one model and one arm.
 
     This command is a diagnostic: it executes one arm against one model
@@ -564,13 +574,33 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
             "Drop the flag so `./g8e auth context` can load the canonical session."
         )
 
-    try:
-        auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
-    except AuthBridgeError as error:
-        raise click.UsageError(
-            f"Could not load the canonical CLI identity: {error}. "
-            "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
-        ) from error
+    selected_arm = Arm(arm)
+
+    # The direct arm calls the model provider directly and bypasses g8ee
+    # HTTP, SSE trails, receipt collection, and governance events. It
+    # does not load the canonical CLI identity or require a g8ee endpoint.
+    # Ensemble and governed arms route through the live stack and must
+    # authenticate via the canonical CLI identity.
+    if selected_arm == Arm.DIRECT:
+        auth_context = None
+    else:
+        if not g8ee_url:
+            raise click.UsageError(
+                "--g8ee-url or G8E_G8EE_URL is required for ensemble and governed arms. "
+                "The direct arm (--arm direct) does not require it."
+            )
+        if auth_project_root is None:
+            raise click.UsageError(
+                "--auth-project-root or G8E_AUTH_PROJECT_ROOT is required for ensemble and governed arms. "
+                "The direct arm (--arm direct) does not require it."
+            )
+        try:
+            auth_context = load_cli_auth_context(g8e_cli, str(auth_project_root.resolve()))
+        except AuthBridgeError as error:
+            raise click.UsageError(
+                f"Could not load the canonical CLI identity: {error}. "
+                "Run `./g8e auth enroll user` or `./g8e auth refresh`, then retry."
+            ) from error
 
     if evidence_key_file is None:
         raise click.UsageError(
@@ -581,16 +611,45 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
     except ValueError as error:
         raise click.UsageError(f"Could not load the evidence encryption key: {error}") from error
 
-    selected_arm = Arm(arm)
+    # Validate sampling settings before calling _run_suite so invalid
+    # values are rejected before the manifest is written. The preflight
+    # inside _run_suite repeats these checks, but this early validation
+    # gives the operator immediate feedback without needing to start
+    # the full run pipeline.
+    effective_sampling = SamplingSettings(
+        temperature=temperature,
+        top_p=top_p,
+        max_output_tokens=max_tokens,
+        seed=seed,
+    )
+    try:
+        _run_preflight(_PreflightRequest(
+            provider=None,
+            model=None,
+            api_key=None,
+            endpoint=None,
+            sampling=effective_sampling,
+            content_hashes=[],
+            required_content_hash_names=frozenset(),
+            preregistration_hash=None,
+            redacted_config={},
+            stack_environment=_detect_stack_environment(),
+            source_build_provenance=None,
+            provider_budget=None,
+            is_production_posture=False,
+            seed_support=seed_support,
+        ))
+    except _PreflightError as e:
+        raise click.UsageError(f"Invalid sampling settings: {e}") from e
 
     config = SUTConfig(
-        g8ee_url=g8ee_url,
+        g8ee_url=g8ee_url or "",
         primary=LLMRoleConfig(provider=provider, model=model, api_key=primary_api_key, endpoint=primary_endpoint),
         assistant=LLMRoleConfig(provider=assistant_provider, model=assistant_model, api_key=assistant_api_key, endpoint=assistant_endpoint),
         lite=LLMRoleConfig(provider=lite_provider, model=lite_model, api_key=lite_api_key, endpoint=lite_endpoint),
         judge=LLMRoleConfig(provider=judge_provider, model=judge_model, api_key=judge_api_key, endpoint=judge_endpoint),
         operator_url=operator_url,
-        operator_session_id=operator_session_id or auth_context.operator_session_id,
+        operator_session_id=operator_session_id or (auth_context.operator_session_id if auth_context else ""),
         auth_context=auth_context,
         state_root=state_root,
         l2_private_key=l2_key,
@@ -604,7 +663,7 @@ def run(suite, model, provider, assistant_model, assistant_provider, lite_model,
         prereg_config = load_preregistration(preregistration)
 
     try:
-        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config))
+        asyncio.run(_run_suite(suite, config, gold_set, output_dir, limit, verbose_text=verbose_text, idle_timeout=idle_timeout, evidence_key=evidence_key, preregistration=prereg_config, effective_sampling=effective_sampling, seed_support=seed_support))
     except EvaluationRunError as error:
         raise click.ClickException(str(error)) from error
 
@@ -800,7 +859,7 @@ def campaign(suite, preregistration, campaign_id, release_version, seed, output_
     console.print(f"  [green]report[/green] {result.report_dir}")
 
 
-async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None):
+async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, output_dir: Path, limit: int | None = None, verbose_text: bool = False, idle_timeout: float = 180.0, evidence_key: EvidenceEncryptionKey | None = None, preregistration: PreregistrationConfig | None = None, effective_sampling: SamplingSettings | None = None, seed_support: str = "unknown"):
     # 1. Load benchmark
     if suite == "ifeval_subset":
         if not gold_set:
@@ -1070,12 +1129,16 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
 
     # 5b. Run typed preflight validation. Each check is single-purpose
     #     and fails closed with a typed ``PreflightFailureCode``.
+    #     Sampling settings from the CLI are validated here: out-of-range
+    #     values and unsupported seeds are rejected before the manifest
+    #     is written.
+    run_sampling = effective_sampling if effective_sampling is not None else SamplingSettings()
     preflight_request = _PreflightRequest(
         provider=config.primary.provider,
         model=config.primary.model,
         api_key=config.primary.api_key,
         endpoint=config.primary.endpoint,
-        sampling=SamplingSettings(),
+        sampling=run_sampling,
         content_hashes=content_hashes,
         required_content_hash_names=frozenset({"dataset", "prompt_bundle", "grader_bundle"}),
         preregistration_hash=compute_preregistration_hash(preregistration) if preregistration is not None else None,
@@ -1083,6 +1146,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         stack_environment=stack_env,
         source_build_provenance=source_build_provenance,
         provider_budget=provider_budget,
+        seed_support=seed_support,
     )
     try:
         _run_preflight(preflight_request)
@@ -1105,6 +1169,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
         source_build_provenance=source_build_provenance,
         provider_budget=provider_budget,
         stack_environment=stack_env,
+        sampling=run_sampling,
     )
 
     # 6. Create report directory and write manifest BEFORE execution.

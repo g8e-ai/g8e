@@ -225,7 +225,8 @@ def test_run_requires_explicit_g8ee_endpoint():
     )
 
     assert result.exit_code == 2, result.output
-    assert "Missing option '--g8ee-url'" in result.output
+    assert "--g8ee-url" in result.output
+    assert "required for ensemble and governed arms" in result.output
 
 
 def test_dead_operator_id_flag_is_removed():
