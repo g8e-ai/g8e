@@ -40,18 +40,18 @@
 
 ## Metric Results
 
-| Metric | Version | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Metric | Version | Cohort | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Domain-Stratified Results
 
-| Arm | Domain | Metrics | Passing | Failing | Not Applicable |
-| --- | --- | --- | --- | --- | --- |
+| Cohort | Arm | Domain | Metrics | Passing | Failing | Not Applicable |
+| --- | --- | --- | --- | --- | --- | --- |
 
 ## Gate Decisions
 
-| Metric | Version | Arm | Status | Measured | Threshold | NI Margin | Reason |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| Metric | Version | Cohort | Arm | Status | Measured | Threshold | NI Margin | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Unsupported Claims
 

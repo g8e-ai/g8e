@@ -48,35 +48,35 @@
 </ul>
 <h2>Metric Results</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>
 <tbody>
-<tr><td>human_wait_seconds</td><td>1.0.0</td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
-<tr><td>local_resource_cpu_seconds</td><td>1.0.0</td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
-<tr><td>local_resource_peak_memory_bytes</td><td>1.0.0</td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
-<tr><td>provider_cost_usd</td><td>1.0.0</td><td>doctrine</td><td>economics</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
-<tr><td>provider_usage_tokens</td><td>1.0.0</td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
-<tr><td>receipt_integrity</td><td>1.0.0</td><td>doctrine</td><td>governance</td><td>binary_pass_fail</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr>
-<tr><td>stage_latency_seconds</td><td>1.0.0</td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>human_wait_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>local_resource_cpu_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>local_resource_peak_memory_bytes</td><td>1.0.0</td><td></td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>provider_cost_usd</td><td>1.0.0</td><td></td><td>doctrine</td><td>economics</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>provider_usage_tokens</td><td>1.0.0</td><td></td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+<tr><td>receipt_integrity</td><td>1.0.0</td><td></td><td>doctrine</td><td>governance</td><td>binary_pass_fail</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr>
+<tr><td>stage_latency_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>telemetry</td><td>neutral</td><td>N/A</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
 </tbody></table>
 <h2>Domain-Stratified Results</h2>
 <table>
-<thead><tr><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>
+<thead><tr><th>Cohort</th><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>
 <tbody>
-<tr><td>doctrine</td><td>economics</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
-<tr><td>doctrine</td><td>governance</td><td>1</td><td>1</td><td>0</td><td>0</td></tr>
-<tr><td>doctrine</td><td>telemetry</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td></td><td>doctrine</td><td>economics</td><td>1</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td></td><td>doctrine</td><td>governance</td><td>1</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><td></td><td>doctrine</td><td>telemetry</td><td>5</td><td>0</td><td>0</td><td>0</td></tr>
 </tbody></table>
 <h2>Gate Decisions</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>
 <tbody>
-<tr><td>human_wait_seconds</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
-<tr><td>local_resource_cpu_seconds</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
-<tr><td>local_resource_peak_memory_bytes</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
-<tr><td>provider_cost_usd</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
-<tr><td>provider_usage_tokens</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
-<tr><td>receipt_integrity</td><td>1.0.0</td><td>doctrine</td><td>pass</td><td>1</td><td>1</td><td>0</td><td>Release-blocker threshold 1.0 met: measured 1.0.</td></tr>
-<tr><td>stage_latency_seconds</td><td>1.0.0</td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>human_wait_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>local_resource_cpu_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>local_resource_peak_memory_bytes</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>provider_cost_usd</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>provider_usage_tokens</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
+<tr><td>receipt_integrity</td><td>1.0.0</td><td></td><td>doctrine</td><td>pass</td><td>1</td><td>1</td><td>0</td><td>Release-blocker threshold 1.0 met: measured 1.0.</td></tr>
+<tr><td>stage_latency_seconds</td><td>1.0.0</td><td></td><td>doctrine</td><td>insufficient_data</td><td>N/A</td><td>N/A</td><td>N/A</td><td>1 of 1 eligible attempts are missing observations.</td></tr>
 </tbody></table>
 <h2>Unsupported Claims</h2>
 <ul>

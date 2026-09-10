@@ -35,6 +35,7 @@ from g8e_evals.analysis.canonical import (
     BridgeRunComparison,
     BridgeRunManifest,
     CanonicalEvalAnalysis,
+    ClaimPolicy,
     ComparisonDirection,
     ConfusionMatrix,
     ContinuousTestPolicy,
@@ -53,6 +54,7 @@ from g8e_evals.analysis.derived import run_all_derived_producers
 from g8e_evals.analysis.input import AnalysisInputRecord
 from g8e_evals.analysis.telemetry import run_all_telemetry_producers
 from g8e_evals.arms import ARM_DEFINITIONS
+from g8e_evals.campaign import CampaignAssignment, validate_campaign_assignments
 from g8e_evals.metrics import (
     DEFAULT_METRIC_REGISTRY,
     AggregationMethod,
@@ -150,6 +152,7 @@ class _RawComparison:
     metric_version: str
     baseline_arm_id: str
     comparison_arm_id: str
+    model_cohort_id: str
     paired_count: int
     baseline_value: float
     comparison_value: float
@@ -491,30 +494,85 @@ def _missing_denominator_contribution(task: TaskDefinition, definition: MetricDe
     return 0
 
 
+def _select_terminal_attempts(
+    attempts: Sequence[AttemptRecord],
+) -> list[AttemptRecord]:
+    """Select one terminal attempt per assignment (FINAL_TRY_IS_OUTCOME).
+
+    The final try in each assignment's retry chain is the assignment
+    outcome. Earlier attempts remain linked diagnostics but do not
+    contribute to metric denominators. An attempt is terminal when no
+    other attempt in the same assignment has it as ``parent_attempt_id``.
+    """
+    by_assignment: dict[str, list[AttemptRecord]] = defaultdict(list)
+    for attempt in attempts:
+        key = attempt.assignment_id if attempt.assignment_id else attempt.attempt_id
+        by_assignment[key].append(attempt)
+
+    terminal: list[AttemptRecord] = []
+    for assignment_attempts in by_assignment.values():
+        if len(assignment_attempts) == 1:
+            terminal.append(assignment_attempts[0])
+            continue
+        parent_ids = {
+            a.parent_attempt_id
+            for a in assignment_attempts
+            if a.parent_attempt_id is not None
+        }
+        candidates = [a for a in assignment_attempts if a.attempt_id not in parent_ids]
+        if len(candidates) == 1:
+            terminal.append(candidates[0])
+        elif len(candidates) == 0:
+            terminal.append(sorted(assignment_attempts, key=lambda a: a.attempt_id)[-1])
+        else:
+            terminal.append(sorted(candidates, key=lambda a: a.attempt_id)[-1])
+
+    return terminal
+
+
 def _compute_metric_results(
     tasks: Sequence[TaskDefinition],
     attempts: Sequence[AttemptRecord],
     metric_observations: Sequence[MetricObservation],
+    campaign_assignments: Sequence[CampaignAssignment] | None = None,
 ) -> list[MetricAnalysisResult]:
-    """Compute per-metric per-arm aggregated results.
+    """Compute per-metric per-cohort per-arm aggregated results.
 
-    Every eligible attempt is retained in the denominator regardless of
-    outcome. Missing observations (eligible attempt with no
-    MetricObservation or a None value) are counted but do not reduce the
-    denominator.
+    When campaign assignments are present, selects one terminal attempt
+    per assignment (FINAL_TRY_IS_OUTCOME), derives ``model_cohort_id``
+    from the linked assignment, and groups by
+    ``(model_cohort_id, arm_id)``. Every eligible assignment is retained
+    in the denominator regardless of outcome. Missing observations
+    (eligible assignment with no MetricObservation or a None value) are
+    counted but do not reduce the denominator.
     """
     release_lookup = _build_release_metric_lookup()
     task_by_id = {task.task_id: task for task in tasks}
 
-    # Group attempts by (arm_id)
-    attempts_by_arm: dict[str, list[AttemptRecord]] = defaultdict(list)
-    for attempt in attempts:
-        attempts_by_arm[attempt.arm_id.value].append(attempt)
+    has_campaign = bool(campaign_assignments)
 
-    # Group metric observations by (metric_id, metric_version, arm_id)
-    obs_by_key: dict[tuple[str, str, str], list[MetricObservation]] = defaultdict(list)
+    if has_campaign:
+        assignment_by_id = {a.assignment_id: a for a in campaign_assignments}
+        terminal_attempts = _select_terminal_attempts(attempts)
+        cohort_by_attempt_id: dict[str, str] = {}
+        attempts_by_cohort_arm: dict[tuple[str, str], list[AttemptRecord]] = defaultdict(list)
+        for attempt in terminal_attempts:
+            assignment = assignment_by_id.get(attempt.assignment_id)
+            cohort_id = assignment.model_cohort_id if assignment is not None else attempt.model_cohort_id
+            cohort_by_attempt_id[attempt.attempt_id] = cohort_id
+            attempts_by_cohort_arm[(cohort_id, attempt.arm_id.value)].append(attempt)
+    else:
+        cohort_by_attempt_id = {}
+        attempts_by_cohort_arm: dict[tuple[str, str], list[AttemptRecord]] = defaultdict(list)
+        for attempt in attempts:
+            cohort_id = attempt.model_cohort_id
+            cohort_by_attempt_id[attempt.attempt_id] = cohort_id
+            attempts_by_cohort_arm[(cohort_id, attempt.arm_id.value)].append(attempt)
+
+    obs_by_key: dict[tuple[str, str, str, str], list[MetricObservation]] = defaultdict(list)
     for obs in metric_observations:
-        obs_by_key[(obs.metric_id, obs.metric_version, obs.arm_id.value)].append(obs)
+        cohort_id = cohort_by_attempt_id.get(obs.attempt_id, "")
+        obs_by_key[(obs.metric_id, obs.metric_version, cohort_id, obs.arm_id.value)].append(obs)
 
     results: list[MetricAnalysisResult] = []
 
@@ -523,23 +581,20 @@ def _compute_metric_results(
         if release_entry is None:
             continue
 
-        for arm_id in sorted(attempts_by_arm.keys()):
-            arm_obs = obs_by_key.get((definition.metric_id, definition.metric_version, arm_id), [])
-            observed_attempt_ids = {observation.attempt_id for observation in arm_obs}
-            arm_attempts = [
+        for (cohort_id, arm_id) in sorted(attempts_by_cohort_arm.keys()):
+            cohort_arm_obs = obs_by_key.get((definition.metric_id, definition.metric_version, cohort_id, arm_id), [])
+            observed_attempt_ids = {observation.attempt_id for observation in cohort_arm_obs}
+            cohort_arm_attempts = [
                 attempt
-                for attempt in attempts_by_arm[arm_id]
+                for attempt in attempts_by_cohort_arm[(cohort_id, arm_id)]
                 if attempt.attempt_id in observed_attempt_ids
                 or _metric_is_eligible(task_by_id[attempt.task_id], attempt, definition)
             ]
-            if not arm_attempts:
+            if not cohort_arm_attempts:
                 continue
 
-            # Determine eligible attempts for this metric
-            # An attempt is eligible if it has a MetricObservation with eligible=True
-            # or if it's in the attempt set for this arm (denominator preservation)
             obs_by_attempt: dict[str, MetricObservation] = {}
-            for obs in arm_obs:
+            for obs in cohort_arm_obs:
                 obs_by_attempt[obs.attempt_id] = obs
 
             eligible_count = 0
@@ -552,7 +607,7 @@ def _compute_metric_results(
             obs_ids: list[str] = []
             accepted_non_missing_obs: list[MetricObservation] = []
 
-            for attempt in arm_attempts:
+            for attempt in cohort_arm_attempts:
                 obs = obs_by_attempt.get(attempt.attempt_id)
                 task = task_by_id[attempt.task_id]
                 contract_eligible = _metric_is_eligible(task, attempt, definition)
@@ -573,16 +628,8 @@ def _compute_metric_results(
                         else:
                             not_eligible_count += 1
                     elif obs.eligible and not contract_eligible:
-                        # Producer marked eligible=True but the typed contract
-                        # says the attempt is ineligible (wrong arm, wrong suite,
-                        # missing assertions, etc.). Reject the producer's flag;
-                        # the contract is the authority.
                         not_eligible_count += 1
                     elif not obs.eligible and contract_eligible:
-                        # Producer marked eligible=False but the typed contract
-                        # says the attempt is eligible. The producer cannot
-                        # remove an assigned attempt from the denominator by
-                        # setting a flag. Override to eligible+missing.
                         eligible_count += 1
                         missing_count += 1
                         denominator += _missing_denominator_contribution(task, definition)
@@ -600,18 +647,12 @@ def _compute_metric_results(
                     else:
                         not_eligible_count += 1
                 else:
-                    # Attempt has no observation for this metric
-                    # It's in the arm's attempt set but has no metric observation
-                    # Count as eligible but missing (denominator preservation)
                     eligible_count += 1
                     missing_count += 1
                     denominator += _missing_denominator_contribution(
                         task, definition,
                     )
 
-            # Compute aggregate value
-            # When all eligible observations are missing, the value is None
-            # (not 0.0) to distinguish "no data" from "measured zero".
             value: float | None = None
             non_missing_values = [obs.value for obs in accepted_non_missing_obs if obs.value is not None]
             if denominator > 0 and accepted_non_missing_obs:
@@ -626,6 +667,7 @@ def _compute_metric_results(
                 metric_id=definition.metric_id,
                 metric_version=definition.metric_version,
                 arm_id=arm_id,
+                model_cohort_id=cohort_id,
                 domain=release_entry.domain,
                 direction=definition.direction,
                 unit=definition.unit,
@@ -640,7 +682,7 @@ def _compute_metric_results(
                 metric_observation_ids=sorted(obs_ids),
             ))
 
-    results.sort(key=lambda r: (r.metric_id, r.metric_version, r.arm_id))
+    results.sort(key=lambda r: (r.metric_id, r.metric_version, r.model_cohort_id, r.arm_id))
     return results
 
 
@@ -648,22 +690,22 @@ def _compute_domain_stratified_results(
     metric_results: list[MetricAnalysisResult],
     gate_decisions: list[GateDecision],
 ) -> list[DomainStratifiedResult]:
-    """Compute per-domain per-arm stratified results."""
-    gate_by_metric_arm: dict[tuple[str, str, str], GateDecisionStatus] = {}
+    """Compute per-domain per-cohort per-arm stratified results."""
+    gate_by_key: dict[tuple[str, str, str, str], GateDecisionStatus] = {}
     for gd in gate_decisions:
-        gate_by_metric_arm[(gd.metric_id, gd.metric_version, gd.arm_id)] = gd.status
+        gate_by_key[(gd.metric_id, gd.metric_version, gd.model_cohort_id, gd.arm_id)] = gd.status
 
-    results_by_arm_domain: dict[tuple[str, MetricDomain], list[MetricAnalysisResult]] = defaultdict(list)
+    results_by_key: dict[tuple[str, str, MetricDomain], list[MetricAnalysisResult]] = defaultdict(list)
     for mr in metric_results:
-        results_by_arm_domain[(mr.arm_id, mr.domain)].append(mr)
+        results_by_key[(mr.model_cohort_id, mr.arm_id, mr.domain)].append(mr)
 
     results: list[DomainStratifiedResult] = []
-    for (arm_id, domain), mrs in sorted(results_by_arm_domain.items(), key=lambda kv: (kv[0][0], kv[0][1].value)):
+    for (cohort_id, arm_id, domain), mrs in sorted(results_by_key.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2].value)):
         passing = 0
         failing = 0
         not_applicable = 0
         for mr in mrs:
-            status = gate_by_metric_arm.get((mr.metric_id, mr.metric_version, mr.arm_id), GateDecisionStatus.INSUFFICIENT_DATA)
+            status = gate_by_key.get((mr.metric_id, mr.metric_version, mr.model_cohort_id, mr.arm_id), GateDecisionStatus.INSUFFICIENT_DATA)
             if status == GateDecisionStatus.PASS:
                 passing += 1
             elif status == GateDecisionStatus.FAIL:
@@ -672,6 +714,7 @@ def _compute_domain_stratified_results(
                 not_applicable += 1
         results.append(DomainStratifiedResult(
             arm_id=arm_id,
+            model_cohort_id=cohort_id,
             domain=domain,
             metric_count=len(mrs),
             passing_metric_count=passing,
@@ -679,7 +722,7 @@ def _compute_domain_stratified_results(
             not_applicable_metric_count=not_applicable,
         ))
 
-    results.sort(key=lambda r: (r.arm_id, r.domain.value))
+    results.sort(key=lambda r: (r.model_cohort_id, r.arm_id, r.domain.value))
     return results
 
 
@@ -697,18 +740,20 @@ def _compute_confusion_matrices(
     """
     task_by_id: dict[str, TaskDefinition] = {t.task_id: t for t in tasks}
     release_lookup = _build_release_metric_lookup()
+    attempt_by_id = {a.attempt_id: a for a in attempts}
 
-    # Only compute confusion matrices for binary allow/block metrics
     confusion_metric_ids = {"policy_outcome", "policy_attack"}
 
-    obs_by_key: dict[tuple[str, str, str], list[MetricObservation]] = defaultdict(list)
+    obs_by_key: dict[tuple[str, str, str, str], list[MetricObservation]] = defaultdict(list)
     for obs in metric_observations:
         if obs.metric_id in confusion_metric_ids:
-            obs_by_key[(obs.metric_id, obs.metric_version, obs.arm_id.value)].append(obs)
+            attempt = attempt_by_id.get(obs.attempt_id)
+            cohort_id = attempt.model_cohort_id if attempt is not None else ""
+            obs_by_key[(obs.metric_id, obs.metric_version, cohort_id, obs.arm_id.value)].append(obs)
 
     matrices: list[ConfusionMatrix] = []
     for key in sorted(obs_by_key.keys()):
-        metric_id, metric_version, arm_id = key
+        metric_id, metric_version, cohort_id, arm_id = key
         obs_list = obs_by_key[key]
         release_entry = release_lookup.get((metric_id, metric_version))
         if release_entry is None:
@@ -724,22 +769,21 @@ def _compute_confusion_matrices(
             expected_allow = task.expected_allow_block_outcome.value == "allow"
             observed_correct = obs.value >= 1.0
 
-            # For allow/block metrics, value=1.0 means the outcome matched
-            # We need to infer the observed outcome from the value and expected outcome
             if expected_allow:
                 if observed_correct:
-                    tp += 1  # Expected allow, observed allow
+                    tp += 1
                 else:
-                    fn += 1  # Expected allow, observed block
+                    fn += 1
             elif observed_correct:
-                tn += 1  # Expected block, observed block
+                tn += 1
             else:
-                fp += 1  # Expected block, observed allow
+                fp += 1
 
         matrices.append(ConfusionMatrix(
             metric_id=metric_id,
             metric_version=metric_version,
             arm_id=arm_id,
+            model_cohort_id=cohort_id,
             domain=release_entry.domain,
             true_positive=tp,
             false_positive=fp,
@@ -747,7 +791,7 @@ def _compute_confusion_matrices(
             false_negative=fn,
         ))
 
-    matrices.sort(key=lambda m: (m.metric_id, m.metric_version, m.arm_id))
+    matrices.sort(key=lambda m: (m.metric_id, m.metric_version, m.model_cohort_id, m.arm_id))
     return matrices
 
 
@@ -844,6 +888,7 @@ def _compute_gate_decisions(
             metric_id=mr.metric_id,
             metric_version=mr.metric_version,
             arm_id=mr.arm_id,
+            model_cohort_id=mr.model_cohort_id,
             threshold_description=threshold_desc,
             measured_value=mr.value,
             threshold_value=threshold_value,
@@ -852,7 +897,7 @@ def _compute_gate_decisions(
             reason=reason,
         ))
 
-    decisions.sort(key=lambda d: (d.metric_id, d.metric_version, d.arm_id))
+    decisions.sort(key=lambda d: (d.metric_id, d.metric_version, d.model_cohort_id, d.arm_id))
     return decisions
 
 
@@ -939,6 +984,7 @@ def _compute_paired_comparisons(
     attempts: Sequence[AttemptRecord],
     metric_observations: Sequence[MetricObservation],
     preregistration: PreregistrationConfig | None = None,
+    campaign_assignments: Sequence[CampaignAssignment] | None = None,
 ) -> list[PairedComparison]:
     """Compute preregistration-driven paired comparisons between arms.
 
@@ -952,6 +998,11 @@ def _compute_paired_comparisons(
     When no preregistration configuration is supplied, the function
     returns an empty list. Comparisons without preregistration are not
     authorized.
+
+    When campaign assignments are present, pairs observations within
+    cohorts by ``(model_cohort_id, task_id, state_snapshot_hash)``.
+    Observations from different cohorts are never paired or pooled.
+    Each ``PairedComparison`` carries its ``model_cohort_id``.
 
     Pairs observations by ``(task_id, state_snapshot_hash)`` so that only
     attempts on the same task instance and initial-state snapshot are
@@ -975,7 +1026,7 @@ def _compute_paired_comparisons(
     changed after observing results.
 
     Returns comparisons sorted by ``(metric_id, metric_version,
-    baseline_arm_id, comparison_arm_id)``.
+    model_cohort_id, baseline_arm_id, comparison_arm_id)``.
     """
     if preregistration is None:
         return []
@@ -984,16 +1035,25 @@ def _compute_paired_comparisons(
 
     release_lookup = _build_release_metric_lookup()
 
-    # Build attempt lookup by attempt_id
     attempt_by_id: dict[str, AttemptRecord] = {a.attempt_id: a for a in attempts}
 
-    # Build the declared arm pairs: (baseline, comparison) for each declared comparison arm
+    has_campaign = bool(campaign_assignments)
+    if has_campaign:
+        assignment_by_id = {a.assignment_id: a for a in campaign_assignments}
+        terminal_attempts = _select_terminal_attempts(attempts)
+        cohort_by_attempt_id: dict[str, str] = {}
+        for attempt in terminal_attempts:
+            assignment = assignment_by_id.get(attempt.assignment_id)
+            cohort_id = assignment.model_cohort_id if assignment is not None else attempt.model_cohort_id
+            cohort_by_attempt_id[attempt.attempt_id] = cohort_id
+    else:
+        cohort_by_attempt_id = {a.attempt_id: a.model_cohort_id for a in attempts}
+
     declared_pairs: list[tuple[str, str]] = [
         (preregistration.baseline_arm_id, comp_arm)
         for comp_arm in sorted(preregistration.comparison_arm_ids)
     ]
 
-    # Build secondary family lookup: metric_id -> family_name
     family_by_metric: dict[str, str] = {}
     for family in preregistration.secondary_families:
         for metric_id in family.metric_ids:
@@ -1001,7 +1061,6 @@ def _compute_paired_comparisons(
 
     primary_set = set(preregistration.primary_metric_ids)
 
-    # Group metric observations by (metric_id, metric_version, arm_id, task_id, state_snapshot_hash)
     obs_by_metric: dict[tuple[str, str], list[MetricObservation]] = defaultdict(list)
     for obs in metric_observations:
         release_entry = release_lookup.get((obs.metric_id, obs.metric_version))
@@ -1009,7 +1068,6 @@ def _compute_paired_comparisons(
             continue
         obs_by_metric[(obs.metric_id, obs.metric_version)].append(obs)
 
-    # Phase 1: Collect all raw comparisons across all metrics with family metadata.
     all_tagged: list[_TaggedComparison] = []
 
     for (metric_id, metric_version), metric_obs_list in sorted(obs_by_metric.items()):
@@ -1018,128 +1076,125 @@ def _compute_paired_comparisons(
         family_name = family_by_metric.get(metric_id)
         is_primary = metric_id in primary_set
 
-        # Group observations by (arm_id, pairing_key) where pairing_key = (task_id, state_snapshot_hash)
-        obs_by_arm_pair: dict[tuple[str, tuple[str, str]], list[MetricObservation]] = defaultdict(list)
+        obs_by_cohort_arm_pair: dict[tuple[str, str, tuple[str, str, str]], list[MetricObservation]] = defaultdict(list)
         for obs in metric_obs_list:
             attempt = attempt_by_id.get(obs.attempt_id)
             if attempt is None:
                 continue
             if obs.value is None:
                 continue
-            pairing_key = (obs.task_id, attempt.state_snapshot_hash)
+            cohort_id = cohort_by_attempt_id.get(obs.attempt_id, attempt.model_cohort_id)
+            pairing_key = (obs.task_id, attempt.state_snapshot_hash, attempt.replicate_id)
             arm_str = obs.arm_id.value
-            obs_by_arm_pair[(arm_str, pairing_key)].append(obs)
+            obs_by_cohort_arm_pair[(cohort_id, arm_str, pairing_key)].append(obs)
 
-        # For each declared pair of arms, find common pairing keys
-        for baseline_arm, comparison_arm in declared_pairs:
-            baseline_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == baseline_arm}
-            comparison_keys = {pk for (arm, pk) in obs_by_arm_pair if arm == comparison_arm}
-            common_keys = sorted(baseline_keys & comparison_keys)
-            if len(common_keys) < 2:
-                continue
+        cohort_ids = sorted({c for (c, _a, _pk) in obs_by_cohort_arm_pair.keys()})
 
-            baseline_vals: list[float] = []
-            comparison_vals: list[float] = []
-            for pk in common_keys:
-                b_obs = obs_by_arm_pair[(baseline_arm, pk)]
-                c_obs = obs_by_arm_pair[(comparison_arm, pk)]
-                # Aggregate replicates per pairing key using the preregistered policy
-                b_vals = [o.value for o in b_obs if o.value is not None]
-                c_vals = [o.value for o in c_obs if o.value is not None]
-                if not b_vals or not c_vals:
+        for cohort_id in cohort_ids:
+            for baseline_arm, comparison_arm in declared_pairs:
+                baseline_keys = {pk for (c, arm, pk) in obs_by_cohort_arm_pair if c == cohort_id and arm == baseline_arm}
+                comparison_keys = {pk for (c, arm, pk) in obs_by_cohort_arm_pair if c == cohort_id and arm == comparison_arm}
+                common_keys = sorted(baseline_keys & comparison_keys)
+                if len(common_keys) < 2:
                     continue
-                if preregistration.replicate_aggregation_policy.value == "mean":
-                    baseline_vals.append(sum(b_vals) / len(b_vals))
-                    comparison_vals.append(sum(c_vals) / len(c_vals))
-                else:
-                    raise ValueError(
-                        f"unsupported replicate aggregation policy: {preregistration.replicate_aggregation_policy}"
-                    )
 
-            if len(baseline_vals) < 2:
-                continue
+                baseline_vals: list[float] = []
+                comparison_vals: list[float] = []
+                for pk in common_keys:
+                    b_obs = obs_by_cohort_arm_pair[(cohort_id, baseline_arm, pk)]
+                    c_obs = obs_by_cohort_arm_pair[(cohort_id, comparison_arm, pk)]
+                    b_vals = [o.value for o in b_obs if o.value is not None]
+                    c_vals = [o.value for o in c_obs if o.value is not None]
+                    if not b_vals or not c_vals:
+                        continue
+                    if preregistration.replicate_aggregation_policy.value == "mean":
+                        baseline_vals.append(sum(b_vals) / len(b_vals))
+                        comparison_vals.append(sum(c_vals) / len(c_vals))
+                    else:
+                        raise ValueError(
+                            f"unsupported replicate aggregation policy: {preregistration.replicate_aggregation_policy}"
+                        )
 
-            baseline_value = sum(baseline_vals) / len(baseline_vals)
-            comparison_value = sum(comparison_vals) / len(comparison_vals)
-            abs_d = statistics.absolute_delta(baseline_value, comparison_value)
-            rel_d = statistics.relative_delta(baseline_value, comparison_value)
-            effect_size = statistics.cohens_d_paired(baseline_vals, comparison_vals)
+                if len(baseline_vals) < 2:
+                    continue
 
-            # McNemar for binary outcomes
-            baseline_binary = [v >= 0.5 for v in baseline_vals]
-            comparison_binary = [v >= 0.5 for v in comparison_vals]
-            mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
+                baseline_value = sum(baseline_vals) / len(baseline_vals)
+                comparison_value = sum(comparison_vals) / len(comparison_vals)
+                abs_d = statistics.absolute_delta(baseline_value, comparison_value)
+                rel_d = statistics.relative_delta(baseline_value, comparison_value)
+                effect_size = statistics.cohens_d_paired(baseline_vals, comparison_vals)
 
-            # Paired t-test for continuous outcomes
-            t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
-            wilcoxon_stat, wilcoxon_p = statistics.wilcoxon_signed_rank_test(
-                baseline_vals, comparison_vals,
-            )
+                baseline_binary = [v >= 0.5 for v in baseline_vals]
+                comparison_binary = [v >= 0.5 for v in comparison_vals]
+                mcnemar_stat, mcnemar_p = statistics.mcnemar_test(baseline_binary, comparison_binary)
 
-            # Bootstrap CI using preregistered parameters
-            ci_lower, ci_upper = statistics.bootstrap_ci(
-                baseline_vals,
-                comparison_vals,
-                n_bootstrap=preregistration.bootstrap_count,
-                confidence=preregistration.bootstrap_confidence,
-                seed=preregistration.bootstrap_seed,
-            )
+                t_stat, t_p = statistics.paired_t_test(baseline_vals, comparison_vals)
+                wilcoxon_stat, wilcoxon_p = statistics.wilcoxon_signed_rank_test(
+                    baseline_vals, comparison_vals,
+                )
 
-            # Direction
-            if definition.direction == MetricDirection.LOWER_IS_BETTER:
-                if abs_d < 0:
-                    direction = ComparisonDirection.IMPROVEMENT
-                elif abs_d > 0:
-                    direction = ComparisonDirection.REGRESSION
+                ci_lower, ci_upper = statistics.bootstrap_ci(
+                    baseline_vals,
+                    comparison_vals,
+                    n_bootstrap=preregistration.bootstrap_count,
+                    confidence=preregistration.bootstrap_confidence,
+                    seed=preregistration.bootstrap_seed,
+                )
+
+                if definition.direction == MetricDirection.LOWER_IS_BETTER:
+                    if abs_d < 0:
+                        direction = ComparisonDirection.IMPROVEMENT
+                    elif abs_d > 0:
+                        direction = ComparisonDirection.REGRESSION
+                    else:
+                        direction = ComparisonDirection.NEUTRAL
+                elif definition.direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
+                    if abs_d > 0:
+                        direction = ComparisonDirection.IMPROVEMENT
+                    elif abs_d < 0:
+                        direction = ComparisonDirection.REGRESSION
+                    else:
+                        direction = ComparisonDirection.NEUTRAL
                 else:
                     direction = ComparisonDirection.NEUTRAL
-            elif definition.direction in (MetricDirection.HIGHER_IS_BETTER, MetricDirection.BINARY_PASS_FAIL):
-                if abs_d > 0:
-                    direction = ComparisonDirection.IMPROVEMENT
-                elif abs_d < 0:
-                    direction = ComparisonDirection.REGRESSION
+
+                if preregistration.continuous_test_policy == ContinuousTestPolicy.MCNEMAR:
+                    p_value = mcnemar_p
+                elif preregistration.continuous_test_policy == ContinuousTestPolicy.WILCOXON:
+                    p_value = wilcoxon_p
                 else:
-                    direction = ComparisonDirection.NEUTRAL
-            else:
-                direction = ComparisonDirection.NEUTRAL
+                    p_value = t_p
 
-            # Select the decision p-value using the preregistered policy
-            if preregistration.continuous_test_policy == ContinuousTestPolicy.MCNEMAR:
-                p_value = mcnemar_p
-            elif preregistration.continuous_test_policy == ContinuousTestPolicy.WILCOXON:
-                p_value = wilcoxon_p
-            else:
-                p_value = t_p
-
-            raw = _RawComparison(
-                metric_id=metric_id,
-                metric_version=metric_version,
-                baseline_arm_id=baseline_arm,
-                comparison_arm_id=comparison_arm,
-                paired_count=len(baseline_vals),
-                baseline_value=_round(baseline_value),
-                comparison_value=_round(comparison_value),
-                absolute_delta=abs_d,
-                relative_delta=rel_d,
-                standardized_effect_size=effect_size,
-                direction=direction,
-                mcnemar_statistic=mcnemar_stat,
-                mcnemar_p_value=mcnemar_p,
-                paired_t_statistic=t_stat,
-                paired_t_p_value=t_p,
-                wilcoxon_statistic=wilcoxon_stat,
-                wilcoxon_p_value=wilcoxon_p,
-                bootstrap_ci_lower=ci_lower,
-                bootstrap_ci_upper=ci_upper,
-                p_value=p_value,
-            )
-            all_tagged.append(_TaggedComparison(
-                raw=raw,
-                definition=definition,
-                family_name=family_name,
-                is_primary=is_primary,
-                non_inferiority_margin=ni_margin,
-            ))
+                raw = _RawComparison(
+                    metric_id=metric_id,
+                    metric_version=metric_version,
+                    baseline_arm_id=baseline_arm,
+                    comparison_arm_id=comparison_arm,
+                    model_cohort_id=cohort_id,
+                    paired_count=len(baseline_vals),
+                    baseline_value=_round(baseline_value),
+                    comparison_value=_round(comparison_value),
+                    absolute_delta=abs_d,
+                    relative_delta=rel_d,
+                    standardized_effect_size=effect_size,
+                    direction=direction,
+                    mcnemar_statistic=mcnemar_stat,
+                    mcnemar_p_value=mcnemar_p,
+                    paired_t_statistic=t_stat,
+                    paired_t_p_value=t_p,
+                    wilcoxon_statistic=wilcoxon_stat,
+                    wilcoxon_p_value=wilcoxon_p,
+                    bootstrap_ci_lower=ci_lower,
+                    bootstrap_ci_upper=ci_upper,
+                    p_value=p_value,
+                )
+                all_tagged.append(_TaggedComparison(
+                    raw=raw,
+                    definition=definition,
+                    family_name=family_name,
+                    is_primary=is_primary,
+                    non_inferiority_margin=ni_margin,
+                ))
 
     # Phase 2: Apply Holm correction family-wide.
     # For each named secondary family, collect all raw p-values across all
@@ -1173,6 +1228,7 @@ def _compute_paired_comparisons(
             metric_version=rc.metric_version,
             baseline_arm_id=rc.baseline_arm_id,
             comparison_arm_id=rc.comparison_arm_id,
+            model_cohort_id=rc.model_cohort_id,
             paired_count=rc.paired_count,
             baseline_value=rc.baseline_value,
             comparison_value=rc.comparison_value,
@@ -1195,13 +1251,14 @@ def _compute_paired_comparisons(
                 rc.p_value, corrected_p, rc.absolute_delta, tc.definition.direction,
                 tc.non_inferiority_margin, rc.bootstrap_ci_lower, rc.bootstrap_ci_upper,
                 preregistration.significance_level,
+                claim_policy=preregistration.claim_policy,
             ),
             selected_test=preregistration.continuous_test_policy.value,
             family_name=tc.family_name,
             replicate_aggregation_policy=preregistration.replicate_aggregation_policy.value,
         ))
 
-    comparisons.sort(key=lambda c: (c.metric_id, c.metric_version, c.baseline_arm_id, c.comparison_arm_id))
+    comparisons.sort(key=lambda c: (c.metric_id, c.metric_version, c.model_cohort_id, c.baseline_arm_id, c.comparison_arm_id))
     return comparisons
 
 
@@ -1214,6 +1271,7 @@ def _paired_gate_decision(
     bootstrap_ci_lower: float | None,
     bootstrap_ci_upper: float | None,
     significance_level: float = 0.05,
+    claim_policy: ClaimPolicy = ClaimPolicy.DESCRIPTIVE_ONLY,
 ) -> GateDecisionStatus:
     """Determine the gate decision for a paired comparison.
 
@@ -1228,6 +1286,12 @@ def _paired_gate_decision(
     default superiority test: Holm-corrected p-value < significance
     level AND a practically meaningful (non-zero) absolute delta.
     Statistical significance alone cannot pass a release.
+
+    When ``claim_policy`` is ``DESCRIPTIVE_ONLY``, the superiority gate
+    cannot produce ``PASS``. Non-inferiority ``PASS`` remains allowed
+    because it does not constitute a superiority claim. Test
+    statistics, p-values, and confidence intervals remain diagnostic
+    and are retained in the output for inspection.
     """
     if non_inferiority_margin is not None:
         # Non-inferiority testing via bootstrap CI
@@ -1252,6 +1316,8 @@ def _paired_gate_decision(
     if corrected_p_value > significance_level:
         return GateDecisionStatus.INSUFFICIENT_DATA
     if abs_delta == 0.0:
+        return GateDecisionStatus.INSUFFICIENT_DATA
+    if claim_policy == ClaimPolicy.DESCRIPTIVE_ONLY:
         return GateDecisionStatus.INSUFFICIENT_DATA
     return GateDecisionStatus.PASS
 
@@ -1440,6 +1506,17 @@ def compute_canonical_analysis_from_record(
     """
     _validate_analysis_input_record(record)
 
+    if record.campaign_manifest is not None and record.preregistration is not None:
+        validate_campaign_assignments(
+            list(record.campaign_assignments),
+            [t.task_id for t in record.tasks],
+            list(record.preregistration.model_cohort_ids),
+            [record.preregistration.baseline_arm_id, *record.preregistration.comparison_arm_ids],
+            list(record.preregistration.required_replicate_ids),
+            record.preregistration.initial_state_assignment_id,
+            record.campaign_manifest.campaign_id,
+        )
+
     input_summary = AnalysisInputSummary(
         task_count=len(record.tasks),
         attempt_count=len(record.attempts),
@@ -1448,6 +1525,8 @@ def compute_canonical_analysis_from_record(
         stage_count=len(record.stages),
         metric_observation_count=len(record.metric_observations),
         input_content_hash=_compute_input_content_hash_from_record(record),
+        campaign_manifest_hash=record.campaign_manifest.content_hash if record.campaign_manifest is not None else None,
+        assignment_count=len(record.campaign_assignments),
     )
 
     missingness = _compute_missingness(record.attempts)
@@ -1458,13 +1537,17 @@ def compute_canonical_analysis_from_record(
     all_metric_observations = run_all_telemetry_producers(record, record.metric_observations)
     all_metric_observations = run_all_derived_producers(record, all_metric_observations)
 
-    metric_results = _compute_metric_results(record.tasks, record.attempts, all_metric_observations)
+    metric_results = _compute_metric_results(
+        record.tasks, record.attempts, all_metric_observations,
+        campaign_assignments=record.campaign_assignments or None,
+    )
     gate_decisions = _compute_gate_decisions(metric_results)
     domain_stratified = _compute_domain_stratified_results(metric_results, gate_decisions)
     confusion_matrices = _compute_confusion_matrices(record.attempts, all_metric_observations, record.tasks)
     pooled_confusion_matrices = _compute_pooled_confusion_matrices(confusion_matrices)
     comparisons = _compute_paired_comparisons(
         record.tasks, record.attempts, all_metric_observations, record.preregistration,
+        campaign_assignments=record.campaign_assignments or None,
     )
 
     unsupported_claim_names = sorted(RELEASE_METRIC_SET.unsupported_claim_names)

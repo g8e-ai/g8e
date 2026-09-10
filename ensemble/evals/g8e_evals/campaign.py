@@ -661,8 +661,14 @@ def validate_campaign_assignments(
     """
     expected_count = len(task_ids) * len(cohort_ids) * len(arm_ids) * len(replicate_ids)
     if len(assignments) != expected_count:
+        if len(assignments) < expected_count:
+            raise ValueError(
+                f"missing campaign assignment: count mismatch: expected {expected_count} "
+                f"({len(task_ids)} tasks x {len(cohort_ids)} cohorts x {len(arm_ids)} arms "
+                f"x {len(replicate_ids)} replicates), found {len(assignments)}"
+            )
         raise ValueError(
-            f"campaign assignment count mismatch: expected {expected_count} "
+            f"unexpected campaign assignment: count mismatch: expected {expected_count} "
             f"({len(task_ids)} tasks x {len(cohort_ids)} cohorts x {len(arm_ids)} arms "
             f"x {len(replicate_ids)} replicates), found {len(assignments)}"
         )

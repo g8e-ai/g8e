@@ -2706,7 +2706,7 @@ async def _run_suite(suite: str, config: SUTConfig, gold_set: Path | None, outpu
     (report_dir / evals_constants.ANALYSIS_MD).write_text(render_markdown(analysis))
     (report_dir / evals_constants.ANALYSIS_HTML).write_text(render_html(analysis))
     (report_dir / evals_constants.ANALYSIS_TXT).write_text(render_cli(analysis))
-    console.print(render_cli(analysis))
+    console.print(render_cli(analysis), markup=False)
 
     console.print(f"\n[bold green]Report saved to {report_dir}[/bold green]")
 
@@ -4942,7 +4942,7 @@ async def _run_synthetic_suite(
     (report_dir / evals_constants.ANALYSIS_MD).write_text(render_markdown(analysis))
     (report_dir / evals_constants.ANALYSIS_HTML).write_text(render_html(analysis))
     (report_dir / evals_constants.ANALYSIS_TXT).write_text(render_cli(analysis))
-    console.print(render_cli(analysis))
+    console.print(render_cli(analysis), markup=False)
 
     _scan_report_for_canary_leaks(report_dir, canary_values, per_run_key)
 

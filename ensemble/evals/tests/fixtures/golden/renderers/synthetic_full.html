@@ -49,21 +49,21 @@
 </ul>
 <h2>Metric Results</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>
 <tbody>
-<tr><td>receipt_integrity</td><td>1.0.0</td><td>doctrine</td><td>governance</td><td>binary_pass_fail</td><td>1</td><td>2</td><td>2</td><td>2</td><td>0</td></tr>
+<tr><td>receipt_integrity</td><td>1.0.0</td><td></td><td>doctrine</td><td>governance</td><td>binary_pass_fail</td><td>1</td><td>2</td><td>2</td><td>2</td><td>0</td></tr>
 </tbody></table>
 <h2>Domain-Stratified Results</h2>
 <table>
-<thead><tr><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>
+<thead><tr><th>Cohort</th><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>
 <tbody>
-<tr><td>doctrine</td><td>governance</td><td>1</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><td></td><td>doctrine</td><td>governance</td><td>1</td><td>1</td><td>0</td><td>0</td></tr>
 </tbody></table>
 <h2>Confusion Matrices (Arm-Level)</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>TP</th><th>FP</th><th>TN</th><th>FN</th><th>Accuracy</th><th>Balanced Accuracy</th><th>MCC</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>TP</th><th>FP</th><th>TN</th><th>FN</th><th>Accuracy</th><th>Balanced Accuracy</th><th>MCC</th></tr></thead>
 <tbody>
-<tr><td>policy_outcome</td><td>1.0.0</td><td>doctrine</td><td>3</td><td>1</td><td>2</td><td>0</td><td>0.8333333333</td><td>0.8333333333</td><td>0.7071067812</td></tr>
+<tr><td>policy_outcome</td><td>1.0.0</td><td></td><td>doctrine</td><td>3</td><td>1</td><td>2</td><td>0</td><td>0.8333333333</td><td>0.8333333333</td><td>0.7071067812</td></tr>
 </tbody></table>
 <h2>Pooled Confusion Matrices</h2>
 <table>
@@ -73,15 +73,15 @@
 </tbody></table>
 <h2>Paired Comparisons</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Paired t p</th><th>Wilcoxon p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Paired t p</th><th>Wilcoxon p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>
 <tbody>
-<tr><td>receipt_integrity</td><td>1.0.0</td><td>direct</td><td>doctrine</td><td>7</td><td>1</td><td>1</td><td>0</td><td>0</td><td>N/A</td><td>neutral</td><td>N/A</td><td>N/A</td><td>N/A</td><td>[0, 0]</td><td>1</td><td>0</td><td>pass</td></tr>
+<tr><td>receipt_integrity</td><td>1.0.0</td><td></td><td>direct</td><td>doctrine</td><td>7</td><td>1</td><td>1</td><td>0</td><td>0</td><td>N/A</td><td>neutral</td><td>N/A</td><td>N/A</td><td>N/A</td><td>[0, 0]</td><td>1</td><td>0</td><td>pass</td></tr>
 </tbody></table>
 <h2>Gate Decisions</h2>
 <table>
-<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>
+<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>
 <tbody>
-<tr><td>receipt_integrity</td><td>1.0.0</td><td>doctrine</td><td>pass</td><td>1</td><td>1</td><td>0</td><td>Release-blocker threshold 1.0 met: measured 1.0.</td></tr>
+<tr><td>receipt_integrity</td><td>1.0.0</td><td></td><td>doctrine</td><td>pass</td><td>1</td><td>1</td><td>0</td><td>Release-blocker threshold 1.0 met: measured 1.0.</td></tr>
 </tbody></table>
 <h2>Bridge Runs</h2>
 <table>

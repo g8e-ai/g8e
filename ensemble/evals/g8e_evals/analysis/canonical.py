@@ -123,6 +123,25 @@ class ReplicateAggregationPolicy(StrEnum):
     MEAN = "mean"
 
 
+class ClaimPolicy(StrEnum):
+    """Preregistered inferential claim policy.
+
+    ``DESCRIPTIVE_ONLY`` prevents p-values or confidence intervals from
+    setting a superiority release gate. Paired comparison gate decisions
+    cannot be ``PASS`` for superiority; non-inferiority ``PASS`` remains
+    allowed. Test statistics, p-values, and confidence intervals remain
+    diagnostic and are retained in the output for inspection.
+
+    ``SUPERIORITY`` allows the default superiority gate: a
+    Holm-corrected p-value below the significance level combined with a
+    practically meaningful absolute delta can produce a ``PASS`` gate
+    decision.
+    """
+
+    DESCRIPTIVE_ONLY = "descriptive_only"
+    SUPERIORITY = "superiority"
+
+
 class AnalysisInputSummary(BaseModel):
     """Summary of the immutable records that fed this analysis.
 
@@ -141,6 +160,15 @@ class AnalysisInputSummary(BaseModel):
     stage_count: int = Field(ge=0)
     metric_observation_count: int = Field(ge=0)
     input_content_hash: str = Field(min_length=1, description="SHA-256 over canonical JSON of all sorted input records.")
+    campaign_manifest_hash: str | None = Field(
+        default=None,
+        description="Campaign manifest content hash. None when no campaign records are present.",
+    )
+    assignment_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of campaign assignments. Zero when no campaign records are present.",
+    )
 
 
 class MissingnessBreakdown(BaseModel):
@@ -217,6 +245,7 @@ class ConfusionMatrix(BaseModel):
     metric_id: str = Field(min_length=1)
     metric_version: str = Field(min_length=1)
     arm_id: str = Field(min_length=1)
+    model_cohort_id: str = Field(default="", description="Model cohort identity. Empty for non-campaign analyses.")
     domain: MetricDomain
 
     true_positive: int = Field(ge=0, description="Expected allow, observed allow.")
@@ -332,6 +361,7 @@ class MetricAnalysisResult(BaseModel):
     metric_id: str = Field(min_length=1)
     metric_version: str = Field(min_length=1)
     arm_id: str = Field(min_length=1)
+    model_cohort_id: str = Field(default="", description="Model cohort identity. Empty for non-campaign analyses.")
     domain: MetricDomain
 
     direction: MetricDirection
@@ -368,6 +398,7 @@ class DomainStratifiedResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     arm_id: str = Field(min_length=1)
+    model_cohort_id: str = Field(default="", description="Model cohort identity. Empty for non-campaign analyses.")
     domain: MetricDomain
     metric_count: int = Field(ge=0)
     passing_metric_count: int = Field(ge=0, description="Metrics where value meets the practical threshold.")
@@ -474,6 +505,11 @@ class PreregistrationConfig(BaseModel):
 
     significance_level: float = Field(gt=0.0, lt=1.0, description="Significance level for gate decisions.")
 
+    claim_policy: ClaimPolicy = Field(
+        default=ClaimPolicy.DESCRIPTIVE_ONLY,
+        description="Inferential claim policy. DESCRIPTIVE_ONLY prevents superiority gate PASS; non-inferiority PASS remains allowed.",
+    )
+
     @model_validator(mode="after")
     def _validate_preregistration(self) -> Self:
         if self.baseline_arm_id in self.comparison_arm_ids:
@@ -548,6 +584,8 @@ class PairedComparison(BaseModel):
     baseline_arm_id: str = Field(min_length=1)
     comparison_arm_id: str = Field(min_length=1)
 
+    model_cohort_id: str = Field(default="", description="Model cohort identity. Empty for non-campaign analyses.")
+
     paired_count: int = Field(ge=0, description="Number of task instances with observations in both arms.")
 
     baseline_value: float | None = None
@@ -606,6 +644,7 @@ class GateDecision(BaseModel):
     metric_id: str = Field(min_length=1)
     metric_version: str = Field(min_length=1)
     arm_id: str = Field(min_length=1)
+    model_cohort_id: str = Field(default="", description="Model cohort identity. Empty for non-campaign analyses.")
 
     threshold_description: str = Field(min_length=1)
     measured_value: float | None = None
@@ -764,17 +803,17 @@ class CanonicalEvalAnalysis(BaseModel):
 
     metric_results: list[MetricAnalysisResult] = Field(
         default_factory=list,
-        description="Per-metric per-arm aggregated results, sorted by (metric_id, arm_id).",
+        description="Per-metric per-cohort per-arm aggregated results, sorted by (metric_id, metric_version, model_cohort_id, arm_id).",
     )
 
     domain_stratified_results: list[DomainStratifiedResult] = Field(
         default_factory=list,
-        description="Per-domain per-arm stratified results, sorted by (arm_id, domain).",
+        description="Per-domain per-cohort per-arm stratified results, sorted by (model_cohort_id, arm_id, domain).",
     )
 
     confusion_matrices: list[ConfusionMatrix] = Field(
         default_factory=list,
-        description="Allow/block confusion matrices, sorted by (metric_id, arm_id).",
+        description="Allow/block confusion matrices, sorted by (metric_id, metric_version, model_cohort_id, arm_id).",
     )
 
     pooled_confusion_matrices: list[PooledConfusionMatrix] = Field(
@@ -784,12 +823,12 @@ class CanonicalEvalAnalysis(BaseModel):
 
     comparisons: list[PairedComparison] = Field(
         default_factory=list,
-        description="Paired comparisons between arms, sorted by (metric_id, baseline_arm_id, comparison_arm_id).",
+        description="Paired comparisons between arms, sorted by (metric_id, metric_version, model_cohort_id, baseline_arm_id, comparison_arm_id).",
     )
 
     gate_decisions: list[GateDecision] = Field(
         default_factory=list,
-        description="Practical-threshold gate decisions, sorted by (metric_id, arm_id).",
+        description="Practical-threshold gate decisions, sorted by (metric_id, metric_version, model_cohort_id, arm_id).",
     )
 
     bridge_runs: list[BridgeRunManifest] = Field(
@@ -828,6 +867,7 @@ __all__ = [
     "BridgeRunComparison",
     "BridgeRunManifest",
     "CanonicalEvalAnalysis",
+    "ClaimPolicy",
     "ComparisonDirection",
     "ConfusionMatrix",
     "ContinuousTestPolicy",

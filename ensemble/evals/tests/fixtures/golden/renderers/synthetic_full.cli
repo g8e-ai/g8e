@@ -34,22 +34,22 @@ Analysis computation: 1.3.0
   doctrine
 
 --- Metric Results ---
-  receipt_integrity@1.0.0 [doctrine] domain=governance dir=binary_pass_fail value=1 num=2 den=2 eligible=2 missing=0
+  receipt_integrity@1.0.0 [/doctrine] domain=governance dir=binary_pass_fail value=1 num=2 den=2 eligible=2 missing=0
 
 --- Domain-Stratified Results ---
-  doctrine / governance: metrics=1 pass=1 fail=0 na=0
+  /doctrine / governance: metrics=1 pass=1 fail=0 na=0
 
 --- Confusion Matrices (Arm-Level) ---
-  policy_outcome@1.0.0 [doctrine] TP=3 FP=1 TN=2 FN=0 acc=0.8333333333 bacc=0.8333333333 mcc=0.7071067812
+  policy_outcome@1.0.0 [/doctrine] TP=3 FP=1 TN=2 FN=0 acc=0.8333333333 bacc=0.8333333333 mcc=0.7071067812
 
 --- Pooled Confusion Matrices ---
   policy_outcome@1.0.0 arms=1 (doctrine) TP=3 FP=1 TN=2 FN=0 acc=0.8333333333 bacc=0.8333333333 mcc=0.7071067812 pool=preregistered_simple_summation_across_arms
 
 --- Paired Comparisons ---
-  receipt_integrity@1.0.0 direct->doctrine paired=7 base=1 comp=1 delta=0 reldelta=0 es=N/A dir=neutral mcnemar_p=N/A paired_t_p=N/A wilcoxon_p=N/A ci=[0, 0] holm_p=1 ni_margin=0 gate=pass
+  receipt_integrity@1.0.0 [] direct->doctrine paired=7 base=1 comp=1 delta=0 reldelta=0 es=N/A dir=neutral mcnemar_p=N/A paired_t_p=N/A wilcoxon_p=N/A ci=[0, 0] holm_p=1 ni_margin=0 gate=pass
 
 --- Gate Decisions ---
-  receipt_integrity@1.0.0 [doctrine] status=pass measured=1 threshold=1 ni_margin=0 reason=Release-blocker threshold 1.0 met: measured 1.0.
+  receipt_integrity@1.0.0 [/doctrine] status=pass measured=1 threshold=1 ni_margin=0 reason=Release-blocker threshold 1.0 met: measured 1.0.
 
 --- Bridge Runs ---
   bridge-1 v1.0.0 old=v2.1.7 new=v2.1.8 old_hash=oldhash123 new_hash=newhash456 cohort=cohort-1 tasks=10

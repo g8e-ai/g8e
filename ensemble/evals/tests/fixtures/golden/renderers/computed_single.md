@@ -41,35 +41,35 @@
 
 ## Metric Results
 
-| Metric | Version | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| human_wait_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
-| local_resource_cpu_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
-| local_resource_peak_memory_bytes | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
-| provider_cost_usd | 1.0.0 | doctrine | economics | neutral | N/A | 0 | 0 | 1 | 1 |
-| provider_usage_tokens | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
-| receipt_integrity | 1.0.0 | doctrine | governance | binary_pass_fail | 1 | 1 | 1 | 1 | 0 |
-| stage_latency_seconds | 1.0.0 | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| Metric | Version | Cohort | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| human_wait_seconds | 1.0.0 |  | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| local_resource_cpu_seconds | 1.0.0 |  | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| local_resource_peak_memory_bytes | 1.0.0 |  | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| provider_cost_usd | 1.0.0 |  | doctrine | economics | neutral | N/A | 0 | 0 | 1 | 1 |
+| provider_usage_tokens | 1.0.0 |  | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
+| receipt_integrity | 1.0.0 |  | doctrine | governance | binary_pass_fail | 1 | 1 | 1 | 1 | 0 |
+| stage_latency_seconds | 1.0.0 |  | doctrine | telemetry | neutral | N/A | 0 | 0 | 1 | 1 |
 
 ## Domain-Stratified Results
 
-| Arm | Domain | Metrics | Passing | Failing | Not Applicable |
-| --- | --- | --- | --- | --- | --- |
-| doctrine | economics | 1 | 0 | 0 | 0 |
-| doctrine | governance | 1 | 1 | 0 | 0 |
-| doctrine | telemetry | 5 | 0 | 0 | 0 |
+| Cohort | Arm | Domain | Metrics | Passing | Failing | Not Applicable |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | doctrine | economics | 1 | 0 | 0 | 0 |
+|  | doctrine | governance | 1 | 1 | 0 | 0 |
+|  | doctrine | telemetry | 5 | 0 | 0 | 0 |
 
 ## Gate Decisions
 
-| Metric | Version | Arm | Status | Measured | Threshold | NI Margin | Reason |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| human_wait_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
-| local_resource_cpu_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
-| local_resource_peak_memory_bytes | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
-| provider_cost_usd | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
-| provider_usage_tokens | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
-| receipt_integrity | 1.0.0 | doctrine | pass | 1 | 1 | 0 | Release-blocker threshold 1.0 met: measured 1.0. |
-| stage_latency_seconds | 1.0.0 | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| Metric | Version | Cohort | Arm | Status | Measured | Threshold | NI Margin | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| human_wait_seconds | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| local_resource_cpu_seconds | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| local_resource_peak_memory_bytes | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| provider_cost_usd | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| provider_usage_tokens | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
+| receipt_integrity | 1.0.0 |  | doctrine | pass | 1 | 1 | 0 | Release-blocker threshold 1.0 met: measured 1.0. |
+| stage_latency_seconds | 1.0.0 |  | doctrine | insufficient_data | N/A | N/A | N/A | 1 of 1 eligible attempts are missing observations. |
 
 ## Unsupported Claims
 

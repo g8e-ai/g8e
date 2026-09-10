@@ -42,21 +42,21 @@
 
 ## Metric Results
 
-| Metric | Version | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| receipt_integrity | 1.0.0 | doctrine | governance | binary_pass_fail | 1 | 2 | 2 | 2 | 0 |
+| Metric | Version | Cohort | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| receipt_integrity | 1.0.0 |  | doctrine | governance | binary_pass_fail | 1 | 2 | 2 | 2 | 0 |
 
 ## Domain-Stratified Results
 
-| Arm | Domain | Metrics | Passing | Failing | Not Applicable |
-| --- | --- | --- | --- | --- | --- |
-| doctrine | governance | 1 | 1 | 0 | 0 |
+| Cohort | Arm | Domain | Metrics | Passing | Failing | Not Applicable |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | doctrine | governance | 1 | 1 | 0 | 0 |
 
 ## Confusion Matrices (Arm-Level)
 
-| Metric | Version | Arm | TP | FP | TN | FN | Accuracy | Balanced Accuracy | MCC |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| policy_outcome | 1.0.0 | doctrine | 3 | 1 | 2 | 0 | 0.8333333333 | 0.8333333333 | 0.7071067812 |
+| Metric | Version | Cohort | Arm | TP | FP | TN | FN | Accuracy | Balanced Accuracy | MCC |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| policy_outcome | 1.0.0 |  | doctrine | 3 | 1 | 2 | 0 | 0.8333333333 | 0.8333333333 | 0.7071067812 |
 
 ## Pooled Confusion Matrices
 
@@ -66,15 +66,15 @@
 
 ## Paired Comparisons
 
-| Metric | Version | Baseline | Comparison | Paired | Baseline Val | Comparison Val | Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Paired t p | Wilcoxon p | Bootstrap CI | Holm p | NI Margin | Gate |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| receipt_integrity | 1.0.0 | direct | doctrine | 7 | 1 | 1 | 0 | 0 | N/A | neutral | N/A | N/A | N/A | [0, 0] | 1 | 0 | pass |
+| Metric | Version | Cohort | Baseline | Comparison | Paired | Baseline Val | Comparison Val | Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Paired t p | Wilcoxon p | Bootstrap CI | Holm p | NI Margin | Gate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| receipt_integrity | 1.0.0 |  | direct | doctrine | 7 | 1 | 1 | 0 | 0 | N/A | neutral | N/A | N/A | N/A | [0, 0] | 1 | 0 | pass |
 
 ## Gate Decisions
 
-| Metric | Version | Arm | Status | Measured | Threshold | NI Margin | Reason |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| receipt_integrity | 1.0.0 | doctrine | pass | 1 | 1 | 0 | Release-blocker threshold 1.0 met: measured 1.0. |
+| Metric | Version | Cohort | Arm | Status | Measured | Threshold | NI Margin | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| receipt_integrity | 1.0.0 |  | doctrine | pass | 1 | 1 | 0 | Release-blocker threshold 1.0 met: measured 1.0. |
 
 ## Bridge Runs
 

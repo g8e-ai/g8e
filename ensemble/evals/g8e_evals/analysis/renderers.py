@@ -74,6 +74,9 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
     lines.append(f"- Stages: {s.stage_count}")
     lines.append(f"- Metric observations: {s.metric_observation_count}")
     lines.append(f"- Input content hash: `{s.input_content_hash}`")
+    if s.campaign_manifest_hash is not None:
+        lines.append(f"- Campaign manifest hash: `{s.campaign_manifest_hash}`")
+        lines.append(f"- Assignment count: {s.assignment_count}")
     lines.append("")
 
     # Missingness
@@ -113,11 +116,11 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
     # Metric results
     lines.append("## Metric Results")
     lines.append("")
-    lines.append("| Metric | Version | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| Metric | Version | Cohort | Arm | Domain | Direction | Value | Numerator | Denominator | Eligible | Missing |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for mr in a.metric_results:
         lines.append(
-            f"| {mr.metric_id} | {mr.metric_version} | {mr.arm_id} | {mr.domain.value} "
+            f"| {mr.metric_id} | {mr.metric_version} | {mr.model_cohort_id} | {mr.arm_id} | {mr.domain.value} "
             f"| {mr.direction.value} | {_fmt_float(mr.value)} | {_fmt_float(mr.numerator)} "
             f"| {mr.denominator} | {mr.eligible_count} | {mr.missing_count} |"
         )
@@ -126,11 +129,11 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
     # Domain-stratified results
     lines.append("## Domain-Stratified Results")
     lines.append("")
-    lines.append("| Arm | Domain | Metrics | Passing | Failing | Not Applicable |")
-    lines.append("| --- | --- | --- | --- | --- | --- |")
+    lines.append("| Cohort | Arm | Domain | Metrics | Passing | Failing | Not Applicable |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
     for ds in a.domain_stratified_results:
         lines.append(
-            f"| {ds.arm_id} | {ds.domain.value} | {ds.metric_count} "
+            f"| {ds.model_cohort_id} | {ds.arm_id} | {ds.domain.value} | {ds.metric_count} "
             f"| {ds.passing_metric_count} | {ds.failing_metric_count} | {ds.not_applicable_metric_count} |"
         )
     lines.append("")
@@ -139,11 +142,11 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
     if a.confusion_matrices:
         lines.append("## Confusion Matrices (Arm-Level)")
         lines.append("")
-        lines.append("| Metric | Version | Arm | TP | FP | TN | FN | Accuracy | Balanced Accuracy | MCC |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| Metric | Version | Cohort | Arm | TP | FP | TN | FN | Accuracy | Balanced Accuracy | MCC |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for cm in a.confusion_matrices:
             lines.append(
-                f"| {cm.metric_id} | {cm.metric_version} | {cm.arm_id} "
+                f"| {cm.metric_id} | {cm.metric_version} | {cm.model_cohort_id} | {cm.arm_id} "
                 f"| {cm.true_positive} | {cm.false_positive} | {cm.true_negative} | {cm.false_negative} "
                 f"| {_fmt_float(cm.accuracy)} | {_fmt_float(cm.balanced_accuracy)} "
                 f"| {_fmt_float(cm.matthews_correlation_coefficient)} |"
@@ -170,10 +173,10 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
         lines.append("## Paired Comparisons")
         lines.append("")
         lines.append(
-            "| Metric | Version | Baseline | Comparison | Paired | Baseline Val | Comparison Val "
+            "| Metric | Version | Cohort | Baseline | Comparison | Paired | Baseline Val | Comparison Val "
             "| Abs Delta | Rel Delta | Effect Size | Direction | McNemar p | Paired t p | Wilcoxon p | Bootstrap CI | Holm p | NI Margin | Gate |"
         )
-        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for pc in a.comparisons:
             ci = (
                 f"[{_fmt_float(pc.bootstrap_ci_lower)}, {_fmt_float(pc.bootstrap_ci_upper)}]"
@@ -181,7 +184,7 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
                 else "N/A"
             )
             lines.append(
-                f"| {pc.metric_id} | {pc.metric_version} | {pc.baseline_arm_id} | {pc.comparison_arm_id} "
+                f"| {pc.metric_id} | {pc.metric_version} | {pc.model_cohort_id} | {pc.baseline_arm_id} | {pc.comparison_arm_id} "
                 f"| {pc.paired_count} | {_fmt_float(pc.baseline_value)} | {_fmt_float(pc.comparison_value)} "
                 f"| {_fmt_float(pc.absolute_delta)} | {_fmt_float(pc.relative_delta)} "
                 f"| {_fmt_float(pc.standardized_effect_size)} | {pc.direction.value} "
@@ -194,11 +197,11 @@ def render_markdown(analysis: CanonicalEvalAnalysis) -> str:
     # Gate decisions
     lines.append("## Gate Decisions")
     lines.append("")
-    lines.append("| Metric | Version | Arm | Status | Measured | Threshold | NI Margin | Reason |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| Metric | Version | Cohort | Arm | Status | Measured | Threshold | NI Margin | Reason |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for gd in a.gate_decisions:
         lines.append(
-            f"| {gd.metric_id} | {gd.metric_version} | {gd.arm_id} | {gd.status.value} "
+            f"| {gd.metric_id} | {gd.metric_version} | {gd.model_cohort_id} | {gd.arm_id} | {gd.status.value} "
             f"| {_fmt_float(gd.measured_value)} | {_fmt_float(gd.threshold_value)} "
             f"| {_fmt_float(gd.non_inferiority_margin)} | {gd.reason} |"
         )
@@ -280,6 +283,9 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     lines.append(f"<li>Stages: {s.stage_count}</li>")
     lines.append(f"<li>Metric observations: {s.metric_observation_count}</li>")
     lines.append(f"<li>Input content hash: <code>{_esc(s.input_content_hash)}</code></li>")
+    if s.campaign_manifest_hash is not None:
+        lines.append(f"<li>Campaign manifest hash: <code>{_esc(s.campaign_manifest_hash)}</code></li>")
+        lines.append(f"<li>Assignment count: {s.assignment_count}</li>")
     lines.append("</ul>")
 
     # Missingness
@@ -319,11 +325,11 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     # Metric results
     lines.append("<h2>Metric Results</h2>")
     lines.append("<table>")
-    lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>")
+    lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Domain</th><th>Direction</th><th>Value</th><th>Numerator</th><th>Denominator</th><th>Eligible</th><th>Missing</th></tr></thead>")
     lines.append("<tbody>")
     for mr in a.metric_results:
         lines.append(
-            f"<tr><td>{_esc(mr.metric_id)}</td><td>{_esc(mr.metric_version)}</td><td>{_esc(mr.arm_id)}</td>"
+            f"<tr><td>{_esc(mr.metric_id)}</td><td>{_esc(mr.metric_version)}</td><td>{_esc(mr.model_cohort_id)}</td><td>{_esc(mr.arm_id)}</td>"
             f"<td>{_esc(mr.domain.value)}</td><td>{_esc(mr.direction.value)}</td>"
             f"<td>{_fmt_float(mr.value)}</td><td>{_fmt_float(mr.numerator)}</td>"
             f"<td>{mr.denominator}</td><td>{mr.eligible_count}</td><td>{mr.missing_count}</td></tr>"
@@ -333,11 +339,11 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     # Domain-stratified results
     lines.append("<h2>Domain-Stratified Results</h2>")
     lines.append("<table>")
-    lines.append("<thead><tr><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>")
+    lines.append("<thead><tr><th>Cohort</th><th>Arm</th><th>Domain</th><th>Metrics</th><th>Passing</th><th>Failing</th><th>Not Applicable</th></tr></thead>")
     lines.append("<tbody>")
     for ds in a.domain_stratified_results:
         lines.append(
-            f"<tr><td>{_esc(ds.arm_id)}</td><td>{_esc(ds.domain.value)}</td><td>{ds.metric_count}</td>"
+            f"<tr><td>{_esc(ds.model_cohort_id)}</td><td>{_esc(ds.arm_id)}</td><td>{_esc(ds.domain.value)}</td><td>{ds.metric_count}</td>"
             f"<td>{ds.passing_metric_count}</td><td>{ds.failing_metric_count}</td><td>{ds.not_applicable_metric_count}</td></tr>"
         )
     lines.append("</tbody></table>")
@@ -346,11 +352,11 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     if a.confusion_matrices:
         lines.append("<h2>Confusion Matrices (Arm-Level)</h2>")
         lines.append("<table>")
-        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>TP</th><th>FP</th><th>TN</th><th>FN</th><th>Accuracy</th><th>Balanced Accuracy</th><th>MCC</th></tr></thead>")
+        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>TP</th><th>FP</th><th>TN</th><th>FN</th><th>Accuracy</th><th>Balanced Accuracy</th><th>MCC</th></tr></thead>")
         lines.append("<tbody>")
         for cm in a.confusion_matrices:
             lines.append(
-                f"<tr><td>{_esc(cm.metric_id)}</td><td>{_esc(cm.metric_version)}</td><td>{_esc(cm.arm_id)}</td>"
+                f"<tr><td>{_esc(cm.metric_id)}</td><td>{_esc(cm.metric_version)}</td><td>{_esc(cm.model_cohort_id)}</td><td>{_esc(cm.arm_id)}</td>"
                 f"<td>{cm.true_positive}</td><td>{cm.false_positive}</td><td>{cm.true_negative}</td><td>{cm.false_negative}</td>"
                 f"<td>{_fmt_float(cm.accuracy)}</td><td>{_fmt_float(cm.balanced_accuracy)}</td>"
                 f"<td>{_fmt_float(cm.matthews_correlation_coefficient)}</td></tr>"
@@ -377,7 +383,7 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     if a.comparisons:
         lines.append("<h2>Paired Comparisons</h2>")
         lines.append("<table>")
-        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Paired t p</th><th>Wilcoxon p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>")
+        lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Baseline</th><th>Comparison</th><th>Paired</th><th>Baseline Val</th><th>Comparison Val</th><th>Abs Delta</th><th>Rel Delta</th><th>Effect Size</th><th>Direction</th><th>McNemar p</th><th>Paired t p</th><th>Wilcoxon p</th><th>Bootstrap CI</th><th>Holm p</th><th>NI Margin</th><th>Gate</th></tr></thead>")
         lines.append("<tbody>")
         for pc in a.comparisons:
             ci = (
@@ -386,7 +392,7 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
                 else "N/A"
             )
             lines.append(
-                f"<tr><td>{_esc(pc.metric_id)}</td><td>{_esc(pc.metric_version)}</td>"
+                f"<tr><td>{_esc(pc.metric_id)}</td><td>{_esc(pc.metric_version)}</td><td>{_esc(pc.model_cohort_id)}</td>"
                 f"<td>{_esc(pc.baseline_arm_id)}</td><td>{_esc(pc.comparison_arm_id)}</td><td>{pc.paired_count}</td>"
                 f"<td>{_fmt_float(pc.baseline_value)}</td><td>{_fmt_float(pc.comparison_value)}</td>"
                 f"<td>{_fmt_float(pc.absolute_delta)}</td><td>{_fmt_float(pc.relative_delta)}</td>"
@@ -401,11 +407,11 @@ def render_html(analysis: CanonicalEvalAnalysis) -> str:
     # Gate decisions
     lines.append("<h2>Gate Decisions</h2>")
     lines.append("<table>")
-    lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>")
+    lines.append("<thead><tr><th>Metric</th><th>Version</th><th>Cohort</th><th>Arm</th><th>Status</th><th>Measured</th><th>Threshold</th><th>NI Margin</th><th>Reason</th></tr></thead>")
     lines.append("<tbody>")
     for gd in a.gate_decisions:
         lines.append(
-            f"<tr><td>{_esc(gd.metric_id)}</td><td>{_esc(gd.metric_version)}</td><td>{_esc(gd.arm_id)}</td>"
+            f"<tr><td>{_esc(gd.metric_id)}</td><td>{_esc(gd.metric_version)}</td><td>{_esc(gd.model_cohort_id)}</td><td>{_esc(gd.arm_id)}</td>"
             f"<td>{_esc(gd.status.value)}</td><td>{_fmt_float(gd.measured_value)}</td>"
             f"<td>{_fmt_float(gd.threshold_value)}</td><td>{_fmt_float(gd.non_inferiority_margin)}</td>"
             f"<td>{_esc(gd.reason)}</td></tr>"
@@ -483,6 +489,9 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
     lines.append(f"  Stages: {s.stage_count}")
     lines.append(f"  Metric observations: {s.metric_observation_count}")
     lines.append(f"  Input content hash: {s.input_content_hash}")
+    if s.campaign_manifest_hash is not None:
+        lines.append(f"  Campaign manifest hash: {s.campaign_manifest_hash}")
+        lines.append(f"  Assignment count: {s.assignment_count}")
     lines.append("")
 
     # Missingness
@@ -518,7 +527,7 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
     lines.append("--- Metric Results ---")
     for mr in a.metric_results:
         lines.append(
-            f"  {mr.metric_id}@{mr.metric_version} [{mr.arm_id}] "
+            f"  {mr.metric_id}@{mr.metric_version} [{mr.model_cohort_id}/{mr.arm_id}] "
             f"domain={mr.domain.value} dir={mr.direction.value} "
             f"value={_fmt_float(mr.value)} num={_fmt_float(mr.numerator)} "
             f"den={mr.denominator} eligible={mr.eligible_count} missing={mr.missing_count}"
@@ -529,7 +538,7 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
     lines.append("--- Domain-Stratified Results ---")
     for ds in a.domain_stratified_results:
         lines.append(
-            f"  {ds.arm_id} / {ds.domain.value}: "
+            f"  {ds.model_cohort_id}/{ds.arm_id} / {ds.domain.value}: "
             f"metrics={ds.metric_count} pass={ds.passing_metric_count} "
             f"fail={ds.failing_metric_count} na={ds.not_applicable_metric_count}"
         )
@@ -540,7 +549,7 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
         lines.append("--- Confusion Matrices (Arm-Level) ---")
         for cm in a.confusion_matrices:
             lines.append(
-                f"  {cm.metric_id}@{cm.metric_version} [{cm.arm_id}] "
+                f"  {cm.metric_id}@{cm.metric_version} [{cm.model_cohort_id}/{cm.arm_id}] "
                 f"TP={cm.true_positive} FP={cm.false_positive} "
                 f"TN={cm.true_negative} FN={cm.false_negative} "
                 f"acc={_fmt_float(cm.accuracy)} bacc={_fmt_float(cm.balanced_accuracy)} "
@@ -573,6 +582,7 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
             )
             lines.append(
                 f"  {pc.metric_id}@{pc.metric_version} "
+                f"[{pc.model_cohort_id}] "
                 f"{pc.baseline_arm_id}->{pc.comparison_arm_id} "
                 f"paired={pc.paired_count} "
                 f"base={_fmt_float(pc.baseline_value)} comp={_fmt_float(pc.comparison_value)} "
@@ -591,7 +601,7 @@ def render_cli(analysis: CanonicalEvalAnalysis) -> str:
     lines.append("--- Gate Decisions ---")
     for gd in a.gate_decisions:
         lines.append(
-            f"  {gd.metric_id}@{gd.metric_version} [{gd.arm_id}] "
+            f"  {gd.metric_id}@{gd.metric_version} [{gd.model_cohort_id}/{gd.arm_id}] "
             f"status={gd.status.value} measured={_fmt_float(gd.measured_value)} "
             f"threshold={_fmt_float(gd.threshold_value)} "
             f"ni_margin={_fmt_float(gd.non_inferiority_margin)} "
