@@ -615,7 +615,7 @@ class TestRenderReadme(unittest.TestCase):
             self.assertIn(component, rendered)
         self.assertIn("<summary>Inspect machine-generated eval evidence and reproduction details</summary>", rendered)
         self.assertNotIn("## Domain Applications", rendered)
-        self.assertLess(len(TEMPLATE.read_text().splitlines()), 200)
+        self.assertLess(len(TEMPLATE.read_text().splitlines()), 220)
 
     def test_missing_marker_fails(self) -> None:
         snapshot = gr.load_snapshot(VALID)

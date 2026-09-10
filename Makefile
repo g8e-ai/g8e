@@ -245,6 +245,11 @@ readme-check:
 readme-test:
 	@echo "Running README generator tests..."
 	@python3 -m unittest discover -s scripts/tests -p 'test_generate_readme.py'
+	@echo "Running publication schema v4, campaign projector, and validator tests..."
+	@cd ensemble/evals && $(EVALS_UV) run --locked --extra test pytest -q \
+		tests/test_publication_schema_v4.py \
+		tests/test_campaign_projector_v4.py \
+		tests/test_publication_validator_v4.py
 
 .PHONY: website-build
 website-build:

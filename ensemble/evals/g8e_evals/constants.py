@@ -89,3 +89,11 @@ REPORT_CHECKSUM_JSON = "report-checksum.json"
 
 # Source inclusion manifest (explicit reviewed list of source files with checksums)
 SOURCE_INCLUSION_MANIFEST_JSON = "source-inclusion-manifest.json"
+
+# Publication schema v4 artifacts (campaign-aware README evidence)
+PUBLICATION_SCHEMA_V4 = "4.0.0"
+MODEL_CAMPAIGN_JSON = "model-campaign.json"
+CAMPAIGN_PROJECTIONS_JSONL = "campaign-projections.jsonl"
+CAMPAIGN_STATISTICAL_ANALYSIS_JSON = "campaign-statistical-analysis.json"
+CAMPAIGN_PROVENANCE_JSON = "campaign-provenance.json"
+CAMPAIGN_VERIFICATION_REF_JSON = "campaign-verification-ref.json"

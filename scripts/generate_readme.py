@@ -33,9 +33,10 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0", "3.0.0"}
+SUPPORTED_PUB_SCHEMAS = {"1.0.0", "2.0.0", "3.0.0", "4.0.0"}
 SUPPORTED_EVAL_SCHEMAS = {"1.33.0", "1.40.0"}
 STAGE2_PUB_SCHEMA = "3.0.0"
+V4_PUB_SCHEMA = "4.0.0"
 STAGE2_PROFILE_SCHEMA = "1.0.0"
 STAGE2_PROFILE_ID = "readme-stage2-v2.1.6"
 STAGE1_EVAL_SCHEMA = "1.40.0"
@@ -65,6 +66,7 @@ MARKERS = {
     "GOVERNANCE_PROOF",
     "DEMO_PROOF",
     "CI_REPRODUCIBILITY",
+    "MODEL_COMPARISON",
 }
 
 SAFE_LINK_LABELS = {
@@ -126,6 +128,23 @@ class Stage2Ref:
 
 
 @dataclass(frozen=True)
+class ModelCampaignRef:
+    """Reference to a verified campaign in a v4 publication snapshot.
+
+    Carries the campaign identity, the path and checksum of the
+    model-campaign.json artifact, and the verification reference path
+    and checksum. The renderer reads the campaign artifact to produce
+    the model-comparison section.
+    """
+    campaign_id: str
+    campaign_revision: str
+    model_campaign_path: str
+    model_campaign_sha256: str
+    verification_ref_path: str
+    verification_ref_sha256: str
+
+
+@dataclass(frozen=True)
 class ReceiptVerificationRef:
     result_path: str
     result_sha256: str
@@ -161,6 +180,7 @@ class PublicationManifest:
     claim_labels: tuple[str, ...]
     caveats: tuple[str, ...]
     stage2_ref: Stage2Ref | None
+    model_campaign_ref: ModelCampaignRef | None
 
 
 @dataclass(frozen=True)
@@ -409,6 +429,7 @@ class ProofSnapshot:
     demo_reports: tuple[DemoReport, ...]
     artifact_paths: set[str]
     stage2: Stage2Evidence | None
+    model_campaign: dict[str, Any] | None
 
 
 def _repo_root() -> Path:
@@ -665,6 +686,20 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         if not isinstance(caveat, str):
             raise ReadmeError("caveats must be strings")
 
+    model_campaign_ref = None
+    if pub_version == V4_PUB_SCHEMA:
+        raw_mc = _require_field(d, "model_campaign", "index.json")
+        if not isinstance(raw_mc, dict):
+            raise ReadmeError("model_campaign in index.json must be an object")
+        model_campaign_ref = ModelCampaignRef(
+            campaign_id=_require_str(raw_mc, "campaign_id", "index.json model_campaign"),
+            campaign_revision=_require_str(raw_mc, "campaign_revision", "index.json model_campaign"),
+            model_campaign_path=_require_str(raw_mc, "model_campaign_path", "index.json model_campaign"),
+            model_campaign_sha256=_require_str(raw_mc, "model_campaign_sha256", "index.json model_campaign"),
+            verification_ref_path=_require_str(raw_mc, "verification_ref_path", "index.json model_campaign"),
+            verification_ref_sha256=_require_str(raw_mc, "verification_ref_sha256", "index.json model_campaign"),
+        )
+
     return PublicationManifest(
         publication_schema_version=pub_version,
         readme_evidence_version=readme_version,
@@ -677,6 +712,7 @@ def _manifest_from_dict(d: dict[str, Any], snapshot_dir: Path) -> PublicationMan
         claim_labels=tuple(raw_claims),
         caveats=tuple(raw_caveats),
         stage2_ref=stage2_ref,
+        model_campaign_ref=model_campaign_ref,
     )
 
 
@@ -1565,6 +1601,31 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         demo_reports.append(report)
         artifact_paths.add(ref.report_path)
 
+    model_campaign: dict[str, Any] | None = None
+    if manifest.model_campaign_ref is not None:
+        mc_ref = manifest.model_campaign_ref
+        mc_path = _safe_relative_path(snapshot_dir, mc_ref.model_campaign_path)
+        ver_path = _safe_relative_path(snapshot_dir, mc_ref.verification_ref_path)
+        _validate_sha256(mc_path, mc_ref.model_campaign_sha256, "model-campaign.json")
+        _validate_sha256(ver_path, mc_ref.verification_ref_sha256, "campaign-verification-ref.json")
+        mc_raw = _load_json(mc_path)
+        if not isinstance(mc_raw, dict):
+            raise ReadmeError("model-campaign.json must contain an object")
+        if mc_raw.get("campaign_id") != mc_ref.campaign_id:
+            raise ReadmeError(
+                f"model-campaign.json campaign_id mismatch: "
+                f"index.json has {mc_ref.campaign_id!r}, artifact has {mc_raw.get('campaign_id')!r}"
+            )
+        if mc_raw.get("campaign_revision") != mc_ref.campaign_revision:
+            raise ReadmeError(
+                f"model-campaign.json campaign_revision mismatch: "
+                f"index.json has {mc_ref.campaign_revision!r}, artifact has {mc_raw.get('campaign_revision')!r}"
+            )
+        if mc_raw.get("verification_ok") is not True:
+            raise ReadmeError("model-campaign.json verification_ok must be true")
+        model_campaign = mc_raw
+        artifact_paths.update({mc_ref.model_campaign_path, mc_ref.verification_ref_path})
+
     # Verify no extra files in snapshot directory that are not declared.
     _scan_for_undeclared_artifacts(snapshot_dir, artifact_paths)
     # Scan declared artifact content for forbidden private keys, credential fields, and raw canaries.
@@ -1577,6 +1638,7 @@ def load_snapshot(snapshot_dir: Path) -> ProofSnapshot:
         demo_reports=tuple(demo_reports),
         artifact_paths=artifact_paths,
         stage2=stage2,
+        model_campaign=model_campaign,
     )
 
 
@@ -2233,6 +2295,107 @@ def _render_ci_reproducibility(snapshot: ProofSnapshot) -> str:
     return "\n".join(lines)
 
 
+def _render_model_comparison(snapshot: ProofSnapshot) -> str:
+    """Render the model-comparison section from a v4 model campaign reference.
+
+    When no model campaign is present (schemas 1.0.0-3.0.0), returns an
+    empty string so the template marker expands to nothing. When a v4
+    model campaign is present, renders campaign identity, evidence
+    cutoff, hardware class, benchmark population, repetitions, backend,
+    quantization policy, direct capability table grouped by weight
+    class, and explicit caveats.
+    """
+    if snapshot.model_campaign is None:
+        return ""
+
+    mc = snapshot.model_campaign
+    lines: list[str] = [
+        "### Model Comparison",
+        "",
+        f"Campaign {_escape_cell(mc.get('campaign_id', ''))} revision {_escape_cell(mc.get('campaign_revision', ''))} "
+        f"under publication schema {_escape_cell(mc.get('publication_schema_version', ''))}.",
+        "",
+    ]
+
+    profile = mc.get("campaign_profile")
+    if isinstance(profile, dict):
+        lines.append(f"- Evidence cutoff: {_escape_cell(snapshot.manifest.evidence_cutoff)}")
+        lines.append(f"- Hardware class: {_escape_cell(profile.get('hardware_identity', ''))}")
+        lines.append(f"- Benchmark population: {_escape_cell(', '.join(profile.get('benchmark_ids', [])))}")
+        lines.append(f"- Task population: {len(profile.get('task_ids', []))} tasks")
+        lines.append(f"- Repetitions: {profile.get('repetitions', 1)}")
+        lines.append(f"- Claim boundary: {_escape_cell(profile.get('claim_boundary', ''))}")
+
+    variants = mc.get("model_variants")
+    if isinstance(variants, list) and variants:
+        lines.append("")
+        lines.append("#### Direct Capability by Weight Class")
+        lines.append("")
+        lines.append("| Variant | Display Name | Weight Class | Parameters | Backend | Quantization | Eligibility |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for v in sorted(variants, key=lambda x: x.get("variant_id", "")):
+            lines.append(
+                f"| {_escape_cell(v.get('variant_id', ''))} "
+                f"| {_escape_cell(v.get('canonical_display_name', ''))} "
+                f"| {_escape_cell(v.get('weight_class', ''))} "
+                f"| {_escape_cell(v.get('parameter_count_display', ''))} "
+                f"| {_escape_cell(v.get('backend_name', ''))} "
+                f"| {_escape_cell(v.get('quantization', '') or 'none')} "
+                f"| {_escape_cell(v.get('publication_eligibility', ''))} |"
+            )
+
+    projections = mc.get("projections")
+    if isinstance(projections, list) and projections:
+        lines.append("")
+        lines.append("#### Measured Results")
+        lines.append("")
+        lines.append("| Variant | Task | Metric | Rate | Numerator | Denominator | Status |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for p in sorted(
+            projections,
+            key=lambda x: (x.get("variant_id", ""), x.get("task_id", ""), x.get("metric_id", "")),
+        ):
+            rate = p.get("rate", 0.0)
+            if isinstance(rate, (int, float)):
+                rate_str = _format_rate(float(rate))
+            else:
+                rate_str = "N/A"
+            lines.append(
+                f"| {_escape_cell(p.get('variant_id', ''))} "
+                f"| {_escape_cell(p.get('task_id', ''))} "
+                f"| {_escape_cell(p.get('metric_id', ''))} "
+                f"| {rate_str} "
+                f"| {p.get('numerator', 0)} "
+                f"| {p.get('denominator', 0)} "
+                f"| {_escape_cell(p.get('verification_status', ''))} |"
+            )
+
+    dispositions = mc.get("dispositions")
+    if isinstance(dispositions, list) and dispositions:
+        lines.append("")
+        lines.append("#### Assignment Dispositions")
+        lines.append("")
+        lines.append("| Assignment | Variant | Task | Disposition | Reason |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for d in sorted(dispositions, key=lambda x: x.get("assignment_id", "")):
+            lines.append(
+                f"| {_escape_cell(d.get('assignment_id', ''))} "
+                f"| {_escape_cell(d.get('variant_id', ''))} "
+                f"| {_escape_cell(d.get('task_id', ''))} "
+                f"| {_escape_cell(d.get('disposition', ''))} "
+                f"| {_escape_cell(d.get('reason', '') or '—')} |"
+            )
+
+    caveats = mc.get("caveats")
+    if isinstance(caveats, list) and caveats:
+        lines.append("")
+        lines.append("**Campaign caveats**")
+        for caveat in caveats:
+            lines.append(f"- {_escape_cell(caveat)}")
+
+    return "\n".join(lines)
+
+
 def _replace_markers(template: str, renderers: dict[str, str]) -> str:
     found: set[str] = set()
 
@@ -2260,6 +2423,7 @@ def render_readme(snapshot: ProofSnapshot, template: str) -> str:
         "GOVERNANCE_PROOF": _render_governance_proof(snapshot),
         "DEMO_PROOF": _render_demo_proof(snapshot),
         "CI_REPRODUCIBILITY": _render_ci_reproducibility(snapshot),
+        "MODEL_COMPARISON": _render_model_comparison(snapshot),
     }
     return _replace_markers(template, renderers)
 
